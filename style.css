@@ -18,10 +18,13 @@
   --border:   rgba(255,255,255,0.12);
 }
 
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  background: #000; /* fallback — shows on pages with no .page-bg */
+}
 
 body {
-  background: var(--midnight);
+  background: transparent; /* lets fixed .page-bg show through */
   color: var(--light);
   font-family: 'Lato', sans-serif;
   font-weight: 300;
@@ -29,15 +32,7 @@ body {
   min-height: 100vh;
 }
 
-/* ── Background gradient ── */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: #000;
-  z-index: -1;
-  pointer-events: none;
-}
+/* body background handles the base black — no pseudo-element needed */
 
 /* ── Navigation ── */
 nav {
@@ -411,24 +406,14 @@ footer {
   position: relative;
   overflow: hidden;
   background: #000;
+  max-height: 320px;
 }
 
-/* The image itself.
-
-   width: 100%
-     Stretch the image to fill the full card width.
-
-   height: auto
-     This is the crucial change from before. Instead of a fixed height
-     that forces a crop, "auto" lets the image grow to whatever height
-     its natural aspect ratio requires. The full art is visible.
-
-   display: block
-     Removes the small default gap below inline images.
-*/
 .site-banner img {
   width: 100%;
-  height: auto;
+  height: 320px;
+  object-fit: cover;
+  object-position: center top;
   display: block;
 }
 
@@ -678,11 +663,40 @@ footer {
 
 /* Bio card — warm dark tone to contrast the synopsis above */
 .author-card {
+  position: relative;
   background: #12100e;
   border: 1px solid rgba(240,192,96,0.15);
   border-top: 3px solid var(--gold);
   border-radius: 20px;
   padding: 2.5rem;
+}
+
+/* Profile picture — sits in the top-right corner of the card */
+.author-avatar {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.75rem;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(240,192,96,0.4);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+
+.author-avatar-placeholder {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.75rem;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: #1e1a14;
+  border: 2px solid rgba(240,192,96,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.2rem;
 }
 
 /* Links card — cool dark tone, rose accent */
@@ -1015,7 +1029,6 @@ footer {
   inset: 0;
   z-index: -1;
   overflow: hidden;
-  background: #000;
 }
 
 .page-bg img {
@@ -1024,13 +1037,13 @@ footer {
   object-fit: cover;
   display: block;
   filter: blur(14px);
-  transform: scale(1.08);
+  transform: scale(1.08); /* hides blur fringe at edges */
 }
 
 .page-bg-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.5);
 }
 
 /* ── Chapter hub ── */
@@ -1045,7 +1058,7 @@ footer {
 .hub-card {
   width: 100%;
   max-width: 860px;
-  background: rgba(10,10,10,0.82);
+  background: rgba(8,8,8,0.72);
   border: 1px solid rgba(255,255,255,0.09);
   border-top: 3px solid var(--violet);
   border-radius: 20px;
@@ -1154,6 +1167,364 @@ footer {
 }
 
 .chapter-view-links .btn-outline { margin-left: 0; }
+
+/* ── Art gallery page ── */
+.gallery-page-wrapper {
+  padding: 4rem 3rem;
+}
+
+.gallery-page-card {
+  max-width: 1100px;
+  margin: 0 auto;
+  background: #111;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-top: 3px solid var(--rose);
+  border-radius: 20px;
+  padding: 3rem;
+  text-align: center;
+}
+
+.gallery-eyebrow {
+  font-family: 'Lato', sans-serif;
+  font-size: 0.8rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--rose);
+  opacity: 0.8;
+  margin: 0 0 0.5rem;
+}
+
+.gallery-title {
+  font-family: 'Cinzel', serif;
+  font-size: clamp(2.2rem, 5vw, 3.5rem);
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+  color: var(--gold);
+  text-shadow: 0 0 24px rgba(240,192,96,0.55), 0 0 6px rgba(240,192,96,0.25);
+  line-height: 1.15;
+}
+
+.gallery-rule {
+  width: 80px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold), var(--rose));
+  border-radius: 2px;
+  margin: 0.75rem auto 2rem;
+}
+
+.gallery-tile-placeholder {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  border: 2px dashed rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.03);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: rgba(255,255,255,0.15);
+  font-weight: 300;
+  transition: border-color 0.2s, background 0.2s;
+  user-select: none;
+}
+
+.gallery-tile-placeholder:hover {
+  border-color: rgba(194, 84, 122, 0.3);
+  background: rgba(194, 84, 122, 0.04);
+}
+
+/* Sidebar + main layout inside the card */
+.gallery-inner {
+  display: flex;
+  gap: 0;
+  min-height: 500px;
+  align-items: flex-start;
+}
+
+.gallery-sidebar {
+  width: 150px;
+  flex-shrink: 0;
+  border-right: 1px solid rgba(255,255,255,0.08);
+  padding-right: 1.5rem;
+  margin-right: 2rem;
+  padding-top: 0.25rem;
+}
+
+.gallery-sidebar-label {
+  font-family: 'Lato', sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.3);
+  margin: 0 0 0.75rem;
+}
+
+.gallery-cat {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  text-decoration: none;
+  color: var(--gold);
+  font-family: 'Lato', sans-serif;
+  font-size: 0.9rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 0.2rem;
+  transition: background 0.15s, color 0.15s, text-shadow 0.15s;
+  text-shadow: 0 0 10px rgba(240,192,96,0.35);
+}
+
+.gallery-cat:hover {
+  background: rgba(240,192,96,0.07);
+  color: #ffe89a;
+  text-shadow: 0 0 14px rgba(240,192,96,0.6);
+}
+
+.gallery-cat.active {
+  background: rgba(240,192,96,0.12);
+  color: #ffe89a;
+  text-shadow: 0 0 16px rgba(240,192,96,0.7);
+  font-weight: 700;
+}
+
+.gallery-main {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.gallery-empty-msg {
+  grid-column: 1 / -1;
+  padding: 3rem 0;
+  color: rgba(200,184,232,0.3);
+  font-size: 0.95rem;
+}
+
+/* 3-column grid */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  text-align: left;
+  align-items: start;
+}
+
+.gallery-tile {
+  display: block;
+  position: relative;
+  padding-top: 116.67%; /* 7÷6 = 6:7 portrait ratio */
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #1a1a1a;
+  border: 1px solid rgba(255,255,255,0.07);
+  transition: transform 0.25s, border-color 0.25s;
+}
+
+.gallery-tile:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255,255,255,0.25);
+}
+
+.gallery-tile img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.35s;
+}
+
+.gallery-tile:hover img {
+  transform: scale(1.03);
+}
+
+
+/* Lightbox */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+
+.lightbox.active {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+}
+
+.lightbox-content {
+  position: relative;
+  z-index: 1;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.lightbox-content img {
+  max-width: 100%;
+  max-height: 82vh;
+  border-radius: 8px;
+  display: block;
+  box-shadow: 0 8px 60px rgba(0,0,0,0.8);
+}
+
+.lightbox-caption {
+  color: var(--mist);
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+.lightbox-close {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.75rem;
+  z-index: 2;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.lightbox-close:hover { background: rgba(255,255,255,0.2); }
+
+/* ── Art view (single artwork page) ── */
+.art-view-wrapper {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 3rem 2rem 6rem;
+}
+
+.art-view-back {
+  display: inline-block;
+  color: var(--mist);
+  font-size: 0.88rem;
+  text-decoration: none;
+  margin-bottom: 2rem;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+  letter-spacing: 0.02em;
+}
+.art-view-back:hover { opacity: 1; }
+
+.art-view-image-wrap {
+  background: #0d0d0d;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.07);
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+  margin-bottom: 1.75rem;
+  text-align: center;
+}
+
+.art-view-image-wrap img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+.art-view-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.art-view-title {
+  font-family: 'Cinzel', serif;
+  font-size: clamp(1.3rem, 3vw, 1.9rem);
+  color: var(--light);
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.art-view-cat-tag {
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--rose);
+  background: rgba(194,84,122,0.12);
+  border: 1px solid rgba(194,84,122,0.28);
+  padding: 0.3em 0.85em;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.art-view-caption {
+  color: var(--mist);
+  opacity: 0.55;
+  font-size: 0.9rem;
+  margin: 0 0 2rem;
+  line-height: 1.6;
+}
+
+/* Comments section */
+.art-view-comments {
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: 2.5rem;
+  margin-top: 2.5rem;
+}
+
+.comments-heading {
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  color: var(--mist);
+  font-weight: 600;
+  margin: 0 0 1.5rem;
+  letter-spacing: 0.05em;
+}
+
+.comment-signin-prompt {
+  background: rgba(255,255,255,0.025);
+  border: 1px dashed rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  color: rgba(200,184,232,0.4);
+  font-size: 0.9rem;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.comment-signin-prompt a {
+  color: var(--rose);
+  text-decoration: none;
+}
+.comment-signin-prompt a:hover { text-decoration: underline; }
+
+.comments-empty {
+  color: rgba(200,184,232,0.25);
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 2rem 0;
+}
 
 /* ── Characters page ── */
 .character-grid {
