@@ -9,23 +9,23 @@
 <body>
 
 <nav>
-  <a class="nav-brand" href="index.html">Between Two Worlds</a>
+  <a class="nav-brand" href="/">Between Two Worlds</a>
   <ul class="nav-links">
-    <li><a href="index.html">Home</a></li>
-    <li><a href="chapters.html">Chapters</a></li>
-    <li><a href="art.html" class="active">Gallery</a></li>
-    <li><a href="spicy.html">Spicy</a></li>
-    <li><a href="discord.html">Discord</a></li>
-    <li><a href="characters.html">Characters</a></li>
-    <li><a href="community.html">Community</a></li>
-    <li><a href="login.html" class="nav-login">Log In / Register</a></li>
-    <li><a href="inbox.html">Inbox</a></li>
+    <li><a href="/">Home</a></li>
+    <li><a href="/chapters">Chapters</a></li>
+    <li><a href="/art" class="active">Gallery</a></li>
+    <li><a href="/spicy">Spicy</a></li>
+    <li><a href="/discord">Discord</a></li>
+    <li><a href="/characters">Characters</a></li>
+    <li><a href="/community">Community</a></li>
+    <li><a href="/login" class="nav-login">Log In / Register</a></li>
+    <li><a href="/inbox">Inbox</a></li>
   </ul>
 </nav>
 
 <main class="art-view-wrapper">
 
-  <a class="art-view-back" id="art-view-back" href="art.html">← Back to Gallery</a>
+  <a class="art-view-back" id="art-view-back" href="/art">← Back to Gallery</a>
 
   <div class="art-view-image-wrap">
     <img id="art-view-img" src="" alt="" />
@@ -33,9 +33,12 @@
 
   <div class="art-view-info">
     <h1 id="art-view-title" class="art-view-title"></h1>
+    <button class="like-btn art-view-like" id="art-view-like" data-type="art" data-id="" aria-label="Like">
+      <span class="like-icon">♡</span><span class="like-count">0</span>
+    </button>
   </div>
 
-  <p id="art-view-caption" class="art-view-caption"></p>
+  <div id="art-view-desc" class="art-view-desc"></div>
 
   <!-- Comments -->
   <section class="art-view-comments" id="comments-section">
@@ -50,6 +53,7 @@
 </footer>
 
 <script src="gallery-data.js"></script>
+<script src="likes.js"></script>
 <script>
   const API    = '/api';
   const params = new URLSearchParams(window.location.search);
@@ -57,28 +61,60 @@
   const entry  = GALLERY.find(g => g.num === id);
 
   if (!entry) {
-    window.location.href = 'art.html';
+    window.location.href = '/art';
   } else {
     document.title = `${entry.title || 'Art'} — Between Two Worlds`;
 
-    document.getElementById('art-view-img').src = entry.src;
-    document.getElementById('art-view-img').alt = entry.title || '';
+    const imgEl = document.getElementById('art-view-img');
+    if (entry.cat === 'spicy') {
+      const spicyToken = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+      const srcFile = entry.src.split('/').pop();
+      imgEl.src = spicyToken ? `/api/spicy-img/${srcFile}?token=${encodeURIComponent(spicyToken)}` : '';
+    } else {
+      imgEl.src = entry.src;
+    }
+    imgEl.alt = entry.title || '';
     document.getElementById('art-view-title').textContent = entry.title || '';
+
+    const likeBtn = document.getElementById('art-view-like');
+    likeBtn.dataset.id = entry.num;
+    LikeButtons.init('art');
 
     const backLink = document.getElementById('art-view-back');
     if (entry.cat === 'sketches') {
-      backLink.href = 'art-sketches.html';
+      backLink.href = '/art-sketches';
       backLink.textContent = '← Back to Sketches';
     } else if (entry.cat === 'spicy') {
-      backLink.href = 'spicy.html';
+      backLink.href = '/spicy';
       backLink.textContent = '← Back to Spicy';
     }
 
-    const capEl = document.getElementById('art-view-caption');
-    if (entry.caption) {
-      capEl.textContent = entry.caption;
+    const descWrap = document.getElementById('art-view-desc');
+    if (entry.desc && entry.desc.length) {
+      entry.desc.forEach(text => {
+        const p = document.createElement('p');
+        p.textContent = text;
+        descWrap.appendChild(p);
+      });
+      if (entry.credit) {
+        const cred = document.createElement('p');
+        cred.className = 'art-view-credit';
+        cred.append('Commissioned by ');
+        const a = document.createElement('a');
+        a.href = entry.credit.url;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.textContent = entry.credit.name;
+        cred.appendChild(a);
+        if (entry.credit.platform) cred.append(' ' + entry.credit.platform);
+        descWrap.appendChild(cred);
+      }
+    } else if (entry.caption) {
+      const p = document.createElement('p');
+      p.textContent = entry.caption;
+      descWrap.appendChild(p);
     } else {
-      capEl.remove();
+      descWrap.remove();
     }
 
     // ── Comments ────────────────────────────────────────────────────────────
@@ -263,7 +299,7 @@
       if (isSpicy && !loggedIn) {
         area.innerHTML = `
           <div class="comments-gate">
-            <a href="login.html?from=art-view.html?id=${entry.num}">Log in</a> to view and leave comments on this artwork.
+            <a href="/login?from=${encodeURIComponent(`/art-view?id=${entry.num}`)}">Log in</a> to view and leave comments on this artwork.
           </div>
         `;
         return;
@@ -280,7 +316,7 @@
       } else {
         const prompt = document.createElement('div');
         prompt.className = 'comment-signin-prompt';
-        prompt.innerHTML = `<a href="login.html?from=art-view.html?id=${entry.num}">Sign in</a> to leave a comment.`;
+        prompt.innerHTML = `<a href="/login?from=${encodeURIComponent(`/art-view?id=${entry.num}`)}">Sign in</a> to leave a comment.`;
         area.appendChild(prompt);
       }
 

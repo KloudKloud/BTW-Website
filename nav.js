@@ -37,47 +37,67 @@
   const loginLink = document.querySelector('a.nav-login');
   if (!loginLink) return;
 
-  const name = (user.display_name || user.username || 'Account').slice(0, 20);
-
   const brandLink = document.querySelector('.nav-brand');
-  const homeHref  = brandLink ? brandLink.getAttribute('href') : 'index.html';
-  // Derive base path so links work from subdirectories (e.g. chapters/)
-  const basePath  = homeHref.includes('/') ? homeHref.replace('index.html', '') : '';
+  const homeHref  = brandLink ? brandLink.getAttribute('href') : '/';
 
-  const li = loginLink.parentElement;
-  li.innerHTML = `
-    <div class="nav-user">
-      <button class="nav-user-btn" id="nav-user-btn" aria-haspopup="true" aria-expanded="false">
-        ${user.avatar ? `<img src="${basePath}${user.avatar.replace(/^\//,'')}" class="nav-user-avatar" alt="" />` : ''}${name} <span class="nav-user-caret">&#9662;</span>
-      </button>
-      <div class="nav-user-dropdown" id="nav-user-dropdown" hidden>
-        <a href="${basePath}profile.html" id="nav-profile">Edit Profile</a>
-        <a href="#" id="nav-logout">Logout</a>
-      </div>
-    </div>
-  `;
-
-  const btn      = document.getElementById('nav-user-btn');
-  const dropdown = document.getElementById('nav-user-dropdown');
-
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const open = !dropdown.hidden;
-    dropdown.hidden = open;
-    btn.setAttribute('aria-expanded', String(!open));
-  });
-
-  document.addEventListener('click', () => {
-    dropdown.hidden = true;
-    btn.setAttribute('aria-expanded', 'false');
-  });
-
-  document.getElementById('nav-logout').addEventListener('click', (e) => {
-    e.preventDefault();
+  function clearAuth() {
     localStorage.removeItem('btw_token');
     localStorage.removeItem('btw_user');
     sessionStorage.removeItem('btw_token');
     sessionStorage.removeItem('btw_user');
-    window.location.href = homeHref;
-  });
+  }
+
+  function renderUserNav(u) {
+    const name = (u.display_name || u.username || 'Account').slice(0, 20);
+    const li = loginLink.parentElement;
+    li.innerHTML = `
+      <div class="nav-user">
+        <button class="nav-user-btn" id="nav-user-btn" aria-haspopup="true" aria-expanded="false">
+          ${u.avatar ? `<img src="${u.avatar}" class="nav-user-avatar" alt="" />` : ''}${name} <span class="nav-user-caret">&#9662;</span>
+        </button>
+        <div class="nav-user-dropdown" id="nav-user-dropdown" hidden>
+          <a href="/profile" id="nav-profile">Edit Profile</a>
+          <a href="#" id="nav-logout">Logout</a>
+        </div>
+      </div>
+    `;
+
+    const btn      = document.getElementById('nav-user-btn');
+    const dropdown = document.getElementById('nav-user-dropdown');
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = !dropdown.hidden;
+      dropdown.hidden = open;
+      btn.setAttribute('aria-expanded', String(!open));
+    });
+
+    document.addEventListener('click', () => {
+      dropdown.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    });
+
+    document.getElementById('nav-logout').addEventListener('click', (e) => {
+      e.preventDefault();
+      clearAuth();
+      window.location.href = homeHref;
+    });
+  }
+
+  // Verify token is still valid before rendering the user nav
+  fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => {
+      if (!r.ok) throw new Error('invalid');
+      return r.json();
+    })
+    .then(data => {
+      // Update stored user with fresh data from server
+      const storage = localStorage.getItem('btw_token') ? localStorage : sessionStorage;
+      storage.setItem('btw_user', JSON.stringify(data.user));
+      renderUserNav(data.user);
+    })
+    .catch(() => {
+      // Token is invalid or expired — clear everything and show login link
+      clearAuth();
+    });
 })();

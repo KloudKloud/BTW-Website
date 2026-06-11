@@ -61,6 +61,18 @@ try { db.exec('ALTER TABLE users ADD COLUMN pending_email TEXT'); } catch {}
 try { db.exec('ALTER TABLE users ADD COLUMN email_change_token TEXT'); } catch {}
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS likes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL,
+    item_type  TEXT    NOT NULL,
+    item_id    INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, item_type, item_id),
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  )
+`);
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS comments (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     art_id     INTEGER NOT NULL,
@@ -224,7 +236,7 @@ app.get('/api/auth/verify', async (req, res) => {
       <html><body style="background:#f5f5f5;color:#1a1a2e;font-family:Arial;text-align:center;padding:60px 20px;">
         <h2 style="color:#c0392b;">Invalid or expired link</h2>
         <p>This activation link has already been used or is invalid.</p>
-        <a href="http://${process.env.SITE_HOST}/login.html" style="color:#1565c0;">Back to login</a>
+        <a href="https://${process.env.SITE_HOST}/login" style="color:#1565c0;">Back to login</a>
       </body></html>
     `);
   }
@@ -233,7 +245,7 @@ app.get('/api/auth/verify', async (req, res) => {
 
   // Generate auto-login token and send welcome email
   const autoToken = signToken(user.id);
-  const loginUrl  = `https://${process.env.SITE_HOST}/login.html?autotoken=${autoToken}`;
+  const loginUrl  = `https://${process.env.SITE_HOST}/login?autotoken=${autoToken}`;
 
   try {
     await resend.emails.send({
@@ -248,7 +260,7 @@ app.get('/api/auth/verify', async (req, res) => {
     console.error('Welcome email error:', err.message);
   }
 
-  res.redirect(`https://${process.env.SITE_HOST}/login.html?autotoken=${autoToken}`);
+  res.redirect(`https://${process.env.SITE_HOST}/login?autotoken=${autoToken}`);
 });
 
 // POST /api/auth/login
@@ -513,13 +525,13 @@ app.get('/api/auth/confirm-email', (req, res) => {
       <html><body style="background:#f5f5f5;color:#1a1a2e;font-family:Arial;text-align:center;padding:60px 20px;">
         <h2 style="color:#c0392b;">Invalid or expired link</h2>
         <p>This email confirmation link has already been used or is invalid.</p>
-        <a href="https://${process.env.SITE_HOST}/profile.html" style="color:#1565c0;">Back to profile</a>
+        <a href="https://${process.env.SITE_HOST}/profile" style="color:#1565c0;">Back to profile</a>
       </body></html>
     `);
   }
   db.prepare('UPDATE users SET email = ?, pending_email = NULL, email_change_token = NULL WHERE id = ?')
     .run(user.pending_email, user.id);
-  res.redirect(`https://${process.env.SITE_HOST}/profile.html?email_verified=1`);
+  res.redirect(`https://${process.env.SITE_HOST}/profile?email_verified=1`);
 });
 
 // GET /api/auth/profile — get full profile for the profile page
@@ -529,6 +541,66 @@ app.get('/api/auth/profile', requireAuth, (req, res) => {
   ).get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found.' });
   res.json({ user });
+});
+
+// ── Protected spicy image delivery ────────────────────────────────────────────
+app.get('/api/spicy-img/:filename', (req, res) => {
+  const token = req.query.token || (req.headers.authorization || '').replace('Bearer ', '');
+  try {
+    jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const filename = path.basename(req.params.filename);
+  if (!/\.(png|jpg|jpeg|webp|gif)$/i.test(filename)) return res.status(400).end();
+  res.setHeader('X-Accel-Redirect', `/protected-spicy/${filename}`);
+  res.end();
+});
+
+// ── Likes ─────────────────────────────────────────────────────────────────────
+
+app.get('/api/likes/counts/:type', (req, res) => {
+  const rows = db.prepare(
+    'SELECT item_id, COUNT(*) as count FROM likes WHERE item_type = ? GROUP BY item_id'
+  ).all(req.params.type);
+  const counts = {};
+  rows.forEach(r => { counts[r.item_id] = r.count; });
+  res.json({ counts });
+});
+
+app.get('/api/likes/mine/:type', (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  if (!token) return res.json({ liked: [] });
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const rows = db.prepare(
+      'SELECT item_id FROM likes WHERE user_id = ? AND item_type = ?'
+    ).all(payload.id, req.params.type);
+    res.json({ liked: rows.map(r => r.item_id) });
+  } catch { res.json({ liked: [] }); }
+});
+
+app.post('/api/likes/toggle/:type/:id', requireAuth, (req, res) => {
+  const { type, id } = req.params;
+  const itemId = parseInt(id, 10);
+  if (!['art', 'chapter'].includes(type) || isNaN(itemId))
+    return res.status(400).json({ error: 'Invalid type or id' });
+
+  const existing = db.prepare(
+    'SELECT id FROM likes WHERE user_id = ? AND item_type = ? AND item_id = ?'
+  ).get(req.user.id, type, itemId);
+
+  if (existing) {
+    db.prepare('DELETE FROM likes WHERE id = ?').run(existing.id);
+  } else {
+    db.prepare('INSERT INTO likes (user_id, item_type, item_id) VALUES (?, ?, ?)').run(req.user.id, type, itemId);
+  }
+
+  const { count } = db.prepare(
+    'SELECT COUNT(*) as count FROM likes WHERE item_type = ? AND item_id = ?'
+  ).get(type, itemId);
+
+  res.json({ liked: !existing, count });
 });
 
 const PORT = process.env.PORT || 3001;

@@ -14,17 +14,17 @@
 </div>
 
 <nav>
-  <a class="nav-brand" href="index.html">Between Two Worlds</a>
+  <a class="nav-brand" href="/">Between Two Worlds</a>
   <ul class="nav-links">
-    <li><a href="index.html">Home</a></li>
-    <li><a href="chapters.html">Chapters</a></li>
-    <li><a href="art.html">Gallery</a></li>
-    <li><a href="spicy.html">Spicy</a></li>
-    <li><a href="discord.html">Discord</a></li>
-    <li><a href="characters.html">Characters</a></li>
-    <li><a href="community.html">Community</a></li>
-    <li><a href="login.html" class="nav-login">Log In / Register</a></li>
-    <li><a href="inbox.html">Inbox</a></li>
+    <li><a href="/">Home</a></li>
+    <li><a href="/chapters">Chapters</a></li>
+    <li><a href="/art">Gallery</a></li>
+    <li><a href="/spicy">Spicy</a></li>
+    <li><a href="/discord">Discord</a></li>
+    <li><a href="/characters">Characters</a></li>
+    <li><a href="/community">Community</a></li>
+    <li><a href="/login" class="nav-login">Log In / Register</a></li>
+    <li><a href="/inbox">Inbox</a></li>
   </ul>
 </nav>
 
@@ -108,7 +108,7 @@
 <div id="profile-gate" hidden style="min-height:calc(100vh - 64px);display:flex;align-items:center;justify-content:center;padding:3rem 1.5rem;">
   <div style="text-align:center;">
     <p style="color:var(--mist);margin-bottom:1rem;">You need to be logged in to view this page.</p>
-    <a href="login.html" class="spicy-gate-btn">Log In / Register</a>
+    <a href="/login" class="spicy-gate-btn">Log In / Register</a>
   </div>
 </div>
 
@@ -139,7 +139,7 @@
     try {
       const res  = await fetch(`${API}/auth/profile`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
-      if (!res.ok) { window.location.href = 'login.html'; return; }
+      if (!res.ok) { window.location.href = '/login'; return; }
 
       const u = data.user;
       currentEmail = u.email;
@@ -147,15 +147,18 @@
       document.getElementById('prof-email').value        = u.email || '';
 
       if (u.avatar) {
-        document.getElementById('profile-avatar-img').src         = u.avatar;
-        document.getElementById('profile-avatar-img').hidden      = false;
-        document.getElementById('profile-avatar-placeholder').hidden = true;
+        const img = document.getElementById('profile-avatar-img');
+        const ph  = document.getElementById('profile-avatar-placeholder');
+        img.src = u.avatar;
+        img.style.display = 'block';
+        img.removeAttribute('hidden');
+        ph.style.display = 'none';
       }
       if (window._emailVerifiedSuccess) {
         showAlert('profile-alert', 'Email address updated successfully!', 'success');
         window._emailVerifiedSuccess = false;
       }
-    } catch { window.location.href = 'login.html'; }
+    } catch { window.location.href = '/login'; }
   }
 
   // Show password field when email changes
@@ -184,11 +187,27 @@
       const data = await res.json();
       if (!res.ok) { showAlert('profile-alert', data.error, 'error'); return; }
 
-      const img  = document.getElementById('profile-avatar-img');
-      const ph   = document.getElementById('profile-avatar-placeholder');
-      img.src    = data.avatar + '?t=' + Date.now();
-      img.hidden = false;
-      ph.hidden  = true;
+      const img = document.getElementById('profile-avatar-img');
+      const ph  = document.getElementById('profile-avatar-placeholder');
+      const url = data.avatar + '?t=' + Date.now();
+      img.src = url;
+      img.style.display = 'block';
+      img.removeAttribute('hidden');
+      ph.style.display = 'none';
+
+      // Also update nav avatar immediately
+      const navAvatarEl = document.querySelector('.nav-user-avatar');
+      if (navAvatarEl) {
+        navAvatarEl.src = url;
+      } else {
+        const navBtn = document.getElementById('nav-user-btn');
+        if (navBtn) {
+          const navImg = document.createElement('img');
+          navImg.className = 'nav-user-avatar';
+          navImg.src = url;
+          navBtn.insertBefore(navImg, navBtn.firstChild);
+        }
+      }
 
       // Update stored user data
       updateStoredUser({ avatar: data.avatar });
@@ -291,7 +310,7 @@
       localStorage.removeItem('btw_user');
       sessionStorage.removeItem('btw_token');
       sessionStorage.removeItem('btw_user');
-      window.location.href = 'index.html';
+      window.location.href = '/';
     } catch { showAlert('delete-alert', 'Network error.', 'error'); }
     finally { btn.disabled = false; }
   });
