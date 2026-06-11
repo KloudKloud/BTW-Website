@@ -13,8 +13,13 @@
   <ul class="nav-links">
     <li><a href="index.html">Home</a></li>
     <li><a href="chapters.html">Chapters</a></li>
-    <li><a href="art.html" class="active">Art</a></li>
+    <li><a href="art.html" class="active">Gallery</a></li>
+    <li><a href="spicy.html">Spicy</a></li>
+    <li><a href="discord.html">Discord</a></li>
     <li><a href="characters.html">Characters</a></li>
+    <li><a href="community.html">Community</a></li>
+    <li><a href="login.html" class="nav-login">Log In / Register</a></li>
+    <li><a href="inbox.html">Inbox</a></li>
   </ul>
 </nav>
 
@@ -33,16 +38,9 @@
   <p id="art-view-caption" class="art-view-caption"></p>
 
   <!-- Comments -->
-  <section class="art-view-comments">
+  <section class="art-view-comments" id="comments-section">
     <h2 class="comments-heading">Comments</h2>
-
-    <div class="comment-signin-prompt">
-      <span>Sign in to leave a comment.</span>
-    </div>
-
-    <div class="comments-list" id="comments-list">
-      <p class="comments-empty">No comments yet. Be the first!</p>
-    </div>
+    <div id="comments-area"></div>
   </section>
 
 </main>
@@ -53,6 +51,7 @@
 
 <script src="gallery-data.js"></script>
 <script>
+  const API    = '/api';
   const params = new URLSearchParams(window.location.search);
   const id     = parseInt(params.get('id'), 10);
   const entry  = GALLERY.find(g => g.num === id);
@@ -66,12 +65,14 @@
     document.getElementById('art-view-img').alt = entry.title || '';
     document.getElementById('art-view-title').textContent = entry.title || '';
 
-    // Back link goes to the right gallery page
     const backLink = document.getElementById('art-view-back');
-    backLink.href = entry.cat === 'sketches' ? 'art-sketches.html' : 'art.html';
-    backLink.textContent = entry.cat === 'sketches'
-      ? '← Back to Sketches'
-      : '← Back to Gallery';
+    if (entry.cat === 'sketches') {
+      backLink.href = 'art-sketches.html';
+      backLink.textContent = '← Back to Sketches';
+    } else if (entry.cat === 'spicy') {
+      backLink.href = 'spicy.html';
+      backLink.textContent = '← Back to Spicy';
+    }
 
     const capEl = document.getElementById('art-view-caption');
     if (entry.caption) {
@@ -79,8 +80,231 @@
     } else {
       capEl.remove();
     }
+
+    // ── Comments ────────────────────────────────────────────────────────────
+    const token    = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+    const rawUser  = localStorage.getItem('btw_user')  || sessionStorage.getItem('btw_user');
+    const loggedIn = !!token;
+    let   currentUser = null;
+    try { currentUser = rawUser ? JSON.parse(rawUser) : null; } catch {}
+    const isSpicy  = entry.cat === 'spicy';
+    const area     = document.getElementById('comments-area');
+
+    function timeAgo(dateStr) {
+      const diff = Date.now() - new Date(dateStr).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1)  return 'just now';
+      if (mins < 60) return `${mins}m ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24)  return `${hrs}h ago`;
+      const days = Math.floor(hrs / 24);
+      if (days < 30) return `${days}d ago`;
+      return new Date(dateStr).toLocaleDateString();
+    }
+
+    function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function renderComment(c) {
+      const name  = c.display_name || c.username;
+      const isOwn = currentUser && (c.username === currentUser.username);
+      const div   = document.createElement('div');
+      div.className    = 'comment-item';
+      div.dataset.id   = c.id;
+      div.dataset.body = c.body;
+      div.innerHTML = `
+        <div class="comment-meta">
+          <span class="comment-author">${esc(name)}</span>
+          <span class="comment-time">${timeAgo(c.created_at)}</span>
+        </div>
+        <p class="comment-body">${esc(c.body)}</p>
+        ${isOwn ? `<div class="comment-actions">
+          <button class="comment-action-btn comment-action-btn--edit"  data-action="edit">Edit</button>
+          <button class="comment-action-btn comment-action-btn--delete" data-action="delete">Delete</button>
+        </div>` : ''}
+      `;
+
+      if (isOwn) {
+        div.querySelector('[data-action="edit"]').addEventListener('click', () => startEdit(div, c.id));
+        div.querySelector('[data-action="delete"]').addEventListener('click', () => deleteComment(div, c.id));
+      }
+
+      return div;
+    }
+
+    async function startEdit(div, id) {
+      const bodyEl = div.querySelector('.comment-body');
+      const actionsEl = div.querySelector('.comment-actions');
+      const current = div.dataset.body;
+
+      bodyEl.hidden   = true;
+      actionsEl.hidden = true;
+
+      const area = document.createElement('textarea');
+      area.className = 'comment-edit-area';
+      area.value     = current;
+      area.maxLength = 500;
+
+      const row = document.createElement('div');
+      row.className = 'comment-edit-row';
+
+      const saveBtn   = document.createElement('button');
+      saveBtn.className   = 'comment-edit-save';
+      saveBtn.textContent = 'Save';
+
+      const cancelBtn   = document.createElement('button');
+      cancelBtn.className   = 'comment-edit-cancel';
+      cancelBtn.textContent = 'Cancel';
+
+      row.appendChild(saveBtn);
+      row.appendChild(cancelBtn);
+      div.appendChild(area);
+      div.appendChild(row);
+      area.focus();
+
+      cancelBtn.addEventListener('click', () => {
+        area.remove(); row.remove();
+        bodyEl.hidden = false; actionsEl.hidden = false;
+      });
+
+      saveBtn.addEventListener('click', async () => {
+        const newBody = area.value.trim();
+        if (!newBody) return;
+        saveBtn.disabled = true;
+        try {
+          const res  = await fetch(`${API}/comments/${id}`, {
+            method:  'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body:    JSON.stringify({ body: newBody }),
+          });
+          const data = await res.json();
+          if (!res.ok) { saveBtn.disabled = false; return; }
+
+          div.dataset.body    = newBody;
+          bodyEl.textContent  = newBody;
+          area.remove(); row.remove();
+          bodyEl.hidden = false; actionsEl.hidden = false;
+        } catch { saveBtn.disabled = false; }
+      });
+    }
+
+    async function deleteComment(div, id) {
+      if (!confirm('Delete this comment?')) return;
+      try {
+        const res = await fetch(`${API}/comments/${id}`, {
+          method:  'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) div.remove();
+      } catch {}
+    }
+
+    function buildCommentForm(listEl) {
+      const form = document.createElement('div');
+      form.className = 'comment-form';
+      form.innerHTML = `
+        <textarea id="comment-input" placeholder="Leave a comment…" maxlength="500"></textarea>
+        <div class="comment-form-row">
+          <span class="comment-char-count" id="comment-chars">0 / 500</span>
+          <button class="comment-submit-btn" id="comment-submit">Post</button>
+        </div>
+        <div id="comment-error" style="font-size:0.83rem;color:#e8849e;display:none;"></div>
+      `;
+
+      const textarea  = form.querySelector('#comment-input');
+      const charCount = form.querySelector('#comment-chars');
+      const submitBtn = form.querySelector('#comment-submit');
+      const errEl     = form.querySelector('#comment-error');
+
+      textarea.addEventListener('input', () => {
+        const len = textarea.value.length;
+        charCount.textContent = `${len} / 500`;
+        charCount.classList.toggle('near-limit', len > 450);
+      });
+
+      submitBtn.addEventListener('click', async () => {
+        const body = textarea.value.trim();
+        if (!body) return;
+        errEl.style.display = 'none';
+        submitBtn.disabled = true;
+
+        try {
+          const res  = await fetch(`${API}/comments`, {
+            method:  'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ art_id: entry.num, body }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            errEl.textContent = data.error || 'Failed to post comment.';
+            errEl.style.display = 'block';
+          } else {
+            const emptyMsg = listEl.querySelector('.comments-empty');
+            if (emptyMsg) emptyMsg.remove();
+            listEl.appendChild(renderComment(data.comment));
+            textarea.value = '';
+            charCount.textContent = '0 / 500';
+          }
+        } catch {
+          errEl.textContent = 'Network error. Please try again.';
+          errEl.style.display = 'block';
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+
+      return form;
+    }
+
+    async function loadComments() {
+      // Spicy art: gate entire comments section behind login
+      if (isSpicy && !loggedIn) {
+        area.innerHTML = `
+          <div class="comments-gate">
+            <a href="login.html?from=art-view.html?id=${entry.num}">Log in</a> to view and leave comments on this artwork.
+          </div>
+        `;
+        return;
+      }
+
+      // Build the list container
+      const listEl = document.createElement('div');
+      listEl.className = 'comments-list';
+      listEl.id = 'comments-list';
+
+      // Comment form for logged-in users
+      if (loggedIn) {
+        area.appendChild(buildCommentForm(listEl));
+      } else {
+        const prompt = document.createElement('div');
+        prompt.className = 'comment-signin-prompt';
+        prompt.innerHTML = `<a href="login.html?from=art-view.html?id=${entry.num}">Sign in</a> to leave a comment.`;
+        area.appendChild(prompt);
+      }
+
+      area.appendChild(listEl);
+
+      // Fetch existing comments
+      try {
+        const res  = await fetch(`${API}/comments?art_id=${entry.num}`);
+        const data = await res.json();
+
+        if (!data.comments || data.comments.length === 0) {
+          listEl.innerHTML = '<p class="comments-empty">No comments yet. Be the first!</p>';
+        } else {
+          data.comments.forEach(c => listEl.appendChild(renderComment(c)));
+        }
+      } catch {
+        listEl.innerHTML = '<p class="comments-empty">Could not load comments.</p>';
+      }
+    }
+
+    loadComments();
   }
 </script>
 
+<script src="nav.js"></script>
 </body>
 </html>

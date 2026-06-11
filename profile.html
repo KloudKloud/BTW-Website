@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Edit Profile — Between Two Worlds</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="page-bg">
+  <img src="images/layout/chapters-bg.png" alt="" />
+  <div class="page-bg-overlay"></div>
+</div>
+
+<nav>
+  <a class="nav-brand" href="index.html">Between Two Worlds</a>
+  <ul class="nav-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="chapters.html">Chapters</a></li>
+    <li><a href="art.html">Gallery</a></li>
+    <li><a href="spicy.html">Spicy</a></li>
+    <li><a href="discord.html">Discord</a></li>
+    <li><a href="characters.html">Characters</a></li>
+    <li><a href="community.html">Community</a></li>
+    <li><a href="login.html" class="nav-login">Log In / Register</a></li>
+    <li><a href="inbox.html">Inbox</a></li>
+  </ul>
+</nav>
+
+<main class="profile-wrapper" id="profile-main" hidden>
+
+  <!-- Avatar + basic info -->
+  <div class="profile-card">
+    <p class="profile-card-title">Profile</p>
+
+    <div class="profile-avatar-row">
+      <img id="profile-avatar-img" class="profile-avatar-img" src="" alt="Avatar" hidden />
+      <div id="profile-avatar-placeholder" class="profile-avatar-placeholder">&#128100;</div>
+      <div class="profile-avatar-info">
+        <span class="profile-avatar-label">Profile Picture</span>
+        <button class="profile-avatar-btn" id="avatar-btn" type="button">Upload Photo</button>
+        <input type="file" id="avatar-file" accept="image/*" style="display:none" />
+        <span class="profile-avatar-note">JPG, PNG or WebP &mdash; max 10 MB &mdash; 200&times;200 px recommended</span>
+      </div>
+    </div>
+
+    <div class="profile-fields" id="profile-fields-form">
+      <div class="profile-field">
+        <label for="prof-displayname">Display Name</label>
+        <input type="text" id="prof-displayname" maxlength="20" placeholder="Display name" />
+      </div>
+      <div class="profile-field">
+        <label for="prof-email">Email</label>
+        <input type="email" id="prof-email" placeholder="Email address" />
+      </div>
+      <div class="profile-field" id="email-pw-field" hidden>
+        <label for="prof-email-pw">Current Password <small style="text-transform:none;letter-spacing:0;opacity:.6">(required to change email)</small></label>
+        <input type="password" id="prof-email-pw" placeholder="Enter current password" />
+      </div>
+      <div id="profile-alert" class="profile-alert" hidden></div>
+      <button class="profile-save-btn" id="profile-save-btn">Save Changes</button>
+    </div>
+  </div>
+
+  <!-- Change password -->
+  <div class="profile-card profile-card--password">
+    <p class="profile-card-title">Change Password</p>
+    <div class="profile-fields">
+      <div class="profile-field">
+        <label for="pw-current">Current Password</label>
+        <input type="password" id="pw-current" placeholder="Current password" />
+      </div>
+      <div class="profile-field">
+        <label for="pw-new">New Password</label>
+        <input type="password" id="pw-new" placeholder="New password (min 8 chars)" />
+      </div>
+      <div class="profile-field">
+        <label for="pw-confirm">Confirm New Password</label>
+        <input type="password" id="pw-confirm" placeholder="Confirm new password" />
+      </div>
+      <div id="pw-alert" class="profile-alert" hidden></div>
+      <button class="profile-save-btn" id="pw-save-btn">Change Password</button>
+    </div>
+  </div>
+
+  <!-- Danger zone -->
+  <div class="profile-card profile-card--danger">
+    <p class="profile-card-title">Danger Zone</p>
+    <p class="danger-text">Permanently deletes your account and all your comments. This cannot be undone.</p>
+    <button class="danger-btn" id="delete-account-btn">Delete My Account</button>
+    <div id="delete-confirm" hidden style="margin-top:1rem;">
+      <div class="profile-field" style="margin-bottom:.75rem;">
+        <label for="delete-pw">Confirm your password</label>
+        <input type="password" id="delete-pw" placeholder="Enter password to confirm" />
+      </div>
+      <div id="delete-alert" class="profile-alert" hidden></div>
+      <div style="display:flex;gap:.75rem;margin-top:.25rem;">
+        <button class="danger-btn" id="delete-confirm-btn">Yes, delete my account</button>
+        <button class="profile-save-btn" id="delete-cancel-btn" style="background:rgba(255,255,255,0.07);color:var(--mist);">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Redirect to login if not logged in -->
+<div id="profile-gate" hidden style="min-height:calc(100vh - 64px);display:flex;align-items:center;justify-content:center;padding:3rem 1.5rem;">
+  <div style="text-align:center;">
+    <p style="color:var(--mist);margin-bottom:1rem;">You need to be logged in to view this page.</p>
+    <a href="login.html" class="spicy-gate-btn">Log In / Register</a>
+  </div>
+</div>
+
+<footer>
+  <p>Between Two Worlds &mdash; a Pokémon fan fiction. Not affiliated with Nintendo or Game Freak.</p>
+</footer>
+
+<script>
+  const API    = '/api';
+  const token  = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+  const params = new URLSearchParams(location.search);
+  if (params.get('email_verified') === '1') {
+    // Show banner after email change confirmed — loaded before profile so we queue it
+    window._emailVerifiedSuccess = true;
+  }
+
+  if (!token) {
+    document.getElementById('profile-gate').hidden   = false;
+  } else {
+    document.getElementById('profile-main').hidden   = false;
+    document.getElementById('profile-gate').hidden   = true;
+    loadProfile();
+  }
+
+  let currentEmail = '';
+
+  async function loadProfile() {
+    try {
+      const res  = await fetch(`${API}/auth/profile`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (!res.ok) { window.location.href = 'login.html'; return; }
+
+      const u = data.user;
+      currentEmail = u.email;
+      document.getElementById('prof-displayname').value = u.display_name || '';
+      document.getElementById('prof-email').value        = u.email || '';
+
+      if (u.avatar) {
+        document.getElementById('profile-avatar-img').src         = u.avatar;
+        document.getElementById('profile-avatar-img').hidden      = false;
+        document.getElementById('profile-avatar-placeholder').hidden = true;
+      }
+      if (window._emailVerifiedSuccess) {
+        showAlert('profile-alert', 'Email address updated successfully!', 'success');
+        window._emailVerifiedSuccess = false;
+      }
+    } catch { window.location.href = 'login.html'; }
+  }
+
+  // Show password field when email changes
+  document.getElementById('prof-email').addEventListener('input', function () {
+    document.getElementById('email-pw-field').hidden = this.value.trim() === currentEmail;
+  });
+
+  // Avatar upload
+  document.getElementById('avatar-btn').addEventListener('click', () =>
+    document.getElementById('avatar-file').click()
+  );
+
+  document.getElementById('avatar-file').addEventListener('change', async function () {
+    const file = this.files[0];
+    if (!file) return;
+
+    const form = new FormData();
+    form.append('avatar', file);
+
+    try {
+      const res  = await fetch(`${API}/auth/avatar`, {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body:    form,
+      });
+      const data = await res.json();
+      if (!res.ok) { showAlert('profile-alert', data.error, 'error'); return; }
+
+      const img  = document.getElementById('profile-avatar-img');
+      const ph   = document.getElementById('profile-avatar-placeholder');
+      img.src    = data.avatar + '?t=' + Date.now();
+      img.hidden = false;
+      ph.hidden  = true;
+
+      // Update stored user data
+      updateStoredUser({ avatar: data.avatar });
+      showAlert('profile-alert', 'Profile picture updated!', 'success');
+    } catch { showAlert('profile-alert', 'Upload failed. Please try again.', 'error'); }
+  });
+
+  // Save profile
+  document.getElementById('profile-save-btn').addEventListener('click', async () => {
+    const btn         = document.getElementById('profile-save-btn');
+    const displayName = document.getElementById('prof-displayname').value.trim();
+    const email       = document.getElementById('prof-email').value.trim();
+    const emailPw     = document.getElementById('prof-email-pw').value;
+
+    if (!displayName) { showAlert('profile-alert', 'Display name cannot be empty.', 'error'); return; }
+
+    const body = { display_name: displayName };
+    if (email !== currentEmail) { body.email = email; body.current_password = emailPw; }
+
+    btn.disabled = true;
+    try {
+      const res  = await fetch(`${API}/auth/profile`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) { showAlert('profile-alert', data.error, 'error'); return; }
+
+      currentEmail = data.user?.email || currentEmail;
+      document.getElementById('email-pw-field').hidden = true;
+      document.getElementById('prof-email-pw').value  = '';
+      updateStoredUser({ display_name: displayName });
+      if (data.emailPending) {
+        showAlert('profile-alert', data.message, 'success');
+      } else {
+        showAlert('profile-alert', 'Profile saved!', 'success');
+      }
+    } catch { showAlert('profile-alert', 'Network error. Please try again.', 'error'); }
+    finally { btn.disabled = false; }
+  });
+
+  // Change password
+  document.getElementById('pw-save-btn').addEventListener('click', async () => {
+    const btn     = document.getElementById('pw-save-btn');
+    const current = document.getElementById('pw-current').value;
+    const newPw   = document.getElementById('pw-new').value;
+    const confirm = document.getElementById('pw-confirm').value;
+
+    if (!current || !newPw || !confirm) { showAlert('pw-alert', 'Please fill in all fields.', 'error'); return; }
+    if (newPw !== confirm)              { showAlert('pw-alert', 'New passwords do not match.', 'error'); return; }
+    if (newPw.length < 8)              { showAlert('pw-alert', 'Password must be at least 8 characters.', 'error'); return; }
+
+    btn.disabled = true;
+    try {
+      const res  = await fetch(`${API}/auth/password`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ current_password: current, new_password: newPw }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showAlert('pw-alert', data.error, 'error'); return; }
+
+      document.getElementById('pw-current').value = '';
+      document.getElementById('pw-new').value     = '';
+      document.getElementById('pw-confirm').value = '';
+      showAlert('pw-alert', 'Password changed!', 'success');
+    } catch { showAlert('pw-alert', 'Network error.', 'error'); }
+    finally { btn.disabled = false; }
+  });
+
+  // Delete account flow
+  document.getElementById('delete-account-btn').addEventListener('click', () => {
+    document.getElementById('delete-confirm').hidden      = false;
+    document.getElementById('delete-account-btn').hidden  = true;
+  });
+
+  document.getElementById('delete-cancel-btn').addEventListener('click', () => {
+    document.getElementById('delete-confirm').hidden      = true;
+    document.getElementById('delete-account-btn').hidden  = false;
+    document.getElementById('delete-pw').value            = '';
+  });
+
+  document.getElementById('delete-confirm-btn').addEventListener('click', async () => {
+    const btn      = document.getElementById('delete-confirm-btn');
+    const password = document.getElementById('delete-pw').value;
+    if (!password) { showAlert('delete-alert', 'Please enter your password.', 'error'); return; }
+
+    btn.disabled = true;
+    try {
+      const res  = await fetch(`${API}/auth/account`, {
+        method:  'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showAlert('delete-alert', data.error, 'error'); return; }
+
+      localStorage.removeItem('btw_token');
+      localStorage.removeItem('btw_user');
+      sessionStorage.removeItem('btw_token');
+      sessionStorage.removeItem('btw_user');
+      window.location.href = 'index.html';
+    } catch { showAlert('delete-alert', 'Network error.', 'error'); }
+    finally { btn.disabled = false; }
+  });
+
+  function showAlert(id, message, type) {
+    const el = document.getElementById(id);
+    el.textContent = message;
+    el.className   = `profile-alert profile-alert--${type}`;
+    el.hidden      = false;
+    setTimeout(() => { if (type === 'success') el.hidden = true; }, 4000);
+  }
+
+  function updateStoredUser(patch) {
+    ['localStorage', 'sessionStorage'].forEach(store => {
+      const raw = window[store].getItem('btw_user');
+      if (!raw) return;
+      try {
+        const u = { ...JSON.parse(raw), ...patch };
+        window[store].setItem('btw_user', JSON.stringify(u));
+      } catch {}
+    });
+  }
+</script>
+
+<script src="nav.js"></script>
+</body>
+</html>
