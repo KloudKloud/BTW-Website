@@ -180,10 +180,12 @@ function renderUserBlock() {
 }
 
 // ── Tab switching ────────────────────────────────────────────────────────────
+const VALID_TABS = ['received', 'sent', 'compose', 'admin'];
 function switchTab(tabId) {
   document.querySelectorAll('.inbox-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
   document.querySelectorAll('.inbox-panel').forEach(p => p.hidden = true);
   document.getElementById('panel-' + tabId).hidden = false;
+  location.replace('#' + tabId);
 }
 document.getElementById('inbox-tab-bar').addEventListener('click', e => {
   const tab = e.target.closest('.inbox-tab');
@@ -413,14 +415,21 @@ async function initAdmin() {
 // ── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
   renderUserBlock();
-  loadReceived();
 
   const probe = await fetch(`${API}/inbox/admin/all`, { headers: { Authorization: `Bearer ${token}` } });
   if (probe.ok || probe.status !== 403) initAdmin();
 
   initCompose();
 
-  let sentLoaded = false;
+  // Restore tab from hash, default to received
+  const hashTab = location.hash.replace('#', '');
+  const startTab = VALID_TABS.includes(hashTab) ? hashTab : 'received';
+
+  let sentLoaded = startTab === 'sent';
+  if (startTab === 'sent') loadSent();
+  loadReceived();
+  switchTab(startTab);
+
   document.getElementById('inbox-tab-bar').addEventListener('click', e => {
     const tab = e.target.closest('.inbox-tab');
     if (tab && tab.dataset.tab === 'sent' && !sentLoaded) {
