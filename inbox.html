@@ -15,7 +15,7 @@
     <li><a href="/chapters">Chapters</a></li>
     <li><a href="/art">Gallery</a></li>
     <li><a href="/spicy">Spicy</a></li>
-        <li><a href="/characters">Characters</a></li>
+    <li><a href="/characters">Characters</a></li>
     <li><a href="/discord">Discord</a></li>
     <li><a href="/community">Community</a></li>
     <li><a href="/login" class="nav-login">Log In / Register</a></li>
@@ -24,18 +24,382 @@
 </nav>
 
 <div class="page-bg">
-  <img src="images/discordblurred.png" alt="" />
+  <img src="images/communitybackground.png" alt="" />
   <div class="page-bg-overlay"></div>
 </div>
 
-<main class="section">
-  <h1 class="section-title">Inbox</h1>
-  <p class="section-sub">Messages — coming soon.</p>
+<main class="inbox-wrap">
+
+  <!-- Auth gate -->
+  <div id="inbox-gate" class="inbox-gate" hidden>
+    <div class="inbox-gate-card">
+      <p class="inbox-gate-icon">✉️</p>
+      <h2 class="inbox-gate-title">Your Inbox</h2>
+      <p class="inbox-gate-sub">Log in to send a note to VeekitPaw and receive messages.</p>
+      <a id="inbox-gate-link" href="/login?from=/inbox" class="btn btn-primary">Log In / Register</a>
+    </div>
+  </div>
+
+  <!-- Main app -->
+  <div id="inbox-app" hidden>
+
+    <header class="inbox-header">
+      <h1 class="inbox-title">Inbox</h1>
+      <p class="inbox-subtitle" id="inbox-subtitle">Your messages with VeekitPaw</p>
+    </header>
+
+    <!-- Tab bar -->
+    <div class="inbox-tab-bar" id="inbox-tab-bar">
+      <button class="inbox-tab active" data-tab="received">📬 Inbox</button>
+      <button class="inbox-tab" data-tab="sent">📤 Sent</button>
+      <button class="inbox-tab" data-tab="compose">✉️ New Message</button>
+    </div>
+
+    <!-- ── Inbox / Received panel ─────────────────────────────────── -->
+    <div id="panel-received" class="inbox-panel">
+      <div id="received-list" class="inbox-list">
+        <div class="inbox-loading">Loading…</div>
+      </div>
+    </div>
+
+    <!-- ── Sent panel ────────────────────────────────────────────── -->
+    <div id="panel-sent" class="inbox-panel" hidden>
+      <div id="sent-list" class="inbox-list">
+        <div class="inbox-loading">Loading…</div>
+      </div>
+    </div>
+
+    <!-- ── Compose panel ─────────────────────────────────────────── -->
+    <div id="panel-compose" class="inbox-panel" hidden>
+      <div class="compose-box">
+        <div class="compose-to-row">
+          <span class="compose-to-label">To</span>
+          <span class="compose-to-name">VeekitPaw ✨</span>
+        </div>
+        <p class="compose-prompt">Send a note to me, VeekitPaw — the author! Let me know what's on your mind. I read every message 🐾</p>
+        <textarea id="compose-body" class="compose-textarea" placeholder="Type your message here…" maxlength="2000"></textarea>
+        <div class="compose-char-row">
+          <span id="compose-chars" class="compose-chars">0 / 2000</span>
+        </div>
+
+        <div class="compose-attach-row">
+          <label class="compose-attach-btn" for="compose-file">
+            📎 Attach image or file
+          </label>
+          <input type="file" id="compose-file" accept="image/*,video/mp4,video/webm,application/pdf" style="display:none" />
+          <span id="compose-file-name" class="compose-file-name"></span>
+          <button id="compose-file-clear" class="compose-file-clear" hidden aria-label="Remove attachment">✕</button>
+        </div>
+        <p class="compose-file-hint">Images, GIFs, video, PDF · Max 10 MB</p>
+
+        <div id="compose-error"   class="compose-feedback compose-feedback--error"   hidden></div>
+        <div id="compose-success" class="compose-feedback compose-feedback--success" hidden></div>
+
+        <button id="compose-send" class="compose-send-btn">Send Message ✨</button>
+      </div>
+    </div>
+
+    <!-- ── Admin panel (only shown to admin) ─────────────────────── -->
+    <div id="panel-admin" class="inbox-panel" hidden>
+      <div id="admin-list" class="inbox-list">
+        <div class="inbox-loading">Loading…</div>
+      </div>
+    </div>
+
+  </div>
 </main>
 
 <footer>
   <p>Between Two Worlds &mdash; a Pokémon fan fiction. Not affiliated with Nintendo or Game Freak.</p>
 </footer>
+
+<script>
+const API = '/api';
+const token   = localStorage.getItem('btw_token')   || sessionStorage.getItem('btw_token');
+const rawUser = localStorage.getItem('btw_user')    || sessionStorage.getItem('btw_user');
+let currentUser = null;
+try { currentUser = rawUser ? JSON.parse(rawUser) : null; } catch {}
+
+// ── Auth gate ────────────────────────────────────────────────────────────────
+if (!token || !currentUser) {
+  document.getElementById('inbox-gate').hidden = false;
+} else {
+  document.getElementById('inbox-app').hidden = false;
+  init();
+}
+
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Tab switching ────────────────────────────────────────────────────────────
+function switchTab(tabId) {
+  document.querySelectorAll('.inbox-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+  document.querySelectorAll('.inbox-panel').forEach(p => p.hidden = true);
+  document.getElementById('panel-' + tabId).hidden = false;
+}
+document.getElementById('inbox-tab-bar').addEventListener('click', e => {
+  const tab = e.target.closest('.inbox-tab');
+  if (tab) switchTab(tab.dataset.tab);
+});
+
+// ── Render helpers ───────────────────────────────────────────────────────────
+function renderEmpty(msg) {
+  const div = document.createElement('div');
+  div.className = 'inbox-empty';
+  div.textContent = msg;
+  return div;
+}
+
+function renderMessage(m, fromLabel) {
+  const card = document.createElement('div');
+  card.className = 'inbox-msg-card';
+
+  const header = document.createElement('div');
+  header.className = 'inbox-msg-header';
+  header.innerHTML = `<span class="inbox-msg-from">${esc(fromLabel)}</span><span class="inbox-msg-time">${timeAgo(m.created_at)}</span>`;
+
+  const body = document.createElement('p');
+  body.className = 'inbox-msg-body';
+  body.textContent = m.body;
+
+  card.appendChild(header);
+  card.appendChild(body);
+
+  if (m.attachment_url) {
+    const isImg = /\.(jpe?g|png|webp|gif|avif)$/i.test(m.attachment_url);
+    const attach = document.createElement('div');
+    attach.className = 'inbox-msg-attach';
+    if (isImg) {
+      const img = document.createElement('img');
+      img.src = m.attachment_url;
+      img.alt = m.attachment_name || 'Attachment';
+      img.className = 'inbox-msg-attach-img';
+      attach.appendChild(img);
+    } else {
+      const a = document.createElement('a');
+      a.href = m.attachment_url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = '📎 ' + (m.attachment_name || 'View attachment');
+      a.className = 'inbox-msg-attach-link';
+      attach.appendChild(a);
+    }
+    card.appendChild(attach);
+  }
+  return card;
+}
+
+// ── Load received ────────────────────────────────────────────────────────────
+async function loadReceived() {
+  const list = document.getElementById('received-list');
+  try {
+    const res  = await fetch(`${API}/inbox/received`, { headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json();
+    list.innerHTML = '';
+    if (!data.messages || !data.messages.length) {
+      list.appendChild(renderEmpty('No messages yet. VeekitPaw will reply here when she does! 🌙'));
+    } else {
+      data.messages.forEach(m => list.appendChild(renderMessage(m, 'VeekitPaw ✨')));
+    }
+  } catch {
+    list.innerHTML = '<div class="inbox-empty">Could not load messages.</div>';
+  }
+}
+
+// ── Load sent ────────────────────────────────────────────────────────────────
+async function loadSent() {
+  const list = document.getElementById('sent-list');
+  try {
+    const res  = await fetch(`${API}/inbox/sent`, { headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json();
+    list.innerHTML = '';
+    if (!data.messages || !data.messages.length) {
+      list.appendChild(renderEmpty("You haven't sent any messages yet. Say hi! 💌"));
+    } else {
+      const name = currentUser.display_name || currentUser.username;
+      data.messages.forEach(m => list.appendChild(renderMessage(m, 'You')));
+    }
+  } catch {
+    list.innerHTML = '<div class="inbox-empty">Could not load sent messages.</div>';
+  }
+}
+
+// ── Compose ──────────────────────────────────────────────────────────────────
+function initCompose() {
+  const textarea  = document.getElementById('compose-body');
+  const charEl    = document.getElementById('compose-chars');
+  const fileInput = document.getElementById('compose-file');
+  const fileName  = document.getElementById('compose-file-name');
+  const fileClear = document.getElementById('compose-file-clear');
+  const sendBtn   = document.getElementById('compose-send');
+  const errEl     = document.getElementById('compose-error');
+  const okEl      = document.getElementById('compose-success');
+
+  textarea.addEventListener('input', () => {
+    const n = textarea.value.length;
+    charEl.textContent = `${n} / 2000`;
+    charEl.classList.toggle('compose-chars--warn', n > 1800);
+  });
+
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files[0];
+    if (!f) return;
+    if (f.size > 10 * 1024 * 1024) {
+      fileInput.value = '';
+      errEl.textContent = 'File exceeds 10 MB limit.';
+      errEl.hidden = false;
+      return;
+    }
+    fileName.textContent = f.name;
+    fileClear.hidden = false;
+    errEl.hidden = true;
+  });
+
+  fileClear.addEventListener('click', () => {
+    fileInput.value = '';
+    fileName.textContent = '';
+    fileClear.hidden = true;
+  });
+
+  sendBtn.addEventListener('click', async () => {
+    errEl.hidden = true;
+    okEl.hidden = true;
+    const body = textarea.value.trim();
+    if (!body) { errEl.textContent = 'Please write something before sending.'; errEl.hidden = false; return; }
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Sending…';
+
+    const form = new FormData();
+    form.append('body', body);
+    if (fileInput.files[0]) form.append('attachment', fileInput.files[0]);
+
+    try {
+      const res  = await fetch(`${API}/inbox/send`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errEl.textContent = data.error || 'Something went wrong.';
+        errEl.hidden = false;
+      } else {
+        textarea.value = '';
+        charEl.textContent = '0 / 2000';
+        fileInput.value = '';
+        fileName.textContent = '';
+        fileClear.hidden = true;
+        okEl.textContent = 'Message sent! VeekitPaw will get back to you soon 🌸';
+        okEl.hidden = false;
+        // Add to sent list silently
+        loadSent();
+      }
+    } catch {
+      errEl.textContent = 'Network error. Please try again.';
+      errEl.hidden = false;
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send Message ✨';
+    }
+  });
+}
+
+// ── Admin panel ──────────────────────────────────────────────────────────────
+async function initAdmin() {
+  // Add admin tab
+  const tabBar = document.getElementById('inbox-tab-bar');
+  const adminTab = document.createElement('button');
+  adminTab.className = 'inbox-tab inbox-tab--admin';
+  adminTab.dataset.tab = 'admin';
+  adminTab.textContent = '🛡 All Messages';
+  tabBar.appendChild(adminTab);
+
+  document.getElementById('inbox-subtitle').textContent = 'Admin view — all user messages';
+
+  const list = document.getElementById('admin-list');
+  try {
+    const res  = await fetch(`${API}/inbox/admin/all`, { headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json();
+    list.innerHTML = '';
+    if (!data.messages || !data.messages.length) {
+      list.appendChild(renderEmpty('No user messages yet.'));
+      return;
+    }
+    data.messages.forEach(m => {
+      const card = renderMessage(m, m.display_name || m.username || 'Unknown user');
+      // Reply form
+      const replyWrap = document.createElement('div');
+      replyWrap.className = 'admin-reply-wrap';
+      const ta = document.createElement('textarea');
+      ta.className = 'admin-reply-area';
+      ta.placeholder = 'Reply to this user…';
+      ta.maxLength = 2000;
+      const btn = document.createElement('button');
+      btn.className = 'admin-reply-btn';
+      btn.textContent = 'Send Reply';
+      const fb = document.createElement('span');
+      fb.className = 'admin-reply-fb';
+      btn.addEventListener('click', async () => {
+        const body = ta.value.trim();
+        if (!body) return;
+        btn.disabled = true;
+        try {
+          const r = await fetch(`${API}/inbox/admin/reply`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to_user_id: m.from_user_id, body }),
+          });
+          const d = await r.json();
+          if (r.ok) { ta.value = ''; fb.textContent = 'Sent ✓'; }
+          else       { fb.textContent = d.error || 'Error.'; }
+        } catch { fb.textContent = 'Network error.'; }
+        finally { btn.disabled = false; }
+      });
+      replyWrap.appendChild(ta);
+      replyWrap.appendChild(btn);
+      replyWrap.appendChild(fb);
+      card.appendChild(replyWrap);
+      list.appendChild(card);
+    });
+  } catch {
+    list.innerHTML = '<div class="inbox-empty">Could not load messages.</div>';
+  }
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+async function init() {
+  loadReceived();
+  // Check admin by attempting admin endpoint
+  const probe = await fetch(`${API}/inbox/admin/all`, { headers: { Authorization: `Bearer ${token}` } });
+  if (probe.ok || probe.status !== 403) initAdmin();
+
+  initCompose();
+
+  // Lazy-load sent when that tab is first opened
+  let sentLoaded = false;
+  document.getElementById('inbox-tab-bar').addEventListener('click', e => {
+    const tab = e.target.closest('.inbox-tab');
+    if (tab && tab.dataset.tab === 'sent' && !sentLoaded) {
+      sentLoaded = true;
+      loadSent();
+    }
+  });
+}
+</script>
 
 <script src="nav.js"></script>
 </body>
