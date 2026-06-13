@@ -15,8 +15,8 @@
     <li><a href="/chapters">Chapters</a></li>
     <li><a href="/art" class="active">Gallery</a></li>
     <li><a href="/spicy">Spicy</a></li>
-    <li><a href="/discord">Discord</a></li>
     <li><a href="/characters">Characters</a></li>
+    <li><a href="/discord">Discord</a></li>
     <li><a href="/community">Community</a></li>
     <li><a href="/login" class="nav-login">Log In / Register</a></li>
     <li><a href="/inbox">Inbox</a></li>
@@ -39,6 +39,8 @@
   </div>
 
   <div id="art-view-desc" class="art-view-desc"></div>
+
+  <div id="art-nav" class="art-nav"></div>
 
   <!-- Comments -->
   <section class="art-view-comments" id="comments-section">
@@ -74,7 +76,8 @@
       imgEl.src = entry.src;
     }
     imgEl.alt = entry.title || '';
-    document.getElementById('art-view-title').textContent = entry.title || '';
+    const titleEl = document.getElementById('art-view-title');
+    titleEl.textContent = entry.title || '';
 
     const likeBtn = document.getElementById('art-view-like');
     likeBtn.dataset.id = entry.num;
@@ -91,15 +94,19 @@
 
     const descWrap = document.getElementById('art-view-desc');
     if (entry.desc && entry.desc.length) {
-      entry.desc.forEach(text => {
+      entry.desc.forEach(item => {
         const p = document.createElement('p');
-        p.textContent = text;
+        if (item && typeof item === 'object' && item.html) {
+          p.innerHTML = item.html;
+        } else {
+          p.textContent = item;
+        }
         descWrap.appendChild(p);
       });
       if (entry.credit) {
         const cred = document.createElement('p');
         cred.className = 'art-view-credit';
-        cred.append('Commissioned by ');
+        cred.append(entry.credit.gifted ? 'Gifted by ' : 'Commissioned by ');
         const a = document.createElement('a');
         a.href = entry.credit.url;
         a.target = '_blank';
@@ -109,6 +116,16 @@
         if (entry.credit.platform) cred.append(' ' + entry.credit.platform);
         descWrap.appendChild(cred);
       }
+      if (entry.links && entry.links.length) {
+        entry.links.forEach(link => {
+          const p = document.createElement('p');
+          p.className = 'art-view-extra-link';
+          const a = document.createElement('a');
+          a.href = link.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = link.label;
+          p.appendChild(a);
+          descWrap.appendChild(p);
+        });
+      }
     } else if (entry.caption) {
       const p = document.createElement('p');
       p.textContent = entry.caption;
@@ -116,6 +133,39 @@
     } else {
       descWrap.remove();
     }
+
+    // ── Slideshow nav ───────────────────────────────────────────────────────
+    (function () {
+      const siblings = GALLERY.filter(g => g.cat === entry.cat).sort((a, b) => a.num - b.num);
+      const idx = siblings.findIndex(g => g.num === entry.num);
+      const prevEntry = idx > 0 ? siblings[idx - 1] : null;
+      const nextEntry = idx < siblings.length - 1 ? siblings[idx + 1] : null;
+      const navEl = document.getElementById('art-nav');
+      function truncate(s, n) { return s.length > n ? s.slice(0, n).trimEnd() + '…' : s; }
+      if (prevEntry) {
+        const a = document.createElement('a');
+        a.className = 'art-nav-btn art-nav-prev';
+        a.href = `/art-view?id=${prevEntry.num}`;
+        const arrow = document.createTextNode('← ');
+        const lbl = document.createElement('span');
+        lbl.className = 'art-nav-label';
+        lbl.textContent = truncate(prevEntry.title || 'Previous', 28);
+        a.appendChild(arrow); a.appendChild(lbl);
+        navEl.appendChild(a);
+      }
+      if (nextEntry) {
+        const a = document.createElement('a');
+        a.className = 'art-nav-btn art-nav-next';
+        a.href = `/art-view?id=${nextEntry.num}`;
+        const lbl = document.createElement('span');
+        lbl.className = 'art-nav-label';
+        lbl.textContent = truncate(nextEntry.title || 'Next', 28);
+        const arrow = document.createTextNode(' →');
+        a.appendChild(lbl); a.appendChild(arrow);
+        navEl.appendChild(a);
+      }
+      if (!prevEntry && !nextEntry) navEl.remove();
+    })();
 
     // ── Comments ────────────────────────────────────────────────────────────
     const token    = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
