@@ -45,7 +45,7 @@ function checkAdmin(req) {
 app.post('/api/inbox/send', requireAuth, uploadInbox.single('attachment'), (req, res) => {
   const body = (req.body.body || '').trim();
   if (!body) return res.status(400).json({ error: 'Message cannot be empty.' });
-  if (body.length > 2000) return res.status(400).json({ error: 'Message too long (max 2000 chars).' });
+  if (body.length > 20000) return res.status(400).json({ error: 'Message too long (max 20,000 chars).' });
 
   const attachmentUrl  = req.file ? '/images/inbox/' + req.file.filename : null;
   const attachmentName = req.file ? req.file.originalname : null;
