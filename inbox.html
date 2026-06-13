@@ -124,10 +124,10 @@ let currentUser = null;
 try { currentUser = rawUser ? JSON.parse(rawUser) : null; } catch {}
 
 // ── Auth gate ────────────────────────────────────────────────────────────────
+document.getElementById('inbox-app').hidden = false;
 if (!token || !currentUser) {
-  document.getElementById('inbox-gate').hidden = false;
+  initGuest();
 } else {
-  document.getElementById('inbox-app').hidden = false;
   init();
 }
 
@@ -410,6 +410,46 @@ async function initAdmin() {
   } catch {
     list.innerHTML = '<div class="inbox-empty">Could not load messages.</div>';
   }
+}
+
+// ── Guest mode ───────────────────────────────────────────────────────────────
+function initGuest() {
+  // Guest user block
+  const block = document.getElementById('inbox-user-block');
+  const avatarEl = document.createElement('div');
+  avatarEl.className = 'inbox-pfp-fallback';
+  avatarEl.textContent = '?';
+  const nameEl = document.createElement('p');
+  nameEl.className = 'inbox-sidebar-username';
+  nameEl.style.color = 'rgba(200,184,232,0.4)';
+  nameEl.textContent = 'Not logged in';
+  block.appendChild(avatarEl);
+  block.appendChild(nameEl);
+
+  // Disable compose tab
+  const composeBtn = document.querySelector('.inbox-tab--compose');
+  composeBtn.disabled = true;
+  composeBtn.classList.add('inbox-tab--disabled');
+
+  // Friendly note for all panels
+  function guestNote(panelId) {
+    document.getElementById(panelId).innerHTML = `
+      <div class="inbox-guest-note">
+        <p>Only users with accounts can send me notes! If you are 18+ and would like to make a free account, simply click the register/log in button and come back here!</p>
+        <a href="/login" class="inbox-guest-register">Register</a>
+      </div>`;
+  }
+  guestNote('received-list');
+  guestNote('sent-list');
+
+  // Tab switching (block compose)
+  document.getElementById('inbox-tab-bar').addEventListener('click', e => {
+    const tab = e.target.closest('.inbox-tab');
+    if (tab && !tab.disabled) switchTab(tab.dataset.tab);
+  });
+
+  const hashTab = location.hash.replace('#', '');
+  switchTab(VALID_TABS.includes(hashTab) && hashTab !== 'compose' && hashTab !== 'admin' ? hashTab : 'received');
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
