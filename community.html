@@ -15,7 +15,7 @@
     <li><a href="/chapters">Chapters</a></li>
     <li><a href="/art">Gallery</a></li>
     <li><a href="/spicy">Spicy</a></li>
-        <li><a href="/characters">Characters</a></li>
+    <li><a href="/characters">Characters</a></li>
     <li><a href="/discord">Discord</a></li>
     <li><a href="/community" class="active">Community</a></li>
     <li><a href="/login" class="nav-login">Log In / Register</a></li>
@@ -28,14 +28,469 @@
   <div class="page-bg-overlay"></div>
 </div>
 
-<main class="section">
-  <h1 class="section-title">Community</h1>
-  <p class="section-sub">Fan hub — coming soon.</p>
+<main class="community-wrap">
+  <div class="community-layout">
+
+    <!-- ── Sidebar ───────────────────────────────────────────────── -->
+    <aside class="community-sidebar">
+      <div id="community-user-block" class="community-user-block"></div>
+      <div class="community-sidebar-rule"></div>
+      <p class="community-sidebar-section-label">Browse by tag</p>
+      <div id="community-tag-filters" class="community-tag-filters"></div>
+    </aside>
+
+    <!-- ── Main ──────────────────────────────────────────────────── -->
+    <div class="community-main">
+      <div id="community-compose-wrap"></div>
+      <div id="community-feed" class="community-feed">
+        <div class="community-loading">Loading posts…</div>
+      </div>
+      <button id="load-more-btn" class="community-load-more" hidden>Load more posts</button>
+    </div>
+
+  </div>
 </main>
 
 <footer>
   <p>Between Two Worlds &mdash; a Pokémon fan fiction. Not affiliated with Nintendo or Game Freak.</p>
 </footer>
+
+<script>
+const API = '/api';
+const token   = localStorage.getItem('btw_token')   || sessionStorage.getItem('btw_token');
+const rawUser = localStorage.getItem('btw_user')    || sessionStorage.getItem('btw_user');
+let currentUser = null;
+try { currentUser = rawUser ? JSON.parse(rawUser) : null; } catch {}
+
+const TAGS = ['General', 'Fanart', 'Theories & Predictions', 'Discussion', 'Introduce Yourself'];
+const TAG_META = {
+  'General':                { emoji: '💬', color: '#a78bfa' },
+  'Fanart':                 { emoji: '🎨', color: '#c2547a' },
+  'Theories & Predictions': { emoji: '🔮', color: '#f0c060' },
+  'Discussion':             { emoji: '📖', color: '#7ec8e3' },
+  'Introduce Yourself':     { emoji: '👋', color: '#7ecfa8' },
+};
+
+const guestLikes = new Set();
+let currentTag = null;
+let feedCursor = null;
+let noMore     = false;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return days + 'd ago';
+  return new Date(dateStr).toLocaleDateString();
+}
+
+function makeAvatar(user, size) {
+  if (user && user.avatar) {
+    const img = document.createElement('img');
+    img.src = user.avatar;
+    img.alt = (user.display_name || user.username || '');
+    img.className = size === 'sm' ? 'community-avatar-sm' : size === 'lg' ? 'community-avatar-lg' : 'community-avatar-md';
+    img.onerror = function() { this.replaceWith(makeFallback(user, size)); };
+    return img;
+  }
+  return makeFallback(user, size);
+}
+function makeFallback(user, size) {
+  const div = document.createElement('div');
+  div.className = size === 'sm' ? 'community-avatar-fallback-sm' : size === 'lg' ? 'community-avatar-fallback-lg' : 'community-avatar-fallback-md';
+  const name = (user && (user.display_name || user.username)) || '?';
+  div.textContent = name.charAt(0).toUpperCase();
+  return div;
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function renderUserBlock() {
+  const block = document.getElementById('community-user-block');
+  const name = currentUser ? (currentUser.display_name || currentUser.username || 'User') : null;
+  block.appendChild(makeAvatar(currentUser, 'lg'));
+  const nameEl = document.createElement('p');
+  nameEl.className = 'community-sidebar-username';
+  if (!name) nameEl.style.color = 'rgba(200,184,232,0.35)';
+  nameEl.textContent = name || 'Not logged in';
+  block.appendChild(nameEl);
+}
+
+function renderTagFilters() {
+  const wrap = document.getElementById('community-tag-filters');
+  wrap.innerHTML = '';
+  const allBtn = makeTagPill('✦ All Posts', null, currentTag === null, '#a78bfa');
+  wrap.appendChild(allBtn);
+  TAGS.forEach(tag => {
+    const m = TAG_META[tag];
+    wrap.appendChild(makeTagPill(m.emoji + ' ' + tag, tag, currentTag === tag, m.color));
+  });
+}
+function makeTagPill(label, tag, active, color) {
+  const btn = document.createElement('button');
+  btn.className = 'community-tag-pill' + (active ? ' community-tag-pill--active' : '');
+  if (active) btn.style.borderColor = color;
+  btn.textContent = label;
+  btn.addEventListener('click', () => { currentTag = tag; renderTagFilters(); loadPosts(true); });
+  return btn;
+}
+
+// ── Compose ───────────────────────────────────────────────────────────────────
+function renderCompose() {
+  const wrap = document.getElementById('community-compose-wrap');
+  wrap.innerHTML = '';
+
+  if (!currentUser) {
+    const card = document.createElement('div');
+    card.className = 'community-guest-card';
+    card.innerHTML = '<p>Only users with accounts can send me notes! If you are 18+ and would like to make a free account, simply click the register/log in button and come back here!</p>';
+    const reg = document.createElement('a');
+    reg.href = '/login';
+    reg.className = 'community-guest-register';
+    reg.textContent = 'Register';
+    card.appendChild(reg);
+    wrap.appendChild(card);
+    return;
+  }
+
+  const card = document.createElement('div');
+  card.className = 'community-compose-card';
+
+  // Avatar + textarea row
+  const topRow = document.createElement('div');
+  topRow.className = 'community-compose-row';
+  topRow.appendChild(makeAvatar(currentUser, 'md'));
+  const textarea = document.createElement('textarea');
+  textarea.className = 'community-compose-textarea';
+  textarea.placeholder = "What's on your mind?";
+  textarea.maxLength = 2000;
+  topRow.appendChild(textarea);
+  card.appendChild(topRow);
+
+  // Tag selector
+  const tagRow = document.createElement('div');
+  tagRow.className = 'community-compose-tags';
+  let selectedTag = 'General';
+  TAGS.forEach((tag, i) => {
+    const m = TAG_META[tag];
+    const btn = document.createElement('button');
+    btn.className = 'community-compose-tag-btn' + (i === 0 ? ' selected' : '');
+    btn.dataset.tag = tag;
+    btn.textContent = m.emoji + ' ' + tag;
+    if (i === 0) btn.style.borderColor = m.color;
+    btn.addEventListener('click', () => {
+      selectedTag = tag;
+      tagRow.querySelectorAll('.community-compose-tag-btn').forEach(b => { b.classList.remove('selected'); b.style.borderColor = ''; });
+      btn.classList.add('selected');
+      btn.style.borderColor = m.color;
+    });
+    tagRow.appendChild(btn);
+  });
+  card.appendChild(tagRow);
+
+  // Footer
+  const footer = document.createElement('div');
+  footer.className = 'community-compose-footer';
+
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file'; fileInput.id = 'c-file'; fileInput.accept = 'image/*'; fileInput.style.display = 'none';
+  const attachLabel = document.createElement('label');
+  attachLabel.className = 'community-attach-btn'; attachLabel.htmlFor = 'c-file'; attachLabel.textContent = '📎 Image';
+  const fileNameEl = document.createElement('span'); fileNameEl.className = 'community-file-name';
+  const fileClear = document.createElement('button'); fileClear.className = 'community-file-clear'; fileClear.hidden = true; fileClear.textContent = '✕';
+  fileClear.addEventListener('click', () => { fileInput.value = ''; fileNameEl.textContent = ''; fileClear.hidden = true; });
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files[0];
+    if (f && f.size > 10 * 1024 * 1024) { fileInput.value = ''; errEl.textContent = 'File exceeds 10 MB.'; errEl.hidden = false; return; }
+    if (f) { fileNameEl.textContent = f.name; fileClear.hidden = false; }
+  });
+
+  const charCount = document.createElement('span'); charCount.className = 'community-char-count'; charCount.textContent = '0 / 2000';
+  textarea.addEventListener('input', () => {
+    const n = textarea.value.length;
+    charCount.textContent = n + ' / 2000';
+    charCount.style.color = n > 1800 ? '#c2547a' : '';
+  });
+
+  const submitBtn = document.createElement('button'); submitBtn.className = 'community-submit-btn'; submitBtn.textContent = 'Post ✨';
+  const errEl = document.createElement('div'); errEl.className = 'community-compose-error'; errEl.hidden = true;
+
+  submitBtn.addEventListener('click', async () => {
+    const body = textarea.value.trim();
+    if (!body) { errEl.textContent = 'Write something first!'; errEl.hidden = false; return; }
+    submitBtn.disabled = true; submitBtn.textContent = 'Posting…'; errEl.hidden = true;
+    const form = new FormData();
+    form.append('body', body);
+    form.append('tag', selectedTag);
+    if (fileInput.files[0]) form.append('attachment', fileInput.files[0]);
+    try {
+      const res  = await fetch(API + '/community/posts', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: form });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = data.error || 'Something went wrong.'; errEl.hidden = false; }
+      else {
+        textarea.value = ''; charCount.textContent = '0 / 2000';
+        fileInput.value = ''; fileNameEl.textContent = ''; fileClear.hidden = true;
+        const feed = document.getElementById('community-feed');
+        const loading = feed.querySelector('.community-loading,.community-empty');
+        if (loading) loading.remove();
+        feed.insertBefore(renderPost(data.post), feed.firstChild);
+      }
+    } catch { errEl.textContent = 'Network error.'; errEl.hidden = false; }
+    finally { submitBtn.disabled = false; submitBtn.textContent = 'Post ✨'; }
+  });
+
+  footer.appendChild(attachLabel); footer.appendChild(fileInput);
+  footer.appendChild(fileNameEl); footer.appendChild(fileClear);
+  footer.appendChild(charCount); footer.appendChild(submitBtn);
+  card.appendChild(footer);
+  card.appendChild(errEl);
+  wrap.appendChild(card);
+}
+
+// ── Render post ───────────────────────────────────────────────────────────────
+function renderPost(p) {
+  const pinned = p.pinned === 1;
+  const card = document.createElement('div');
+  card.className = 'community-post' + (pinned ? ' community-post--pinned' : '');
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'community-post-header';
+  const avatarUser = { avatar: p.avatar, display_name: p.display_name, username: p.username };
+  header.appendChild(makeAvatar(avatarUser, 'md'));
+
+  const meta = document.createElement('div');
+  meta.className = 'community-post-meta';
+  const authorEl = document.createElement('span');
+  authorEl.className = 'community-post-author' + (pinned ? ' community-post-author--admin' : '');
+  authorEl.textContent = p.display_name || p.username || 'Unknown';
+  const m = TAG_META[p.tag] || TAG_META['General'];
+  const tagBadge = document.createElement('span');
+  tagBadge.className = 'community-post-tag';
+  tagBadge.textContent = m.emoji + ' ' + p.tag;
+  tagBadge.style.cssText = 'color:' + m.color + ';border-color:' + m.color + '44';
+  const timeEl = document.createElement('span');
+  timeEl.className = 'community-post-time';
+  timeEl.textContent = timeAgo(p.created_at);
+  meta.appendChild(authorEl); meta.appendChild(tagBadge); meta.appendChild(timeEl);
+  header.appendChild(meta);
+
+  const right = document.createElement('div');
+  right.className = 'community-post-header-right';
+  if (pinned) {
+    const badge = document.createElement('span');
+    badge.className = 'community-pin-badge';
+    badge.textContent = '📌 Author';
+    right.appendChild(badge);
+  }
+  const isOwner = currentUser && (currentUser.id === p.user_id);
+  const isAdmin = currentUser && currentUser.email && currentUser.email.toLowerCase() === 'shyfy000@gmail.com';
+  if (isOwner || isAdmin) {
+    const delBtn = document.createElement('button');
+    delBtn.className = 'community-delete-btn';
+    delBtn.textContent = '✕';
+    delBtn.addEventListener('click', async () => {
+      if (!confirm('Delete this post?')) return;
+      const r = await fetch(API + '/community/posts/' + p.id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } });
+      if (r.ok) card.remove();
+    });
+    right.appendChild(delBtn);
+  }
+  if (right.children.length) header.appendChild(right);
+  card.appendChild(header);
+
+  // Body
+  const body = document.createElement('p');
+  body.className = 'community-post-body';
+  body.textContent = p.body;
+  card.appendChild(body);
+
+  // Attachment
+  if (p.attachment_url) {
+    const img = document.createElement('img');
+    img.src = p.attachment_url; img.alt = 'Post image'; img.className = 'community-post-img';
+    card.appendChild(img);
+  }
+
+  // Actions
+  const actions = document.createElement('div');
+  actions.className = 'community-post-actions';
+
+  const likedInit = p.user_liked || guestLikes.has(p.id);
+  const likeBtn = document.createElement('button');
+  likeBtn.className = 'community-action' + (likedInit ? ' community-action--liked' : '');
+  const likeCount = document.createElement('span');
+  likeCount.textContent = p.like_count || 0;
+  likeBtn.innerHTML = '♥ ';
+  likeBtn.appendChild(likeCount);
+  likeBtn.addEventListener('click', () => toggleLike(p.id, likeBtn, likeCount));
+  actions.appendChild(likeBtn);
+
+  const commentsWrap = document.createElement('div');
+  commentsWrap.className = 'community-comments-wrap';
+  commentsWrap.hidden = true;
+  let commentsLoaded = false;
+
+  const commentBtn = document.createElement('button');
+  commentBtn.className = 'community-action';
+  const commentCount = document.createElement('span');
+  commentCount.textContent = p.comment_count || 0;
+  commentBtn.innerHTML = '💬 ';
+  commentBtn.appendChild(commentCount);
+  commentBtn.addEventListener('click', async () => {
+    commentsWrap.hidden = !commentsWrap.hidden;
+    if (!commentsWrap.hidden && !commentsLoaded) {
+      commentsLoaded = true;
+      await loadComments(p.id, commentsWrap, commentCount);
+    }
+  });
+  actions.appendChild(commentBtn);
+  card.appendChild(actions);
+  card.appendChild(commentsWrap);
+  return card;
+}
+
+// ── Toggle like ───────────────────────────────────────────────────────────────
+async function toggleLike(postId, btn, countEl) {
+  if (!currentUser) {
+    if (guestLikes.has(postId)) {
+      guestLikes.delete(postId);
+      btn.classList.remove('community-action--liked');
+      countEl.textContent = Math.max(0, parseInt(countEl.textContent) - 1);
+    } else {
+      guestLikes.add(postId);
+      btn.classList.add('community-action--liked');
+      countEl.textContent = parseInt(countEl.textContent) + 1;
+    }
+    return;
+  }
+  try {
+    const res  = await fetch(API + '/community/posts/' + postId + '/like', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+    const data = await res.json();
+    btn.classList.toggle('community-action--liked', data.liked);
+    countEl.textContent = data.like_count;
+  } catch {}
+}
+
+// ── Comments ──────────────────────────────────────────────────────────────────
+async function loadComments(postId, wrap, countEl) {
+  wrap.innerHTML = '<div class="community-loading" style="font-size:0.82rem;padding:0.6rem 0">Loading…</div>';
+  try {
+    const res  = await fetch(API + '/community/posts/' + postId + '/comments');
+    const data = await res.json();
+    wrap.innerHTML = '';
+    data.comments.forEach(c => wrap.appendChild(renderComment(c)));
+    renderCommentInput(postId, wrap, countEl);
+  } catch { wrap.innerHTML = '<div class="community-loading" style="font-size:0.82rem">Could not load.</div>'; }
+}
+
+function renderComment(c) {
+  const div = document.createElement('div');
+  div.className = 'community-comment';
+  div.appendChild(makeAvatar({ avatar: c.avatar, display_name: c.display_name, username: c.username }, 'sm'));
+  const main = document.createElement('div');
+  main.className = 'community-comment-main';
+  const top = document.createElement('div');
+  top.className = 'community-comment-top';
+  const author = document.createElement('span');
+  author.className = 'community-comment-author';
+  author.textContent = c.display_name || c.username || 'Unknown';
+  const time = document.createElement('span');
+  time.className = 'community-comment-time';
+  time.textContent = timeAgo(c.created_at);
+  top.appendChild(author); top.appendChild(time);
+  const body = document.createElement('p');
+  body.className = 'community-comment-body';
+  body.textContent = c.body;
+  main.appendChild(top); main.appendChild(body);
+  div.appendChild(main);
+  return div;
+}
+
+function renderCommentInput(postId, wrap, countEl) {
+  if (!currentUser) {
+    const note = document.createElement('p');
+    note.className = 'community-comment-guest';
+    note.innerHTML = '<a href="/login">Log in</a> to leave a comment.';
+    wrap.appendChild(note);
+    return;
+  }
+  const row = document.createElement('div');
+  row.className = 'community-comment-input-row';
+  row.appendChild(makeAvatar(currentUser, 'sm'));
+  const ta = document.createElement('textarea');
+  ta.className = 'community-comment-textarea';
+  ta.placeholder = 'Write a comment…';
+  ta.maxLength = 500;
+  const btn = document.createElement('button');
+  btn.className = 'community-comment-submit';
+  btn.textContent = 'Reply';
+  const errEl = document.createElement('span');
+  errEl.className = 'community-comment-err';
+  btn.addEventListener('click', async () => {
+    const body = ta.value.trim();
+    if (!body) return;
+    btn.disabled = true;
+    try {
+      const res  = await fetch(API + '/community/posts/' + postId + '/comments', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body }),
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = data.error || 'Error.'; return; }
+      wrap.insertBefore(renderComment(data.comment), row);
+      ta.value = '';
+      countEl.textContent = parseInt(countEl.textContent) + 1;
+    } catch { errEl.textContent = 'Network error.'; }
+    finally { btn.disabled = false; }
+  });
+  row.appendChild(ta); row.appendChild(btn); row.appendChild(errEl);
+  wrap.appendChild(row);
+}
+
+// ── Load feed ─────────────────────────────────────────────────────────────────
+async function loadPosts(reset) {
+  if (reset) {
+    document.getElementById('community-feed').innerHTML = '<div class="community-loading">Loading posts…</div>';
+    feedCursor = null; noMore = false;
+    document.getElementById('load-more-btn').hidden = true;
+  }
+  const params = new URLSearchParams();
+  if (currentTag) params.set('tag', currentTag);
+  if (feedCursor) params.set('before', feedCursor);
+  const headers = token ? { Authorization: 'Bearer ' + token } : {};
+  try {
+    const res  = await fetch(API + '/community/posts?' + params, { headers });
+    const data = await res.json();
+    const feed = document.getElementById('community-feed');
+    if (reset) feed.innerHTML = '';
+    if (!data.posts || !data.posts.length) {
+      if (reset) { const e = document.createElement('div'); e.className = 'community-empty'; e.textContent = 'No posts yet — be the first! 🌸'; feed.appendChild(e); }
+      noMore = true;
+    } else {
+      data.posts.forEach(p => feed.appendChild(renderPost(p)));
+      const nonPinned = data.posts.filter(p => !p.pinned);
+      if (data.posts.length < 20) noMore = true;
+      else if (nonPinned.length) feedCursor = nonPinned[nonPinned.length - 1].id;
+    }
+    document.getElementById('load-more-btn').hidden = noMore;
+  } catch {
+    document.getElementById('community-feed').innerHTML = '<div class="community-empty">Could not load posts.</div>';
+  }
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+renderUserBlock();
+renderTagFilters();
+renderCompose();
+loadPosts(true);
+document.getElementById('load-more-btn').addEventListener('click', () => loadPosts(false));
+</script>
 
 <script src="nav.js"></script>
 </body>
