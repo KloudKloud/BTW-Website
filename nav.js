@@ -49,11 +49,15 @@
 
   function renderUserNav(u) {
     const name = (u.display_name || u.username || 'Account').slice(0, 20);
+    const initial = name.charAt(0).toUpperCase();
+    const avatarHtml = u.avatar
+      ? `<img src="${u.avatar}" class="nav-user-avatar" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'nav-user-avatar nav-user-avatar--fallback',textContent:'${initial}'}))"/>`
+      : `<div class="nav-user-avatar nav-user-avatar--fallback">${initial}</div>`;
     const li = loginLink.parentElement;
     li.innerHTML = `
       <div class="nav-user">
         <button class="nav-user-btn" id="nav-user-btn" aria-haspopup="true" aria-expanded="false">
-          ${u.avatar ? `<img src="${u.avatar}" class="nav-user-avatar" alt="" />` : ''}${name} <span class="nav-user-caret">&#9662;</span>
+          ${avatarHtml}${name} <span class="nav-user-caret">&#9662;</span>
         </button>
         <div class="nav-user-dropdown" id="nav-user-dropdown" hidden>
           <a href="/profile" id="nav-profile">Edit Profile</a>
