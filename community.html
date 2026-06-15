@@ -34,6 +34,7 @@
     <!-- ── Sidebar ───────────────────────────────────────────────── -->
     <aside class="community-sidebar">
       <div id="community-user-block" class="community-user-block"></div>
+      <button id="create-post-btn" class="community-create-post-btn">✦ Create Post</button>
       <div class="community-sidebar-rule"></div>
       <p class="community-sidebar-section-label">Community Rules</p>
       <ol class="community-rules">
@@ -72,13 +73,11 @@ let currentUser = null;
 try { currentUser = rawUser ? JSON.parse(rawUser) : null; } catch {}
 
 // All tags (used in compose). Quick filter bar shows only first 3.
-const TAGS = ['General', 'Fanart', 'Theories & Predictions', 'Discussion', 'Introduce Yourself', 'Other'];
+const TAGS = ['General', 'Fanart', 'Theories & Predictions', 'Other'];
 const TAG_META = {
   'General':                { emoji: '💬', color: '#a78bfa' },
   'Fanart':                 { emoji: '🎨', color: '#c2547a' },
   'Theories & Predictions': { emoji: '🔮', color: '#f0c060', short: 'Theories' },
-  'Discussion':             { emoji: '📖', color: '#7ec8e3' },
-  'Introduce Yourself':     { emoji: '👋', color: '#7ecfa8' },
   'Other':                  { emoji: '✦',  color: '#b0b0c8' },
 };
 const QUICK_FILTER_TAGS = ['General', 'Fanart', 'Theories & Predictions'];
@@ -193,72 +192,63 @@ function renderCompose() {
   topRow.appendChild(textarea);
   card.appendChild(topRow);
 
-  // Footer row
+  const errEl = document.createElement('div'); errEl.className = 'community-compose-error'; errEl.hidden = true;
+
+  // Footer — split left / right
   const footer = document.createElement('div');
   footer.className = 'community-compose-footer';
+  const footerLeft  = document.createElement('div'); footerLeft.className  = 'community-compose-footer-left';
+  const footerRight = document.createElement('div'); footerRight.className = 'community-compose-footer-right';
 
-  // File attach
+  // Left: attach
   const fileInput = document.createElement('input');
   fileInput.type = 'file'; fileInput.id = 'c-file'; fileInput.accept = 'image/*'; fileInput.style.display = 'none';
   const attachLabel = document.createElement('label');
-  attachLabel.className = 'community-attach-btn'; attachLabel.htmlFor = 'c-file'; attachLabel.textContent = '📎 Image';
+  attachLabel.className = 'community-attach-btn'; attachLabel.htmlFor = 'c-file';
+  attachLabel.innerHTML = '<span class="community-attach-plus">+</span> Attach';
   const fileNameEl = document.createElement('span'); fileNameEl.className = 'community-file-name';
   const fileClear = document.createElement('button');
   fileClear.className = 'community-file-clear'; fileClear.hidden = true; fileClear.textContent = '✕'; fileClear.type = 'button';
-  const errEl = document.createElement('div'); errEl.className = 'community-compose-error'; errEl.hidden = true;
   fileClear.addEventListener('click', () => { fileInput.value = ''; fileNameEl.textContent = ''; fileClear.hidden = true; });
   fileInput.addEventListener('change', () => {
     const f = fileInput.files[0];
     if (f && f.size > 50 * 1024 * 1024) { fileInput.value = ''; errEl.textContent = 'File exceeds 50 MB.'; errEl.hidden = false; return; }
     if (f) { fileNameEl.textContent = f.name; fileClear.hidden = false; }
   });
+  footerLeft.appendChild(attachLabel); footerLeft.appendChild(fileInput);
+  footerLeft.appendChild(fileNameEl); footerLeft.appendChild(fileClear);
 
-  // Tag picker dropdown
+  // Right: tag picker, NSFW switch, char count, post button
   let selectedTag = 'General';
-  const tagWrap = document.createElement('div');
-  tagWrap.className = 'community-tag-picker-wrap';
-
+  const tagWrap = document.createElement('div'); tagWrap.className = 'community-tag-picker-wrap';
   const tagBtn = document.createElement('button');
   tagBtn.className = 'community-tag-picker-btn'; tagBtn.type = 'button';
-  tagBtn.textContent = '🏷️ Tag?';
-
+  tagBtn.innerHTML = '🏷️ Tag <span class="community-tag-caret">▾</span>';
   const tagDropdown = document.createElement('div');
   tagDropdown.className = 'community-tag-dropdown'; tagDropdown.hidden = true;
-
   TAGS.forEach(tag => {
     const m = TAG_META[tag];
     const opt = document.createElement('button');
     opt.className = 'community-tag-option'; opt.type = 'button';
-    opt.textContent = m.emoji + ' ' + tag;
-    opt.style.color = m.color;
+    opt.textContent = m.emoji + ' ' + tag; opt.style.color = m.color;
     opt.addEventListener('click', () => {
       selectedTag = tag;
-      tagBtn.textContent = m.emoji + ' ' + tag;
-      tagBtn.style.borderColor = m.color;
-      tagBtn.style.color = m.color;
+      tagBtn.innerHTML = m.emoji + ' ' + tag + ' <span class="community-tag-caret">▾</span>';
+      tagBtn.style.borderColor = m.color; tagBtn.style.color = m.color;
       tagDropdown.hidden = true;
     });
     tagDropdown.appendChild(opt);
   });
-
-  tagBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    tagDropdown.hidden = !tagDropdown.hidden;
-  });
+  tagBtn.addEventListener('click', (e) => { e.stopPropagation(); tagDropdown.hidden = !tagDropdown.hidden; });
   document.addEventListener('click', () => { tagDropdown.hidden = true; });
+  tagWrap.appendChild(tagBtn); tagWrap.appendChild(tagDropdown);
 
-  tagWrap.appendChild(tagBtn);
-  tagWrap.appendChild(tagDropdown);
-
-  // NSFW toggle
-  let nsfwOn = false;
-  const nsfwBtn = document.createElement('button');
-  nsfwBtn.className = 'community-nsfw-toggle'; nsfwBtn.type = 'button';
-  nsfwBtn.textContent = '🔞 NSFW';
-  nsfwBtn.addEventListener('click', () => {
-    nsfwOn = !nsfwOn;
-    nsfwBtn.classList.toggle('community-nsfw-toggle--on', nsfwOn);
-  });
+  // NSFW switch toggle
+  const nsfwLabel = document.createElement('label'); nsfwLabel.className = 'community-nsfw-switch';
+  const nsfwCheckbox = document.createElement('input'); nsfwCheckbox.type = 'checkbox'; nsfwCheckbox.className = 'community-nsfw-checkbox';
+  const nsfwSlider = document.createElement('span'); nsfwSlider.className = 'community-nsfw-slider';
+  const nsfwText = document.createElement('span'); nsfwText.className = 'community-nsfw-label'; nsfwText.textContent = 'NSFW';
+  nsfwLabel.appendChild(nsfwCheckbox); nsfwLabel.appendChild(nsfwSlider); nsfwLabel.appendChild(nsfwText);
 
   // Char count
   const charCount = document.createElement('span');
@@ -270,8 +260,7 @@ function renderCompose() {
   });
 
   // Submit
-  const submitBtn = document.createElement('button');
-  submitBtn.className = 'community-submit-btn'; submitBtn.textContent = 'Post ✨';
+  const submitBtn = document.createElement('button'); submitBtn.className = 'community-submit-btn'; submitBtn.textContent = 'Post ✨';
 
   submitBtn.addEventListener('click', async () => {
     const body = textarea.value.trim();
@@ -280,7 +269,7 @@ function renderCompose() {
     const form = new FormData();
     form.append('body', body);
     form.append('tag', selectedTag);
-    form.append('nsfw', nsfwOn ? 'true' : 'false');
+    form.append('nsfw', nsfwCheckbox.checked ? 'true' : 'false');
     if (fileInput.files[0]) form.append('attachment', fileInput.files[0]);
     try {
       const res  = await fetch(API + '/community/posts', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: form });
@@ -289,8 +278,10 @@ function renderCompose() {
       else {
         textarea.value = ''; charCount.textContent = '0 / 20,000';
         fileInput.value = ''; fileNameEl.textContent = ''; fileClear.hidden = true;
-        selectedTag = 'General'; tagBtn.textContent = '🏷️ Tag?'; tagBtn.style.borderColor = ''; tagBtn.style.color = '';
-        nsfwOn = false; nsfwBtn.classList.remove('community-nsfw-toggle--on');
+        selectedTag = 'General';
+        tagBtn.innerHTML = '🏷️ Tag <span class="community-tag-caret">▾</span>';
+        tagBtn.style.borderColor = ''; tagBtn.style.color = '';
+        nsfwCheckbox.checked = false;
         const feed = document.getElementById('community-feed');
         const loading = feed.querySelector('.community-loading,.community-empty');
         if (loading) loading.remove();
@@ -300,12 +291,12 @@ function renderCompose() {
     finally { submitBtn.disabled = false; submitBtn.textContent = 'Post ✨'; }
   });
 
-  footer.appendChild(attachLabel); footer.appendChild(fileInput);
-  footer.appendChild(fileNameEl); footer.appendChild(fileClear);
-  footer.appendChild(tagWrap);
-  footer.appendChild(nsfwBtn);
-  footer.appendChild(charCount);
-  footer.appendChild(submitBtn);
+  footerRight.appendChild(tagWrap);
+  footerRight.appendChild(nsfwLabel);
+  footerRight.appendChild(charCount);
+  footerRight.appendChild(submitBtn);
+  footer.appendChild(footerLeft);
+  footer.appendChild(footerRight);
   card.appendChild(footer);
   card.appendChild(errEl);
   wrap.appendChild(card);
@@ -601,6 +592,20 @@ let searchTimer = null;
 renderUserBlock();
 renderQuickTags();
 renderCompose();
+
+// Compose hidden until "Create Post" is clicked
+const composeWrap = document.getElementById('community-compose-wrap');
+composeWrap.hidden = true;
+const createPostBtn = document.getElementById('create-post-btn');
+createPostBtn.addEventListener('click', () => {
+  composeWrap.hidden = !composeWrap.hidden;
+  createPostBtn.classList.toggle('community-create-post-btn--active', !composeWrap.hidden);
+  if (!composeWrap.hidden) {
+    const ta = composeWrap.querySelector('textarea');
+    if (ta) ta.focus();
+  }
+});
+
 loadPosts(true);
 document.getElementById('load-more-btn').addEventListener('click', () => loadPosts(false));
 document.getElementById('community-search').addEventListener('input', function() {

@@ -782,7 +782,7 @@ const uploadCommunityImg = multer({
   },
 });
 
-const COMMUNITY_TAGS = ['General', 'Fanart', 'Theories & Predictions', 'Discussion', 'Introduce Yourself', 'Other'];
+const COMMUNITY_TAGS = ['General', 'Fanart', 'Theories & Predictions', 'Other'];
 
 // GET /api/community/posts
 app.get('/api/community/posts', async (req, res) => {
