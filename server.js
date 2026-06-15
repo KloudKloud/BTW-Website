@@ -145,10 +145,11 @@ function requireAuth(req, res, next) {
   }
 }
 
-const ADMIN_EMAIL = 'shyfy000@gmail.com';
 async function checkAdmin(req) {
   const { rows: [user] } = await pool.query('SELECT email FROM users WHERE id = $1', [req.user.id]);
-  return user && user.email.toLowerCase() === ADMIN_EMAIL;
+  if (!user) return false;
+  const hash = crypto.createHash('sha256').update(user.email.toLowerCase()).digest('hex');
+  return hash === process.env.ADMIN_EMAIL_HASH;
 }
 
 // ── Email templates ───────────────────────────────────────────────────────────
@@ -702,7 +703,7 @@ app.post('/api/inbox/send', requireAuth, uploadInbox.single('attachment'), async
     : '';
   resend.emails.send({
     from: 'BTW Inbox <noreply@btwfanfic.net>',
-    to: ADMIN_EMAIL,
+    to: process.env.ADMIN_EMAIL,
     subject: `New message from ${senderName} — Between Two Worlds`,
     html: emailShell(`
       <h2 style="color:#1a237e;font-size:1.1rem;margin:0 0 12px;">New Inbox Message</h2>
