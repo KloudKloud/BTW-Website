@@ -223,87 +223,136 @@
 
     function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+    function makeCommentAvatar(c) {
+      const name = c.display_name || c.username || '?';
+      const initial = name.charAt(0).toUpperCase();
+      if (c.avatar) {
+        const img = document.createElement('img');
+        img.src = c.avatar; img.alt = name;
+        img.className = 'comment-avatar';
+        img.onerror = function() {
+          const fb = document.createElement('div');
+          fb.className = 'comment-avatar comment-avatar--fallback';
+          fb.textContent = initial;
+          this.replaceWith(fb);
+        };
+        return img;
+      }
+      const fb = document.createElement('div');
+      fb.className = 'comment-avatar comment-avatar--fallback';
+      fb.textContent = initial;
+      return fb;
+    }
+
     function renderComment(c) {
-      const name  = c.display_name || c.username;
-      const isOwn = currentUser && (c.username === currentUser.username);
-      const div   = document.createElement('div');
+      const name      = c.display_name || c.username;
+      const isOwn     = currentUser && (c.username === currentUser.username);
+      const isAdmin   = currentUser && currentUser.is_admin;
+      const canDelete = isOwn || isAdmin;
+      const div = document.createElement('div');
       div.className    = 'comment-item';
       div.dataset.id   = c.id;
       div.dataset.body = c.body;
-      div.innerHTML = `
+
+      div.appendChild(makeCommentAvatar(c));
+
+      const inner = document.createElement('div');
+      inner.className = 'comment-inner';
+      inner.innerHTML = `
         <div class="comment-meta">
           <span class="comment-author">${esc(name)}</span>
           <span class="comment-time">${timeAgo(c.created_at)}</span>
         </div>
         <p class="comment-body">${esc(c.body)}</p>
-        ${isOwn ? `<div class="comment-actions">
-          <button class="comment-action-btn comment-action-btn--edit"  data-action="edit">Edit</button>
-          <button class="comment-action-btn comment-action-btn--delete" data-action="delete">Delete</button>
-        </div>` : ''}
+        <div class="comment-actions"></div>
       `;
+      div.appendChild(inner);
 
-      if (isOwn) {
-        div.querySelector('[data-action="edit"]').addEventListener('click', () => startEdit(div, c.id));
-        div.querySelector('[data-action="delete"]').addEventListener('click', () => deleteComment(div, c.id));
+      const actionsWrap = inner.querySelector('.comment-actions');
+
+      // Reply — all logged-in users
+      if (currentUser) {
+        const repBtn = document.createElement('button');
+        repBtn.className = 'comment-action-btn';
+        repBtn.textContent = 'Reply';
+        repBtn.addEventListener('click', () => {
+          const ta = document.getElementById('comment-input');
+          if (!ta) return;
+          const prefix = `@${name} `;
+          if (!ta.value.startsWith(prefix)) ta.value = prefix + ta.value;
+          ta.focus();
+          ta.selectionStart = ta.selectionEnd = ta.value.length;
+          ta.dispatchEvent(new Event('input'));
+          ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+        actionsWrap.appendChild(repBtn);
+      }
+
+      // Delete — owner or admin
+      if (canDelete) {
+        const delBtn = document.createElement('button');
+        delBtn.className = 'comment-action-btn comment-action-btn--delete';
+        delBtn.textContent = 'Delete';
+        delBtn.addEventListener('click', () => deleteComment(div, c.id));
+        actionsWrap.appendChild(delBtn);
+      }
+
+      // Report — logged-in non-owners
+      if (currentUser && !isOwn) {
+        const flagBtn = document.createElement('button');
+        flagBtn.className = 'comment-action-btn comment-action-btn--report';
+        flagBtn.textContent = '⚑ Report';
+        flagBtn.addEventListener('click', () => buildReportForm('art-comment', c.id, div));
+        actionsWrap.appendChild(flagBtn);
       }
 
       return div;
     }
 
-    async function startEdit(div, id) {
-      const bodyEl = div.querySelector('.comment-body');
-      const actionsEl = div.querySelector('.comment-actions');
-      const current = div.dataset.body;
+    // ── Shared report form ─────────────────────────────────────────────────────
+    function buildReportForm(type, id, anchorEl) {
+      const existing = anchorEl.querySelector('.report-form');
+      if (existing) { existing.remove(); return; }
 
-      bodyEl.hidden   = true;
-      actionsEl.hidden = true;
+      const form = document.createElement('div');
+      form.className = 'report-form';
+      form.innerHTML = `
+        <label class="report-form-label">Please describe the issue you are reporting:</label>
+        <textarea class="report-form-textarea" maxlength="1000" placeholder="Describe the problem…"></textarea>
+        <div class="report-form-actions">
+          <button class="report-form-submit">Send Report</button>
+          <button class="report-form-cancel">Cancel</button>
+        </div>
+        <span class="report-form-msg"></span>
+      `;
 
-      const area = document.createElement('textarea');
-      area.className = 'comment-edit-area';
-      area.value     = current;
-      area.maxLength = 500;
+      const ta     = form.querySelector('.report-form-textarea');
+      const submit = form.querySelector('.report-form-submit');
+      const cancel = form.querySelector('.report-form-cancel');
+      const msg    = form.querySelector('.report-form-msg');
 
-      const row = document.createElement('div');
-      row.className = 'comment-edit-row';
-
-      const saveBtn   = document.createElement('button');
-      saveBtn.className   = 'comment-edit-save';
-      saveBtn.textContent = 'Save';
-
-      const cancelBtn   = document.createElement('button');
-      cancelBtn.className   = 'comment-edit-cancel';
-      cancelBtn.textContent = 'Cancel';
-
-      row.appendChild(saveBtn);
-      row.appendChild(cancelBtn);
-      div.appendChild(area);
-      div.appendChild(row);
-      area.focus();
-
-      cancelBtn.addEventListener('click', () => {
-        area.remove(); row.remove();
-        bodyEl.hidden = false; actionsEl.hidden = false;
-      });
-
-      saveBtn.addEventListener('click', async () => {
-        const newBody = area.value.trim();
-        if (!newBody) return;
-        saveBtn.disabled = true;
+      cancel.addEventListener('click', () => form.remove());
+      submit.addEventListener('click', async () => {
+        const description = ta.value.trim();
+        if (!description) { msg.textContent = 'Please describe the issue first.'; return; }
+        submit.disabled = true;
         try {
-          const res  = await fetch(`${API}/comments/${id}`, {
-            method:  'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body:    JSON.stringify({ body: newBody }),
+          const res = await fetch('/api/report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+            body: JSON.stringify({ type, id, description }),
           });
           const data = await res.json();
-          if (!res.ok) { saveBtn.disabled = false; return; }
-
-          div.dataset.body    = newBody;
-          bodyEl.textContent  = newBody;
-          area.remove(); row.remove();
-          bodyEl.hidden = false; actionsEl.hidden = false;
-        } catch { saveBtn.disabled = false; }
+          if (!res.ok) { msg.textContent = data.error || 'Failed to send.'; submit.disabled = false; return; }
+          ta.remove(); submit.remove(); cancel.remove();
+          msg.className = 'report-form-msg report-form-msg--ok';
+          msg.textContent = '✓ Report submitted. Thank you!';
+          setTimeout(() => form.remove(), 3000);
+        } catch { msg.textContent = 'Network error.'; submit.disabled = false; }
       });
+
+      anchorEl.appendChild(form);
+      ta.focus();
     }
 
     async function deleteComment(div, id) {

@@ -102,6 +102,54 @@ let noMore      = false;
 let searchQuery = null;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Report form ───────────────────────────────────────────────────────────────
+function buildReportForm(type, id, anchorEl) {
+  // If one is already open on this item, toggle it closed
+  const existing = anchorEl.querySelector('.report-form');
+  if (existing) { existing.remove(); return; }
+
+  const form = document.createElement('div');
+  form.className = 'report-form';
+  form.innerHTML = `
+    <label class="report-form-label">Please describe the issue you are reporting:</label>
+    <textarea class="report-form-textarea" maxlength="1000" placeholder="Describe the problem…"></textarea>
+    <div class="report-form-actions">
+      <button class="report-form-submit">Send Report</button>
+      <button class="report-form-cancel">Cancel</button>
+    </div>
+    <span class="report-form-msg"></span>
+  `;
+
+  const ta     = form.querySelector('.report-form-textarea');
+  const submit = form.querySelector('.report-form-submit');
+  const cancel = form.querySelector('.report-form-cancel');
+  const msg    = form.querySelector('.report-form-msg');
+
+  cancel.addEventListener('click', () => form.remove());
+
+  submit.addEventListener('click', async () => {
+    const description = ta.value.trim();
+    if (!description) { msg.textContent = 'Please describe the issue first.'; return; }
+    submit.disabled = true;
+    try {
+      const res  = await fetch('/api/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ type, id, description }),
+      });
+      const data = await res.json();
+      if (!res.ok) { msg.textContent = data.error || 'Failed to send.'; submit.disabled = false; return; }
+      ta.remove(); submit.remove(); cancel.remove();
+      msg.className = 'report-form-msg report-form-msg--ok';
+      msg.textContent = '✓ Report submitted. Thank you!';
+      setTimeout(() => form.remove(), 3000);
+    } catch { msg.textContent = 'Network error.'; submit.disabled = false; }
+  });
+
+  anchorEl.appendChild(form);
+  ta.focus();
+}
+
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -645,6 +693,51 @@ function renderPost(p) {
     actions.appendChild(delBtn);
   }
 
+  // NSFW toggle — admin only
+  if (currentUser && currentUser.is_admin) {
+    let nsfwState = isNsfw;
+    const nsfwBtn = document.createElement('button');
+    nsfwBtn.className = 'community-post-nsfw-toggle' + (nsfwState ? ' community-post-nsfw-toggle--on' : '');
+    nsfwBtn.title = nsfwState ? 'Remove NSFW flag' : 'Mark as NSFW';
+    nsfwBtn.textContent = nsfwState ? '🔞 NSFW' : '🔞 Mark NSFW';
+    nsfwBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      nsfwBtn.disabled = true;
+      const r = await fetch(`${API}/community/posts/${p.id}/nsfw`, {
+        method: 'PATCH', headers: { Authorization: 'Bearer ' + token },
+      });
+      if (!r.ok) { nsfwBtn.disabled = false; return; }
+      const data = await r.json();
+      nsfwState = data.nsfw;
+      nsfwBtn.disabled = false;
+      nsfwBtn.textContent = nsfwState ? '🔞 NSFW' : '🔞 Mark NSFW';
+      nsfwBtn.className = 'community-post-nsfw-toggle' + (nsfwState ? ' community-post-nsfw-toggle--on' : '');
+      nsfwBtn.title = nsfwState ? 'Remove NSFW flag' : 'Mark as NSFW';
+
+      // Update card class
+      card.classList.toggle('community-post--nsfw', nsfwState);
+
+      // Update 🔞 badge in header
+      let existingFlag = meta.querySelector('.community-post-nsfw-flag');
+      if (nsfwState && !existingFlag) {
+        const flag = document.createElement('span');
+        flag.className = 'community-post-nsfw-flag'; flag.textContent = '🔞';
+        meta.insertBefore(flag, timeEl);
+      } else if (!nsfwState && existingFlag) {
+        existingFlag.remove();
+      }
+    });
+    actions.appendChild(nsfwBtn);
+  }
+
+  // Report button — shown to logged-in non-owners
+  if (currentUser && !isOwner) {
+    const repBtn = document.createElement('button');
+    repBtn.className = 'community-post-report'; repBtn.title = 'Report post'; repBtn.textContent = '⚑ Report';
+    repBtn.addEventListener('click', (e) => { e.stopPropagation(); buildReportForm('post', p.id, card); });
+    actions.appendChild(repBtn);
+  }
+
   card.style.cursor = 'pointer';
   card.addEventListener('click', (e) => {
     if (e.target.closest('button, a, textarea, input')) return;
@@ -776,7 +869,7 @@ function openPostModal(p, cardLikeBtn, cardLikeCount, cardCommentCount) {
         e.textContent = 'No comments yet! Be the first to reply? ✨';
         commentsArea.appendChild(e);
       } else {
-        data.comments.forEach(c => commentsArea.appendChild(renderComment(c)));
+        data.comments.forEach(c => commentsArea.appendChild(renderComment(c, p.id, cardCommentCount)));
       }
       renderCommentInput(p.id, commentsArea, cardCommentCount);
     })
@@ -792,12 +885,12 @@ async function loadComments(postId, wrap, countEl) {
     const res  = await fetch(API + '/community/posts/' + postId + '/comments');
     const data = await res.json();
     wrap.innerHTML = '';
-    data.comments.forEach(c => wrap.appendChild(renderComment(c)));
+    data.comments.forEach(c => wrap.appendChild(renderComment(c, postId, countEl)));
     renderCommentInput(postId, wrap, countEl);
   } catch { wrap.innerHTML = '<div class="community-loading" style="font-size:0.82rem">Could not load.</div>'; }
 }
 
-function renderComment(c) {
+function renderComment(c, postId, countEl) {
   const div = document.createElement('div');
   div.className = 'community-comment';
   div.appendChild(makeAvatar({ avatar: c.avatar, display_name: c.display_name, username: c.username }, 'sm'));
@@ -816,6 +909,38 @@ function renderComment(c) {
   body.className = 'community-comment-body';
   body.textContent = c.body;
   main.appendChild(top); main.appendChild(body);
+
+  const isOwn   = currentUser && (c.username === currentUser.username);
+  const isAdmin = currentUser && currentUser.is_admin;
+  if ((isOwn || isAdmin) && postId) {
+    const delBtn = document.createElement('button');
+    delBtn.className = 'community-comment-delete';
+    delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', async () => {
+      if (!confirm('Delete this comment?')) return;
+      try {
+        const res = await fetch(`${API}/community/posts/${postId}/comments/${c.id}`, {
+          method: 'DELETE',
+          headers: { Authorization: 'Bearer ' + token },
+        });
+        if (res.ok) {
+          div.remove();
+          if (countEl) countEl.textContent = Math.max(0, parseInt(countEl.textContent) - 1);
+        }
+      } catch {}
+    });
+    main.appendChild(delBtn);
+  }
+
+  if (currentUser && !isOwn && postId) {
+    const repBtn = document.createElement('button');
+    repBtn.className = 'community-comment-delete';
+    repBtn.textContent = '⚑ Report';
+    repBtn.style.color = 'rgba(255,255,255,0.3)';
+    repBtn.addEventListener('click', () => buildReportForm('comment', c.id, div));
+    main.appendChild(repBtn);
+  }
+
   div.appendChild(main);
   return div;
 }
@@ -848,7 +973,7 @@ function renderCommentInput(postId, wrap, countEl) {
       });
       const data = await res.json();
       if (!res.ok) { errEl.textContent = data.error || 'Error.'; return; }
-      wrap.insertBefore(renderComment(data.comment), row);
+      wrap.insertBefore(renderComment(data.comment, postId, countEl), row);
       ta.value = '';
       countEl.textContent = parseInt(countEl.textContent) + 1;
     } catch { errEl.textContent = 'Network error.'; }

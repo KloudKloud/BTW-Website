@@ -95,13 +95,29 @@
       return r.json();
     })
     .then(data => {
-      // Update stored user with fresh data from server
       const storage = localStorage.getItem('btw_token') ? localStorage : sessionStorage;
       storage.setItem('btw_user', JSON.stringify(data.user));
       renderUserNav(data.user);
+
+      // Inject Stats link for admin
+      if (data.user.is_admin) {
+        const dropdown = document.getElementById('nav-user-dropdown');
+        if (dropdown) {
+          const statsLink = document.createElement('a');
+          statsLink.href = '/stats';
+          statsLink.textContent = 'Stats';
+          dropdown.insertBefore(statsLink, dropdown.firstChild);
+        }
+      }
     })
     .catch(() => {
-      // Token is invalid or expired — clear everything and show login link
       clearAuth();
     });
+
+  // ── Page view tracking (no PII) ───────────────────────────────────────────
+  fetch('/api/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: window.location.pathname }),
+  }).catch(() => {});
 })();

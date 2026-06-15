@@ -134,6 +134,14 @@ async function initDb() {
   await pool.query(`UPDATE community_posts SET tag = 'Art/Fanart' WHERE tag = 'Fanart'`).catch(() => {});
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS page_views (
+      id         SERIAL      PRIMARY KEY,
+      path       TEXT        NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(() => {});
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS donations (
       id         SERIAL      PRIMARY KEY,
       donor_name TEXT        NOT NULL DEFAULT 'Anonymous',
@@ -143,6 +151,39 @@ async function initDb() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `).catch(() => {});
+
+  // Add email_hash column if missing
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_hash TEXT`).catch(() => {});
+
+  // Migrate plaintext emails → encrypted + hash
+  const { rows: unmigratedUsers } = await pool.query('SELECT id, email FROM users WHERE email_hash IS NULL');
+  for (const u of unmigratedUsers) {
+    try {
+      await pool.query('UPDATE users SET email = $1, email_hash = $2 WHERE id = $3',
+        [encryptEmail(u.email), hashEmail(u.email), u.id]);
+    } catch (e) { console.error('Email migration failed for user', u.id, e.message); }
+  }
+}
+
+// ── Email encryption helpers ──────────────────────────────────────────────────
+function getEmailKey() {
+  return Buffer.from(process.env.EMAIL_ENCRYPTION_KEY, 'hex');
+}
+function encryptEmail(plain) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', getEmailKey(), iv);
+  const enc = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
+  return `${iv.toString('hex')}:${enc.toString('hex')}:${cipher.getAuthTag().toString('hex')}`;
+}
+function decryptEmail(ct) {
+  if (!ct || !ct.includes(':')) return ct; // already plaintext (migration window)
+  const [ivH, dataH, tagH] = ct.split(':');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', getEmailKey(), Buffer.from(ivH, 'hex'));
+  decipher.setAuthTag(Buffer.from(tagH, 'hex'));
+  return Buffer.concat([decipher.update(Buffer.from(dataH, 'hex')), decipher.final()]).toString('utf8');
+}
+function hashEmail(email) {
+  return crypto.createHash('sha256').update(email.toLowerCase().trim()).digest('hex');
 }
 
 // ── Email ─────────────────────────────────────────────────────────────────────
@@ -165,10 +206,9 @@ function requireAuth(req, res, next) {
 }
 
 async function checkAdmin(req) {
-  const { rows: [user] } = await pool.query('SELECT email FROM users WHERE id = $1', [req.user.id]);
+  const { rows: [user] } = await pool.query('SELECT email_hash FROM users WHERE id = $1', [req.user.id]);
   if (!user) return false;
-  const hash = crypto.createHash('sha256').update(user.email.toLowerCase()).digest('hex');
-  return hash === process.env.ADMIN_EMAIL_HASH;
+  return user.email_hash === process.env.ADMIN_EMAIL_HASH;
 }
 
 // ── Email templates ───────────────────────────────────────────────────────────
@@ -262,8 +302,8 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'Username may only contain letters, numbers and underscores.' });
 
     const { rows: [existing] } = await pool.query(
-      'SELECT id FROM users WHERE email = $1 OR username = $2',
-      [email.toLowerCase(), username.toLowerCase()]
+      'SELECT id FROM users WHERE email_hash = $1 OR username = $2',
+      [hashEmail(email), username.toLowerCase()]
     );
     if (existing)
       return res.status(409).json({ error: 'That username or email is already registered.' });
@@ -273,8 +313,8 @@ app.post('/api/auth/register', async (req, res) => {
     const dname         = (display_name?.trim() || username).slice(0, 20);
 
     await pool.query(
-      'INSERT INTO users (username, display_name, email, password_hash, verify_token) VALUES ($1, $2, $3, $4, $5)',
-      [username.toLowerCase(), dname, email.toLowerCase(), password_hash, verify_token]
+      'INSERT INTO users (username, display_name, email, email_hash, password_hash, verify_token) VALUES ($1, $2, $3, $4, $5, $6)',
+      [username.toLowerCase(), dname, encryptEmail(email.toLowerCase()), hashEmail(email), password_hash, verify_token]
     );
 
     const verifyUrl = `https://${process.env.SITE_HOST}/api/auth/verify?token=${verify_token}`;
@@ -318,7 +358,7 @@ app.get('/api/auth/verify', async (req, res) => {
     await resend.emails.send({
       from: 'Between Two Worlds <hello@btwfanfic.net>',
       reply_to: 'hello@btwfanfic.net',
-      to: user.email,
+      to: decryptEmail(user.email),
       subject: 'Welcome to Between Two Worlds!',
       html: emailWelcome(user.display_name || user.username, loginUrl),
       text: `Hi ${user.display_name || user.username},\n\nYour Between Two Worlds account is now active!\n\nClick the link below to log in automatically:\n${loginUrl}\n\nWelcome aboard!\n\n— Between Two Worlds`,
@@ -338,8 +378,8 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Please fill in all fields.' });
 
     const { rows: [user] } = await pool.query(
-      'SELECT * FROM users WHERE email = $1 OR username = $1',
-      [identifier.toLowerCase()]
+      'SELECT * FROM users WHERE username = $1 OR email_hash = $2',
+      [identifier.toLowerCase(), hashEmail(identifier)]
     );
 
     if (!user)
@@ -365,11 +405,10 @@ app.post('/api/auth/login', async (req, res) => {
 // GET /api/auth/me
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
-    'SELECT id, username, display_name, avatar, email FROM users WHERE id = $1', [req.user.id]
+    'SELECT id, username, display_name, avatar, email_hash FROM users WHERE id = $1', [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
-  const hash = crypto.createHash('sha256').update(user.email.toLowerCase()).digest('hex');
-  const is_admin = hash === process.env.ADMIN_EMAIL_HASH;
+  const is_admin = user.email_hash === process.env.ADMIN_EMAIL_HASH;
   res.json({ user: { id: user.id, username: user.username, display_name: user.display_name, avatar: user.avatar || null, is_admin } });
 });
 
@@ -409,7 +448,7 @@ app.post('/api/comments', requireAuth, async (req, res) => {
     );
 
     const { rows: [user] } = await pool.query(
-      'SELECT display_name, username FROM users WHERE id = $1', [req.user.id]
+      'SELECT display_name, username, avatar FROM users WHERE id = $1', [req.user.id]
     );
 
     res.json({
@@ -418,6 +457,7 @@ app.post('/api/comments', requireAuth, async (req, res) => {
         body:         body.trim(),
         display_name: user.display_name,
         username:     user.username,
+        avatar:       user.avatar,
         created_at:   new Date().toISOString(),
       },
     });
@@ -443,7 +483,8 @@ app.put('/api/comments/:id', requireAuth, async (req, res) => {
 app.delete('/api/comments/:id', requireAuth, async (req, res) => {
   const { rows: [comment] } = await pool.query('SELECT * FROM comments WHERE id = $1', [req.params.id]);
   if (!comment) return res.status(404).json({ error: 'Comment not found.' });
-  if (comment.user_id !== req.user.id) return res.status(403).json({ error: 'Not your comment.' });
+  if (comment.user_id !== req.user.id && !await checkAdmin(req))
+    return res.status(403).json({ error: 'Not your comment.' });
 
   await pool.query('DELETE FROM comments WHERE id = $1', [req.params.id]);
   res.json({ message: 'Deleted.' });
@@ -465,20 +506,20 @@ app.put('/api/auth/profile', requireAuth, async (req, res) => {
       updates.display_name = dn;
     }
 
-    if (email !== undefined && email.toLowerCase() !== user.email) {
+    if (email !== undefined && hashEmail(email) !== user.email_hash) {
       if (!current_password) return res.status(400).json({ error: 'Current password required to change email.' });
       const valid = await bcrypt.compare(current_password, user.password_hash);
       if (!valid) return res.status(401).json({ error: 'Incorrect password.' });
 
       const { rows: [exists] } = await pool.query(
-        'SELECT id FROM users WHERE email = $1 AND id != $2', [email.toLowerCase(), user.id]
+        'SELECT id FROM users WHERE email_hash = $1 AND id != $2', [hashEmail(email), user.id]
       );
       if (exists) return res.status(409).json({ error: 'That email is already in use.' });
 
       const changeToken = crypto.randomBytes(32).toString('hex');
       await pool.query(
         'UPDATE users SET pending_email = $1, email_change_token = $2 WHERE id = $3',
-        [email.toLowerCase(), changeToken, user.id]
+        [encryptEmail(email.toLowerCase()), changeToken, user.id]
       );
 
       const confirmUrl = `https://${process.env.SITE_HOST}/api/auth/confirm-email?token=${changeToken}`;
@@ -599,8 +640,8 @@ app.get('/api/auth/confirm-email', async (req, res) => {
     `);
   }
   await pool.query(
-    'UPDATE users SET email = $1, pending_email = NULL, email_change_token = NULL WHERE id = $2',
-    [user.pending_email, user.id]
+    'UPDATE users SET email = $1, email_hash = $2, pending_email = NULL, email_change_token = NULL WHERE id = $3',
+    [user.pending_email, hashEmail(decryptEmail(user.pending_email)), user.id]
   );
   res.redirect(`https://${process.env.SITE_HOST}/profile?email_verified=1`);
 });
@@ -610,7 +651,7 @@ app.get('/api/auth/profile', requireAuth, async (req, res) => {
     'SELECT id, username, display_name, email, avatar FROM users WHERE id = $1', [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
-  res.json({ user });
+  res.json({ user: { ...user, email: decryptEmail(user.email) } });
 });
 
 // ── Protected spicy image delivery ────────────────────────────────────────────
@@ -992,6 +1033,29 @@ app.post('/api/community/posts/:id/comments', requireAuth, async (req, res) => {
   res.json({ comment });
 });
 
+// PATCH /api/community/posts/:id/nsfw  (admin only — toggle NSFW flag)
+app.patch('/api/community/posts/:id/nsfw', requireAuth, async (req, res) => {
+  if (!await checkAdmin(req)) return res.status(403).json({ error: 'Forbidden.' });
+  const postId = parseInt(req.params.id);
+  const { rows: [post] } = await pool.query('SELECT nsfw FROM community_posts WHERE id = $1', [postId]);
+  if (!post) return res.status(404).json({ error: 'Post not found.' });
+  const newVal = !post.nsfw;
+  await pool.query('UPDATE community_posts SET nsfw = $1 WHERE id = $2', [newVal, postId]);
+  res.json({ nsfw: newVal });
+});
+
+// DELETE /api/community/posts/:id/comments/:commentId
+app.delete('/api/community/posts/:id/comments/:commentId', requireAuth, async (req, res) => {
+  const commentId = parseInt(req.params.commentId);
+  const { rows: [comment] } = await pool.query('SELECT * FROM community_comments WHERE id = $1', [commentId]);
+  if (!comment) return res.status(404).json({ error: 'Comment not found.' });
+  if (comment.user_id !== req.user.id && !await checkAdmin(req))
+    return res.status(403).json({ error: 'Forbidden.' });
+
+  await pool.query('DELETE FROM community_comments WHERE id = $1', [commentId]);
+  res.json({ message: 'Deleted.' });
+});
+
 // DELETE /api/community/posts/:id
 app.delete('/api/community/posts/:id', requireAuth, async (req, res) => {
   const postId = parseInt(req.params.id);
@@ -1024,6 +1088,89 @@ app.delete('/api/community/posts/:id', requireAuth, async (req, res) => {
   }
 
   res.json({ ok: true });
+});
+
+// ── Page tracking (no PII) ────────────────────────────────────────────────────
+// ── Report ────────────────────────────────────────────────────────────────────
+app.post('/api/report', requireAuth, async (req, res) => {
+  const { type, id, description } = req.body;
+  if (!description || !description.trim()) return res.status(400).json({ error: 'Description is required.' });
+  if (description.length > 1000) return res.status(400).json({ error: 'Description too long (max 1000 chars).' });
+  if (!['post', 'comment', 'art-comment'].includes(type)) return res.status(400).json({ error: 'Invalid type.' });
+
+  const { rows: [reporter] } = await pool.query(
+    'SELECT username, display_name FROM users WHERE id = $1', [req.user.id]
+  );
+  const reporterName = (reporter && (reporter.display_name || reporter.username)) || 'Unknown';
+  const typeLabel = type === 'post' ? 'Community Post' : type === 'comment' ? 'Community Comment' : 'Art Comment';
+
+  resend.emails.send({
+    from: 'BTW Reports <noreply@btwfanfic.net>',
+    to: process.env.ADMIN_EMAIL,
+    subject: `Content Report — ${typeLabel} #${id} — Between Two Worlds`,
+    html: emailShell(`
+      <h2 style="color:#c2547a;font-size:1.1rem;margin:0 0 12px;">⚠️ Content Report</h2>
+      <p style="color:#424242;font-size:0.9rem;margin:0 0 6px;"><strong>Reported by:</strong> ${reporterName}</p>
+      <p style="color:#424242;font-size:0.9rem;margin:0 0 6px;"><strong>Content type:</strong> ${typeLabel} (ID: ${id})</p>
+      <div style="background:#fff8f8;border-left:3px solid #c2547a;padding:12px 16px;border-radius:4px;margin:12px 0;">
+        <p style="color:#212121;font-size:0.95rem;margin:0;white-space:pre-wrap;">${String(description).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>
+      </div>
+    `),
+  }).catch(console.error);
+
+  res.json({ message: 'Report submitted. Thank you.' });
+});
+
+app.post('/api/track', async (req, res) => {
+  res.sendStatus(200);
+  const raw = (req.body.path || '').slice(0, 200);
+  const path_clean = raw.split('?')[0] || '/';
+  try { await pool.query('INSERT INTO page_views (path) VALUES ($1)', [path_clean]); } catch {}
+});
+
+// ── Admin stats ───────────────────────────────────────────────────────────────
+app.get('/api/admin/stats', requireAuth, async (req, res) => {
+  if (!await checkAdmin(req)) return res.status(403).json({ error: 'Forbidden.' });
+  try {
+    const [users, signups, topPages, pagesByDay, viewTotal, donations, community] = await Promise.all([
+      pool.query(`SELECT username, display_name, created_at FROM users ORDER BY created_at DESC`),
+      pool.query(`
+        SELECT DATE(created_at) AS date, COUNT(*)::int AS count
+        FROM users WHERE created_at > NOW() - INTERVAL '30 days'
+        GROUP BY DATE(created_at) ORDER BY date
+      `),
+      pool.query(`
+        SELECT path, COUNT(*)::int AS count FROM page_views
+        WHERE created_at > NOW() - INTERVAL '30 days'
+        GROUP BY path ORDER BY count DESC LIMIT 10
+      `),
+      pool.query(`
+        SELECT DATE(created_at) AS date, COUNT(*)::int AS count
+        FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'
+        GROUP BY DATE(created_at) ORDER BY date
+      `),
+      pool.query(`SELECT COUNT(*)::int AS total FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'`),
+      pool.query(`
+        SELECT source, COUNT(*)::int AS count, SUM(amount)::float AS amount
+        FROM donations GROUP BY source
+      `),
+      pool.query(`
+        SELECT
+          (SELECT COUNT(*)::int FROM community_posts) AS posts,
+          (SELECT COUNT(*)::int FROM community_comments) AS comments
+      `),
+    ]);
+    res.json({
+      users:     { total: users.rows.length, list: users.rows },
+      signups:   signups.rows,
+      pageViews: { total: viewTotal.rows[0].total, byPath: topPages.rows, byDay: pagesByDay.rows },
+      donations: donations.rows,
+      community: community.rows[0],
+    });
+  } catch (err) {
+    console.error('Stats error:', err);
+    res.status(500).json({ error: 'Failed to load stats.' });
+  }
 });
 
 // ── Donations ─────────────────────────────────────────────────────────────────
