@@ -41,7 +41,7 @@
       <ol class="community-rules">
         <li>Feel free to have discussions, post a fun meme, or share fanart and story thoughts here!</li>
         <li>NSFW content is fine and supported! Please just label your post with the NSFW flag before posting.</li>
-        <li>Fanart (NSFW or SFW) may be stored in a special gallery, with your permission, as a thank you for reading! ❤</li>
+        <li>Art/Fanart (NSFW or SFW) may be stored in a special gallery, with your permission, as a thank you for reading! ❤</li>
         <li>Have fun!</li>
       </ol>
     </aside>
@@ -79,14 +79,14 @@ let currentUser = null;
 try { currentUser = rawUser ? JSON.parse(rawUser) : null; } catch {}
 
 // All tags (used in compose). Quick filter bar shows only first 3.
-const TAGS = ['General', 'Fanart', 'Theories & Predictions', 'Other'];
+const TAGS = ['General', 'Art/Fanart', 'Theories & Predictions', 'Other'];
 const TAG_META = {
   'General':                { emoji: '💬', color: '#a78bfa' },
-  'Fanart':                 { emoji: '🎨', color: '#c2547a' },
+  'Art/Fanart':             { emoji: '🎨', color: '#c2547a' },
   'Theories & Predictions': { emoji: '🔮', color: '#f0c060', short: 'Theories' },
   'Other':                  { emoji: '✦',  color: '#b0b0c8' },
 };
-const QUICK_FILTER_TAGS = ['General', 'Fanart', 'Theories & Predictions'];
+const QUICK_FILTER_TAGS = ['General', 'Art/Fanart', 'Theories & Predictions'];
 
 const guestLikes = new Set();
 let currentTag  = null;
@@ -493,10 +493,11 @@ function renderPost(p) {
   authorEl.className = 'community-post-author' + (pinned ? ' community-post-author--admin' : '');
   authorEl.textContent = p.display_name || p.username || 'Unknown';
 
-  const m = TAG_META[p.tag] || TAG_META['General'];
+  const tagKey = p.tag === 'Fanart' ? 'Art/Fanart' : p.tag;
+  const m = TAG_META[tagKey] || TAG_META['General'];
   const tagBadge = document.createElement('span');
   tagBadge.className = 'community-post-tag';
-  tagBadge.textContent = m.emoji + ' ' + p.tag;
+  tagBadge.textContent = m.emoji + ' ' + tagKey;
   tagBadge.style.cssText = 'color:' + m.color + ';border-color:' + m.color + '44';
 
   meta.appendChild(authorEl);
@@ -514,26 +515,14 @@ function renderPost(p) {
   meta.appendChild(timeEl);
   header.appendChild(meta);
 
-  const right = document.createElement('div');
-  right.className = 'community-post-header-right';
-  if (pinned) {
-    const badge = document.createElement('span');
-    badge.className = 'community-pin-badge';
-    badge.textContent = '📌 Author';
-    right.appendChild(badge);
-  }
   const isOwner = currentUser && (currentUser.id === p.user_id);
-  if (isOwner || pinned) {
-    const delBtn = document.createElement('button');
-    delBtn.className = 'community-delete-btn'; delBtn.textContent = '✕';
-    delBtn.addEventListener('click', async () => {
-      if (!confirm('Delete this post?')) return;
-      const r = await fetch(API + '/community/posts/' + p.id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } });
-      if (r.ok) card.remove();
-    });
-    right.appendChild(delBtn);
+  if (pinned) {
+    const right = document.createElement('div');
+    right.className = 'community-post-header-right';
+    const badge = document.createElement('span');
+    badge.className = 'community-pin-badge'; badge.textContent = '📌 Author';
+    right.appendChild(badge); header.appendChild(right);
   }
-  if (right.children.length) header.appendChild(right);
   card.appendChild(header);
 
   // Resolve media: gif_url takes priority, then attachments JSON, then legacy attachment_url
@@ -593,7 +582,31 @@ function renderPost(p) {
     appendMedia(card, media, false);
   }
 
-  // Actions
+  // Comments section (declared early so toggleComments can reference it)
+  const commentsWrap = document.createElement('div');
+  commentsWrap.className = 'community-comments-wrap';
+  commentsWrap.hidden = true;
+  let commentsLoaded = false;
+  const commentCount = document.createElement('span');
+  commentCount.textContent = p.comment_count || 0;
+
+  function toggleComments() {
+    commentsWrap.hidden = !commentsWrap.hidden;
+    card.classList.toggle('community-post--open', !commentsWrap.hidden);
+    if (!commentsWrap.hidden && !commentsLoaded) {
+      commentsLoaded = true;
+      loadComments(p.id, commentsWrap, commentCount);
+    }
+  }
+
+  // Clicking the card body opens comments; interactive elements handle themselves
+  card.style.cursor = 'pointer';
+  card.addEventListener('click', (e) => {
+    if (e.target.closest('button, a, textarea, input, .community-comments-wrap')) return;
+    toggleComments();
+  });
+
+  // Actions bar
   const actions = document.createElement('div');
   actions.className = 'community-post-actions';
 
@@ -604,28 +617,30 @@ function renderPost(p) {
   likeCount.textContent = p.like_count || 0;
   likeBtn.innerHTML = '♥ ';
   likeBtn.appendChild(likeCount);
-  likeBtn.addEventListener('click', () => toggleLike(p.id, likeBtn, likeCount));
+  likeBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleLike(p.id, likeBtn, likeCount); });
   actions.appendChild(likeBtn);
-
-  const commentsWrap = document.createElement('div');
-  commentsWrap.className = 'community-comments-wrap';
-  commentsWrap.hidden = true;
-  let commentsLoaded = false;
 
   const commentBtn = document.createElement('button');
   commentBtn.className = 'community-action';
-  const commentCount = document.createElement('span');
-  commentCount.textContent = p.comment_count || 0;
   commentBtn.innerHTML = '💬 ';
   commentBtn.appendChild(commentCount);
-  commentBtn.addEventListener('click', async () => {
-    commentsWrap.hidden = !commentsWrap.hidden;
-    if (!commentsWrap.hidden && !commentsLoaded) {
-      commentsLoaded = true;
-      await loadComments(p.id, commentsWrap, commentCount);
-    }
-  });
+  commentBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleComments(); });
   actions.appendChild(commentBtn);
+
+  // Trash icon — owner sees it on their posts; admin sees it on all posts
+  const canDelete = isOwner || (currentUser && currentUser.is_admin);
+  if (canDelete) {
+    const delBtn = document.createElement('button');
+    delBtn.className = 'community-post-delete'; delBtn.title = 'Delete post'; delBtn.textContent = '🗑️';
+    delBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm('Delete this post?')) return;
+      const r = await fetch(API + '/community/posts/' + p.id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } });
+      if (r.ok) card.remove();
+    });
+    actions.appendChild(delBtn);
+  }
+
   card.appendChild(actions);
   card.appendChild(commentsWrap);
   return card;
@@ -787,6 +802,22 @@ async function runSearch(q) {
 let searchTimer = null;
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
+(async () => {
+  // Fetch fresh user data (includes is_admin) before rendering anything
+  if (token) {
+    try {
+      const r = await fetch(API + '/auth/me', { headers: { Authorization: 'Bearer ' + token } });
+      if (r.ok) {
+        const d = await r.json();
+        if (d.user) {
+          currentUser = Object.assign({}, currentUser, d.user);
+          const store = localStorage.getItem('btw_token') ? localStorage : sessionStorage;
+          store.setItem('btw_user', JSON.stringify(currentUser));
+        }
+      }
+    } catch {}
+  }
+
 renderUserBlock();
 renderQuickTags();
 renderCompose();
@@ -825,6 +856,7 @@ document.getElementById('sidebar-search-btn').addEventListener('click', () => {
   searchEl.focus();
   searchEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 });
+})(); // end async boot IIFE
 </script>
 
 <script src="nav.js"></script>

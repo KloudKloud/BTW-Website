@@ -130,6 +130,8 @@ async function initDb() {
     ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS attachments TEXT;
     ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS gif_url TEXT;
   `).catch(() => {});
+
+  await pool.query(`UPDATE community_posts SET tag = 'Art/Fanart' WHERE tag = 'Fanart'`).catch(() => {});
 }
 
 // ── Email ─────────────────────────────────────────────────────────────────────
@@ -352,10 +354,12 @@ app.post('/api/auth/login', async (req, res) => {
 // GET /api/auth/me
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
-    'SELECT id, username, display_name, avatar FROM users WHERE id = $1', [req.user.id]
+    'SELECT id, username, display_name, avatar, email FROM users WHERE id = $1', [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
-  res.json({ user });
+  const hash = crypto.createHash('sha256').update(user.email.toLowerCase()).digest('hex');
+  const is_admin = hash === process.env.ADMIN_EMAIL_HASH;
+  res.json({ user: { id: user.id, username: user.username, display_name: user.display_name, avatar: user.avatar || null, is_admin } });
 });
 
 // POST /api/auth/logout
@@ -788,7 +792,7 @@ const uploadCommunityImg = multer({
   },
 });
 
-const COMMUNITY_TAGS = ['General', 'Fanart', 'Theories & Predictions', 'Other'];
+const COMMUNITY_TAGS = ['General', 'Art/Fanart', 'Theories & Predictions', 'Other'];
 
 // GET /api/community/posts
 app.get('/api/community/posts', async (req, res) => {
