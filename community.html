@@ -35,14 +35,20 @@
     <aside class="community-sidebar">
       <div id="community-user-block" class="community-user-block"></div>
       <div class="community-sidebar-rule"></div>
-      <p class="community-sidebar-section-label">Browse by tag</p>
-      <div id="community-tag-filters" class="community-tag-filters"></div>
+      <p class="community-sidebar-section-label">Community Rules</p>
+      <ol class="community-rules">
+        <li>Feel free to have discussions, post a fun meme, or share fanart and story thoughts here!</li>
+        <li>NSFW content is fine and supported! Please just label your post with the NSFW flag before posting.</li>
+        <li>Fanart (NSFW or SFW) may be stored in a special gallery, with your permission, as a thank you for reading! ❤</li>
+        <li>Have fun!</li>
+      </ol>
     </aside>
 
     <!-- ── Main ──────────────────────────────────────────────────── -->
     <div class="community-main">
-      <div class="community-search-wrap">
-        <input id="community-search" class="community-search-input" type="search" placeholder="🔍  Search posts…" autocomplete="off" />
+      <div class="community-search-row">
+        <input id="community-search" class="community-search-input" type="search" placeholder="🔍 Search…" autocomplete="off" />
+        <div id="community-quick-tags" class="community-quick-tags"></div>
       </div>
       <div id="community-compose-wrap"></div>
       <div id="community-feed" class="community-feed">
@@ -65,20 +71,23 @@ const rawUser = localStorage.getItem('btw_user')    || sessionStorage.getItem('b
 let currentUser = null;
 try { currentUser = rawUser ? JSON.parse(rawUser) : null; } catch {}
 
-const TAGS = ['General', 'Fanart', 'Theories & Predictions', 'Discussion', 'Introduce Yourself'];
+// All tags (used in compose). Quick filter bar shows only first 3.
+const TAGS = ['General', 'Fanart', 'Theories & Predictions', 'Discussion', 'Introduce Yourself', 'Other'];
 const TAG_META = {
   'General':                { emoji: '💬', color: '#a78bfa' },
   'Fanart':                 { emoji: '🎨', color: '#c2547a' },
-  'Theories & Predictions': { emoji: '🔮', color: '#f0c060' },
+  'Theories & Predictions': { emoji: '🔮', color: '#f0c060', short: 'Theories' },
   'Discussion':             { emoji: '📖', color: '#7ec8e3' },
   'Introduce Yourself':     { emoji: '👋', color: '#7ecfa8' },
+  'Other':                  { emoji: '✦',  color: '#b0b0c8' },
 };
+const QUICK_FILTER_TAGS = ['General', 'Fanart', 'Theories & Predictions'];
 
 const guestLikes = new Set();
-let currentTag    = null;
-let feedCursor    = null;
-let noMore        = false;
-let searchQuery   = null;
+let currentTag  = null;
+let feedCursor  = null;
+let noMore      = false;
+let searchQuery = null;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(dateStr) {
@@ -124,22 +133,31 @@ function renderUserBlock() {
   block.appendChild(nameEl);
 }
 
-function renderTagFilters() {
-  const wrap = document.getElementById('community-tag-filters');
+// ── Quick tag filter bar ──────────────────────────────────────────────────────
+function renderQuickTags() {
+  const wrap = document.getElementById('community-quick-tags');
   wrap.innerHTML = '';
-  const allBtn = makeTagPill('✦ All Posts', null, currentTag === null, '#a78bfa');
+  const allBtn = makeQuickPill('All', null);
   wrap.appendChild(allBtn);
-  TAGS.forEach(tag => {
+  QUICK_FILTER_TAGS.forEach(tag => {
     const m = TAG_META[tag];
-    wrap.appendChild(makeTagPill(m.emoji + ' ' + tag, tag, currentTag === tag, m.color));
+    wrap.appendChild(makeQuickPill(m.emoji + ' ' + (m.short || tag), tag));
   });
 }
-function makeTagPill(label, tag, active, color) {
+function makeQuickPill(label, tag) {
   const btn = document.createElement('button');
-  btn.className = 'community-tag-pill' + (active ? ' community-tag-pill--active' : '');
+  const active = currentTag === tag;
+  const color = tag ? TAG_META[tag].color : '#a78bfa';
+  btn.className = 'community-quick-pill' + (active ? ' community-quick-pill--active' : '');
   if (active) btn.style.borderColor = color;
   btn.textContent = label;
-  btn.addEventListener('click', () => { currentTag = tag; renderTagFilters(); loadPosts(true); });
+  btn.addEventListener('click', () => {
+    currentTag = tag;
+    document.getElementById('community-search').value = '';
+    searchQuery = null;
+    renderQuickTags();
+    loadPosts(true);
+  });
   return btn;
 }
 
@@ -151,7 +169,7 @@ function renderCompose() {
   if (!currentUser) {
     const card = document.createElement('div');
     card.className = 'community-guest-card';
-    card.innerHTML = '<p>Only users with accounts can send me notes! If you are 18+ and would like to make a free account, simply click the register/log in button and come back here!</p>';
+    card.innerHTML = '<p>Only users with accounts can post here! If you\'d like to make a free account, click Register below!</p>';
     const reg = document.createElement('a');
     reg.href = '/login';
     reg.className = 'community-guest-register';
@@ -164,75 +182,96 @@ function renderCompose() {
   const card = document.createElement('div');
   card.className = 'community-compose-card';
 
-  // Avatar + textarea row
+  // Avatar + textarea
   const topRow = document.createElement('div');
   topRow.className = 'community-compose-row';
   topRow.appendChild(makeAvatar(currentUser, 'md'));
   const textarea = document.createElement('textarea');
   textarea.className = 'community-compose-textarea';
   textarea.placeholder = "What's on your mind?";
-  textarea.maxLength = 2000;
+  textarea.maxLength = 20000;
   topRow.appendChild(textarea);
   card.appendChild(topRow);
 
-  // Tag selector
-  const tagRow = document.createElement('div');
-  tagRow.className = 'community-compose-tags';
-  let selectedTag = 'General';
-  TAGS.forEach((tag, i) => {
-    const m = TAG_META[tag];
-    const btn = document.createElement('button');
-    btn.className = 'community-compose-tag-btn' + (i === 0 ? ' selected' : '');
-    btn.dataset.tag = tag;
-    btn.textContent = m.emoji + ' ' + tag;
-    if (i === 0) btn.style.borderColor = m.color;
-    btn.addEventListener('click', () => {
-      selectedTag = tag;
-      tagRow.querySelectorAll('.community-compose-tag-btn').forEach(b => { b.classList.remove('selected'); b.style.borderColor = ''; });
-      btn.classList.add('selected');
-      btn.style.borderColor = m.color;
-    });
-    tagRow.appendChild(btn);
-  });
-  card.appendChild(tagRow);
-
-  // Footer
+  // Footer row
   const footer = document.createElement('div');
   footer.className = 'community-compose-footer';
 
+  // File attach
   const fileInput = document.createElement('input');
   fileInput.type = 'file'; fileInput.id = 'c-file'; fileInput.accept = 'image/*'; fileInput.style.display = 'none';
   const attachLabel = document.createElement('label');
   attachLabel.className = 'community-attach-btn'; attachLabel.htmlFor = 'c-file'; attachLabel.textContent = '📎 Image';
   const fileNameEl = document.createElement('span'); fileNameEl.className = 'community-file-name';
-  const fileClear = document.createElement('button'); fileClear.className = 'community-file-clear'; fileClear.hidden = true; fileClear.textContent = '✕';
+  const fileClear = document.createElement('button');
+  fileClear.className = 'community-file-clear'; fileClear.hidden = true; fileClear.textContent = '✕'; fileClear.type = 'button';
+  const errEl = document.createElement('div'); errEl.className = 'community-compose-error'; errEl.hidden = true;
   fileClear.addEventListener('click', () => { fileInput.value = ''; fileNameEl.textContent = ''; fileClear.hidden = true; });
   fileInput.addEventListener('change', () => {
     const f = fileInput.files[0];
-    if (f && f.size > 10 * 1024 * 1024) { fileInput.value = ''; errEl.textContent = 'File exceeds 10 MB.'; errEl.hidden = false; return; }
+    if (f && f.size > 50 * 1024 * 1024) { fileInput.value = ''; errEl.textContent = 'File exceeds 50 MB.'; errEl.hidden = false; return; }
     if (f) { fileNameEl.textContent = f.name; fileClear.hidden = false; }
   });
+
+  // Tag picker dropdown
+  let selectedTag = 'General';
+  const tagWrap = document.createElement('div');
+  tagWrap.className = 'community-tag-picker-wrap';
+
+  const tagBtn = document.createElement('button');
+  tagBtn.className = 'community-tag-picker-btn'; tagBtn.type = 'button';
+  tagBtn.textContent = '🏷️ Tag?';
+
+  const tagDropdown = document.createElement('div');
+  tagDropdown.className = 'community-tag-dropdown'; tagDropdown.hidden = true;
+
+  TAGS.forEach(tag => {
+    const m = TAG_META[tag];
+    const opt = document.createElement('button');
+    opt.className = 'community-tag-option'; opt.type = 'button';
+    opt.textContent = m.emoji + ' ' + tag;
+    opt.style.color = m.color;
+    opt.addEventListener('click', () => {
+      selectedTag = tag;
+      tagBtn.textContent = m.emoji + ' ' + tag;
+      tagBtn.style.borderColor = m.color;
+      tagBtn.style.color = m.color;
+      tagDropdown.hidden = true;
+    });
+    tagDropdown.appendChild(opt);
+  });
+
+  tagBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    tagDropdown.hidden = !tagDropdown.hidden;
+  });
+  document.addEventListener('click', () => { tagDropdown.hidden = true; });
+
+  tagWrap.appendChild(tagBtn);
+  tagWrap.appendChild(tagDropdown);
 
   // NSFW toggle
   let nsfwOn = false;
   const nsfwBtn = document.createElement('button');
-  nsfwBtn.className = 'community-nsfw-toggle';
+  nsfwBtn.className = 'community-nsfw-toggle'; nsfwBtn.type = 'button';
   nsfwBtn.textContent = '🔞 NSFW';
-  nsfwBtn.type = 'button';
   nsfwBtn.addEventListener('click', () => {
     nsfwOn = !nsfwOn;
     nsfwBtn.classList.toggle('community-nsfw-toggle--on', nsfwOn);
   });
 
-  const charCount = document.createElement('span'); charCount.className = 'community-char-count'; charCount.textContent = '0 / 2000';
+  // Char count
+  const charCount = document.createElement('span');
+  charCount.className = 'community-char-count'; charCount.textContent = '0 / 20,000';
   textarea.addEventListener('input', () => {
     const n = textarea.value.length;
-    charCount.textContent = n + ' / 2000';
-    charCount.style.color = n > 1800 ? '#c2547a' : '';
+    charCount.textContent = n.toLocaleString() + ' / 20,000';
+    charCount.style.color = n > 18000 ? '#c2547a' : '';
   });
 
-  const submitBtn = document.createElement('button'); submitBtn.className = 'community-submit-btn'; submitBtn.textContent = 'Post ✨';
-  const errEl = document.createElement('div'); errEl.className = 'community-compose-error'; errEl.hidden = true;
+  // Submit
+  const submitBtn = document.createElement('button');
+  submitBtn.className = 'community-submit-btn'; submitBtn.textContent = 'Post ✨';
 
   submitBtn.addEventListener('click', async () => {
     const body = textarea.value.trim();
@@ -248,8 +287,9 @@ function renderCompose() {
       const data = await res.json();
       if (!res.ok) { errEl.textContent = data.error || 'Something went wrong.'; errEl.hidden = false; }
       else {
-        textarea.value = ''; charCount.textContent = '0 / 2000';
+        textarea.value = ''; charCount.textContent = '0 / 20,000';
         fileInput.value = ''; fileNameEl.textContent = ''; fileClear.hidden = true;
+        selectedTag = 'General'; tagBtn.textContent = '🏷️ Tag?'; tagBtn.style.borderColor = ''; tagBtn.style.color = '';
         nsfwOn = false; nsfwBtn.classList.remove('community-nsfw-toggle--on');
         const feed = document.getElementById('community-feed');
         const loading = feed.querySelector('.community-loading,.community-empty');
@@ -262,8 +302,10 @@ function renderCompose() {
 
   footer.appendChild(attachLabel); footer.appendChild(fileInput);
   footer.appendChild(fileNameEl); footer.appendChild(fileClear);
+  footer.appendChild(tagWrap);
   footer.appendChild(nsfwBtn);
-  footer.appendChild(charCount); footer.appendChild(submitBtn);
+  footer.appendChild(charCount);
+  footer.appendChild(submitBtn);
   card.appendChild(footer);
   card.appendChild(errEl);
   wrap.appendChild(card);
@@ -279,23 +321,34 @@ function renderPost(p) {
   // Header
   const header = document.createElement('div');
   header.className = 'community-post-header';
-  const avatarUser = { avatar: p.avatar, display_name: p.display_name, username: p.username };
-  header.appendChild(makeAvatar(avatarUser, 'md'));
+  header.appendChild(makeAvatar({ avatar: p.avatar, display_name: p.display_name, username: p.username }, 'md'));
 
   const meta = document.createElement('div');
   meta.className = 'community-post-meta';
+
   const authorEl = document.createElement('span');
   authorEl.className = 'community-post-author' + (pinned ? ' community-post-author--admin' : '');
   authorEl.textContent = p.display_name || p.username || 'Unknown';
+
   const m = TAG_META[p.tag] || TAG_META['General'];
   const tagBadge = document.createElement('span');
   tagBadge.className = 'community-post-tag';
   tagBadge.textContent = m.emoji + ' ' + p.tag;
   tagBadge.style.cssText = 'color:' + m.color + ';border-color:' + m.color + '44';
+
+  meta.appendChild(authorEl);
+  meta.appendChild(tagBadge);
+  if (isNsfw) {
+    const nsfwFlag = document.createElement('span');
+    nsfwFlag.className = 'community-post-nsfw-flag';
+    nsfwFlag.textContent = '🔞';
+    meta.appendChild(nsfwFlag);
+  }
+
   const timeEl = document.createElement('span');
   timeEl.className = 'community-post-time';
   timeEl.textContent = timeAgo(p.created_at);
-  meta.appendChild(authorEl); meta.appendChild(tagBadge); meta.appendChild(timeEl);
+  meta.appendChild(timeEl);
   header.appendChild(meta);
 
   const right = document.createElement('div');
@@ -307,11 +360,9 @@ function renderPost(p) {
     right.appendChild(badge);
   }
   const isOwner = currentUser && (currentUser.id === p.user_id);
-  const isAdmin = currentUser && currentUser.email && currentUser.email.toLowerCase() === 'shyfy000@gmail.com';
-  if (isOwner || isAdmin) {
+  if (isOwner || pinned) {
     const delBtn = document.createElement('button');
-    delBtn.className = 'community-delete-btn';
-    delBtn.textContent = '✕';
+    delBtn.className = 'community-delete-btn'; delBtn.textContent = '✕';
     delBtn.addEventListener('click', async () => {
       if (!confirm('Delete this post?')) return;
       const r = await fetch(API + '/community/posts/' + p.id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } });
@@ -322,7 +373,7 @@ function renderPost(p) {
   if (right.children.length) header.appendChild(right);
   card.appendChild(header);
 
-  // Body + image (with NSFW gate for guests)
+  // Body + image (NSFW gate for guests)
   if (isNsfw && !currentUser) {
     const gate = document.createElement('div');
     gate.className = 'community-nsfw-gate';
@@ -332,7 +383,8 @@ function renderPost(p) {
     gate.appendChild(blurBody);
     if (p.attachment_url) {
       const blurImg = document.createElement('img');
-      blurImg.src = p.attachment_url; blurImg.alt = ''; blurImg.className = 'community-post-img community-nsfw-blur';
+      blurImg.src = p.attachment_url; blurImg.alt = '';
+      blurImg.className = 'community-post-img community-nsfw-blur';
       gate.appendChild(blurImg);
     }
     const overlay = document.createElement('div');
@@ -350,14 +402,6 @@ function renderPost(p) {
       img.src = p.attachment_url; img.alt = 'Post image'; img.className = 'community-post-img';
       card.appendChild(img);
     }
-  }
-
-  // NSFW badge for logged-in users
-  if (isNsfw && currentUser) {
-    const badge = document.createElement('span');
-    badge.className = 'community-nsfw-badge';
-    badge.textContent = '🔞 NSFW';
-    card.insertBefore(badge, card.querySelector('.community-post-actions') || null);
   }
 
   // Actions
@@ -467,14 +511,10 @@ function renderCommentInput(postId, wrap, countEl) {
   row.className = 'community-comment-input-row';
   row.appendChild(makeAvatar(currentUser, 'sm'));
   const ta = document.createElement('textarea');
-  ta.className = 'community-comment-textarea';
-  ta.placeholder = 'Write a comment…';
-  ta.maxLength = 500;
+  ta.className = 'community-comment-textarea'; ta.placeholder = 'Write a comment…'; ta.maxLength = 500;
   const btn = document.createElement('button');
-  btn.className = 'community-comment-submit';
-  btn.textContent = 'Reply';
-  const errEl = document.createElement('span');
-  errEl.className = 'community-comment-err';
+  btn.className = 'community-comment-submit'; btn.textContent = 'Reply';
+  const errEl = document.createElement('span'); errEl.className = 'community-comment-err';
   btn.addEventListener('click', async () => {
     const body = ta.value.trim();
     if (!body) return;
@@ -532,25 +572,22 @@ async function loadPosts(reset) {
 async function runSearch(q) {
   searchQuery = q || null;
   const feed = document.getElementById('community-feed');
-  const loadMoreBtn = document.getElementById('load-more-btn');
   if (!searchQuery) { loadPosts(true); return; }
   feed.innerHTML = '<div class="community-loading">Searching…</div>';
-  loadMoreBtn.hidden = true;
+  document.getElementById('load-more-btn').hidden = true;
   const headers = token ? { Authorization: 'Bearer ' + token } : {};
   try {
     const res  = await fetch(API + '/community/search?q=' + encodeURIComponent(searchQuery), { headers });
     const data = await res.json();
     feed.innerHTML = '';
     if (!data.posts || !data.posts.length) {
-      const e = document.createElement('div');
-      e.className = 'community-empty';
+      const e = document.createElement('div'); e.className = 'community-empty';
       e.textContent = 'No posts found for "' + searchQuery + '"';
       feed.appendChild(e);
     } else {
-      const header = document.createElement('div');
-      header.className = 'community-search-header';
-      header.textContent = data.posts.length + ' result' + (data.posts.length === 1 ? '' : 's') + ' for "' + searchQuery + '"';
-      feed.appendChild(header);
+      const hdr = document.createElement('div'); hdr.className = 'community-search-header';
+      hdr.textContent = data.posts.length + ' result' + (data.posts.length === 1 ? '' : 's') + ' for "' + searchQuery + '"';
+      feed.appendChild(hdr);
       data.posts.forEach(p => feed.appendChild(renderPost(p)));
     }
   } catch {
@@ -562,15 +599,13 @@ let searchTimer = null;
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 renderUserBlock();
-renderTagFilters();
+renderQuickTags();
 renderCompose();
 loadPosts(true);
 document.getElementById('load-more-btn').addEventListener('click', () => loadPosts(false));
-
-const searchInput = document.getElementById('community-search');
-searchInput.addEventListener('input', () => {
+document.getElementById('community-search').addEventListener('input', function() {
   clearTimeout(searchTimer);
-  const q = searchInput.value.trim();
+  const q = this.value.trim();
   searchTimer = setTimeout(() => runSearch(q), 300);
 });
 </script>

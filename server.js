@@ -775,14 +775,14 @@ const communityImgStorage = multer.diskStorage({
 });
 const uploadCommunityImg = multer({
   storage: communityImgStorage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ok = ['image/jpeg','image/png','image/webp','image/gif','image/avif'].includes(file.mimetype);
     cb(null, ok);
   },
 });
 
-const COMMUNITY_TAGS = ['General', 'Fanart', 'Theories & Predictions', 'Discussion', 'Introduce Yourself'];
+const COMMUNITY_TAGS = ['General', 'Fanart', 'Theories & Predictions', 'Discussion', 'Introduce Yourself', 'Other'];
 
 // GET /api/community/posts
 app.get('/api/community/posts', async (req, res) => {
@@ -863,7 +863,7 @@ app.post('/api/community/posts', requireAuth, uploadCommunityImg.single('attachm
   const tag  = COMMUNITY_TAGS.includes(req.body.tag) ? req.body.tag : 'General';
   const nsfw = req.body.nsfw === 'true' || req.body.nsfw === true;
   if (!body) return res.status(400).json({ error: 'Post cannot be empty.' });
-  if (body.length > 2000) return res.status(400).json({ error: 'Post too long (max 2000 chars).' });
+  if (body.length > 20000) return res.status(400).json({ error: 'Post too long (max 20,000 chars).' });
 
   const attachmentUrl  = req.file ? '/images/community/' + req.file.filename : null;
   const attachmentName = req.file ? req.file.originalname : null;
