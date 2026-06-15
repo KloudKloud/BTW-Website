@@ -193,6 +193,16 @@ function renderCompose() {
   topRow.appendChild(textarea);
   card.appendChild(topRow);
 
+  // Image preview (shown between textarea and footer)
+  const previewWrap = document.createElement('div');
+  previewWrap.className = 'community-compose-preview'; previewWrap.hidden = true;
+  const previewImg = document.createElement('img');
+  previewImg.className = 'community-compose-preview-img'; previewImg.alt = 'Preview';
+  const previewRemove = document.createElement('button');
+  previewRemove.className = 'community-compose-preview-remove'; previewRemove.type = 'button'; previewRemove.textContent = '✕';
+  previewWrap.appendChild(previewImg); previewWrap.appendChild(previewRemove);
+  card.appendChild(previewWrap);
+
   const errEl = document.createElement('div'); errEl.className = 'community-compose-error'; errEl.hidden = true;
 
   // Footer — split left / right
@@ -210,11 +220,21 @@ function renderCompose() {
   const fileNameEl = document.createElement('span'); fileNameEl.className = 'community-file-name';
   const fileClear = document.createElement('button');
   fileClear.className = 'community-file-clear'; fileClear.hidden = true; fileClear.textContent = '✕'; fileClear.type = 'button';
-  fileClear.addEventListener('click', () => { fileInput.value = ''; fileNameEl.textContent = ''; fileClear.hidden = true; });
+  function clearFile() {
+    fileInput.value = ''; fileNameEl.textContent = ''; fileClear.hidden = true;
+    previewWrap.hidden = true; previewImg.src = '';
+  }
+  fileClear.addEventListener('click', clearFile);
+  previewRemove.addEventListener('click', clearFile);
   fileInput.addEventListener('change', () => {
     const f = fileInput.files[0];
     if (f && f.size > 50 * 1024 * 1024) { fileInput.value = ''; errEl.textContent = 'File exceeds 50 MB.'; errEl.hidden = false; return; }
-    if (f) { fileNameEl.textContent = f.name; fileClear.hidden = false; }
+    if (f) {
+      fileNameEl.textContent = f.name; fileClear.hidden = false;
+      const reader = new FileReader();
+      reader.onload = (e) => { previewImg.src = e.target.result; previewWrap.hidden = false; };
+      reader.readAsDataURL(f);
+    }
   });
   footerLeft.appendChild(attachLabel); footerLeft.appendChild(fileInput);
   footerLeft.appendChild(fileNameEl); footerLeft.appendChild(fileClear);
@@ -278,7 +298,7 @@ function renderCompose() {
       if (!res.ok) { errEl.textContent = data.error || 'Something went wrong.'; errEl.hidden = false; }
       else {
         textarea.value = ''; charCount.textContent = '0 / 20,000';
-        fileInput.value = ''; fileNameEl.textContent = ''; fileClear.hidden = true;
+        clearFile();
         selectedTag = 'General';
         tagBtn.innerHTML = '🏷️ Tag <span class="community-tag-caret">▾</span>';
         tagBtn.style.borderColor = ''; tagBtn.style.color = '';
