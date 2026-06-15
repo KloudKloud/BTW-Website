@@ -114,7 +114,7 @@
 </main>
 
 <footer>
-  <p>Between Two Worlds &mdash; a Pokémon fan fiction. Not affiliated with Nintendo or Game Freak.</p>
+  <p>Between Two Worlds is a pokémon fanfiction! I am not affiliated with Nintendo or Game Freak. This website is simply a fandom page, nothing more</p>
 </footer>
 
 <script>
@@ -363,6 +363,56 @@ async function initAdmin() {
   adminTab.dataset.tab = 'admin';
   adminTab.textContent = '🛡 All Messages';
   tabBar.appendChild(adminTab);
+
+  // ── Newsletter blast UI (injected at top of admin panel) ──────────────────
+  const adminPanel = document.getElementById('panel-admin');
+  const nlWrap = document.createElement('div');
+  nlWrap.className = 'newsletter-blast';
+  nlWrap.innerHTML = `
+    <p class="newsletter-blast-title">📬 Send Newsletter</p>
+    <p class="newsletter-blast-sub" id="nl-sub">Loading subscriber count…</p>
+    <div class="newsletter-blast-fields">
+      <input  class="newsletter-blast-input" id="nl-subject" type="text" placeholder="Subject line…" maxlength="200" />
+      <textarea class="newsletter-blast-body" id="nl-body" placeholder="Write your message here…" maxlength="10000"></textarea>
+    </div>
+    <div class="newsletter-blast-foot">
+      <button class="newsletter-blast-btn" id="nl-send">Send to All Subscribers</button>
+      <span class="newsletter-blast-fb" id="nl-fb"></span>
+    </div>
+  `;
+  adminPanel.insertBefore(nlWrap, adminPanel.firstChild);
+
+  // Load subscriber count
+  fetch(`${API}/admin/newsletter/count`, { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => r.json())
+    .then(d => { document.getElementById('nl-sub').textContent = `${d.count} subscriber${d.count !== 1 ? 's' : ''} will receive this email.`; })
+    .catch(() => { document.getElementById('nl-sub').textContent = ''; });
+
+  document.getElementById('nl-send').addEventListener('click', async () => {
+    const subject = document.getElementById('nl-subject').value.trim();
+    const body    = document.getElementById('nl-body').value.trim();
+    const fb      = document.getElementById('nl-fb');
+    const btn     = document.getElementById('nl-send');
+    if (!subject) { fb.textContent = 'Subject is required.'; return; }
+    if (!body)    { fb.textContent = 'Message body is required.'; return; }
+    if (!confirm(`Send this newsletter to all opted-in subscribers?`)) return;
+    btn.disabled = true; fb.textContent = 'Sending…';
+    try {
+      const res  = await fetch(`${API}/admin/newsletter`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject, body }),
+      });
+      const data = await res.json();
+      if (!res.ok) { fb.textContent = data.error || 'Error.'; }
+      else {
+        fb.textContent = `✓ Sent to ${data.sent} of ${data.total} subscribers!`;
+        document.getElementById('nl-subject').value = '';
+        document.getElementById('nl-body').value    = '';
+      }
+    } catch { fb.textContent = 'Network error.'; }
+    finally { btn.disabled = false; }
+  });
 
   const list = document.getElementById('admin-list');
   try {

@@ -154,6 +154,8 @@ async function initDb() {
 
   // Add email_hash column if missing
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_hash TEXT`).catch(() => {});
+  // Add newsletter opt-in column if missing (default true for existing users)
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_newsletter BOOLEAN DEFAULT true`).catch(() => {});
 
   // Migrate plaintext emails → encrypted + hash
   const { rows: unmigratedUsers } = await pool.query('SELECT id, email FROM users WHERE email_hash IS NULL');
@@ -494,7 +496,7 @@ app.delete('/api/comments/:id', requireAuth, async (req, res) => {
 
 app.put('/api/auth/profile', requireAuth, async (req, res) => {
   try {
-    const { display_name, email, current_password } = req.body;
+    const { display_name, email, current_password, email_newsletter } = req.body;
     const { rows: [user] } = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
@@ -504,6 +506,10 @@ app.put('/api/auth/profile', requireAuth, async (req, res) => {
       const dn = display_name.trim().slice(0, 20);
       if (!dn) return res.status(400).json({ error: 'Display name cannot be empty.' });
       updates.display_name = dn;
+    }
+
+    if (email_newsletter !== undefined) {
+      updates.email_newsletter = !!email_newsletter;
     }
 
     if (email !== undefined && hashEmail(email) !== user.email_hash) {
@@ -648,7 +654,7 @@ app.get('/api/auth/confirm-email', async (req, res) => {
 
 app.get('/api/auth/profile', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
-    'SELECT id, username, display_name, email, avatar FROM users WHERE id = $1', [req.user.id]
+    'SELECT id, username, display_name, email, avatar, email_newsletter FROM users WHERE id = $1', [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
   res.json({ user: { ...user, email: decryptEmail(user.email) } });
@@ -1129,6 +1135,51 @@ app.post('/api/track', async (req, res) => {
 });
 
 // ── Admin stats ───────────────────────────────────────────────────────────────
+// POST /api/admin/newsletter — send email blast to all opted-in users
+app.post('/api/admin/newsletter', requireAuth, async (req, res) => {
+  if (!await checkAdmin(req)) return res.status(403).json({ error: 'Forbidden.' });
+  const { subject, body } = req.body;
+  if (!subject?.trim()) return res.status(400).json({ error: 'Subject is required.' });
+  if (!body?.trim())    return res.status(400).json({ error: 'Message body is required.' });
+
+  const { rows } = await pool.query(
+    `SELECT email FROM users WHERE email_newsletter = true AND verified = true`
+  );
+  if (!rows.length) return res.json({ sent: 0 });
+
+  const escaped = body.trim()
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>');
+
+  let sent = 0;
+  for (const row of rows) {
+    const to = decryptEmail(row.email);
+    if (!to || !to.includes('@')) continue;
+    try {
+      await resend.emails.send({
+        from:       'Between Two Worlds <hello@btwfanfic.net>',
+        reply_to:   'hello@btwfanfic.net',
+        to,
+        subject:    subject.trim(),
+        html:       emailShell(`<div style="font-size:0.95rem;color:#424242;line-height:1.7;">${escaped}</div><p style="font-size:0.78rem;color:#999;margin-top:24px;">You're receiving this because you opted in to BTW newsletters. You can turn this off any time in your <a href="https://${process.env.SITE_HOST}/profile">profile settings</a>.</p>`),
+        text:       body.trim() + '\n\n---\nYou can unsubscribe at any time via your profile settings at https://' + process.env.SITE_HOST + '/profile',
+      });
+      sent++;
+    } catch (err) { console.error('Newsletter send error to', to, err.message); }
+  }
+
+  res.json({ sent, total: rows.length });
+});
+
+// GET /api/admin/newsletter/count — how many opted-in users
+app.get('/api/admin/newsletter/count', requireAuth, async (req, res) => {
+  if (!await checkAdmin(req)) return res.status(403).json({ error: 'Forbidden.' });
+  const { rows: [r] } = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM users WHERE email_newsletter = true AND verified = true`
+  );
+  res.json({ count: r.count });
+});
+
 app.get('/api/admin/stats', requireAuth, async (req, res) => {
   if (!await checkAdmin(req)) return res.status(403).json({ error: 'Forbidden.' });
   try {

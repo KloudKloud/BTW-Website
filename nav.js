@@ -106,7 +106,7 @@
           const statsLink = document.createElement('a');
           statsLink.href = '/stats';
           statsLink.textContent = 'Stats';
-          dropdown.insertBefore(statsLink, dropdown.firstChild);
+          dropdown.appendChild(statsLink);
         }
       }
     })

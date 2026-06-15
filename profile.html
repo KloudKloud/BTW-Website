@@ -59,6 +59,12 @@
         <label for="prof-email-pw">Current Password <small style="text-transform:none;letter-spacing:0;opacity:.6">(required to change email)</small></label>
         <input type="password" id="prof-email-pw" placeholder="Enter current password" />
       </div>
+      <div class="profile-field profile-field--checkbox">
+        <label class="profile-checkbox-label">
+          <input type="checkbox" id="prof-newsletter" checked />
+          <span>Receive monthly emails about newsletters, book updates, and giveaways</span>
+        </label>
+      </div>
       <div id="profile-alert" class="profile-alert" hidden></div>
       <button class="profile-save-btn" id="profile-save-btn">Save Changes</button>
     </div>
@@ -114,7 +120,7 @@
 </div>
 
 <footer>
-  <p>Between Two Worlds &mdash; a Pokémon fan fiction. Not affiliated with Nintendo or Game Freak.</p>
+  <p>Between Two Worlds is a pokémon fanfiction! I am not affiliated with Nintendo or Game Freak. This website is simply a fandom page, nothing more</p>
 </footer>
 
 <script>
@@ -144,8 +150,9 @@
 
       const u = data.user;
       currentEmail = u.email;
-      document.getElementById('prof-displayname').value = u.display_name || '';
-      document.getElementById('prof-email').value        = u.email || '';
+      document.getElementById('prof-displayname').value    = u.display_name || '';
+      document.getElementById('prof-email').value          = u.email || '';
+      document.getElementById('prof-newsletter').checked   = u.email_newsletter !== false;
 
       if (u.avatar) {
         const img = document.getElementById('profile-avatar-img');
@@ -197,16 +204,19 @@
       ph.style.display = 'none';
 
       // Also update nav avatar immediately
-      const navAvatarEl = document.querySelector('.nav-user-avatar');
-      if (navAvatarEl) {
-        navAvatarEl.src = url;
-      } else {
-        const navBtn = document.getElementById('nav-user-btn');
-        if (navBtn) {
+      const navBtn = document.getElementById('nav-user-btn');
+      if (navBtn) {
+        const existing = navBtn.querySelector('.nav-user-avatar');
+        if (existing && existing.tagName === 'IMG') {
+          existing.src = url;
+        } else {
           const navImg = document.createElement('img');
-          navImg.className = 'nav-user-avatar';
           navImg.src = url;
-          navBtn.insertBefore(navImg, navBtn.firstChild);
+          navImg.alt = '';
+          navImg.className = 'nav-user-avatar';
+          navImg.onerror = function () { this.style.display = 'none'; };
+          if (existing) existing.replaceWith(navImg);
+          else navBtn.insertBefore(navImg, navBtn.firstChild);
         }
       }
 
@@ -225,7 +235,10 @@
 
     if (!displayName) { showAlert('profile-alert', 'Display name cannot be empty.', 'error'); return; }
 
-    const body = { display_name: displayName };
+    const body = {
+      display_name:     displayName,
+      email_newsletter: document.getElementById('prof-newsletter').checked,
+    };
     if (email !== currentEmail) { body.email = email; body.current_password = emailPw; }
 
     btn.disabled = true;
