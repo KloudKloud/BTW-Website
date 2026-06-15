@@ -41,6 +41,9 @@
 
     <!-- ── Main ──────────────────────────────────────────────────── -->
     <div class="community-main">
+      <div class="community-search-wrap">
+        <input id="community-search" class="community-search-input" type="search" placeholder="🔍  Search posts…" autocomplete="off" />
+      </div>
       <div id="community-compose-wrap"></div>
       <div id="community-feed" class="community-feed">
         <div class="community-loading">Loading posts…</div>
@@ -72,9 +75,10 @@ const TAG_META = {
 };
 
 const guestLikes = new Set();
-let currentTag = null;
-let feedCursor = null;
-let noMore     = false;
+let currentTag    = null;
+let feedCursor    = null;
+let noMore        = false;
+let searchQuery   = null;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(dateStr) {
@@ -209,6 +213,17 @@ function renderCompose() {
     if (f) { fileNameEl.textContent = f.name; fileClear.hidden = false; }
   });
 
+  // NSFW toggle
+  let nsfwOn = false;
+  const nsfwBtn = document.createElement('button');
+  nsfwBtn.className = 'community-nsfw-toggle';
+  nsfwBtn.textContent = '🔞 NSFW';
+  nsfwBtn.type = 'button';
+  nsfwBtn.addEventListener('click', () => {
+    nsfwOn = !nsfwOn;
+    nsfwBtn.classList.toggle('community-nsfw-toggle--on', nsfwOn);
+  });
+
   const charCount = document.createElement('span'); charCount.className = 'community-char-count'; charCount.textContent = '0 / 2000';
   textarea.addEventListener('input', () => {
     const n = textarea.value.length;
@@ -226,6 +241,7 @@ function renderCompose() {
     const form = new FormData();
     form.append('body', body);
     form.append('tag', selectedTag);
+    form.append('nsfw', nsfwOn ? 'true' : 'false');
     if (fileInput.files[0]) form.append('attachment', fileInput.files[0]);
     try {
       const res  = await fetch(API + '/community/posts', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: form });
@@ -234,6 +250,7 @@ function renderCompose() {
       else {
         textarea.value = ''; charCount.textContent = '0 / 2000';
         fileInput.value = ''; fileNameEl.textContent = ''; fileClear.hidden = true;
+        nsfwOn = false; nsfwBtn.classList.remove('community-nsfw-toggle--on');
         const feed = document.getElementById('community-feed');
         const loading = feed.querySelector('.community-loading,.community-empty');
         if (loading) loading.remove();
@@ -245,6 +262,7 @@ function renderCompose() {
 
   footer.appendChild(attachLabel); footer.appendChild(fileInput);
   footer.appendChild(fileNameEl); footer.appendChild(fileClear);
+  footer.appendChild(nsfwBtn);
   footer.appendChild(charCount); footer.appendChild(submitBtn);
   card.appendChild(footer);
   card.appendChild(errEl);
@@ -253,9 +271,10 @@ function renderCompose() {
 
 // ── Render post ───────────────────────────────────────────────────────────────
 function renderPost(p) {
-  const pinned = p.pinned === 1;
+  const pinned = !!p.pinned;
+  const isNsfw = !!p.nsfw;
   const card = document.createElement('div');
-  card.className = 'community-post' + (pinned ? ' community-post--pinned' : '');
+  card.className = 'community-post' + (pinned ? ' community-post--pinned' : '') + (isNsfw ? ' community-post--nsfw' : '');
 
   // Header
   const header = document.createElement('div');
@@ -303,17 +322,42 @@ function renderPost(p) {
   if (right.children.length) header.appendChild(right);
   card.appendChild(header);
 
-  // Body
-  const body = document.createElement('p');
-  body.className = 'community-post-body';
-  body.textContent = p.body;
-  card.appendChild(body);
+  // Body + image (with NSFW gate for guests)
+  if (isNsfw && !currentUser) {
+    const gate = document.createElement('div');
+    gate.className = 'community-nsfw-gate';
+    const blurBody = document.createElement('p');
+    blurBody.className = 'community-post-body community-nsfw-blur';
+    blurBody.textContent = p.body;
+    gate.appendChild(blurBody);
+    if (p.attachment_url) {
+      const blurImg = document.createElement('img');
+      blurImg.src = p.attachment_url; blurImg.alt = ''; blurImg.className = 'community-post-img community-nsfw-blur';
+      gate.appendChild(blurImg);
+    }
+    const overlay = document.createElement('div');
+    overlay.className = 'community-nsfw-overlay';
+    overlay.innerHTML = '🔞 NSFW &mdash; <a href="/login">Log in</a> to view';
+    gate.appendChild(overlay);
+    card.appendChild(gate);
+  } else {
+    const body = document.createElement('p');
+    body.className = 'community-post-body';
+    body.textContent = p.body;
+    card.appendChild(body);
+    if (p.attachment_url) {
+      const img = document.createElement('img');
+      img.src = p.attachment_url; img.alt = 'Post image'; img.className = 'community-post-img';
+      card.appendChild(img);
+    }
+  }
 
-  // Attachment
-  if (p.attachment_url) {
-    const img = document.createElement('img');
-    img.src = p.attachment_url; img.alt = 'Post image'; img.className = 'community-post-img';
-    card.appendChild(img);
+  // NSFW badge for logged-in users
+  if (isNsfw && currentUser) {
+    const badge = document.createElement('span');
+    badge.className = 'community-nsfw-badge';
+    badge.textContent = '🔞 NSFW';
+    card.insertBefore(badge, card.querySelector('.community-post-actions') || null);
   }
 
   // Actions
@@ -484,12 +528,51 @@ async function loadPosts(reset) {
   }
 }
 
+// ── Search ────────────────────────────────────────────────────────────────────
+async function runSearch(q) {
+  searchQuery = q || null;
+  const feed = document.getElementById('community-feed');
+  const loadMoreBtn = document.getElementById('load-more-btn');
+  if (!searchQuery) { loadPosts(true); return; }
+  feed.innerHTML = '<div class="community-loading">Searching…</div>';
+  loadMoreBtn.hidden = true;
+  const headers = token ? { Authorization: 'Bearer ' + token } : {};
+  try {
+    const res  = await fetch(API + '/community/search?q=' + encodeURIComponent(searchQuery), { headers });
+    const data = await res.json();
+    feed.innerHTML = '';
+    if (!data.posts || !data.posts.length) {
+      const e = document.createElement('div');
+      e.className = 'community-empty';
+      e.textContent = 'No posts found for "' + searchQuery + '"';
+      feed.appendChild(e);
+    } else {
+      const header = document.createElement('div');
+      header.className = 'community-search-header';
+      header.textContent = data.posts.length + ' result' + (data.posts.length === 1 ? '' : 's') + ' for "' + searchQuery + '"';
+      feed.appendChild(header);
+      data.posts.forEach(p => feed.appendChild(renderPost(p)));
+    }
+  } catch {
+    feed.innerHTML = '<div class="community-empty">Search failed. Try again.</div>';
+  }
+}
+
+let searchTimer = null;
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 renderUserBlock();
 renderTagFilters();
 renderCompose();
 loadPosts(true);
 document.getElementById('load-more-btn').addEventListener('click', () => loadPosts(false));
+
+const searchInput = document.getElementById('community-search');
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const q = searchInput.value.trim();
+  searchTimer = setTimeout(() => runSearch(q), 300);
+});
 </script>
 
 <script src="nav.js"></script>
