@@ -373,51 +373,93 @@ function renderCompose() {
   footer.appendChild(footerLeft); footer.appendChild(footerRight);
   card.appendChild(footer); card.appendChild(errEl);
 
-  // GIF picker panel (inside card, below footer)
+  // GIF picker — floating popover appended to document.body
   const gifPickerWrap = document.createElement('div');
   gifPickerWrap.className = 'community-gif-picker'; gifPickerWrap.hidden = true;
+
   const gifPickerTop = document.createElement('div'); gifPickerTop.className = 'community-gif-picker-top';
   const gifSearch = document.createElement('input');
-  gifSearch.type = 'text'; gifSearch.placeholder = 'Search GIFs via GIPHY…'; gifSearch.className = 'community-gif-search';
-  const gifCloseBtn = document.createElement('button');
-  gifCloseBtn.type = 'button'; gifCloseBtn.className = 'community-gif-close'; gifCloseBtn.textContent = '✕';
-  gifPickerTop.appendChild(gifSearch); gifPickerTop.appendChild(gifCloseBtn);
+  gifSearch.type = 'text'; gifSearch.placeholder = '🔍 Search GIFs…'; gifSearch.className = 'community-gif-search';
+  gifPickerTop.appendChild(gifSearch);
+
+  const gifLabel = document.createElement('div'); gifLabel.className = 'community-gif-label'; gifLabel.textContent = '✨ Trending';
   const gifResults = document.createElement('div'); gifResults.className = 'community-gif-results';
 
-  let gifTimer = null;
+  let gifTimer = null, trendingCache = null;
+
+  function populateGifResults(gifs) {
+    gifResults.innerHTML = '';
+    if (!gifs.length) { gifResults.innerHTML = '<div class="community-gif-loading">No GIFs found.</div>'; return; }
+    gifs.forEach(gif => {
+      const img = document.createElement('img');
+      img.src = gif.preview; img.title = gif.title; img.className = 'community-gif-item'; img.loading = 'lazy';
+      img.addEventListener('click', () => {
+        selectedGifUrl = gif.url; selectedFiles = []; fileInput.value = '';
+        fileCountEl.textContent = ''; fileClear.hidden = true;
+        gifPickerWrap.hidden = true; gifSearch.value = ''; gifLabel.textContent = '✨ Trending';
+        renderPreview();
+      });
+      gifResults.appendChild(img);
+    });
+  }
+
+  async function loadTrending() {
+    if (trendingCache) { populateGifResults(trendingCache); return; }
+    gifResults.innerHTML = '<div class="community-gif-loading">Loading…</div>';
+    try {
+      const res = await fetch(API + '/giphy/trending');
+      const data = await res.json();
+      trendingCache = data.gifs || [];
+      populateGifResults(trendingCache);
+    } catch { gifResults.innerHTML = '<div class="community-gif-loading">Could not load.</div>'; }
+  }
+
   async function searchGifs(q) {
     gifResults.innerHTML = '<div class="community-gif-loading">Searching…</div>';
     try {
       const res = await fetch(API + '/giphy/search?q=' + encodeURIComponent(q));
       const data = await res.json();
-      gifResults.innerHTML = '';
-      if (!data.gifs || !data.gifs.length) { gifResults.innerHTML = '<div class="community-gif-loading">No GIFs found.</div>'; return; }
-      data.gifs.forEach(gif => {
-        const img = document.createElement('img');
-        img.src = gif.preview; img.title = gif.title; img.className = 'community-gif-item'; img.loading = 'lazy';
-        img.addEventListener('click', () => {
-          selectedGifUrl = gif.url; selectedFiles = []; fileInput.value = '';
-          fileCountEl.textContent = ''; fileClear.hidden = true;
-          gifPickerWrap.hidden = true; gifSearch.value = ''; gifResults.innerHTML = '';
-          renderPreview();
-        });
-        gifResults.appendChild(img);
-      });
-    } catch { gifResults.innerHTML = '<div class="community-gif-loading">Failed to load GIFs.</div>'; }
+      populateGifResults(data.gifs || []);
+    } catch { gifResults.innerHTML = '<div class="community-gif-loading">Failed to load.</div>'; }
   }
+
   gifSearch.addEventListener('input', () => {
     clearTimeout(gifTimer);
     const q = gifSearch.value.trim();
-    if (!q) { gifResults.innerHTML = ''; return; }
-    gifTimer = setTimeout(() => searchGifs(q), 400);
+    if (!q) { gifLabel.textContent = '✨ Trending'; gifTimer = setTimeout(loadTrending, 150); return; }
+    gifLabel.textContent = 'Results';
+    gifTimer = setTimeout(() => searchGifs(q), 350);
   });
-  gifCloseBtn.addEventListener('click', () => { gifPickerWrap.hidden = true; gifSearch.value = ''; gifResults.innerHTML = ''; });
+
+  function positionGifPicker() {
+    const rect = gifBtn.getBoundingClientRect();
+    const pw = 360, ph = 420;
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - pw - 8));
+    const top  = rect.top - ph - 8 > 8 ? rect.top - ph - 8 : rect.bottom + 8;
+    gifPickerWrap.style.left  = left + 'px';
+    gifPickerWrap.style.top   = top  + 'px';
+    gifPickerWrap.style.width = pw   + 'px';
+  }
+
   gifBtn.addEventListener('click', (e) => {
-    e.stopPropagation(); gifPickerWrap.hidden = !gifPickerWrap.hidden;
-    if (!gifPickerWrap.hidden) setTimeout(() => gifSearch.focus(), 50);
+    e.stopPropagation();
+    if (gifPickerWrap.hidden) {
+      positionGifPicker(); gifPickerWrap.hidden = false;
+      loadTrending(); setTimeout(() => gifSearch.focus(), 50);
+    } else {
+      gifPickerWrap.hidden = true;
+    }
   });
-  gifPickerWrap.appendChild(gifPickerTop); gifPickerWrap.appendChild(gifResults);
-  card.appendChild(gifPickerWrap);
+
+  document.addEventListener('click', (e) => {
+    if (!gifPickerWrap.hidden && !gifPickerWrap.contains(e.target) && e.target !== gifBtn)
+      gifPickerWrap.hidden = true;
+  });
+
+  gifPickerWrap.appendChild(gifPickerTop);
+  gifPickerWrap.appendChild(gifLabel);
+  gifPickerWrap.appendChild(gifResults);
+  document.body.appendChild(gifPickerWrap);
 
   // Assign real discard function now that all vars exist
   discardCompose = () => {
@@ -426,7 +468,7 @@ function renderCompose() {
     tagBtn.innerHTML = '🏷️ Tag <span class="community-tag-caret">▾</span>';
     tagBtn.style.borderColor = ''; tagBtn.style.color = '';
     nsfwCheckbox.checked = false; errEl.hidden = true;
-    gifPickerWrap.hidden = true; gifSearch.value = ''; gifResults.innerHTML = '';
+    gifPickerWrap.hidden = true; gifSearch.value = ''; gifLabel.textContent = '✨ Trending';
   };
 
   wrap.appendChild(card);
@@ -761,11 +803,13 @@ createPostBtn.addEventListener('click', () => {
 document.getElementById('community-compose-backdrop').addEventListener('click', () => {
   composeModal.hidden = true;
   createPostBtn.classList.remove('community-create-post-btn--active');
+  document.querySelectorAll('.community-gif-picker').forEach(el => el.hidden = true);
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !composeModal.hidden) {
     composeModal.hidden = true;
     createPostBtn.classList.remove('community-create-post-btn--active');
+    document.querySelectorAll('.community-gif-picker').forEach(el => el.hidden = true);
   }
 });
 

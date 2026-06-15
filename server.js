@@ -863,12 +863,7 @@ app.get('/api/community/search', async (req, res) => {
   res.json({ posts: rows });
 });
 
-// GET /api/giphy/search?q=...
-app.get('/api/giphy/search', (req, res) => {
-  const q = (req.query.q || '').trim();
-  const limit = Math.min(parseInt(req.query.limit || '24', 10), 48);
-  if (!q || !process.env.GIPHY_API_KEY) return res.json({ gifs: [] });
-  const url = `https://api.giphy.com/v1/gifs/search?api_key=${process.env.GIPHY_API_KEY}&q=${encodeURIComponent(q)}&limit=${limit}&rating=pg-13`;
+function giphyFetch(url, res) {
   https.get(url, (r) => {
     let data = '';
     r.on('data', c => data += c);
@@ -876,8 +871,8 @@ app.get('/api/giphy/search', (req, res) => {
       try {
         const json = JSON.parse(data);
         const gifs = (json.data || []).map(g => ({
-          id: g.id,
-          title: g.title,
+          id:      g.id,
+          title:   g.title,
           preview: (g.images && g.images.fixed_width_small && g.images.fixed_width_small.url) || (g.images && g.images.preview_gif && g.images.preview_gif.url) || '',
           url:     (g.images && g.images.fixed_width && g.images.fixed_width.url)             || (g.images && g.images.original && g.images.original.url) || '',
         }));
@@ -885,6 +880,21 @@ app.get('/api/giphy/search', (req, res) => {
       } catch { res.json({ gifs: [] }); }
     });
   }).on('error', () => res.json({ gifs: [] }));
+}
+
+// GET /api/giphy/trending
+app.get('/api/giphy/trending', (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit || '24', 10), 48);
+  if (!process.env.GIPHY_API_KEY) return res.json({ gifs: [] });
+  giphyFetch(`https://api.giphy.com/v1/gifs/trending?api_key=${process.env.GIPHY_API_KEY}&limit=${limit}&rating=pg-13`, res);
+});
+
+// GET /api/giphy/search?q=...
+app.get('/api/giphy/search', (req, res) => {
+  const q = (req.query.q || '').trim();
+  const limit = Math.min(parseInt(req.query.limit || '24', 10), 48);
+  if (!q || !process.env.GIPHY_API_KEY) return res.json({ gifs: [] });
+  giphyFetch(`https://api.giphy.com/v1/gifs/search?api_key=${process.env.GIPHY_API_KEY}&q=${encodeURIComponent(q)}&limit=${limit}&rating=pg-13`, res);
 });
 
 // POST /api/community/posts
