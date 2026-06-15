@@ -8,6 +8,7 @@ const crypto   = require('crypto');
 const path     = require('path');
 const fs       = require('fs');
 const multer   = require('multer');
+const https    = require('https');
 
 // ── Avatar upload ─────────────────────────────────────────────────────────────
 const AVATARS_DIR = '/var/www/btw/images/avatars';
@@ -123,6 +124,11 @@ async function initDb() {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS community_posts_search_idx
     ON community_posts USING GIN(to_tsvector('english', body))
+  `).catch(() => {});
+
+  await pool.query(`
+    ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS attachments TEXT;
+    ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS gif_url TEXT;
   `).catch(() => {});
 }
 
@@ -770,7 +776,7 @@ const communityImgStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, COMMUNITY_DIR),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname) || '';
-    cb(null, Date.now() + '_' + req.user.id + ext);
+    cb(null, Date.now() + '_' + Math.random().toString(36).slice(2,8) + '_' + req.user.id + ext);
   },
 });
 const uploadCommunityImg = multer({
@@ -857,21 +863,49 @@ app.get('/api/community/search', async (req, res) => {
   res.json({ posts: rows });
 });
 
+// GET /api/giphy/search?q=...
+app.get('/api/giphy/search', (req, res) => {
+  const q = (req.query.q || '').trim();
+  const limit = Math.min(parseInt(req.query.limit || '24', 10), 48);
+  if (!q || !process.env.GIPHY_API_KEY) return res.json({ gifs: [] });
+  const url = `https://api.giphy.com/v1/gifs/search?api_key=${process.env.GIPHY_API_KEY}&q=${encodeURIComponent(q)}&limit=${limit}&rating=pg-13`;
+  https.get(url, (r) => {
+    let data = '';
+    r.on('data', c => data += c);
+    r.on('end', () => {
+      try {
+        const json = JSON.parse(data);
+        const gifs = (json.data || []).map(g => ({
+          id: g.id,
+          title: g.title,
+          preview: (g.images && g.images.fixed_width_small && g.images.fixed_width_small.url) || (g.images && g.images.preview_gif && g.images.preview_gif.url) || '',
+          url:     (g.images && g.images.fixed_width && g.images.fixed_width.url)             || (g.images && g.images.original && g.images.original.url) || '',
+        }));
+        res.json({ gifs });
+      } catch { res.json({ gifs: [] }); }
+    });
+  }).on('error', () => res.json({ gifs: [] }));
+});
+
 // POST /api/community/posts
-app.post('/api/community/posts', requireAuth, uploadCommunityImg.single('attachment'), async (req, res) => {
+app.post('/api/community/posts', requireAuth, uploadCommunityImg.array('attachments', 4), async (req, res) => {
   const body = (req.body.body || '').trim();
   const tag  = COMMUNITY_TAGS.includes(req.body.tag) ? req.body.tag : 'General';
   const nsfw = req.body.nsfw === 'true' || req.body.nsfw === true;
   if (!body) return res.status(400).json({ error: 'Post cannot be empty.' });
   if (body.length > 20000) return res.status(400).json({ error: 'Post too long (max 20,000 chars).' });
 
-  const attachmentUrl  = req.file ? '/images/community/' + req.file.filename : null;
-  const attachmentName = req.file ? req.file.originalname : null;
+  const gifUrl         = (req.body.gif_url || '').trim() || null;
+  const files          = req.files || [];
+  const attachmentUrls = files.map(f => '/images/community/' + f.filename);
+  const attachmentsJson = attachmentUrls.length > 0 ? JSON.stringify(attachmentUrls) : null;
+  const attachmentUrl   = attachmentUrls[0] || null;
+  const attachmentName  = files[0] ? files[0].originalname : null;
   const pinned = await checkAdmin(req);
 
   const { rows: [row] } = await pool.query(
-    'INSERT INTO community_posts (user_id, body, tag, attachment_url, attachment_name, pinned, nsfw) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-    [req.user.id, body, tag, attachmentUrl, attachmentName, pinned, nsfw]
+    'INSERT INTO community_posts (user_id, body, tag, attachment_url, attachment_name, attachments, gif_url, pinned, nsfw) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id',
+    [req.user.id, body, tag, attachmentUrl, attachmentName, attachmentsJson, gifUrl, pinned, nsfw]
   );
 
   const { rows: [post] } = await pool.query(`
@@ -942,6 +976,13 @@ app.delete('/api/community/posts/:id', requireAuth, async (req, res) => {
   if (!post) return res.status(404).json({ error: 'Post not found.' });
   if (post.user_id !== req.user.id && !await checkAdmin(req))
     return res.status(403).json({ error: 'Forbidden.' });
+
+  if (post.attachments) {
+    try { JSON.parse(post.attachments).forEach(u => { const fp = path.join('/var/www/btw', u); if (fs.existsSync(fp)) fs.unlinkSync(fp); }); } catch {}
+  } else if (post.attachment_url) {
+    const fp = path.join('/var/www/btw', post.attachment_url);
+    if (fs.existsSync(fp)) fs.unlinkSync(fp);
+  }
 
   const client = await pool.connect();
   try {

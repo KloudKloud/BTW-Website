@@ -52,7 +52,6 @@
         <input id="community-search" class="community-search-input" type="search" placeholder="🔍 Search…" autocomplete="off" />
         <div id="community-quick-tags" class="community-quick-tags"></div>
       </div>
-      <div id="community-compose-wrap"></div>
       <div id="community-feed" class="community-feed">
         <div class="community-loading">Loading posts…</div>
       </div>
@@ -61,6 +60,12 @@
 
   </div>
 </main>
+
+<!-- ── Compose modal ─────────────────────────────────────────────── -->
+<div id="community-compose-modal" class="community-compose-modal" hidden aria-modal="true" role="dialog">
+  <div class="community-compose-backdrop" id="community-compose-backdrop"></div>
+  <div id="community-compose-wrap" class="community-compose-modal-inner"></div>
+</div>
 
 <footer>
   <p>Between Two Worlds &mdash; a Pokémon fan fiction. Not affiliated with Nintendo or Game Freak.</p>
@@ -171,16 +176,30 @@ function renderCompose() {
     card.className = 'community-guest-card';
     card.innerHTML = '<p>Only users with accounts can post here! If you\'d like to make a free account, click Register below!</p>';
     const reg = document.createElement('a');
-    reg.href = '/login';
-    reg.className = 'community-guest-register';
-    reg.textContent = 'Register';
-    card.appendChild(reg);
-    wrap.appendChild(card);
-    return;
+    reg.href = '/login'; reg.className = 'community-guest-register'; reg.textContent = 'Register';
+    card.appendChild(reg); wrap.appendChild(card); return;
   }
 
   const card = document.createElement('div');
   card.className = 'community-compose-card';
+
+  // Modal header
+  const modalHeader = document.createElement('div');
+  modalHeader.className = 'community-compose-modal-header';
+  const modalTitle = document.createElement('span');
+  modalTitle.className = 'community-compose-modal-title'; modalTitle.textContent = 'New Post';
+  const discardBtn = document.createElement('button');
+  discardBtn.className = 'community-compose-discard'; discardBtn.type = 'button';
+  discardBtn.innerHTML = '🗑️ Discard';
+  modalHeader.appendChild(modalTitle); modalHeader.appendChild(discardBtn);
+  card.appendChild(modalHeader);
+
+  function closeModal() {
+    document.getElementById('community-compose-modal').hidden = true;
+    document.getElementById('create-post-btn').classList.remove('community-create-post-btn--active');
+  }
+  let discardCompose = () => {};
+  discardBtn.addEventListener('click', () => { discardCompose(); closeModal(); });
 
   // Avatar + textarea
   const topRow = document.createElement('div');
@@ -193,53 +212,94 @@ function renderCompose() {
   topRow.appendChild(textarea);
   card.appendChild(topRow);
 
-  // Image preview (shown between textarea and footer)
+  // Multi-file / GIF preview area
+  let selectedFiles = [], selectedGifUrl = null;
+
   const previewWrap = document.createElement('div');
   previewWrap.className = 'community-compose-preview'; previewWrap.hidden = true;
-  const previewImg = document.createElement('img');
-  previewImg.className = 'community-compose-preview-img'; previewImg.alt = 'Preview';
-  const previewRemove = document.createElement('button');
-  previewRemove.className = 'community-compose-preview-remove'; previewRemove.type = 'button'; previewRemove.textContent = '✕';
-  previewWrap.appendChild(previewImg); previewWrap.appendChild(previewRemove);
+
+  function renderPreview() {
+    previewWrap.innerHTML = '';
+    if (selectedGifUrl) {
+      const item = document.createElement('div'); item.className = 'community-compose-img-item';
+      const img = document.createElement('img');
+      img.src = selectedGifUrl; img.className = 'community-compose-preview-img'; img.alt = 'GIF';
+      const rmv = document.createElement('button');
+      rmv.type = 'button'; rmv.className = 'community-compose-preview-remove'; rmv.textContent = '✕';
+      rmv.addEventListener('click', () => { selectedGifUrl = null; renderPreview(); });
+      item.appendChild(img); item.appendChild(rmv); previewWrap.appendChild(item);
+      previewWrap.hidden = false;
+    } else if (selectedFiles.length > 0) {
+      const grid = document.createElement('div'); grid.className = 'community-compose-img-grid';
+      selectedFiles.forEach((file, i) => {
+        const item = document.createElement('div'); item.className = 'community-compose-img-item';
+        const img = document.createElement('img'); img.className = 'community-compose-preview-img'; img.alt = file.name;
+        const reader = new FileReader();
+        reader.onload = (e) => { img.src = e.target.result; };
+        reader.readAsDataURL(file);
+        const rmv = document.createElement('button');
+        rmv.type = 'button'; rmv.className = 'community-compose-preview-remove'; rmv.textContent = '✕';
+        rmv.addEventListener('click', () => {
+          selectedFiles = selectedFiles.filter((_, j) => j !== i);
+          fileCountEl.textContent = selectedFiles.length > 0 ? selectedFiles.length + '/4' : '';
+          fileClear.hidden = selectedFiles.length === 0;
+          renderPreview();
+        });
+        item.appendChild(img); item.appendChild(rmv); grid.appendChild(item);
+      });
+      previewWrap.appendChild(grid); previewWrap.hidden = false;
+    } else {
+      previewWrap.hidden = true;
+    }
+  }
   card.appendChild(previewWrap);
 
   const errEl = document.createElement('div'); errEl.className = 'community-compose-error'; errEl.hidden = true;
 
-  // Footer — split left / right
-  const footer = document.createElement('div');
-  footer.className = 'community-compose-footer';
+  // Footer
+  const footer = document.createElement('div'); footer.className = 'community-compose-footer';
   const footerLeft  = document.createElement('div'); footerLeft.className  = 'community-compose-footer-left';
   const footerRight = document.createElement('div'); footerRight.className = 'community-compose-footer-right';
 
-  // Left: attach
+  // Left: file input, attach label, GIF button, count, clear
   const fileInput = document.createElement('input');
-  fileInput.type = 'file'; fileInput.id = 'c-file'; fileInput.accept = 'image/*'; fileInput.style.display = 'none';
+  fileInput.type = 'file'; fileInput.id = 'c-file'; fileInput.accept = 'image/*';
+  fileInput.multiple = true; fileInput.style.display = 'none';
   const attachLabel = document.createElement('label');
   attachLabel.className = 'community-attach-btn'; attachLabel.htmlFor = 'c-file';
   attachLabel.innerHTML = '<span class="community-attach-plus">+</span> Attach';
-  const fileNameEl = document.createElement('span'); fileNameEl.className = 'community-file-name';
+  const fileCountEl = document.createElement('span'); fileCountEl.className = 'community-file-count';
   const fileClear = document.createElement('button');
   fileClear.className = 'community-file-clear'; fileClear.hidden = true; fileClear.textContent = '✕'; fileClear.type = 'button';
-  function clearFile() {
-    fileInput.value = ''; fileNameEl.textContent = ''; fileClear.hidden = true;
-    previewWrap.hidden = true; previewImg.src = '';
-  }
-  fileClear.addEventListener('click', clearFile);
-  previewRemove.addEventListener('click', clearFile);
-  fileInput.addEventListener('change', () => {
-    const f = fileInput.files[0];
-    if (f && f.size > 50 * 1024 * 1024) { fileInput.value = ''; errEl.textContent = 'File exceeds 50 MB.'; errEl.hidden = false; return; }
-    if (f) {
-      fileNameEl.textContent = f.name; fileClear.hidden = false;
-      const reader = new FileReader();
-      reader.onload = (e) => { previewImg.src = e.target.result; previewWrap.hidden = false; };
-      reader.readAsDataURL(f);
-    }
-  });
-  footerLeft.appendChild(attachLabel); footerLeft.appendChild(fileInput);
-  footerLeft.appendChild(fileNameEl); footerLeft.appendChild(fileClear);
+  const gifBtn = document.createElement('button');
+  gifBtn.type = 'button'; gifBtn.className = 'community-gif-btn'; gifBtn.textContent = 'GIF';
 
-  // Right: tag picker, NSFW switch, char count, post button
+  function clearAllFiles() {
+    selectedFiles = []; selectedGifUrl = null; fileInput.value = '';
+    fileCountEl.textContent = ''; fileClear.hidden = true; renderPreview();
+  }
+  fileClear.addEventListener('click', clearAllFiles);
+  fileInput.addEventListener('change', () => {
+    const incoming = Array.from(fileInput.files);
+    if (!incoming.length) return;
+    if (incoming.some(f => f.size > 50 * 1024 * 1024)) {
+      fileInput.value = ''; errEl.textContent = 'A file exceeds 50 MB.'; errEl.hidden = false; return;
+    }
+    if (selectedFiles.length + incoming.length > 4) {
+      fileInput.value = ''; errEl.textContent = 'You can attach up to 4 images.'; errEl.hidden = false; return;
+    }
+    selectedGifUrl = null;
+    selectedFiles = [...selectedFiles, ...incoming];
+    fileInput.value = '';
+    fileCountEl.textContent = selectedFiles.length + '/4';
+    fileClear.hidden = false; errEl.hidden = true;
+    renderPreview();
+  });
+
+  footerLeft.appendChild(attachLabel); footerLeft.appendChild(fileInput);
+  footerLeft.appendChild(gifBtn); footerLeft.appendChild(fileCountEl); footerLeft.appendChild(fileClear);
+
+  // Right: tag picker, NSFW, char count, submit
   let selectedTag = 'General';
   const tagWrap = document.createElement('div'); tagWrap.className = 'community-tag-picker-wrap';
   const tagBtn = document.createElement('button');
@@ -264,14 +324,12 @@ function renderCompose() {
   document.addEventListener('click', () => { tagDropdown.hidden = true; });
   tagWrap.appendChild(tagBtn); tagWrap.appendChild(tagDropdown);
 
-  // NSFW switch toggle
   const nsfwLabel = document.createElement('label'); nsfwLabel.className = 'community-nsfw-switch';
   const nsfwCheckbox = document.createElement('input'); nsfwCheckbox.type = 'checkbox'; nsfwCheckbox.className = 'community-nsfw-checkbox';
   const nsfwSlider = document.createElement('span'); nsfwSlider.className = 'community-nsfw-slider';
   const nsfwText = document.createElement('span'); nsfwText.className = 'community-nsfw-label'; nsfwText.textContent = 'NSFW';
   nsfwLabel.appendChild(nsfwCheckbox); nsfwLabel.appendChild(nsfwSlider); nsfwLabel.appendChild(nsfwText);
 
-  // Char count
   const charCount = document.createElement('span');
   charCount.className = 'community-char-count'; charCount.textContent = '0 / 20,000';
   textarea.addEventListener('input', () => {
@@ -280,7 +338,6 @@ function renderCompose() {
     charCount.style.color = n > 18000 ? '#c2547a' : '';
   });
 
-  // Submit
   const submitBtn = document.createElement('button'); submitBtn.className = 'community-submit-btn'; submitBtn.textContent = 'Post ✨';
 
   submitBtn.addEventListener('click', async () => {
@@ -291,18 +348,17 @@ function renderCompose() {
     form.append('body', body);
     form.append('tag', selectedTag);
     form.append('nsfw', nsfwCheckbox.checked ? 'true' : 'false');
-    if (fileInput.files[0]) form.append('attachment', fileInput.files[0]);
+    if (selectedGifUrl) {
+      form.append('gif_url', selectedGifUrl);
+    } else {
+      selectedFiles.forEach(f => form.append('attachments', f));
+    }
     try {
       const res  = await fetch(API + '/community/posts', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: form });
       const data = await res.json();
       if (!res.ok) { errEl.textContent = data.error || 'Something went wrong.'; errEl.hidden = false; }
       else {
-        textarea.value = ''; charCount.textContent = '0 / 20,000';
-        clearFile();
-        selectedTag = 'General';
-        tagBtn.innerHTML = '🏷️ Tag <span class="community-tag-caret">▾</span>';
-        tagBtn.style.borderColor = ''; tagBtn.style.color = '';
-        nsfwCheckbox.checked = false;
+        discardCompose(); closeModal();
         const feed = document.getElementById('community-feed');
         const loading = feed.querySelector('.community-loading,.community-empty');
         if (loading) loading.remove();
@@ -312,14 +368,67 @@ function renderCompose() {
     finally { submitBtn.disabled = false; submitBtn.textContent = 'Post ✨'; }
   });
 
-  footerRight.appendChild(tagWrap);
-  footerRight.appendChild(nsfwLabel);
-  footerRight.appendChild(charCount);
-  footerRight.appendChild(submitBtn);
-  footer.appendChild(footerLeft);
-  footer.appendChild(footerRight);
-  card.appendChild(footer);
-  card.appendChild(errEl);
+  footerRight.appendChild(tagWrap); footerRight.appendChild(nsfwLabel);
+  footerRight.appendChild(charCount); footerRight.appendChild(submitBtn);
+  footer.appendChild(footerLeft); footer.appendChild(footerRight);
+  card.appendChild(footer); card.appendChild(errEl);
+
+  // GIF picker panel (inside card, below footer)
+  const gifPickerWrap = document.createElement('div');
+  gifPickerWrap.className = 'community-gif-picker'; gifPickerWrap.hidden = true;
+  const gifPickerTop = document.createElement('div'); gifPickerTop.className = 'community-gif-picker-top';
+  const gifSearch = document.createElement('input');
+  gifSearch.type = 'text'; gifSearch.placeholder = 'Search GIFs via GIPHY…'; gifSearch.className = 'community-gif-search';
+  const gifCloseBtn = document.createElement('button');
+  gifCloseBtn.type = 'button'; gifCloseBtn.className = 'community-gif-close'; gifCloseBtn.textContent = '✕';
+  gifPickerTop.appendChild(gifSearch); gifPickerTop.appendChild(gifCloseBtn);
+  const gifResults = document.createElement('div'); gifResults.className = 'community-gif-results';
+
+  let gifTimer = null;
+  async function searchGifs(q) {
+    gifResults.innerHTML = '<div class="community-gif-loading">Searching…</div>';
+    try {
+      const res = await fetch(API + '/giphy/search?q=' + encodeURIComponent(q));
+      const data = await res.json();
+      gifResults.innerHTML = '';
+      if (!data.gifs || !data.gifs.length) { gifResults.innerHTML = '<div class="community-gif-loading">No GIFs found.</div>'; return; }
+      data.gifs.forEach(gif => {
+        const img = document.createElement('img');
+        img.src = gif.preview; img.title = gif.title; img.className = 'community-gif-item'; img.loading = 'lazy';
+        img.addEventListener('click', () => {
+          selectedGifUrl = gif.url; selectedFiles = []; fileInput.value = '';
+          fileCountEl.textContent = ''; fileClear.hidden = true;
+          gifPickerWrap.hidden = true; gifSearch.value = ''; gifResults.innerHTML = '';
+          renderPreview();
+        });
+        gifResults.appendChild(img);
+      });
+    } catch { gifResults.innerHTML = '<div class="community-gif-loading">Failed to load GIFs.</div>'; }
+  }
+  gifSearch.addEventListener('input', () => {
+    clearTimeout(gifTimer);
+    const q = gifSearch.value.trim();
+    if (!q) { gifResults.innerHTML = ''; return; }
+    gifTimer = setTimeout(() => searchGifs(q), 400);
+  });
+  gifCloseBtn.addEventListener('click', () => { gifPickerWrap.hidden = true; gifSearch.value = ''; gifResults.innerHTML = ''; });
+  gifBtn.addEventListener('click', (e) => {
+    e.stopPropagation(); gifPickerWrap.hidden = !gifPickerWrap.hidden;
+    if (!gifPickerWrap.hidden) setTimeout(() => gifSearch.focus(), 50);
+  });
+  gifPickerWrap.appendChild(gifPickerTop); gifPickerWrap.appendChild(gifResults);
+  card.appendChild(gifPickerWrap);
+
+  // Assign real discard function now that all vars exist
+  discardCompose = () => {
+    textarea.value = ''; charCount.textContent = '0 / 20,000'; charCount.style.color = '';
+    clearAllFiles(); selectedTag = 'General';
+    tagBtn.innerHTML = '🏷️ Tag <span class="community-tag-caret">▾</span>';
+    tagBtn.style.borderColor = ''; tagBtn.style.color = '';
+    nsfwCheckbox.checked = false; errEl.hidden = true;
+    gifPickerWrap.hidden = true; gifSearch.value = ''; gifResults.innerHTML = '';
+  };
+
   wrap.appendChild(card);
 }
 
@@ -385,6 +494,41 @@ function renderPost(p) {
   if (right.children.length) header.appendChild(right);
   card.appendChild(header);
 
+  // Resolve media: gif_url takes priority, then attachments JSON, then legacy attachment_url
+  function resolveMedia(post) {
+    if (post.gif_url) return { type: 'gif', url: post.gif_url };
+    const urls = (() => {
+      if (post.attachments) { try { return JSON.parse(post.attachments); } catch {} }
+      if (post.attachment_url) return [post.attachment_url];
+      return [];
+    })();
+    return urls.length ? { type: 'images', urls } : null;
+  }
+  function appendMedia(container, media, blur) {
+    if (!media) return;
+    const blurClass = blur ? ' community-nsfw-blur' : '';
+    if (media.type === 'gif') {
+      const img = document.createElement('img');
+      img.src = media.url; img.alt = 'GIF'; img.className = 'community-post-img' + blurClass;
+      container.appendChild(img);
+    } else if (media.urls.length === 1) {
+      const img = document.createElement('img');
+      img.src = media.urls[0]; img.alt = 'Post image'; img.className = 'community-post-img' + blurClass;
+      container.appendChild(img);
+    } else {
+      const grid = document.createElement('div');
+      grid.className = 'community-post-img-grid community-post-img-grid--' + media.urls.length + blurClass;
+      media.urls.forEach(url => {
+        const img = document.createElement('img');
+        img.src = url; img.alt = 'Post image'; img.className = 'community-post-img-grid-item';
+        grid.appendChild(img);
+      });
+      container.appendChild(grid);
+    }
+  }
+
+  const media = resolveMedia(p);
+
   // Body + image (NSFW gate for guests)
   if (isNsfw && !currentUser) {
     const gate = document.createElement('div');
@@ -393,12 +537,7 @@ function renderPost(p) {
     blurBody.className = 'community-post-body community-nsfw-blur';
     blurBody.textContent = p.body;
     gate.appendChild(blurBody);
-    if (p.attachment_url) {
-      const blurImg = document.createElement('img');
-      blurImg.src = p.attachment_url; blurImg.alt = '';
-      blurImg.className = 'community-post-img community-nsfw-blur';
-      gate.appendChild(blurImg);
-    }
+    appendMedia(gate, media, true);
     const overlay = document.createElement('div');
     overlay.className = 'community-nsfw-overlay';
     overlay.innerHTML = '🔞 NSFW &mdash; <a href="/login">Log in</a> to view';
@@ -409,11 +548,7 @@ function renderPost(p) {
     body.className = 'community-post-body';
     body.textContent = p.body;
     card.appendChild(body);
-    if (p.attachment_url) {
-      const img = document.createElement('img');
-      img.src = p.attachment_url; img.alt = 'Post image'; img.className = 'community-post-img';
-      card.appendChild(img);
-    }
+    appendMedia(card, media, false);
   }
 
   // Actions
@@ -614,16 +749,23 @@ renderUserBlock();
 renderQuickTags();
 renderCompose();
 
-// Compose hidden until "Create Post" is clicked
-const composeWrap = document.getElementById('community-compose-wrap');
-composeWrap.hidden = true;
+// Compose modal
+const composeModal = document.getElementById('community-compose-modal');
 const createPostBtn = document.getElementById('create-post-btn');
 createPostBtn.addEventListener('click', () => {
-  composeWrap.hidden = !composeWrap.hidden;
-  createPostBtn.classList.toggle('community-create-post-btn--active', !composeWrap.hidden);
-  if (!composeWrap.hidden) {
-    const ta = composeWrap.querySelector('textarea');
-    if (ta) ta.focus();
+  composeModal.hidden = false;
+  createPostBtn.classList.add('community-create-post-btn--active');
+  const ta = composeModal.querySelector('textarea');
+  if (ta) setTimeout(() => ta.focus(), 50);
+});
+document.getElementById('community-compose-backdrop').addEventListener('click', () => {
+  composeModal.hidden = true;
+  createPostBtn.classList.remove('community-create-post-btn--active');
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !composeModal.hidden) {
+    composeModal.hidden = true;
+    createPostBtn.classList.remove('community-create-post-btn--active');
   }
 });
 
