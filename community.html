@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Community — Between Two Worlds</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -65,6 +66,12 @@
 <div id="community-compose-modal" class="community-compose-modal" hidden aria-modal="true" role="dialog">
   <div class="community-compose-backdrop" id="community-compose-backdrop"></div>
   <div id="community-compose-wrap" class="community-compose-modal-inner"></div>
+</div>
+
+<!-- ── Post view modal ───────────────────────────────────────────── -->
+<div id="post-modal" class="post-modal" hidden aria-modal="true" role="dialog">
+  <div class="post-modal-backdrop" id="post-modal-backdrop"></div>
+  <div id="post-modal-inner" class="post-modal-inner"></div>
 </div>
 
 <footer>
@@ -474,6 +481,53 @@ function renderCompose() {
   wrap.appendChild(card);
 }
 
+// ── Time formatter ────────────────────────────────────────────────────────────
+function formatTime(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  let h = d.getHours(), ampm = 'a.m.';
+  if (h >= 12) { ampm = 'p.m.'; if (h > 12) h -= 12; }
+  if (h === 0) h = 12;
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return mm + '/' + dd + '/' + yyyy + ' ' + h + ':' + min + ' ' + ampm;
+}
+
+// ── Media helpers (top-level so post modal can use them) ──────────────────────
+function resolveMedia(post) {
+  if (post.gif_url) return { type: 'gif', url: post.gif_url };
+  const urls = (() => {
+    if (post.attachments) { try { return JSON.parse(post.attachments); } catch {} }
+    if (post.attachment_url) return [post.attachment_url];
+    return [];
+  })();
+  return urls.length ? { type: 'images', urls } : null;
+}
+function appendMedia(container, media, blur) {
+  if (!media) return;
+  const blurClass = blur ? ' community-nsfw-blur' : '';
+  if (media.type === 'gif') {
+    const img = document.createElement('img');
+    img.src = media.url; img.alt = 'GIF'; img.className = 'community-post-img' + blurClass;
+    container.appendChild(img);
+  } else if (media.urls.length === 1) {
+    const img = document.createElement('img');
+    img.src = media.urls[0]; img.alt = 'Post image'; img.className = 'community-post-img' + blurClass;
+    container.appendChild(img);
+  } else {
+    const grid = document.createElement('div');
+    grid.className = 'community-post-img-grid community-post-img-grid--' + media.urls.length + blurClass;
+    media.urls.forEach(url => {
+      const img = document.createElement('img');
+      img.src = url; img.alt = 'Post image'; img.className = 'community-post-img-grid-item';
+      grid.appendChild(img);
+    });
+    container.appendChild(grid);
+  }
+}
+
 // ── Render post ───────────────────────────────────────────────────────────────
 function renderPost(p) {
   const pinned = !!p.pinned;
@@ -525,39 +579,6 @@ function renderPost(p) {
   }
   card.appendChild(header);
 
-  // Resolve media: gif_url takes priority, then attachments JSON, then legacy attachment_url
-  function resolveMedia(post) {
-    if (post.gif_url) return { type: 'gif', url: post.gif_url };
-    const urls = (() => {
-      if (post.attachments) { try { return JSON.parse(post.attachments); } catch {} }
-      if (post.attachment_url) return [post.attachment_url];
-      return [];
-    })();
-    return urls.length ? { type: 'images', urls } : null;
-  }
-  function appendMedia(container, media, blur) {
-    if (!media) return;
-    const blurClass = blur ? ' community-nsfw-blur' : '';
-    if (media.type === 'gif') {
-      const img = document.createElement('img');
-      img.src = media.url; img.alt = 'GIF'; img.className = 'community-post-img' + blurClass;
-      container.appendChild(img);
-    } else if (media.urls.length === 1) {
-      const img = document.createElement('img');
-      img.src = media.urls[0]; img.alt = 'Post image'; img.className = 'community-post-img' + blurClass;
-      container.appendChild(img);
-    } else {
-      const grid = document.createElement('div');
-      grid.className = 'community-post-img-grid community-post-img-grid--' + media.urls.length + blurClass;
-      media.urls.forEach(url => {
-        const img = document.createElement('img');
-        img.src = url; img.alt = 'Post image'; img.className = 'community-post-img-grid-item';
-        grid.appendChild(img);
-      });
-      container.appendChild(grid);
-    }
-  }
-
   const media = resolveMedia(p);
 
   // Body + image (NSFW gate for guests)
@@ -582,30 +603,6 @@ function renderPost(p) {
     appendMedia(card, media, false);
   }
 
-  // Comments section (declared early so toggleComments can reference it)
-  const commentsWrap = document.createElement('div');
-  commentsWrap.className = 'community-comments-wrap';
-  commentsWrap.hidden = true;
-  let commentsLoaded = false;
-  const commentCount = document.createElement('span');
-  commentCount.textContent = p.comment_count || 0;
-
-  function toggleComments() {
-    commentsWrap.hidden = !commentsWrap.hidden;
-    card.classList.toggle('community-post--open', !commentsWrap.hidden);
-    if (!commentsWrap.hidden && !commentsLoaded) {
-      commentsLoaded = true;
-      loadComments(p.id, commentsWrap, commentCount);
-    }
-  }
-
-  // Clicking the card body opens comments; interactive elements handle themselves
-  card.style.cursor = 'pointer';
-  card.addEventListener('click', (e) => {
-    if (e.target.closest('button, a, textarea, input, .community-comments-wrap')) return;
-    toggleComments();
-  });
-
   // Actions bar
   const actions = document.createElement('div');
   actions.className = 'community-post-actions';
@@ -620,12 +617,19 @@ function renderPost(p) {
   likeBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleLike(p.id, likeBtn, likeCount); });
   actions.appendChild(likeBtn);
 
+  const commentCount = document.createElement('span');
+  commentCount.textContent = p.comment_count || 0;
   const commentBtn = document.createElement('button');
   commentBtn.className = 'community-action';
   commentBtn.innerHTML = '💬 ';
   commentBtn.appendChild(commentCount);
-  commentBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleComments(); });
+  commentBtn.addEventListener('click', (e) => { e.stopPropagation(); openPostModal(p, likeBtn, likeCount, commentCount); });
   actions.appendChild(commentBtn);
+
+  const timeStamp = document.createElement('span');
+  timeStamp.className = 'community-post-time-stamp';
+  timeStamp.textContent = formatTime(p.created_at);
+  actions.appendChild(timeStamp);
 
   // Trash icon — owner sees it on their posts; admin sees it on all posts
   const canDelete = isOwner || (currentUser && currentUser.is_admin);
@@ -641,8 +645,13 @@ function renderPost(p) {
     actions.appendChild(delBtn);
   }
 
+  card.style.cursor = 'pointer';
+  card.addEventListener('click', (e) => {
+    if (e.target.closest('button, a, textarea, input')) return;
+    openPostModal(p, likeBtn, likeCount, commentCount);
+  });
+
   card.appendChild(actions);
-  card.appendChild(commentsWrap);
   return card;
 }
 
@@ -666,6 +675,114 @@ async function toggleLike(postId, btn, countEl) {
     btn.classList.toggle('community-action--liked', data.liked);
     countEl.textContent = data.like_count;
   } catch {}
+}
+
+// ── Post modal ────────────────────────────────────────────────────────────────
+function openPostModal(p, cardLikeBtn, cardLikeCount, cardCommentCount) {
+  const modal = document.getElementById('post-modal');
+  const inner = document.getElementById('post-modal-inner');
+  inner.innerHTML = '';
+  document.body.style.overflow = 'hidden';
+
+  // × close button
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'post-modal-close'; closeBtn.textContent = '✕'; closeBtn.type = 'button';
+  closeBtn.addEventListener('click', () => { modal.hidden = true; document.body.style.overflow = ''; });
+  inner.appendChild(closeBtn);
+
+  // Header: avatar + name + tag
+  const header = document.createElement('div');
+  header.className = 'post-modal-header';
+  header.appendChild(makeAvatar({ avatar: p.avatar, display_name: p.display_name, username: p.username }, 'md'));
+  const meta = document.createElement('div'); meta.className = 'community-post-meta';
+  const authorEl = document.createElement('span');
+  authorEl.className = 'community-post-author' + (p.pinned ? ' community-post-author--admin' : '');
+  authorEl.textContent = p.display_name || p.username || 'Unknown';
+  const tagKey = p.tag === 'Fanart' ? 'Art/Fanart' : p.tag;
+  const m = TAG_META[tagKey] || TAG_META['General'];
+  const tagBadge = document.createElement('span');
+  tagBadge.className = 'community-post-tag';
+  tagBadge.textContent = m.emoji + ' ' + tagKey;
+  tagBadge.style.cssText = 'color:' + m.color + ';border-color:' + m.color + '44';
+  meta.appendChild(authorEl); meta.appendChild(tagBadge);
+  if (p.nsfw) { const f = document.createElement('span'); f.className = 'community-post-nsfw-flag'; f.textContent = '🔞'; meta.appendChild(f); }
+  header.appendChild(meta);
+  inner.appendChild(header);
+
+  // Timestamp
+  const timeEl = document.createElement('p'); timeEl.className = 'post-modal-time-label';
+  timeEl.textContent = '🕐 ' + formatTime(p.created_at);
+  inner.appendChild(timeEl);
+
+  // Post body + media
+  const body = document.createElement('p');
+  body.className = 'community-post-body'; body.style.margin = '0.9rem 0';
+  body.textContent = p.body;
+  inner.appendChild(body);
+  appendMedia(inner, resolveMedia(p), false);
+
+  // Divider
+  inner.appendChild(Object.assign(document.createElement('hr'), { className: 'post-modal-divider' }));
+
+  // Big like + comment buttons
+  const actionsRow = document.createElement('div'); actionsRow.className = 'post-modal-actions';
+
+  let modalLiked = !!(p.user_liked || guestLikes.has(p.id));
+  let modalLikeNum = parseInt(p.like_count) || 0;
+  const bigLikeBtn = document.createElement('button'); bigLikeBtn.type = 'button';
+  function refreshLike() {
+    bigLikeBtn.className = 'post-modal-action-btn' + (modalLiked ? ' post-modal-action-btn--liked' : '');
+    bigLikeBtn.innerHTML = (modalLiked ? '♥' : '♡') + '&nbsp;' + modalLikeNum + ' Like' + (modalLikeNum !== 1 ? 's' : '');
+  }
+  refreshLike();
+  bigLikeBtn.addEventListener('click', async () => {
+    if (!currentUser) {
+      if (guestLikes.has(p.id)) { guestLikes.delete(p.id); modalLiked = false; modalLikeNum--; }
+      else { guestLikes.add(p.id); modalLiked = true; modalLikeNum++; }
+    } else {
+      try {
+        const res = await fetch(API + '/community/posts/' + p.id + '/like', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+        const data = await res.json();
+        modalLiked = data.liked; modalLikeNum = data.like_count;
+      } catch {}
+    }
+    refreshLike();
+    cardLikeBtn.className = 'community-action' + (modalLiked ? ' community-action--liked' : '');
+    cardLikeCount.textContent = modalLikeNum;
+  });
+  actionsRow.appendChild(bigLikeBtn);
+
+  const commentNumEl = document.createElement('span');
+  commentNumEl.textContent = parseInt(cardCommentCount.textContent) || 0;
+  const commentInfo = document.createElement('div'); commentInfo.className = 'post-modal-action-btn post-modal-action-btn--passive';
+  commentInfo.innerHTML = '💬&nbsp;'; commentInfo.appendChild(commentNumEl);
+  commentInfo.appendChild(Object.assign(document.createElement('span'), { textContent: ' Comments' }));
+  actionsRow.appendChild(commentInfo);
+  inner.appendChild(actionsRow);
+
+  inner.appendChild(Object.assign(document.createElement('hr'), { className: 'post-modal-divider' }));
+
+  // Comments area
+  const commentsArea = document.createElement('div'); commentsArea.className = 'post-modal-comments';
+  commentsArea.innerHTML = '<div class="community-loading" style="font-size:0.82rem;padding:0.6rem 0">Loading…</div>';
+  inner.appendChild(commentsArea);
+
+  fetch(API + '/community/posts/' + p.id + '/comments')
+    .then(r => r.json())
+    .then(data => {
+      commentsArea.innerHTML = '';
+      if (!data.comments.length) {
+        const e = document.createElement('p'); e.className = 'post-modal-empty';
+        e.textContent = 'No comments yet! Be the first to reply? ✨';
+        commentsArea.appendChild(e);
+      } else {
+        data.comments.forEach(c => commentsArea.appendChild(renderComment(c)));
+      }
+      renderCommentInput(p.id, commentsArea, cardCommentCount);
+    })
+    .catch(() => { commentsArea.innerHTML = '<div class="community-loading" style="font-size:0.82rem">Could not load comments.</div>'; });
+
+  modal.hidden = false;
 }
 
 // ── Comments ──────────────────────────────────────────────────────────────────
@@ -836,11 +953,19 @@ document.getElementById('community-compose-backdrop').addEventListener('click', 
   createPostBtn.classList.remove('community-create-post-btn--active');
   document.querySelectorAll('.community-gif-picker').forEach(el => el.hidden = true);
 });
+document.getElementById('post-modal-backdrop').addEventListener('click', () => {
+  document.getElementById('post-modal').hidden = true;
+  document.body.style.overflow = '';
+});
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !composeModal.hidden) {
-    composeModal.hidden = true;
-    createPostBtn.classList.remove('community-create-post-btn--active');
-    document.querySelectorAll('.community-gif-picker').forEach(el => el.hidden = true);
+  if (e.key === 'Escape') {
+    const postModal = document.getElementById('post-modal');
+    if (postModal && !postModal.hidden) { postModal.hidden = true; document.body.style.overflow = ''; return; }
+    if (!composeModal.hidden) {
+      composeModal.hidden = true;
+      createPostBtn.classList.remove('community-create-post-btn--active');
+      document.querySelectorAll('.community-gif-picker').forEach(el => el.hidden = true);
+    }
   }
 });
 

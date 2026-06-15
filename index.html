@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Between Two Worlds</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -26,6 +27,17 @@
 <div class="site-banner site-banner--hero">
   <div class="site-banner-inner">
     <img src="images/layout/banner.png" alt="Between Two Worlds — banner art" />
+    <div class="banner-read-menu">
+      <span class="banner-read-label">Read on</span>
+      <div class="banner-read-btns">
+        <a class="banner-read-btn banner-read-btn--ao3"
+           href="https://archiveofourown.org/works/85995301/chapters/227352831"
+           target="_blank" rel="noopener">AO3</a>
+        <a class="banner-read-btn banner-read-btn--wattpad"
+           href="https://www.wattpad.com/story/412261599-between-two-worlds-pokemon"
+           target="_blank" rel="noopener">Wattpad</a>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -96,7 +108,7 @@
           <span class="link-name">Wattpad</span>
           <span class="link-arrow">↗</span>
         </a></li>
-        <li><a href="/discord" class="link-item link-item-discord">
+        <li><a href="/discord" class="link-item">
           <span class="link-icon">💬</span>
           <span class="link-name">Discord Server</span>
           <span class="link-arrow">→</span>
@@ -132,9 +144,12 @@
       <h2 class="author-title">Donations</h2>
       <div class="author-rule" style="background: linear-gradient(to right, var(--rose), transparent);"></div>
       <p class="donations-blurb">All donations are optional and deeply appreciated. Supporters will be listed here! &lt;3</p>
-      <a class="btn btn-primary donations-btn" href="#" target="_blank" rel="noopener">☕ Support on Ko-fi</a>
-      <div class="donations-feed">
-        <p class="donations-empty">No donations yet — be the first! 🌟</p>
+      <div class="donations-btns">
+        <a class="btn btn-primary donations-btn" href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">☕ Ko-fi</a>
+        <a class="btn btn-primary donations-btn" href="https://www.paypal.com/donate?business=mewtwosmew%40gmail.com&currency_code=USD" target="_blank" rel="noopener">💳 PayPal</a>
+      </div>
+      <div class="donations-feed" id="donations-feed">
+        <p class="donations-empty" id="donations-empty">Loading supporters…</p>
       </div>
     </div>
 
@@ -150,9 +165,9 @@
         <p>Thanks for visiting my page! If you're here, that means you're pretty cool. Very cool even. &lt;3</p>
         <p><em>Between Two Worlds</em> is a story about fun, adventure, and adult story-telling in a pokemon-themed world. I started this story as a way to alleviate the stress from college/Software Engineering, and since its inception, I've been captivated by it.</p>
         <p>Beyond making sparky characters and goofing around, I dedicate a lot of time into personal, side projects, both creative and for school. I'm a developer of several writing-related Discord bots, fanfic parsers, dappled with music (STILL LEARNING EJKGBERJKG), and enjoy competitive pokemon whenever I'm not writing.</p>
-        <p>Currently, I graduate Spring of 2027, and I am double majoring in Computer Science and Math. I love STEM and gay, doomed yaoi, so I'd say I have the best of both worlds~</p>
-        <p>If you'd like to see my other projects, as well as join the community <a href="/discord" class="inline-link">Discord server</a> (18+ only), visit the links on the right! If you'd like to browse chapters and leave personal comments for me, you can do so via the Inbox tab after making a free account, and I'll try and respond as quick as I can! Donations are all optional and totally your choice, but if you'd like to support my other projects/me personally, all donations are greatly appreciated and will be displayed on this website! &lt;3 (But of course, no pressure~)</p>
-        <p>To make an account and access spicy artwork and one-shots, you must be 18+. This story is not suitable for anyone below that age. Thanks so much for your understanding!</p>
+        <p>If you'd like to see my other projects, as well as join the community <a href="/discord" class="inline-link">Discord server</a> (18+), visit the links above! If you'd like to browse chapters and leave personal comments for me, you can do so via the Inbox tab after making a free account, and I'll try and respond as quick as I can!</p>
+        <p>Donations are all optional and totally your choice, but if you'd like to support my other projects/me personally, all donations are greatly appreciated and will be displayed on this website! &lt;3 (But of course, no pressure~)</p>
+        <p>(To access spicy artwork, one-shots, and adult content, you must be 18+! This story is not suitable for anyone below that age. Thanks so much for your understanding ^w^)</p>
       </div>
     </div>
 
@@ -201,6 +216,56 @@
 
 <script src="likes.js"></script>
 <script>LikeButtons.init('chapter');</script>
+<script>
+(async function loadDonations() {
+  const feed  = document.getElementById('donations-feed');
+  const empty = document.getElementById('donations-empty');
+  try {
+    const res  = await fetch('/api/donations');
+    const data = await res.json();
+    const list = data.donations || [];
+    if (!list.length) {
+      empty.textContent = 'No donations yet — be the first! 🌟';
+      return;
+    }
+    empty.remove();
+
+    const preview = list.slice(0, 5);
+    const rest    = list.slice(5);
+
+    function makeRow(d) {
+      const row = document.createElement('div');
+      row.className = 'donations-row';
+      const sym = d.currency === 'USD' ? '$' : d.currency + ' ';
+      const src = d.source === 'kofi' ? '☕' : '💳';
+      row.innerHTML = `<span class="donations-name">${src} ${esc(d.donor_name)}</span><span class="donations-amount">${sym}${parseFloat(d.amount).toFixed(2)}</span>`;
+      return row;
+    }
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    preview.forEach(d => feed.appendChild(makeRow(d)));
+
+    if (rest.length) {
+      const scrollBox = document.createElement('div');
+      scrollBox.className = 'donations-scroll';
+      rest.forEach(d => scrollBox.appendChild(makeRow(d)));
+      const toggle = document.createElement('button');
+      toggle.className = 'donations-toggle';
+      toggle.textContent = `Show all ${list.length} supporters ↓`;
+      toggle.addEventListener('click', () => {
+        const open = scrollBox.hidden;
+        scrollBox.hidden = !open;
+        toggle.textContent = open ? 'Hide ↑' : `Show all ${list.length} supporters ↓`;
+      });
+      scrollBox.hidden = true;
+      feed.appendChild(toggle);
+      feed.appendChild(scrollBox);
+    }
+  } catch {
+    empty.textContent = 'No donations yet — be the first! 🌟';
+  }
+})();
+</script>
 <script src="nav.js"></script>
 </body>
 </html>

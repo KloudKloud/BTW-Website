@@ -132,6 +132,17 @@ async function initDb() {
   `).catch(() => {});
 
   await pool.query(`UPDATE community_posts SET tag = 'Art/Fanart' WHERE tag = 'Fanart'`).catch(() => {});
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS donations (
+      id         SERIAL      PRIMARY KEY,
+      donor_name TEXT        NOT NULL DEFAULT 'Anonymous',
+      amount     NUMERIC(10,2) NOT NULL,
+      currency   TEXT        NOT NULL DEFAULT 'USD',
+      source     TEXT        NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(() => {});
 }
 
 // ── Email ─────────────────────────────────────────────────────────────────────
@@ -1013,6 +1024,75 @@ app.delete('/api/community/posts/:id', requireAuth, async (req, res) => {
   }
 
   res.json({ ok: true });
+});
+
+// ── Donations ─────────────────────────────────────────────────────────────────
+
+// GET /api/donations — public, newest first
+app.get('/api/donations', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT donor_name, amount, currency, source, created_at FROM donations ORDER BY created_at DESC LIMIT 100'
+    );
+    res.json({ donations: rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load donations' });
+  }
+});
+
+// POST /api/webhooks/kofi
+app.post('/api/webhooks/kofi', express.urlencoded({ extended: true }), async (req, res) => {
+  res.sendStatus(200); // Ko-fi needs a fast 200 to stop retrying
+  try {
+    const data = JSON.parse(req.body.data || '{}');
+    if (data.verification_token !== process.env.KOFI_VERIFICATION_TOKEN) return;
+    const name   = data.is_public !== false ? (data.from_name || 'Anonymous') : 'Anonymous';
+    const amount = parseFloat(data.amount) || 0;
+    if (amount <= 0) return;
+    await pool.query(
+      'INSERT INTO donations (donor_name, amount, currency, source) VALUES ($1, $2, $3, $4)',
+      [name, amount, data.currency || 'USD', 'kofi']
+    );
+  } catch (err) {
+    console.error('Ko-fi webhook error:', err);
+  }
+});
+
+// POST /api/webhooks/paypal  (IPN verification)
+app.post('/api/webhooks/paypal', express.urlencoded({ extended: true }), (req, res) => {
+  res.sendStatus(200);
+  const body = req.body;
+  const verifyBody = Buffer.from('cmd=_notify-validate&' + new URLSearchParams(body).toString());
+  const options = {
+    hostname: 'ipnpb.paypal.com',
+    path:     '/cgi-bin/webscr',
+    method:   'POST',
+    headers:  { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': verifyBody.length },
+  };
+  const verifyReq = https.request(options, verifyRes => {
+    let text = '';
+    verifyRes.on('data', c => text += c);
+    verifyRes.on('end', async () => {
+      if (text !== 'VERIFIED') return;
+      if (body.payment_status !== 'Completed') return;
+      try {
+        const first = (body.first_name || '').trim();
+        const last  = (body.last_name  || '').trim();
+        const name  = [first, last].filter(Boolean).join(' ') || 'Anonymous';
+        const amount = parseFloat(body.mc_gross) || 0;
+        if (amount <= 0) return;
+        await pool.query(
+          'INSERT INTO donations (donor_name, amount, currency, source) VALUES ($1, $2, $3, $4)',
+          [name, amount, body.mc_currency || 'USD', 'paypal']
+        );
+      } catch (err) {
+        console.error('PayPal IPN save error:', err);
+      }
+    });
+  });
+  verifyReq.on('error', err => console.error('PayPal IPN verify error:', err));
+  verifyReq.write(verifyBody);
+  verifyReq.end();
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
