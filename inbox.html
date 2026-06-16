@@ -52,6 +52,7 @@
         <div class="inbox-sidebar-rule"></div>
         <button class="inbox-tab active" data-tab="received">📬 Inbox</button>
         <button class="inbox-tab" data-tab="sent">📤 Sent</button>
+        <button class="inbox-tab" data-tab="trash">🗑️ Trash</button>
       </aside>
 
       <!-- ── Content ─────────────────────────────────────────────── -->
@@ -85,20 +86,18 @@
                      placeholder="Subject line…" maxlength="200" />
             </div>
 
-            <textarea id="compose-body" class="compose-textarea" placeholder="Type your message here…" maxlength="20000"></textarea>
-            <div class="compose-char-row">
-              <span id="compose-chars" class="compose-chars">0 / 20,000</span>
+            <div class="unified-input-box">
+              <textarea id="compose-body" class="compose-textarea unified-textarea" placeholder="Type your message here…" maxlength="20000"></textarea>
+              <div class="unified-previews" id="compose-previews"></div>
+              <div class="unified-input-footer">
+                <label class="unified-attach-btn" title="Attach up to 4 files">
+                  📎
+                  <input type="file" id="compose-file" accept="image/*,video/mp4,video/webm,application/pdf" multiple style="display:none" />
+                </label>
+                <span class="unified-attach-count" id="compose-file-count"></span>
+                <span class="compose-chars" id="compose-chars">0 / 20,000</span>
+              </div>
             </div>
-
-            <div class="compose-attach-row">
-              <label class="compose-attach-btn" for="compose-file">
-                📎 Attach image or file
-              </label>
-              <input type="file" id="compose-file" accept="image/*,video/mp4,video/webm,application/pdf" style="display:none" />
-              <span id="compose-file-name" class="compose-file-name"></span>
-              <button id="compose-file-clear" class="compose-file-clear" hidden aria-label="Remove attachment">✕</button>
-            </div>
-            <p class="compose-file-hint">Images, GIFs, video, PDF · Max 10 MB</p>
 
             <div id="compose-error"   class="compose-feedback compose-feedback--error"   hidden></div>
             <div id="compose-success" class="compose-feedback compose-feedback--success" hidden></div>
@@ -116,10 +115,20 @@
             </div>
             <div class="inbox-thread-messages" id="thread-messages"></div>
             <div class="inbox-thread-reply" id="thread-reply-wrap">
-              <textarea class="inbox-thread-reply-area" id="thread-reply-body" placeholder="Write a reply…" maxlength="20000"></textarea>
-              <div class="inbox-thread-reply-foot">
-                <span class="inbox-thread-reply-fb" id="thread-reply-fb"></span>
-                <button class="inbox-thread-reply-btn" id="thread-reply-send">Send Reply ✨</button>
+              <div class="unified-input-box">
+                <textarea class="inbox-thread-reply-area unified-textarea" id="thread-reply-body" placeholder="Write a reply…" maxlength="20000"></textarea>
+                <div class="unified-previews" id="thread-reply-previews"></div>
+                <div class="unified-input-footer">
+                  <label class="unified-attach-btn" title="Attach up to 4 files">
+                    📎
+                    <input type="file" id="thread-reply-file" accept="image/*,video/mp4,video/webm,application/pdf" multiple style="display:none" />
+                  </label>
+                  <span class="unified-attach-count" id="thread-reply-file-count"></span>
+                  <div class="inbox-thread-reply-foot">
+                    <span class="inbox-thread-reply-fb" id="thread-reply-fb"></span>
+                    <button class="inbox-thread-reply-btn" id="thread-reply-send">Send Reply ✨</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -128,6 +137,13 @@
         <!-- Admin panel (only shown to admin) -->
         <div id="panel-admin" class="inbox-panel" hidden>
           <div id="admin-list" class="inbox-list">
+            <div class="inbox-loading">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Trash panel -->
+        <div id="panel-trash" class="inbox-panel" hidden>
+          <div id="trash-list" class="inbox-list">
             <div class="inbox-loading">Loading…</div>
           </div>
         </div>
@@ -209,8 +225,9 @@ function renderUserBlock() {
 }
 
 // ── Tab switching ────────────────────────────────────────────────────────────
-const VALID_TABS = ['received', 'sent', 'compose', 'admin'];
+const VALID_TABS = ['received', 'sent', 'compose', 'admin', 'trash'];
 let _prevTab = 'received';
+let _selectedIds = new Set();
 
 function switchTab(tabId, pushHash = true) {
   document.querySelectorAll('.inbox-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
@@ -230,7 +247,7 @@ document.getElementById('inbox-tab-bar').addEventListener('click', e => {
 let _threadId   = null;
 let _threadBack = 'received';
 
-async function openThread(threadId, backTab) {
+async function openThread(threadId, backTab, uptoId) {
   _threadId   = threadId;
   _threadBack = backTab || _prevTab;
 
@@ -242,9 +259,17 @@ async function openThread(threadId, backTab) {
   msgWrap.innerHTML = '<div class="inbox-loading">Loading…</div>';
   subjEl.textContent = '';
   document.getElementById('thread-reply-fb').textContent = '';
+  document.getElementById('thread-reply-body').value = '';
+  document.getElementById('thread-reply-file').value = '';
+  replyFiles = [];
+  renderPreviews('thread-reply-previews', replyFiles);
+  updateCount('thread-reply-previews', replyFiles);
 
   try {
-    const res  = await fetch(`${API}/inbox/thread/${threadId}`, { headers: { Authorization: `Bearer ${token}` } });
+    const url = uptoId
+      ? `${API}/inbox/thread/${threadId}?upto=${uptoId}`
+      : `${API}/inbox/thread/${threadId}`;
+    const res  = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     const data = await res.json();
     if (!res.ok) { msgWrap.innerHTML = `<div class="inbox-empty">${esc(data.error || 'Could not load thread.')}</div>`; return; }
 
@@ -254,6 +279,10 @@ async function openThread(threadId, backTab) {
     // Subject from root (first) message
     subjEl.textContent = msgs[0].subject || 'No Subject';
     msgWrap.innerHTML  = '';
+
+    // Newsletter messages (admin-initiated, no user sender) — hide reply box
+    const isNewsletter = msgs[0].is_admin && !msgs[0].from_user_id;
+    document.getElementById('thread-reply-wrap').style.display = isNewsletter ? 'none' : '';
 
     msgs.forEach(m => {
       const isAdminMsg = m.is_admin;
@@ -272,31 +301,45 @@ async function openThread(threadId, backTab) {
         <p class="inbox-bubble-body">${esc(m.body)}</p>
       `;
 
-      if (m.attachment_url) {
-        const isImg = /\.(jpe?g|png|webp|gif|avif)$/i.test(m.attachment_url);
-        const attach = document.createElement('div');
-        attach.className = 'inbox-msg-attach';
-        if (isImg) {
-          const img = document.createElement('img');
-          img.src = m.attachment_url;
-          img.alt = m.attachment_name || 'Attachment';
-          img.className = 'inbox-msg-attach-img';
-          attach.appendChild(img);
-        } else {
-          const a = document.createElement('a');
-          a.href = m.attachment_url; a.target = '_blank'; a.rel = 'noopener';
-          a.textContent = '📎 ' + (m.attachment_name || 'View attachment');
-          a.className = 'inbox-msg-attach-link';
-          attach.appendChild(a);
-        }
-        bubble.appendChild(attach);
+      // Attachments: new JSON array OR legacy single field
+      const attList = (m.attachments && m.attachments.length)
+        ? m.attachments
+        : (m.attachment_url ? [{ url: m.attachment_url, name: m.attachment_name }] : []);
+      if (attList.length) {
+        const wrap = document.createElement('div');
+        wrap.className = 'inbox-msg-attach-grid';
+        attList.forEach(att => {
+          const isImg = /\.(jpe?g|png|webp|gif|avif)$/i.test(att.url);
+          const isVid = /\.(mp4|webm)$/i.test(att.url);
+          if (isImg) {
+            const img = document.createElement('img');
+            img.src = att.url; img.alt = att.name || 'Image';
+            img.className = 'inbox-msg-attach-img';
+            wrap.appendChild(img);
+          } else if (isVid) {
+            const vid = document.createElement('video');
+            vid.src = att.url; vid.controls = true;
+            vid.className = 'inbox-msg-attach-img';
+            wrap.appendChild(vid);
+          } else {
+            const a = document.createElement('a');
+            a.href = att.url; a.target = '_blank'; a.rel = 'noopener';
+            a.textContent = '📎 ' + (att.name || 'View attachment');
+            a.className = 'inbox-msg-attach-link';
+            wrap.appendChild(a);
+          }
+        });
+        bubble.appendChild(wrap);
       }
 
       msgWrap.appendChild(bubble);
     });
 
-    // Scroll to bottom (latest message)
-    msgWrap.scrollTop = msgWrap.scrollHeight;
+    // Scroll to bottom after layout is computed
+    requestAnimationFrame(() => { msgWrap.scrollTop = msgWrap.scrollHeight; });
+
+    // Refresh nav badge — opening a thread marks messages as read
+    if (!_isAdmin) refreshInboxBadge();
   } catch {
     msgWrap.innerHTML = '<div class="inbox-empty">Could not load thread.</div>';
   }
@@ -307,32 +350,110 @@ document.getElementById('thread-back').addEventListener('click', () => {
   switchTab(_threadBack, false);
 });
 
+// ── Multi-file attachment system ──────────────────────────────────────────────
+let composeFiles = [];
+let replyFiles   = [];
+
+function renderPreviews(containerId, filesArr) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  // Revoke stale blob URLs
+  el.querySelectorAll('img[data-blob],video[data-blob]').forEach(n => URL.revokeObjectURL(n.src));
+  el.innerHTML = '';
+  if (!filesArr.length) return;
+  filesArr.forEach((f, i) => {
+    const item = document.createElement('div');
+    item.className = 'compose-preview-item';
+    const isImage = /^image\//.test(f.type);
+    const isVideo = /^video\//.test(f.type);
+    if (isImage) {
+      const img = document.createElement('img');
+      img.className = 'compose-preview-thumb';
+      img.src = URL.createObjectURL(f);
+      img.setAttribute('data-blob', '1');
+      item.appendChild(img);
+    } else if (isVideo) {
+      const vid = document.createElement('video');
+      vid.className = 'compose-preview-thumb';
+      vid.src = URL.createObjectURL(f);
+      vid.setAttribute('data-blob', '1');
+      vid.controls = true;
+      item.appendChild(vid);
+    } else {
+      const icon = document.createElement('div');
+      icon.className = 'compose-preview-file-icon';
+      icon.textContent = '📄';
+      item.appendChild(icon);
+    }
+    const name = document.createElement('span');
+    name.className = 'compose-preview-name';
+    name.textContent = f.name.length > 18 ? f.name.slice(0, 15) + '…' : f.name;
+    item.appendChild(name);
+    const rm = document.createElement('button');
+    rm.className = 'compose-preview-remove';
+    rm.type = 'button';
+    rm.textContent = '✕';
+    rm.addEventListener('click', () => {
+      filesArr.splice(i, 1);
+      renderPreviews(containerId, filesArr);
+      updateCount(containerId, filesArr);
+    });
+    item.appendChild(rm);
+    el.appendChild(item);
+  });
+}
+
+function updateCount(containerId, filesArr) {
+  const countId = containerId === 'compose-previews' ? 'compose-file-count' : 'thread-reply-file-count';
+  const el = document.getElementById(countId);
+  if (el) el.textContent = filesArr.length ? `${filesArr.length}/4` : '';
+}
+
+function addFiles(filesArr, newFiles, containerId) {
+  for (const f of newFiles) {
+    if (filesArr.length >= 4) break;
+    if (f.size > 10 * 1024 * 1024) continue;
+    filesArr.push(f);
+  }
+  renderPreviews(containerId, filesArr);
+  updateCount(containerId, filesArr);
+}
+
+document.getElementById('thread-reply-file').addEventListener('change', function () {
+  addFiles(replyFiles, Array.from(this.files), 'thread-reply-previews');
+  this.value = '';
+});
+
 document.getElementById('thread-reply-send').addEventListener('click', async () => {
-  const body = document.getElementById('thread-reply-body').value.trim();
-  const fb   = document.getElementById('thread-reply-fb');
-  const btn  = document.getElementById('thread-reply-send');
+  const body    = document.getElementById('thread-reply-body').value.trim();
+  const fb      = document.getElementById('thread-reply-fb');
+  const btn     = document.getElementById('thread-reply-send');
+  const fileIn  = document.getElementById('thread-reply-file');
   if (!body) { fb.textContent = 'Please write something first.'; return; }
   btn.disabled = true;
   fb.textContent = '';
   try {
+    const form = new FormData();
+    form.append('body', body);
+    replyFiles.forEach(f => form.append('attachments', f));
     const res  = await fetch(`${API}/inbox/thread/${_threadId}/reply`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ body }),
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
     });
     const data = await res.json();
     if (!res.ok) { fb.textContent = data.error || 'Something went wrong.'; }
     else {
-      document.getElementById('thread-reply-body').value = '';
+      replyFiles = [];
       await openThread(_threadId, _threadBack);
+      refreshInboxBadge();
     }
   } catch { fb.textContent = 'Network error.'; }
   finally { btn.disabled = false; }
 });
 
-// ── Thread card ──────────────────────────────────────────────────────────────
+// ── Thread card (admin views — thread-grouped) ────────────────────────────────
 function renderThreadCard(t, opts = {}) {
-  // opts: { fromLabel, previewLabel, showUnread, tab }
   const card = document.createElement('div');
   card.className = 'inbox-thread-card' + (opts.showUnread && t.unread_count > 0 ? ' inbox-thread-card--unread' : '');
   card.setAttribute('role', 'button');
@@ -345,17 +466,168 @@ function renderThreadCard(t, opts = {}) {
   const unread  = opts.showUnread && t.unread_count > 0;
 
   card.innerHTML = `
+    ${unread ? '<div class="inbox-tc-new-banner">⭐ New Message!</div>' : ''}
     <div class="inbox-tc-row">
       <span class="inbox-tc-from">${esc(from)}</span>
       <span class="inbox-tc-time">${timeAgo(date)}</span>
     </div>
-    <div class="inbox-tc-subject">${esc(subject)}${unread ? ' <span class="inbox-tc-badge">NEW</span>' : ''}</div>
+    <div class="inbox-tc-subject">${esc(subject)}</div>
     <div class="inbox-tc-preview">${esc(preview.slice(0, 120))}${preview.length > 120 ? '…' : ''}</div>
   `;
 
   card.addEventListener('click', () => openThread(t.thread_id, opts.tab || _prevTab));
   card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') openThread(t.thread_id, opts.tab || _prevTab); });
   return card;
+}
+
+// ── Message card (user inbox/sent — per-message, FA-style) ───────────────────
+function renderMsgCard(msg, opts = {}) {
+  // opts: { fromLabel, tab, showUnread, noOpenedAt }
+  const isUnread = opts.showUnread && !msg.read_at;
+  const isRead   = opts.showUnread && !!msg.read_at;
+
+  const outer = document.createElement('div');
+  outer.className = 'inbox-tc-outer';
+
+  // Checkbox for selection
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.className = 'inbox-tc-checkbox';
+  cb.setAttribute('aria-label', 'Select message');
+  cb.addEventListener('change', e => {
+    e.stopPropagation();
+    if (cb.checked) _selectedIds.add(msg.id);
+    else _selectedIds.delete(msg.id);
+    updateDeleteToolbar(opts.tab || 'received');
+  });
+  cb.addEventListener('click', e => e.stopPropagation());
+  outer.appendChild(cb);
+
+  // Card body
+  const card = document.createElement('div');
+  let cls = 'inbox-thread-card inbox-tc-body';
+  if (isUnread) cls += ' inbox-thread-card--unread';
+  else if (isRead) cls += ' inbox-thread-card--read';
+  card.className = cls;
+  card.setAttribute('role', 'button');
+  card.tabIndex = 0;
+
+  const subject = msg.subject || 'No Subject';
+  const preview = msg.body || '';
+  const from    = opts.fromLabel || '';
+  const openedAt = msg.read_at && !opts.noOpenedAt
+    ? `<div class="inbox-tc-opened-at">Opened ${fmtDate(msg.read_at)}</div>` : '';
+
+  card.innerHTML = `
+    ${isUnread ? '<div class="inbox-tc-new-banner">⭐ New Message!</div>' : ''}
+    <div class="inbox-tc-row">
+      <span class="inbox-tc-from">${esc(from)}</span>
+      <span class="inbox-tc-time">${timeAgo(msg.created_at)}</span>
+    </div>
+    <div class="inbox-tc-subject">${esc(subject)}</div>
+    <div class="inbox-tc-preview">${esc(preview.slice(0, 120))}${preview.length > 120 ? '…' : ''}</div>
+    ${openedAt}
+  `;
+
+  const tab = opts.tab || _prevTab;
+  card.addEventListener('click', () => openThread(msg.thread_id, tab, msg.id));
+  card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') openThread(msg.thread_id, tab, msg.id); });
+  outer.appendChild(card);
+  return outer;
+}
+
+// ── Trash card ────────────────────────────────────────────────────────────────
+function renderTrashCard(msg) {
+  const deletedAt  = new Date(msg.user_deleted_at);
+  const expiresAt  = new Date(deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const daysLeft   = Math.max(0, Math.ceil((expiresAt - Date.now()) / (24 * 60 * 60 * 1000)));
+  const daysAgo    = Math.floor((Date.now() - deletedAt) / (24 * 60 * 60 * 1000));
+
+  const outer = document.createElement('div');
+  outer.className = 'inbox-tc-outer';
+
+  const card = document.createElement('div');
+  card.className = 'inbox-thread-card inbox-tc-body inbox-thread-card--read';
+
+  const from = msg.is_admin ? 'VeekitPaw ✨' : 'You';
+  const subject = msg.subject || 'No Subject';
+  const preview = msg.body || '';
+
+  card.innerHTML = `
+    <div class="inbox-tc-row">
+      <span class="inbox-tc-from">${esc(from)}</span>
+      <span class="inbox-tc-time">${timeAgo(msg.created_at)}</span>
+    </div>
+    <div class="inbox-tc-subject">${esc(subject)}</div>
+    <div class="inbox-tc-preview">${esc(preview.slice(0, 120))}${preview.length > 120 ? '…' : ''}</div>
+    <div class="inbox-tc-trash-meta">Deleted ${daysAgo === 0 ? 'today' : daysAgo + 'd ago'} · expires in ${daysLeft}d</div>
+    <div class="inbox-trash-actions">
+      <button class="inbox-trash-restore-btn">↩ Restore</button>
+      <button class="inbox-trash-delete-btn">✕ Delete now</button>
+    </div>
+  `;
+
+  card.querySelector('.inbox-trash-restore-btn').addEventListener('click', async e => {
+    e.stopPropagation();
+    await fetch(`${API}/inbox/restore`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [msg.id] }),
+    });
+    loadTrash();
+  });
+
+  card.querySelector('.inbox-trash-delete-btn').addEventListener('click', async e => {
+    e.stopPropagation();
+    if (!confirm('Permanently delete this message? This cannot be undone.')) return;
+    await fetch(`${API}/inbox/trash`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [msg.id] }),
+    });
+    // Already in trash, so just remove from view by re-loading
+    outer.remove();
+  });
+
+  outer.appendChild(card);
+  return outer;
+}
+
+// ── Delete toolbar helpers ────────────────────────────────────────────────────
+function injectDeleteToolbar(listId, tabId) {
+  const list = document.getElementById(listId);
+  if (!list || list.querySelector('.inbox-delete-toolbar')) return;
+  const toolbar = document.createElement('div');
+  toolbar.className = 'inbox-delete-toolbar';
+  toolbar.dataset.tab = tabId;
+  toolbar.hidden = true;
+  toolbar.innerHTML = `
+    <span class="inbox-delete-count"></span>
+    <button class="inbox-delete-btn">🗑️ Move to Trash</button>
+  `;
+  toolbar.querySelector('.inbox-delete-btn').addEventListener('click', async () => {
+    const ids = [..._selectedIds];
+    if (!ids.length) return;
+    await fetch(`${API}/inbox/trash`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+    _selectedIds.clear();
+    if (tabId === 'received') loadReceived();
+    else if (tabId === 'sent') loadSent();
+  });
+  list.insertBefore(toolbar, list.firstChild);
+}
+
+function updateDeleteToolbar(tabId) {
+  const listId = tabId === 'received' ? 'received-list' : 'sent-list';
+  const toolbar = document.getElementById(listId)?.querySelector('.inbox-delete-toolbar');
+  if (!toolbar) return;
+  const n = _selectedIds.size;
+  toolbar.hidden = n === 0;
+  const countEl = toolbar.querySelector('.inbox-delete-count');
+  if (countEl) countEl.textContent = `${n} selected`;
 }
 
 function renderEmpty(msg) {
@@ -367,16 +639,18 @@ function renderEmpty(msg) {
 
 // ── Load received ────────────────────────────────────────────────────────────
 async function loadReceived() {
+  _selectedIds.clear();
   const list = document.getElementById('received-list');
   list.innerHTML = '<div class="inbox-loading">Loading…</div>';
   try {
     const res  = await fetch(`${API}/inbox/received`, { headers: { Authorization: `Bearer ${token}` } });
     const data = await res.json();
     list.innerHTML = '';
-    if (!data.threads || !data.threads.length) {
+    injectDeleteToolbar('received-list', 'received');
+    if (!data.messages || !data.messages.length) {
       list.appendChild(renderEmpty("No replies yet! When VeekitPaw responds, you'll see it here. 💌"));
     } else {
-      data.threads.forEach(t => list.appendChild(renderThreadCard(t, {
+      data.messages.forEach(m => list.appendChild(renderMsgCard(m, {
         fromLabel: 'VeekitPaw ✨',
         showUnread: true,
         tab: 'received',
@@ -389,22 +663,43 @@ async function loadReceived() {
 
 // ── Load sent ────────────────────────────────────────────────────────────────
 async function loadSent() {
+  _selectedIds.clear();
   const list = document.getElementById('sent-list');
   list.innerHTML = '<div class="inbox-loading">Loading…</div>';
   try {
     const res  = await fetch(`${API}/inbox/sent`, { headers: { Authorization: `Bearer ${token}` } });
     const data = await res.json();
     list.innerHTML = '';
-    if (!data.threads || !data.threads.length) {
+    injectDeleteToolbar('sent-list', 'sent');
+    if (!data.messages || !data.messages.length) {
       list.appendChild(renderEmpty("You haven't sent any messages yet. Say hi! 💌"));
     } else {
-      data.threads.forEach(t => list.appendChild(renderThreadCard(t, {
-        fromLabel: t.latest_is_admin ? 'VeekitPaw ✨ replied' : 'You',
+      data.messages.forEach(m => list.appendChild(renderMsgCard(m, {
+        fromLabel: 'You',
         tab: 'sent',
+        noOpenedAt: true,
       })));
     }
   } catch {
     list.innerHTML = '<div class="inbox-empty">Could not load sent messages.</div>';
+  }
+}
+
+// ── Load trash ───────────────────────────────────────────────────────────────
+async function loadTrash() {
+  const list = document.getElementById('trash-list');
+  list.innerHTML = '<div class="inbox-loading">Loading…</div>';
+  try {
+    const res  = await fetch(`${API}/inbox/trash`, { headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json();
+    list.innerHTML = '';
+    if (!data.messages || !data.messages.length) {
+      list.appendChild(renderEmpty('Trash is empty. Deleted messages are kept for 30 days.'));
+    } else {
+      data.messages.forEach(m => list.appendChild(renderTrashCard(m)));
+    }
+  } catch {
+    list.innerHTML = '<div class="inbox-empty">Could not load trash.</div>';
   }
 }
 
@@ -414,8 +709,6 @@ function initCompose() {
   const subjectIn  = document.getElementById('compose-subject');
   const charEl     = document.getElementById('compose-chars');
   const fileInput  = document.getElementById('compose-file');
-  const fileName   = document.getElementById('compose-file-name');
-  const fileClear  = document.getElementById('compose-file-clear');
   const sendBtn    = document.getElementById('compose-send');
   const errEl      = document.getElementById('compose-error');
   const okEl       = document.getElementById('compose-success');
@@ -426,24 +719,9 @@ function initCompose() {
     charEl.classList.toggle('compose-chars--warn', n > 18000);
   });
 
-  fileInput.addEventListener('change', () => {
-    const f = fileInput.files[0];
-    if (!f) return;
-    if (f.size > 10 * 1024 * 1024) {
-      fileInput.value = '';
-      errEl.textContent = 'File exceeds 10 MB limit.';
-      errEl.hidden = false;
-      return;
-    }
-    fileName.textContent = f.name;
-    fileClear.hidden = false;
-    errEl.hidden = true;
-  });
-
-  fileClear.addEventListener('click', () => {
-    fileInput.value = '';
-    fileName.textContent = '';
-    fileClear.hidden = true;
+  fileInput.addEventListener('change', function () {
+    addFiles(composeFiles, Array.from(this.files), 'compose-previews');
+    this.value = '';
   });
 
   sendBtn.addEventListener('click', async () => {
@@ -459,7 +737,7 @@ function initCompose() {
     const form = new FormData();
     form.append('subject', subject);
     form.append('body', body);
-    if (fileInput.files[0]) form.append('attachment', fileInput.files[0]);
+    composeFiles.forEach(f => form.append('attachments', f));
 
     try {
       const res  = await fetch(`${API}/inbox/send`, {
@@ -475,9 +753,9 @@ function initCompose() {
         textarea.value = '';
         subjectIn.value = '';
         charEl.textContent = '0 / 20,000';
-        fileInput.value = '';
-        fileName.textContent = '';
-        fileClear.hidden = true;
+        composeFiles = [];
+        renderPreviews('compose-previews', composeFiles);
+        updateCount('compose-previews', composeFiles);
         okEl.textContent = 'Message sent! VeekitPaw will get back to you soon 🌸';
         okEl.hidden = false;
         loadSent();
@@ -501,7 +779,7 @@ async function initAdmin() {
   const adminTab = document.createElement('button');
   adminTab.className = 'inbox-tab inbox-tab--admin';
   adminTab.dataset.tab = 'admin';
-  adminTab.textContent = '🛡 All Messages';
+  adminTab.textContent = '🛡 Admin Panel';
   tabBar.appendChild(adminTab);
 
   // Swap sent tab label to show admin-sent instead
@@ -556,18 +834,40 @@ async function initAdmin() {
     finally { btn.disabled = false; }
   });
 
-  await loadAdminThreads();
+  await loadAdminPanel();
 }
 
-async function loadAdminThreads() {
-  const list = document.getElementById('admin-list');
+async function loadAdminInbox() {
+  _selectedIds.clear();
+  const list = document.getElementById('received-list');
   list.innerHTML = '<div class="inbox-loading">Loading…</div>';
   try {
     const res  = await fetch(`${API}/inbox/admin/all`, { headers: { Authorization: `Bearer ${token}` } });
     const data = await res.json();
     list.innerHTML = '';
+    if (!data.messages || !data.messages.length) {
+      list.appendChild(renderEmpty('No messages yet.'));
+      return;
+    }
+    data.messages.forEach(m => list.appendChild(renderMsgCard(m, {
+      fromLabel: m.display_name || m.username || 'Unknown user',
+      showUnread: true,
+      tab: 'received',
+    })));
+  } catch {
+    list.innerHTML = '<div class="inbox-empty">Could not load messages.</div>';
+  }
+}
+
+async function loadAdminPanel() {
+  const list = document.getElementById('admin-list');
+  list.innerHTML = '<div class="inbox-loading">Loading…</div>';
+  try {
+    const res  = await fetch(`${API}/inbox/admin/unreplied`, { headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json();
+    list.innerHTML = '';
     if (!data.threads || !data.threads.length) {
-      list.appendChild(renderEmpty('No user messages yet.'));
+      list.appendChild(renderEmpty('All caught up! No unreplied messages. 🎉'));
       return;
     }
     data.threads.forEach(t => list.appendChild(renderThreadCard(t, {
@@ -580,18 +880,21 @@ async function loadAdminThreads() {
 }
 
 async function loadAdminSent() {
+  _selectedIds.clear();
   const list = document.getElementById('sent-list');
   list.innerHTML = '<div class="inbox-loading">Loading…</div>';
   try {
     const res  = await fetch(`${API}/inbox/admin/sent`, { headers: { Authorization: `Bearer ${token}` } });
-    const data = await res.json();
     list.innerHTML = '';
-    if (!data.threads || !data.threads.length) {
-      list.appendChild(renderEmpty("No replies sent yet."));
+    if (!res.ok) { list.appendChild(renderEmpty('No replies sent yet.')); return; }
+    const data = await res.json();
+    if (!data.messages || !data.messages.length) {
+      list.appendChild(renderEmpty("You haven't sent any replies yet. 💌"));
     } else {
-      data.threads.forEach(t => list.appendChild(renderThreadCard(t, {
-        fromLabel: 'To: ' + (t.display_name || t.username || 'User'),
+      data.messages.forEach(m => list.appendChild(renderMsgCard(m, {
+        fromLabel: 'To: ' + (m.display_name || m.username || 'User'),
         tab: 'sent',
+        noOpenedAt: true,
       })));
     }
   } catch {
@@ -632,7 +935,16 @@ function initGuest() {
   });
 
   const hashTab = location.hash.replace('#', '');
-  switchTab(VALID_TABS.includes(hashTab) && hashTab !== 'compose' && hashTab !== 'admin' ? hashTab : 'received');
+  switchTab(VALID_TABS.includes(hashTab) && hashTab !== 'compose' && hashTab !== 'admin' && hashTab !== 'trash' ? hashTab : 'received');
+}
+
+// ── Nav badge ─────────────────────────────────────────────────────────────────
+async function refreshInboxBadge() {
+  try {
+    const res  = await fetch(`${API}/inbox/unread-count`, { headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json();
+    window._updateInboxBadge && window._updateInboxBadge(data.count || 0);
+  } catch {}
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
@@ -653,23 +965,24 @@ async function init() {
   const hashTab  = location.hash.replace('#', '');
   const startTab = VALID_TABS.includes(hashTab) ? hashTab : 'received';
 
-  if (!_isAdmin) {
-    loadReceived();
-    if (startTab === 'sent') { _sentLoaded = true; loadSent(); }
-  }
-
+  if (_isAdmin) loadAdminInbox(); else loadReceived();
+  if (!_isAdmin && startTab === 'sent') { _sentLoaded = true; loadSent(); }
   switchTab(startTab);
 
   document.getElementById('inbox-tab-bar').addEventListener('click', e => {
     const tab = e.target.closest('.inbox-tab');
     if (!tab) return;
     const id = tab.dataset.tab;
-    if (id === 'sent' && !_sentLoaded) {
-      _sentLoaded = true;
-      if (_isAdmin) loadAdminSent();
-      else          loadSent();
+    _selectedIds.clear();
+    if (id === 'sent') {
+      if (_isAdmin) loadAdminSent(); else loadSent();
     }
-    if (id === 'received' && !_isAdmin) loadReceived();
+    if (id === 'received') {
+      if (_isAdmin) loadAdminInbox(); else loadReceived();
+      refreshInboxBadge();
+    }
+    if (id === 'admin') loadAdminPanel();
+    if (id === 'trash') loadTrash();
   });
 }
 </script>

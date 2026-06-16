@@ -157,10 +157,14 @@ async function initDb() {
   // Add newsletter opt-in column if missing (default true for existing users)
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_newsletter BOOLEAN DEFAULT true`).catch(() => {});
   // Inbox threading columns
-  await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS thread_id INTEGER`).catch(() => {});
-  await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS subject TEXT DEFAULT 'No Subject'`).catch(() => {});
+  await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS thread_id INTEGER`).catch(e => console.error('migration thread_id:', e.message));
+  await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS subject TEXT DEFAULT 'No Subject'`).catch(e => console.error('migration subject:', e.message));
   // Backfill thread_id for existing messages (each becomes its own root)
-  await pool.query(`UPDATE inbox_messages SET thread_id = id WHERE thread_id IS NULL`).catch(() => {});
+  await pool.query(`UPDATE inbox_messages SET thread_id = id WHERE thread_id IS NULL`).catch(e => console.error('migration backfill:', e.message));
+  // Multi-attachment support
+  await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'`).catch(e => console.error('migration inbox attachments:', e.message));
+  // Per-user soft-delete (trash)
+  await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS user_deleted_at TIMESTAMPTZ`).catch(e => console.error('migration user_deleted_at:', e.message));
   // Password reset table
   await pool.query(`
     CREATE TABLE IF NOT EXISTS password_resets (
@@ -824,18 +828,21 @@ const uploadInbox = multer({
 });
 
 // ── Inbox: start a new thread ─────────────────────────────────────────────────
-app.post('/api/inbox/send', requireAuth, uploadInbox.single('attachment'), async (req, res) => {
+app.post('/api/inbox/send', requireAuth, uploadInbox.array('attachments', 4), async (req, res) => {
   const body    = (req.body.body    || '').trim();
   const subject = (req.body.subject || '').trim() || 'No Subject';
   if (!body) return res.status(400).json({ error: 'Message cannot be empty.' });
   if (body.length > 20000) return res.status(400).json({ error: 'Message too long (max 20,000 chars).' });
 
-  const attachmentUrl  = req.file ? '/images/inbox/' + req.file.filename : null;
-  const attachmentName = req.file ? req.file.originalname : null;
+  const files = req.files || [];
+  const attachments = files.map(f => ({ url: '/images/inbox/' + f.filename, name: f.originalname }));
+  // Legacy single-attachment fields (keep for backwards compat)
+  const attachmentUrl  = attachments[0]?.url  || null;
+  const attachmentName = attachments[0]?.name || null;
 
   const { rows: [row] } = await pool.query(
-    'INSERT INTO inbox_messages (from_user_id, body, subject, attachment_url, attachment_name, is_admin) VALUES ($1, $2, $3, $4, $5, false) RETURNING *',
-    [req.user.id, body, subject, attachmentUrl, attachmentName]
+    'INSERT INTO inbox_messages (from_user_id, body, subject, attachment_url, attachment_name, attachments, is_admin) VALUES ($1, $2, $3, $4, $5, $6, false) RETURNING *',
+    [req.user.id, body, subject, attachmentUrl, attachmentName, JSON.stringify(attachments)]
   );
   // thread_id = own id (this message is the root of the thread)
   await pool.query('UPDATE inbox_messages SET thread_id = $1 WHERE id = $1', [row.id]);
@@ -843,8 +850,8 @@ app.post('/api/inbox/send', requireAuth, uploadInbox.single('attachment'), async
 
   const { rows: [sender] } = await pool.query('SELECT username, display_name FROM users WHERE id = $1', [req.user.id]);
   const senderName = (sender && (sender.display_name || sender.username)) || 'Someone';
-  const attachHtml = attachmentUrl
-    ? `<p style="margin:8px 0 0;font-size:0.85rem;color:#555;">Attachment: <a href="https://btwfanfic.net${attachmentUrl}">${attachmentName}</a></p>`
+  const attachHtml = attachments.length
+    ? attachments.map(a => `<p style="margin:8px 0 0;font-size:0.85rem;color:#555;">Attachment: <a href="https://btwfanfic.net${a.url}">${a.name}</a></p>`).join('')
     : '';
   resend.emails.send({
     from: 'BTW Inbox <noreply@btwfanfic.net>',
@@ -865,7 +872,7 @@ app.post('/api/inbox/send', requireAuth, uploadInbox.single('attachment'), async
 });
 
 // ── Inbox: reply within a thread ──────────────────────────────────────────────
-app.post('/api/inbox/thread/:id/reply', requireAuth, async (req, res) => {
+app.post('/api/inbox/thread/:id/reply', requireAuth, uploadInbox.array('attachments', 4), async (req, res) => {
   const threadId = parseInt(req.params.id);
   const body     = (req.body.body || '').trim();
   if (!body) return res.status(400).json({ error: 'Reply cannot be empty.' });
@@ -877,12 +884,16 @@ app.post('/api/inbox/thread/:id/reply', requireAuth, async (req, res) => {
   if (!root) return res.status(404).json({ error: 'Thread not found.' });
 
   const isAdmin = await checkAdmin(req);
+  const files = req.files || [];
+  const attachments = files.map(f => ({ url: '/images/inbox/' + f.filename, name: f.originalname }));
+  const attachmentUrl  = attachments[0]?.url  || null;
+  const attachmentName = attachments[0]?.name || null;
 
   if (isAdmin) {
     // Admin replying to user
     const { rows: [reply] } = await pool.query(
-      'INSERT INTO inbox_messages (to_user_id, body, thread_id, is_admin) VALUES ($1, $2, $3, true) RETURNING *',
-      [root.from_user_id, body, threadId]
+      'INSERT INTO inbox_messages (to_user_id, body, thread_id, is_admin, attachment_url, attachment_name, attachments) VALUES ($1, $2, $3, true, $4, $5, $6) RETURNING *',
+      [root.from_user_id, body, threadId, attachmentUrl, attachmentName, JSON.stringify(attachments)]
     );
     // Notify the user by email
     const { rows: [toUser] } = await pool.query('SELECT email, username, display_name FROM users WHERE id = $1', [root.from_user_id]);
@@ -908,8 +919,8 @@ app.post('/api/inbox/thread/:id/reply', requireAuth, async (req, res) => {
     // Regular user replying within thread — verify they own this thread
     if (root.from_user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden.' });
     const { rows: [reply] } = await pool.query(
-      'INSERT INTO inbox_messages (from_user_id, body, thread_id, is_admin) VALUES ($1, $2, $3, false) RETURNING *',
-      [req.user.id, body, threadId]
+      'INSERT INTO inbox_messages (from_user_id, body, thread_id, is_admin, attachment_url, attachment_name, attachments) VALUES ($1, $2, $3, false, $4, $5, $6) RETURNING *',
+      [req.user.id, body, threadId, attachmentUrl, attachmentName, JSON.stringify(attachments)]
     );
     // Notify admin of user reply
     const { rows: [sender] } = await pool.query('SELECT username, display_name FROM users WHERE id = $1', [req.user.id]);
@@ -931,135 +942,245 @@ app.post('/api/inbox/thread/:id/reply', requireAuth, async (req, res) => {
   }
 });
 
-// ── Inbox: get all messages in a thread ───────────────────────────────────────
+// ── Inbox: get messages in a thread (optionally up to a specific message) ─────
 app.get('/api/inbox/thread/:id', requireAuth, async (req, res) => {
   const threadId = parseInt(req.params.id);
+  const uptoId   = req.query.upto ? parseInt(req.query.upto) : null;
   const isAdmin  = await checkAdmin(req);
 
-  const { rows } = await pool.query(`
-    SELECT m.*,
-      u.username, u.display_name, u.avatar
-    FROM inbox_messages m
-    LEFT JOIN users u ON m.from_user_id = u.id
-    WHERE m.thread_id = $1 OR m.id = $1
-    ORDER BY m.created_at ASC
-  `, [threadId]);
+  let rows;
+  if (uptoId) {
+    const result = await pool.query(`
+      SELECT m.*, u.username, u.display_name, u.avatar
+      FROM inbox_messages m
+      LEFT JOIN users u ON m.from_user_id = u.id
+      WHERE (m.thread_id = $1 OR m.id = $1)
+        AND m.created_at <= (SELECT created_at FROM inbox_messages WHERE id = $2)
+      ORDER BY m.created_at ASC
+    `, [threadId, uptoId]);
+    rows = result.rows;
+  } else {
+    const result = await pool.query(`
+      SELECT m.*, u.username, u.display_name, u.avatar
+      FROM inbox_messages m
+      LEFT JOIN users u ON m.from_user_id = u.id
+      WHERE m.thread_id = $1 OR m.id = $1
+      ORDER BY m.created_at ASC
+    `, [threadId]);
+    rows = result.rows;
+  }
 
   if (!rows.length) return res.status(404).json({ error: 'Thread not found.' });
 
-  // Security: non-admin can only view threads they own
+  // Security: non-admin can only view threads they own or were addressed to them
   if (!isAdmin) {
     const root = rows.find(r => r.id === threadId);
-    if (!root || root.from_user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden.' });
+    if (!root) return res.status(403).json({ error: 'Forbidden.' });
+    const isOwner = root.from_user_id === req.user.id ||
+                    (root.is_admin && root.to_user_id === req.user.id);
+    if (!isOwner) return res.status(403).json({ error: 'Forbidden.' });
   }
 
-  // Mark admin messages as read for the user
+  // Mark messages as read when viewed
   if (!isAdmin) {
+    if (uptoId) {
+      await pool.query(
+        `UPDATE inbox_messages SET read_at = NOW()
+         WHERE (thread_id = $1 OR id = $1) AND is_admin = true AND to_user_id = $2 AND read_at IS NULL
+           AND created_at <= (SELECT created_at FROM inbox_messages WHERE id = $3)`,
+        [threadId, req.user.id, uptoId]
+      );
+    } else {
+      await pool.query(
+        `UPDATE inbox_messages SET read_at = NOW()
+         WHERE (thread_id = $1 OR id = $1) AND is_admin = true AND to_user_id = $2 AND read_at IS NULL`,
+        [threadId, req.user.id]
+      );
+    }
+  } else {
+    // Admin reading user messages
     await pool.query(
       `UPDATE inbox_messages SET read_at = NOW()
-       WHERE (thread_id = $1 OR id = $1) AND is_admin = true AND to_user_id = $2 AND read_at IS NULL`,
-      [threadId, req.user.id]
+       WHERE (thread_id = $1 OR id = $1) AND is_admin = false AND from_user_id IS NOT NULL AND read_at IS NULL`,
+      [threadId]
     );
   }
 
   res.json({ messages: rows });
 });
 
-// ── Inbox: thread list for current user (received = threads with admin replies) ─
+// ── Inbox: received — one card per admin message (FA-style) ──────────────────
 app.get('/api/inbox/received', requireAuth, async (req, res) => {
   const { rows } = await pool.query(`
-    SELECT * FROM (
-      SELECT DISTINCT ON (m.thread_id)
-        m.thread_id,
-        r.subject,
-        m.body        AS preview,
-        m.created_at  AS latest_at,
-        (SELECT COUNT(*) FROM inbox_messages
-         WHERE (thread_id = m.thread_id OR id = m.thread_id)
-           AND is_admin = true AND to_user_id = $1 AND read_at IS NULL) AS unread_count
-      FROM inbox_messages m
-      JOIN inbox_messages r ON r.id = m.thread_id
-      WHERE m.is_admin = true AND m.to_user_id = $1
-      ORDER BY m.thread_id, m.created_at DESC
-    ) sub
-    ORDER BY latest_at DESC
-    LIMIT 50
+    SELECT m.id, m.thread_id, m.body, m.created_at, m.read_at,
+           r.subject
+    FROM inbox_messages m
+    JOIN inbox_messages r ON r.id = m.thread_id
+    WHERE m.is_admin = true
+      AND m.to_user_id = $1
+      AND m.user_deleted_at IS NULL
+    ORDER BY m.created_at DESC
+    LIMIT 100
   `, [req.user.id]);
-  res.json({ threads: rows });
+  res.json({ messages: rows });
 });
 
-// ── Inbox: thread list for current user (sent = all threads they started) ─────
+// ── Inbox: unread count for nav badge ────────────────────────────────────────
+app.get('/api/inbox/unread-count', requireAuth, async (req, res) => {
+  const isAdmin = await checkAdmin(req);
+  let count = 0;
+  if (isAdmin) {
+    const { rows: [row] } = await pool.query(
+      `SELECT COUNT(*)::int AS count FROM inbox_messages
+       WHERE is_admin = false AND from_user_id IS NOT NULL AND read_at IS NULL AND user_deleted_at IS NULL`
+    );
+    count = row.count || 0;
+  } else {
+    const { rows: [row] } = await pool.query(
+      `SELECT COUNT(*)::int AS count FROM inbox_messages
+       WHERE is_admin = true AND to_user_id = $1 AND read_at IS NULL AND user_deleted_at IS NULL`,
+      [req.user.id]
+    );
+    count = row.count || 0;
+  }
+  res.json({ count });
+});
+
+// ── Inbox: sent — one card per user message (FA-style) ───────────────────────
 app.get('/api/inbox/sent', requireAuth, async (req, res) => {
   const { rows } = await pool.query(`
-    SELECT * FROM (
-      SELECT DISTINCT ON (m.thread_id)
-        m.thread_id,
-        r.subject,
-        m.body        AS preview,
-        m.is_admin    AS latest_is_admin,
-        m.created_at  AS latest_at,
-        (SELECT EXISTS (
-          SELECT 1 FROM inbox_messages
-          WHERE (thread_id = r.id OR id = r.id) AND is_admin = true
-        )) AS has_reply
-      FROM inbox_messages m
-      JOIN inbox_messages r ON r.id = m.thread_id
-      WHERE r.from_user_id = $1 AND r.is_admin = false
-      ORDER BY m.thread_id, m.created_at DESC
-    ) sub
-    ORDER BY latest_at DESC
-    LIMIT 50
+    SELECT m.id, m.thread_id, m.body, m.created_at,
+           r.subject
+    FROM inbox_messages m
+    JOIN inbox_messages r ON r.id = m.thread_id
+    WHERE m.is_admin = false
+      AND m.from_user_id = $1
+      AND m.user_deleted_at IS NULL
+    ORDER BY m.created_at DESC
+    LIMIT 100
   `, [req.user.id]);
-  res.json({ threads: rows });
+  res.json({ messages: rows });
 });
 
-// ── Inbox: admin — all threads ────────────────────────────────────────────────
+// ── Inbox: trash — soft-delete messages ──────────────────────────────────────
+app.post('/api/inbox/trash', requireAuth, async (req, res) => {
+  const ids = (req.body.ids || []).map(Number).filter(Boolean);
+  if (!ids.length) return res.status(400).json({ error: 'No IDs provided.' });
+  await pool.query(
+    `UPDATE inbox_messages SET user_deleted_at = NOW()
+     WHERE id = ANY($1) AND (to_user_id = $2 OR from_user_id = $2)`,
+    [ids, req.user.id]
+  );
+  res.json({ ok: true });
+});
+
+// ── Inbox: trash — restore messages ──────────────────────────────────────────
+app.post('/api/inbox/restore', requireAuth, async (req, res) => {
+  const ids = (req.body.ids || []).map(Number).filter(Boolean);
+  if (!ids.length) return res.status(400).json({ error: 'No IDs provided.' });
+  await pool.query(
+    `UPDATE inbox_messages SET user_deleted_at = NULL
+     WHERE id = ANY($1) AND (to_user_id = $2 OR from_user_id = $2)`,
+    [ids, req.user.id]
+  );
+  res.json({ ok: true });
+});
+
+// ── Inbox: trash — list deleted messages (lazy-expire after 30 days) ─────────
+app.get('/api/inbox/trash', requireAuth, async (req, res) => {
+  // Clean up anything older than 30 days
+  await pool.query(
+    `DELETE FROM inbox_messages
+     WHERE (to_user_id = $1 OR from_user_id = $1)
+       AND user_deleted_at < NOW() - INTERVAL '30 days'`,
+    [req.user.id]
+  );
+  const { rows } = await pool.query(`
+    SELECT m.id, m.thread_id, m.body, m.created_at, m.user_deleted_at, m.is_admin,
+           r.subject
+    FROM inbox_messages m
+    JOIN inbox_messages r ON r.id = m.thread_id
+    WHERE (m.to_user_id = $1 OR m.from_user_id = $1)
+      AND m.user_deleted_at IS NOT NULL
+      AND m.user_deleted_at > NOW() - INTERVAL '30 days'
+    ORDER BY m.user_deleted_at DESC
+    LIMIT 200
+  `, [req.user.id]);
+  res.json({ messages: rows });
+});
+
+// ── Inbox: admin — all user messages (one card per message, FA-style) ────────
 app.get('/api/inbox/admin/all', requireAuth, async (req, res) => {
   if (!await checkAdmin(req)) return res.status(403).json({ error: 'Forbidden.' });
   const { rows } = await pool.query(`
-    SELECT * FROM (
-      SELECT DISTINCT ON (m.thread_id)
-        m.thread_id,
-        r.subject,
-        r.from_user_id,
-        u.username, u.display_name,
-        m.body        AS preview,
-        m.is_admin    AS latest_is_admin,
-        m.created_at  AS latest_at
-      FROM inbox_messages m
-      JOIN inbox_messages r ON r.id = m.thread_id
-      LEFT JOIN users u ON r.from_user_id = u.id
-      WHERE r.from_user_id IS NOT NULL
-      ORDER BY m.thread_id, m.created_at DESC
-    ) sub
-    ORDER BY latest_at DESC
-    LIMIT 200
+    SELECT m.id, m.thread_id, m.body, m.created_at, m.read_at,
+           r.subject,
+           u.username, u.display_name
+    FROM inbox_messages m
+    JOIN inbox_messages r ON r.id = m.thread_id
+    LEFT JOIN users u ON m.from_user_id = u.id
+    WHERE m.is_admin = false
+      AND m.from_user_id IS NOT NULL
+      AND m.user_deleted_at IS NULL
+    ORDER BY m.created_at DESC
+    LIMIT 500
   `);
-  res.json({ threads: rows });
+  res.json({ messages: rows });
 });
 
-// ── Inbox: admin — sent replies ───────────────────────────────────────────────
+// ── Inbox: admin — unreplied threads (latest message is from user) ────────────
+app.get('/api/inbox/admin/unreplied', requireAuth, async (req, res) => {
+  if (!await checkAdmin(req)) return res.status(403).json({ error: 'Forbidden.' });
+  try {
+    const { rows } = await pool.query(`
+      SELECT * FROM (
+        SELECT DISTINCT ON (m.thread_id)
+          m.thread_id,
+          r.subject,
+          r.from_user_id,
+          u.username, u.display_name,
+          m.body        AS preview,
+          m.is_admin    AS latest_is_admin,
+          m.created_at  AS latest_at
+        FROM inbox_messages m
+        JOIN inbox_messages r ON r.id = m.thread_id
+        LEFT JOIN users u ON r.from_user_id = u.id
+        WHERE r.from_user_id IS NOT NULL
+        ORDER BY m.thread_id, m.created_at DESC
+      ) sub
+      WHERE latest_is_admin = false
+      ORDER BY latest_at DESC
+      LIMIT 200
+    `);
+    res.json({ threads: rows });
+  } catch (e) {
+    console.error('admin/unreplied error:', e);
+    res.json({ threads: [] });
+  }
+});
+
+// ── Inbox: admin — sent replies (one card per reply, FA-style) ────────────────
 app.get('/api/inbox/admin/sent', requireAuth, async (req, res) => {
   if (!await checkAdmin(req)) return res.status(403).json({ error: 'Forbidden.' });
-  const { rows } = await pool.query(`
-    SELECT * FROM (
-      SELECT DISTINCT ON (m.thread_id)
-        m.thread_id,
-        r.subject,
-        r.from_user_id,
-        u.username, u.display_name,
-        m.body       AS preview,
-        m.created_at AS latest_at
+  try {
+    const { rows } = await pool.query(`
+      SELECT m.id, m.thread_id, m.body, m.created_at,
+             r.subject, r.from_user_id,
+             u.username, u.display_name
       FROM inbox_messages m
       JOIN inbox_messages r ON r.id = m.thread_id
       LEFT JOIN users u ON r.from_user_id = u.id
       WHERE m.is_admin = true
-      ORDER BY m.thread_id, m.created_at DESC
-    ) sub
-    ORDER BY latest_at DESC
-    LIMIT 200
-  `);
-  res.json({ threads: rows });
+        AND m.id != m.thread_id
+        AND m.user_deleted_at IS NULL
+      ORDER BY m.created_at DESC
+      LIMIT 200
+    `);
+    res.json({ messages: rows });
+  } catch (e) {
+    console.error('admin/sent error:', e);
+    res.json({ messages: [] });
+  }
 });
 
 // ── Community ─────────────────────────────────────────────────────────────────
@@ -1377,7 +1498,7 @@ app.post('/api/admin/newsletter', requireAuth, async (req, res) => {
   if (!body?.trim())    return res.status(400).json({ error: 'Message body is required.' });
 
   const { rows } = await pool.query(
-    `SELECT email FROM users WHERE email_newsletter = true AND verified = true`
+    `SELECT id, email FROM users WHERE email_newsletter = true AND verified = true`
   );
   if (!rows.length) return res.json({ sent: 0 });
 
@@ -1400,6 +1521,15 @@ app.post('/api/admin/newsletter', requireAuth, async (req, res) => {
       });
       sent++;
     } catch (err) { console.error('Newsletter send error to', to, err.message); }
+
+    // Also deliver to the user's inbox
+    try {
+      const { rows: [nm] } = await pool.query(
+        'INSERT INTO inbox_messages (to_user_id, body, subject, is_admin) VALUES ($1, $2, $3, true) RETURNING id',
+        [row.id, body.trim(), subject.trim()]
+      );
+      await pool.query('UPDATE inbox_messages SET thread_id = $1 WHERE id = $1', [nm.id]);
+    } catch (err) { console.error('Newsletter inbox delivery error:', err.message); }
   }
 
   res.json({ sent, total: rows.length });

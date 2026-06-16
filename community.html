@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Community — Between Two Worlds</title>
+  <title>Community ✦ Between Two Worlds</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -72,6 +72,40 @@
 <div id="post-modal" class="post-modal" hidden aria-modal="true" role="dialog">
   <div class="post-modal-backdrop" id="post-modal-backdrop"></div>
   <div id="post-modal-inner" class="post-modal-inner"></div>
+</div>
+
+<!-- ── Mobile: left drawer ───────────────────────────────────────── -->
+<div id="mobile-drawer-overlay" class="mobile-drawer-overlay"></div>
+<aside id="mobile-drawer" class="mobile-drawer" aria-hidden="true">
+  <div id="mobile-drawer-user" class="mobile-drawer-user"></div>
+  <div class="mobile-drawer-divider"></div>
+  <button id="mobile-drawer-create" class="mobile-drawer-btn">✦ Create Post</button>
+  <button id="mobile-drawer-search" class="mobile-drawer-btn">🔍 Search</button>
+  <button id="mobile-drawer-guides" class="mobile-drawer-btn mobile-drawer-btn--guides">
+    <span>📋 Guides</span><span class="mobile-drawer-caret">▸</span>
+  </button>
+  <div id="mobile-drawer-rules" class="mobile-drawer-rules">
+    <ol>
+      <li>Feel free to have discussions, post a fun meme, or share fanart and story thoughts here!</li>
+      <li>NSFW content is fine and supported! Please just label your post with the NSFW flag before posting.</li>
+      <li>Art/Fanart (NSFW or SFW) may be stored in a special gallery, with your permission, as a thank you for reading! ❤</li>
+      <li>Have fun!</li>
+    </ol>
+  </div>
+</aside>
+
+<!-- ── Mobile: bottom tab bar ───────────────────────────────────── -->
+<div class="mobile-bottom-bar">
+  <button id="mobile-tab-menu" class="mobile-tab-btn" aria-label="Menu">
+    <span id="mobile-tab-avatar-wrap" class="mobile-tab-avatar-wrap"></span>
+    <span class="mobile-tab-label">Menu</span>
+  </button>
+  <button id="mobile-tab-compose" class="mobile-tab-btn mobile-tab-btn--compose" aria-label="Create post">
+    <span class="mobile-tab-icon">＋</span>
+  </button>
+  <button id="mobile-tab-search"  class="mobile-tab-btn" aria-label="Search">
+    <span class="mobile-tab-icon">⌕</span><span class="mobile-tab-label">Search</span>
+  </button>
 </div>
 
 <footer>
@@ -249,9 +283,19 @@ function renderCompose() {
   modalHeader.appendChild(modalTitle); modalHeader.appendChild(discardBtn);
   card.appendChild(modalHeader);
 
+  // Selected-tag pills row — sits between header and textarea, hidden when empty
+  let selectedTags = new Set();
+  const selectedTagsRow = document.createElement('div');
+  selectedTagsRow.className = 'community-selected-tags';
+  selectedTagsRow.hidden = true;
+  card.appendChild(selectedTagsRow);
+
   function closeModal() {
-    document.getElementById('community-compose-modal').hidden = true;
+    const m = document.getElementById('community-compose-modal');
+    m.hidden = true;
+    m.style.height = '';
     document.getElementById('create-post-btn').classList.remove('community-create-post-btn--active');
+    if (window._composePushedState) { window._composePushedState = false; history.back(); }
   }
   let discardCompose = () => {};
   discardBtn.addEventListener('click', () => { discardCompose(); closeModal(); });
@@ -333,6 +377,10 @@ function renderCompose() {
     selectedFiles = []; selectedGifUrl = null; fileInput.value = '';
     fileCountEl.textContent = ''; fileClear.hidden = true; renderPreview();
   }
+  // Prevent mousedown on footer buttons from stealing focus (keeps keyboard open)
+  [attachLabel, gifBtn, fileClear].forEach(el =>
+    el.addEventListener('mousedown', e => e.preventDefault())
+  );
   fileClear.addEventListener('click', clearAllFiles);
   fileInput.addEventListener('change', () => {
     const incoming = Array.from(fileInput.files);
@@ -354,27 +402,78 @@ function renderCompose() {
   footerLeft.appendChild(attachLabel); footerLeft.appendChild(fileInput);
   footerLeft.appendChild(gifBtn); footerLeft.appendChild(fileCountEl); footerLeft.appendChild(fileClear);
 
-  // Right: tag picker, NSFW, char count, submit
-  let selectedTag = 'General';
+  // Right: tag picker (multi-select), NSFW, char count, submit
+  const tagOptButtons = {};
   const tagWrap = document.createElement('div'); tagWrap.className = 'community-tag-picker-wrap';
   const tagBtn = document.createElement('button');
   tagBtn.className = 'community-tag-picker-btn'; tagBtn.type = 'button';
-  tagBtn.innerHTML = '🏷️ Tag <span class="community-tag-caret">▾</span>';
+  tagBtn.innerHTML = '🏷️ Tags <span class="community-tag-caret">▾</span>';
   const tagDropdown = document.createElement('div');
   tagDropdown.className = 'community-tag-dropdown'; tagDropdown.hidden = true;
+
+  function updateTagBtn() {
+    if (selectedTags.size === 0) {
+      tagBtn.innerHTML = '🏷️ Tags <span class="community-tag-caret">▾</span>';
+      tagBtn.style.borderColor = ''; tagBtn.style.color = '';
+    } else {
+      tagBtn.innerHTML = `🏷️ Tags (${selectedTags.size}) <span class="community-tag-caret">▾</span>`;
+      tagBtn.style.borderColor = '#a78bfa'; tagBtn.style.color = '#a78bfa';
+    }
+  }
+
+  function updateTagDropdownOpts() {
+    TAGS.forEach(tag => {
+      const m = TAG_META[tag];
+      const opt = tagOptButtons[tag];
+      if (!opt) return;
+      const checked = selectedTags.has(tag);
+      opt.innerHTML = `<span class="community-tag-option-check">${checked ? '✓' : ''}</span>${m.emoji} ${tag}`;
+      opt.style.color = m.color;
+      opt.classList.toggle('community-tag-option--selected', checked);
+    });
+  }
+
+  function updateSelectedTagsRow() {
+    selectedTagsRow.innerHTML = '';
+    if (selectedTags.size === 0) { selectedTagsRow.hidden = true; return; }
+    selectedTagsRow.hidden = false;
+    selectedTags.forEach(tag => {
+      const m = TAG_META[tag];
+      const pill = document.createElement('span');
+      pill.className = 'community-selected-tag-pill';
+      pill.style.cssText = `color:${m.color};border-color:${m.color}44;background:${m.color}18`;
+      const pillText = document.createElement('span');
+      pillText.textContent = m.emoji + ' ' + tag;
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button'; removeBtn.className = 'community-selected-tag-remove';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectedTags.delete(tag);
+        updateSelectedTagsRow(); updateTagDropdownOpts(); updateTagBtn();
+      });
+      pill.appendChild(pillText); pill.appendChild(removeBtn);
+      selectedTagsRow.appendChild(pill);
+    });
+  }
+
   TAGS.forEach(tag => {
     const m = TAG_META[tag];
     const opt = document.createElement('button');
     opt.className = 'community-tag-option'; opt.type = 'button';
-    opt.textContent = m.emoji + ' ' + tag; opt.style.color = m.color;
-    opt.addEventListener('click', () => {
-      selectedTag = tag;
-      tagBtn.innerHTML = m.emoji + ' ' + tag + ' <span class="community-tag-caret">▾</span>';
-      tagBtn.style.borderColor = m.color; tagBtn.style.color = m.color;
-      tagDropdown.hidden = true;
+    opt.innerHTML = `<span class="community-tag-option-check"></span>${m.emoji} ${tag}`;
+    opt.style.color = m.color;
+    opt.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (selectedTags.has(tag)) { selectedTags.delete(tag); } else { selectedTags.add(tag); }
+      updateSelectedTagsRow(); updateTagDropdownOpts(); updateTagBtn();
     });
+    tagOptButtons[tag] = opt;
     tagDropdown.appendChild(opt);
   });
+
+  tagBtn.addEventListener('mousedown', e => e.preventDefault());
+  tagDropdown.addEventListener('mousedown', e => e.preventDefault());
   tagBtn.addEventListener('click', (e) => { e.stopPropagation(); tagDropdown.hidden = !tagDropdown.hidden; });
   document.addEventListener('click', () => { tagDropdown.hidden = true; });
   tagWrap.appendChild(tagBtn); tagWrap.appendChild(tagDropdown);
@@ -401,7 +500,7 @@ function renderCompose() {
     submitBtn.disabled = true; submitBtn.textContent = 'Posting…'; errEl.hidden = true;
     const form = new FormData();
     form.append('body', body);
-    form.append('tag', selectedTag);
+    form.append('tag', Array.from(selectedTags).join(',') || 'General');
     form.append('nsfw', nsfwCheckbox.checked ? 'true' : 'false');
     if (selectedGifUrl) {
       form.append('gif_url', selectedGifUrl);
@@ -519,9 +618,8 @@ function renderCompose() {
   // Assign real discard function now that all vars exist
   discardCompose = () => {
     textarea.value = ''; charCount.textContent = '0 / 20,000'; charCount.style.color = '';
-    clearAllFiles(); selectedTag = 'General';
-    tagBtn.innerHTML = '🏷️ Tag <span class="community-tag-caret">▾</span>';
-    tagBtn.style.borderColor = ''; tagBtn.style.color = '';
+    clearAllFiles(); selectedTags.clear();
+    updateSelectedTagsRow(); updateTagDropdownOpts(); updateTagBtn();
     nsfwCheckbox.checked = false; errEl.hidden = true;
     gifPickerWrap.hidden = true; gifSearch.value = ''; gifLabel.textContent = '✨ Trending';
   };
@@ -595,15 +693,16 @@ function renderPost(p) {
   authorEl.className = 'community-post-author' + (pinned ? ' community-post-author--admin' : '');
   authorEl.textContent = p.display_name || p.username || 'Unknown';
 
-  const tagKey = p.tag === 'Fanart' ? 'Art/Fanart' : p.tag;
-  const m = TAG_META[tagKey] || TAG_META['General'];
-  const tagBadge = document.createElement('span');
-  tagBadge.className = 'community-post-tag';
-  tagBadge.textContent = m.emoji + ' ' + tagKey;
-  tagBadge.style.cssText = 'color:' + m.color + ';border-color:' + m.color + '44';
-
   meta.appendChild(authorEl);
-  meta.appendChild(tagBadge);
+  (p.tag || 'General').split(',').map(t => t.trim()).filter(Boolean).forEach(tagKey => {
+    const tk = tagKey === 'Fanart' ? 'Art/Fanart' : tagKey;
+    const m = TAG_META[tk] || TAG_META['General'];
+    const tagBadge = document.createElement('span');
+    tagBadge.className = 'community-post-tag';
+    tagBadge.textContent = m.emoji + ' ' + tk;
+    tagBadge.style.cssText = 'color:' + m.color + ';border-color:' + m.color + '44';
+    meta.appendChild(tagBadge);
+  });
   if (isNsfw) {
     const nsfwFlag = document.createElement('span');
     nsfwFlag.className = 'community-post-nsfw-flag';
@@ -791,13 +890,16 @@ function openPostModal(p, cardLikeBtn, cardLikeCount, cardCommentCount) {
   const authorEl = document.createElement('span');
   authorEl.className = 'community-post-author' + (p.pinned ? ' community-post-author--admin' : '');
   authorEl.textContent = p.display_name || p.username || 'Unknown';
-  const tagKey = p.tag === 'Fanart' ? 'Art/Fanart' : p.tag;
-  const m = TAG_META[tagKey] || TAG_META['General'];
-  const tagBadge = document.createElement('span');
-  tagBadge.className = 'community-post-tag';
-  tagBadge.textContent = m.emoji + ' ' + tagKey;
-  tagBadge.style.cssText = 'color:' + m.color + ';border-color:' + m.color + '44';
-  meta.appendChild(authorEl); meta.appendChild(tagBadge);
+  meta.appendChild(authorEl);
+  (p.tag || 'General').split(',').map(t => t.trim()).filter(Boolean).forEach(tagKey => {
+    const tk = tagKey === 'Fanart' ? 'Art/Fanart' : tagKey;
+    const m = TAG_META[tk] || TAG_META['General'];
+    const tagBadge = document.createElement('span');
+    tagBadge.className = 'community-post-tag';
+    tagBadge.textContent = m.emoji + ' ' + tk;
+    tagBadge.style.cssText = 'color:' + m.color + ';border-color:' + m.color + '44';
+    meta.appendChild(tagBadge);
+  });
   if (p.nsfw) { const f = document.createElement('span'); f.className = 'community-post-nsfw-flag'; f.textContent = '🔞'; meta.appendChild(f); }
   header.appendChild(meta);
   inner.appendChild(header);
@@ -1067,15 +1169,73 @@ renderCompose();
 // Compose modal
 const composeModal = document.getElementById('community-compose-modal');
 const createPostBtn = document.getElementById('create-post-btn');
+window._composePushedState = false;
+
+function composeHasContent() {
+  if (composeModal.hidden) return false;
+  const ta = composeModal.querySelector('textarea');
+  const preview = composeModal.querySelector('.community-compose-preview');
+  return (ta && ta.value.trim().length > 0) || (preview && !preview.hidden);
+}
+
+function _composeSetHeight() {
+  composeModal.style.height = (window.visualViewport ? window.visualViewport.height : window.innerHeight) + 'px';
+}
+function _composeCloseCleanup() {
+  composeModal.hidden = true;
+  composeModal.style.height = '';
+  createPostBtn.classList.remove('community-create-post-btn--active');
+  if (window._composePushedState) { window._composePushedState = false; history.back(); }
+}
+
+// Keep modal height in sync with visual viewport (keyboard open/close)
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    if (!composeModal.hidden) _composeSetHeight();
+  });
+}
+
 createPostBtn.addEventListener('click', () => {
   composeModal.hidden = false;
+  _composeSetHeight();
   createPostBtn.classList.add('community-create-post-btn--active');
+  history.pushState({ compose: true }, '');
+  window._composePushedState = true;
   const ta = composeModal.querySelector('textarea');
   if (ta) setTimeout(() => ta.focus(), 50);
 });
+
+// Android back button: dismiss keyboard first, then close modal, warn if content
+window.addEventListener('popstate', () => {
+  window._composePushedState = false; // browser already popped
+  if (composeModal.hidden) return;
+  const vv = window.visualViewport;
+  const kbVisible = vv && (vv.height < window.innerHeight * 0.75);
+  if (kbVisible) {
+    // First back press: just hide keyboard, keep modal open
+    const ta = composeModal.querySelector('textarea');
+    if (ta) ta.blur();
+    history.pushState({ compose: true }, '');
+    window._composePushedState = true;
+  } else if (composeHasContent()) {
+    if (confirm('You have unsaved content. Discard it and close?')) {
+      _composeCloseCleanup();
+    } else {
+      history.pushState({ compose: true }, '');
+      window._composePushedState = true;
+    }
+  } else {
+    _composeCloseCleanup();
+  }
+});
+
+// Warn on full page navigation if compose has content
+window.addEventListener('beforeunload', e => {
+  if (composeHasContent()) { e.preventDefault(); e.returnValue = ''; }
+});
+
 document.getElementById('community-compose-backdrop').addEventListener('click', () => {
-  composeModal.hidden = true;
-  createPostBtn.classList.remove('community-create-post-btn--active');
+  _composeCloseCleanup();
   document.querySelectorAll('.community-gif-picker').forEach(el => el.hidden = true);
 });
 document.getElementById('post-modal-backdrop').addEventListener('click', () => {
@@ -1087,8 +1247,7 @@ document.addEventListener('keydown', (e) => {
     const postModal = document.getElementById('post-modal');
     if (postModal && !postModal.hidden) { postModal.hidden = true; document.body.style.overflow = ''; return; }
     if (!composeModal.hidden) {
-      composeModal.hidden = true;
-      createPostBtn.classList.remove('community-create-post-btn--active');
+      _composeCloseCleanup();
       document.querySelectorAll('.community-gif-picker').forEach(el => el.hidden = true);
     }
   }
@@ -1096,6 +1255,114 @@ document.addEventListener('keydown', (e) => {
 
 loadPosts(true);
 document.getElementById('load-more-btn').addEventListener('click', () => loadPosts(false));
+
+// ── Mobile UI ─────────────────────────────────────────────────────────────────
+(function () {
+  const drawerOverlay = document.getElementById('mobile-drawer-overlay');
+  const drawer        = document.getElementById('mobile-drawer');
+
+  function openDrawer() {
+    drawer.classList.add('mobile-drawer--open');
+    drawerOverlay.classList.add('mobile-drawer-overlay--open');
+    drawer.setAttribute('aria-hidden', 'false');
+  }
+  function closeDrawer() {
+    drawer.classList.remove('mobile-drawer--open');
+    drawerOverlay.classList.remove('mobile-drawer-overlay--open');
+    drawer.setAttribute('aria-hidden', 'true');
+  }
+
+  drawerOverlay.addEventListener('click', closeDrawer);
+
+  // Swipe left anywhere on screen to close drawer
+  let touchStartX = 0;
+  document.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX;
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (dx < -50 && drawer.classList.contains('mobile-drawer--open')) closeDrawer();
+  }, { passive: true });
+
+  // ── Populate drawer user block ──────────────────────────────────────────────
+  const drawerUser   = document.getElementById('mobile-drawer-user');
+  const tabAvatarWrap = document.getElementById('mobile-tab-avatar-wrap');
+
+  function makeAvatarImg(src, fallbackLetter, className) {
+    if (src) {
+      const img = document.createElement('img');
+      img.src = src; img.alt = ''; img.className = className;
+      img.onerror = function () {
+        const d = document.createElement('div');
+        d.className = className + ' mobile-avatar--fallback';
+        d.textContent = fallbackLetter;
+        this.replaceWith(d);
+      };
+      return img;
+    }
+    const d = document.createElement('div');
+    d.className = className + ' mobile-avatar--fallback';
+    d.textContent = fallbackLetter;
+    return d;
+  }
+
+  if (currentUser) {
+    const letter = (currentUser.display_name || currentUser.username || '?')[0].toUpperCase();
+    // Drawer header
+    drawerUser.appendChild(makeAvatarImg(currentUser.avatar, letter, 'mobile-drawer-avatar'));
+    const nameEl = document.createElement('p');
+    nameEl.className = 'mobile-drawer-name';
+    nameEl.textContent = currentUser.display_name || currentUser.username || 'You';
+    if (currentUser.username) {
+      const handleEl = document.createElement('p');
+      handleEl.className = 'mobile-drawer-handle';
+      handleEl.textContent = '@' + currentUser.username;
+      const nameWrap = document.createElement('div');
+      nameWrap.appendChild(nameEl); nameWrap.appendChild(handleEl);
+      drawerUser.appendChild(nameWrap);
+    } else {
+      drawerUser.appendChild(nameEl);
+    }
+    // Bottom bar avatar
+    tabAvatarWrap.appendChild(makeAvatarImg(currentUser.avatar, letter, 'mobile-tab-avatar'));
+  } else {
+    drawerUser.innerHTML = '<p class="mobile-drawer-name" style="opacity:.5">Not logged in</p>';
+    const icon = document.createElement('div');
+    icon.className = 'mobile-tab-avatar mobile-avatar--fallback';
+    icon.textContent = '?';
+    tabAvatarWrap.appendChild(icon);
+  }
+
+  // ── Drawer buttons ──────────────────────────────────────────────────────────
+  document.getElementById('mobile-drawer-create').addEventListener('click', () => {
+    closeDrawer();
+    document.getElementById('create-post-btn').click();
+  });
+  document.getElementById('mobile-drawer-search').addEventListener('click', () => {
+    closeDrawer();
+    document.getElementById('sidebar-search-btn').click();
+  });
+
+  // Guides toggle
+  const guidesBtn  = document.getElementById('mobile-drawer-guides');
+  const rulesPanel = document.getElementById('mobile-drawer-rules');
+  const caret      = guidesBtn.querySelector('.mobile-drawer-caret');
+  guidesBtn.addEventListener('click', () => {
+    const open = rulesPanel.classList.toggle('mobile-drawer-rules--open');
+    caret.textContent = open ? '▾' : '▸';
+  });
+
+  // ── Bottom bar ──────────────────────────────────────────────────────────────
+  document.getElementById('mobile-tab-compose').addEventListener('click', () => {
+    document.getElementById('create-post-btn').click();
+  });
+  document.getElementById('mobile-tab-search').addEventListener('click', () => {
+    document.getElementById('sidebar-search-btn').click();
+  });
+  document.getElementById('mobile-tab-menu').addEventListener('click', () =>
+    drawer.classList.contains('mobile-drawer--open') ? closeDrawer() : openDrawer()
+  );
+})();
 document.getElementById('community-search').addEventListener('input', function() {
   clearTimeout(searchTimer);
   const q = this.value.trim();

@@ -88,6 +88,23 @@
     });
   }
 
+  function updateInboxBadge(count) {
+    const inboxLink = document.querySelector('a[href="/inbox"]');
+    if (!inboxLink) return;
+    let badge = inboxLink.querySelector('.nav-inbox-badge');
+    if (count > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'nav-inbox-badge';
+        inboxLink.appendChild(badge);
+      }
+      badge.textContent = count > 99 ? '99+' : count;
+    } else if (badge) {
+      badge.remove();
+    }
+  }
+  window._updateInboxBadge = updateInboxBadge;
+
   // Verify token is still valid before rendering the user nav
   fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
     .then(r => {
@@ -109,6 +126,12 @@
           dropdown.appendChild(statsLink);
         }
       }
+
+      // Fetch unread inbox count for badge
+      fetch('/api/inbox/unread-count', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.json())
+        .then(d => updateInboxBadge(d.count || 0))
+        .catch(() => {});
     })
     .catch(() => {
       clearAuth();

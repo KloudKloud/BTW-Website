@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Art — Between Two Worlds</title>
+  <title>Art ✦ Between Two Worlds</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -66,7 +66,7 @@
   if (!entry) {
     window.location.href = '/art';
   } else {
-    document.title = `${entry.title || 'Art'} — Between Two Worlds`;
+    document.title = `${entry.title || 'Art'} ✦ Between Two Worlds`;
 
     const imgEl = document.getElementById('art-view-img');
     if (entry.cat === 'spicy') {
@@ -167,35 +167,64 @@
       }
       if (!prevEntry && !nextEntry) navEl.remove();
 
-      // ── Swipe navigation (direction-locked, threshold-gated) ────────────────
+      // ── Swipe navigation with live drag + slide-out ─────────────────────────
       (function () {
-        let startX = 0, startY = 0, dirLock = null, busy = false;
-        const THRESHOLD = () => window.innerWidth * 0.3;
+        const page = document.querySelector('main.art-view-wrapper') || document.body;
+        let startX = 0, startY = 0, dirLock = null, busy = false, dragging = false;
+        const THRESHOLD = () => window.innerWidth * 0.25;
 
         document.addEventListener('touchstart', (e) => {
           if (busy) return;
           startX = e.changedTouches[0].screenX;
           startY = e.changedTouches[0].screenY;
-          dirLock = null;
+          dirLock = null; dragging = false;
+          page.style.transition = 'none';
         }, { passive: true });
 
         document.addEventListener('touchmove', (e) => {
           if (busy) return;
           const dx = e.changedTouches[0].screenX - startX;
           const dy = e.changedTouches[0].screenY - startY;
-          if (!dirLock && (Math.abs(dx) > 10 || Math.abs(dy) > 10))
-            dirLock = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
-          if (dirLock === 'h') e.preventDefault();
+          // Lock direction only after 12px; horizontal must not be clearly beaten by vertical
+          if (!dirLock && (Math.abs(dx) > 12 || Math.abs(dy) > 12)) {
+            dirLock = Math.abs(dx) >= Math.abs(dy) * 0.8 ? 'h' : 'v';
+          }
+          if (dirLock === 'h') {
+            e.preventDefault();
+            dragging = true;
+            // Resistance at edges (no sibling in that direction)
+            let dampedDx = dx;
+            if ((dx > 0 && !prevEntry) || (dx < 0 && !nextEntry)) dampedDx = dx * 0.2;
+            page.style.transform = `translateX(${dampedDx}px)`;
+          }
         }, { passive: false });
 
         document.addEventListener('touchend', (e) => {
-          if (busy || dirLock !== 'h') return;
+          if (busy) return;
           const dx = e.changedTouches[0].screenX - startX;
-          if (Math.abs(dx) < THRESHOLD()) return;
+          if (dirLock !== 'h' || !dragging) {
+            page.style.transition = '';
+            page.style.transform = '';
+            return;
+          }
+          if (Math.abs(dx) < THRESHOLD()) {
+            // Snap back
+            page.style.transition = 'transform 0.22s cubic-bezier(0.4,0,0.2,1)';
+            page.style.transform = '';
+            setTimeout(() => { page.style.transition = ''; }, 250);
+            return;
+          }
+          const target = dx < 0 ? nextEntry : prevEntry;
+          if (!target) {
+            page.style.transition = 'transform 0.22s cubic-bezier(0.4,0,0.2,1)';
+            page.style.transform = '';
+            setTimeout(() => { page.style.transition = ''; }, 250);
+            return;
+          }
           busy = true;
-          if (dx < 0 && nextEntry) window.location.href = `/art-view?id=${nextEntry.num}`;
-          else if (dx > 0 && prevEntry) window.location.href = `/art-view?id=${prevEntry.num}`;
-          else busy = false;
+          page.style.transition = 'transform 0.25s cubic-bezier(0.4,0,0.2,1)';
+          page.style.transform = `translateX(${dx < 0 ? '-110vw' : '110vw'})`;
+          setTimeout(() => { window.location.href = `/art-view?id=${target.num}`; }, 240);
         }, { passive: true });
       })();
     })();
