@@ -1486,6 +1486,7 @@ app.post('/api/track', async (req, res) => {
   res.sendStatus(200);
   const raw = (req.body.path || '').slice(0, 200);
   const path_clean = raw.split('?')[0] || '/';
+  if (path_clean === '/stats') return;
   try { await pool.query('INSERT INTO page_views (path) VALUES ($1)', [path_clean]); } catch {}
 });
 
