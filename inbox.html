@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Inbox — Between Two Worlds</title>
+  <title>Inbox ✦ Between Two Worlds</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -79,6 +79,12 @@
               <span class="compose-to-name">VeekitPaw ✨</span>
             </div>
             <p class="compose-prompt">Send a note to me, Veekitpaw! Let me know what's on your mind; I read and reply to every message ASAP! Thank you &lt;3</p>
+
+            <div class="compose-subject-row">
+              <input type="text" id="compose-subject" class="compose-subject-input"
+                     placeholder="Subject line…" maxlength="200" />
+            </div>
+
             <textarea id="compose-body" class="compose-textarea" placeholder="Type your message here…" maxlength="20000"></textarea>
             <div class="compose-char-row">
               <span id="compose-chars" class="compose-chars">0 / 20,000</span>
@@ -98,6 +104,24 @@
             <div id="compose-success" class="compose-feedback compose-feedback--success" hidden></div>
 
             <button id="compose-send" class="compose-send-btn">Send Message ✨</button>
+          </div>
+        </div>
+
+        <!-- Thread view (shared, shown over panels) -->
+        <div id="panel-thread" class="inbox-panel" hidden>
+          <div class="inbox-thread-wrap">
+            <div class="inbox-thread-header">
+              <button class="inbox-thread-back" id="thread-back">← Back</button>
+              <h2 class="inbox-thread-subject" id="thread-subject"></h2>
+            </div>
+            <div class="inbox-thread-messages" id="thread-messages"></div>
+            <div class="inbox-thread-reply" id="thread-reply-wrap">
+              <textarea class="inbox-thread-reply-area" id="thread-reply-body" placeholder="Write a reply…" maxlength="20000"></textarea>
+              <div class="inbox-thread-reply-foot">
+                <span class="inbox-thread-reply-fb" id="thread-reply-fb"></span>
+                <button class="inbox-thread-reply-btn" id="thread-reply-send">Send Reply ✨</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -124,12 +148,19 @@ const rawUser = localStorage.getItem('btw_user')    || sessionStorage.getItem('b
 let currentUser = null;
 try { currentUser = rawUser ? JSON.parse(rawUser) : null; } catch {}
 
-// ── Auth gate ────────────────────────────────────────────────────────────────
 document.getElementById('inbox-app').hidden = false;
 if (!token || !currentUser) {
   initGuest();
 } else {
   init();
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function fmtDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    + ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
 function timeAgo(dateStr) {
@@ -141,7 +172,7 @@ function timeAgo(dateStr) {
   if (hrs < 24)  return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   if (days < 30) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString();
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function esc(s) {
@@ -153,7 +184,6 @@ function renderUserBlock() {
   const block = document.getElementById('inbox-user-block');
   const name = currentUser.display_name || currentUser.username || 'User';
   const avatarUrl = currentUser.avatar;
-
   let avatarEl;
   if (avatarUrl) {
     avatarEl = document.createElement('img');
@@ -171,29 +201,163 @@ function renderUserBlock() {
     avatarEl.className = 'inbox-pfp-fallback';
     avatarEl.textContent = name.charAt(0).toUpperCase();
   }
-
   const nameEl = document.createElement('p');
   nameEl.className = 'inbox-sidebar-username';
   nameEl.textContent = name;
-
   block.appendChild(avatarEl);
   block.appendChild(nameEl);
 }
 
 // ── Tab switching ────────────────────────────────────────────────────────────
 const VALID_TABS = ['received', 'sent', 'compose', 'admin'];
-function switchTab(tabId) {
+let _prevTab = 'received';
+
+function switchTab(tabId, pushHash = true) {
   document.querySelectorAll('.inbox-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
   document.querySelectorAll('.inbox-panel').forEach(p => p.hidden = true);
-  document.getElementById('panel-' + tabId).hidden = false;
-  location.replace('#' + tabId);
+  const panel = document.getElementById('panel-' + tabId);
+  if (panel) panel.hidden = false;
+  _prevTab = tabId;
+  if (pushHash) location.replace('#' + tabId);
 }
+
 document.getElementById('inbox-tab-bar').addEventListener('click', e => {
   const tab = e.target.closest('.inbox-tab');
-  if (tab) switchTab(tab.dataset.tab);
+  if (tab && !tab.disabled) switchTab(tab.dataset.tab);
 });
 
-// ── Render helpers ───────────────────────────────────────────────────────────
+// ── Thread view ──────────────────────────────────────────────────────────────
+let _threadId   = null;
+let _threadBack = 'received';
+
+async function openThread(threadId, backTab) {
+  _threadId   = threadId;
+  _threadBack = backTab || _prevTab;
+
+  document.querySelectorAll('.inbox-panel').forEach(p => p.hidden = true);
+  document.getElementById('panel-thread').hidden = false;
+
+  const msgWrap = document.getElementById('thread-messages');
+  const subjEl  = document.getElementById('thread-subject');
+  msgWrap.innerHTML = '<div class="inbox-loading">Loading…</div>';
+  subjEl.textContent = '';
+  document.getElementById('thread-reply-fb').textContent = '';
+
+  try {
+    const res  = await fetch(`${API}/inbox/thread/${threadId}`, { headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json();
+    if (!res.ok) { msgWrap.innerHTML = `<div class="inbox-empty">${esc(data.error || 'Could not load thread.')}</div>`; return; }
+
+    const msgs = data.messages;
+    if (!msgs.length) { msgWrap.innerHTML = '<div class="inbox-empty">No messages in this thread.</div>'; return; }
+
+    // Subject from root (first) message
+    subjEl.textContent = msgs[0].subject || 'No Subject';
+    msgWrap.innerHTML  = '';
+
+    msgs.forEach(m => {
+      const isAdminMsg = m.is_admin;
+      const bubble = document.createElement('div');
+      bubble.className = 'inbox-bubble ' + (isAdminMsg ? 'inbox-bubble--admin' : 'inbox-bubble--user');
+
+      const senderName = isAdminMsg
+        ? 'VeekitPaw ✨'
+        : (m.display_name || m.username || currentUser.display_name || currentUser.username || 'You');
+
+      bubble.innerHTML = `
+        <div class="inbox-bubble-header">
+          <span class="inbox-bubble-sender">${esc(senderName)}</span>
+          <span class="inbox-bubble-date">${fmtDate(m.created_at)}</span>
+        </div>
+        <p class="inbox-bubble-body">${esc(m.body)}</p>
+      `;
+
+      if (m.attachment_url) {
+        const isImg = /\.(jpe?g|png|webp|gif|avif)$/i.test(m.attachment_url);
+        const attach = document.createElement('div');
+        attach.className = 'inbox-msg-attach';
+        if (isImg) {
+          const img = document.createElement('img');
+          img.src = m.attachment_url;
+          img.alt = m.attachment_name || 'Attachment';
+          img.className = 'inbox-msg-attach-img';
+          attach.appendChild(img);
+        } else {
+          const a = document.createElement('a');
+          a.href = m.attachment_url; a.target = '_blank'; a.rel = 'noopener';
+          a.textContent = '📎 ' + (m.attachment_name || 'View attachment');
+          a.className = 'inbox-msg-attach-link';
+          attach.appendChild(a);
+        }
+        bubble.appendChild(attach);
+      }
+
+      msgWrap.appendChild(bubble);
+    });
+
+    // Scroll to bottom (latest message)
+    msgWrap.scrollTop = msgWrap.scrollHeight;
+  } catch {
+    msgWrap.innerHTML = '<div class="inbox-empty">Could not load thread.</div>';
+  }
+}
+
+document.getElementById('thread-back').addEventListener('click', () => {
+  document.getElementById('panel-thread').hidden = true;
+  switchTab(_threadBack, false);
+});
+
+document.getElementById('thread-reply-send').addEventListener('click', async () => {
+  const body = document.getElementById('thread-reply-body').value.trim();
+  const fb   = document.getElementById('thread-reply-fb');
+  const btn  = document.getElementById('thread-reply-send');
+  if (!body) { fb.textContent = 'Please write something first.'; return; }
+  btn.disabled = true;
+  fb.textContent = '';
+  try {
+    const res  = await fetch(`${API}/inbox/thread/${_threadId}/reply`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body }),
+    });
+    const data = await res.json();
+    if (!res.ok) { fb.textContent = data.error || 'Something went wrong.'; }
+    else {
+      document.getElementById('thread-reply-body').value = '';
+      await openThread(_threadId, _threadBack);
+    }
+  } catch { fb.textContent = 'Network error.'; }
+  finally { btn.disabled = false; }
+});
+
+// ── Thread card ──────────────────────────────────────────────────────────────
+function renderThreadCard(t, opts = {}) {
+  // opts: { fromLabel, previewLabel, showUnread, tab }
+  const card = document.createElement('div');
+  card.className = 'inbox-thread-card' + (opts.showUnread && t.unread_count > 0 ? ' inbox-thread-card--unread' : '');
+  card.setAttribute('role', 'button');
+  card.tabIndex = 0;
+
+  const subject = t.subject || 'No Subject';
+  const preview = t.preview || '';
+  const date    = t.latest_at || t.started_at || '';
+  const from    = opts.fromLabel || '';
+  const unread  = opts.showUnread && t.unread_count > 0;
+
+  card.innerHTML = `
+    <div class="inbox-tc-row">
+      <span class="inbox-tc-from">${esc(from)}</span>
+      <span class="inbox-tc-time">${timeAgo(date)}</span>
+    </div>
+    <div class="inbox-tc-subject">${esc(subject)}${unread ? ' <span class="inbox-tc-badge">NEW</span>' : ''}</div>
+    <div class="inbox-tc-preview">${esc(preview.slice(0, 120))}${preview.length > 120 ? '…' : ''}</div>
+  `;
+
+  card.addEventListener('click', () => openThread(t.thread_id, opts.tab || _prevTab));
+  card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') openThread(t.thread_id, opts.tab || _prevTab); });
+  return card;
+}
+
 function renderEmpty(msg) {
   const div = document.createElement('div');
   div.className = 'inbox-empty';
@@ -201,56 +365,22 @@ function renderEmpty(msg) {
   return div;
 }
 
-function renderMessage(m, fromLabel) {
-  const card = document.createElement('div');
-  card.className = 'inbox-msg-card';
-
-  const header = document.createElement('div');
-  header.className = 'inbox-msg-header';
-  header.innerHTML = `<span class="inbox-msg-from">${esc(fromLabel)}</span><span class="inbox-msg-time">${timeAgo(m.created_at)}</span>`;
-
-  const body = document.createElement('p');
-  body.className = 'inbox-msg-body';
-  body.textContent = m.body;
-
-  card.appendChild(header);
-  card.appendChild(body);
-
-  if (m.attachment_url) {
-    const isImg = /\.(jpe?g|png|webp|gif|avif)$/i.test(m.attachment_url);
-    const attach = document.createElement('div');
-    attach.className = 'inbox-msg-attach';
-    if (isImg) {
-      const img = document.createElement('img');
-      img.src = m.attachment_url;
-      img.alt = m.attachment_name || 'Attachment';
-      img.className = 'inbox-msg-attach-img';
-      attach.appendChild(img);
-    } else {
-      const a = document.createElement('a');
-      a.href = m.attachment_url;
-      a.target = '_blank';
-      a.rel = 'noopener';
-      a.textContent = '📎 ' + (m.attachment_name || 'View attachment');
-      a.className = 'inbox-msg-attach-link';
-      attach.appendChild(a);
-    }
-    card.appendChild(attach);
-  }
-  return card;
-}
-
 // ── Load received ────────────────────────────────────────────────────────────
 async function loadReceived() {
   const list = document.getElementById('received-list');
+  list.innerHTML = '<div class="inbox-loading">Loading…</div>';
   try {
     const res  = await fetch(`${API}/inbox/received`, { headers: { Authorization: `Bearer ${token}` } });
     const data = await res.json();
     list.innerHTML = '';
-    if (!data.messages || !data.messages.length) {
-      list.appendChild(renderEmpty('No messages yet! When VeekitPaw sends something, you\'ll see it plop up here! :3'));
+    if (!data.threads || !data.threads.length) {
+      list.appendChild(renderEmpty("No replies yet! When VeekitPaw responds, you'll see it here. 💌"));
     } else {
-      data.messages.forEach(m => list.appendChild(renderMessage(m, 'VeekitPaw ✨')));
+      data.threads.forEach(t => list.appendChild(renderThreadCard(t, {
+        fromLabel: 'VeekitPaw ✨',
+        showUnread: true,
+        tab: 'received',
+      })));
     }
   } catch {
     list.innerHTML = '<div class="inbox-empty">Could not load messages.</div>';
@@ -260,14 +390,18 @@ async function loadReceived() {
 // ── Load sent ────────────────────────────────────────────────────────────────
 async function loadSent() {
   const list = document.getElementById('sent-list');
+  list.innerHTML = '<div class="inbox-loading">Loading…</div>';
   try {
     const res  = await fetch(`${API}/inbox/sent`, { headers: { Authorization: `Bearer ${token}` } });
     const data = await res.json();
     list.innerHTML = '';
-    if (!data.messages || !data.messages.length) {
+    if (!data.threads || !data.threads.length) {
       list.appendChild(renderEmpty("You haven't sent any messages yet. Say hi! 💌"));
     } else {
-      data.messages.forEach(m => list.appendChild(renderMessage(m, 'You')));
+      data.threads.forEach(t => list.appendChild(renderThreadCard(t, {
+        fromLabel: t.latest_is_admin ? 'VeekitPaw ✨ replied' : 'You',
+        tab: 'sent',
+      })));
     }
   } catch {
     list.innerHTML = '<div class="inbox-empty">Could not load sent messages.</div>';
@@ -276,14 +410,15 @@ async function loadSent() {
 
 // ── Compose ──────────────────────────────────────────────────────────────────
 function initCompose() {
-  const textarea  = document.getElementById('compose-body');
-  const charEl    = document.getElementById('compose-chars');
-  const fileInput = document.getElementById('compose-file');
-  const fileName  = document.getElementById('compose-file-name');
-  const fileClear = document.getElementById('compose-file-clear');
-  const sendBtn   = document.getElementById('compose-send');
-  const errEl     = document.getElementById('compose-error');
-  const okEl      = document.getElementById('compose-success');
+  const textarea   = document.getElementById('compose-body');
+  const subjectIn  = document.getElementById('compose-subject');
+  const charEl     = document.getElementById('compose-chars');
+  const fileInput  = document.getElementById('compose-file');
+  const fileName   = document.getElementById('compose-file-name');
+  const fileClear  = document.getElementById('compose-file-clear');
+  const sendBtn    = document.getElementById('compose-send');
+  const errEl      = document.getElementById('compose-error');
+  const okEl       = document.getElementById('compose-success');
 
   textarea.addEventListener('input', () => {
     const n = textarea.value.length;
@@ -313,14 +448,16 @@ function initCompose() {
 
   sendBtn.addEventListener('click', async () => {
     errEl.hidden = true;
-    okEl.hidden = true;
-    const body = textarea.value.trim();
+    okEl.hidden  = true;
+    const body    = textarea.value.trim();
+    const subject = subjectIn.value.trim() || 'No Subject';
     if (!body) { errEl.textContent = 'Please write something before sending.'; errEl.hidden = false; return; }
 
     sendBtn.disabled = true;
     sendBtn.textContent = 'Sending…';
 
     const form = new FormData();
+    form.append('subject', subject);
     form.append('body', body);
     if (fileInput.files[0]) form.append('attachment', fileInput.files[0]);
 
@@ -336,6 +473,7 @@ function initCompose() {
         errEl.hidden = false;
       } else {
         textarea.value = '';
+        subjectIn.value = '';
         charEl.textContent = '0 / 20,000';
         fileInput.value = '';
         fileName.textContent = '';
@@ -356,15 +494,20 @@ function initCompose() {
 
 // ── Admin panel ──────────────────────────────────────────────────────────────
 async function initAdmin() {
-  // Add admin tab to sidebar
-  const tabBar = document.getElementById('inbox-tab-bar');
+  const tabBar   = document.getElementById('inbox-tab-bar');
+  const sentBtn  = tabBar.querySelector('[data-tab="sent"]');
+
+  // Add admin tab
   const adminTab = document.createElement('button');
   adminTab.className = 'inbox-tab inbox-tab--admin';
   adminTab.dataset.tab = 'admin';
   adminTab.textContent = '🛡 All Messages';
   tabBar.appendChild(adminTab);
 
-  // ── Newsletter blast UI (injected at top of admin panel) ──────────────────
+  // Swap sent tab label to show admin-sent instead
+  sentBtn.textContent = '📤 Sent Replies';
+
+  // ── Newsletter blast UI ────────────────────────────────────────────────────
   const adminPanel = document.getElementById('panel-admin');
   const nlWrap = document.createElement('div');
   nlWrap.className = 'newsletter-blast';
@@ -382,11 +525,10 @@ async function initAdmin() {
   `;
   adminPanel.insertBefore(nlWrap, adminPanel.firstChild);
 
-  // Load subscriber count
   fetch(`${API}/admin/newsletter/count`, { headers: { Authorization: `Bearer ${token}` } })
     .then(r => r.json())
     .then(d => { document.getElementById('nl-sub').textContent = `${d.count} subscriber${d.count !== 1 ? 's' : ''} will receive this email.`; })
-    .catch(() => { document.getElementById('nl-sub').textContent = ''; });
+    .catch(() => {});
 
   document.getElementById('nl-send').addEventListener('click', async () => {
     const subject = document.getElementById('nl-subject').value.trim();
@@ -395,7 +537,7 @@ async function initAdmin() {
     const btn     = document.getElementById('nl-send');
     if (!subject) { fb.textContent = 'Subject is required.'; return; }
     if (!body)    { fb.textContent = 'Message body is required.'; return; }
-    if (!confirm(`Send this newsletter to all opted-in subscribers?`)) return;
+    if (!confirm('Send this newsletter to all opted-in subscribers?')) return;
     btn.disabled = true; fb.textContent = 'Sending…';
     try {
       const res  = await fetch(`${API}/admin/newsletter`, {
@@ -414,58 +556,51 @@ async function initAdmin() {
     finally { btn.disabled = false; }
   });
 
+  await loadAdminThreads();
+}
+
+async function loadAdminThreads() {
   const list = document.getElementById('admin-list');
+  list.innerHTML = '<div class="inbox-loading">Loading…</div>';
   try {
     const res  = await fetch(`${API}/inbox/admin/all`, { headers: { Authorization: `Bearer ${token}` } });
     const data = await res.json();
     list.innerHTML = '';
-    if (!data.messages || !data.messages.length) {
+    if (!data.threads || !data.threads.length) {
       list.appendChild(renderEmpty('No user messages yet.'));
       return;
     }
-    data.messages.forEach(m => {
-      const card = renderMessage(m, m.display_name || m.username || 'Unknown user');
-      const replyWrap = document.createElement('div');
-      replyWrap.className = 'admin-reply-wrap';
-      const ta = document.createElement('textarea');
-      ta.className = 'admin-reply-area';
-      ta.placeholder = 'Reply to this user…';
-      ta.maxLength = 20000;
-      const btn = document.createElement('button');
-      btn.className = 'admin-reply-btn';
-      btn.textContent = 'Send Reply';
-      const fb = document.createElement('span');
-      fb.className = 'admin-reply-fb';
-      btn.addEventListener('click', async () => {
-        const body = ta.value.trim();
-        if (!body) return;
-        btn.disabled = true;
-        try {
-          const r = await fetch(`${API}/inbox/admin/reply`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to_user_id: m.from_user_id, body }),
-          });
-          const d = await r.json();
-          if (r.ok) { ta.value = ''; fb.textContent = 'Sent ✓'; }
-          else       { fb.textContent = d.error || 'Error.'; }
-        } catch { fb.textContent = 'Network error.'; }
-        finally { btn.disabled = false; }
-      });
-      replyWrap.appendChild(ta);
-      replyWrap.appendChild(btn);
-      replyWrap.appendChild(fb);
-      card.appendChild(replyWrap);
-      list.appendChild(card);
-    });
+    data.threads.forEach(t => list.appendChild(renderThreadCard(t, {
+      fromLabel: t.display_name || t.username || 'Unknown user',
+      tab: 'admin',
+    })));
   } catch {
     list.innerHTML = '<div class="inbox-empty">Could not load messages.</div>';
   }
 }
 
+async function loadAdminSent() {
+  const list = document.getElementById('sent-list');
+  list.innerHTML = '<div class="inbox-loading">Loading…</div>';
+  try {
+    const res  = await fetch(`${API}/inbox/admin/sent`, { headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json();
+    list.innerHTML = '';
+    if (!data.threads || !data.threads.length) {
+      list.appendChild(renderEmpty("No replies sent yet."));
+    } else {
+      data.threads.forEach(t => list.appendChild(renderThreadCard(t, {
+        fromLabel: 'To: ' + (t.display_name || t.username || 'User'),
+        tab: 'sent',
+      })));
+    }
+  } catch {
+    list.innerHTML = '<div class="inbox-empty">Could not load sent replies.</div>';
+  }
+}
+
 // ── Guest mode ───────────────────────────────────────────────────────────────
 function initGuest() {
-  // Guest user block
   const block = document.getElementById('inbox-user-block');
   const avatarEl = document.createElement('div');
   avatarEl.className = 'inbox-pfp-fallback';
@@ -477,12 +612,10 @@ function initGuest() {
   block.appendChild(avatarEl);
   block.appendChild(nameEl);
 
-  // Disable compose tab
   const composeBtn = document.querySelector('.inbox-tab--compose');
   composeBtn.disabled = true;
   composeBtn.classList.add('inbox-tab--disabled');
 
-  // Friendly note for all panels
   function guestNote(panelId) {
     document.getElementById(panelId).innerHTML = `
       <div class="inbox-guest-note">
@@ -493,7 +626,6 @@ function initGuest() {
   guestNote('received-list');
   guestNote('sent-list');
 
-  // Tab switching (block compose)
   document.getElementById('inbox-tab-bar').addEventListener('click', e => {
     const tab = e.target.closest('.inbox-tab');
     if (tab && !tab.disabled) switchTab(tab.dataset.tab);
@@ -504,29 +636,40 @@ function initGuest() {
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
+let _isAdmin      = false;
+let _sentLoaded   = false;
+
 async function init() {
   renderUserBlock();
 
   const probe = await fetch(`${API}/inbox/admin/all`, { headers: { Authorization: `Bearer ${token}` } });
-  if (probe.ok || probe.status !== 403) initAdmin();
+  if (probe.ok || probe.status !== 403) {
+    _isAdmin = true;
+    await initAdmin();
+  }
 
   initCompose();
 
-  // Restore tab from hash, default to received
-  const hashTab = location.hash.replace('#', '');
+  const hashTab  = location.hash.replace('#', '');
   const startTab = VALID_TABS.includes(hashTab) ? hashTab : 'received';
 
-  let sentLoaded = startTab === 'sent';
-  if (startTab === 'sent') loadSent();
-  loadReceived();
+  if (!_isAdmin) {
+    loadReceived();
+    if (startTab === 'sent') { _sentLoaded = true; loadSent(); }
+  }
+
   switchTab(startTab);
 
   document.getElementById('inbox-tab-bar').addEventListener('click', e => {
     const tab = e.target.closest('.inbox-tab');
-    if (tab && tab.dataset.tab === 'sent' && !sentLoaded) {
-      sentLoaded = true;
-      loadSent();
+    if (!tab) return;
+    const id = tab.dataset.tab;
+    if (id === 'sent' && !_sentLoaded) {
+      _sentLoaded = true;
+      if (_isAdmin) loadAdminSent();
+      else          loadSent();
     }
+    if (id === 'received' && !_isAdmin) loadReceived();
   });
 }
 </script>

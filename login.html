@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Log In — Between Two Worlds</title>
+  <title>Log In ✦ Between Two Worlds</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -51,7 +51,41 @@
         <button type="submit" class="auth-btn auth-btn--primary">Login</button>
       </form>
 
-      <a class="auth-forgot" href="#">Forgot your password?</a>
+      <button type="button" class="auth-forgot" id="forgot-btn">Forgot your password?</button>
+    </div>
+
+    <!-- ── Forgot password ── -->
+    <div class="auth-panel auth-panel--forgot" id="panel-forgot" style="display:none">
+      <h2 class="auth-heading">Reset Password</h2>
+      <p class="auth-forgot-desc">Enter your username or email address and we'll send a reset link to the email on file.</p>
+      <div id="forgot-alert" class="auth-alert" hidden></div>
+      <form class="auth-form" id="forgot-form" novalidate>
+        <div class="auth-field">
+          <input type="text" id="forgot-identifier" name="identifier"
+                 placeholder="Username or email" autocomplete="username" required />
+        </div>
+        <button type="submit" class="auth-btn auth-btn--primary">Send Reset Link</button>
+      </form>
+      <button type="button" class="auth-forgot" id="back-to-login">← Back to Login</button>
+    </div>
+
+    <!-- ── Reset password (arrived via ?reset=token) ── -->
+    <div class="auth-panel auth-panel--reset" id="panel-reset" style="display:none">
+      <h2 class="auth-heading">Set New Password</h2>
+      <div id="reset-alert" class="auth-alert" hidden></div>
+      <form class="auth-form" id="reset-form" novalidate>
+        <div class="auth-field auth-field--password">
+          <input type="password" id="reset-password" name="password"
+                 placeholder="New password" autocomplete="new-password" required />
+          <button type="button" class="auth-eye" aria-label="Toggle" data-target="reset-password">&#128065;</button>
+        </div>
+        <div class="auth-field auth-field--password">
+          <input type="password" id="reset-confirm" name="confirm"
+                 placeholder="Confirm new password" autocomplete="new-password" required />
+          <button type="button" class="auth-eye" aria-label="Toggle" data-target="reset-confirm">&#128065;</button>
+        </div>
+        <button type="submit" class="auth-btn auth-btn--primary">Update Password</button>
+      </form>
     </div>
 
     <!-- ── Divider ── -->
@@ -121,6 +155,79 @@
   if (params.get('verified') === '1') {
     showAlert('login-alert', 'Account activated! You can now log in.', 'success');
   }
+
+  // ── Reset password flow (arrived via ?reset=token) ─────────────────────────
+  const resetToken = params.get('reset');
+  if (resetToken) {
+    document.querySelector('.auth-panel--login').style.display    = 'none';
+    document.querySelector('.auth-divider').style.display          = 'none';
+    document.querySelector('.auth-panel--register').style.display  = 'none';
+    document.getElementById('panel-reset').style.display           = 'flex';
+  }
+
+  document.getElementById('reset-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn      = e.target.querySelector('button[type=submit]');
+    const password = document.getElementById('reset-password').value;
+    const confirm  = document.getElementById('reset-confirm').value;
+    if (password !== confirm) { showAlert('reset-alert', 'Passwords do not match.'); return; }
+    if (password.length < 8)  { showAlert('reset-alert', 'Password must be at least 8 characters.'); return; }
+    setLoading(btn, true);
+    try {
+      const res  = await fetch(`${API}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resetToken, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showAlert('reset-alert', data.error || 'Reset failed.'); }
+      else {
+        showAlert('reset-alert', data.message + ' Redirecting to login…', 'success');
+        setTimeout(() => { window.location.href = '/login'; }, 2500);
+      }
+    } catch { showAlert('reset-alert', 'Network error. Please try again.'); }
+    finally { setLoading(btn, false); }
+  });
+
+  // ── Forgot password panel ────────────────────────────────────────────────────
+  const loginPanel    = document.querySelector('.auth-panel--login');
+  const forgotPanel   = document.getElementById('panel-forgot');
+  const dividerEl     = document.querySelector('.auth-divider');
+  const registerPanel = document.querySelector('.auth-panel--register');
+
+  document.getElementById('forgot-btn').addEventListener('click', () => {
+    loginPanel.style.display    = 'none';
+    dividerEl.style.display     = 'none';
+    registerPanel.style.display = 'none';
+    forgotPanel.style.display   = 'flex';
+    document.getElementById('forgot-identifier').focus();
+  });
+
+  document.getElementById('back-to-login').addEventListener('click', () => {
+    forgotPanel.style.display   = 'none';
+    loginPanel.style.display    = '';
+    dividerEl.style.display     = '';
+    registerPanel.style.display = '';
+  });
+
+  document.getElementById('forgot-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn        = e.target.querySelector('button[type=submit]');
+    const identifier = document.getElementById('forgot-identifier').value.trim();
+    if (!identifier) { showAlert('forgot-alert', 'Please enter your username or email.'); return; }
+    setLoading(btn, true);
+    try {
+      const res  = await fetch(`${API}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showAlert('forgot-alert', data.error || 'Something went wrong.'); }
+      else         { showAlert('forgot-alert', data.message, 'success'); }
+    } catch { showAlert('forgot-alert', 'Network error. Please try again.'); }
+    finally { setLoading(btn, false); }
+  });
 
   // Toggle password visibility
   document.querySelectorAll('.auth-eye').forEach(btn => {
@@ -233,5 +340,6 @@
   });
 </script>
 
+<script src="nav.js"></script>
 </body>
 </html>

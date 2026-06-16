@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Characters — Between Two Worlds</title>
+  <title>Characters ✦ Between Two Worlds</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -35,7 +35,9 @@
 
   <aside class="chars-sidebar">
     <span class="chars-sidebar-label">Explore the cast!</span>
-    <div class="chars-nav" id="chars-nav"></div>
+    <div class="chars-nav-scroller">
+      <div class="chars-nav" id="chars-nav"></div>
+    </div>
   </aside>
 
   <main class="chars-main">
@@ -341,7 +343,7 @@ const CHARACTERS = [
     name: 'Primera',
     hasRef: false,
     desc: [
-      { html: '<span class="char-warn-banner">(This segment contains homophobic, bigoted lore that is strictly written in-character. Do not conflate Primera with any other character or myself, as I abhor her beliefs in the real world. Read <a href="/characters#sapherotheal">Saphero\'s perspective</a> if you haven\'t already ❤)</span>' },
+      { html: '<span class="char-warn-banner">(This segment contains homophobic, bigoted lore that is strictly written in-character. Do not conflate Primera with any other character or myself, as I abhor her beliefs in the real world. Read <a href="/characters?char=saphero">Saphero\'s perspective</a> if you haven\'t already ❤)</span>' },
       { html: '<em>"That\'s fake love. You know that, Saphero."</em>' },
       'Church is every Sunday, 9:30 sharp. Steering your kids on the right path is no easy task; the world is full of distractions, and a mother\'s job is never easy.',
       'Saphero was a quiet boy. Exceptional at school, and never missed a "thank you" at the dinner table. But he\'s not a child anymore; one day, her son will find a girl, and fulfill the legacy Arceus leaves for all of us.',
@@ -607,7 +609,16 @@ function updateActiveTab(id) {
     btn.classList.toggle('active', btn.dataset.id === id);
   });
   const active = document.querySelector('.chars-tab.active');
-  if (active) active.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  if (!active) return;
+  // Scroll only the sidebar container, never the page — scrollIntoView() scrolls all
+  // ancestors including the body, which shifts the sticky sidebar off-screen on mobile.
+  const scroller = document.querySelector('.chars-nav-scroller') || document.querySelector('.chars-sidebar');
+  if (scroller) {
+    const sr = scroller.getBoundingClientRect();
+    const ar = active.getBoundingClientRect();
+    const target = scroller.scrollLeft + ar.left - sr.left - sr.width / 2 + ar.width / 2;
+    scroller.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
+  }
 }
 
 function renderProfile(char) {
@@ -789,7 +800,7 @@ function buildNav() {
     btn.textContent = char.name;
     btn.addEventListener('click', () => {
       history.pushState(null, '', `?char=${char.id}`);
-      document.title = `${char.name} — Between Two Worlds`;
+      document.title = `${char.name} ✦ Between Two Worlds`;
       renderProfile(char);
       updateActiveTab(char.id);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -801,7 +812,7 @@ function buildNav() {
 window.addEventListener('popstate', () => {
   const id = getActiveId();
   const char = CHARACTERS.find(c => c.id === id) || CHARACTERS[0];
-  document.title = `${char.name} — Between Two Worlds`;
+  document.title = `${char.name} ✦ Between Two Worlds`;
   renderProfile(char);
   updateActiveTab(char.id);
 });
@@ -809,50 +820,96 @@ window.addEventListener('popstate', () => {
 // Init
 buildNav();
 const activeChar = CHARACTERS.find(c => c.id === getActiveId()) || CHARACTERS[0];
-document.title = `${activeChar.name} — Between Two Worlds`;
+document.title = `${activeChar.name} ✦ Between Two Worlds`;
 renderProfile(activeChar);
 
-// ── Swipe navigation (mirrors art gallery) ───────────────────────────────────
+// ── Swipe navigation with live drag preview ───────────────────────────────────
 (function () {
-  let startX = 0, startY = 0, dirLock = null, busy = false;
-  const THRESHOLD = () => window.innerWidth * 0.3;
+  const panel = document.getElementById('char-profile');
+  let startX = 0, startY = 0, dirLock = null, busy = false, dragging = false;
+  const THRESHOLD = () => window.innerWidth * 0.25;
 
   function currentIdx() {
     return CHARACTERS.findIndex(c => c.id === getActiveId());
+  }
+
+  function goTo(target, direction) {
+    busy = true;
+    // Slide current panel out
+    panel.style.transition = 'transform 0.28s cubic-bezier(0.4,0,0.2,1)';
+    panel.style.transform = `translateX(${direction < 0 ? '-110vw' : '110vw'})`;
+    setTimeout(() => {
+      history.pushState(null, '', `?char=${target.id}`);
+      document.title = `${target.name} ✦ Between Two Worlds`;
+      renderProfile(target);
+      updateActiveTab(target.id);
+      window.scrollTo({ top: 0 });
+      // Slide new content in from opposite side
+      panel.style.transition = 'none';
+      panel.style.transform = `translateX(${direction < 0 ? '110vw' : '-110vw'})`;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        panel.style.transition = 'transform 0.28s cubic-bezier(0.4,0,0.2,1)';
+        panel.style.transform = '';
+        setTimeout(() => { panel.style.transition = ''; busy = false; }, 300);
+      }));
+    }, 280);
   }
 
   document.addEventListener('touchstart', (e) => {
     if (busy) return;
     startX = e.changedTouches[0].screenX;
     startY = e.changedTouches[0].screenY;
-    dirLock = null;
+    dirLock = null; dragging = false;
   }, { passive: true });
 
   document.addEventListener('touchmove', (e) => {
     if (busy) return;
     const dx = e.changedTouches[0].screenX - startX;
     const dy = e.changedTouches[0].screenY - startY;
-    if (!dirLock && (Math.abs(dx) > 10 || Math.abs(dy) > 10))
-      dirLock = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
-    if (dirLock === 'h') e.preventDefault();
+    // Only lock direction after 12px movement; require clear horizontal bias
+    if (!dirLock && (Math.abs(dx) > 12 || Math.abs(dy) > 12)) {
+      dirLock = Math.abs(dx) >= Math.abs(dy) * 0.8 ? 'h' : 'v';
+    }
+    if (dirLock === 'h') {
+      e.preventDefault();
+      dragging = true;
+      panel.style.transition = 'none';
+      // Slight resistance at edges (no prev/next)
+      const ci = currentIdx();
+      const atLeft  = ci === 0;
+      const atRight = ci === CHARACTERS.length - 1;
+      let dampedDx = dx;
+      if ((dx > 0 && atLeft) || (dx < 0 && atRight)) dampedDx = dx * 0.2;
+      panel.style.transform = `translateX(${dampedDx}px)`;
+    }
   }, { passive: false });
 
   document.addEventListener('touchend', (e) => {
-    if (busy || dirLock !== 'h') return;
+    if (busy) return;
     const dx = e.changedTouches[0].screenX - startX;
-    if (Math.abs(dx) < THRESHOLD()) return;
-    busy = true;
+    if (dirLock !== 'h' || !dragging) {
+      panel.style.transition = '';
+      panel.style.transform = '';
+      return;
+    }
+    if (Math.abs(dx) < THRESHOLD()) {
+      // Snap back
+      panel.style.transition = 'transform 0.22s cubic-bezier(0.4,0,0.2,1)';
+      panel.style.transform = '';
+      setTimeout(() => { panel.style.transition = ''; }, 250);
+      return;
+    }
     const ci = currentIdx();
     let target = null;
     if (dx < 0 && ci < CHARACTERS.length - 1) target = CHARACTERS[ci + 1];
     else if (dx > 0 && ci > 0)                target = CHARACTERS[ci - 1];
-    if (!target) { busy = false; return; }
-    history.pushState(null, '', `?char=${target.id}`);
-    document.title = `${target.name} — Between Two Worlds`;
-    renderProfile(target);
-    updateActiveTab(target.id);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    busy = false;
+    if (!target) {
+      panel.style.transition = 'transform 0.22s cubic-bezier(0.4,0,0.2,1)';
+      panel.style.transform = '';
+      setTimeout(() => { panel.style.transition = ''; }, 250);
+      return;
+    }
+    goTo(target, dx < 0 ? -1 : 1);
   }, { passive: true });
 })();
 </script>

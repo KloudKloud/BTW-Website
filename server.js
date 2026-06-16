@@ -156,6 +156,22 @@ async function initDb() {
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_hash TEXT`).catch(() => {});
   // Add newsletter opt-in column if missing (default true for existing users)
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_newsletter BOOLEAN DEFAULT true`).catch(() => {});
+  // Inbox threading columns
+  await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS thread_id INTEGER`).catch(() => {});
+  await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS subject TEXT DEFAULT 'No Subject'`).catch(() => {});
+  // Backfill thread_id for existing messages (each becomes its own root)
+  await pool.query(`UPDATE inbox_messages SET thread_id = id WHERE thread_id IS NULL`).catch(() => {});
+  // Password reset table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS password_resets (
+      id         SERIAL      PRIMARY KEY,
+      user_id    INTEGER     NOT NULL,
+      token      TEXT        NOT NULL UNIQUE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at    TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {});
 
   // Migrate plaintext emails → encrypted + hash
   const { rows: unmigratedUsers } = await pool.query('SELECT id, email FROM users WHERE email_hash IS NULL');
@@ -587,6 +603,64 @@ app.put('/api/auth/password', requireAuth, async (req, res) => {
   }
 });
 
+// ── Forgot password ───────────────────────────────────────────────────────────
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const identifier = (req.body.identifier || '').trim().toLowerCase();
+  if (!identifier) return res.status(400).json({ error: 'Please provide your username or email.' });
+
+  const { rows: [user] } = await pool.query(
+    'SELECT id, email, username, display_name FROM users WHERE username = $1 OR email_hash = $2',
+    [identifier, hashEmail(identifier)]
+  );
+
+  // Always respond the same regardless of whether the account exists (prevents enumeration)
+  if (!user) return res.json({ message: 'If that account exists, a reset link has been sent to the registered email.' });
+
+  const token   = require('crypto').randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+  await pool.query(
+    'INSERT INTO password_resets (user_id, token, expires_at) VALUES ($1, $2, $3)',
+    [user.id, token, expires]
+  );
+
+  const toEmail  = decryptEmail(user.email);
+  const toName   = user.display_name || user.username;
+  const resetUrl = `https://btwfanfic.net/login?reset=${token}`;
+  resend.emails.send({
+    from: 'Between Two Worlds <noreply@btwfanfic.net>',
+    to: toEmail,
+    subject: 'Reset your password — Between Two Worlds',
+    html: emailShell(`
+      <h2 style="color:#1a237e;font-size:1.1rem;margin:0 0 12px;">Password Reset Request</h2>
+      <p style="color:#424242;font-size:0.9rem;margin:0 0 8px;">Hi <strong>${toName}</strong>!</p>
+      <p style="color:#424242;font-size:0.9rem;margin:0 0 16px;">Someone requested a password reset for your account. Click the button below to set a new password. This link expires in <strong>1 hour</strong>.</p>
+      <a href="${resetUrl}" style="display:inline-block;background:#7b5ea7;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-size:0.95rem;font-weight:600;">Reset My Password</a>
+      <p style="color:#888;font-size:0.82rem;margin:18px 0 0;">If you didn't request this, you can safely ignore this email — your password won't change.</p>
+    `),
+  }).catch(console.error);
+
+  res.json({ message: 'If that account exists, a reset link has been sent to the registered email.' });
+});
+
+// ── Reset password (with token) ───────────────────────────────────────────────
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return res.status(400).json({ error: 'Missing required fields.' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+
+  const { rows: [reset] } = await pool.query(
+    'SELECT * FROM password_resets WHERE token = $1 AND expires_at > NOW() AND used_at IS NULL',
+    [token]
+  );
+  if (!reset) return res.status(400).json({ error: 'This reset link is invalid or has expired.' });
+
+  const hash = await bcrypt.hash(password, 12);
+  await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, reset.user_id]);
+  await pool.query('UPDATE password_resets SET used_at = NOW() WHERE id = $1', [reset.id]);
+
+  res.json({ message: 'Password updated! You can now log in with your new password.' });
+});
+
 app.post('/api/auth/avatar', requireAuth, (req, res, next) => {
   uploadAvatar.single('avatar')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message || 'Upload failed.' });
@@ -749,8 +823,10 @@ const uploadInbox = multer({
   },
 });
 
+// ── Inbox: start a new thread ─────────────────────────────────────────────────
 app.post('/api/inbox/send', requireAuth, uploadInbox.single('attachment'), async (req, res) => {
-  const body = (req.body.body || '').trim();
+  const body    = (req.body.body    || '').trim();
+  const subject = (req.body.subject || '').trim() || 'No Subject';
   if (!body) return res.status(400).json({ error: 'Message cannot be empty.' });
   if (body.length > 20000) return res.status(400).json({ error: 'Message too long (max 20,000 chars).' });
 
@@ -758,13 +834,14 @@ app.post('/api/inbox/send', requireAuth, uploadInbox.single('attachment'), async
   const attachmentName = req.file ? req.file.originalname : null;
 
   const { rows: [row] } = await pool.query(
-    'INSERT INTO inbox_messages (from_user_id, body, attachment_url, attachment_name, is_admin) VALUES ($1, $2, $3, $4, false) RETURNING *',
-    [req.user.id, body, attachmentUrl, attachmentName]
+    'INSERT INTO inbox_messages (from_user_id, body, subject, attachment_url, attachment_name, is_admin) VALUES ($1, $2, $3, $4, $5, false) RETURNING *',
+    [req.user.id, body, subject, attachmentUrl, attachmentName]
   );
+  // thread_id = own id (this message is the root of the thread)
+  await pool.query('UPDATE inbox_messages SET thread_id = $1 WHERE id = $1', [row.id]);
+  const fullRow = { ...row, thread_id: row.id };
 
-  const { rows: [sender] } = await pool.query(
-    'SELECT username, display_name FROM users WHERE id = $1', [req.user.id]
-  );
+  const { rows: [sender] } = await pool.query('SELECT username, display_name FROM users WHERE id = $1', [req.user.id]);
   const senderName = (sender && (sender.display_name || sender.username)) || 'Someone';
   const attachHtml = attachmentUrl
     ? `<p style="margin:8px 0 0;font-size:0.85rem;color:#555;">Attachment: <a href="https://btwfanfic.net${attachmentUrl}">${attachmentName}</a></p>`
@@ -772,10 +849,11 @@ app.post('/api/inbox/send', requireAuth, uploadInbox.single('attachment'), async
   resend.emails.send({
     from: 'BTW Inbox <noreply@btwfanfic.net>',
     to: process.env.ADMIN_EMAIL,
-    subject: `New message from ${senderName} — Between Two Worlds`,
+    subject: `[BTW Inbox] ${subject} — from ${senderName}`,
     html: emailShell(`
-      <h2 style="color:#1a237e;font-size:1.1rem;margin:0 0 12px;">New Inbox Message</h2>
+      <h2 style="color:#1a237e;font-size:1.1rem;margin:0 0 12px;">New Message</h2>
       <p style="color:#424242;font-size:0.9rem;margin:0 0 6px;"><strong>From:</strong> ${senderName}</p>
+      <p style="color:#424242;font-size:0.9rem;margin:0 0 12px;"><strong>Subject:</strong> ${subject}</p>
       <div style="background:#f5f5f5;border-left:3px solid #c2547a;padding:12px 16px;border-radius:4px;margin:12px 0;">
         <p style="color:#212121;font-size:0.95rem;margin:0;white-space:pre-wrap;">${body}</p>
       </div>
@@ -783,50 +861,205 @@ app.post('/api/inbox/send', requireAuth, uploadInbox.single('attachment'), async
     `),
   }).catch(console.error);
 
-  res.json({ message: row });
+  res.json({ message: fullRow });
 });
 
-app.get('/api/inbox/sent', requireAuth, async (req, res) => {
-  const { rows } = await pool.query(
-    'SELECT * FROM inbox_messages WHERE from_user_id = $1 AND is_admin = false ORDER BY created_at DESC LIMIT 50',
-    [req.user.id]
+// ── Inbox: reply within a thread ──────────────────────────────────────────────
+app.post('/api/inbox/thread/:id/reply', requireAuth, async (req, res) => {
+  const threadId = parseInt(req.params.id);
+  const body     = (req.body.body || '').trim();
+  if (!body) return res.status(400).json({ error: 'Reply cannot be empty.' });
+  if (body.length > 20000) return res.status(400).json({ error: 'Reply too long.' });
+
+  const { rows: [root] } = await pool.query(
+    'SELECT * FROM inbox_messages WHERE id = $1 AND thread_id = id', [threadId]
   );
+  if (!root) return res.status(404).json({ error: 'Thread not found.' });
+
+  const isAdmin = await checkAdmin(req);
+
+  if (isAdmin) {
+    // Admin replying to user
+    const { rows: [reply] } = await pool.query(
+      'INSERT INTO inbox_messages (to_user_id, body, thread_id, is_admin) VALUES ($1, $2, $3, true) RETURNING *',
+      [root.from_user_id, body, threadId]
+    );
+    // Notify the user by email
+    const { rows: [toUser] } = await pool.query('SELECT email, username, display_name FROM users WHERE id = $1', [root.from_user_id]);
+    if (toUser) {
+      const toEmail = decryptEmail(toUser.email);
+      const toName  = toUser.display_name || toUser.username;
+      resend.emails.send({
+        from: 'VeekitPaw <noreply@btwfanfic.net>',
+        to: toEmail,
+        subject: `Re: ${root.subject || 'Your message'} — Between Two Worlds`,
+        html: emailShell(`
+          <h2 style="color:#1a237e;font-size:1.1rem;margin:0 0 12px;">VeekitPaw replied to your message!</h2>
+          <p style="color:#424242;font-size:0.9rem;margin:0 0 12px;">Hi ${toName}! You got a reply to your message "<strong>${root.subject || 'No Subject'}</strong>".</p>
+          <div style="background:#f5f5f5;border-left:3px solid #7b5ea7;padding:12px 16px;border-radius:4px;margin:12px 0;">
+            <p style="color:#212121;font-size:0.95rem;margin:0;white-space:pre-wrap;">${body}</p>
+          </div>
+          <p style="margin-top:16px;"><a href="https://btwfanfic.net/inbox" style="color:#c2547a;">View in your inbox →</a></p>
+        `),
+      }).catch(console.error);
+    }
+    res.json({ message: reply });
+  } else {
+    // Regular user replying within thread — verify they own this thread
+    if (root.from_user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden.' });
+    const { rows: [reply] } = await pool.query(
+      'INSERT INTO inbox_messages (from_user_id, body, thread_id, is_admin) VALUES ($1, $2, $3, false) RETURNING *',
+      [req.user.id, body, threadId]
+    );
+    // Notify admin of user reply
+    const { rows: [sender] } = await pool.query('SELECT username, display_name FROM users WHERE id = $1', [req.user.id]);
+    const senderName = (sender && (sender.display_name || sender.username)) || 'Someone';
+    resend.emails.send({
+      from: 'BTW Inbox <noreply@btwfanfic.net>',
+      to: process.env.ADMIN_EMAIL,
+      subject: `[BTW Reply] ${root.subject || 'No Subject'} — from ${senderName}`,
+      html: emailShell(`
+        <h2 style="color:#1a237e;font-size:1.1rem;margin:0 0 12px;">New Reply in Thread</h2>
+        <p style="color:#424242;font-size:0.9rem;margin:0 0 6px;"><strong>From:</strong> ${senderName}</p>
+        <p style="color:#424242;font-size:0.9rem;margin:0 0 12px;"><strong>Thread:</strong> ${root.subject || 'No Subject'}</p>
+        <div style="background:#f5f5f5;border-left:3px solid #c2547a;padding:12px 16px;border-radius:4px;margin:12px 0;">
+          <p style="color:#212121;font-size:0.95rem;margin:0;white-space:pre-wrap;">${body}</p>
+        </div>
+      `),
+    }).catch(console.error);
+    res.json({ message: reply });
+  }
+});
+
+// ── Inbox: get all messages in a thread ───────────────────────────────────────
+app.get('/api/inbox/thread/:id', requireAuth, async (req, res) => {
+  const threadId = parseInt(req.params.id);
+  const isAdmin  = await checkAdmin(req);
+
+  const { rows } = await pool.query(`
+    SELECT m.*,
+      u.username, u.display_name, u.avatar
+    FROM inbox_messages m
+    LEFT JOIN users u ON m.from_user_id = u.id
+    WHERE m.thread_id = $1 OR m.id = $1
+    ORDER BY m.created_at ASC
+  `, [threadId]);
+
+  if (!rows.length) return res.status(404).json({ error: 'Thread not found.' });
+
+  // Security: non-admin can only view threads they own
+  if (!isAdmin) {
+    const root = rows.find(r => r.id === threadId);
+    if (!root || root.from_user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden.' });
+  }
+
+  // Mark admin messages as read for the user
+  if (!isAdmin) {
+    await pool.query(
+      `UPDATE inbox_messages SET read_at = NOW()
+       WHERE (thread_id = $1 OR id = $1) AND is_admin = true AND to_user_id = $2 AND read_at IS NULL`,
+      [threadId, req.user.id]
+    );
+  }
+
   res.json({ messages: rows });
 });
 
+// ── Inbox: thread list for current user (received = threads with admin replies) ─
 app.get('/api/inbox/received', requireAuth, async (req, res) => {
-  const { rows } = await pool.query(
-    'SELECT * FROM inbox_messages WHERE to_user_id = $1 AND is_admin = true ORDER BY created_at DESC LIMIT 50',
-    [req.user.id]
-  );
-  await pool.query(
-    'UPDATE inbox_messages SET read_at = NOW() WHERE to_user_id = $1 AND is_admin = true AND read_at IS NULL',
-    [req.user.id]
-  );
-  res.json({ messages: rows });
+  const { rows } = await pool.query(`
+    SELECT * FROM (
+      SELECT DISTINCT ON (m.thread_id)
+        m.thread_id,
+        r.subject,
+        m.body        AS preview,
+        m.created_at  AS latest_at,
+        (SELECT COUNT(*) FROM inbox_messages
+         WHERE (thread_id = m.thread_id OR id = m.thread_id)
+           AND is_admin = true AND to_user_id = $1 AND read_at IS NULL) AS unread_count
+      FROM inbox_messages m
+      JOIN inbox_messages r ON r.id = m.thread_id
+      WHERE m.is_admin = true AND m.to_user_id = $1
+      ORDER BY m.thread_id, m.created_at DESC
+    ) sub
+    ORDER BY latest_at DESC
+    LIMIT 50
+  `, [req.user.id]);
+  res.json({ threads: rows });
 });
 
+// ── Inbox: thread list for current user (sent = all threads they started) ─────
+app.get('/api/inbox/sent', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT * FROM (
+      SELECT DISTINCT ON (m.thread_id)
+        m.thread_id,
+        r.subject,
+        m.body        AS preview,
+        m.is_admin    AS latest_is_admin,
+        m.created_at  AS latest_at,
+        (SELECT EXISTS (
+          SELECT 1 FROM inbox_messages
+          WHERE (thread_id = r.id OR id = r.id) AND is_admin = true
+        )) AS has_reply
+      FROM inbox_messages m
+      JOIN inbox_messages r ON r.id = m.thread_id
+      WHERE r.from_user_id = $1 AND r.is_admin = false
+      ORDER BY m.thread_id, m.created_at DESC
+    ) sub
+    ORDER BY latest_at DESC
+    LIMIT 50
+  `, [req.user.id]);
+  res.json({ threads: rows });
+});
+
+// ── Inbox: admin — all threads ────────────────────────────────────────────────
 app.get('/api/inbox/admin/all', requireAuth, async (req, res) => {
   if (!await checkAdmin(req)) return res.status(403).json({ error: 'Forbidden.' });
   const { rows } = await pool.query(`
-    SELECT m.*, u.username, u.display_name
-    FROM inbox_messages m
-    LEFT JOIN users u ON m.from_user_id = u.id
-    WHERE m.is_admin = false
-    ORDER BY m.created_at DESC LIMIT 200
+    SELECT * FROM (
+      SELECT DISTINCT ON (m.thread_id)
+        m.thread_id,
+        r.subject,
+        r.from_user_id,
+        u.username, u.display_name,
+        m.body        AS preview,
+        m.is_admin    AS latest_is_admin,
+        m.created_at  AS latest_at
+      FROM inbox_messages m
+      JOIN inbox_messages r ON r.id = m.thread_id
+      LEFT JOIN users u ON r.from_user_id = u.id
+      WHERE r.from_user_id IS NOT NULL
+      ORDER BY m.thread_id, m.created_at DESC
+    ) sub
+    ORDER BY latest_at DESC
+    LIMIT 200
   `);
-  res.json({ messages: rows });
+  res.json({ threads: rows });
 });
 
-app.post('/api/inbox/admin/reply', requireAuth, async (req, res) => {
+// ── Inbox: admin — sent replies ───────────────────────────────────────────────
+app.get('/api/inbox/admin/sent', requireAuth, async (req, res) => {
   if (!await checkAdmin(req)) return res.status(403).json({ error: 'Forbidden.' });
-  const { to_user_id, body } = req.body;
-  if (!to_user_id || !(body || '').trim()) return res.status(400).json({ error: 'Missing fields.' });
-  const { rows: [row] } = await pool.query(
-    'INSERT INTO inbox_messages (to_user_id, body, is_admin) VALUES ($1, $2, true) RETURNING *',
-    [to_user_id, body.trim()]
-  );
-  res.json({ message: row });
+  const { rows } = await pool.query(`
+    SELECT * FROM (
+      SELECT DISTINCT ON (m.thread_id)
+        m.thread_id,
+        r.subject,
+        r.from_user_id,
+        u.username, u.display_name,
+        m.body       AS preview,
+        m.created_at AS latest_at
+      FROM inbox_messages m
+      JOIN inbox_messages r ON r.id = m.thread_id
+      LEFT JOIN users u ON r.from_user_id = u.id
+      WHERE m.is_admin = true
+      ORDER BY m.thread_id, m.created_at DESC
+    ) sub
+    ORDER BY latest_at DESC
+    LIMIT 200
+  `);
+  res.json({ threads: rows });
 });
 
 // ── Community ─────────────────────────────────────────────────────────────────
@@ -865,8 +1098,8 @@ app.get('/api/community/posts', async (req, res) => {
   const params = [];
 
   if (tag && COMMUNITY_TAGS.includes(tag)) {
-    params.push(tag);
-    where.push(`p.tag = $${params.length}`);
+    params.push('%,' + tag + ',%');
+    where.push(`(',' || p.tag || ',') LIKE $${params.length}`);
   }
   if (before) {
     params.push(parseInt(before));
@@ -962,7 +1195,8 @@ app.get('/api/giphy/search', (req, res) => {
 // POST /api/community/posts
 app.post('/api/community/posts', requireAuth, uploadCommunityImg.array('attachments', 4), async (req, res) => {
   const body = (req.body.body || '').trim();
-  const tag  = COMMUNITY_TAGS.includes(req.body.tag) ? req.body.tag : 'General';
+  const rawTags = (req.body.tag || '').split(',').map(t => t.trim()).filter(t => COMMUNITY_TAGS.includes(t));
+  const tag = rawTags.length ? rawTags.join(',') : 'General';
   const nsfw = req.body.nsfw === 'true' || req.body.nsfw === true;
   if (!body) return res.status(400).json({ error: 'Post cannot be empty.' });
   if (body.length > 20000) return res.status(400).json({ error: 'Post too long (max 20,000 chars).' });
