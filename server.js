@@ -131,6 +131,10 @@ async function initDb() {
     ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS gif_url TEXT;
   `).catch(() => {});
 
+  await pool.query(`
+    ALTER TABLE community_comments ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES community_comments(id) ON DELETE CASCADE;
+  `).catch(() => {});
+
   await pool.query(`UPDATE community_posts SET tag = 'Art/Fanart' WHERE tag = 'Fanart'`).catch(() => {});
 
   await pool.query(`
@@ -1425,10 +1429,11 @@ app.post('/api/community/posts/:id/like', requireAuth, async (req, res) => {
 // GET /api/community/posts/:id/comments
 app.get('/api/community/posts/:id/comments', async (req, res) => {
   const { rows } = await pool.query(`
-    SELECT c.*, u.username, u.display_name, u.avatar
+    SELECT c.id, c.post_id, c.user_id, c.body, c.parent_id, c.created_at,
+           u.username, u.display_name, u.avatar
     FROM community_comments c
     LEFT JOIN users u ON c.user_id = u.id
-    WHERE c.post_id = $1 ORDER BY c.created_at ASC LIMIT 100
+    WHERE c.post_id = $1 ORDER BY c.created_at ASC LIMIT 500
   `, [parseInt(req.params.id)]);
   res.json({ comments: rows });
 });
@@ -1436,17 +1441,19 @@ app.get('/api/community/posts/:id/comments', async (req, res) => {
 // POST /api/community/posts/:id/comments
 app.post('/api/community/posts/:id/comments', requireAuth, async (req, res) => {
   const postId = parseInt(req.params.id);
-  const body = (req.body.body || '').trim();
+  const body     = (req.body.body || '').trim();
+  const parentId = req.body.parent_id ? parseInt(req.body.parent_id) : null;
   if (!body) return res.status(400).json({ error: 'Comment cannot be empty.' });
   if (body.length > 500) return res.status(400).json({ error: 'Comment too long (max 500 chars).' });
 
   const { rows: [row] } = await pool.query(
-    'INSERT INTO community_comments (post_id, user_id, body) VALUES ($1, $2, $3) RETURNING id',
-    [postId, req.user.id, body]
+    'INSERT INTO community_comments (post_id, user_id, body, parent_id) VALUES ($1, $2, $3, $4) RETURNING id',
+    [postId, req.user.id, body, parentId]
   );
 
   const { rows: [comment] } = await pool.query(`
-    SELECT c.*, u.username, u.display_name, u.avatar
+    SELECT c.id, c.post_id, c.user_id, c.body, c.parent_id, c.created_at,
+           u.username, u.display_name, u.avatar
     FROM community_comments c LEFT JOIN users u ON c.user_id = u.id WHERE c.id = $1
   `, [row.id]);
 

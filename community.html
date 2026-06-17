@@ -966,14 +966,7 @@ function openPostModal(p, cardLikeBtn, cardLikeCount, cardCommentCount) {
     .then(r => r.json())
     .then(data => {
       commentsArea.innerHTML = '';
-      if (!data.comments.length) {
-        const e = document.createElement('p'); e.className = 'post-modal-empty';
-        e.textContent = 'No comments yet! Be the first to reply? ✨';
-        commentsArea.appendChild(e);
-      } else {
-        data.comments.forEach(c => commentsArea.appendChild(renderComment(c, p.id, cardCommentCount)));
-      }
-      renderCommentInput(p.id, commentsArea, cardCommentCount);
+      renderThreadedComments(data.comments, p.id, commentsArea, cardCommentCount);
     })
     .catch(() => { commentsArea.innerHTML = '<div class="community-loading" style="font-size:0.82rem">Could not load comments.</div>'; });
 
@@ -987,17 +980,46 @@ async function loadComments(postId, wrap, countEl) {
     const res  = await fetch(API + '/community/posts/' + postId + '/comments');
     const data = await res.json();
     wrap.innerHTML = '';
-    data.comments.forEach(c => wrap.appendChild(renderComment(c, postId, countEl)));
-    renderCommentInput(postId, wrap, countEl);
+    renderThreadedComments(data.comments, postId, wrap, countEl);
   } catch { wrap.innerHTML = '<div class="community-loading" style="font-size:0.82rem">Could not load.</div>'; }
 }
 
-function renderComment(c, postId, countEl) {
+// Build nested comment tree and render into wrap
+function renderThreadedComments(comments, postId, wrap, countEl) {
+  const byId = {};
+  const topLevel = [];
+  const repliesMap = {};
+
+  comments.forEach(c => { byId[c.id] = c; });
+  comments.forEach(c => {
+    if (!c.parent_id) {
+      topLevel.push(c);
+    } else {
+      if (!repliesMap[c.parent_id]) repliesMap[c.parent_id] = [];
+      repliesMap[c.parent_id].push(c);
+    }
+  });
+
+  if (!topLevel.length) {
+    const e = document.createElement('p'); e.className = 'post-modal-empty';
+    e.textContent = 'No comments yet! Be the first to reply? ✨';
+    wrap.appendChild(e);
+  } else {
+    topLevel.forEach(c => {
+      wrap.appendChild(renderComment(c, postId, countEl, repliesMap));
+    });
+  }
+  renderCommentInput(postId, wrap, countEl, null);
+}
+
+function renderComment(c, postId, countEl, repliesMap, isReply) {
   const div = document.createElement('div');
-  div.className = 'community-comment';
+  div.className = isReply ? 'community-comment community-comment--reply' : 'community-comment';
   div.appendChild(makeAvatar({ avatar: c.avatar, display_name: c.display_name, username: c.username }, 'sm'));
+
   const main = document.createElement('div');
   main.className = 'community-comment-main';
+
   const top = document.createElement('div');
   top.className = 'community-comment-top';
   const author = document.createElement('span');
@@ -1007,10 +1029,29 @@ function renderComment(c, postId, countEl) {
   time.className = 'community-comment-time';
   time.textContent = timeAgo(c.created_at);
   top.appendChild(author); top.appendChild(time);
+
   const body = document.createElement('p');
   body.className = 'community-comment-body';
   body.textContent = c.body;
   main.appendChild(top); main.appendChild(body);
+
+  // Action buttons row
+  const actions = document.createElement('div');
+  actions.className = 'community-comment-actions';
+
+  // Reply button (only on top-level, logged-in users)
+  if (currentUser && !isReply) {
+    const repBtn = document.createElement('button');
+    repBtn.className = 'community-comment-reply-btn';
+    repBtn.textContent = '↩ Reply';
+    repBtn.addEventListener('click', () => {
+      // Toggle: remove existing inline input if present
+      const existing = div.querySelector('.community-comment-inline-input');
+      if (existing) { existing.remove(); return; }
+      renderCommentInput(postId, div, countEl, c.id);
+    });
+    actions.appendChild(repBtn);
+  }
 
   const isOwn   = currentUser && (c.username === currentUser.username);
   const isAdmin = currentUser && currentUser.is_admin;
@@ -1031,23 +1072,33 @@ function renderComment(c, postId, countEl) {
         }
       } catch {}
     });
-    main.appendChild(delBtn);
+    actions.appendChild(delBtn);
   }
 
   if (currentUser && !isOwn && postId) {
-    const repBtn = document.createElement('button');
-    repBtn.className = 'community-comment-delete';
-    repBtn.textContent = '⚑ Report';
-    repBtn.style.color = 'rgba(255,255,255,0.3)';
-    repBtn.addEventListener('click', () => buildReportForm('comment', c.id, div));
-    main.appendChild(repBtn);
+    const flagBtn = document.createElement('button');
+    flagBtn.className = 'community-comment-delete';
+    flagBtn.textContent = '⚑ Report';
+    flagBtn.style.color = 'rgba(255,255,255,0.3)';
+    flagBtn.addEventListener('click', () => buildReportForm('comment', c.id, div));
+    actions.appendChild(flagBtn);
   }
 
+  main.appendChild(actions);
   div.appendChild(main);
+
+  // Render existing replies nested below
+  if (!isReply && repliesMap && repliesMap[c.id]) {
+    const repliesWrap = document.createElement('div');
+    repliesWrap.className = 'community-comment-replies';
+    repliesMap[c.id].forEach(r => repliesWrap.appendChild(renderComment(r, postId, countEl, null, true)));
+    div.appendChild(repliesWrap);
+  }
+
   return div;
 }
 
-function renderCommentInput(postId, wrap, countEl) {
+function renderCommentInput(postId, wrap, countEl, parentId) {
   if (!currentUser) {
     const note = document.createElement('p');
     note.className = 'community-comment-guest';
@@ -1055,33 +1106,63 @@ function renderCommentInput(postId, wrap, countEl) {
     wrap.appendChild(note);
     return;
   }
+  const isInline = parentId !== null && parentId !== undefined;
   const row = document.createElement('div');
-  row.className = 'community-comment-input-row';
+  row.className = isInline ? 'community-comment-input-row community-comment-inline-input' : 'community-comment-input-row';
   row.appendChild(makeAvatar(currentUser, 'sm'));
   const ta = document.createElement('textarea');
-  ta.className = 'community-comment-textarea'; ta.placeholder = 'Write a comment…'; ta.maxLength = 500;
+  ta.className = 'community-comment-textarea';
+  ta.placeholder = isInline ? 'Write a reply…' : 'Write a comment…';
+  ta.maxLength = 500;
+  if (isInline) setTimeout(() => ta.focus(), 50);
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'community-comment-btn-row';
   const btn = document.createElement('button');
-  btn.className = 'community-comment-submit'; btn.textContent = 'Reply';
+  btn.className = 'community-comment-submit'; btn.textContent = isInline ? 'Post Reply' : 'Comment';
   const errEl = document.createElement('span'); errEl.className = 'community-comment-err';
+
+  if (isInline) {
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'community-comment-cancel'; cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', () => row.remove());
+    btnRow.appendChild(cancelBtn);
+  }
+  btnRow.appendChild(btn); btnRow.appendChild(errEl);
+
   btn.addEventListener('click', async () => {
     const body = ta.value.trim();
     if (!body) return;
     btn.disabled = true;
     try {
-      const res  = await fetch(API + '/community/posts/' + postId + '/comments', {
+      const res = await fetch(API + '/community/posts/' + postId + '/comments', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({ body, parent_id: parentId || null }),
       });
       const data = await res.json();
       if (!res.ok) { errEl.textContent = data.error || 'Error.'; return; }
-      wrap.insertBefore(renderComment(data.comment, postId, countEl), row);
-      ta.value = '';
-      countEl.textContent = parseInt(countEl.textContent) + 1;
+      if (isInline) {
+        // Append reply into the parent comment's replies block
+        let repliesWrap = wrap.querySelector('.community-comment-replies');
+        if (!repliesWrap) {
+          repliesWrap = document.createElement('div');
+          repliesWrap.className = 'community-comment-replies';
+          wrap.appendChild(repliesWrap);
+        }
+        repliesWrap.appendChild(renderComment(data.comment, postId, countEl, null, true));
+        row.remove();
+      } else {
+        // Top-level comment: insert before this input row
+        wrap.insertBefore(renderComment(data.comment, postId, countEl, {}, false), row);
+        ta.value = '';
+      }
+      if (countEl) countEl.textContent = parseInt(countEl.textContent) + 1;
     } catch { errEl.textContent = 'Network error.'; }
     finally { btn.disabled = false; }
   });
-  row.appendChild(ta); row.appendChild(btn); row.appendChild(errEl);
+
+  row.appendChild(ta); row.appendChild(btnRow);
   wrap.appendChild(row);
 }
 
