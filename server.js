@@ -1551,11 +1551,16 @@ app.post('/api/track', async (req, res) => {
 
 // ── Admin stats ───────────────────────────────────────────────────────────────
 // POST /api/admin/newsletter — send email blast to all opted-in users
-app.post('/api/admin/newsletter', requireAuth, async (req, res) => {
+app.post('/api/admin/newsletter', requireAuth, uploadInbox.array('attachments', 4), async (req, res) => {
   if (!await checkAdmin(req)) return res.status(403).json({ error: 'Forbidden.' });
   const { subject, body } = req.body;
   if (!subject?.trim()) return res.status(400).json({ error: 'Subject is required.' });
   if (!body?.trim())    return res.status(400).json({ error: 'Message body is required.' });
+
+  const files = req.files || [];
+  const attachments = files.map(f => ({ url: '/images/inbox/' + f.filename, name: f.originalname }));
+  const attachmentUrl  = attachments[0]?.url  || null;
+  const attachmentName = attachments[0]?.name || null;
 
   const { rows } = await pool.query(
     `SELECT id, email FROM users WHERE email_newsletter = true AND verified = true`
@@ -1565,6 +1570,11 @@ app.post('/api/admin/newsletter', requireAuth, async (req, res) => {
   const escaped = body.trim()
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/\n/g, '<br>');
+
+  const attachHtml = attachments
+    .filter(a => /\.(jpe?g|png|webp|gif|avif)$/i.test(a.url))
+    .map(a => `<div style="margin-top:12px;"><img src="https://${process.env.SITE_HOST}${a.url}" alt="${a.name}" style="max-width:100%;border-radius:8px;" /></div>`)
+    .join('');
 
   let sent = 0;
   for (const row of rows) {
@@ -1576,7 +1586,7 @@ app.post('/api/admin/newsletter', requireAuth, async (req, res) => {
         reply_to:   'hello@btwfanfic.net',
         to,
         subject:    subject.trim(),
-        html:       emailShell(`<div style="font-size:0.95rem;color:#424242;line-height:1.7;">${escaped}</div><p style="font-size:0.78rem;color:#999;margin-top:24px;">You're receiving this because you opted in to BTW newsletters. You can turn this off any time in your <a href="https://${process.env.SITE_HOST}/profile">profile settings</a>.</p>`),
+        html:       emailShell(`<div style="font-size:0.95rem;color:#424242;line-height:1.7;">${escaped}</div>${attachHtml}<p style="font-size:0.78rem;color:#999;margin-top:24px;">You're receiving this because you opted in to BTW newsletters. You can turn this off any time in your <a href="https://${process.env.SITE_HOST}/profile">profile settings</a>.</p>`),
         text:       body.trim() + '\n\n---\nYou can unsubscribe at any time via your profile settings at https://' + process.env.SITE_HOST + '/profile',
       });
       sent++;
@@ -1585,8 +1595,8 @@ app.post('/api/admin/newsletter', requireAuth, async (req, res) => {
     // Also deliver to the user's inbox
     try {
       const { rows: [nm] } = await pool.query(
-        'INSERT INTO inbox_messages (to_user_id, body, subject, is_admin) VALUES ($1, $2, $3, true) RETURNING id',
-        [row.id, body.trim(), subject.trim()]
+        'INSERT INTO inbox_messages (to_user_id, body, subject, is_admin, attachment_url, attachment_name, attachments) VALUES ($1, $2, $3, true, $4, $5, $6) RETURNING id',
+        [row.id, body.trim(), subject.trim(), attachmentUrl, attachmentName, JSON.stringify(attachments)]
       );
       await pool.query('UPDATE inbox_messages SET thread_id = $1 WHERE id = $1', [nm.id]);
     } catch (err) { console.error('Newsletter inbox delivery error:', err.message); }

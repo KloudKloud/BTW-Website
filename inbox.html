@@ -409,8 +409,12 @@ function renderPreviews(containerId, filesArr) {
 }
 
 function updateCount(containerId, filesArr) {
-  const countId = containerId === 'compose-previews' ? 'compose-file-count' : 'thread-reply-file-count';
-  const el = document.getElementById(countId);
+  const countMap = {
+    'compose-previews':      'compose-file-count',
+    'thread-reply-previews': 'thread-reply-file-count',
+    'nl-previews':           'nl-file-count',
+  };
+  const el = document.getElementById(countMap[containerId]);
   if (el) el.textContent = filesArr.length ? `${filesArr.length}/4` : '';
 }
 
@@ -796,6 +800,14 @@ async function initAdmin() {
     <div class="newsletter-blast-fields">
       <input  class="newsletter-blast-input" id="nl-subject" type="text" placeholder="Subject line…" maxlength="200" />
       <textarea class="newsletter-blast-body" id="nl-body" placeholder="Write your message here…" maxlength="10000"></textarea>
+      <div class="nl-attach-row">
+        <label class="unified-attach-btn" title="Attach up to 4 images">
+          📎 Attach
+          <input type="file" id="nl-file" accept="image/*,video/mp4,video/webm,application/pdf" multiple style="display:none" />
+        </label>
+        <span class="unified-attach-count" id="nl-file-count"></span>
+        <div class="unified-previews" id="nl-previews"></div>
+      </div>
     </div>
     <div class="newsletter-blast-foot">
       <button class="newsletter-blast-btn" id="nl-send">Send to All Subscribers</button>
@@ -809,6 +821,12 @@ async function initAdmin() {
     .then(d => { document.getElementById('nl-sub').textContent = `${d.count} subscriber${d.count !== 1 ? 's' : ''} will receive this email.`; })
     .catch(() => {});
 
+  let nlFiles = [];
+  document.getElementById('nl-file').addEventListener('change', function () {
+    addFiles(nlFiles, Array.from(this.files), 'nl-previews');
+    this.value = '';
+  });
+
   document.getElementById('nl-send').addEventListener('click', async () => {
     const subject = document.getElementById('nl-subject').value.trim();
     const body    = document.getElementById('nl-body').value.trim();
@@ -819,10 +837,14 @@ async function initAdmin() {
     if (!confirm('Send this newsletter to all opted-in subscribers?')) return;
     btn.disabled = true; fb.textContent = 'Sending…';
     try {
+      const form = new FormData();
+      form.append('subject', subject);
+      form.append('body', body);
+      nlFiles.forEach(f => form.append('attachments', f));
       const res  = await fetch(`${API}/admin/newsletter`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, body }),
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
       });
       const data = await res.json();
       if (!res.ok) { fb.textContent = data.error || 'Error.'; }
@@ -830,6 +852,9 @@ async function initAdmin() {
         fb.textContent = `✓ Sent to ${data.sent} of ${data.total} subscribers!`;
         document.getElementById('nl-subject').value = '';
         document.getElementById('nl-body').value    = '';
+        nlFiles = [];
+        renderPreviews('nl-previews', nlFiles);
+        updateCount('nl-previews', nlFiles);
       }
     } catch { fb.textContent = 'Network error.'; }
     finally { btn.disabled = false; }
