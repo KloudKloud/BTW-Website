@@ -1066,11 +1066,20 @@ app.get('/api/inbox/sent', requireAuth, async (req, res) => {
 app.post('/api/inbox/trash', requireAuth, async (req, res) => {
   const ids = (req.body.ids || []).map(Number).filter(Boolean);
   if (!ids.length) return res.status(400).json({ error: 'No IDs provided.' });
-  await pool.query(
-    `UPDATE inbox_messages SET user_deleted_at = NOW()
-     WHERE id = ANY($1) AND (to_user_id = $2 OR from_user_id = $2)`,
-    [ids, req.user.id]
-  );
+  if (await checkAdmin(req)) {
+    // Admin inbox shows user→admin messages (to_user_id IS NULL, is_admin=false)
+    await pool.query(
+      `UPDATE inbox_messages SET user_deleted_at = NOW()
+       WHERE id = ANY($1) AND is_admin = false AND from_user_id IS NOT NULL`,
+      [ids]
+    );
+  } else {
+    await pool.query(
+      `UPDATE inbox_messages SET user_deleted_at = NOW()
+       WHERE id = ANY($1) AND (to_user_id = $2 OR from_user_id = $2)`,
+      [ids, req.user.id]
+    );
+  }
   res.json({ ok: true });
 });
 
@@ -1078,11 +1087,19 @@ app.post('/api/inbox/trash', requireAuth, async (req, res) => {
 app.post('/api/inbox/delete', requireAuth, async (req, res) => {
   const ids = (req.body.ids || []).map(Number).filter(Boolean);
   if (!ids.length) return res.status(400).json({ error: 'No IDs provided.' });
-  await pool.query(
-    `DELETE FROM inbox_messages
-     WHERE id = ANY($1) AND (to_user_id = $2 OR from_user_id = $2) AND user_deleted_at IS NOT NULL`,
-    [ids, req.user.id]
-  );
+  if (await checkAdmin(req)) {
+    await pool.query(
+      `DELETE FROM inbox_messages
+       WHERE id = ANY($1) AND is_admin = false AND from_user_id IS NOT NULL AND user_deleted_at IS NOT NULL`,
+      [ids]
+    );
+  } else {
+    await pool.query(
+      `DELETE FROM inbox_messages
+       WHERE id = ANY($1) AND (to_user_id = $2 OR from_user_id = $2) AND user_deleted_at IS NOT NULL`,
+      [ids, req.user.id]
+    );
+  }
   res.json({ ok: true });
 });
 
@@ -1090,35 +1107,65 @@ app.post('/api/inbox/delete', requireAuth, async (req, res) => {
 app.post('/api/inbox/restore', requireAuth, async (req, res) => {
   const ids = (req.body.ids || []).map(Number).filter(Boolean);
   if (!ids.length) return res.status(400).json({ error: 'No IDs provided.' });
-  await pool.query(
-    `UPDATE inbox_messages SET user_deleted_at = NULL
-     WHERE id = ANY($1) AND (to_user_id = $2 OR from_user_id = $2)`,
-    [ids, req.user.id]
-  );
+  if (await checkAdmin(req)) {
+    await pool.query(
+      `UPDATE inbox_messages SET user_deleted_at = NULL
+       WHERE id = ANY($1) AND is_admin = false AND from_user_id IS NOT NULL`,
+      [ids]
+    );
+  } else {
+    await pool.query(
+      `UPDATE inbox_messages SET user_deleted_at = NULL
+       WHERE id = ANY($1) AND (to_user_id = $2 OR from_user_id = $2)`,
+      [ids, req.user.id]
+    );
+  }
   res.json({ ok: true });
 });
 
 // ── Inbox: trash — list deleted messages (lazy-expire after 30 days) ─────────
 app.get('/api/inbox/trash', requireAuth, async (req, res) => {
-  // Clean up anything older than 30 days
-  await pool.query(
-    `DELETE FROM inbox_messages
-     WHERE (to_user_id = $1 OR from_user_id = $1)
-       AND user_deleted_at < NOW() - INTERVAL '30 days'`,
-    [req.user.id]
-  );
-  const { rows } = await pool.query(`
-    SELECT m.id, m.thread_id, m.body, m.created_at, m.user_deleted_at, m.is_admin,
-           r.subject
-    FROM inbox_messages m
-    JOIN inbox_messages r ON r.id = m.thread_id
-    WHERE (m.to_user_id = $1 OR m.from_user_id = $1)
-      AND m.user_deleted_at IS NOT NULL
-      AND m.user_deleted_at > NOW() - INTERVAL '30 days'
-    ORDER BY m.user_deleted_at DESC
-    LIMIT 200
-  `, [req.user.id]);
-  res.json({ messages: rows });
+  const isAdmin = await checkAdmin(req);
+  if (isAdmin) {
+    // Admin trash: user→admin messages (to_user_id IS NULL, is_admin=false)
+    await pool.query(
+      `DELETE FROM inbox_messages
+       WHERE is_admin = false AND from_user_id IS NOT NULL
+         AND user_deleted_at < NOW() - INTERVAL '30 days'`
+    );
+    const { rows } = await pool.query(`
+      SELECT m.id, m.thread_id, m.body, m.created_at, m.user_deleted_at, m.is_admin,
+             r.subject, u.username, u.display_name
+      FROM inbox_messages m
+      JOIN inbox_messages r ON r.id = m.thread_id
+      LEFT JOIN users u ON m.from_user_id = u.id
+      WHERE m.is_admin = false AND m.from_user_id IS NOT NULL
+        AND m.user_deleted_at IS NOT NULL
+        AND m.user_deleted_at > NOW() - INTERVAL '30 days'
+      ORDER BY m.user_deleted_at DESC
+      LIMIT 200
+    `);
+    res.json({ messages: rows });
+  } else {
+    await pool.query(
+      `DELETE FROM inbox_messages
+       WHERE (to_user_id = $1 OR from_user_id = $1)
+         AND user_deleted_at < NOW() - INTERVAL '30 days'`,
+      [req.user.id]
+    );
+    const { rows } = await pool.query(`
+      SELECT m.id, m.thread_id, m.body, m.created_at, m.user_deleted_at, m.is_admin,
+             r.subject
+      FROM inbox_messages m
+      JOIN inbox_messages r ON r.id = m.thread_id
+      WHERE (m.to_user_id = $1 OR m.from_user_id = $1)
+        AND m.user_deleted_at IS NOT NULL
+        AND m.user_deleted_at > NOW() - INTERVAL '30 days'
+      ORDER BY m.user_deleted_at DESC
+      LIMIT 200
+    `, [req.user.id]);
+    res.json({ messages: rows });
+  }
 });
 
 // ── Inbox: admin — all user messages (one card per message, FA-style) ────────
