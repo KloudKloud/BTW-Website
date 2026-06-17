@@ -150,6 +150,11 @@
 
       </div><!-- .inbox-content -->
     </div><!-- .inbox-app-layout -->
+
+    <!-- Floating trash button — appears when cards are selected -->
+    <button id="inbox-float-trash" class="inbox-float-trash" hidden aria-label="Move selected to trash">
+      🗑️<span class="inbox-float-trash-count" id="inbox-float-count"></span>
+    </button>
   </div><!-- #inbox-app -->
 </main>
 
@@ -498,7 +503,7 @@ function renderMsgCard(msg, opts = {}) {
     e.stopPropagation();
     if (cb.checked) _selectedIds.add(msg.id);
     else _selectedIds.delete(msg.id);
-    updateDeleteToolbar(opts.tab || 'received');
+    updateDeleteToolbar();
   });
   cb.addEventListener('click', e => e.stopPropagation());
   outer.appendChild(cb);
@@ -569,23 +574,27 @@ function renderTrashCard(msg) {
 
   card.querySelector('.inbox-trash-restore-btn').addEventListener('click', async e => {
     e.stopPropagation();
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Restoring…';
     await fetch(`${API}/inbox/restore`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids: [msg.id] }),
     });
-    loadTrash();
+    const dest = msg.is_admin ? 'Inbox' : 'Sent';
+    card.innerHTML = `<div class="inbox-trash-restored">✓ Restored to ${dest}</div>`;
+    setTimeout(() => outer.remove(), 1400);
   });
 
   card.querySelector('.inbox-trash-delete-btn').addEventListener('click', async e => {
     e.stopPropagation();
     if (!confirm('Permanently delete this message? This cannot be undone.')) return;
-    await fetch(`${API}/inbox/trash`, {
+    await fetch(`${API}/inbox/delete`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids: [msg.id] }),
     });
-    // Already in trash, so just remove from view by re-loading
     outer.remove();
   });
 
@@ -594,18 +603,11 @@ function renderTrashCard(msg) {
 }
 
 // ── Delete toolbar helpers ────────────────────────────────────────────────────
-function injectDeleteToolbar(listId, tabId) {
-  const list = document.getElementById(listId);
-  if (!list || list.querySelector('.inbox-delete-toolbar')) return;
-  const toolbar = document.createElement('div');
-  toolbar.className = 'inbox-delete-toolbar';
-  toolbar.dataset.tab = tabId;
-  toolbar.hidden = true;
-  toolbar.innerHTML = `
-    <span class="inbox-delete-count"></span>
-    <button class="inbox-delete-btn">🗑️ Move to Trash</button>
-  `;
-  toolbar.querySelector('.inbox-delete-btn').addEventListener('click', async () => {
+// Floating trash FAB — wired once on load
+(function () {
+  const fab = document.getElementById('inbox-float-trash');
+  if (!fab) return;
+  fab.addEventListener('click', async () => {
     const ids = [..._selectedIds];
     if (!ids.length) return;
     await fetch(`${API}/inbox/trash`, {
@@ -614,20 +616,19 @@ function injectDeleteToolbar(listId, tabId) {
       body: JSON.stringify({ ids }),
     });
     _selectedIds.clear();
-    if (tabId === 'received') loadReceived();
-    else if (tabId === 'sent') loadSent();
+    updateDeleteToolbar();
+    if (_prevTab === 'sent') loadSent();
+    else loadReceived();
   });
-  list.insertBefore(toolbar, list.firstChild);
-}
+})();
 
-function updateDeleteToolbar(tabId) {
-  const listId = tabId === 'received' ? 'received-list' : 'sent-list';
-  const toolbar = document.getElementById(listId)?.querySelector('.inbox-delete-toolbar');
-  if (!toolbar) return;
+function updateDeleteToolbar() {
+  const fab = document.getElementById('inbox-float-trash');
+  if (!fab) return;
   const n = _selectedIds.size;
-  toolbar.hidden = n === 0;
-  const countEl = toolbar.querySelector('.inbox-delete-count');
-  if (countEl) countEl.textContent = `${n} selected`;
+  fab.hidden = n === 0;
+  const countEl = document.getElementById('inbox-float-count');
+  if (countEl) countEl.textContent = n > 0 ? n : '';
 }
 
 function renderEmpty(msg) {
@@ -646,7 +647,6 @@ async function loadReceived() {
     const res  = await fetch(`${API}/inbox/received`, { headers: { Authorization: `Bearer ${token}` } });
     const data = await res.json();
     list.innerHTML = '';
-    injectDeleteToolbar('received-list', 'received');
     if (!data.messages || !data.messages.length) {
       list.appendChild(renderEmpty("No replies yet! When VeekitPaw responds, you'll see it here. 💌"));
     } else {
@@ -670,7 +670,6 @@ async function loadSent() {
     const res  = await fetch(`${API}/inbox/sent`, { headers: { Authorization: `Bearer ${token}` } });
     const data = await res.json();
     list.innerHTML = '';
-    injectDeleteToolbar('sent-list', 'sent');
     if (!data.messages || !data.messages.length) {
       list.appendChild(renderEmpty("You haven't sent any messages yet. Say hi! 💌"));
     } else {
@@ -974,6 +973,7 @@ async function init() {
     if (!tab) return;
     const id = tab.dataset.tab;
     _selectedIds.clear();
+    updateDeleteToolbar();
     if (id === 'sent') {
       if (_isAdmin) loadAdminSent(); else loadSent();
     }

@@ -1074,6 +1074,18 @@ app.post('/api/inbox/trash', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Inbox: trash — hard-delete (permanent) ───────────────────────────────────
+app.post('/api/inbox/delete', requireAuth, async (req, res) => {
+  const ids = (req.body.ids || []).map(Number).filter(Boolean);
+  if (!ids.length) return res.status(400).json({ error: 'No IDs provided.' });
+  await pool.query(
+    `DELETE FROM inbox_messages
+     WHERE id = ANY($1) AND (to_user_id = $2 OR from_user_id = $2) AND user_deleted_at IS NOT NULL`,
+    [ids, req.user.id]
+  );
+  res.json({ ok: true });
+});
+
 // ── Inbox: trash — restore messages ──────────────────────────────────────────
 app.post('/api/inbox/restore', requireAuth, async (req, res) => {
   const ids = (req.body.ids || []).map(Number).filter(Boolean);
