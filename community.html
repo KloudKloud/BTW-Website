@@ -1017,6 +1017,10 @@ function renderComment(c, postId, countEl, repliesMap, isReply) {
   div.className = isReply ? 'community-comment community-comment--reply' : 'community-comment';
   div.appendChild(makeAvatar({ avatar: c.avatar, display_name: c.display_name, username: c.username }, 'sm'));
 
+  // Column wrapper so main, replies, and inline input all stack vertically
+  const right = document.createElement('div');
+  right.className = 'community-comment-right';
+
   const main = document.createElement('div');
   main.className = 'community-comment-main';
 
@@ -1045,10 +1049,9 @@ function renderComment(c, postId, countEl, repliesMap, isReply) {
     repBtn.className = 'community-comment-reply-btn';
     repBtn.textContent = '↩ Reply';
     repBtn.addEventListener('click', () => {
-      // Toggle: remove existing inline input if present
-      const existing = div.querySelector('.community-comment-inline-input');
+      const existing = right.querySelector('.community-comment-inline-input');
       if (existing) { existing.remove(); return; }
-      renderCommentInput(postId, div, countEl, c.id);
+      renderCommentInput(postId, right, countEl, c.id);
     });
     actions.appendChild(repBtn);
   }
@@ -1085,16 +1088,17 @@ function renderComment(c, postId, countEl, repliesMap, isReply) {
   }
 
   main.appendChild(actions);
-  div.appendChild(main);
+  right.appendChild(main);
 
-  // Render existing replies nested below
+  // Render existing replies nested below (inside the right column)
   if (!isReply && repliesMap && repliesMap[c.id]) {
     const repliesWrap = document.createElement('div');
     repliesWrap.className = 'community-comment-replies';
     repliesMap[c.id].forEach(r => repliesWrap.appendChild(renderComment(r, postId, countEl, null, true)));
-    div.appendChild(repliesWrap);
+    right.appendChild(repliesWrap);
   }
 
+  div.appendChild(right);
   return div;
 }
 
