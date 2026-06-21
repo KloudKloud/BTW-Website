@@ -361,19 +361,71 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// GET /api/auth/verify?token=xxx
+// GET /api/auth/verify?token=xxx — shows confirmation page (safe for email scanners)
 app.get('/api/auth/verify', async (req, res) => {
   const { token } = req.query;
-  const { rows: [user] } = await pool.query('SELECT * FROM users WHERE verify_token = $1', [token]);
+  if (!token) return res.redirect(`https://${process.env.SITE_HOST}/login`);
+
+  // Check token exists but do NOT consume it — scanner-safe
+  const { rows: [user] } = await pool.query('SELECT id FROM users WHERE verify_token = $1', [token]);
   if (!user) {
-    return res.status(400).send(`
-      <html><body style="background:#f5f5f5;color:#1a1a2e;font-family:Arial;text-align:center;padding:60px 20px;">
-        <h2 style="color:#c0392b;">Invalid or expired link</h2>
-        <p>This activation link has already been used or is invalid.</p>
-        <a href="https://${process.env.SITE_HOST}/login" style="color:#1565c0;">Back to login</a>
-      </body></html>
-    `);
+    return res.status(400).send(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Invalid Link — Between Two Worlds</title>
+<style>body{font-family:Arial,sans-serif;background:#0d0d1a;color:#ccc;text-align:center;padding:60px 20px;}
+h2{color:#e55;}a{color:#7ca0ff;}</style></head>
+<body><h2>Invalid or expired link</h2>
+<p>This activation link has already been used or is invalid.</p>
+<a href="https://${process.env.SITE_HOST}/login">Back to login →</a></body></html>`);
   }
+
+  // Show a button — only a POST actually activates (scanners don't submit forms)
+  res.send(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Activate Account — Between Two Worlds</title>
+<style>
+  body{font-family:Arial,sans-serif;background:#0d0d1a;color:#ccc;display:flex;align-items:center;
+       justify-content:center;min-height:100vh;margin:0;}
+  .box{background:#161625;border:1px solid rgba(255,255,255,0.08);border-radius:14px;
+       padding:48px 40px;max-width:420px;text-align:center;}
+  h2{color:#fff;margin:0 0 12px;}
+  p{color:rgba(200,190,230,0.7);font-size:0.95rem;line-height:1.6;margin:0 0 28px;}
+  button{background:#00796b;color:#fff;border:none;border-radius:8px;padding:14px 36px;
+         font-size:1rem;font-weight:bold;cursor:pointer;transition:background .15s;}
+  button:hover{background:#009688;}
+  button:disabled{opacity:0.6;cursor:default;}
+  .msg{margin-top:16px;font-size:0.9rem;min-height:1.2em;}
+</style></head>
+<body><div class="box">
+  <h2>Almost there!</h2>
+  <p>Click the button below to activate your Between Two Worlds account and start exploring.</p>
+  <button id="btn" onclick="activate()">Activate My Account</button>
+  <div class="msg" id="msg"></div>
+</div>
+<script>
+async function activate() {
+  const btn = document.getElementById('btn');
+  const msg = document.getElementById('msg');
+  btn.disabled = true; btn.textContent = 'Activating…';
+  try {
+    const r = await fetch('/api/auth/verify', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({token: ${JSON.stringify(token)}})
+    });
+    const d = await r.json();
+    if (d.redirect) { window.location.href = d.redirect; }
+    else { msg.style.color='#e55'; msg.textContent = d.error || 'Something went wrong.'; btn.disabled=false; btn.textContent='Try Again'; }
+  } catch(e) { msg.style.color='#e55'; msg.textContent='Network error — please try again.'; btn.disabled=false; btn.textContent='Try Again'; }
+}
+</script></body></html>`);
+});
+
+// POST /api/auth/verify — actually activates the account
+app.post('/api/auth/verify', async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Missing token.' });
+
+  const { rows: [user] } = await pool.query('SELECT * FROM users WHERE verify_token = $1', [token]);
+  if (!user) return res.status(400).json({ error: 'This link has already been used or is invalid.' });
 
   await pool.query('UPDATE users SET verified = true, verify_token = NULL WHERE id = $1', [user.id]);
 
@@ -393,7 +445,7 @@ app.get('/api/auth/verify', async (req, res) => {
     console.error('Welcome email error:', err.message);
   }
 
-  res.redirect(`https://${process.env.SITE_HOST}/login?autotoken=${autoToken}`);
+  res.json({ redirect: loginUrl });
 });
 
 // POST /api/auth/login
