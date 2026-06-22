@@ -1772,6 +1772,20 @@ app.post('/api/webhooks/paypal', express.urlencoded({ extended: true }), (req, r
         const name  = [first, last].filter(Boolean).join(' ') || 'Anonymous';
         const amount = parseFloat(body.mc_gross) || 0;
         if (amount <= 0) return;
+
+        // Skip if this is a Ko-fi passthrough — Ko-fi forwards donations to PayPal
+        // automatically, which would duplicate the entry with the donor's real name.
+        // A matching Ko-fi donation within the last 30 minutes at the same amount = passthrough.
+        const { rows: existing } = await pool.query(
+          `SELECT id FROM donations
+           WHERE source = 'kofi'
+             AND ABS(amount - $1) < 0.01
+             AND created_at > NOW() - INTERVAL '30 minutes'
+           LIMIT 1`,
+          [amount]
+        );
+        if (existing.length > 0) return;
+
         await pool.query(
           'INSERT INTO donations (donor_name, amount, currency, source) VALUES ($1, $2, $3, $4)',
           [name, amount, body.mc_currency || 'USD', 'paypal']
