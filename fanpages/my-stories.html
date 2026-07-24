@@ -38,6 +38,19 @@
       background: #1e1e1e; border: 1px solid rgba(255,255,255,0.08); transition: transform 0.15s;
     }
     .lib-card:hover .lib-card-cover { transform: translateY(-4px); }
+    .lib-card-cover--generated {
+      position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a);
+    }
+    .lib-card-cover-bg {
+      position: absolute; inset: -25%; background-size: cover; background-position: center;
+      filter: blur(12px) saturate(1.3) brightness(0.6); transform: scale(1.15);
+    }
+    .lib-card-cover-title {
+      position: relative; z-index: 1; color: #fff; text-align: center; padding: 0 0.6rem;
+      font-family: 'Cinzel', Georgia, serif; font-weight: 700; font-size: 0.92rem; line-height: 1.35;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.85);
+    }
     .lib-card-title { font-size: 0.9rem; font-weight: 700; margin-top: 0.5rem; line-height: 1.3; }
     .lib-card-edit-hint { font-size: 0.78rem; color: #999; margin-top: 0.15rem; }
 
@@ -83,18 +96,42 @@
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  // No custom cover? Fake one out of a blurred, zoomed-in crop of the
+  // author's own avatar with the story title lettered over it, instead of
+  // showing the same static stock image on every uncovered story.
+  function buildCoverEl(site) {
+    if (site.cover_url) {
+      const img = document.createElement('img');
+      img.className = 'lib-card-cover';
+      img.src = site.cover_url;
+      img.alt = `${escapeHtml(site.site_title)} cover`;
+      img.loading = 'lazy';
+      return img;
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'lib-card-cover lib-card-cover--generated';
+    const bg = document.createElement('div');
+    bg.className = 'lib-card-cover-bg';
+    if (site.author_avatar) bg.style.backgroundImage = `url(${site.author_avatar})`;
+    wrap.appendChild(bg);
+    const title = document.createElement('span');
+    title.className = 'lib-card-cover-title';
+    title.textContent = site.site_title || 'Untitled Story';
+    wrap.appendChild(title);
+    return wrap;
+  }
+
   function storyCard(site) {
     const a = document.createElement('a');
     a.className = 'lib-card';
     // Own story — opens straight into the editor, since there's no reason
     // to land on the read-only view of a page you're about to edit.
     a.href = `/fanpages/${site.story_path || site.slug}?edit=1`;
-    const cover = site.cover_url || '/images/gallery/kloudsaphbedroom_1.png';
     a.innerHTML = `
-      <img class="lib-card-cover" src="${cover}" alt="${escapeHtml(site.site_title)} cover" loading="lazy" />
       <p class="lib-card-title">${escapeHtml(site.site_title)}</p>
       <p class="lib-card-edit-hint">✏️ Edit this story</p>
     `;
+    a.prepend(buildCoverEl(site));
     return a;
   }
 

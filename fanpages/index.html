@@ -129,6 +129,19 @@
       transition: transform 0.15s;
     }
     .fp-card:hover .fp-card-cover { transform: translateY(-4px); }
+    .fp-card-cover--generated {
+      position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a);
+    }
+    .fp-card-cover-bg {
+      position: absolute; inset: -25%; background-size: cover; background-position: center;
+      filter: blur(12px) saturate(1.3) brightness(0.6); transform: scale(1.15);
+    }
+    .fp-card-cover-title {
+      position: relative; z-index: 1; color: #fff; text-align: center; padding: 0 0.6rem;
+      font-family: 'Cinzel', Georgia, serif; font-weight: 700; font-size: 0.92rem; line-height: 1.35;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.85);
+    }
     .fp-card-title { font-size: 0.9rem; font-weight: 700; margin-top: 0.5rem; line-height: 1.3; }
     .fp-card-author { font-size: 0.78rem; color: #999; margin-top: 0.15rem; }
     .fp-card-author-link:hover { color: #7fa8d9; text-decoration: underline; }
@@ -333,16 +346,40 @@
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
 
+  // No custom cover? Fake one out of a blurred, zoomed-in crop of the
+  // author's own avatar with the story title lettered over it, instead of
+  // showing the same static stock image on every uncovered story.
+  function buildCoverEl(site) {
+    if (site.cover_url) {
+      const img = document.createElement('img');
+      img.className = 'fp-card-cover';
+      img.src = site.cover_url;
+      img.alt = `${site.site_title} cover`;
+      img.loading = 'lazy';
+      return img;
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'fp-card-cover fp-card-cover--generated';
+    const bg = document.createElement('div');
+    bg.className = 'fp-card-cover-bg';
+    if (site.author_avatar) bg.style.backgroundImage = `url(${site.author_avatar})`;
+    wrap.appendChild(bg);
+    const title = document.createElement('span');
+    title.className = 'fp-card-cover-title';
+    title.textContent = site.site_title || 'Untitled Story';
+    wrap.appendChild(title);
+    return wrap;
+  }
+
   function storyCard(site, { showBookmark }) {
     const a = document.createElement('a');
     a.className = 'fp-card';
     a.href = `/fanpages/${site.story_path || site.slug}`;
-    const cover = site.cover_url || '/images/gallery/kloudsaphbedroom_1.png';
     a.innerHTML = `
-      <img class="fp-card-cover" src="${cover}" alt="${site.site_title} cover" loading="lazy" />
       <p class="fp-card-title">${site.site_title}</p>
       <p class="fp-card-author">by <span class="fp-card-author-link">${site.author}</span></p>
     `;
+    a.prepend(buildCoverEl(site));
     // Author name links to their profile — nested <a> isn't valid HTML since
     // the whole card is already a link, so this is a click-through instead.
     if (site.author_username) {

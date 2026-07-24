@@ -16,7 +16,10 @@
 
 <!-- Edit bar — only shown while editing -->
 <div class="mod-edit-bar" id="edit-bar" style="display:none;">
-  <span class="mod-edit-bar-label">Currently editing your story</span>
+  <div class="mod-edit-bar-left">
+    <button class="mod-edit-bar-delete" id="delete-story-btn" type="button">🗑️ Delete Story</button>
+    <span class="mod-edit-bar-label">Currently editing your story</span>
+  </div>
   <div class="mod-edit-bar-actions">
     <div class="mod-theme-picker">
       <button class="mod-edit-bar-theme-btn" id="theme-btn" type="button">🎨 Theme</button>
@@ -27,6 +30,18 @@
     </div>
     <button class="mod-edit-bar-save" id="save-edit-btn">Save Changes</button>
     <button class="mod-edit-bar-cancel" id="cancel-edit-btn" type="button">Cancel</button>
+  </div>
+</div>
+
+<!-- Delete-story confirmation — centered on-page modal -->
+<div class="mod-confirm-overlay" id="delete-story-confirm-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title">Delete this entire story?</p>
+    <p class="mod-confirm-text">This permanently deletes the story, its characters, chapters, and gallery. This can't be undone.</p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="delete-story-confirm-cancel" type="button">Cancel</button>
+      <button class="mod-btn mod-btn--danger" id="delete-story-confirm-yes" type="button">Delete</button>
+    </div>
   </div>
 </div>
 
@@ -633,6 +648,41 @@ function exitEditMode() {
 
 document.getElementById('edit-profile-btn').addEventListener('click', enterEditMode);
 document.getElementById('cancel-edit-btn').addEventListener('click', exitEditMode);
+
+function confirmDeleteStory() {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('delete-story-confirm-overlay');
+    const yesBtn = document.getElementById('delete-story-confirm-yes');
+    const cancelBtn = document.getElementById('delete-story-confirm-cancel');
+    overlay.hidden = false;
+    const cleanup = (result) => {
+      overlay.hidden = true;
+      yesBtn.removeEventListener('click', onYes);
+      cancelBtn.removeEventListener('click', onCancel);
+      resolve(result);
+    };
+    const onYes = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    yesBtn.addEventListener('click', onYes);
+    cancelBtn.addEventListener('click', onCancel);
+  });
+}
+
+document.getElementById('delete-story-btn').addEventListener('click', async () => {
+  if (!await confirmDeleteStory()) return;
+  const btn = document.getElementById('delete-story-btn');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+  try {
+    const res = await fetch('/api/moderator/site', { method: 'DELETE', headers: authHeaders() });
+    if (!res.ok) throw new Error();
+    window.location.href = '/fanpages/my-stories';
+  } catch {
+    alert('Something went wrong deleting this story. Please try again.');
+    btn.disabled = false;
+    btn.textContent = '🗑️ Delete Story';
+  }
+});
 
 document.getElementById('save-edit-btn').addEventListener('click', async () => {
   const links = Array.from(document.querySelectorAll('#site-links-editor .mod-stat-row')).map(row => ({

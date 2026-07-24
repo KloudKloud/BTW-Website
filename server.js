@@ -2288,7 +2288,7 @@ app.get('/api/moderator-sites', async (req, res) => {
   const q = (req.query.q || '').trim();
   const { rows: sites } = await pool.query(`
     SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.tags,
-           u.username, u.display_name
+           u.username, u.display_name, u.avatar
     FROM moderator_sites ms
     JOIN users u ON u.id = ms.owner_user_id
     WHERE $1 = '' OR
@@ -2315,6 +2315,7 @@ app.get('/api/moderator-sites', async (req, res) => {
       tags: s.tags || [],
       author: s.display_name || s.username,
       author_username: s.username,
+      author_avatar: s.avatar || null,
       bookmarked: bookmarkedIds.has(s.id),
     })),
   });
@@ -2323,7 +2324,7 @@ app.get('/api/moderator-sites', async (req, res) => {
 // ── Bookmarks — save a fanpage to your hub profile ────────────────────────────
 app.get('/api/bookmarks', requireAuth, async (req, res) => {
   const { rows } = await pool.query(`
-    SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.username, u.display_name
+    SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.username, u.display_name, u.avatar
     FROM moderator_bookmarks mb
     JOIN moderator_sites ms ON ms.id = mb.site_id
     JOIN users u ON u.id = ms.owner_user_id
@@ -2333,7 +2334,7 @@ app.get('/api/bookmarks', requireAuth, async (req, res) => {
   res.json({
     bookmarks: rows.map(r => ({
       slug: r.slug, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url,
-      author: r.display_name || r.username, author_username: r.username,
+      author: r.display_name || r.username, author_username: r.username, author_avatar: r.avatar || null,
     })),
   });
 });
@@ -2696,10 +2697,12 @@ app.get('/api/moderator-sites/:slug/is-owner', requireAuth, async (req, res) => 
 // to a single story — this deliberately lists all of them.
 app.get('/api/moderator/my-sites', requireAuth, async (req, res) => {
   const { rows } = await pool.query(
-    'SELECT id, slug, story_path, site_title, cover_url, banner_url FROM moderator_sites WHERE owner_user_id = $1 ORDER BY created_at ASC',
+    `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, u.avatar
+     FROM moderator_sites ms JOIN users u ON u.id = ms.owner_user_id
+     WHERE ms.owner_user_id = $1 ORDER BY ms.created_at ASC`,
     [req.user.id]
   );
-  res.json({ sites: rows });
+  res.json({ sites: rows.map(s => ({ ...s, author_avatar: s.avatar || null, avatar: undefined })) });
 });
 
 // ── Site (Above All Else / Meet Blue text + links) ────────────────────────────
@@ -2831,6 +2834,34 @@ app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) =
      tags !== undefined ? JSON.stringify(tags) : null, req.modSite.id]
   );
   res.json({ site });
+});
+
+// DELETE /api/moderator/site — permanently deletes the whole story. Characters/
+// chapters/gallery/bookmarks cascade via FK; uploaded images/files are best-effort
+// cleaned up first (shared static assets on migrated data are never touched).
+app.delete('/api/moderator/site', requireAuth, requireModerator, async (req, res) => {
+  const site = req.modSite;
+  const isUploadedFile = (url) => !!url && (url.startsWith('/images/moderators/') || url.startsWith('/moderators/files/'));
+  const unlinkIfUploaded = (url) => {
+    if (!isUploadedFile(url)) return;
+    const fp = path.join('/var/www/btw', url);
+    if (fs.existsSync(fp)) fs.unlinkSync(fp);
+  };
+
+  const [{ rows: chars }, { rows: gallery }, { rows: chapters }] = await Promise.all([
+    pool.query('SELECT ref_image FROM moderator_characters WHERE site_id = $1', [site.id]),
+    pool.query('SELECT image_url FROM moderator_gallery WHERE site_id = $1', [site.id]),
+    pool.query('SELECT image_url, file_url FROM moderator_chapters WHERE site_id = $1', [site.id]),
+  ]);
+
+  [site.banner_url, site.cover_url, site.theme_bg_url, site.characters_card_url, site.chapters_card_url, site.gallery_card_url]
+    .forEach(unlinkIfUploaded);
+  chars.forEach(c => unlinkIfUploaded(c.ref_image));
+  gallery.forEach(g => unlinkIfUploaded(g.image_url));
+  chapters.forEach(c => { unlinkIfUploaded(c.image_url); unlinkIfUploaded(c.file_url); });
+
+  await pool.query('DELETE FROM moderator_sites WHERE id = $1', [site.id]);
+  res.json({ message: 'Deleted.' });
 });
 
 // ── Chapters ───────────────────────────────────────────────────────────────────
@@ -3108,7 +3139,7 @@ app.delete('/api/moderator/gallery/:id/like', requireAuth, async (req, res) => {
 app.get('/api/library', requireAuth, async (req, res) => {
   const [{ rows: stories }, { rows: gallery }] = await Promise.all([
     pool.query(`
-      SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.username, u.display_name
+      SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.username, u.display_name, u.avatar
       FROM moderator_bookmarks mb
       JOIN moderator_sites ms ON ms.id = mb.site_id
       JOIN users u ON u.id = ms.owner_user_id
@@ -3127,7 +3158,7 @@ app.get('/api/library', requireAuth, async (req, res) => {
   res.json({
     stories: stories.map(r => ({
       slug: r.slug, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url,
-      author: r.display_name || r.username, author_username: r.username,
+      author: r.display_name || r.username, author_username: r.username, author_avatar: r.avatar || null,
     })),
     gallery: gallery.map(r => ({
       id: r.id, image_url: r.image_url, title: r.title, category: r.category,
