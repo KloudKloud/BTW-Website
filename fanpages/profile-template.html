@@ -11,6 +11,38 @@
     body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; }
     a { color: inherit; }
 
+    /* Custom profile theme — same default/blurred-background pattern a
+       story uses, just scoped to this account instead of a story. */
+    .fp-bg-wrap { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: #0d0d0d; }
+    .fp-bg-img { width: 100%; height: 100%; object-fit: cover; filter: blur(20px); transform: scale(1.1); opacity: 0.5; display: none; }
+    .fp-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.78); display: none; }
+
+    .fp-theme-picker { position: relative; }
+    .fp-theme-btn {
+      background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #f0f0f0;
+      cursor: pointer; font-family: inherit; font-size: 0.85rem; font-weight: 700;
+      padding: 0.55rem 1.1rem; border-radius: 6px;
+    }
+    .fp-theme-btn:hover { border-color: #f0f0f0; }
+    .fp-theme-popover {
+      position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
+      background: #161616; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.5); padding: 1rem; width: 220px;
+    }
+    .fp-theme-popover-label { font-size: 0.75rem; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; }
+    .fp-theme-grid { display: flex; gap: 0.75rem; }
+    .fp-theme-swatch {
+      width: 48px; height: 48px; border-radius: 50%; cursor: pointer;
+      border: 2px solid transparent; padding: 0; overflow: hidden;
+      display: flex; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+    .fp-theme-swatch span { display: block; width: 100%; height: 100%; background: #0a0a0a; }
+    .fp-theme-swatch.active { border-color: #7fa8d9; }
+    .fp-theme-swatch--upload {
+      align-items: center; justify-content: center; background: #1e1e1e; color: #999; font-size: 1.1rem;
+    }
+    .fp-theme-swatch--upload:hover { background: #292929; }
+
     /* ── Banner + avatar bleed (Twitter-style) ── */
     .fp-banner-wrap { position: relative; width: 100%; height: 560px; background: #1a1a1a; overflow: hidden; }
     .fp-banner-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; transition: filter 0.2s; }
@@ -286,11 +318,23 @@
 </head>
 <body>
 
+<div class="fp-bg-wrap">
+  <img class="fp-bg-img" id="fp-bg-img" alt="" />
+  <div class="fp-bg-overlay" id="fp-bg-overlay"></div>
+</div>
+
 <div id="fanpages-topbar-root"></div>
 
 <div class="fp-edit-bar" id="fp-edit-bar" hidden>
   <span class="fp-edit-bar-label">Currently editing your profile</span>
   <div class="fp-edit-bar-actions">
+    <div class="fp-theme-picker">
+      <button type="button" class="fp-theme-btn" id="fp-theme-btn">🎨 Theme</button>
+      <div class="fp-theme-popover" id="fp-theme-popover" hidden>
+        <p class="fp-theme-popover-label">Profile Background</p>
+        <div class="fp-theme-grid" id="fp-theme-grid"></div>
+      </div>
+    </div>
     <button type="button" id="fp-edit-save" class="fp-edit-btn fp-edit-btn--save">Save Changes</button>
     <button type="button" id="fp-edit-cancel" class="fp-edit-btn fp-edit-btn--cancel">Cancel</button>
   </div>
@@ -410,6 +454,83 @@
   let editMode = false;
   let editLinks = [];
   let editFeatured = { character: [], gallery: [] };
+
+  // ── Profile theme — default (plain dark) or a custom blurred background ──
+  function applyProfileTheme(themeId, bgUrl) {
+    const bgImg = document.getElementById('fp-bg-img');
+    const bgOverlay = document.getElementById('fp-bg-overlay');
+    if (themeId === 'custom' && bgUrl) {
+      bgImg.src = bgUrl;
+      bgImg.style.display = 'block';
+      bgOverlay.style.display = 'block';
+    } else {
+      bgImg.style.display = 'none';
+      bgOverlay.style.display = 'none';
+    }
+    document.querySelectorAll('.fp-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
+  }
+
+  function buildThemeGrid() {
+    const grid = document.getElementById('fp-theme-grid');
+    grid.innerHTML = '';
+
+    const defaultBtn = document.createElement('button');
+    defaultBtn.className = 'fp-theme-swatch';
+    defaultBtn.type = 'button';
+    defaultBtn.title = 'Default (plain dark)';
+    defaultBtn.dataset.theme = 'default';
+    defaultBtn.innerHTML = '<span></span>';
+    defaultBtn.addEventListener('click', () => selectProfileTheme('default'));
+    grid.appendChild(defaultBtn);
+
+    const uploadBtn = document.createElement('button');
+    uploadBtn.className = 'fp-theme-swatch fp-theme-swatch--upload';
+    uploadBtn.type = 'button';
+    uploadBtn.title = 'Upload a custom blurred background image';
+    uploadBtn.textContent = '+';
+    uploadBtn.addEventListener('click', () => document.getElementById('fp-theme-bg-file-input').click());
+    grid.appendChild(uploadBtn);
+  }
+
+  async function selectProfileTheme(themeId) {
+    applyProfileTheme(themeId, currentAuthor.profile_theme_bg_url);
+    const res = await fetch('/api/account/theme', {
+      method: 'PUT',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme: themeId }),
+    });
+    if (res.ok) currentAuthor.profile_theme = themeId;
+  }
+
+  const themeBgFileInput = document.createElement('input');
+  themeBgFileInput.type = 'file';
+  themeBgFileInput.accept = 'image/png,image/jpeg,image/webp,image/gif';
+  themeBgFileInput.id = 'fp-theme-bg-file-input';
+  themeBgFileInput.hidden = true;
+  document.body.appendChild(themeBgFileInput);
+  themeBgFileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    applyProfileTheme('custom', URL.createObjectURL(file)); // instant preview
+    const fd = new FormData();
+    fd.append('image', file);
+    const res = await fetch('/api/account/theme-bg', { method: 'PUT', headers: authHeaders(), body: fd });
+    if (res.ok) {
+      const data = await res.json();
+      currentAuthor.profile_theme = 'custom';
+      currentAuthor.profile_theme_bg_url = data.theme_bg_url;
+      applyProfileTheme('custom', data.theme_bg_url);
+    }
+  });
+
+  document.getElementById('fp-theme-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('fp-theme-popover').hidden = !document.getElementById('fp-theme-popover').hidden;
+  });
+  document.addEventListener('click', (e) => {
+    const picker = document.querySelector('.fp-theme-picker');
+    if (picker && !picker.contains(e.target)) document.getElementById('fp-theme-popover').hidden = true;
+  });
 
   const ABOUT_FIELD_DEFS = [
     ['Pronouns',         'pronouns',         'text'],
@@ -564,6 +685,7 @@
     editMode = false;
     document.body.classList.remove('fp-editing');
     document.getElementById('fp-edit-bar').hidden = true;
+    document.getElementById('fp-theme-popover').hidden = true;
     document.getElementById('fp-banner-camera-wrap').hidden = true;
     document.getElementById('fp-avatar-camera-btn').hidden = true;
     document.getElementById('fp-avatar-hint').hidden = true;
@@ -838,6 +960,7 @@
       document.getElementById('fp-follower-count').textContent = data.follower_count;
       document.getElementById('fp-following-count').textContent = data.following_count;
       document.title = `${a.display_name} ✦ Fanpages`;
+      applyProfileTheme(a.profile_theme, a.profile_theme_bg_url);
 
       const bannerImg = document.getElementById('fp-banner-img');
       bannerImg.src = a.banner_url || '/images/gallery/pixernbath_13.png';
@@ -915,6 +1038,7 @@
     }
   }
 
+  buildThemeGrid();
   loadProfile();
 </script>
 

@@ -172,6 +172,8 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS account_banner_position_y INTEGER NOT NULL DEFAULT 50;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_position_x INTEGER NOT NULL DEFAULT 50;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_position_y INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_theme TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_theme_bg_url TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('account profile fields migration:', e.message));
   // Add newsletter opt-in column if missing (default true for existing users)
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_newsletter BOOLEAN DEFAULT true`).catch(() => {});
@@ -328,6 +330,15 @@ async function initDb() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `).catch(e => console.error('hub_billboard_slides migration:', e.message));
+
+  // Slow pan/zoom animation while a slide is active — position_x/y/zoom is the
+  // start frame, end_* is where it eases to over the slide's full time on screen.
+  await pool.query(`
+    ALTER TABLE hub_billboard_slides ADD COLUMN IF NOT EXISTS animation_type TEXT NOT NULL DEFAULT 'none';
+    ALTER TABLE hub_billboard_slides ADD COLUMN IF NOT EXISTS end_position_x INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE hub_billboard_slides ADD COLUMN IF NOT EXISTS end_position_y INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE hub_billboard_slides ADD COLUMN IF NOT EXISTS end_zoom INTEGER NOT NULL DEFAULT 100;
+  `).catch(e => console.error('hub_billboard_slides animation migration:', e.message));
 
   // story_path is the actual URL under /fanpages/ (e.g. "blue/above-all-else") —
   // separate from slug (the moderator's own identity) since one person can
@@ -2134,19 +2145,31 @@ app.get('/api/hub-billboard', async (req, res) => {
   res.json({ slides: rows });
 });
 
+const HUB_ANIMATION_TYPES = ['none', 'pan_v', 'pan_h', 'zoom'];
+function clampZoom(v, fallback) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) && n >= 100 && n <= 400 ? n : fallback;
+}
+
 app.post('/api/admin/hub-billboard', requireAuth, requireAdmin, uploadModImage.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
   const { caption, credit, link } = req.body;
   const positionX = clampPosition(req.body.position_x);
   const positionY = clampPosition(req.body.position_y);
-  const zoomRaw = parseInt(req.body.zoom, 10);
-  const zoom = Number.isFinite(zoomRaw) && zoomRaw >= 100 && zoomRaw <= 400 ? zoomRaw : 100;
+  const zoom = clampZoom(req.body.zoom, 100);
+  const animationType = HUB_ANIMATION_TYPES.includes(req.body.animation_type) ? req.body.animation_type : 'none';
+  const endPositionX = clampPosition(req.body.end_position_x);
+  const endPositionY = clampPosition(req.body.end_position_y);
+  const endZoom = clampZoom(req.body.end_zoom, 100);
   const imageUrl = `/images/moderators/${req.file.filename}`;
   const { rows: [{ maxOrder }] } = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM hub_billboard_slides');
   const { rows: [slide] } = await pool.query(
-    `INSERT INTO hub_billboard_slides (image_url, position_x, position_y, zoom, caption, credit, link, sort_order)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    [imageUrl, positionX, positionY, zoom, (caption || '').trim(), (credit || '').trim(), (link || '').trim(), maxOrder + 1]
+    `INSERT INTO hub_billboard_slides
+       (image_url, position_x, position_y, zoom, caption, credit, link, sort_order,
+        animation_type, end_position_x, end_position_y, end_zoom)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+    [imageUrl, positionX, positionY, zoom, (caption || '').trim(), (credit || '').trim(), (link || '').trim(), maxOrder + 1,
+     animationType, endPositionX, endPositionY, endZoom]
   );
   res.json({ slide });
 });
@@ -2158,11 +2181,13 @@ app.put('/api/admin/hub-billboard/:id', requireAuth, requireAdmin, uploadModImag
   const { caption, credit, link } = req.body;
   const positionX = req.body.position_x !== undefined ? clampPosition(req.body.position_x) : existing.position_x;
   const positionY = req.body.position_y !== undefined ? clampPosition(req.body.position_y) : existing.position_y;
-  let zoom = existing.zoom;
-  if (req.body.zoom !== undefined) {
-    const zoomRaw = parseInt(req.body.zoom, 10);
-    zoom = Number.isFinite(zoomRaw) && zoomRaw >= 100 && zoomRaw <= 400 ? zoomRaw : existing.zoom;
-  }
+  const zoom = req.body.zoom !== undefined ? clampZoom(req.body.zoom, existing.zoom) : existing.zoom;
+  const animationType = req.body.animation_type !== undefined
+    ? (HUB_ANIMATION_TYPES.includes(req.body.animation_type) ? req.body.animation_type : existing.animation_type)
+    : existing.animation_type;
+  const endPositionX = req.body.end_position_x !== undefined ? clampPosition(req.body.end_position_x) : existing.end_position_x;
+  const endPositionY = req.body.end_position_y !== undefined ? clampPosition(req.body.end_position_y) : existing.end_position_y;
+  const endZoom = req.body.end_zoom !== undefined ? clampZoom(req.body.end_zoom, existing.end_zoom) : existing.end_zoom;
 
   let imageUrl = existing.image_url;
   if (req.file) {
@@ -2176,10 +2201,12 @@ app.put('/api/admin/hub-billboard/:id', requireAuth, requireAdmin, uploadModImag
   const { rows: [slide] } = await pool.query(
     `UPDATE hub_billboard_slides SET
        image_url = $1, position_x = $2, position_y = $3, zoom = $4,
-       caption = COALESCE($5, caption), credit = COALESCE($6, credit), link = COALESCE($7, link)
-     WHERE id = $8 RETURNING *`,
+       caption = COALESCE($5, caption), credit = COALESCE($6, credit), link = COALESCE($7, link),
+       animation_type = $8, end_position_x = $9, end_position_y = $10, end_zoom = $11
+     WHERE id = $12 RETURNING *`,
     [imageUrl, positionX, positionY, zoom, caption != null ? caption.trim() : null,
-     credit != null ? credit.trim() : null, link != null ? link.trim() : null, existing.id]
+     credit != null ? credit.trim() : null, link != null ? link.trim() : null,
+     animationType, endPositionX, endPositionY, endZoom, existing.id]
   );
   res.json({ slide });
 });
@@ -2311,7 +2338,8 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
   const { rows: [author] } = await pool.query(
     `SELECT id, username, display_name, avatar, avatar_position_x, avatar_position_y,
             pronouns, favorite_pokemon, account_bio, fun_fact, account_links,
-            account_banner_url, account_banner_position_x, account_banner_position_y
+            account_banner_url, account_banner_position_x, account_banner_position_y,
+            profile_theme, profile_theme_bg_url
      FROM users WHERE username = $1`,
     [req.params.username.toLowerCase()]
   );
@@ -2364,6 +2392,8 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       account_bio: author.account_bio || '',
       fun_fact: author.fun_fact || '',
       account_links: author.account_links || [],
+      profile_theme: author.profile_theme || 'default',
+      profile_theme_bg_url: author.profile_theme_bg_url || '',
       featured_characters: featuredChars.rows,
       featured_gallery: featuredGallery.rows,
       is_self: viewerId === author.id,
@@ -2416,6 +2446,21 @@ app.put('/api/account/profile', requireAuth, async (req, res) => {
     [pronouns, favoritePokemon, accountBio, funFact, JSON.stringify(links), req.user.id]
   );
   res.json({ message: 'Profile updated.' });
+});
+
+// Profile page theme — same default/custom-blurred-background pattern as a
+// story's theme, just scoped to the account instead of a moderator_sites row.
+app.put('/api/account/theme', requireAuth, async (req, res) => {
+  const theme = req.body.theme === 'custom' ? 'custom' : 'default';
+  await pool.query('UPDATE users SET profile_theme = $1 WHERE id = $2', [theme, req.user.id]);
+  res.json({ theme });
+});
+
+app.put('/api/account/theme-bg', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const bgUrl = `/images/moderators/${req.file.filename}`;
+  await pool.query(`UPDATE users SET profile_theme_bg_url = $1, profile_theme = 'custom' WHERE id = $2`, [bgUrl, req.user.id]);
+  res.json({ theme: 'custom', theme_bg_url: bgUrl });
 });
 
 // PUT /api/account/banner — the profile page's own banner image, distinct

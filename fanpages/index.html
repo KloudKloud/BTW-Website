@@ -207,10 +207,8 @@
       const el = document.createElement(slide.link ? 'a' : 'div');
       el.className = 'fp-billboard-slide' + (i === 0 ? ' active' : '');
       if (slide.link) el.href = slide.link;
-      const zoom = (slide.zoom || 100) / 100;
       el.innerHTML = `
-        <img src="${slide.image_url}" alt="${slide.caption || ''}" loading="lazy"
-             style="object-position: ${slide.position_x}% ${slide.position_y}%; transform: scale(${zoom});" />
+        <img src="${slide.image_url}" alt="${slide.caption || ''}" loading="lazy" />
         ${(slide.caption || slide.credit) ? `
           <div class="fp-billboard-slide-scrim">
             ${slide.caption ? `<p class="fp-billboard-slide-cap">${slide.caption}</p>` : ''}
@@ -239,7 +237,39 @@
     }
 
     billboardIndex = 0;
+    playSlideAnimation(0);
     restartBillboardTimer();
+  }
+
+  // Ken Burns-style pan/zoom — the CSS transition duration is set to exactly
+  // the slide's on-screen time, so however far apart the start/end frames
+  // are, the motion always finishes right as the next slide crossfades in.
+  const BILLBOARD_INTERVAL_MS = 15000;
+
+  function playSlideAnimation(index) {
+    const slide = billboardSlides[index];
+    if (!slide) return;
+    const el = document.querySelectorAll('.fp-billboard-slide')[index];
+    if (!el) return;
+    const img = el.querySelector('img');
+
+    img.style.transition = 'none';
+    img.style.objectPosition = `${slide.position_x}% ${slide.position_y}%`;
+    img.style.transform = `scale(${(slide.zoom || 100) / 100})`;
+    void img.offsetWidth; // force reflow so the reset above applies before re-enabling transitions
+
+    if (slide.animation_type && slide.animation_type !== 'none') {
+      img.style.transition = `object-position ${BILLBOARD_INTERVAL_MS}ms linear, transform ${BILLBOARD_INTERVAL_MS}ms linear`;
+      requestAnimationFrame(() => {
+        if (slide.animation_type === 'pan_v') {
+          img.style.objectPosition = `${slide.position_x}% ${slide.end_position_y}%`;
+        } else if (slide.animation_type === 'pan_h') {
+          img.style.objectPosition = `${slide.end_position_x}% ${slide.position_y}%`;
+        } else if (slide.animation_type === 'zoom') {
+          img.style.transform = `scale(${(slide.end_zoom || 100) / 100})`;
+        }
+      });
+    }
   }
 
   function goToSlide(i) {
@@ -247,13 +277,14 @@
     billboardIndex = (i + billboardSlides.length) % billboardSlides.length;
     document.querySelectorAll('.fp-billboard-slide').forEach((el, idx) => el.classList.toggle('active', idx === billboardIndex));
     document.querySelectorAll('.fp-billboard-dot').forEach((el, idx) => el.classList.toggle('active', idx === billboardIndex));
+    playSlideAnimation(billboardIndex);
     restartBillboardTimer();
   }
 
   function restartBillboardTimer() {
     if (billboardTimer) clearInterval(billboardTimer);
     if (billboardSlides.length > 1) {
-      billboardTimer = setInterval(() => goToSlide(billboardIndex + 1), 30000);
+      billboardTimer = setInterval(() => goToSlide(billboardIndex + 1), BILLBOARD_INTERVAL_MS);
     }
   }
 

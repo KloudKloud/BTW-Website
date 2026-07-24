@@ -28,6 +28,7 @@
     .hb-empty-state { color: #999; font-size: 0.92rem; padding: 2rem 0; text-align: center; }
     .hb-forbidden { max-width: 500px; margin: 6rem auto; text-align: center; color: #999; }
     .hb-sliders { display: flex; flex-wrap: wrap; gap: 1.25rem; margin: 0 0 1.5rem; justify-content: center; }
+    .hb-sliders-caption { text-align: center; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #999; margin-bottom: 0.5rem; }
     .hb-sliders label { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: #999; }
     .hb-sliders input[type="range"] { width: 130px; }
   </style>
@@ -64,10 +65,32 @@
     </div>
     <input type="file" id="hb-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
 
+    <p class="hb-sliders-caption">Start Frame</p>
     <div class="hb-sliders">
       <label>Horizontal <input type="range" id="hb-pos-x" min="0" max="100" value="50" /></label>
       <label>Vertical <input type="range" id="hb-pos-y" min="0" max="100" value="50" /></label>
       <label>Zoom <input type="range" id="hb-zoom" min="100" max="400" value="100" /></label>
+    </div>
+
+    <div class="mod-field">
+      <label>Animation</label>
+      <div class="gallery-cat-row" id="hb-animation-row">
+        <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="none" checked /><span>None</span></label>
+        <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="pan_v" /><span>Pan ↕</span></label>
+        <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="pan_h" /><span>Pan ↔</span></label>
+        <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="zoom" /><span>Zoom</span></label>
+      </div>
+      <p class="char-editor-facts-hint">Slowly eases from the start frame above to the end frame below over the slide's full 15 seconds on screen.</p>
+    </div>
+
+    <div id="hb-end-frame-field" style="display:none;">
+      <p class="hb-sliders-caption">End Frame</p>
+      <div class="hb-sliders">
+        <label id="hb-end-pos-x-label" style="display:none;">Horizontal <input type="range" id="hb-end-pos-x" min="0" max="100" value="50" /></label>
+        <label id="hb-end-pos-y-label" style="display:none;">Vertical <input type="range" id="hb-end-pos-y" min="0" max="100" value="50" /></label>
+        <label id="hb-end-zoom-label" style="display:none;">Zoom <input type="range" id="hb-end-zoom" min="100" max="400" value="100" /></label>
+      </div>
+      <button class="mod-btn mod-btn--small" id="hb-preview-btn" type="button" style="display:block; margin: 0 auto 1rem;">▶ Preview Animation (3s)</button>
     </div>
 
     <div class="mod-field">
@@ -115,16 +138,48 @@ function escapeHtml(s) {
 let slides = [];
 let editingId = null;
 let selectedFile = null;
-let slidePos = { x: 50, y: 50, zoom: 100 };
+let slidePos = { x: 50, y: 50, zoom: 100, endX: 50, endY: 50, endZoom: 100, animationType: 'none' };
 
 function applyEditorPreview() {
   const img = document.getElementById('hb-editor-img');
+  img.style.transition = 'none';
   img.style.objectPosition = `${slidePos.x}% ${slidePos.y}%`;
   img.style.transform = `scale(${slidePos.zoom / 100})`;
 }
 document.getElementById('hb-pos-x').addEventListener('input', (e) => { slidePos.x = parseInt(e.target.value, 10); applyEditorPreview(); });
 document.getElementById('hb-pos-y').addEventListener('input', (e) => { slidePos.y = parseInt(e.target.value, 10); applyEditorPreview(); });
 document.getElementById('hb-zoom').addEventListener('input', (e) => { slidePos.zoom = parseInt(e.target.value, 10); applyEditorPreview(); });
+document.getElementById('hb-end-pos-x').addEventListener('input', (e) => { slidePos.endX = parseInt(e.target.value, 10); });
+document.getElementById('hb-end-pos-y').addEventListener('input', (e) => { slidePos.endY = parseInt(e.target.value, 10); });
+document.getElementById('hb-end-zoom').addEventListener('input', (e) => { slidePos.endZoom = parseInt(e.target.value, 10); });
+
+function updateAnimationFieldVisibility() {
+  const type = slidePos.animationType;
+  document.getElementById('hb-end-frame-field').style.display = type === 'none' ? 'none' : 'block';
+  document.getElementById('hb-end-pos-x-label').style.display = type === 'pan_h' ? 'flex' : 'none';
+  document.getElementById('hb-end-pos-y-label').style.display = type === 'pan_v' ? 'flex' : 'none';
+  document.getElementById('hb-end-zoom-label').style.display = type === 'zoom' ? 'flex' : 'none';
+}
+document.querySelectorAll('input[name="hb-animation-type"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    slidePos.animationType = radio.value;
+    updateAnimationFieldVisibility();
+  });
+});
+
+document.getElementById('hb-preview-btn').addEventListener('click', () => {
+  const img = document.getElementById('hb-editor-img');
+  applyEditorPreview();
+  void img.offsetWidth;
+  const type = slidePos.animationType;
+  if (type === 'none') return;
+  img.style.transition = 'object-position 3s linear, transform 3s linear';
+  requestAnimationFrame(() => {
+    if (type === 'pan_v') img.style.objectPosition = `${slidePos.x}% ${slidePos.endY}%`;
+    else if (type === 'pan_h') img.style.objectPosition = `${slidePos.endX}% ${slidePos.y}%`;
+    else if (type === 'zoom') img.style.transform = `scale(${slidePos.endZoom / 100})`;
+  });
+});
 
 function renderGrid() {
   const grid = document.getElementById('hb-grid');
@@ -180,10 +235,19 @@ function openEditor(slide) {
     placeholder.style.display = 'block';
   }
 
-  slidePos = slide ? { x: slide.position_x, y: slide.position_y, zoom: slide.zoom || 100 } : { x: 50, y: 50, zoom: 100 };
+  slidePos = slide
+    ? { x: slide.position_x, y: slide.position_y, zoom: slide.zoom || 100,
+        endX: slide.end_position_x, endY: slide.end_position_y, endZoom: slide.end_zoom || 100,
+        animationType: slide.animation_type || 'none' }
+    : { x: 50, y: 50, zoom: 100, endX: 50, endY: 50, endZoom: 100, animationType: 'none' };
   document.getElementById('hb-pos-x').value = slidePos.x;
   document.getElementById('hb-pos-y').value = slidePos.y;
   document.getElementById('hb-zoom').value = slidePos.zoom;
+  document.getElementById('hb-end-pos-x').value = slidePos.endX;
+  document.getElementById('hb-end-pos-y').value = slidePos.endY;
+  document.getElementById('hb-end-zoom').value = slidePos.endZoom;
+  document.querySelectorAll('input[name="hb-animation-type"]').forEach(r => { r.checked = r.value === slidePos.animationType; });
+  updateAnimationFieldVisibility();
   applyEditorPreview();
 
   document.getElementById('hb-caption').value = slide ? (slide.caption || '') : '';
@@ -217,10 +281,15 @@ document.getElementById('hb-editor-file-input').addEventListener('change', (e) =
   img.src = URL.createObjectURL(file);
   img.style.display = 'block';
   document.getElementById('hb-editor-img-placeholder').style.display = 'none';
-  slidePos = { x: 50, y: 50, zoom: 100 };
+  slidePos = { x: 50, y: 50, zoom: 100, endX: 50, endY: 50, endZoom: 100, animationType: 'none' };
   document.getElementById('hb-pos-x').value = 50;
   document.getElementById('hb-pos-y').value = 50;
   document.getElementById('hb-zoom').value = 100;
+  document.getElementById('hb-end-pos-x').value = 50;
+  document.getElementById('hb-end-pos-y').value = 50;
+  document.getElementById('hb-end-zoom').value = 100;
+  document.querySelectorAll('input[name="hb-animation-type"]').forEach(r => { r.checked = r.value === 'none'; });
+  updateAnimationFieldVisibility();
   applyEditorPreview();
   updateSaveButtonState();
 });
@@ -240,6 +309,10 @@ document.getElementById('hb-editor-save').addEventListener('click', async () => 
   fd.append('position_x', slidePos.x);
   fd.append('position_y', slidePos.y);
   fd.append('zoom', slidePos.zoom);
+  fd.append('animation_type', slidePos.animationType);
+  fd.append('end_position_x', slidePos.endX);
+  fd.append('end_position_y', slidePos.endY);
+  fd.append('end_zoom', slidePos.endZoom);
   fd.append('caption', document.getElementById('hb-caption').value.trim());
   fd.append('credit', document.getElementById('hb-credit').value.trim());
   fd.append('link', document.getElementById('hb-link').value.trim());
