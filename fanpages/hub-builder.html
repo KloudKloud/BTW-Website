@@ -86,6 +86,9 @@
 
     <div id="hb-end-frame-field" style="display:none;">
       <p class="hb-sliders-caption">End Frame</p>
+      <div class="char-editor-ref-wrap" id="hb-end-preview-wrap" style="max-width: 520px; aspect-ratio: 21 / 9; cursor: default;">
+        <div id="hb-end-preview-bg" class="hb-preview-bg"></div>
+      </div>
       <div class="hb-sliders">
         <label id="hb-end-pos-x-label" style="display:none;">Horizontal <input type="range" id="hb-end-pos-x" min="0" max="100" value="50" /></label>
         <label id="hb-end-pos-y-label" style="display:none;">Vertical <input type="range" id="hb-end-pos-y" min="0" max="100" value="50" /></label>
@@ -141,6 +144,7 @@ let editingId = null;
 let selectedFile = null;
 let slidePos = { x: 50, y: 50, zoom: 100, endX: 50, endY: 50, endZoom: 100, animationType: 'none' };
 let currentImageDims = null;
+let currentImageUrl = null;
 
 // Pan + zoom via background-image — see fanpages/index.html for why
 // object-fit + transform:scale() doesn't work for this (the scale happens
@@ -173,12 +177,30 @@ function applyEditorPreview() {
   bg.style.backgroundSize = `${size.w}% ${size.h}%`;
   bg.style.backgroundPosition = `${slidePos.x}% ${slidePos.y}%`;
 }
-document.getElementById('hb-pos-x').addEventListener('input', (e) => { slidePos.x = parseInt(e.target.value, 10); applyEditorPreview(); });
-document.getElementById('hb-pos-y').addEventListener('input', (e) => { slidePos.y = parseInt(e.target.value, 10); applyEditorPreview(); });
-document.getElementById('hb-zoom').addEventListener('input', (e) => { slidePos.zoom = parseInt(e.target.value, 10); applyEditorPreview(); });
-document.getElementById('hb-end-pos-x').addEventListener('input', (e) => { slidePos.endX = parseInt(e.target.value, 10); });
-document.getElementById('hb-end-pos-y').addEventListener('input', (e) => { slidePos.endY = parseInt(e.target.value, 10); });
-document.getElementById('hb-end-zoom').addEventListener('input', (e) => { slidePos.endZoom = parseInt(e.target.value, 10); });
+// End-frame preview — shows exactly what the animation will settle on, live
+// as any of the start/end sliders move (the axis not being animated stays
+// pinned to the start value, matching what playSlideAnimation() actually does).
+function updateEndPreview() {
+  const bg = document.getElementById('hb-end-preview-bg');
+  bg.style.transition = 'none';
+  if (!currentImageDims || slidePos.animationType === 'none') return;
+  const boxW = bg.clientWidth, boxH = bg.clientHeight;
+  let x = slidePos.x, y = slidePos.y, zoom = slidePos.zoom;
+  if (slidePos.animationType === 'pan_v') y = slidePos.endY;
+  else if (slidePos.animationType === 'pan_h') x = slidePos.endX;
+  else if (slidePos.animationType === 'zoom') zoom = slidePos.endZoom;
+  const size = coverBgSize(currentImageDims, boxW, boxH, zoom);
+  bg.style.backgroundImage = `url(${currentImageUrl})`;
+  bg.style.backgroundSize = `${size.w}% ${size.h}%`;
+  bg.style.backgroundPosition = `${x}% ${y}%`;
+}
+
+document.getElementById('hb-pos-x').addEventListener('input', (e) => { slidePos.x = parseInt(e.target.value, 10); applyEditorPreview(); updateEndPreview(); });
+document.getElementById('hb-pos-y').addEventListener('input', (e) => { slidePos.y = parseInt(e.target.value, 10); applyEditorPreview(); updateEndPreview(); });
+document.getElementById('hb-zoom').addEventListener('input', (e) => { slidePos.zoom = parseInt(e.target.value, 10); applyEditorPreview(); updateEndPreview(); });
+document.getElementById('hb-end-pos-x').addEventListener('input', (e) => { slidePos.endX = parseInt(e.target.value, 10); updateEndPreview(); });
+document.getElementById('hb-end-pos-y').addEventListener('input', (e) => { slidePos.endY = parseInt(e.target.value, 10); updateEndPreview(); });
+document.getElementById('hb-end-zoom').addEventListener('input', (e) => { slidePos.endZoom = parseInt(e.target.value, 10); updateEndPreview(); });
 
 function updateAnimationFieldVisibility() {
   const type = slidePos.animationType;
@@ -186,6 +208,7 @@ function updateAnimationFieldVisibility() {
   document.getElementById('hb-end-pos-x-label').style.display = type === 'pan_h' ? 'flex' : 'none';
   document.getElementById('hb-end-pos-y-label').style.display = type === 'pan_v' ? 'flex' : 'none';
   document.getElementById('hb-end-zoom-label').style.display = type === 'zoom' ? 'flex' : 'none';
+  updateEndPreview();
 }
 document.querySelectorAll('input[name="hb-animation-type"]').forEach(radio => {
   radio.addEventListener('change', () => {
@@ -265,10 +288,12 @@ async function openEditor(slide) {
   const bg = document.getElementById('hb-editor-preview-bg');
   const placeholder = document.getElementById('hb-editor-img-placeholder');
   if (slide) {
+    currentImageUrl = slide.image_url;
     currentImageDims = await loadImageDims(slide.image_url);
     bg.style.backgroundImage = `url(${slide.image_url})`;
     placeholder.style.display = 'none';
   } else {
+    currentImageUrl = null;
     currentImageDims = null;
     bg.style.backgroundImage = '';
     placeholder.style.display = 'block';
@@ -317,6 +342,7 @@ document.getElementById('hb-editor-file-input').addEventListener('change', async
   if (!file) return;
   selectedFile = file;
   const objectUrl = URL.createObjectURL(file);
+  currentImageUrl = objectUrl;
   currentImageDims = await loadImageDims(objectUrl);
   const bg = document.getElementById('hb-editor-preview-bg');
   bg.style.backgroundImage = `url(${objectUrl})`;
