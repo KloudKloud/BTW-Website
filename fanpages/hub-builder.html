@@ -31,6 +31,8 @@
     .hb-sliders-caption { text-align: center; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #999; margin-bottom: 0.5rem; }
     .hb-preview-bg { position: absolute; inset: 0; background-repeat: no-repeat; }
     .hb-sliders label { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: #999; }
+    .hb-slider-locked { opacity: 0.4; }
+    .hb-slider-locked input[type="range"] { cursor: not-allowed; }
     .hb-sliders input[type="range"] { width: 130px; }
   </style>
 </head>
@@ -81,7 +83,7 @@
         <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="pan_h" /><span>Pan ↔</span></label>
         <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="zoom" /><span>Zoom</span></label>
       </div>
-      <p class="char-editor-facts-hint">Slowly eases from the start frame above to the end frame below over the slide's full 15 seconds on screen.</p>
+      <p class="char-editor-facts-hint">Slowly eases from the start frame above to the end frame below over the slide's full 15 seconds on screen. Picking an animation locks the start frame sliders above exactly where they are — adjust the crop first, then choose the animation.</p>
     </div>
 
     <div id="hb-end-frame-field" style="display:none;">
@@ -208,6 +210,17 @@ function updateAnimationFieldVisibility() {
   document.getElementById('hb-end-pos-x-label').style.display = type === 'pan_h' ? 'flex' : 'none';
   document.getElementById('hb-end-pos-y-label').style.display = type === 'pan_v' ? 'flex' : 'none';
   document.getElementById('hb-end-zoom-label').style.display = type === 'zoom' ? 'flex' : 'none';
+
+  // Once an animation is picked, the start frame is locked exactly where it
+  // was at that moment — the end frame then animates FROM that locked point,
+  // instead of the start sliders being free to drift out from under it.
+  const locked = type !== 'none';
+  ['hb-pos-x', 'hb-pos-y', 'hb-zoom'].forEach(id => {
+    const input = document.getElementById(id);
+    input.disabled = locked;
+    input.closest('label').classList.toggle('hb-slider-locked', locked);
+  });
+
   updateEndPreview();
 }
 document.querySelectorAll('input[name="hb-animation-type"]').forEach(radio => {
