@@ -3,11 +3,16 @@
 // own DOM shape — kept separate so the fetch/auth logic isn't duplicated
 // four times.
 window.ModeratorSite = {
+  // `slug` is either just an owner's identity ("veekitpaws" — their one
+  // story) or a full "owner/story" path now that authors can have several
+  // stories. The by-path route is the precise lookup; plain single-segment
+  // slugs still work via the legacy route for anything not yet story-aware.
   async load(slug) {
     const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const url = slug.includes('/') ? `/api/moderator-sites/by-path/${slug}` : `/api/moderator-sites/${slug}`;
     try {
-      const res = await fetch(`/api/moderator-sites/${slug}`, { headers });
+      const res = await fetch(url, { headers });
       if (!res.ok) return null;
       return await res.json();
     } catch { return null; }

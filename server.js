@@ -350,6 +350,14 @@ async function initDb() {
   await pool.query(`UPDATE moderator_sites SET story_path = 'blue/above-all-else' WHERE slug = 'blue' AND story_path = 'blue'`)
     .catch(e => console.error('moderator_sites blue story_path fix:', e.message));
 
+  // "One story per account" is over — slug (the owner's identity) can no
+  // longer be the unique key since multiple stories share it; story_path
+  // (the actual per-story URL) becomes the real unique identifier instead.
+  await pool.query(`ALTER TABLE moderator_sites DROP CONSTRAINT IF EXISTS moderator_sites_slug_key`)
+    .catch(e => console.error('moderator_sites slug-unique drop migration:', e.message));
+  await pool.query(`ALTER TABLE moderator_sites ADD CONSTRAINT moderator_sites_story_path_key UNIQUE (story_path)`)
+    .catch(e => { if (!['42710', '42P07'].includes(e.code)) console.error('moderator_sites story_path-unique add migration:', e.message); });
+
   // Following — generic user-to-user, powers each author's /fanpages/:username profile
   await pool.query(`
     CREATE TABLE IF NOT EXISTS user_follows (
@@ -412,11 +420,13 @@ async function initDb() {
     ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS file_name TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('moderator_chapters authoring migration:', e.message));
 
-  // Seed Blue's site row if it doesn't exist yet, once his account is registered
+  // Seed Blue's site row if it doesn't exist yet, once his account is registered.
+  // slug is no longer unique (authors can have multiple stories), so this is
+  // guarded with an explicit existence check instead of ON CONFLICT.
   await pool.query(`
     INSERT INTO moderator_sites (slug, owner_user_id)
-    SELECT 'blue', u.id FROM users u WHERE u.email_hash = $1
-    ON CONFLICT (slug) DO NOTHING
+    SELECT 'blue', u.id FROM users u
+    WHERE u.email_hash = $1 AND NOT EXISTS (SELECT 1 FROM moderator_sites WHERE slug = 'blue')
   `, [hashEmail('xrcblue@gmail.com')]).catch(e => console.error('moderator site seed:', e.message));
 
   // Migrate plaintext emails → encrypted + hash
@@ -2125,8 +2135,19 @@ const uploadChapter = multer({
   },
 });
 
+// Authors can own multiple stories now, so "my site" is ambiguous without a
+// hint — every story-template page sends its own story_path (owner/story) in
+// the X-Story-Path header. Falls back to "whichever site is theirs" for any
+// caller that doesn't send it yet (single-story authors, or older pages).
 async function getMySite(req) {
-  const { rows: [site] } = await pool.query('SELECT * FROM moderator_sites WHERE owner_user_id = $1', [req.user.id]);
+  const storyPath = req.headers['x-story-path'];
+  if (storyPath) {
+    const { rows: [site] } = await pool.query(
+      'SELECT * FROM moderator_sites WHERE story_path = $1 AND owner_user_id = $2', [storyPath, req.user.id]
+    );
+    if (site) return site;
+  }
+  const { rows: [site] } = await pool.query('SELECT * FROM moderator_sites WHERE owner_user_id = $1 ORDER BY created_at ASC LIMIT 1', [req.user.id]);
   return site || null;
 }
 
@@ -2222,18 +2243,14 @@ app.delete('/api/admin/hub-billboard/:id', requireAuth, requireAdmin, async (req
   res.json({ message: 'Deleted.' });
 });
 
-// POST /api/moderator/site/create — the Create Story onboarding flow. One
-// story per account for now (mirrors "My Stories" and every other place in
-// the codebase that assumes a single moderator_sites row per owner). slug
-// doubles as the person's fanpage identity, so it's just their username;
-// story_path is the actual /fanpages/<slug>/<story> URL, slugified from the
-// title they chose and de-duped if it collides with an existing story.
+// POST /api/moderator/site/create — the Create Story onboarding flow.
+// Authors can have multiple stories; slug stays their username (their
+// fanpage identity), while story_path is the unique per-story
+// /fanpages/<slug>/<story> URL, slugified from the title and de-duped if it
+// collides with an existing story (their own or anyone else's).
 app.post('/api/moderator/site/create', requireAuth, async (req, res) => {
   const title = String(req.body.title || '').trim().slice(0, 60);
   if (!title) return res.status(400).json({ error: 'A title is required.' });
-
-  const { rows: existing } = await pool.query('SELECT id FROM moderator_sites WHERE owner_user_id = $1', [req.user.id]);
-  if (existing.length) return res.status(409).json({ error: 'You already have a story.' });
 
   const { rows: [user] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
   const slug = user.username.toLowerCase();
@@ -2246,11 +2263,16 @@ app.post('/api/moderator/site/create', requireAuth, async (req, res) => {
     suffix++;
   }
 
-  const { rows: [site] } = await pool.query(
-    `INSERT INTO moderator_sites (slug, owner_user_id, site_title, story_path) VALUES ($1, $2, $3, $4) RETURNING *`,
-    [slug, req.user.id, title, storyPath]
-  );
-  res.json({ site });
+  try {
+    const { rows: [site] } = await pool.query(
+      `INSERT INTO moderator_sites (slug, owner_user_id, site_title, story_path) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [slug, req.user.id, title, storyPath]
+    );
+    res.json({ site });
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'That story URL is already taken — please try again.' });
+    throw e;
+  }
 });
 
 // GET /api/moderator-sites — public list of every fanpage, for the hub's
@@ -2316,8 +2338,21 @@ app.get('/api/bookmarks', requireAuth, async (req, res) => {
   });
 });
 
-app.post('/api/bookmarks/:slug', requireAuth, async (req, res) => {
-  const { rows: [site] } = await pool.query('SELECT id FROM moderator_sites WHERE slug = $1', [req.params.slug]);
+// Single-segment :slug still works for an author's only story (or as a
+// fallback); by-path/:owner/:story is the precise lookup once an author has
+// more than one, since slug (their identity) is no longer unique.
+async function findSiteBySlugParam(req) {
+  const { owner, story } = req.params;
+  if (owner && story) {
+    const { rows: [site] } = await pool.query('SELECT id FROM moderator_sites WHERE story_path = $1', [`${owner}/${story}`]);
+    return site || null;
+  }
+  const { rows: [site] } = await pool.query('SELECT id FROM moderator_sites WHERE slug = $1 ORDER BY created_at ASC LIMIT 1', [req.params.slug]);
+  return site || null;
+}
+
+app.post(['/api/bookmarks/:slug', '/api/bookmarks/by-path/:owner/:story'], requireAuth, async (req, res) => {
+  const site = await findSiteBySlugParam(req);
   if (!site) return res.status(404).json({ error: 'Not found.' });
   await pool.query(
     'INSERT INTO moderator_bookmarks (user_id, site_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
@@ -2326,8 +2361,8 @@ app.post('/api/bookmarks/:slug', requireAuth, async (req, res) => {
   res.json({ message: 'Bookmarked.' });
 });
 
-app.delete('/api/bookmarks/:slug', requireAuth, async (req, res) => {
-  const { rows: [site] } = await pool.query('SELECT id FROM moderator_sites WHERE slug = $1', [req.params.slug]);
+app.delete(['/api/bookmarks/:slug', '/api/bookmarks/by-path/:owner/:story'], requireAuth, async (req, res) => {
+  const site = await findSiteBySlugParam(req);
   if (!site) return res.status(404).json({ error: 'Not found.' });
   await pool.query('DELETE FROM moderator_bookmarks WHERE user_id = $1 AND site_id = $2', [req.user.id, site.id]);
   res.json({ message: 'Removed.' });
@@ -2561,14 +2596,33 @@ app.put('/api/account/featured', requireAuth, async (req, res) => {
 
 // GET /api/moderator-sites/:slug — public read, powers the static moderator pages.
 // Spicy gallery items are only included when the request carries a valid token,
-// mirroring how BTW's own /spicy page gates content.
+// mirroring how BTW's own /spicy page gates content. Kept for callers with only
+// a single-segment identity (an author's one-and-only story, or legacy links);
+// authors with multiple stories are looked up by the more specific story_path
+// route below instead, since slug (their identity) is no longer unique.
 app.get('/api/moderator-sites/:slug', async (req, res) => {
-  const { rows: [site] } = await pool.query(
+  await sendSiteLookup(
     `SELECT ms.*, u.display_name AS author_display_name, u.username AS author_username, u.avatar AS author_avatar
      FROM moderator_sites ms JOIN users u ON u.id = ms.owner_user_id
-     WHERE ms.slug = $1`,
-    [req.params.slug]
+     WHERE ms.slug = $1 ORDER BY ms.created_at ASC LIMIT 1`,
+    [req.params.slug], req, res
   );
+});
+
+// GET /api/moderator-sites/by-path/:owner/:story — the precise per-story
+// lookup, used by every story-template page now that one author can have
+// several stories sharing the same slug/identity.
+app.get('/api/moderator-sites/by-path/:owner/:story', async (req, res) => {
+  await sendSiteLookup(
+    `SELECT ms.*, u.display_name AS author_display_name, u.username AS author_username, u.avatar AS author_avatar
+     FROM moderator_sites ms JOIN users u ON u.id = ms.owner_user_id
+     WHERE ms.story_path = $1`,
+    [`${req.params.owner}/${req.params.story}`], req, res
+  );
+});
+
+async function sendSiteLookup(query, params, req, res) {
+  const { rows: [site] } = await pool.query(query, params);
   if (!site) return res.status(404).json({ error: 'Not found.' });
 
   let viewerId = null;
@@ -2626,7 +2680,7 @@ app.get('/api/moderator-sites/:slug', async (req, res) => {
     gallery_sketches: gallery.filter(g => g.category === 'sketches'),
     gallery_spicy:    loggedIn ? gallery.filter(g => g.category === 'spicy') : [],
   });
-});
+}
 
 // GET /api/moderator-sites/:slug/is-owner — does the logged-in user own THIS
 // specific site? (Not just "are they a moderator somewhere" — important once
@@ -2635,6 +2689,17 @@ app.get('/api/moderator-sites/:slug', async (req, res) => {
 app.get('/api/moderator-sites/:slug/is-owner', requireAuth, async (req, res) => {
   const { rows: [site] } = await pool.query('SELECT owner_user_id FROM moderator_sites WHERE slug = $1', [req.params.slug]);
   res.json({ isOwner: !!site && site.owner_user_id === req.user.id });
+});
+
+// GET /api/moderator/my-sites — every story the logged-in user owns, for the
+// "My Stories" page. Doesn't go through requireModerator since that resolves
+// to a single story — this deliberately lists all of them.
+app.get('/api/moderator/my-sites', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT id, slug, story_path, site_title, cover_url, banner_url FROM moderator_sites WHERE owner_user_id = $1 ORDER BY created_at ASC',
+    [req.user.id]
+  );
+  res.json({ sites: rows });
 });
 
 // ── Site (Above All Else / Meet Blue text + links) ────────────────────────────

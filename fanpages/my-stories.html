@@ -8,24 +8,129 @@
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; }
-    .ms-wrap { max-width: 640px; margin: 0 auto; padding: 4.5rem 2rem; text-align: center; }
-    .ms-wrap h1 { font-family: 'Cinzel', Georgia, serif; font-size: 2rem; margin-bottom: 1rem; color: #f0c060; }
-    .ms-wrap p { color: #999; font-size: 1rem; line-height: 1.8; }
+    body {
+      background: #0d0d0d;
+      color: #f0f0f0;
+      font-family: 'Lato', Arial, sans-serif;
+      min-height: 100vh;
+    }
+    a { color: inherit; }
+
+    .lib-bg-wrap { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: #0d0d0d; }
+    .lib-bg-img { width: 100%; height: 100%; object-fit: cover; filter: blur(20px); transform: scale(1.1); opacity: 0.4; }
+    .lib-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.78); }
+
+    .lib-main { max-width: 1100px; margin: 0 auto; padding: 3rem 2rem 5rem; }
+    .lib-header-row { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 1.5rem; }
+    .lib-title { font-family: 'Cinzel', Georgia, serif; font-size: 2.2rem; }
+    .lib-private { display: flex; align-items: center; gap: 0.4rem; color: #999; font-size: 0.85rem; }
+
+    .lib-tabs { display: flex; gap: 2rem; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 2.5rem; }
+    .lib-tab { color: #f0f0f0; border-bottom-color: #d97a72; font-size: 0.95rem; font-weight: 700; padding: 0.85rem 0; border-bottom: 2px solid #d97a72; }
+
+    .lib-section-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 1.25rem; }
+    .lib-empty { color: #999; font-size: 0.92rem; padding: 2rem 0; }
+
+    .lib-story-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1.5rem 1.1rem; }
+    .lib-card { text-decoration: none; color: inherit; }
+    .lib-card-cover {
+      width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; display: block;
+      background: #1e1e1e; border: 1px solid rgba(255,255,255,0.08); transition: transform 0.15s;
+    }
+    .lib-card:hover .lib-card-cover { transform: translateY(-4px); }
+    .lib-card-title { font-size: 0.9rem; font-weight: 700; margin-top: 0.5rem; line-height: 1.3; }
+    .lib-card-edit-hint { font-size: 0.78rem; color: #999; margin-top: 0.15rem; }
+
+    .lib-card--create .lib-card-cover {
+      display: flex; align-items: center; justify-content: center;
+      border: 2px dashed rgba(255,255,255,0.18); background: rgba(255,255,255,0.02);
+      font-size: 2.2rem; color: rgba(255,255,255,0.35);
+    }
+    .lib-card--create:hover .lib-card-cover { border-color: #7fa8d9; color: #7fa8d9; background: rgba(127,168,217,0.06); }
+    .lib-card--create .lib-card-title { color: #7fa8d9; }
   </style>
 </head>
 <body>
 
-<div id="fanpages-topbar-root"></div>
-
-<div class="ms-wrap">
-  <h1>My Stories</h1>
-  <p>
-    This is where you'll pick from any story you've published and jump straight into its editor —
-    same view Blue uses for "Above All Else." Coming soon!
-  </p>
+<div class="lib-bg-wrap">
+  <img class="lib-bg-img" src="/images/gallery/close_6.png" alt="" />
+  <div class="lib-bg-overlay"></div>
 </div>
 
+<div id="fanpages-topbar-root"></div>
+
+<main class="lib-main">
+  <div class="lib-header-row">
+    <h1 class="lib-title">My Stories</h1>
+    <span class="lib-private">🔒 Private</span>
+  </div>
+
+  <div class="lib-tabs">
+    <span class="lib-tab">Your Stories</span>
+  </div>
+
+  <section id="ms-stories-section">
+    <div id="ms-stories-grid"><p class="lib-empty">Loading…</p></div>
+  </section>
+</main>
+
 <script src="/fanpages/fanpages-nav.js"></script>
+<script>
+  const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+  const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function storyCard(site) {
+    const a = document.createElement('a');
+    a.className = 'lib-card';
+    // Own story — opens straight into the editor, since there's no reason
+    // to land on the read-only view of a page you're about to edit.
+    a.href = `/fanpages/${site.story_path || site.slug}?edit=1`;
+    const cover = site.cover_url || '/images/gallery/kloudsaphbedroom_1.png';
+    a.innerHTML = `
+      <img class="lib-card-cover" src="${cover}" alt="${escapeHtml(site.site_title)} cover" loading="lazy" />
+      <p class="lib-card-title">${escapeHtml(site.site_title)}</p>
+      <p class="lib-card-edit-hint">✏️ Edit this story</p>
+    `;
+    return a;
+  }
+
+  function createCard() {
+    const a = document.createElement('a');
+    a.className = 'lib-card lib-card--create';
+    a.href = '/fanpages/create';
+    a.innerHTML = `
+      <div class="lib-card-cover">➕</div>
+      <p class="lib-card-title">Create New Story</p>
+    `;
+    return a;
+  }
+
+  (async () => {
+    const grid = document.getElementById('ms-stories-grid');
+    if (!token) {
+      grid.innerHTML = `<p class="lib-empty"><a href="/login?from=${encodeURIComponent('/fanpages/my-stories')}" style="color:#7fa8d9;">Log in</a> to see and manage your stories.</p>`;
+      return;
+    }
+    try {
+      const res = await fetch('/api/moderator/my-sites', { headers: authHeaders() });
+      const data = await res.json();
+      const sites = data.sites || [];
+
+      const wrap = document.createElement('div');
+      wrap.className = 'lib-story-grid';
+      sites.forEach(s => wrap.appendChild(storyCard(s)));
+      wrap.appendChild(createCard());
+      grid.innerHTML = '';
+      grid.appendChild(wrap);
+    } catch {
+      grid.innerHTML = '<p class="lib-empty">Couldn\'t load your stories right now.</p>';
+    }
+  })();
+</script>
+
 </body>
 </html>
