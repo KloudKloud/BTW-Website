@@ -67,8 +67,13 @@
       <div class="art-view-info">
         <h1 class="art-view-title" id="gallery-detail-title"></h1>
       </div>
+      <button class="art-view-like" id="gallery-detail-like" type="button" aria-label="Like">
+        <span id="gallery-detail-like-icon">♡</span> <span id="gallery-detail-like-count">0</span>
+      </button>
 
       <div class="art-view-desc" id="gallery-detail-desc"></div>
+
+      <div id="gallery-detail-nav" class="art-nav"></div>
     </div>
 
     <div class="wiki-side-col">
@@ -106,6 +111,18 @@
     </div>
     <input type="file" id="gallery-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
 
+    <div class="mod-field" id="gallery-editor-preview-field" style="display:none;">
+      <label>Gallery Preview Crop</label>
+      <p class="char-editor-facts-hint" style="margin-top:0; margin-bottom:0.6rem;">Gallery tiles are smaller and cropped — drag the sliders to pick the best part of your art to show off.</p>
+      <div class="gallery-preview-crop-wrap">
+        <img id="gallery-editor-preview-img" alt="" draggable="false" />
+      </div>
+      <div class="gallery-preview-sliders">
+        <label>H <input type="range" id="gallery-editor-pos-x" min="0" max="100" value="50" /></label>
+        <label>V <input type="range" id="gallery-editor-pos-y" min="0" max="100" value="50" /></label>
+      </div>
+    </div>
+
     <div class="gallery-cat-field">
       <p class="gallery-cat-label">Category</p>
       <div class="gallery-cat-row" id="gallery-editor-cat-row">
@@ -126,13 +143,13 @@
     </div>
 
     <div class="mod-field">
-      <label for="gallery-editor-name">Name</label>
+      <label for="gallery-editor-name">Name <span style="font-weight:400;color:#888;">(optional)</span></label>
       <input class="mod-input" id="gallery-editor-name" maxlength="60" placeholder="Give your piece a title" />
     </div>
 
     <div class="mod-field">
       <label for="gallery-editor-desc">Description <span style="font-weight:400;color:#888;">(use *word* for italics, **word** for bold)</span></label>
-      <textarea class="mod-textarea" id="gallery-editor-desc" placeholder="N/A"></textarea>
+      <textarea class="mod-textarea" id="gallery-editor-desc" placeholder="No description provided"></textarea>
       <p class="char-editor-facts-hint">To credit an artist, write it like this: [Artist Name]&lt;https://link-to-artist&gt;</p>
     </div>
 
@@ -144,8 +161,8 @@
     <p class="mod-panel-msg" id="gallery-editor-msg"></p>
 
     <div class="char-editor-actions">
-      <button class="mod-btn" id="gallery-editor-cancel" type="button">Cancel</button>
       <button class="mod-btn mod-btn--danger" id="gallery-editor-delete" type="button" style="display:none;">Delete</button>
+      <button class="mod-btn" id="gallery-editor-cancel" type="button">Cancel</button>
       <button class="mod-btn" id="gallery-editor-save" type="button" disabled>Post</button>
     </div>
   </div>
@@ -211,7 +228,7 @@ function richText(s) {
   return out;
 }
 function renderGalleryText(s) {
-  if (!s) return '<span style="color:#888;">N/A</span>';
+  if (!s) return '<span style="color:#888;">No description provided</span>';
   const tokens = [];
   const working = String(s).replace(/\[([^\]]+)\]<([^>]+)>/g, (m, label, url) => {
     const safeUrl = /^https?:\/\//i.test(url.trim()) ? url.trim() : '#';
@@ -235,7 +252,9 @@ function renderTiles(items, emptyMsg) {
     const a = document.createElement('a');
     a.className = 'gallery-tile';
     a.href = '#';
-    a.innerHTML = `<img src="${g.image_url}" alt="${g.title || 'Gallery image'}" loading="lazy" draggable="false" />`;
+    const posX = g.position_x != null ? g.position_x : 50;
+    const posY = g.position_y != null ? g.position_y : 50;
+    a.innerHTML = `<img src="${g.image_url}" alt="${g.title || 'Gallery image'}" loading="lazy" draggable="false" style="object-position: ${posX}% ${posY}%;" />`;
     a.addEventListener('click', (e) => { e.preventDefault(); openPostDetail(g, true); });
     grid.appendChild(a);
   });
@@ -296,13 +315,116 @@ function backLabelFor(cat) {
   return '← Back to Gallery';
 }
 
+// ── Slideshow prev/next nav (mirrors the main site's art-view slideshow) ──
+let navPrevItem = null;
+let navNextItem = null;
+
+function truncateLabel(s, n) { return s.length > n ? s.slice(0, n).trimEnd() + '…' : s; }
+
+function siblingsForCategory(cat) {
+  if (cat === 'sketches') return GALLERY_SKETCHES;
+  if (cat === 'spicy') return GALLERY_SPICY;
+  return GALLERY_ART;
+}
+
+function renderDetailNav(item) {
+  const siblings = siblingsForCategory(item.category);
+  const idx = siblings.findIndex(g => String(g.id) === String(item.id));
+  navPrevItem = idx > 0 ? siblings[idx - 1] : null;
+  navNextItem = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : null;
+
+  const navEl = document.getElementById('gallery-detail-nav');
+  navEl.innerHTML = '';
+  if (navPrevItem) {
+    const a = document.createElement('a');
+    a.className = 'art-nav-btn art-nav-prev';
+    a.href = `${STORY_BASE}/gallery?post=${navPrevItem.id}`;
+    a.innerHTML = `← <span class="art-nav-label">${escapeHtml(truncateLabel(navPrevItem.title || 'Previous', 28))}</span>`;
+    a.addEventListener('click', (e) => { e.preventDefault(); openPostDetail(navPrevItem, true); });
+    navEl.appendChild(a);
+  }
+  if (navNextItem) {
+    const a = document.createElement('a');
+    a.className = 'art-nav-btn art-nav-next';
+    a.href = `${STORY_BASE}/gallery?post=${navNextItem.id}`;
+    a.innerHTML = `<span class="art-nav-label">${escapeHtml(truncateLabel(navNextItem.title || 'Next', 28))}</span> →`;
+    a.addEventListener('click', (e) => { e.preventDefault(); openPostDetail(navNextItem, true); });
+    navEl.appendChild(a);
+  }
+}
+
+// Swipe navigation — live drag + slide-out, same feel as the main site's gallery.
+(function () {
+  const page = document.getElementById('gallery-detail-view');
+  let startX = 0, startY = 0, dirLock = null, busy = false, dragging = false;
+  const THRESHOLD = () => window.innerWidth * 0.25;
+
+  document.addEventListener('touchstart', (e) => {
+    if (busy || page.style.display === 'none') return;
+    startX = e.changedTouches[0].screenX;
+    startY = e.changedTouches[0].screenY;
+    dirLock = null; dragging = false;
+    page.style.transition = 'none';
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (busy || page.style.display === 'none') return;
+    const dx = e.changedTouches[0].screenX - startX;
+    const dy = e.changedTouches[0].screenY - startY;
+    if (!dirLock && (Math.abs(dx) > 12 || Math.abs(dy) > 12)) {
+      dirLock = Math.abs(dx) >= Math.abs(dy) * 0.8 ? 'h' : 'v';
+    }
+    if (dirLock === 'h') {
+      e.preventDefault();
+      dragging = true;
+      let dampedDx = dx;
+      if ((dx > 0 && !navPrevItem) || (dx < 0 && !navNextItem)) dampedDx = dx * 0.2;
+      page.style.transform = `translateX(${dampedDx}px)`;
+    }
+  }, { passive: false });
+
+  document.addEventListener('touchend', (e) => {
+    if (busy || page.style.display === 'none') return;
+    const dx = e.changedTouches[0].screenX - startX;
+    if (dirLock !== 'h' || !dragging) {
+      page.style.transition = '';
+      page.style.transform = '';
+      return;
+    }
+    if (Math.abs(dx) < THRESHOLD()) {
+      page.style.transition = 'transform 0.22s cubic-bezier(0.4,0,0.2,1)';
+      page.style.transform = '';
+      setTimeout(() => { page.style.transition = ''; }, 250);
+      return;
+    }
+    const target = dx < 0 ? navNextItem : navPrevItem;
+    if (!target) {
+      page.style.transition = 'transform 0.22s cubic-bezier(0.4,0,0.2,1)';
+      page.style.transform = '';
+      setTimeout(() => { page.style.transition = ''; }, 250);
+      return;
+    }
+    busy = true;
+    page.style.transition = 'transform 0.25s cubic-bezier(0.4,0,0.2,1)';
+    page.style.transform = `translateX(${dx < 0 ? '-110vw' : '110vw'})`;
+    setTimeout(() => {
+      page.style.transition = '';
+      page.style.transform = '';
+      busy = false;
+      openPostDetail(target, true);
+    }, 240);
+  }, { passive: true });
+})();
+
 function openPostDetail(item, pushHistory) {
   currentDetailItem = item;
   document.getElementById('gallery-detail-img').src = item.image_url;
   document.getElementById('gallery-detail-img').alt = item.title || '';
-  document.getElementById('gallery-detail-title').textContent = item.title || 'Untitled';
+  document.getElementById('gallery-detail-title').textContent = item.title || 'No title provided';
   document.getElementById('gallery-detail-desc').innerHTML = renderGalleryText(item.description);
   document.getElementById('gallery-detail-back').textContent = backLabelFor(item.category);
+  renderDetailNav(item);
+  updateLikeUI(item);
 
   document.getElementById('gallery-grid-view').style.display = 'none';
   document.getElementById('gallery-detail-view').style.display = 'block';
@@ -335,6 +457,28 @@ document.getElementById('gallery-detail-back').addEventListener('click', (e) => 
   closePostDetail(true);
 });
 
+// ── Gallery post likes ───────────────────────────────────────────────────
+function updateLikeUI(item) {
+  document.getElementById('gallery-detail-like-icon').textContent = item.liked ? '♥' : '♡';
+  document.getElementById('gallery-detail-like-count').textContent = item.like_count || 0;
+  document.getElementById('gallery-detail-like').classList.toggle('liked', !!item.liked);
+}
+
+document.getElementById('gallery-detail-like').addEventListener('click', async () => {
+  if (!token) { window.location.href = `/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+  if (!currentDetailItem) return;
+  const item = currentDetailItem;
+  const method = item.liked ? 'DELETE' : 'POST';
+  try {
+    const res = await fetch(`/api/moderator/gallery/${item.id}/like`, { method, headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    item.liked = data.liked;
+    item.like_count = data.like_count;
+    updateLikeUI(item);
+  } catch {}
+});
+
 window.addEventListener('popstate', () => {
   const id = new URLSearchParams(window.location.search).get('post');
   if (!id) { closePostDetail(false); return; }
@@ -346,6 +490,25 @@ window.addEventListener('popstate', () => {
 // ── Create/Edit modal ────────────────────────────────────────────────────
 let editingPostId = null;
 let selectedFile = null;
+let galleryPos = { x: 50, y: 50 };
+
+function applyGalleryPreviewPosition() {
+  document.getElementById('gallery-editor-preview-img').style.objectPosition = `${galleryPos.x}% ${galleryPos.y}%`;
+}
+function showGalleryPreview(src) {
+  const previewImg = document.getElementById('gallery-editor-preview-img');
+  previewImg.src = src;
+  applyGalleryPreviewPosition();
+  document.getElementById('gallery-editor-preview-field').style.display = 'block';
+}
+document.getElementById('gallery-editor-pos-x').addEventListener('input', (e) => {
+  galleryPos.x = parseInt(e.target.value, 10);
+  applyGalleryPreviewPosition();
+});
+document.getElementById('gallery-editor-pos-y').addEventListener('input', (e) => {
+  galleryPos.y = parseInt(e.target.value, 10);
+  applyGalleryPreviewPosition();
+});
 
 function getSelectedCategory() {
   const checked = document.querySelector('input[name="gallery-editor-category"]:checked');
@@ -358,12 +521,10 @@ function setSelectedCategory(category) {
 }
 
 function updateSaveButtonState() {
-  const name = document.getElementById('gallery-editor-name').value.trim();
   const consent = editingPostId || document.getElementById('gallery-editor-consent').checked;
   const hasImage = !!selectedFile || !!editingPostId;
-  document.getElementById('gallery-editor-save').disabled = !(name && consent && hasImage);
+  document.getElementById('gallery-editor-save').disabled = !(consent && hasImage);
 }
-document.getElementById('gallery-editor-name').addEventListener('input', updateSaveButtonState);
 document.getElementById('gallery-editor-consent').addEventListener('change', updateSaveButtonState);
 
 function openGalleryEditor(item) {
@@ -371,7 +532,6 @@ function openGalleryEditor(item) {
   selectedFile = null;
 
   document.getElementById('gallery-editor-title').textContent = item ? 'Edit Gallery Post' : 'Create Gallery Post';
-  document.getElementById('gallery-editor-cancel').style.display = item ? 'none' : '';
   document.getElementById('gallery-editor-delete').style.display = item ? '' : 'none';
   document.getElementById('gallery-editor-save').textContent = item ? 'Save and Close' : 'Post';
 
@@ -381,9 +541,17 @@ function openGalleryEditor(item) {
     img.src = item.image_url;
     img.style.display = 'block';
     placeholder.style.display = 'none';
+    galleryPos = { x: item.position_x || 50, y: item.position_y || 50 };
+    document.getElementById('gallery-editor-pos-x').value = galleryPos.x;
+    document.getElementById('gallery-editor-pos-y').value = galleryPos.y;
+    showGalleryPreview(item.image_url);
   } else {
     img.style.display = 'none';
     placeholder.style.display = 'block';
+    galleryPos = { x: 50, y: 50 };
+    document.getElementById('gallery-editor-pos-x').value = 50;
+    document.getElementById('gallery-editor-pos-y').value = 50;
+    document.getElementById('gallery-editor-preview-field').style.display = 'none';
   }
 
   setSelectedCategory(item ? item.category : 'sfw');
@@ -413,10 +581,16 @@ document.getElementById('gallery-editor-file-input').addEventListener('change', 
   const file = e.target.files[0];
   if (!file) return;
   selectedFile = file;
+  const objectUrl = URL.createObjectURL(file);
   const img = document.getElementById('gallery-editor-img');
-  img.src = URL.createObjectURL(file);
+  img.src = objectUrl;
   img.style.display = 'block';
   document.getElementById('gallery-editor-img-placeholder').style.display = 'none';
+  // A newly-picked image resets the crop — the old position no longer means anything for different art.
+  galleryPos = { x: 50, y: 50 };
+  document.getElementById('gallery-editor-pos-x').value = 50;
+  document.getElementById('gallery-editor-pos-y').value = 50;
+  showGalleryPreview(objectUrl);
   updateSaveButtonState();
 });
 
@@ -488,11 +662,6 @@ document.getElementById('gallery-editor-save').addEventListener('click', async (
     msgEl.textContent = 'Please upload an image.';
     return;
   }
-  if (!name) {
-    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
-    msgEl.textContent = 'Name is required.';
-    return;
-  }
   if (!editingPostId && !consent) {
     msgEl.className = 'mod-panel-msg mod-panel-msg--error';
     msgEl.textContent = 'Please confirm the art belongs to you before posting.';
@@ -505,6 +674,8 @@ document.getElementById('gallery-editor-save').addEventListener('click', async (
   fd.append('category', category);
   fd.append('title', name);
   fd.append('description', document.getElementById('gallery-editor-desc').value.trim());
+  fd.append('position_x', galleryPos.x);
+  fd.append('position_y', galleryPos.y);
 
   const saveBtn = document.getElementById('gallery-editor-save');
   saveBtn.disabled = true;

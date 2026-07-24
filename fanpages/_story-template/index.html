@@ -154,6 +154,33 @@
           </div>
         </div>
       </section>
+
+      <section class="wiki-section wiki-tags-section">
+        <div class="wiki-tags-title-row">
+          <h2 class="wiki-section-title">🏷️ Tags</h2>
+          <button class="wiki-tags-tip-icon" id="tags-tip-icon" type="button" aria-label="Tag tips" style="display:none;">ⓘ</button>
+          <div class="wiki-tags-tip-popover" id="tags-tip-popover" hidden>
+            Tag up to 100 simple, relevant, searchable tags to help your story be discovered! For example: Pokemon, Furry, Mystery, Love, Ships, Umbreon, Lucario, Sexual_Intimacy... - Use "_" instead of spaces. Enter tags one at a time. Duplicate tags will be auto-deleted for your convienency. No need to tag specific character names: your character names are tied inside of your story and will be searchable in meta-data by default. Still tag species or other relevant traits about them that you feel could attract readers.
+          </div>
+          <span class="wiki-tags-count" id="tags-count" style="display:none;">0/100</span>
+        </div>
+        <div class="wiki-rule"></div>
+
+        <div class="wiki-tags-wrap" id="site-tags-wrap">
+          <div class="wiki-tags-display" id="site-tags-display">
+            <p class="wiki-tags-empty">No tags available</p>
+          </div>
+          <div class="wiki-tags-fade" id="site-tags-fade" hidden>
+            <button class="wiki-tags-expand-btn" id="site-tags-expand-btn" type="button">Click to show all tags</button>
+          </div>
+        </div>
+
+        <div class="wiki-tags-editor" id="site-tags-editor" style="display:none;">
+          <div class="wiki-tags-input-box" id="tags-input-box">
+            <input type="text" class="wiki-tags-input" id="tags-text-input" placeholder="Type a tag and press Enter…" />
+          </div>
+        </div>
+      </section>
     </div>
 
     <!-- Side column -->
@@ -371,6 +398,8 @@ function populateDisplay() {
     bannerImg.src = targetBannerSrc;
   }
 
+  renderTagsDisplay(s.tags || []);
+
   document.getElementById('qn-characters-img').src = s.characters_card_url || '/images/characters/kloudreference.png';
   document.getElementById('qn-chapters-img').src   = s.chapters_card_url   || '/images/gallery/autumnleave_11.png';
   document.getElementById('qn-gallery-img').src    = s.gallery_card_url    || '/images/gallery/apolloref_10.png';
@@ -428,6 +457,89 @@ function addLinkEditRow(label, url) {
 }
 document.getElementById('add-link-edit-row').addEventListener('click', () => addLinkEditRow('', ''));
 
+// ── Tags — e621/Wattpad-style bubble input ──────────────────────────────────
+let workingTags = [];
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderTagsDisplay(tags) {
+  const wrap = document.getElementById('site-tags-display');
+  const fade = document.getElementById('site-tags-fade');
+  wrap.classList.remove('expanded');
+  if (!tags || !tags.length) {
+    wrap.innerHTML = '<p class="wiki-tags-empty">No tags available</p>';
+    fade.hidden = true;
+    return;
+  }
+  wrap.innerHTML = tags.map(t =>
+    `<a class="wiki-tag-bubble" href="/fanpages/search?q=${encodeURIComponent(t)}">${escapeHtml(t)}</a>`
+  ).join('');
+  // Only show the "show all" fade if the tags actually overflow one row.
+  requestAnimationFrame(() => {
+    fade.hidden = wrap.scrollHeight <= wrap.clientHeight + 2;
+  });
+}
+document.getElementById('site-tags-expand-btn').addEventListener('click', () => {
+  document.getElementById('site-tags-display').classList.add('expanded');
+  document.getElementById('site-tags-fade').hidden = true;
+});
+
+function renderTagsEditor() {
+  const box = document.getElementById('tags-input-box');
+  const input = document.getElementById('tags-text-input');
+  box.querySelectorAll('.wiki-tag-bubble--editable').forEach(b => b.remove());
+  workingTags.forEach(t => {
+    const bubble = document.createElement('span');
+    bubble.className = 'wiki-tag-bubble wiki-tag-bubble--editable';
+    bubble.innerHTML = `${escapeHtml(t)} <button class="wiki-tag-bubble-remove" type="button" aria-label="Remove tag">✕</button>`;
+    bubble.querySelector('.wiki-tag-bubble-remove').addEventListener('click', () => {
+      workingTags = workingTags.filter(x => x !== t);
+      renderTagsEditor();
+    });
+    box.insertBefore(bubble, input);
+  });
+  document.getElementById('tags-count').textContent = `${workingTags.length}/100`;
+}
+
+function addWorkingTag(raw) {
+  const clean = raw.trim().replace(/\s+/g, '_').toLowerCase().slice(0, 40);
+  if (!clean) return;
+  if (workingTags.includes(clean)) return; // duplicates silently dropped
+  if (workingTags.length >= 100) return;
+  workingTags.push(clean);
+  renderTagsEditor();
+}
+
+const tagsTextInput = document.getElementById('tags-text-input');
+tagsTextInput.addEventListener('input', () => {
+  // Space bar becomes an underscore live, matching e621/Wattpad tag conventions.
+  tagsTextInput.value = tagsTextInput.value.replace(/\s/g, '_');
+});
+tagsTextInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    addWorkingTag(tagsTextInput.value);
+    tagsTextInput.value = '';
+  } else if (e.key === 'Backspace' && !tagsTextInput.value && workingTags.length) {
+    workingTags.pop();
+    renderTagsEditor();
+  }
+});
+
+const tagsTipIcon = document.getElementById('tags-tip-icon');
+const tagsTipPopover = document.getElementById('tags-tip-popover');
+tagsTipIcon.addEventListener('click', (e) => {
+  e.stopPropagation();
+  tagsTipPopover.hidden = !tagsTipPopover.hidden;
+});
+document.addEventListener('click', (e) => {
+  if (!tagsTipPopover.hidden && !tagsTipPopover.contains(e.target) && e.target !== tagsTipIcon) {
+    tagsTipPopover.hidden = true;
+  }
+});
+
 function toggle(el, show) { el.style.display = show ? '' : 'none'; }
 
 function enterEditMode() {
@@ -471,6 +583,13 @@ function enterEditMode() {
   document.getElementById('site-links-editor').innerHTML = '';
   const links = s.links && s.links.length ? s.links : [{ label: '', url: '' }];
   links.forEach(l => addLinkEditRow(l.label, l.url));
+
+  toggle(document.getElementById('site-tags-display'), false);
+  document.getElementById('site-tags-editor').style.display = 'block';
+  document.getElementById('tags-tip-icon').style.display = 'flex';
+  document.getElementById('tags-count').style.display = 'inline';
+  workingTags = (s.tags || []).slice();
+  renderTagsEditor();
 }
 
 function exitEditMode() {
@@ -501,6 +620,12 @@ function exitEditMode() {
   toggle(document.getElementById('site-links-display'), true);
   document.getElementById('site-links-editor').style.display = 'none';
   document.getElementById('add-link-edit-row').style.display = 'none';
+
+  toggle(document.getElementById('site-tags-display'), true);
+  document.getElementById('site-tags-editor').style.display = 'none';
+  document.getElementById('tags-tip-icon').style.display = 'none';
+  document.getElementById('tags-count').style.display = 'none';
+  document.getElementById('tags-tip-popover').hidden = true;
 }
 
 document.getElementById('edit-profile-btn').addEventListener('click', enterEditMode);
@@ -512,11 +637,18 @@ document.getElementById('save-edit-btn').addEventListener('click', async () => {
     url:   row.querySelector('.link-url').value.trim(),
   })).filter(l => l.label && l.url);
 
+  // Commit whatever's still sitting in the tag input so it isn't lost.
+  if (tagsTextInput.value.trim()) {
+    addWorkingTag(tagsTextInput.value);
+    tagsTextInput.value = '';
+  }
+
   const body = {
     site_title: document.getElementById('site-title-input').value.trim(),
     synopsis:   document.getElementById('site-synopsis-input').value.trim(),
     bio:        document.getElementById('site-bio-input').value.trim(),
     links,
+    tags: workingTags,
   };
 
   const res = await fetch('/api/moderator/site', {

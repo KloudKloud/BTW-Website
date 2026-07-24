@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Library ✦ Fanpages</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0d0d0d;
+      color: #f0f0f0;
+      font-family: 'Lato', Arial, sans-serif;
+      min-height: 100vh;
+    }
+    a { color: inherit; }
+
+    .lib-bg-wrap { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: #0d0d0d; }
+    .lib-bg-img { width: 100%; height: 100%; object-fit: cover; filter: blur(20px); transform: scale(1.1); opacity: 0.4; }
+    .lib-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.78); }
+
+    .lib-main { max-width: 1100px; margin: 0 auto; padding: 3rem 2rem 5rem; }
+    .lib-header-row { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 1.5rem; }
+    .lib-title { font-family: 'Cinzel', Georgia, serif; font-size: 2.2rem; }
+    .lib-private { display: flex; align-items: center; gap: 0.4rem; color: #999; font-size: 0.85rem; }
+
+    .lib-tabs { display: flex; gap: 2rem; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 2.5rem; }
+    .lib-tab {
+      background: none; border: none; color: #999; font-size: 0.95rem; font-weight: 700;
+      padding: 0.85rem 0; cursor: pointer; border-bottom: 2px solid transparent;
+      font-family: inherit;
+    }
+    .lib-tab.active { color: #f0f0f0; border-bottom-color: #d97a72; }
+    .lib-tab:hover { color: #f0f0f0; }
+
+    .lib-section-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 1.25rem; }
+    .lib-empty { color: #999; font-size: 0.92rem; padding: 2rem 0; }
+
+    .lib-story-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1.5rem 1.1rem; }
+    .lib-card { text-decoration: none; color: inherit; }
+    .lib-card-cover {
+      width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; display: block;
+      background: #1e1e1e; border: 1px solid rgba(255,255,255,0.08); transition: transform 0.15s;
+    }
+    .lib-card:hover .lib-card-cover { transform: translateY(-4px); }
+    .lib-card-title { font-size: 0.9rem; font-weight: 700; margin-top: 0.5rem; line-height: 1.3; }
+    .lib-card-author { font-size: 0.78rem; color: #999; margin-top: 0.15rem; }
+
+    .lib-gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1.1rem; }
+    .lib-gallery-card { text-decoration: none; color: inherit; display: block; position: relative; }
+    .lib-gallery-img-wrap {
+      width: 100%; aspect-ratio: 6 / 7; border-radius: 10px; overflow: hidden;
+      background: #1e1e1e; border: 1px solid rgba(255,255,255,0.08); transition: transform 0.15s;
+    }
+    .lib-gallery-card:hover .lib-gallery-img-wrap { transform: translateY(-4px); }
+    .lib-gallery-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .lib-gallery-story { font-size: 0.76rem; color: #999; margin-top: 0.4rem; }
+  </style>
+</head>
+<body>
+
+<div class="lib-bg-wrap">
+  <img class="lib-bg-img" src="/images/gallery/close_6.png" alt="" />
+  <div class="lib-bg-overlay"></div>
+</div>
+
+<div id="fanpages-topbar-root"></div>
+
+<main class="lib-main">
+  <div class="lib-header-row">
+    <h1 class="lib-title">Library</h1>
+    <span class="lib-private">🔒 Private</span>
+  </div>
+
+  <div class="lib-tabs">
+    <button class="lib-tab active" id="lib-tab-stories" type="button">Stories</button>
+    <button class="lib-tab" id="lib-tab-gallery" type="button">Galleries</button>
+  </div>
+
+  <section id="lib-stories-section">
+    <p class="lib-section-title">Bookmarked Stories</p>
+    <div id="lib-stories-grid"><p class="lib-empty">Loading…</p></div>
+  </section>
+
+  <section id="lib-gallery-section" style="display:none;">
+    <p class="lib-section-title">Liked Art</p>
+    <div id="lib-gallery-grid"><p class="lib-empty">Loading…</p></div>
+  </section>
+</main>
+
+<script src="/fanpages/fanpages-nav.js"></script>
+<script>
+  const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+  const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function storyCard(site) {
+    const a = document.createElement('a');
+    a.className = 'lib-card';
+    a.href = `/fanpages/${site.story_path || site.slug}`;
+    const cover = site.cover_url || '/images/gallery/kloudsaphbedroom_1.png';
+    a.innerHTML = `
+      <img class="lib-card-cover" src="${cover}" alt="${escapeHtml(site.site_title)} cover" loading="lazy" />
+      <p class="lib-card-title">${escapeHtml(site.site_title)}</p>
+      <p class="lib-card-author">by ${escapeHtml(site.author)}</p>
+    `;
+    return a;
+  }
+
+  function galleryCard(item) {
+    const a = document.createElement('a');
+    a.className = 'lib-gallery-card';
+    a.href = `/fanpages/${item.story_path}/gallery?post=${item.id}`;
+    a.innerHTML = `
+      <div class="lib-gallery-img-wrap"><img src="${item.image_url}" alt="${escapeHtml(item.title || 'Art')}" loading="lazy" /></div>
+      <p class="lib-gallery-story">from ${escapeHtml(item.site_title)}</p>
+    `;
+    return a;
+  }
+
+  const tabStories = document.getElementById('lib-tab-stories');
+  const tabGallery = document.getElementById('lib-tab-gallery');
+  const sectionStories = document.getElementById('lib-stories-section');
+  const sectionGallery = document.getElementById('lib-gallery-section');
+
+  tabStories.addEventListener('click', () => {
+    tabStories.classList.add('active');
+    tabGallery.classList.remove('active');
+    sectionStories.style.display = 'block';
+    sectionGallery.style.display = 'none';
+  });
+  tabGallery.addEventListener('click', () => {
+    tabGallery.classList.add('active');
+    tabStories.classList.remove('active');
+    sectionGallery.style.display = 'block';
+    sectionStories.style.display = 'none';
+  });
+
+  (async () => {
+    if (!token) {
+      document.getElementById('lib-stories-grid').innerHTML = `<p class="lib-empty"><a href="/login?from=${encodeURIComponent('/fanpages/library')}" style="color:#7fa8d9;">Log in</a> to see your bookmarked stories and liked art.</p>`;
+      document.getElementById('lib-gallery-grid').innerHTML = '<p class="lib-empty">Log in to see your liked art.</p>';
+      return;
+    }
+    try {
+      const res = await fetch('/api/library', { headers: authHeaders() });
+      const data = await res.json();
+
+      const storiesGrid = document.getElementById('lib-stories-grid');
+      const stories = data.stories || [];
+      if (!stories.length) {
+        storiesGrid.innerHTML = '<p class="lib-empty">You haven\'t bookmarked any stories yet.</p>';
+      } else {
+        const grid = document.createElement('div');
+        grid.className = 'lib-story-grid';
+        stories.forEach(s => grid.appendChild(storyCard(s)));
+        storiesGrid.innerHTML = '';
+        storiesGrid.appendChild(grid);
+      }
+
+      const galleryGrid = document.getElementById('lib-gallery-grid');
+      const gallery = data.gallery || [];
+      if (!gallery.length) {
+        galleryGrid.innerHTML = '<p class="lib-empty">You haven\'t liked any art yet — hit the ♡ on a gallery piece to save it here.</p>';
+      } else {
+        const grid = document.createElement('div');
+        grid.className = 'lib-gallery-grid';
+        gallery.forEach(g => grid.appendChild(galleryCard(g)));
+        galleryGrid.innerHTML = '';
+        galleryGrid.appendChild(grid);
+      }
+    } catch {
+      document.getElementById('lib-stories-grid').innerHTML = '<p class="lib-empty">Couldn\'t load your library right now.</p>';
+      document.getElementById('lib-gallery-grid').innerHTML = '<p class="lib-empty">Couldn\'t load your library right now.</p>';
+    }
+  })();
+</script>
+
+</body>
+</html>

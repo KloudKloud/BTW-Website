@@ -16,8 +16,71 @@
     }
     a { color: inherit; }
 
+    /* Blurred full-bleed background, fixed behind everything */
+    .fp-bg-wrap { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: #0d0d0d; }
+    .fp-bg-img {
+      width: 100%; height: 100%; object-fit: cover;
+      filter: blur(16px); transform: scale(1.08);
+      opacity: 0.55;
+    }
+    .fp-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.72); }
+
     /* ── Main ── */
     .fp-main { max-width: 1200px; margin: 0 auto; padding: 2.5rem 2rem 5rem; }
+
+    /* Billboard — the big "theater" banner, crossfades between promo slides */
+    .fp-billboard {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 21 / 9;
+      max-height: 420px;
+      border-radius: 18px;
+      overflow: hidden;
+      margin-bottom: 3rem;
+      background: #141018;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 24px 70px rgba(0,0,0,0.55);
+    }
+    .fp-billboard-track { position: absolute; inset: 0; }
+    .fp-billboard-slide {
+      position: absolute; inset: 0;
+      opacity: 0; transition: opacity 1.4s ease;
+      text-decoration: none; color: #fff; display: block;
+    }
+    .fp-billboard-slide.active { opacity: 1; z-index: 1; }
+    .fp-billboard-slide img { width: 100%; height: 100%; object-fit: cover; display: block; transform-origin: center; }
+    .fp-billboard-slide-scrim {
+      position: absolute; left: 0; right: 0; bottom: 0; padding: 2.5rem 2.5rem 1.75rem;
+      background: linear-gradient(to top, rgba(0,0,0,0.82), transparent);
+    }
+    .fp-billboard-slide-cap {
+      font-family: 'Cinzel', Georgia, serif; font-size: clamp(1.3rem, 3vw, 2rem); font-weight: 700;
+      margin-bottom: 0.3rem; text-shadow: 0 2px 10px rgba(0,0,0,0.6);
+    }
+    .fp-billboard-slide-credit { font-size: 0.82rem; color: rgba(255,255,255,0.75); }
+    .fp-billboard-empty {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      color: #999; font-size: 0.95rem; text-align: center; padding: 2rem;
+    }
+    .fp-billboard-arrow {
+      position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
+      width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(0,0,0,0.45);
+      color: #fff; font-size: 1.4rem; cursor: pointer; align-items: center; justify-content: center;
+      transition: background 0.2s;
+    }
+    .fp-billboard-arrow:hover { background: rgba(0,0,0,0.7); }
+    .fp-billboard-arrow--prev { left: 1rem; }
+    .fp-billboard-arrow--next { right: 1rem; }
+    .fp-billboard-dots { position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%); display: flex; gap: 0.4rem; z-index: 3; }
+    .fp-billboard-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.35);
+      cursor: pointer; transition: background 0.2s, transform 0.2s; border: none; padding: 0;
+    }
+    .fp-billboard-dot.active { background: #fff; transform: scale(1.3); }
+    @media (max-width: 640px) {
+      .fp-billboard { aspect-ratio: 4 / 3; }
+      .fp-billboard-slide-scrim { padding: 1.5rem 1.25rem 1.1rem; }
+    }
 
     /* Profile / welcome card */
     .fp-profile-card {
@@ -81,9 +144,24 @@
 </head>
 <body>
 
+<div class="fp-bg-wrap">
+  <img class="fp-bg-img" src="/images/gallery/kloudsaphbedroom_1.png" alt="" />
+  <div class="fp-bg-overlay"></div>
+</div>
+
 <div id="fanpages-topbar-root"></div>
 
 <main class="fp-main">
+
+  <section class="fp-billboard" id="fp-billboard">
+    <div class="fp-billboard-track" id="fp-billboard-track"></div>
+    <div class="fp-billboard-empty" id="fp-billboard-empty">
+      <p>✨ Something fun is coming to this spot soon!</p>
+    </div>
+    <button class="fp-billboard-arrow fp-billboard-arrow--prev" id="fp-billboard-prev" type="button" aria-label="Previous slide" style="display:none;">‹</button>
+    <button class="fp-billboard-arrow fp-billboard-arrow--next" id="fp-billboard-next" type="button" aria-label="Next slide" style="display:none;">›</button>
+    <div class="fp-billboard-dots" id="fp-billboard-dots"></div>
+  </section>
 
   <div class="fp-profile-card" id="fp-profile-card"><!-- filled by JS --></div>
 
@@ -100,6 +178,93 @@
 </main>
 
 <script src="/fanpages/fanpages-nav.js"></script>
+<script>
+  // ── Billboard — slides come from the DB now (managed via Hub Image Builder) ──
+  let billboardSlides = [];
+  let billboardIndex = 0;
+  let billboardTimer = null;
+
+  function renderBillboard(slides) {
+    billboardSlides = slides;
+    const track   = document.getElementById('fp-billboard-track');
+    const empty   = document.getElementById('fp-billboard-empty');
+    const prevBtn = document.getElementById('fp-billboard-prev');
+    const nextBtn = document.getElementById('fp-billboard-next');
+    const dotsWrap = document.getElementById('fp-billboard-dots');
+
+    if (!slides.length) {
+      empty.style.display = 'flex';
+      track.innerHTML = '';
+      prevBtn.style.display = 'none';
+      nextBtn.style.display = 'none';
+      dotsWrap.innerHTML = '';
+      return;
+    }
+    empty.style.display = 'none';
+
+    track.innerHTML = '';
+    slides.forEach((slide, i) => {
+      const el = document.createElement(slide.link ? 'a' : 'div');
+      el.className = 'fp-billboard-slide' + (i === 0 ? ' active' : '');
+      if (slide.link) el.href = slide.link;
+      const zoom = (slide.zoom || 100) / 100;
+      el.innerHTML = `
+        <img src="${slide.image_url}" alt="${slide.caption || ''}" loading="lazy"
+             style="object-position: ${slide.position_x}% ${slide.position_y}%; transform: scale(${zoom});" />
+        ${(slide.caption || slide.credit) ? `
+          <div class="fp-billboard-slide-scrim">
+            ${slide.caption ? `<p class="fp-billboard-slide-cap">${slide.caption}</p>` : ''}
+            ${slide.credit ? `<p class="fp-billboard-slide-credit">${slide.credit}</p>` : ''}
+          </div>` : ''}
+      `;
+      track.appendChild(el);
+    });
+
+    if (slides.length > 1) {
+      prevBtn.style.display = 'flex';
+      nextBtn.style.display = 'flex';
+      dotsWrap.innerHTML = '';
+      slides.forEach((_, i) => {
+        const dot = document.createElement('button');
+        dot.className = 'fp-billboard-dot' + (i === 0 ? ' active' : '');
+        dot.type = 'button';
+        dot.setAttribute('aria-label', `Go to slide ${i + 1}`);
+        dot.addEventListener('click', () => goToSlide(i));
+        dotsWrap.appendChild(dot);
+      });
+    } else {
+      prevBtn.style.display = 'none';
+      nextBtn.style.display = 'none';
+      dotsWrap.innerHTML = '';
+    }
+
+    billboardIndex = 0;
+    restartBillboardTimer();
+  }
+
+  function goToSlide(i) {
+    if (!billboardSlides.length) return;
+    billboardIndex = (i + billboardSlides.length) % billboardSlides.length;
+    document.querySelectorAll('.fp-billboard-slide').forEach((el, idx) => el.classList.toggle('active', idx === billboardIndex));
+    document.querySelectorAll('.fp-billboard-dot').forEach((el, idx) => el.classList.toggle('active', idx === billboardIndex));
+    restartBillboardTimer();
+  }
+
+  function restartBillboardTimer() {
+    if (billboardTimer) clearInterval(billboardTimer);
+    if (billboardSlides.length > 1) {
+      billboardTimer = setInterval(() => goToSlide(billboardIndex + 1), 30000);
+    }
+  }
+
+  document.getElementById('fp-billboard-prev').addEventListener('click', () => goToSlide(billboardIndex - 1));
+  document.getElementById('fp-billboard-next').addEventListener('click', () => goToSlide(billboardIndex + 1));
+
+  fetch('/api/hub-billboard')
+    .then(r => r.ok ? r.json() : { slides: [] })
+    .then(data => renderBillboard(data.slides || []))
+    .catch(() => renderBillboard([]));
+</script>
 <script>
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});

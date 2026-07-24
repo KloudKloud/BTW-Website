@@ -278,6 +278,11 @@ async function initDb() {
     ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS ref_position_y INTEGER NOT NULL DEFAULT 50;
   `).catch(e => console.error('moderator_characters ref-position migration:', e.message));
 
+  // e621/Wattpad-style discovery tags — up to 100 per story, feed the search bar.
+  await pool.query(`
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]';
+  `).catch(e => console.error('moderator_sites tags migration:', e.message));
+
   // Structured relationships — replaces the old free-text stats.Relationships
   // string. Each entry is { name, type, character_id }, where character_id
   // (nullable) lets one character's relationship list link straight to
@@ -296,6 +301,33 @@ async function initDb() {
       UNIQUE(user_id, site_id)
     );
   `).catch(e => console.error('moderator_bookmarks migration:', e.message));
+
+  // Likes on gallery posts — mirrors moderator_bookmarks, feeds the Library's "Galleries" tab.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS moderator_gallery_likes (
+      id         SERIAL      PRIMARY KEY,
+      user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      gallery_id INTEGER     NOT NULL REFERENCES moderator_gallery(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, gallery_id)
+    );
+  `).catch(e => console.error('moderator_gallery_likes migration:', e.message));
+
+  // Fanpages hub billboard — admin-managed promo carousel on /fanpages.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS hub_billboard_slides (
+      id         SERIAL      PRIMARY KEY,
+      image_url  TEXT        NOT NULL,
+      position_x INTEGER     NOT NULL DEFAULT 50,
+      position_y INTEGER     NOT NULL DEFAULT 50,
+      zoom       INTEGER     NOT NULL DEFAULT 100,
+      caption    TEXT        NOT NULL DEFAULT '',
+      credit     TEXT        NOT NULL DEFAULT '',
+      link       TEXT        NOT NULL DEFAULT '',
+      sort_order INTEGER     NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(e => console.error('hub_billboard_slides migration:', e.message));
 
   // story_path is the actual URL under /fanpages/ (e.g. "blue/above-all-else") —
   // separate from slug (the moderator's own identity) since one person can
@@ -349,6 +381,14 @@ async function initDb() {
   await pool.query(`
     ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('moderator_gallery description migration:', e.message));
+
+  // Gallery tile crop position — same H/V reposition pattern used for
+  // banners/covers/character refs/avatars, so the small grid preview can be
+  // cropped independently of the full-size image shown on the detail page.
+  await pool.query(`
+    ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS position_x INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS position_y INTEGER NOT NULL DEFAULT 50;
+  `).catch(e => console.error('moderator_gallery position migration:', e.message));
 
   // Chapter authoring: teaser blurb, multiple "where to read" links, an optional
   // per-chapter cover image (falls back to the story cover when unset), and an
@@ -422,6 +462,11 @@ async function checkAdmin(req) {
   const { rows: [user] } = await pool.query('SELECT email_hash FROM users WHERE id = $1', [req.user.id]);
   if (!user) return false;
   return user.email_hash === process.env.ADMIN_EMAIL_HASH;
+}
+
+async function requireAdmin(req, res, next) {
+  if (!await checkAdmin(req)) return res.status(403).json({ error: 'Forbidden.' });
+  next();
 }
 
 // ── Moderators ────────────────────────────────────────────────────────────────
@@ -2083,6 +2128,73 @@ async function requireModerator(req, res, next) {
   next();
 }
 
+// ── Fanpages hub billboard (admin-only management) ──────────────────────────
+app.get('/api/hub-billboard', async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM hub_billboard_slides ORDER BY sort_order, id');
+  res.json({ slides: rows });
+});
+
+app.post('/api/admin/hub-billboard', requireAuth, requireAdmin, uploadModImage.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const { caption, credit, link } = req.body;
+  const positionX = clampPosition(req.body.position_x);
+  const positionY = clampPosition(req.body.position_y);
+  const zoomRaw = parseInt(req.body.zoom, 10);
+  const zoom = Number.isFinite(zoomRaw) && zoomRaw >= 100 && zoomRaw <= 400 ? zoomRaw : 100;
+  const imageUrl = `/images/moderators/${req.file.filename}`;
+  const { rows: [{ maxOrder }] } = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM hub_billboard_slides');
+  const { rows: [slide] } = await pool.query(
+    `INSERT INTO hub_billboard_slides (image_url, position_x, position_y, zoom, caption, credit, link, sort_order)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [imageUrl, positionX, positionY, zoom, (caption || '').trim(), (credit || '').trim(), (link || '').trim(), maxOrder + 1]
+  );
+  res.json({ slide });
+});
+
+app.put('/api/admin/hub-billboard/:id', requireAuth, requireAdmin, uploadModImage.single('image'), async (req, res) => {
+  const { rows: [existing] } = await pool.query('SELECT * FROM hub_billboard_slides WHERE id = $1', [req.params.id]);
+  if (!existing) return res.status(404).json({ error: 'Not found.' });
+
+  const { caption, credit, link } = req.body;
+  const positionX = req.body.position_x !== undefined ? clampPosition(req.body.position_x) : existing.position_x;
+  const positionY = req.body.position_y !== undefined ? clampPosition(req.body.position_y) : existing.position_y;
+  let zoom = existing.zoom;
+  if (req.body.zoom !== undefined) {
+    const zoomRaw = parseInt(req.body.zoom, 10);
+    zoom = Number.isFinite(zoomRaw) && zoomRaw >= 100 && zoomRaw <= 400 ? zoomRaw : existing.zoom;
+  }
+
+  let imageUrl = existing.image_url;
+  if (req.file) {
+    imageUrl = `/images/moderators/${req.file.filename}`;
+    if (existing.image_url.startsWith('/images/moderators/')) {
+      const oldPath = path.join('/var/www/btw', existing.image_url);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+  }
+
+  const { rows: [slide] } = await pool.query(
+    `UPDATE hub_billboard_slides SET
+       image_url = $1, position_x = $2, position_y = $3, zoom = $4,
+       caption = COALESCE($5, caption), credit = COALESCE($6, credit), link = COALESCE($7, link)
+     WHERE id = $8 RETURNING *`,
+    [imageUrl, positionX, positionY, zoom, caption != null ? caption.trim() : null,
+     credit != null ? credit.trim() : null, link != null ? link.trim() : null, existing.id]
+  );
+  res.json({ slide });
+});
+
+app.delete('/api/admin/hub-billboard/:id', requireAuth, requireAdmin, async (req, res) => {
+  const { rows: [slide] } = await pool.query('SELECT * FROM hub_billboard_slides WHERE id = $1', [req.params.id]);
+  if (!slide) return res.status(404).json({ error: 'Not found.' });
+  if (slide.image_url.startsWith('/images/moderators/')) {
+    const filePath = path.join('/var/www/btw', slide.image_url);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
+  await pool.query('DELETE FROM hub_billboard_slides WHERE id = $1', [slide.id]);
+  res.json({ message: 'Deleted.' });
+});
+
 // POST /api/moderator/site/create — the Create Story onboarding flow. One
 // story per account for now (mirrors "My Stories" and every other place in
 // the codebase that assumes a single moderator_sites row per owner). slug
@@ -2124,13 +2236,19 @@ app.get('/api/moderator-sites', async (req, res) => {
     try { userId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
 
+  const q = (req.query.q || '').trim();
   const { rows: sites } = await pool.query(`
-    SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url,
+    SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.tags,
            u.username, u.display_name
     FROM moderator_sites ms
     JOIN users u ON u.id = ms.owner_user_id
+    WHERE $1 = '' OR
+      ms.site_title ILIKE '%' || $1 || '%' OR
+      u.username ILIKE '%' || $1 || '%' OR
+      u.display_name ILIKE '%' || $1 || '%' OR
+      EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.tags) tag WHERE tag ILIKE '%' || $1 || '%')
     ORDER BY ms.created_at ASC
-  `);
+  `, [q]);
 
   let bookmarkedIds = new Set();
   if (userId) {
@@ -2145,6 +2263,7 @@ app.get('/api/moderator-sites', async (req, res) => {
       site_title: s.site_title,
       cover_url: s.cover_url,
       banner_url: s.banner_url,
+      tags: s.tags || [],
       author: s.display_name || s.username,
       author_username: s.username,
       bookmarked: bookmarkedIds.has(s.id),
@@ -2414,17 +2533,30 @@ app.get('/api/moderator-sites/:slug', async (req, res) => {
   }
   const loggedIn = viewerId !== null;
 
-  const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked] = await Promise.all([
+  const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds] = await Promise.all([
     pool.query('SELECT id, title, teaser, links, image_url, file_url, file_name FROM moderator_chapters WHERE site_id = $1 ORDER BY sort_order, id', [site.id]),
     pool.query('SELECT id, name, ref_image, ref_position_x, ref_position_y, description, stats, facts, lore, relationships FROM moderator_characters WHERE site_id = $1 ORDER BY sort_order, id', [site.id]),
-    pool.query('SELECT id, category, image_url, title, description FROM moderator_gallery WHERE site_id = $1 ORDER BY sort_order, id', [site.id]),
+    pool.query(`
+      SELECT mg.id, mg.category, mg.image_url, mg.title, mg.description, mg.position_x, mg.position_y,
+             (SELECT count(*) FROM moderator_gallery_likes WHERE gallery_id = mg.id) AS like_count
+      FROM moderator_gallery mg WHERE mg.site_id = $1 ORDER BY mg.sort_order, mg.id
+    `, [site.id]),
     viewerId
       ? pool.query('SELECT 1 FROM user_follows WHERE follower_id = $1 AND followed_id = $2', [viewerId, site.owner_user_id])
       : Promise.resolve({ rows: [] }),
     viewerId
       ? pool.query('SELECT 1 FROM moderator_bookmarks WHERE user_id = $1 AND site_id = $2', [viewerId, site.id])
       : Promise.resolve({ rows: [] }),
+    viewerId
+      ? pool.query('SELECT gallery_id FROM moderator_gallery_likes WHERE user_id = $1', [viewerId])
+      : Promise.resolve({ rows: [] }),
   ]);
+
+  const likedSet = new Set(likedGalleryIds.rows.map(r => r.gallery_id));
+  gallery.forEach(g => {
+    g.like_count = Number(g.like_count);
+    g.liked = likedSet.has(g.id);
+  });
 
   res.json({
     site: {
@@ -2438,6 +2570,7 @@ app.get('/api/moderator-sites/:slug', async (req, res) => {
       gallery_card_position_x: site.gallery_card_position_x, gallery_card_position_y: site.gallery_card_position_y,
       author_display_name: site.author_display_name, author_username: site.author_username,
       author_avatar: site.author_avatar || null,
+      tags: site.tags || [],
       is_self: viewerId === site.owner_user_id,
       is_following: isFollowing.rows.length > 0,
       is_bookmarked: isBookmarked.rows.length > 0,
@@ -2553,8 +2686,27 @@ app.put('/api/moderator/site/nav-card/:kind/position', requireAuth, requireModer
   res.json({ site });
 });
 
+// Wattpad/e621-style tags: lowercased, whitespace collapsed to underscores,
+// deduped, capped at 100. Bad input silently gets cleaned up rather than
+// rejected — this is discovery metadata, not user-facing prose.
+function sanitizeTags(raw) {
+  if (!Array.isArray(raw)) return null;
+  const seen = new Set();
+  const out = [];
+  for (const t of raw) {
+    if (typeof t !== 'string') continue;
+    const clean = t.trim().replace(/\s+/g, '_').toLowerCase().slice(0, 40);
+    if (!clean || seen.has(clean)) continue;
+    seen.add(clean);
+    out.push(clean);
+    if (out.length >= 100) break;
+  }
+  return out;
+}
+
 app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) => {
   const { site_title, synopsis, bio, links, theme } = req.body;
+  const tags = req.body.tags !== undefined ? sanitizeTags(req.body.tags) : undefined;
   const { rows: [site] } = await pool.query(
     `UPDATE moderator_sites SET
        site_title = COALESCE($1, site_title),
@@ -2562,9 +2714,11 @@ app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) =
        bio        = COALESCE($3, bio),
        links      = COALESCE($4, links),
        theme      = COALESCE($5, theme),
+       tags       = COALESCE($6, tags),
        updated_at = NOW()
-     WHERE id = $6 RETURNING *`,
-    [site_title, synopsis, bio, links !== undefined ? JSON.stringify(links) : null, theme, req.modSite.id]
+     WHERE id = $7 RETURNING *`,
+    [site_title, synopsis, bio, links !== undefined ? JSON.stringify(links) : null, theme,
+     tags !== undefined ? JSON.stringify(tags) : null, req.modSite.id]
   );
   res.json({ site });
 });
@@ -2618,19 +2772,25 @@ app.put('/api/moderator/chapters/:id', requireAuth, requireModerator, uploadChap
   const imageFile = req.files && req.files.image && req.files.image[0];
   const docFile   = req.files && req.files.file  && req.files.file[0];
 
+  // Only ever delete files that live under the uploads dirs — migrated
+  // chapters can point image_url at a shared site asset (e.g. a main-site
+  // chapter cover), which must never be unlinked from disk.
+  const isUploadedFile = (url) => !!url && (url.startsWith('/images/moderators/') || url.startsWith('/moderators/files/'));
+
   let imageUrl = existing.image_url;
   if (imageFile) {
     imageUrl = `/images/moderators/${imageFile.filename}`;
-    const oldPath = path.join('/var/www/btw', existing.image_url);
-    if (existing.image_url && fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    if (isUploadedFile(existing.image_url)) fs.unlinkSync(path.join('/var/www/btw', existing.image_url));
+  } else if (req.body.remove_image === 'true') {
+    imageUrl = '';
+    if (isUploadedFile(existing.image_url)) fs.unlinkSync(path.join('/var/www/btw', existing.image_url));
   }
   let fileUrl = existing.file_url;
   let fileName = existing.file_name;
   if (docFile) {
     fileUrl = `/moderators/files/${docFile.filename}`;
     fileName = docFile.originalname;
-    const oldPath = path.join('/var/www/btw', existing.file_url);
-    if (existing.file_url && fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    if (isUploadedFile(existing.file_url)) fs.unlinkSync(path.join('/var/www/btw', existing.file_url));
   }
 
   const { rows: [chapter] } = await pool.query(
@@ -2648,10 +2808,9 @@ app.delete('/api/moderator/chapters/:id', requireAuth, requireModerator, async (
     'SELECT * FROM moderator_chapters WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
   );
   if (!existing) return res.status(404).json({ error: 'Not found.' });
-  const imgPath = path.join('/var/www/btw', existing.image_url);
-  if (existing.image_url && fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
-  const filePath = path.join('/var/www/btw', existing.file_url);
-  if (existing.file_url && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  const isUploadedFile = (url) => !!url && (url.startsWith('/images/moderators/') || url.startsWith('/moderators/files/'));
+  if (isUploadedFile(existing.image_url)) fs.unlinkSync(path.join('/var/www/btw', existing.image_url));
+  if (isUploadedFile(existing.file_url)) fs.unlinkSync(path.join('/var/www/btw', existing.file_url));
   await pool.query('DELETE FROM moderator_chapters WHERE id = $1', [existing.id]);
   res.json({ message: 'Deleted.' });
 });
@@ -2743,19 +2902,27 @@ app.get('/api/moderator/gallery', requireAuth, requireModerator, async (req, res
   res.json({ gallery: rows });
 });
 
+function clampPosition(v) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 50;
+}
+
 app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
   const { category, title, description } = req.body;
   if (!['sfw', 'sketches', 'spicy'].includes(category)) return res.status(400).json({ error: 'Category must be sfw, sketches, or spicy.' });
 
   const imageUrl = `/images/moderators/${req.file.filename}`;
+  const positionX = clampPosition(req.body.position_x);
+  const positionY = clampPosition(req.body.position_y);
   const { rows: [{ maxOrder }] } = await pool.query(
     'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM moderator_gallery WHERE site_id = $1 AND category = $2',
     [req.modSite.id, category]
   );
   const { rows: [item] } = await pool.query(
-    'INSERT INTO moderator_gallery (site_id, category, image_url, title, description, sort_order) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-    [req.modSite.id, category, imageUrl, (title || '').trim(), (description || '').trim(), maxOrder + 1]
+    `INSERT INTO moderator_gallery (site_id, category, image_url, title, description, position_x, position_y, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [req.modSite.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY, maxOrder + 1]
   );
   res.json({ item });
 });
@@ -2772,18 +2939,25 @@ app.put('/api/moderator/gallery/:id', requireAuth, requireModerator, uploadModIm
   let imageUrl = existing.image_url;
   if (req.file) {
     imageUrl = `/images/moderators/${req.file.filename}`;
-    const oldPath = path.join('/var/www/btw', existing.image_url);
-    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    // Migrated posts can point image_url at a shared site asset — never unlink those.
+    if (existing.image_url.startsWith('/images/moderators/')) {
+      const oldPath = path.join('/var/www/btw', existing.image_url);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
   }
+  const positionX = req.body.position_x !== undefined ? clampPosition(req.body.position_x) : existing.position_x;
+  const positionY = req.body.position_y !== undefined ? clampPosition(req.body.position_y) : existing.position_y;
 
   const { rows: [item] } = await pool.query(
     `UPDATE moderator_gallery SET
        category    = COALESCE($1, category),
        title       = COALESCE($2, title),
        description = COALESCE($3, description),
-       image_url   = $4
-     WHERE id = $5 RETURNING *`,
-    [category || null, title != null ? title.trim() : null, description != null ? description.trim() : null, imageUrl, existing.id]
+       image_url   = $4,
+       position_x  = $5,
+       position_y  = $6
+     WHERE id = $7 RETURNING *`,
+    [category || null, title != null ? title.trim() : null, description != null ? description.trim() : null, imageUrl, positionX, positionY, existing.id]
   );
   res.json({ item });
 });
@@ -2793,10 +2967,63 @@ app.delete('/api/moderator/gallery/:id', requireAuth, requireModerator, async (r
     'SELECT * FROM moderator_gallery WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
   );
   if (!item) return res.status(404).json({ error: 'Not found.' });
-  const filePath = path.join('/var/www/btw', item.image_url);
-  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  if (item.image_url.startsWith('/images/moderators/')) {
+    const filePath = path.join('/var/www/btw', item.image_url);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
   await pool.query('DELETE FROM moderator_gallery WHERE id = $1', [item.id]);
   res.json({ message: 'Deleted.' });
+});
+
+// ── Gallery likes — any logged-in user can like any story's gallery post ────
+app.post('/api/moderator/gallery/:id/like', requireAuth, async (req, res) => {
+  const { rows: [item] } = await pool.query('SELECT id FROM moderator_gallery WHERE id = $1', [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  await pool.query(
+    'INSERT INTO moderator_gallery_likes (user_id, gallery_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [req.user.id, item.id]
+  );
+  const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM moderator_gallery_likes WHERE gallery_id = $1', [item.id]);
+  res.json({ liked: true, like_count: Number(count) });
+});
+
+app.delete('/api/moderator/gallery/:id/like', requireAuth, async (req, res) => {
+  await pool.query('DELETE FROM moderator_gallery_likes WHERE user_id = $1 AND gallery_id = $2', [req.user.id, req.params.id]);
+  const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM moderator_gallery_likes WHERE gallery_id = $1', [req.params.id]);
+  res.json({ liked: false, like_count: Number(count) });
+});
+
+// GET /api/library — bookmarked stories + liked gallery art, across every
+// story, for the avatar dropdown's "Library" page.
+app.get('/api/library', requireAuth, async (req, res) => {
+  const [{ rows: stories }, { rows: gallery }] = await Promise.all([
+    pool.query(`
+      SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.username, u.display_name
+      FROM moderator_bookmarks mb
+      JOIN moderator_sites ms ON ms.id = mb.site_id
+      JOIN users u ON u.id = ms.owner_user_id
+      WHERE mb.user_id = $1
+      ORDER BY mb.created_at DESC
+    `, [req.user.id]),
+    pool.query(`
+      SELECT mg.id, mg.image_url, mg.title, mg.category, ms.slug, ms.story_path, ms.site_title
+      FROM moderator_gallery_likes mgl
+      JOIN moderator_gallery mg ON mg.id = mgl.gallery_id
+      JOIN moderator_sites ms ON ms.id = mg.site_id
+      WHERE mgl.user_id = $1
+      ORDER BY mgl.created_at DESC
+    `, [req.user.id]),
+  ]);
+  res.json({
+    stories: stories.map(r => ({
+      slug: r.slug, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url,
+      author: r.display_name || r.username, author_username: r.username,
+    })),
+    gallery: gallery.map(r => ({
+      id: r.id, image_url: r.image_url, title: r.title, category: r.category,
+      story_path: r.story_path || r.slug, site_title: r.site_title,
+    })),
+  });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────

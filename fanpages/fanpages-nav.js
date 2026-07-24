@@ -17,8 +17,8 @@
   root.innerHTML = `
     <div class="fpnav-bar">
       <a class="fpnav-brand" href="/fanpages">Fanpages</a>
-      <a class="fpnav-link" href="/fanpages/social">Social</a>
-      <div class="fpnav-search"><input type="search" placeholder="🔍 Search stories…" /></div>
+      <a class="fpnav-link${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Social</a>
+      <div class="fpnav-search"><input type="search" id="fpnav-search-input" placeholder="🔍 Search stories…" /></div>
       <div class="fpnav-right">
 
         <div class="fpnav-dropdown-wrap">
@@ -40,6 +40,7 @@
           </button>
           <div class="fpnav-dropdown" id="fpnav-avatar-dropdown" hidden>
             <a href="#" id="fpnav-my-profile-link">My Profile</a>
+            <a href="/fanpages/library" id="fpnav-library-link">Library</a>
             <a href="#" id="fpnav-edit-profile-link">Account Settings</a>
           </div>
         </div>
@@ -56,6 +57,16 @@
       </div>
     </div>
   `;
+
+  // ── Search ───────────────────────────────────────────────────────────────
+  const searchInput = document.getElementById('fpnav-search-input');
+  const currentQ = new URLSearchParams(window.location.search).get('q');
+  if (here === '/fanpages/search' && currentQ) searchInput.value = currentQ;
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const q = searchInput.value.trim();
+    window.location.href = q ? `/fanpages/search?q=${encodeURIComponent(q)}` : '/fanpages/search';
+  });
 
   // ── Dropdown toggling ────────────────────────────────────────────────────
   function wireDropdown(btnId, dropdownId) {
@@ -121,6 +132,13 @@
       // here too so the lead dev never loses it while inside Fanpages.
       if (u.is_admin) {
         const dropdown = document.getElementById('fpnav-avatar-dropdown');
+        if (dropdown && !document.getElementById('fpnav-hub-builder-link')) {
+          const hubBuilderLink = document.createElement('a');
+          hubBuilderLink.id = 'fpnav-hub-builder-link';
+          hubBuilderLink.href = '/fanpages/hub-builder';
+          hubBuilderLink.textContent = 'Hub Image Builder';
+          dropdown.appendChild(hubBuilderLink);
+        }
         if (dropdown && !document.getElementById('fpnav-stats-link')) {
           const statsLink = document.createElement('a');
           statsLink.id = 'fpnav-stats-link';

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Search ✦ Fanpages</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0d0d0d;
+      color: #f0f0f0;
+      font-family: 'Lato', Arial, sans-serif;
+      min-height: 100vh;
+    }
+    a { color: inherit; }
+
+    .fp-main { max-width: 1200px; margin: 0 auto; padding: 2.5rem 2rem 5rem; }
+
+    .fp-search-heading { font-family: 'Cinzel', Georgia, serif; font-size: 1.6rem; margin-bottom: 0.4rem; }
+    .fp-search-sub { color: #999; font-size: 0.9rem; margin-bottom: 2.5rem; }
+    .fp-search-sub strong { color: #f0f0f0; }
+
+    .fp-search-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 1.5rem 1.1rem;
+    }
+
+    .fp-card { position: relative; text-decoration: none; color: inherit; }
+    .fp-card-cover {
+      width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; display: block;
+      background: #1e1e1e; border: 1px solid rgba(255,255,255,0.08);
+      transition: transform 0.15s;
+    }
+    .fp-card:hover .fp-card-cover { transform: translateY(-4px); }
+    .fp-card-title { font-size: 0.9rem; font-weight: 700; margin-top: 0.5rem; line-height: 1.3; }
+    .fp-card-author { font-size: 0.78rem; color: #999; margin-top: 0.15rem; }
+    .fp-card-author-link:hover { color: #7fa8d9; text-decoration: underline; }
+    .fp-card-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem; }
+    .fp-card-tag { font-size: 0.68rem; color: #7fa8d9; background: rgba(127,168,217,0.12); border-radius: 10px; padding: 0.15em 0.55em; }
+
+    .fp-search-empty { color: #999; font-size: 0.95rem; padding: 2rem 0; }
+  </style>
+</head>
+<body>
+
+<div id="fanpages-topbar-root"></div>
+
+<main class="fp-main">
+  <h1 class="fp-search-heading" id="fp-search-heading">Search</h1>
+  <p class="fp-search-sub" id="fp-search-sub"></p>
+  <div id="fp-search-results"><p class="fp-search-empty">Loading…</p></div>
+</main>
+
+<script src="/fanpages/fanpages-nav.js"></script>
+<script>
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function storyCard(site) {
+    const a = document.createElement('a');
+    a.className = 'fp-card';
+    a.href = `/fanpages/${site.story_path || site.slug}`;
+    const cover = site.cover_url || '/images/gallery/kloudsaphbedroom_1.png';
+    const tagsHtml = (site.tags || []).slice(0, 4).map(t => `<span class="fp-card-tag">${escapeHtml(t)}</span>`).join('');
+    a.innerHTML = `
+      <img class="fp-card-cover" src="${cover}" alt="${escapeHtml(site.site_title)} cover" loading="lazy" />
+      <p class="fp-card-title">${escapeHtml(site.site_title)}</p>
+      <p class="fp-card-author">by <span class="fp-card-author-link">${escapeHtml(site.author)}</span></p>
+      ${tagsHtml ? `<div class="fp-card-tags">${tagsHtml}</div>` : ''}
+    `;
+    if (site.author_username) {
+      const authorLink = a.querySelector('.fp-card-author-link');
+      authorLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = `/fanpages/${site.author_username}`;
+      });
+    }
+    return a;
+  }
+
+  (async () => {
+    const q = new URLSearchParams(window.location.search).get('q') || '';
+    const resultsEl = document.getElementById('fp-search-results');
+    const subEl = document.getElementById('fp-search-sub');
+
+    if (!q) {
+      document.getElementById('fp-search-heading').textContent = 'Search Stories';
+      subEl.textContent = 'Type a title, author, or tag into the search bar above to get started.';
+      resultsEl.innerHTML = '';
+      return;
+    }
+
+    document.getElementById('fp-search-heading').textContent = `Results for "${q}"`;
+
+    try {
+      const res = await fetch(`/api/moderator-sites?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      const sites = data.sites || [];
+
+      subEl.innerHTML = `<strong>${sites.length}</strong> stor${sites.length === 1 ? 'y' : 'ies'} found — matching titles, authors, and tags.`;
+
+      if (!sites.length) {
+        resultsEl.innerHTML = '<p class="fp-search-empty">No stories match that search. Try a different title, author, or tag.</p>';
+        return;
+      }
+
+      const grid = document.createElement('div');
+      grid.className = 'fp-search-grid';
+      sites.forEach(s => grid.appendChild(storyCard(s)));
+      resultsEl.innerHTML = '';
+      resultsEl.appendChild(grid);
+    } catch {
+      resultsEl.innerHTML = '<p class="fp-search-empty">Couldn\'t load search results right now.</p>';
+    }
+  })();
+</script>
+
+</body>
+</html>

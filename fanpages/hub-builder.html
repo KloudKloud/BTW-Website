@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hub Image Builder ✦ Fanpages</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <style>
+    body { background: #0d0d0d; }
+    .hb-wrap { max-width: 1000px; margin: 0 auto; padding: 3rem 2rem 5rem; }
+    .hb-title { font-family: 'Cinzel', serif; font-size: 1.8rem; color: #f0f0f0; margin-bottom: 0.5rem; }
+    .hb-sub { color: #999; font-size: 0.92rem; margin-bottom: 2rem; max-width: 640px; line-height: 1.7; }
+    .hb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1.25rem; margin-top: 2rem; }
+    .hb-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+      overflow: hidden;
+    }
+    .hb-card-img-wrap { width: 100%; aspect-ratio: 21 / 9; overflow: hidden; background: #1a1a1a; }
+    .hb-card-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .hb-card-body { padding: 0.9rem 1rem; }
+    .hb-card-caption { font-size: 0.9rem; font-weight: 700; color: #f0f0f0; margin-bottom: 0.2rem; }
+    .hb-card-credit { font-size: 0.78rem; color: #999; margin-bottom: 0.6rem; }
+    .hb-card-empty-text { font-size: 0.82rem; color: #666; font-style: italic; margin-bottom: 0.6rem; }
+    .hb-card-actions { display: flex; gap: 0.5rem; }
+    .hb-empty-state { color: #999; font-size: 0.92rem; padding: 2rem 0; text-align: center; }
+    .hb-forbidden { max-width: 500px; margin: 6rem auto; text-align: center; color: #999; }
+    .hb-sliders { display: flex; flex-wrap: wrap; gap: 1.25rem; margin: 0 0 1.5rem; justify-content: center; }
+    .hb-sliders label { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: #999; }
+    .hb-sliders input[type="range"] { width: 130px; }
+  </style>
+</head>
+<body class="mod-theme">
+
+<div id="fanpages-topbar-root"></div>
+<script src="/fanpages/fanpages-nav.js"></script>
+
+<div class="hb-wrap" id="hb-wrap" style="display:none;">
+  <h1 class="hb-title">🖼️ Hub Image Builder</h1>
+  <p class="hb-sub">Manage the promo slides that cycle on the Fanpages hub billboard. Add, edit, or remove slides here and they show up in the rotation instantly — no deploy needed.</p>
+
+  <button class="chars-create-btn" id="hb-add-btn" type="button" style="max-width: 260px;">
+    <span class="chars-create-btn-icon">➕</span> Add New Slide
+  </button>
+
+  <div class="hb-grid" id="hb-grid"></div>
+</div>
+
+<div class="hb-forbidden" id="hb-forbidden" style="display:none;">
+  <p>This page is admin-only.</p>
+</div>
+
+<!-- Slide editor modal -->
+<div class="char-editor-overlay" id="hb-editor-overlay" hidden>
+  <div class="char-editor-modal">
+    <h2 class="char-editor-title" id="hb-editor-title">Add New Slide</h2>
+
+    <div class="char-editor-ref-wrap" id="hb-editor-img-wrap" style="max-width: 520px; aspect-ratio: 21 / 9;">
+      <img id="hb-editor-img" alt="" style="display:none;" draggable="false" />
+      <div class="char-editor-ref-placeholder" id="hb-editor-img-placeholder">Click to upload an image</div>
+      <div class="char-editor-ref-overlay">📷 Change Image</div>
+    </div>
+    <input type="file" id="hb-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+
+    <div class="hb-sliders">
+      <label>Horizontal <input type="range" id="hb-pos-x" min="0" max="100" value="50" /></label>
+      <label>Vertical <input type="range" id="hb-pos-y" min="0" max="100" value="50" /></label>
+      <label>Zoom <input type="range" id="hb-zoom" min="100" max="400" value="100" /></label>
+    </div>
+
+    <div class="mod-field">
+      <label for="hb-caption">Caption <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <input class="mod-input" id="hb-caption" maxlength="80" placeholder="Don't forget to read BTW!" />
+    </div>
+    <div class="mod-field">
+      <label for="hb-credit">Credit <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <input class="mod-input" id="hb-credit" maxlength="60" placeholder="- VeekitPaws" />
+    </div>
+    <div class="mod-field">
+      <label for="hb-link">Link <span style="font-weight:400;color:#888;">(optional — makes the slide clickable)</span></label>
+      <input class="mod-input" id="hb-link" maxlength="300" placeholder="https:// or /fanpages/..." />
+    </div>
+
+    <p class="mod-panel-msg" id="hb-editor-msg"></p>
+
+    <div class="char-editor-actions">
+      <button class="mod-btn mod-btn--danger" id="hb-editor-delete" type="button" style="display:none;">Delete</button>
+      <button class="mod-btn" id="hb-editor-cancel" type="button">Cancel</button>
+      <button class="mod-btn" id="hb-editor-save" type="button" disabled>Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="mod-confirm-overlay" id="hb-delete-confirm-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title">Delete this slide?</p>
+    <p class="mod-confirm-text">This can't be undone.</p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="hb-delete-confirm-cancel" type="button">Cancel</button>
+      <button class="mod-btn mod-btn--danger" id="hb-delete-confirm-yes" type="button">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+const authHeaders = () => ({ Authorization: `Bearer ${token}` });
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+let slides = [];
+let editingId = null;
+let selectedFile = null;
+let slidePos = { x: 50, y: 50, zoom: 100 };
+
+function applyEditorPreview() {
+  const img = document.getElementById('hb-editor-img');
+  img.style.objectPosition = `${slidePos.x}% ${slidePos.y}%`;
+  img.style.transform = `scale(${slidePos.zoom / 100})`;
+}
+document.getElementById('hb-pos-x').addEventListener('input', (e) => { slidePos.x = parseInt(e.target.value, 10); applyEditorPreview(); });
+document.getElementById('hb-pos-y').addEventListener('input', (e) => { slidePos.y = parseInt(e.target.value, 10); applyEditorPreview(); });
+document.getElementById('hb-zoom').addEventListener('input', (e) => { slidePos.zoom = parseInt(e.target.value, 10); applyEditorPreview(); });
+
+function renderGrid() {
+  const grid = document.getElementById('hb-grid');
+  if (!slides.length) {
+    grid.innerHTML = '<p class="hb-empty-state">No slides yet — add one to get the billboard rotating!</p>';
+    return;
+  }
+  grid.innerHTML = '';
+  slides.forEach(slide => {
+    const card = document.createElement('div');
+    card.className = 'hb-card';
+    card.innerHTML = `
+      <div class="hb-card-img-wrap">
+        <img src="${slide.image_url}" alt="" style="object-position:${slide.position_x}% ${slide.position_y}%; transform:scale(${(slide.zoom || 100) / 100});" />
+      </div>
+      <div class="hb-card-body">
+        ${slide.caption ? `<p class="hb-card-caption">${escapeHtml(slide.caption)}</p>` : ''}
+        ${slide.credit ? `<p class="hb-card-credit">${escapeHtml(slide.credit)}</p>` : ''}
+        ${!slide.caption && !slide.credit ? '<p class="hb-card-empty-text">No caption</p>' : ''}
+        <div class="hb-card-actions">
+          <button class="mod-btn mod-btn--small" type="button">Edit</button>
+        </div>
+      </div>
+    `;
+    card.querySelector('.hb-card-actions button').addEventListener('click', () => openEditor(slide));
+    grid.appendChild(card);
+  });
+}
+
+async function loadSlides() {
+  const res = await fetch('/api/hub-billboard');
+  const data = await res.json();
+  slides = data.slides || [];
+  renderGrid();
+}
+
+function openEditor(slide) {
+  editingId = slide ? slide.id : null;
+  selectedFile = null;
+
+  document.getElementById('hb-editor-title').textContent = slide ? 'Edit Slide' : 'Add New Slide';
+  document.getElementById('hb-editor-delete').style.display = slide ? '' : 'none';
+  document.getElementById('hb-editor-save').textContent = slide ? 'Save and Close' : 'Create';
+
+  const img = document.getElementById('hb-editor-img');
+  const placeholder = document.getElementById('hb-editor-img-placeholder');
+  if (slide) {
+    img.src = slide.image_url;
+    img.style.display = 'block';
+    placeholder.style.display = 'none';
+  } else {
+    img.style.display = 'none';
+    placeholder.style.display = 'block';
+  }
+
+  slidePos = slide ? { x: slide.position_x, y: slide.position_y, zoom: slide.zoom || 100 } : { x: 50, y: 50, zoom: 100 };
+  document.getElementById('hb-pos-x').value = slidePos.x;
+  document.getElementById('hb-pos-y').value = slidePos.y;
+  document.getElementById('hb-zoom').value = slidePos.zoom;
+  applyEditorPreview();
+
+  document.getElementById('hb-caption').value = slide ? (slide.caption || '') : '';
+  document.getElementById('hb-credit').value = slide ? (slide.credit || '') : '';
+  document.getElementById('hb-link').value = slide ? (slide.link || '') : '';
+  document.getElementById('hb-editor-msg').textContent = '';
+  updateSaveButtonState();
+
+  document.getElementById('hb-editor-overlay').hidden = false;
+}
+function closeEditor() {
+  document.getElementById('hb-editor-overlay').hidden = true;
+}
+document.getElementById('hb-add-btn').addEventListener('click', () => openEditor(null));
+document.getElementById('hb-editor-cancel').addEventListener('click', closeEditor);
+// No click-outside-to-close on purpose — accidental clicks shouldn't wipe out a half-filled slide.
+
+function updateSaveButtonState() {
+  const hasImage = !!selectedFile || !!editingId;
+  document.getElementById('hb-editor-save').disabled = !hasImage;
+}
+
+document.getElementById('hb-editor-img-wrap').addEventListener('click', () => {
+  document.getElementById('hb-editor-file-input').click();
+});
+document.getElementById('hb-editor-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  selectedFile = file;
+  const img = document.getElementById('hb-editor-img');
+  img.src = URL.createObjectURL(file);
+  img.style.display = 'block';
+  document.getElementById('hb-editor-img-placeholder').style.display = 'none';
+  slidePos = { x: 50, y: 50, zoom: 100 };
+  document.getElementById('hb-pos-x').value = 50;
+  document.getElementById('hb-pos-y').value = 50;
+  document.getElementById('hb-zoom').value = 100;
+  applyEditorPreview();
+  updateSaveButtonState();
+});
+
+document.getElementById('hb-editor-save').addEventListener('click', async () => {
+  const msgEl = document.getElementById('hb-editor-msg');
+  msgEl.textContent = '';
+
+  if (!editingId && !selectedFile) {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Please upload an image.';
+    return;
+  }
+
+  const fd = new FormData();
+  if (selectedFile) fd.append('image', selectedFile);
+  fd.append('position_x', slidePos.x);
+  fd.append('position_y', slidePos.y);
+  fd.append('zoom', slidePos.zoom);
+  fd.append('caption', document.getElementById('hb-caption').value.trim());
+  fd.append('credit', document.getElementById('hb-credit').value.trim());
+  fd.append('link', document.getElementById('hb-link').value.trim());
+
+  const saveBtn = document.getElementById('hb-editor-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = editingId ? 'Saving…' : 'Creating…';
+  try {
+    const url = editingId ? `/api/admin/hub-billboard/${editingId}` : '/api/admin/hub-billboard';
+    const method = editingId ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: authHeaders(), body: fd });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+      msgEl.textContent = data.error || 'Something went wrong. Please try again.';
+      return;
+    }
+    closeEditor();
+    await loadSlides();
+  } catch {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Network error. Please try again.';
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = editingId ? 'Save and Close' : 'Create';
+  }
+});
+
+function confirmDelete() {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('hb-delete-confirm-overlay');
+    const yesBtn = document.getElementById('hb-delete-confirm-yes');
+    const cancelBtn = document.getElementById('hb-delete-confirm-cancel');
+    overlay.hidden = false;
+    const cleanup = (result) => {
+      overlay.hidden = true;
+      yesBtn.removeEventListener('click', onYes);
+      cancelBtn.removeEventListener('click', onCancel);
+      resolve(result);
+    };
+    const onYes = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    yesBtn.addEventListener('click', onYes);
+    cancelBtn.addEventListener('click', onCancel);
+  });
+}
+
+document.getElementById('hb-editor-delete').addEventListener('click', async () => {
+  if (!editingId) return;
+  if (!await confirmDelete()) return;
+
+  const deleteBtn = document.getElementById('hb-editor-delete');
+  deleteBtn.disabled = true;
+  deleteBtn.textContent = 'Deleting…';
+  try {
+    await fetch(`/api/admin/hub-billboard/${editingId}`, { method: 'DELETE', headers: authHeaders() });
+    closeEditor();
+    await loadSlides();
+  } catch {
+    document.getElementById('hb-editor-msg').className = 'mod-panel-msg mod-panel-msg--error';
+    document.getElementById('hb-editor-msg').textContent = 'Failed to delete. Please try again.';
+  } finally {
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = 'Delete';
+  }
+});
+
+(async () => {
+  if (!token) { document.getElementById('hb-forbidden').style.display = 'block'; return; }
+  try {
+    const res = await fetch('/api/auth/me', { headers: authHeaders() });
+    const data = await res.json();
+    if (!res.ok || !data.user || !data.user.is_admin) {
+      document.getElementById('hb-forbidden').style.display = 'block';
+      return;
+    }
+    document.getElementById('hb-wrap').style.display = 'block';
+    await loadSlides();
+  } catch {
+    document.getElementById('hb-forbidden').style.display = 'block';
+  }
+})();
+</script>
+</body>
+</html>

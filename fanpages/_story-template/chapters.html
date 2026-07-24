@@ -45,19 +45,19 @@
       <a class="art-view-back" href="#" id="chapter-detail-back">← Back to Chapters</a>
 
       <div class="chapter-detail-card">
-        <div class="chapter-detail-main">
-          <h1 class="chapter-detail-title" id="chapter-detail-title"></h1>
-          <p class="chapter-detail-teaser" id="chapter-detail-teaser"></p>
-          <div class="chapter-detail-image-wrap" id="chapter-detail-image-wrap" style="display:none;">
-            <img id="chapter-detail-image" alt="" />
-          </div>
-        </div>
-
         <div class="chapter-detail-side">
           <p class="chapter-detail-side-label">Where to Read!</p>
           <div class="chapter-view-links" id="chapter-detail-links"></div>
           <button class="btn btn-outline chapter-read-btn" id="chapter-detail-pdf-btn" type="button" style="display:none; margin-top:0.5rem;">📄 Read as PDF?</button>
           <p class="chapter-detail-no-pdf" id="chapter-detail-no-pdf" style="display:none;"><em>No PDF available to view</em></p>
+        </div>
+
+        <div class="chapter-detail-main">
+          <h1 class="chapter-detail-title" id="chapter-detail-title"></h1>
+          <p class="chapter-detail-teaser" id="chapter-detail-teaser"></p>
+          <div class="chapter-detail-image-wrap" id="chapter-detail-image-wrap">
+            <img id="chapter-detail-image" alt="" />
+          </div>
         </div>
       </div>
 
@@ -129,6 +129,7 @@
         <div class="char-editor-ref-overlay">📷 Change Image</div>
       </div>
       <input type="file" id="chapter-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+      <button class="mod-btn mod-btn--small" id="chapter-editor-remove-img" type="button" style="display:none; margin-top:0.5rem;">✕ Remove Image (use story cover instead)</button>
       <p class="char-editor-facts-hint">Add a special image for this chapter! Chapters will default to your story cover image when displayed, but you can individualize every chapter if you wish!</p>
     </div>
 
@@ -145,8 +146,8 @@
     <p class="mod-panel-msg" id="chapter-editor-msg"></p>
 
     <div class="char-editor-actions">
-      <button class="mod-btn" id="chapter-editor-cancel" type="button">Cancel</button>
       <button class="mod-btn mod-btn--danger" id="chapter-editor-delete" type="button" style="display:none;">Delete</button>
+      <button class="mod-btn" id="chapter-editor-cancel" type="button">Cancel</button>
       <button class="mod-btn" id="chapter-editor-save" type="button">Create</button>
     </div>
   </div>
@@ -234,10 +235,11 @@ function renderChapterList() {
 // ── Chapter detail "page" ───────────────────────────────────────────────
 function closePdfView() {
   document.getElementById('chapter-pdf-view').hidden = true;
-  document.getElementById('chapter-detail-image-wrap').style.display =
-    currentDetailChapter && currentDetailChapter.image_url ? 'block' : 'none';
+  document.getElementById('chapter-detail-image-wrap').style.display = 'block';
   document.getElementById('chapter-pdf-iframe').src = '';
 }
+
+function truncateLabel(s, n) { return s.length > n ? s.slice(0, n).trimEnd() + '…' : s; }
 
 function openChapterDetail(ch, pushHistory) {
   currentDetailChapter = ch;
@@ -246,14 +248,8 @@ function openChapterDetail(ch, pushHistory) {
   document.getElementById('chapter-detail-title').textContent = ch.title || 'Untitled Chapter';
   document.getElementById('chapter-detail-teaser').textContent = ch.teaser && ch.teaser.trim() ? ch.teaser : 'No description provided';
 
-  const imgWrap = document.getElementById('chapter-detail-image-wrap');
-  const img = document.getElementById('chapter-detail-image');
-  if (ch.image_url) {
-    img.src = ch.image_url;
-    imgWrap.style.display = 'block';
-  } else {
-    imgWrap.style.display = 'none';
-  }
+  document.getElementById('chapter-detail-image').src = chapterThumb(ch);
+  document.getElementById('chapter-detail-image-wrap').style.display = 'block';
 
   const linksWrap = document.getElementById('chapter-detail-links');
   linksWrap.innerHTML = '';
@@ -263,7 +259,7 @@ function openChapterDetail(ch, pushHistory) {
     a.href = l.url;
     a.target = '_blank';
     a.rel = 'noopener';
-    a.textContent = `📖 Read on ${l.label}`;
+    a.textContent = truncateLabel(l.label, 20);
     linksWrap.appendChild(a);
   });
 
@@ -313,9 +309,7 @@ document.getElementById('chapter-detail-pdf-btn').addEventListener('click', () =
 });
 document.getElementById('chapter-pdf-close').addEventListener('click', () => {
   document.getElementById('chapter-pdf-view').hidden = true;
-  if (currentDetailChapter && currentDetailChapter.image_url) {
-    document.getElementById('chapter-detail-image-wrap').style.display = 'block';
-  }
+  document.getElementById('chapter-detail-image-wrap').style.display = 'block';
 });
 
 window.addEventListener('popstate', () => {
@@ -348,6 +342,7 @@ function updateActionBox() {
 let editingChapterId = null;
 let selectedChapterImage = null;
 let selectedChapterDoc = null;
+let removeChapterImage = false;
 
 function addLinkRow(label, url, removable) {
   if (removable === undefined) removable = true;
@@ -376,11 +371,11 @@ function openChapterEditor(ch) {
   editingChapterId = ch ? ch.id : null;
   selectedChapterImage = null;
   selectedChapterDoc = null;
+  removeChapterImage = false;
 
   document.getElementById('chapter-editor-title').textContent = ch ? 'Edit Chapter' : 'Create New Chapter';
-  document.getElementById('chapter-editor-cancel').style.display = ch ? 'none' : '';
   document.getElementById('chapter-editor-delete').style.display = ch ? '' : 'none';
-  document.getElementById('chapter-editor-save').textContent = ch ? 'Save' : 'Create';
+  document.getElementById('chapter-editor-save').textContent = ch ? 'Save and Close' : 'Create';
 
   document.getElementById('chapter-editor-title-input').value = ch ? (ch.title || '') : '';
   document.getElementById('chapter-editor-teaser').value = ch ? (ch.teaser || '') : '';
@@ -392,13 +387,16 @@ function openChapterEditor(ch) {
 
   const img = document.getElementById('chapter-editor-img');
   const placeholder = document.getElementById('chapter-editor-img-placeholder');
+  const removeBtn = document.getElementById('chapter-editor-remove-img');
   if (ch && ch.image_url) {
     img.src = ch.image_url;
     img.style.display = 'block';
     placeholder.style.display = 'none';
+    removeBtn.style.display = 'block';
   } else {
     img.style.display = 'none';
     placeholder.style.display = 'block';
+    removeBtn.style.display = 'none';
   }
 
   document.getElementById('chapter-editor-doc-name').textContent = (ch && ch.file_name) ? ch.file_name : 'No file attached';
@@ -420,10 +418,21 @@ document.getElementById('chapter-editor-file-input').addEventListener('change', 
   const file = e.target.files[0];
   if (!file) return;
   selectedChapterImage = file;
+  removeChapterImage = false;
   const img = document.getElementById('chapter-editor-img');
   img.src = URL.createObjectURL(file);
   img.style.display = 'block';
   document.getElementById('chapter-editor-img-placeholder').style.display = 'none';
+  document.getElementById('chapter-editor-remove-img').style.display = 'block';
+});
+
+document.getElementById('chapter-editor-remove-img').addEventListener('click', () => {
+  selectedChapterImage = null;
+  removeChapterImage = true;
+  document.getElementById('chapter-editor-file-input').value = '';
+  document.getElementById('chapter-editor-img').style.display = 'none';
+  document.getElementById('chapter-editor-img-placeholder').style.display = 'block';
+  document.getElementById('chapter-editor-remove-img').style.display = 'none';
 });
 
 document.getElementById('chapter-editor-doc-btn').addEventListener('click', () => {
@@ -484,6 +493,7 @@ document.getElementById('chapter-editor-save').addEventListener('click', async (
   fd.append('links', JSON.stringify(collectLinks()));
   if (selectedChapterImage) fd.append('image', selectedChapterImage);
   if (selectedChapterDoc) fd.append('file', selectedChapterDoc);
+  if (removeChapterImage) fd.append('remove_image', 'true');
 
   const saveBtn = document.getElementById('chapter-editor-save');
   saveBtn.disabled = true;
@@ -506,7 +516,7 @@ document.getElementById('chapter-editor-save').addEventListener('click', async (
     msgEl.textContent = 'Network error. Please try again.';
   } finally {
     saveBtn.disabled = false;
-    saveBtn.textContent = editingChapterId ? 'Save' : 'Create';
+    saveBtn.textContent = editingChapterId ? 'Save and Close' : 'Create';
   }
 });
 
