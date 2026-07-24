@@ -1,31 +1,1462 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Social ✦ Fanpages</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; }
-    .so-wrap { max-width: 640px; margin: 0 auto; padding: 4.5rem 2rem; text-align: center; }
-    .so-wrap h1 { font-family: 'Cinzel', Georgia, serif; font-size: 2rem; margin-bottom: 1rem; color: #f0c060; }
-    .so-wrap p { color: #999; font-size: 1rem; line-height: 1.8; }
-  </style>
 </head>
 <body>
 
 <div id="fanpages-topbar-root"></div>
+<script src="/fanpages/fanpages-nav.js"></script>
 
-<div class="so-wrap">
-  <h1>Social</h1>
-  <p>
-    The community wall is moving here from the main BTW site — this page is a placeholder until that
-    migration happens. Nothing has been moved or deleted yet.
-  </p>
+<div class="page-bg">
+  <img src="/images/discordblurred.png" alt="" />
+  <div class="page-bg-overlay"></div>
 </div>
 
-<script src="/fanpages/fanpages-nav.js"></script>
+<main class="community-wrap">
+  <div class="community-layout">
+
+    <!-- ── Sidebar ───────────────────────────────────────────────── -->
+    <div class="community-side-col">
+      <aside class="community-sidebar">
+        <div id="community-user-block" class="community-user-block"></div>
+        <button id="create-post-btn" class="community-create-post-btn">✦ Create Post</button>
+        <button id="sidebar-search-btn" class="community-sidebar-search-btn">🔍 Search</button>
+        <div class="community-sidebar-rule"></div>
+        <p class="community-sidebar-section-label">Community Rules</p>
+        <ol class="community-rules">
+          <li>This is an open space for every Fanpages creator and reader — promote your own book, share a meme, post fanart, or just chat!</li>
+          <li>NSFW content is fine and supported! Please just label your post with the NSFW flag before posting.</li>
+          <li>Be respectful of other creators and their work — this is a shared space for the whole community.</li>
+          <li>Have fun!</li>
+        </ol>
+      </aside>
+
+      <!-- ── Fanpages access point ─────────────────────────────────── -->
+      <aside class="community-friends-box">
+        <p class="community-friends-box-title">Discover Stories!</p>
+        <div class="community-sidebar-rule"></div>
+        <ul class="community-friends-list">
+          <li><a href="/fanpages" class="community-friends-link">Browse Fanpages →</a></li>
+        </ul>
+      </aside>
+    </div>
+
+    <!-- ── Main ──────────────────────────────────────────────────── -->
+    <div class="community-main">
+      <div class="community-search-row">
+        <input id="community-search" class="community-search-input" type="search" placeholder="🔍 Search…" autocomplete="off" />
+        <div id="community-quick-tags" class="community-quick-tags"></div>
+      </div>
+      <div id="community-feed" class="community-feed">
+        <div class="community-loading">Loading posts…</div>
+      </div>
+      <button id="load-more-btn" class="community-load-more" hidden>Load more posts</button>
+    </div>
+
+  </div>
+</main>
+
+<!-- ── Compose modal ─────────────────────────────────────────────── -->
+<div id="community-compose-modal" class="community-compose-modal" hidden aria-modal="true" role="dialog">
+  <div class="community-compose-backdrop" id="community-compose-backdrop"></div>
+  <div id="community-compose-wrap" class="community-compose-modal-inner"></div>
+</div>
+
+<!-- ── Post view modal ───────────────────────────────────────────── -->
+<div id="post-modal" class="post-modal" hidden aria-modal="true" role="dialog">
+  <div class="post-modal-backdrop" id="post-modal-backdrop"></div>
+  <div id="post-modal-inner" class="post-modal-inner"></div>
+</div>
+
+<!-- ── Mobile: left drawer ───────────────────────────────────────── -->
+<div id="mobile-drawer-overlay" class="mobile-drawer-overlay"></div>
+<aside id="mobile-drawer" class="mobile-drawer" aria-hidden="true">
+  <div id="mobile-drawer-user" class="mobile-drawer-user"></div>
+  <div class="mobile-drawer-divider"></div>
+  <button id="mobile-drawer-create" class="mobile-drawer-btn">✦ Create Post</button>
+  <button id="mobile-drawer-search" class="mobile-drawer-btn">🔍 Search</button>
+  <button id="mobile-drawer-guides" class="mobile-drawer-btn mobile-drawer-btn--guides">
+    <span>📋 Guides</span><span class="mobile-drawer-caret">▸</span>
+  </button>
+  <div id="mobile-drawer-rules" class="mobile-drawer-rules">
+    <ol>
+      <li>This is an open space for every Fanpages creator and reader — promote your own book, share a meme, post fanart, or just chat!</li>
+      <li>NSFW content is fine and supported! Please just label your post with the NSFW flag before posting.</li>
+      <li>Be respectful of other creators and their work — this is a shared space for the whole community.</li>
+      <li>Have fun!</li>
+    </ol>
+  </div>
+</aside>
+
+<!-- ── Mobile: bottom tab bar ───────────────────────────────────── -->
+<div class="mobile-bottom-bar">
+  <button id="mobile-tab-menu" class="mobile-tab-btn" aria-label="Menu">
+    <span id="mobile-tab-avatar-wrap" class="mobile-tab-avatar-wrap"></span>
+    <span class="mobile-tab-label">Menu</span>
+  </button>
+  <button id="mobile-tab-compose" class="mobile-tab-btn mobile-tab-btn--compose" aria-label="Create post">
+    <span class="mobile-tab-icon">＋</span>
+  </button>
+  <button id="mobile-tab-search"  class="mobile-tab-btn" aria-label="Search">
+    <span class="mobile-tab-icon">⌕</span><span class="mobile-tab-label">Search</span>
+  </button>
+</div>
+
+
+<script>
+const API = '/api';
+const token   = localStorage.getItem('btw_token')   || sessionStorage.getItem('btw_token');
+const rawUser = localStorage.getItem('btw_user')    || sessionStorage.getItem('btw_user');
+let currentUser = null;
+try { currentUser = rawUser ? JSON.parse(rawUser) : null; } catch {}
+
+// All tags (used in compose). Quick filter bar shows only first 3.
+const TAGS = ['General', 'Art/Fanart', 'Theories & Predictions', 'Other'];
+const TAG_META = {
+  'General':                { emoji: '💬', color: '#a78bfa' },
+  'Art/Fanart':             { emoji: '🎨', color: '#c2547a' },
+  'Theories & Predictions': { emoji: '🔮', color: '#f0c060', short: 'Theories' },
+  'Other':                  { emoji: '✦',  color: '#b0b0c8' },
+};
+const QUICK_FILTER_TAGS = ['General', 'Art/Fanart', 'Theories & Predictions'];
+
+const guestLikes = new Set();
+let currentTag  = null;
+let feedCursor  = null;
+let noMore      = false;
+let searchQuery = null;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Report form ───────────────────────────────────────────────────────────────
+function buildReportForm(type, id, anchorEl) {
+  // If one is already open on this item, toggle it closed
+  const existing = anchorEl.querySelector('.report-form');
+  if (existing) { existing.remove(); return; }
+
+  const form = document.createElement('div');
+  form.className = 'report-form';
+  form.innerHTML = `
+    <label class="report-form-label">Please describe the issue you are reporting:</label>
+    <textarea class="report-form-textarea" maxlength="1000" placeholder="Describe the problem…"></textarea>
+    <div class="report-form-actions">
+      <button class="report-form-submit">Send Report</button>
+      <button class="report-form-cancel">Cancel</button>
+    </div>
+    <span class="report-form-msg"></span>
+  `;
+
+  const ta     = form.querySelector('.report-form-textarea');
+  const submit = form.querySelector('.report-form-submit');
+  const cancel = form.querySelector('.report-form-cancel');
+  const msg    = form.querySelector('.report-form-msg');
+
+  cancel.addEventListener('click', () => form.remove());
+
+  submit.addEventListener('click', async () => {
+    const description = ta.value.trim();
+    if (!description) { msg.textContent = 'Please describe the issue first.'; return; }
+    submit.disabled = true;
+    try {
+      const res  = await fetch('/api/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ type, id, description }),
+      });
+      const data = await res.json();
+      if (!res.ok) { msg.textContent = data.error || 'Failed to send.'; submit.disabled = false; return; }
+      ta.remove(); submit.remove(); cancel.remove();
+      msg.className = 'report-form-msg report-form-msg--ok';
+      msg.textContent = '✓ Report submitted. Thank you!';
+      setTimeout(() => form.remove(), 3000);
+    } catch { msg.textContent = 'Network error.'; submit.disabled = false; }
+  });
+
+  anchorEl.appendChild(form);
+  ta.focus();
+}
+
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return days + 'd ago';
+  return new Date(dateStr).toLocaleDateString();
+}
+
+function makeAvatar(user, size) {
+  if (user && user.avatar) {
+    const img = document.createElement('img');
+    img.src = user.avatar;
+    img.alt = (user.display_name || user.username || '');
+    img.className = size === 'sm' ? 'community-avatar-sm' : size === 'lg' ? 'community-avatar-lg' : 'community-avatar-md';
+    img.onerror = function() { this.replaceWith(makeFallback(user, size)); };
+    return img;
+  }
+  return makeFallback(user, size);
+}
+function makeFallback(user, size) {
+  const div = document.createElement('div');
+  div.className = size === 'sm' ? 'community-avatar-fallback-sm' : size === 'lg' ? 'community-avatar-fallback-lg' : 'community-avatar-fallback-md';
+  const name = (user && (user.display_name || user.username)) || '?';
+  div.textContent = name.charAt(0).toUpperCase();
+  return div;
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function renderUserBlock() {
+  const block = document.getElementById('community-user-block');
+  const name = currentUser ? (currentUser.display_name || currentUser.username || 'User') : null;
+  block.appendChild(makeAvatar(currentUser, 'lg'));
+  const nameEl = document.createElement('p');
+  nameEl.className = 'community-sidebar-username';
+  if (!name) nameEl.style.color = 'rgba(200,184,232,0.35)';
+  nameEl.textContent = name || 'Not logged in';
+  block.appendChild(nameEl);
+}
+
+// ── Quick tag filter bar ──────────────────────────────────────────────────────
+function renderQuickTags() {
+  const wrap = document.getElementById('community-quick-tags');
+  wrap.innerHTML = '';
+  const allBtn = makeQuickPill('All', null);
+  wrap.appendChild(allBtn);
+  QUICK_FILTER_TAGS.forEach(tag => {
+    const m = TAG_META[tag];
+    wrap.appendChild(makeQuickPill(m.emoji + ' ' + (m.short || tag), tag));
+  });
+}
+function makeQuickPill(label, tag) {
+  const btn = document.createElement('button');
+  const active = currentTag === tag;
+  const color = tag ? TAG_META[tag].color : '#a78bfa';
+  btn.className = 'community-quick-pill' + (active ? ' community-quick-pill--active' : '');
+  if (active) btn.style.borderColor = color;
+  btn.textContent = label;
+  btn.addEventListener('click', () => {
+    currentTag = tag;
+    document.getElementById('community-search').value = '';
+    searchQuery = null;
+    renderQuickTags();
+    loadPosts(true);
+  });
+  return btn;
+}
+
+// ── Compose ───────────────────────────────────────────────────────────────────
+function renderCompose() {
+  const wrap = document.getElementById('community-compose-wrap');
+  wrap.innerHTML = '';
+
+  if (!currentUser) {
+    const card = document.createElement('div');
+    card.className = 'community-guest-card';
+    card.innerHTML = '<p>Only users with accounts can post here! If you\'d like to make a free account, click Register below!</p>';
+    const reg = document.createElement('a');
+    reg.href = '/login'; reg.className = 'community-guest-register'; reg.textContent = 'Register';
+    card.appendChild(reg); wrap.appendChild(card); return;
+  }
+
+  const card = document.createElement('div');
+  card.className = 'community-compose-card';
+
+  // Modal header
+  const modalHeader = document.createElement('div');
+  modalHeader.className = 'community-compose-modal-header';
+  const modalTitle = document.createElement('span');
+  modalTitle.className = 'community-compose-modal-title'; modalTitle.textContent = 'New Post';
+  const discardBtn = document.createElement('button');
+  discardBtn.className = 'community-compose-discard'; discardBtn.type = 'button';
+  discardBtn.innerHTML = '🗑️ Discard';
+  modalHeader.appendChild(modalTitle); modalHeader.appendChild(discardBtn);
+  card.appendChild(modalHeader);
+
+  // Selected-tag pills row — sits between header and textarea, hidden when empty
+  let selectedTags = new Set();
+  const selectedTagsRow = document.createElement('div');
+  selectedTagsRow.className = 'community-selected-tags';
+  selectedTagsRow.hidden = true;
+  card.appendChild(selectedTagsRow);
+
+  function closeModal() {
+    const m = document.getElementById('community-compose-modal');
+    m.hidden = true;
+    m.style.height = '';
+    document.getElementById('create-post-btn').classList.remove('community-create-post-btn--active');
+    if (window._composePushedState) { window._composePushedState = false; history.back(); }
+  }
+  let discardCompose = () => {};
+  discardBtn.addEventListener('click', () => { discardCompose(); closeModal(); });
+
+  // Avatar + textarea
+  const topRow = document.createElement('div');
+  topRow.className = 'community-compose-row';
+  topRow.appendChild(makeAvatar(currentUser, 'md'));
+  const textarea = document.createElement('textarea');
+  textarea.className = 'community-compose-textarea';
+  textarea.placeholder = "What's on your mind?";
+  textarea.maxLength = 20000;
+  topRow.appendChild(textarea);
+  card.appendChild(topRow);
+
+  // Multi-file / GIF preview area
+  let selectedFiles = [], selectedGifUrl = null;
+
+  const previewWrap = document.createElement('div');
+  previewWrap.className = 'community-compose-preview'; previewWrap.hidden = true;
+
+  function renderPreview() {
+    previewWrap.innerHTML = '';
+    if (selectedGifUrl) {
+      const item = document.createElement('div'); item.className = 'community-compose-img-item';
+      const img = document.createElement('img');
+      img.src = selectedGifUrl; img.className = 'community-compose-preview-img'; img.alt = 'GIF';
+      const rmv = document.createElement('button');
+      rmv.type = 'button'; rmv.className = 'community-compose-preview-remove'; rmv.textContent = '✕';
+      rmv.addEventListener('click', () => { selectedGifUrl = null; renderPreview(); });
+      item.appendChild(img); item.appendChild(rmv); previewWrap.appendChild(item);
+      previewWrap.hidden = false;
+    } else if (selectedFiles.length > 0) {
+      const grid = document.createElement('div'); grid.className = 'community-compose-img-grid';
+      selectedFiles.forEach((file, i) => {
+        const item = document.createElement('div'); item.className = 'community-compose-img-item';
+        const img = document.createElement('img'); img.className = 'community-compose-preview-img'; img.alt = file.name;
+        const reader = new FileReader();
+        reader.onload = (e) => { img.src = e.target.result; };
+        reader.readAsDataURL(file);
+        const rmv = document.createElement('button');
+        rmv.type = 'button'; rmv.className = 'community-compose-preview-remove'; rmv.textContent = '✕';
+        rmv.addEventListener('click', () => {
+          selectedFiles = selectedFiles.filter((_, j) => j !== i);
+          fileCountEl.textContent = selectedFiles.length > 0 ? selectedFiles.length + '/4' : '';
+          fileClear.hidden = selectedFiles.length === 0;
+          renderPreview();
+        });
+        item.appendChild(img); item.appendChild(rmv); grid.appendChild(item);
+      });
+      previewWrap.appendChild(grid); previewWrap.hidden = false;
+    } else {
+      previewWrap.hidden = true;
+    }
+  }
+  card.appendChild(previewWrap);
+
+  const errEl = document.createElement('div'); errEl.className = 'community-compose-error'; errEl.hidden = true;
+
+  // Footer
+  const footer = document.createElement('div'); footer.className = 'community-compose-footer';
+  const footerLeft  = document.createElement('div'); footerLeft.className  = 'community-compose-footer-left';
+  const footerRight = document.createElement('div'); footerRight.className = 'community-compose-footer-right';
+
+  // Left: file input, attach label, GIF button, count, clear
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file'; fileInput.id = 'c-file'; fileInput.accept = 'image/*';
+  fileInput.multiple = true; fileInput.style.display = 'none';
+  const attachLabel = document.createElement('label');
+  attachLabel.className = 'community-attach-btn'; attachLabel.htmlFor = 'c-file';
+  attachLabel.innerHTML = '<span class="community-attach-plus">+</span> Attach';
+  const fileCountEl = document.createElement('span'); fileCountEl.className = 'community-file-count';
+  const fileClear = document.createElement('button');
+  fileClear.className = 'community-file-clear'; fileClear.hidden = true; fileClear.textContent = '✕'; fileClear.type = 'button';
+  const gifBtn = document.createElement('button');
+  gifBtn.type = 'button'; gifBtn.className = 'community-gif-btn'; gifBtn.textContent = 'GIF';
+
+  function clearAllFiles() {
+    selectedFiles = []; selectedGifUrl = null; fileInput.value = '';
+    fileCountEl.textContent = ''; fileClear.hidden = true; renderPreview();
+  }
+  // Prevent mousedown on footer buttons from stealing focus (keeps keyboard open)
+  [attachLabel, gifBtn, fileClear].forEach(el =>
+    el.addEventListener('mousedown', e => e.preventDefault())
+  );
+  fileClear.addEventListener('click', clearAllFiles);
+  fileInput.addEventListener('change', () => {
+    const incoming = Array.from(fileInput.files);
+    if (!incoming.length) return;
+    if (incoming.some(f => f.size > 50 * 1024 * 1024)) {
+      fileInput.value = ''; errEl.textContent = 'A file exceeds 50 MB.'; errEl.hidden = false; return;
+    }
+    if (selectedFiles.length + incoming.length > 4) {
+      fileInput.value = ''; errEl.textContent = 'You can attach up to 4 images.'; errEl.hidden = false; return;
+    }
+    selectedGifUrl = null;
+    selectedFiles = [...selectedFiles, ...incoming];
+    fileInput.value = '';
+    fileCountEl.textContent = selectedFiles.length + '/4';
+    fileClear.hidden = false; errEl.hidden = true;
+    renderPreview();
+  });
+
+  footerLeft.appendChild(attachLabel); footerLeft.appendChild(fileInput);
+  footerLeft.appendChild(gifBtn); footerLeft.appendChild(fileCountEl); footerLeft.appendChild(fileClear);
+
+  // Right: tag picker (multi-select), NSFW, char count, submit
+  const tagOptButtons = {};
+  const tagWrap = document.createElement('div'); tagWrap.className = 'community-tag-picker-wrap';
+  const tagBtn = document.createElement('button');
+  tagBtn.className = 'community-tag-picker-btn'; tagBtn.type = 'button';
+  tagBtn.innerHTML = '🏷️ Tags <span class="community-tag-caret">▾</span>';
+  const tagDropdown = document.createElement('div');
+  tagDropdown.className = 'community-tag-dropdown'; tagDropdown.hidden = true;
+
+  function updateTagBtn() {
+    if (selectedTags.size === 0) {
+      tagBtn.innerHTML = '🏷️ Tags <span class="community-tag-caret">▾</span>';
+      tagBtn.style.borderColor = ''; tagBtn.style.color = '';
+    } else {
+      tagBtn.innerHTML = `🏷️ Tags (${selectedTags.size}) <span class="community-tag-caret">▾</span>`;
+      tagBtn.style.borderColor = '#a78bfa'; tagBtn.style.color = '#a78bfa';
+    }
+  }
+
+  function updateTagDropdownOpts() {
+    TAGS.forEach(tag => {
+      const m = TAG_META[tag];
+      const opt = tagOptButtons[tag];
+      if (!opt) return;
+      const checked = selectedTags.has(tag);
+      opt.innerHTML = `<span class="community-tag-option-check">${checked ? '✓' : ''}</span>${m.emoji} ${tag}`;
+      opt.style.color = m.color;
+      opt.classList.toggle('community-tag-option--selected', checked);
+    });
+  }
+
+  function updateSelectedTagsRow() {
+    selectedTagsRow.innerHTML = '';
+    if (selectedTags.size === 0) { selectedTagsRow.hidden = true; return; }
+    selectedTagsRow.hidden = false;
+    selectedTags.forEach(tag => {
+      const m = TAG_META[tag];
+      const pill = document.createElement('span');
+      pill.className = 'community-selected-tag-pill';
+      pill.style.cssText = `color:${m.color};border-color:${m.color}44;background:${m.color}18`;
+      const pillText = document.createElement('span');
+      pillText.textContent = m.emoji + ' ' + tag;
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button'; removeBtn.className = 'community-selected-tag-remove';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectedTags.delete(tag);
+        updateSelectedTagsRow(); updateTagDropdownOpts(); updateTagBtn();
+      });
+      pill.appendChild(pillText); pill.appendChild(removeBtn);
+      selectedTagsRow.appendChild(pill);
+    });
+  }
+
+  TAGS.forEach(tag => {
+    const m = TAG_META[tag];
+    const opt = document.createElement('button');
+    opt.className = 'community-tag-option'; opt.type = 'button';
+    opt.innerHTML = `<span class="community-tag-option-check"></span>${m.emoji} ${tag}`;
+    opt.style.color = m.color;
+    opt.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (selectedTags.has(tag)) { selectedTags.delete(tag); } else { selectedTags.add(tag); }
+      updateSelectedTagsRow(); updateTagDropdownOpts(); updateTagBtn();
+    });
+    tagOptButtons[tag] = opt;
+    tagDropdown.appendChild(opt);
+  });
+
+  tagBtn.addEventListener('mousedown', e => e.preventDefault());
+  tagDropdown.addEventListener('mousedown', e => e.preventDefault());
+  tagBtn.addEventListener('click', (e) => { e.stopPropagation(); tagDropdown.hidden = !tagDropdown.hidden; });
+  document.addEventListener('click', () => { tagDropdown.hidden = true; });
+  tagWrap.appendChild(tagBtn); tagWrap.appendChild(tagDropdown);
+
+  const nsfwLabel = document.createElement('label'); nsfwLabel.className = 'community-nsfw-switch';
+  const nsfwCheckbox = document.createElement('input'); nsfwCheckbox.type = 'checkbox'; nsfwCheckbox.className = 'community-nsfw-checkbox';
+  const nsfwSlider = document.createElement('span'); nsfwSlider.className = 'community-nsfw-slider';
+  const nsfwText = document.createElement('span'); nsfwText.className = 'community-nsfw-label'; nsfwText.textContent = 'NSFW';
+  nsfwLabel.appendChild(nsfwCheckbox); nsfwLabel.appendChild(nsfwSlider); nsfwLabel.appendChild(nsfwText);
+
+  const charCount = document.createElement('span');
+  charCount.className = 'community-char-count'; charCount.textContent = '0 / 20,000';
+  textarea.addEventListener('input', () => {
+    const n = textarea.value.length;
+    charCount.textContent = n.toLocaleString() + ' / 20,000';
+    charCount.style.color = n > 18000 ? '#c2547a' : '';
+  });
+
+  const submitBtn = document.createElement('button'); submitBtn.className = 'community-submit-btn'; submitBtn.textContent = 'Post ✨';
+
+  submitBtn.addEventListener('click', async () => {
+    const body = textarea.value.trim();
+    if (!body) { errEl.textContent = 'Write something first!'; errEl.hidden = false; return; }
+    submitBtn.disabled = true; submitBtn.textContent = 'Posting…'; errEl.hidden = true;
+    const form = new FormData();
+    form.append('body', body);
+    form.append('tag', Array.from(selectedTags).join(',') || 'General');
+    form.append('nsfw', nsfwCheckbox.checked ? 'true' : 'false');
+    if (selectedGifUrl) {
+      form.append('gif_url', selectedGifUrl);
+    } else {
+      selectedFiles.forEach(f => form.append('attachments', f));
+    }
+    try {
+      const res  = await fetch(API + '/community/posts', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: form });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = data.error || 'Something went wrong.'; errEl.hidden = false; }
+      else {
+        discardCompose(); closeModal();
+        const feed = document.getElementById('community-feed');
+        const loading = feed.querySelector('.community-loading,.community-empty');
+        if (loading) loading.remove();
+        feed.insertBefore(renderPost(data.post), feed.firstChild);
+      }
+    } catch { errEl.textContent = 'Network error.'; errEl.hidden = false; }
+    finally { submitBtn.disabled = false; submitBtn.textContent = 'Post ✨'; }
+  });
+
+  footerRight.appendChild(tagWrap); footerRight.appendChild(nsfwLabel);
+  footerRight.appendChild(charCount); footerRight.appendChild(submitBtn);
+  footer.appendChild(footerLeft); footer.appendChild(footerRight);
+  card.appendChild(footer); card.appendChild(errEl);
+
+  // GIF picker — floating popover appended to document.body
+  const gifPickerWrap = document.createElement('div');
+  gifPickerWrap.className = 'community-gif-picker'; gifPickerWrap.hidden = true;
+
+  const gifPickerTop = document.createElement('div'); gifPickerTop.className = 'community-gif-picker-top';
+  const gifSearch = document.createElement('input');
+  gifSearch.type = 'text'; gifSearch.placeholder = '🔍 Search GIFs…'; gifSearch.className = 'community-gif-search';
+  gifPickerTop.appendChild(gifSearch);
+
+  const gifLabel = document.createElement('div'); gifLabel.className = 'community-gif-label'; gifLabel.textContent = '✨ Trending';
+  const gifResults = document.createElement('div'); gifResults.className = 'community-gif-results';
+
+  let gifTimer = null, trendingCache = null;
+
+  function populateGifResults(gifs) {
+    gifResults.innerHTML = '';
+    if (!gifs.length) { gifResults.innerHTML = '<div class="community-gif-loading">No GIFs found.</div>'; return; }
+    gifs.forEach(gif => {
+      const img = document.createElement('img');
+      img.src = gif.preview; img.title = gif.title; img.className = 'community-gif-item'; img.loading = 'lazy';
+      img.addEventListener('click', () => {
+        selectedGifUrl = gif.url; selectedFiles = []; fileInput.value = '';
+        fileCountEl.textContent = ''; fileClear.hidden = true;
+        gifPickerWrap.hidden = true; gifSearch.value = ''; gifLabel.textContent = '✨ Trending';
+        renderPreview();
+      });
+      gifResults.appendChild(img);
+    });
+  }
+
+  async function loadTrending() {
+    if (trendingCache) { populateGifResults(trendingCache); return; }
+    gifResults.innerHTML = '<div class="community-gif-loading">Loading…</div>';
+    try {
+      const res = await fetch(API + '/giphy/trending');
+      const data = await res.json();
+      trendingCache = data.gifs || [];
+      populateGifResults(trendingCache);
+    } catch { gifResults.innerHTML = '<div class="community-gif-loading">Could not load.</div>'; }
+  }
+
+  async function searchGifs(q) {
+    gifResults.innerHTML = '<div class="community-gif-loading">Searching…</div>';
+    try {
+      const res = await fetch(API + '/giphy/search?q=' + encodeURIComponent(q));
+      const data = await res.json();
+      populateGifResults(data.gifs || []);
+    } catch { gifResults.innerHTML = '<div class="community-gif-loading">Failed to load.</div>'; }
+  }
+
+  gifSearch.addEventListener('input', () => {
+    clearTimeout(gifTimer);
+    const q = gifSearch.value.trim();
+    if (!q) { gifLabel.textContent = '✨ Trending'; gifTimer = setTimeout(loadTrending, 150); return; }
+    gifLabel.textContent = 'Results';
+    gifTimer = setTimeout(() => searchGifs(q), 350);
+  });
+
+  function positionGifPicker() {
+    const rect = gifBtn.getBoundingClientRect();
+    const pw = 360, ph = 420;
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - pw - 8));
+    const top  = rect.top - ph - 8 > 8 ? rect.top - ph - 8 : rect.bottom + 8;
+    gifPickerWrap.style.left  = left + 'px';
+    gifPickerWrap.style.top   = top  + 'px';
+    gifPickerWrap.style.width = pw   + 'px';
+  }
+
+  gifBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (gifPickerWrap.hidden) {
+      positionGifPicker(); gifPickerWrap.hidden = false;
+      loadTrending(); setTimeout(() => gifSearch.focus(), 50);
+    } else {
+      gifPickerWrap.hidden = true;
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!gifPickerWrap.hidden && !gifPickerWrap.contains(e.target) && e.target !== gifBtn)
+      gifPickerWrap.hidden = true;
+  });
+
+  gifPickerWrap.appendChild(gifPickerTop);
+  gifPickerWrap.appendChild(gifLabel);
+  gifPickerWrap.appendChild(gifResults);
+  document.body.appendChild(gifPickerWrap);
+
+  // Assign real discard function now that all vars exist
+  discardCompose = () => {
+    textarea.value = ''; charCount.textContent = '0 / 20,000'; charCount.style.color = '';
+    clearAllFiles(); selectedTags.clear();
+    updateSelectedTagsRow(); updateTagDropdownOpts(); updateTagBtn();
+    nsfwCheckbox.checked = false; errEl.hidden = true;
+    gifPickerWrap.hidden = true; gifSearch.value = ''; gifLabel.textContent = '✨ Trending';
+  };
+
+  wrap.appendChild(card);
+}
+
+// ── Time formatter ────────────────────────────────────────────────────────────
+function formatTime(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  let h = d.getHours(), ampm = 'a.m.';
+  if (h >= 12) { ampm = 'p.m.'; if (h > 12) h -= 12; }
+  if (h === 0) h = 12;
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return mm + '/' + dd + '/' + yyyy + ' ' + h + ':' + min + ' ' + ampm;
+}
+
+// ── Media helpers (top-level so post modal can use them) ──────────────────────
+function resolveMedia(post) {
+  if (post.gif_url) return { type: 'gif', url: post.gif_url };
+  const urls = (() => {
+    if (post.attachments) { try { return JSON.parse(post.attachments); } catch {} }
+    if (post.attachment_url) return [post.attachment_url];
+    return [];
+  })();
+  return urls.length ? { type: 'images', urls } : null;
+}
+function appendMedia(container, media, blur) {
+  if (!media) return;
+  const blurClass = blur ? ' community-nsfw-blur' : '';
+  if (media.type === 'gif') {
+    const img = document.createElement('img');
+    img.src = media.url; img.alt = 'GIF'; img.className = 'community-post-img' + blurClass;
+    container.appendChild(img);
+  } else if (media.urls.length === 1) {
+    const img = document.createElement('img');
+    img.src = media.urls[0]; img.alt = 'Post image'; img.className = 'community-post-img' + blurClass;
+    container.appendChild(img);
+  } else {
+    const grid = document.createElement('div');
+    grid.className = 'community-post-img-grid community-post-img-grid--' + media.urls.length + blurClass;
+    media.urls.forEach(url => {
+      const img = document.createElement('img');
+      img.src = url; img.alt = 'Post image'; img.className = 'community-post-img-grid-item';
+      grid.appendChild(img);
+    });
+    container.appendChild(grid);
+  }
+}
+
+// ── Render post ───────────────────────────────────────────────────────────────
+function renderPost(p) {
+  const pinned = !!p.pinned;
+  const isNsfw = !!p.nsfw;
+  const card = document.createElement('div');
+  card.className = 'community-post' + (pinned ? ' community-post--pinned' : '') + (isNsfw ? ' community-post--nsfw' : '');
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'community-post-header';
+  header.appendChild(makeAvatar({ avatar: p.avatar, display_name: p.display_name, username: p.username }, 'md'));
+
+  const meta = document.createElement('div');
+  meta.className = 'community-post-meta';
+
+  const authorEl = document.createElement('span');
+  authorEl.className = 'community-post-author' + (pinned ? ' community-post-author--admin' : '');
+  authorEl.textContent = p.display_name || p.username || 'Unknown';
+
+  meta.appendChild(authorEl);
+  (p.tag || 'General').split(',').map(t => t.trim()).filter(Boolean).forEach(tagKey => {
+    const tk = tagKey === 'Fanart' ? 'Art/Fanart' : tagKey;
+    const m = TAG_META[tk] || TAG_META['General'];
+    const tagBadge = document.createElement('span');
+    tagBadge.className = 'community-post-tag';
+    tagBadge.textContent = m.emoji + ' ' + tk;
+    tagBadge.style.cssText = 'color:' + m.color + ';border-color:' + m.color + '44';
+    meta.appendChild(tagBadge);
+  });
+  if (isNsfw) {
+    const nsfwFlag = document.createElement('span');
+    nsfwFlag.className = 'community-post-nsfw-flag';
+    nsfwFlag.textContent = '🔞';
+    meta.appendChild(nsfwFlag);
+  }
+
+  const timeEl = document.createElement('span');
+  timeEl.className = 'community-post-time';
+  timeEl.textContent = timeAgo(p.created_at);
+  meta.appendChild(timeEl);
+  header.appendChild(meta);
+
+  const isOwner = currentUser && (currentUser.id === p.user_id);
+  if (pinned) {
+    const right = document.createElement('div');
+    right.className = 'community-post-header-right';
+    const badge = document.createElement('span');
+    badge.className = 'community-pin-badge'; badge.textContent = '📌 Author';
+    right.appendChild(badge); header.appendChild(right);
+  }
+  card.appendChild(header);
+
+  const media = resolveMedia(p);
+
+  // Body + image (NSFW gate for guests)
+  if (isNsfw && !currentUser) {
+    const gate = document.createElement('div');
+    gate.className = 'community-nsfw-gate';
+    const blurBody = document.createElement('p');
+    blurBody.className = 'community-post-body community-nsfw-blur';
+    blurBody.textContent = p.body;
+    gate.appendChild(blurBody);
+    appendMedia(gate, media, true);
+    const overlay = document.createElement('div');
+    overlay.className = 'community-nsfw-overlay';
+    overlay.innerHTML = '🔞 NSFW &mdash; <a href="/login">Log in</a> to view';
+    gate.appendChild(overlay);
+    card.appendChild(gate);
+  } else {
+    const body = document.createElement('p');
+    body.className = 'community-post-body';
+    body.textContent = p.body;
+    card.appendChild(body);
+    appendMedia(card, media, false);
+  }
+
+  // Actions bar
+  const actions = document.createElement('div');
+  actions.className = 'community-post-actions';
+
+  const likedInit = p.user_liked || guestLikes.has(p.id);
+  const likeBtn = document.createElement('button');
+  likeBtn.className = 'community-action' + (likedInit ? ' community-action--liked' : '');
+  const likeCount = document.createElement('span');
+  likeCount.textContent = p.like_count || 0;
+  likeBtn.innerHTML = '♥ ';
+  likeBtn.appendChild(likeCount);
+  likeBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleLike(p.id, likeBtn, likeCount); });
+  actions.appendChild(likeBtn);
+
+  const commentCount = document.createElement('span');
+  commentCount.textContent = p.comment_count || 0;
+  const commentBtn = document.createElement('button');
+  commentBtn.className = 'community-action';
+  commentBtn.innerHTML = '💬 ';
+  commentBtn.appendChild(commentCount);
+  commentBtn.addEventListener('click', (e) => { e.stopPropagation(); openPostModal(p, likeBtn, likeCount, commentCount); });
+  actions.appendChild(commentBtn);
+
+  const timeStamp = document.createElement('span');
+  timeStamp.className = 'community-post-time-stamp';
+  timeStamp.textContent = formatTime(p.created_at);
+  actions.appendChild(timeStamp);
+
+  // Trash icon — owner sees it on their posts; admin sees it on all posts
+  const canDelete = isOwner || (currentUser && currentUser.is_admin);
+  if (canDelete) {
+    const delBtn = document.createElement('button');
+    delBtn.className = 'community-post-delete'; delBtn.title = 'Delete post'; delBtn.textContent = '🗑️';
+    delBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm('Delete this post?')) return;
+      const r = await fetch(API + '/community/posts/' + p.id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } });
+      if (r.ok) card.remove();
+    });
+    actions.appendChild(delBtn);
+  }
+
+  // NSFW toggle — admin only
+  if (currentUser && currentUser.is_admin) {
+    let nsfwState = isNsfw;
+    const nsfwBtn = document.createElement('button');
+    nsfwBtn.className = 'community-post-nsfw-toggle' + (nsfwState ? ' community-post-nsfw-toggle--on' : '');
+    nsfwBtn.title = nsfwState ? 'Remove NSFW flag' : 'Mark as NSFW';
+    nsfwBtn.textContent = nsfwState ? '🔞 NSFW' : '🔞 Mark NSFW';
+    nsfwBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      nsfwBtn.disabled = true;
+      const r = await fetch(`${API}/community/posts/${p.id}/nsfw`, {
+        method: 'PATCH', headers: { Authorization: 'Bearer ' + token },
+      });
+      if (!r.ok) { nsfwBtn.disabled = false; return; }
+      const data = await r.json();
+      nsfwState = data.nsfw;
+      nsfwBtn.disabled = false;
+      nsfwBtn.textContent = nsfwState ? '🔞 NSFW' : '🔞 Mark NSFW';
+      nsfwBtn.className = 'community-post-nsfw-toggle' + (nsfwState ? ' community-post-nsfw-toggle--on' : '');
+      nsfwBtn.title = nsfwState ? 'Remove NSFW flag' : 'Mark as NSFW';
+
+      // Update card class
+      card.classList.toggle('community-post--nsfw', nsfwState);
+
+      // Update 🔞 badge in header
+      let existingFlag = meta.querySelector('.community-post-nsfw-flag');
+      if (nsfwState && !existingFlag) {
+        const flag = document.createElement('span');
+        flag.className = 'community-post-nsfw-flag'; flag.textContent = '🔞';
+        meta.insertBefore(flag, timeEl);
+      } else if (!nsfwState && existingFlag) {
+        existingFlag.remove();
+      }
+    });
+    actions.appendChild(nsfwBtn);
+  }
+
+  // Report button — shown to logged-in non-owners
+  if (currentUser && !isOwner) {
+    const repBtn = document.createElement('button');
+    repBtn.className = 'community-post-report'; repBtn.title = 'Report post'; repBtn.textContent = '⚑ Report';
+    repBtn.addEventListener('click', (e) => { e.stopPropagation(); buildReportForm('post', p.id, card); });
+    actions.appendChild(repBtn);
+  }
+
+  card.style.cursor = 'pointer';
+  card.addEventListener('click', (e) => {
+    if (e.target.closest('button, a, textarea, input')) return;
+    openPostModal(p, likeBtn, likeCount, commentCount);
+  });
+
+  card.appendChild(actions);
+  return card;
+}
+
+// ── Toggle like ───────────────────────────────────────────────────────────────
+async function toggleLike(postId, btn, countEl) {
+  if (!currentUser) {
+    if (guestLikes.has(postId)) {
+      guestLikes.delete(postId);
+      btn.classList.remove('community-action--liked');
+      countEl.textContent = Math.max(0, parseInt(countEl.textContent) - 1);
+    } else {
+      guestLikes.add(postId);
+      btn.classList.add('community-action--liked');
+      countEl.textContent = parseInt(countEl.textContent) + 1;
+    }
+    return;
+  }
+  try {
+    const res  = await fetch(API + '/community/posts/' + postId + '/like', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+    const data = await res.json();
+    btn.classList.toggle('community-action--liked', data.liked);
+    countEl.textContent = data.like_count;
+  } catch {}
+}
+
+// ── Post modal ────────────────────────────────────────────────────────────────
+function openPostModal(p, cardLikeBtn, cardLikeCount, cardCommentCount) {
+  const modal = document.getElementById('post-modal');
+  const inner = document.getElementById('post-modal-inner');
+  inner.innerHTML = '';
+  document.body.style.overflow = 'hidden';
+
+  // × close button
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'post-modal-close'; closeBtn.textContent = '✕'; closeBtn.type = 'button';
+  closeBtn.addEventListener('click', () => { modal.hidden = true; document.body.style.overflow = ''; });
+  inner.appendChild(closeBtn);
+
+  // Header: avatar + name + tag
+  const header = document.createElement('div');
+  header.className = 'post-modal-header';
+  header.appendChild(makeAvatar({ avatar: p.avatar, display_name: p.display_name, username: p.username }, 'md'));
+  const meta = document.createElement('div'); meta.className = 'community-post-meta';
+  const authorEl = document.createElement('span');
+  authorEl.className = 'community-post-author' + (p.pinned ? ' community-post-author--admin' : '');
+  authorEl.textContent = p.display_name || p.username || 'Unknown';
+  meta.appendChild(authorEl);
+  (p.tag || 'General').split(',').map(t => t.trim()).filter(Boolean).forEach(tagKey => {
+    const tk = tagKey === 'Fanart' ? 'Art/Fanart' : tagKey;
+    const m = TAG_META[tk] || TAG_META['General'];
+    const tagBadge = document.createElement('span');
+    tagBadge.className = 'community-post-tag';
+    tagBadge.textContent = m.emoji + ' ' + tk;
+    tagBadge.style.cssText = 'color:' + m.color + ';border-color:' + m.color + '44';
+    meta.appendChild(tagBadge);
+  });
+  if (p.nsfw) { const f = document.createElement('span'); f.className = 'community-post-nsfw-flag'; f.textContent = '🔞'; meta.appendChild(f); }
+  header.appendChild(meta);
+  inner.appendChild(header);
+
+  // Timestamp
+  const timeEl = document.createElement('p'); timeEl.className = 'post-modal-time-label';
+  timeEl.textContent = '🕐 ' + formatTime(p.created_at);
+  inner.appendChild(timeEl);
+
+  // Post body + media
+  const body = document.createElement('p');
+  body.className = 'community-post-body'; body.style.margin = '0.9rem 0';
+  body.textContent = p.body;
+  inner.appendChild(body);
+  appendMedia(inner, resolveMedia(p), false);
+
+  // Divider
+  inner.appendChild(Object.assign(document.createElement('hr'), { className: 'post-modal-divider' }));
+
+  // Big like + comment buttons
+  const actionsRow = document.createElement('div'); actionsRow.className = 'post-modal-actions';
+
+  let modalLiked = !!(p.user_liked || guestLikes.has(p.id));
+  let modalLikeNum = parseInt(p.like_count) || 0;
+  const bigLikeBtn = document.createElement('button'); bigLikeBtn.type = 'button';
+  function refreshLike() {
+    bigLikeBtn.className = 'post-modal-action-btn' + (modalLiked ? ' post-modal-action-btn--liked' : '');
+    bigLikeBtn.innerHTML = (modalLiked ? '♥' : '♡') + '&nbsp;' + modalLikeNum + ' Like' + (modalLikeNum !== 1 ? 's' : '');
+  }
+  refreshLike();
+  bigLikeBtn.addEventListener('click', async () => {
+    if (!currentUser) {
+      if (guestLikes.has(p.id)) { guestLikes.delete(p.id); modalLiked = false; modalLikeNum--; }
+      else { guestLikes.add(p.id); modalLiked = true; modalLikeNum++; }
+    } else {
+      try {
+        const res = await fetch(API + '/community/posts/' + p.id + '/like', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+        const data = await res.json();
+        modalLiked = data.liked; modalLikeNum = data.like_count;
+      } catch {}
+    }
+    refreshLike();
+    cardLikeBtn.className = 'community-action' + (modalLiked ? ' community-action--liked' : '');
+    cardLikeCount.textContent = modalLikeNum;
+  });
+  actionsRow.appendChild(bigLikeBtn);
+
+  const commentNumEl = document.createElement('span');
+  commentNumEl.textContent = parseInt(cardCommentCount.textContent) || 0;
+  const commentInfo = document.createElement('div'); commentInfo.className = 'post-modal-action-btn post-modal-action-btn--passive';
+  commentInfo.innerHTML = '💬&nbsp;'; commentInfo.appendChild(commentNumEl);
+  commentInfo.appendChild(Object.assign(document.createElement('span'), { textContent: ' Comments' }));
+  actionsRow.appendChild(commentInfo);
+  inner.appendChild(actionsRow);
+
+  inner.appendChild(Object.assign(document.createElement('hr'), { className: 'post-modal-divider' }));
+
+  // Comments area
+  const commentsArea = document.createElement('div'); commentsArea.className = 'post-modal-comments';
+  commentsArea.innerHTML = '<div class="community-loading" style="font-size:0.82rem;padding:0.6rem 0">Loading…</div>';
+  inner.appendChild(commentsArea);
+
+  fetch(API + '/community/posts/' + p.id + '/comments')
+    .then(r => r.json())
+    .then(data => {
+      commentsArea.innerHTML = '';
+      renderThreadedComments(data.comments, p.id, commentsArea, cardCommentCount);
+    })
+    .catch(() => { commentsArea.innerHTML = '<div class="community-loading" style="font-size:0.82rem">Could not load comments.</div>'; });
+
+  modal.hidden = false;
+}
+
+// ── Comments ──────────────────────────────────────────────────────────────────
+async function loadComments(postId, wrap, countEl) {
+  wrap.innerHTML = '<div class="community-loading" style="font-size:0.82rem;padding:0.6rem 0">Loading…</div>';
+  try {
+    const res  = await fetch(API + '/community/posts/' + postId + '/comments');
+    const data = await res.json();
+    wrap.innerHTML = '';
+    renderThreadedComments(data.comments, postId, wrap, countEl);
+  } catch { wrap.innerHTML = '<div class="community-loading" style="font-size:0.82rem">Could not load.</div>'; }
+}
+
+// Build nested comment tree and render into wrap
+function renderThreadedComments(comments, postId, wrap, countEl) {
+  const byId = {};
+  const topLevel = [];
+  const repliesMap = {};
+
+  comments.forEach(c => { byId[c.id] = c; });
+  comments.forEach(c => {
+    if (!c.parent_id) {
+      topLevel.push(c);
+    } else {
+      if (!repliesMap[c.parent_id]) repliesMap[c.parent_id] = [];
+      repliesMap[c.parent_id].push(c);
+    }
+  });
+
+  if (!topLevel.length) {
+    const e = document.createElement('p'); e.className = 'post-modal-empty';
+    e.textContent = 'No comments yet! Be the first to reply? ✨';
+    wrap.appendChild(e);
+  } else {
+    topLevel.forEach(c => {
+      wrap.appendChild(renderComment(c, postId, countEl, repliesMap));
+    });
+  }
+  renderCommentInput(postId, wrap, countEl, null);
+}
+
+function renderComment(c, postId, countEl, repliesMap, isReply) {
+  const div = document.createElement('div');
+  div.className = isReply ? 'community-comment community-comment--reply' : 'community-comment';
+  div.appendChild(makeAvatar({ avatar: c.avatar, display_name: c.display_name, username: c.username }, 'sm'));
+
+  // Column wrapper so main, replies, and inline input all stack vertically
+  const right = document.createElement('div');
+  right.className = 'community-comment-right';
+
+  const main = document.createElement('div');
+  main.className = 'community-comment-main';
+
+  const top = document.createElement('div');
+  top.className = 'community-comment-top';
+  const author = document.createElement('span');
+  author.className = 'community-comment-author';
+  author.textContent = c.display_name || c.username || 'Unknown';
+  const time = document.createElement('span');
+  time.className = 'community-comment-time';
+  time.textContent = timeAgo(c.created_at);
+  top.appendChild(author); top.appendChild(time);
+
+  const body = document.createElement('p');
+  body.className = 'community-comment-body';
+  body.textContent = c.body;
+  main.appendChild(top); main.appendChild(body);
+
+  // Action buttons row
+  const actions = document.createElement('div');
+  actions.className = 'community-comment-actions';
+
+  // Reply button (only on top-level, logged-in users)
+  if (currentUser && !isReply) {
+    const repBtn = document.createElement('button');
+    repBtn.className = 'community-comment-reply-btn';
+    repBtn.textContent = '↩ Reply';
+    repBtn.addEventListener('click', () => {
+      const existing = right.querySelector('.community-comment-inline-input');
+      if (existing) { existing.remove(); return; }
+      renderCommentInput(postId, right, countEl, c.id);
+    });
+    actions.appendChild(repBtn);
+  }
+
+  const isOwn   = currentUser && (c.username === currentUser.username);
+  const isAdmin = currentUser && currentUser.is_admin;
+  if ((isOwn || isAdmin) && postId) {
+    const delBtn = document.createElement('button');
+    delBtn.className = 'community-comment-delete';
+    delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', async () => {
+      if (!confirm('Delete this comment?')) return;
+      try {
+        const res = await fetch(`${API}/community/posts/${postId}/comments/${c.id}`, {
+          method: 'DELETE',
+          headers: { Authorization: 'Bearer ' + token },
+        });
+        if (res.ok) {
+          div.remove();
+          if (countEl) countEl.textContent = Math.max(0, parseInt(countEl.textContent) - 1);
+        }
+      } catch {}
+    });
+    actions.appendChild(delBtn);
+  }
+
+  if (currentUser && !isOwn && postId) {
+    const flagBtn = document.createElement('button');
+    flagBtn.className = 'community-comment-delete';
+    flagBtn.textContent = '⚑ Report';
+    flagBtn.style.color = 'rgba(255,255,255,0.3)';
+    flagBtn.addEventListener('click', () => buildReportForm('comment', c.id, div));
+    actions.appendChild(flagBtn);
+  }
+
+  main.appendChild(actions);
+  right.appendChild(main);
+
+  // Render existing replies nested below (inside the right column)
+  if (!isReply && repliesMap && repliesMap[c.id]) {
+    const repliesWrap = document.createElement('div');
+    repliesWrap.className = 'community-comment-replies';
+    repliesMap[c.id].forEach(r => repliesWrap.appendChild(renderComment(r, postId, countEl, null, true)));
+    right.appendChild(repliesWrap);
+  }
+
+  div.appendChild(right);
+  return div;
+}
+
+function renderCommentInput(postId, wrap, countEl, parentId) {
+  if (!currentUser) {
+    const note = document.createElement('p');
+    note.className = 'community-comment-guest';
+    note.innerHTML = '<a href="/login">Log in</a> to leave a comment.';
+    wrap.appendChild(note);
+    return;
+  }
+  const isInline = parentId !== null && parentId !== undefined;
+  const row = document.createElement('div');
+  row.className = isInline ? 'community-comment-input-row community-comment-inline-input' : 'community-comment-input-row';
+  row.appendChild(makeAvatar(currentUser, 'sm'));
+  const ta = document.createElement('textarea');
+  ta.className = 'community-comment-textarea';
+  ta.placeholder = isInline ? 'Write a reply…' : 'Write a comment…';
+  ta.maxLength = 500;
+  if (isInline) setTimeout(() => ta.focus(), 50);
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'community-comment-btn-row';
+  const btn = document.createElement('button');
+  btn.className = 'community-comment-submit'; btn.textContent = isInline ? 'Post Reply' : 'Comment';
+  const errEl = document.createElement('span'); errEl.className = 'community-comment-err';
+
+  if (isInline) {
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'community-comment-cancel'; cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', () => row.remove());
+    btnRow.appendChild(cancelBtn);
+  }
+  btnRow.appendChild(btn); btnRow.appendChild(errEl);
+
+  btn.addEventListener('click', async () => {
+    const body = ta.value.trim();
+    if (!body) return;
+    btn.disabled = true;
+    try {
+      const res = await fetch(API + '/community/posts/' + postId + '/comments', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body, parent_id: parentId || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = data.error || 'Error.'; return; }
+      if (isInline) {
+        // Append reply into the parent comment's replies block
+        let repliesWrap = wrap.querySelector('.community-comment-replies');
+        if (!repliesWrap) {
+          repliesWrap = document.createElement('div');
+          repliesWrap.className = 'community-comment-replies';
+          wrap.appendChild(repliesWrap);
+        }
+        repliesWrap.appendChild(renderComment(data.comment, postId, countEl, null, true));
+        row.remove();
+      } else {
+        // Top-level comment: insert before this input row
+        wrap.insertBefore(renderComment(data.comment, postId, countEl, {}, false), row);
+        ta.value = '';
+      }
+      if (countEl) countEl.textContent = parseInt(countEl.textContent) + 1;
+    } catch { errEl.textContent = 'Network error.'; }
+    finally { btn.disabled = false; }
+  });
+
+  row.appendChild(ta); row.appendChild(btnRow);
+  wrap.appendChild(row);
+}
+
+// ── Load feed ─────────────────────────────────────────────────────────────────
+async function loadPosts(reset) {
+  if (reset) {
+    document.getElementById('community-feed').innerHTML = '<div class="community-loading">Loading posts…</div>';
+    feedCursor = null; noMore = false;
+    document.getElementById('load-more-btn').hidden = true;
+  }
+  const params = new URLSearchParams();
+  if (currentTag) params.set('tag', currentTag);
+  if (feedCursor) params.set('before', feedCursor);
+  const headers = token ? { Authorization: 'Bearer ' + token } : {};
+  try {
+    const res  = await fetch(API + '/community/posts?' + params, { headers });
+    const data = await res.json();
+    const feed = document.getElementById('community-feed');
+    if (reset) feed.innerHTML = '';
+    if (!data.posts || !data.posts.length) {
+      if (reset) { const e = document.createElement('div'); e.className = 'community-empty'; e.textContent = 'No posts yet — be the first! 🌸'; feed.appendChild(e); }
+      noMore = true;
+    } else {
+      data.posts.forEach(p => feed.appendChild(renderPost(p)));
+      const nonPinned = data.posts.filter(p => !p.pinned);
+      if (data.posts.length < 20) noMore = true;
+      else if (nonPinned.length) feedCursor = nonPinned[nonPinned.length - 1].id;
+    }
+    document.getElementById('load-more-btn').hidden = noMore;
+  } catch {
+    document.getElementById('community-feed').innerHTML = '<div class="community-empty">Could not load posts.</div>';
+  }
+}
+
+// ── Search ────────────────────────────────────────────────────────────────────
+async function runSearch(q) {
+  searchQuery = q || null;
+  const feed = document.getElementById('community-feed');
+  if (!searchQuery) { loadPosts(true); return; }
+  feed.innerHTML = '<div class="community-loading">Searching…</div>';
+  document.getElementById('load-more-btn').hidden = true;
+  const headers = token ? { Authorization: 'Bearer ' + token } : {};
+  try {
+    const res  = await fetch(API + '/community/search?q=' + encodeURIComponent(searchQuery), { headers });
+    const data = await res.json();
+    feed.innerHTML = '';
+    if (!data.posts || !data.posts.length) {
+      const e = document.createElement('div'); e.className = 'community-empty';
+      e.textContent = 'No posts found for "' + searchQuery + '"';
+      feed.appendChild(e);
+    } else {
+      const hdr = document.createElement('div'); hdr.className = 'community-search-header';
+      hdr.textContent = data.posts.length + ' result' + (data.posts.length === 1 ? '' : 's') + ' for "' + searchQuery + '"';
+      feed.appendChild(hdr);
+      data.posts.forEach(p => feed.appendChild(renderPost(p)));
+    }
+  } catch {
+    feed.innerHTML = '<div class="community-empty">Search failed. Try again.</div>';
+  }
+}
+
+let searchTimer = null;
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+(async () => {
+  // Fetch fresh user data (includes is_admin) before rendering anything
+  if (token) {
+    try {
+      const r = await fetch(API + '/auth/me', { headers: { Authorization: 'Bearer ' + token } });
+      if (r.ok) {
+        const d = await r.json();
+        if (d.user) {
+          currentUser = Object.assign({}, currentUser, d.user);
+          const store = localStorage.getItem('btw_token') ? localStorage : sessionStorage;
+          store.setItem('btw_user', JSON.stringify(currentUser));
+        }
+      }
+    } catch {}
+  }
+
+renderUserBlock();
+renderQuickTags();
+renderCompose();
+
+// Compose modal
+const composeModal = document.getElementById('community-compose-modal');
+const createPostBtn = document.getElementById('create-post-btn');
+window._composePushedState = false;
+
+function composeHasContent() {
+  if (composeModal.hidden) return false;
+  const ta = composeModal.querySelector('textarea');
+  const preview = composeModal.querySelector('.community-compose-preview');
+  return (ta && ta.value.trim().length > 0) || (preview && !preview.hidden);
+}
+
+function _composeSetHeight() {
+  composeModal.style.height = (window.visualViewport ? window.visualViewport.height : window.innerHeight) + 'px';
+}
+function _composeCloseCleanup() {
+  composeModal.hidden = true;
+  composeModal.style.height = '';
+  createPostBtn.classList.remove('community-create-post-btn--active');
+  if (window._composePushedState) { window._composePushedState = false; history.back(); }
+}
+
+// Keep modal height in sync with visual viewport (keyboard open/close)
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    if (!composeModal.hidden) _composeSetHeight();
+  });
+}
+
+createPostBtn.addEventListener('click', () => {
+  composeModal.hidden = false;
+  _composeSetHeight();
+  createPostBtn.classList.add('community-create-post-btn--active');
+  history.pushState({ compose: true }, '');
+  window._composePushedState = true;
+  const ta = composeModal.querySelector('textarea');
+  if (ta) setTimeout(() => ta.focus(), 50);
+});
+
+// Android back button: dismiss keyboard first, then close modal, warn if content
+window.addEventListener('popstate', () => {
+  window._composePushedState = false; // browser already popped
+  if (composeModal.hidden) return;
+  const vv = window.visualViewport;
+  const kbVisible = vv && (vv.height < window.innerHeight * 0.75);
+  if (kbVisible) {
+    // First back press: just hide keyboard, keep modal open
+    const ta = composeModal.querySelector('textarea');
+    if (ta) ta.blur();
+    history.pushState({ compose: true }, '');
+    window._composePushedState = true;
+  } else if (composeHasContent()) {
+    if (confirm('You have unsaved content. Discard it and close?')) {
+      _composeCloseCleanup();
+    } else {
+      history.pushState({ compose: true }, '');
+      window._composePushedState = true;
+    }
+  } else {
+    _composeCloseCleanup();
+  }
+});
+
+// Warn on full page navigation if compose has content
+window.addEventListener('beforeunload', e => {
+  if (composeHasContent()) { e.preventDefault(); e.returnValue = ''; }
+});
+
+document.getElementById('community-compose-backdrop').addEventListener('click', () => {
+  _composeCloseCleanup();
+  document.querySelectorAll('.community-gif-picker').forEach(el => el.hidden = true);
+});
+document.getElementById('post-modal-backdrop').addEventListener('click', () => {
+  document.getElementById('post-modal').hidden = true;
+  document.body.style.overflow = '';
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const postModal = document.getElementById('post-modal');
+    if (postModal && !postModal.hidden) { postModal.hidden = true; document.body.style.overflow = ''; return; }
+    if (!composeModal.hidden) {
+      _composeCloseCleanup();
+      document.querySelectorAll('.community-gif-picker').forEach(el => el.hidden = true);
+    }
+  }
+});
+
+loadPosts(true);
+document.getElementById('load-more-btn').addEventListener('click', () => loadPosts(false));
+
+// ── Mobile UI ─────────────────────────────────────────────────────────────────
+(function () {
+  const drawerOverlay = document.getElementById('mobile-drawer-overlay');
+  const drawer        = document.getElementById('mobile-drawer');
+
+  function openDrawer() {
+    drawer.classList.add('mobile-drawer--open');
+    drawerOverlay.classList.add('mobile-drawer-overlay--open');
+    drawer.setAttribute('aria-hidden', 'false');
+  }
+  function closeDrawer() {
+    drawer.classList.remove('mobile-drawer--open');
+    drawerOverlay.classList.remove('mobile-drawer-overlay--open');
+    drawer.setAttribute('aria-hidden', 'true');
+  }
+
+  drawerOverlay.addEventListener('click', closeDrawer);
+
+  // Swipe left anywhere on screen to close drawer
+  let touchStartX = 0;
+  document.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX;
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (dx < -50 && drawer.classList.contains('mobile-drawer--open')) closeDrawer();
+  }, { passive: true });
+
+  // ── Populate drawer user block ──────────────────────────────────────────────
+  const drawerUser   = document.getElementById('mobile-drawer-user');
+  const tabAvatarWrap = document.getElementById('mobile-tab-avatar-wrap');
+
+  function makeAvatarImg(src, fallbackLetter, className) {
+    if (src) {
+      const img = document.createElement('img');
+      img.src = src; img.alt = ''; img.className = className;
+      img.onerror = function () {
+        const d = document.createElement('div');
+        d.className = className + ' mobile-avatar--fallback';
+        d.textContent = fallbackLetter;
+        this.replaceWith(d);
+      };
+      return img;
+    }
+    const d = document.createElement('div');
+    d.className = className + ' mobile-avatar--fallback';
+    d.textContent = fallbackLetter;
+    return d;
+  }
+
+  if (currentUser) {
+    const letter = (currentUser.display_name || currentUser.username || '?')[0].toUpperCase();
+    // Drawer header
+    drawerUser.appendChild(makeAvatarImg(currentUser.avatar, letter, 'mobile-drawer-avatar'));
+    const nameEl = document.createElement('p');
+    nameEl.className = 'mobile-drawer-name';
+    nameEl.textContent = currentUser.display_name || currentUser.username || 'You';
+    if (currentUser.username) {
+      const handleEl = document.createElement('p');
+      handleEl.className = 'mobile-drawer-handle';
+      handleEl.textContent = '@' + currentUser.username;
+      const nameWrap = document.createElement('div');
+      nameWrap.appendChild(nameEl); nameWrap.appendChild(handleEl);
+      drawerUser.appendChild(nameWrap);
+    } else {
+      drawerUser.appendChild(nameEl);
+    }
+    // Bottom bar avatar
+    tabAvatarWrap.appendChild(makeAvatarImg(currentUser.avatar, letter, 'mobile-tab-avatar'));
+  } else {
+    drawerUser.innerHTML = '<p class="mobile-drawer-name" style="opacity:.5">Not logged in</p>';
+    const icon = document.createElement('div');
+    icon.className = 'mobile-tab-avatar mobile-avatar--fallback';
+    icon.textContent = '?';
+    tabAvatarWrap.appendChild(icon);
+  }
+
+  // ── Drawer buttons ──────────────────────────────────────────────────────────
+  document.getElementById('mobile-drawer-create').addEventListener('click', () => {
+    closeDrawer();
+    document.getElementById('create-post-btn').click();
+  });
+  document.getElementById('mobile-drawer-search').addEventListener('click', () => {
+    closeDrawer();
+    document.getElementById('sidebar-search-btn').click();
+  });
+
+  // Guides toggle
+  const guidesBtn  = document.getElementById('mobile-drawer-guides');
+  const rulesPanel = document.getElementById('mobile-drawer-rules');
+  const caret      = guidesBtn.querySelector('.mobile-drawer-caret');
+  guidesBtn.addEventListener('click', () => {
+    const open = rulesPanel.classList.toggle('mobile-drawer-rules--open');
+    caret.textContent = open ? '▾' : '▸';
+  });
+
+  // ── Bottom bar ──────────────────────────────────────────────────────────────
+  document.getElementById('mobile-tab-compose').addEventListener('click', () => {
+    document.getElementById('create-post-btn').click();
+  });
+  document.getElementById('mobile-tab-search').addEventListener('click', () => {
+    document.getElementById('sidebar-search-btn').click();
+  });
+  document.getElementById('mobile-tab-menu').addEventListener('click', () =>
+    drawer.classList.contains('mobile-drawer--open') ? closeDrawer() : openDrawer()
+  );
+})();
+document.getElementById('community-search').addEventListener('input', function() {
+  clearTimeout(searchTimer);
+  const q = this.value.trim();
+  searchTimer = setTimeout(() => runSearch(q), 300);
+});
+document.getElementById('sidebar-search-btn').addEventListener('click', () => {
+  const searchEl = document.getElementById('community-search');
+  searchEl.focus();
+  searchEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+});
+})(); // end async boot IIFE
+</script>
+
 </body>
 </html>
