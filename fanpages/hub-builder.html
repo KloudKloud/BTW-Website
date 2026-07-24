@@ -18,8 +18,8 @@
       background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
       overflow: hidden;
     }
-    .hb-card-img-wrap { width: 100%; aspect-ratio: 21 / 9; overflow: hidden; background: #1a1a1a; }
-    .hb-card-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .hb-card-img-wrap { position: relative; width: 100%; aspect-ratio: 21 / 9; overflow: hidden; background: #1a1a1a; }
+    .hb-card-img-wrap .hb-preview-bg { background-repeat: no-repeat; }
     .hb-card-body { padding: 0.9rem 1rem; }
     .hb-card-caption { font-size: 0.9rem; font-weight: 700; color: #f0f0f0; margin-bottom: 0.2rem; }
     .hb-card-credit { font-size: 0.78rem; color: #999; margin-bottom: 0.6rem; }
@@ -29,6 +29,7 @@
     .hb-forbidden { max-width: 500px; margin: 6rem auto; text-align: center; color: #999; }
     .hb-sliders { display: flex; flex-wrap: wrap; gap: 1.25rem; margin: 0 0 1.5rem; justify-content: center; }
     .hb-sliders-caption { text-align: center; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #999; margin-bottom: 0.5rem; }
+    .hb-preview-bg { position: absolute; inset: 0; background-repeat: no-repeat; }
     .hb-sliders label { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: #999; }
     .hb-sliders input[type="range"] { width: 130px; }
   </style>
@@ -59,7 +60,7 @@
     <h2 class="char-editor-title" id="hb-editor-title">Add New Slide</h2>
 
     <div class="char-editor-ref-wrap" id="hb-editor-img-wrap" style="max-width: 520px; aspect-ratio: 21 / 9;">
-      <img id="hb-editor-img" alt="" style="display:none;" draggable="false" />
+      <div id="hb-editor-preview-bg" class="hb-preview-bg"></div>
       <div class="char-editor-ref-placeholder" id="hb-editor-img-placeholder">Click to upload an image</div>
       <div class="char-editor-ref-overlay">📷 Change Image</div>
     </div>
@@ -139,12 +140,38 @@ let slides = [];
 let editingId = null;
 let selectedFile = null;
 let slidePos = { x: 50, y: 50, zoom: 100, endX: 50, endY: 50, endZoom: 100, animationType: 'none' };
+let currentImageDims = null;
+
+// Pan + zoom via background-image — see fanpages/index.html for why
+// object-fit + transform:scale() doesn't work for this (the scale happens
+// after object-fit places the image, so position sliders can't reach the
+// newly-revealed edges). background-size/background-position compose
+// correctly since position is resolved against the *current* size.
+const imgDimsCache = {};
+function loadImageDims(url) {
+  if (imgDimsCache[url]) return Promise.resolve(imgDimsCache[url]);
+  return new Promise(resolve => {
+    const probe = new Image();
+    probe.onload = () => { const d = { w: probe.naturalWidth || 1, h: probe.naturalHeight || 1 }; imgDimsCache[url] = d; resolve(d); };
+    probe.onerror = () => resolve({ w: 1, h: 1 });
+    probe.src = url;
+  });
+}
+function coverBgSize(dims, boxW, boxH, zoomPercent) {
+  const scale = Math.max(boxW / dims.w, boxH / dims.h) || 1;
+  const renderedW = dims.w * scale, renderedH = dims.h * scale;
+  const factor = (zoomPercent || 100) / 100;
+  return { w: (renderedW / (boxW || 1)) * 100 * factor, h: (renderedH / (boxH || 1)) * 100 * factor };
+}
 
 function applyEditorPreview() {
-  const img = document.getElementById('hb-editor-img');
-  img.style.transition = 'none';
-  img.style.objectPosition = `${slidePos.x}% ${slidePos.y}%`;
-  img.style.transform = `scale(${slidePos.zoom / 100})`;
+  const bg = document.getElementById('hb-editor-preview-bg');
+  bg.style.transition = 'none';
+  if (!currentImageDims) return;
+  const boxW = bg.clientWidth, boxH = bg.clientHeight;
+  const size = coverBgSize(currentImageDims, boxW, boxH, slidePos.zoom);
+  bg.style.backgroundSize = `${size.w}% ${size.h}%`;
+  bg.style.backgroundPosition = `${slidePos.x}% ${slidePos.y}%`;
 }
 document.getElementById('hb-pos-x').addEventListener('input', (e) => { slidePos.x = parseInt(e.target.value, 10); applyEditorPreview(); });
 document.getElementById('hb-pos-y').addEventListener('input', (e) => { slidePos.y = parseInt(e.target.value, 10); applyEditorPreview(); });
@@ -168,20 +195,24 @@ document.querySelectorAll('input[name="hb-animation-type"]').forEach(radio => {
 });
 
 document.getElementById('hb-preview-btn').addEventListener('click', () => {
-  const img = document.getElementById('hb-editor-img');
+  const bg = document.getElementById('hb-editor-preview-bg');
   applyEditorPreview();
-  void img.offsetWidth;
+  void bg.offsetWidth;
   const type = slidePos.animationType;
-  if (type === 'none') return;
-  img.style.transition = 'object-position 3s linear, transform 3s linear';
+  if (type === 'none' || !currentImageDims) return;
+  const boxW = bg.clientWidth, boxH = bg.clientHeight;
+  bg.style.transition = 'background-position 3s linear, background-size 3s linear';
   requestAnimationFrame(() => {
-    if (type === 'pan_v') img.style.objectPosition = `${slidePos.x}% ${slidePos.endY}%`;
-    else if (type === 'pan_h') img.style.objectPosition = `${slidePos.endX}% ${slidePos.y}%`;
-    else if (type === 'zoom') img.style.transform = `scale(${slidePos.endZoom / 100})`;
+    if (type === 'pan_v') bg.style.backgroundPosition = `${slidePos.x}% ${slidePos.endY}%`;
+    else if (type === 'pan_h') bg.style.backgroundPosition = `${slidePos.endX}% ${slidePos.y}%`;
+    else if (type === 'zoom') {
+      const endSize = coverBgSize(currentImageDims, boxW, boxH, slidePos.endZoom);
+      bg.style.backgroundSize = `${endSize.w}% ${endSize.h}%`;
+    }
   });
 });
 
-function renderGrid() {
+async function renderGrid() {
   const grid = document.getElementById('hb-grid');
   if (!slides.length) {
     grid.innerHTML = '<p class="hb-empty-state">No slides yet — add one to get the billboard rotating!</p>';
@@ -192,9 +223,7 @@ function renderGrid() {
     const card = document.createElement('div');
     card.className = 'hb-card';
     card.innerHTML = `
-      <div class="hb-card-img-wrap">
-        <img src="${slide.image_url}" alt="" style="object-position:${slide.position_x}% ${slide.position_y}%; transform:scale(${(slide.zoom || 100) / 100});" />
-      </div>
+      <div class="hb-card-img-wrap"><div class="hb-preview-bg"></div></div>
       <div class="hb-card-body">
         ${slide.caption ? `<p class="hb-card-caption">${escapeHtml(slide.caption)}</p>` : ''}
         ${slide.credit ? `<p class="hb-card-credit">${escapeHtml(slide.credit)}</p>` : ''}
@@ -206,6 +235,15 @@ function renderGrid() {
     `;
     card.querySelector('.hb-card-actions button').addEventListener('click', () => openEditor(slide));
     grid.appendChild(card);
+
+    loadImageDims(slide.image_url).then(dims => {
+      const bg = card.querySelector('.hb-preview-bg');
+      const boxW = bg.clientWidth, boxH = bg.clientHeight;
+      const size = coverBgSize(dims, boxW, boxH, slide.zoom);
+      bg.style.backgroundImage = `url(${slide.image_url})`;
+      bg.style.backgroundSize = `${size.w}% ${size.h}%`;
+      bg.style.backgroundPosition = `${slide.position_x}% ${slide.position_y}%`;
+    });
   });
 }
 
@@ -216,7 +254,7 @@ async function loadSlides() {
   renderGrid();
 }
 
-function openEditor(slide) {
+async function openEditor(slide) {
   editingId = slide ? slide.id : null;
   selectedFile = null;
 
@@ -224,14 +262,15 @@ function openEditor(slide) {
   document.getElementById('hb-editor-delete').style.display = slide ? '' : 'none';
   document.getElementById('hb-editor-save').textContent = slide ? 'Save and Close' : 'Create';
 
-  const img = document.getElementById('hb-editor-img');
+  const bg = document.getElementById('hb-editor-preview-bg');
   const placeholder = document.getElementById('hb-editor-img-placeholder');
   if (slide) {
-    img.src = slide.image_url;
-    img.style.display = 'block';
+    currentImageDims = await loadImageDims(slide.image_url);
+    bg.style.backgroundImage = `url(${slide.image_url})`;
     placeholder.style.display = 'none';
   } else {
-    img.style.display = 'none';
+    currentImageDims = null;
+    bg.style.backgroundImage = '';
     placeholder.style.display = 'block';
   }
 
@@ -273,13 +312,14 @@ function updateSaveButtonState() {
 document.getElementById('hb-editor-img-wrap').addEventListener('click', () => {
   document.getElementById('hb-editor-file-input').click();
 });
-document.getElementById('hb-editor-file-input').addEventListener('change', (e) => {
+document.getElementById('hb-editor-file-input').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   selectedFile = file;
-  const img = document.getElementById('hb-editor-img');
-  img.src = URL.createObjectURL(file);
-  img.style.display = 'block';
+  const objectUrl = URL.createObjectURL(file);
+  currentImageDims = await loadImageDims(objectUrl);
+  const bg = document.getElementById('hb-editor-preview-bg');
+  bg.style.backgroundImage = `url(${objectUrl})`;
   document.getElementById('hb-editor-img-placeholder').style.display = 'none';
   slidePos = { x: 50, y: 50, zoom: 100, endX: 50, endY: 50, endZoom: 100, animationType: 'none' };
   document.getElementById('hb-pos-x').value = 50;

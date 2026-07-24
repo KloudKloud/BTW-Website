@@ -48,7 +48,7 @@
       text-decoration: none; color: #fff; display: block;
     }
     .fp-billboard-slide.active { opacity: 1; z-index: 1; }
-    .fp-billboard-slide img { width: 100%; height: 100%; object-fit: cover; display: block; transform-origin: center; }
+    .fp-billboard-slide-bg { position: absolute; inset: 0; background-repeat: no-repeat; }
     .fp-billboard-slide-scrim {
       position: absolute; left: 0; right: 0; bottom: 0; padding: 2.5rem 2.5rem 1.75rem;
       background: linear-gradient(to top, rgba(0,0,0,0.82), transparent);
@@ -184,7 +184,30 @@
   let billboardIndex = 0;
   let billboardTimer = null;
 
-  function renderBillboard(slides) {
+  // Pan + zoom via background-image instead of object-fit + transform:scale.
+  // object-position and a post-hoc CSS scale() don't compose — the scale
+  // happens AFTER object-fit places the image, so the position sliders can
+  // never reach the newly-revealed edges. background-size/background-position
+  // are defined to compose correctly (position is resolved against the
+  // *current* size), so zooming in genuinely opens up room to pan into.
+  const billboardImgDims = {};
+  function loadImageDims(url) {
+    if (billboardImgDims[url]) return Promise.resolve(billboardImgDims[url]);
+    return new Promise(resolve => {
+      const probe = new Image();
+      probe.onload = () => { const d = { w: probe.naturalWidth || 1, h: probe.naturalHeight || 1 }; billboardImgDims[url] = d; resolve(d); };
+      probe.onerror = () => resolve({ w: 1, h: 1 });
+      probe.src = url;
+    });
+  }
+  function coverBgSize(dims, boxW, boxH, zoomPercent) {
+    const scale = Math.max(boxW / dims.w, boxH / dims.h) || 1;
+    const renderedW = dims.w * scale, renderedH = dims.h * scale;
+    const factor = (zoomPercent || 100) / 100;
+    return { w: (renderedW / (boxW || 1)) * 100 * factor, h: (renderedH / (boxH || 1)) * 100 * factor };
+  }
+
+  async function renderBillboard(slides) {
     billboardSlides = slides;
     const track   = document.getElementById('fp-billboard-track');
     const empty   = document.getElementById('fp-billboard-empty');
@@ -202,13 +225,15 @@
     }
     empty.style.display = 'none';
 
+    await Promise.all(slides.map(s => loadImageDims(s.image_url)));
+
     track.innerHTML = '';
     slides.forEach((slide, i) => {
       const el = document.createElement(slide.link ? 'a' : 'div');
       el.className = 'fp-billboard-slide' + (i === 0 ? ' active' : '');
       if (slide.link) el.href = slide.link;
       el.innerHTML = `
-        <img src="${slide.image_url}" alt="${slide.caption || ''}" loading="lazy" />
+        <div class="fp-billboard-slide-bg"></div>
         ${(slide.caption || slide.credit) ? `
           <div class="fp-billboard-slide-scrim">
             ${slide.caption ? `<p class="fp-billboard-slide-cap">${slide.caption}</p>` : ''}
@@ -251,26 +276,34 @@
     if (!slide) return;
     const el = document.querySelectorAll('.fp-billboard-slide')[index];
     if (!el) return;
-    const img = el.querySelector('img');
+    const bg = el.querySelector('.fp-billboard-slide-bg');
+    const dims = billboardImgDims[slide.image_url];
+    if (!dims) return;
+    const boxW = el.clientWidth, boxH = el.clientHeight;
 
-    img.style.transition = 'none';
-    img.style.objectPosition = `${slide.position_x}% ${slide.position_y}%`;
-    img.style.transform = `scale(${(slide.zoom || 100) / 100})`;
-    void img.offsetWidth; // force reflow so the reset above applies before re-enabling transitions
+    bg.style.transition = 'none';
+    bg.style.backgroundImage = `url(${slide.image_url})`;
+    const startSize = coverBgSize(dims, boxW, boxH, slide.zoom);
+    bg.style.backgroundSize = `${startSize.w}% ${startSize.h}%`;
+    bg.style.backgroundPosition = `${slide.position_x}% ${slide.position_y}%`;
+    void bg.offsetWidth; // force reflow so the reset above applies before re-enabling transitions
 
     if (slide.animation_type && slide.animation_type !== 'none') {
-      img.style.transition = `object-position ${BILLBOARD_INTERVAL_MS}ms linear, transform ${BILLBOARD_INTERVAL_MS}ms linear`;
+      bg.style.transition = `background-position ${BILLBOARD_INTERVAL_MS}ms linear, background-size ${BILLBOARD_INTERVAL_MS}ms linear`;
       requestAnimationFrame(() => {
         if (slide.animation_type === 'pan_v') {
-          img.style.objectPosition = `${slide.position_x}% ${slide.end_position_y}%`;
+          bg.style.backgroundPosition = `${slide.position_x}% ${slide.end_position_y}%`;
         } else if (slide.animation_type === 'pan_h') {
-          img.style.objectPosition = `${slide.end_position_x}% ${slide.position_y}%`;
+          bg.style.backgroundPosition = `${slide.end_position_x}% ${slide.position_y}%`;
         } else if (slide.animation_type === 'zoom') {
-          img.style.transform = `scale(${(slide.end_zoom || 100) / 100})`;
+          const endSize = coverBgSize(dims, boxW, boxH, slide.end_zoom);
+          bg.style.backgroundSize = `${endSize.w}% ${endSize.h}%`;
         }
       });
     }
   }
+
+  window.addEventListener('resize', () => { if (billboardSlides.length) playSlideAnimation(billboardIndex); });
 
   function goToSlide(i) {
     if (!billboardSlides.length) return;
