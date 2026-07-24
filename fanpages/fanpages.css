@@ -1,0 +1,911 @@
+/* ── Moderator sites — shared overrides ──────────────────────────────────────
+   Loaded on top of the main /style.css. Moderator pages intentionally look
+   and feel different from BTW itself: dark background by default, different
+   type, no dark-on-dark "card" boxes for body content — only the side nav
+   is a box. Keep BTW-specific styling out of the root style.css — anything
+   moderator-only belongs in here instead. Only pages that link this
+   stylesheet are affected; nothing here touches the main site. */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* Cinzel is already imported by /style.css — reused here for the same serif
+   heading font BTW itself uses, per request. */
+
+html { background: #0a0a0a; }
+
+/* Cozy blue/red theme, dark background by default. Redeclaring these custom
+   properties re-skins every reused BTW class (rules, borders, footer text,
+   nav links) without touching a single rule in the root stylesheet. */
+body.mod-theme {
+  background: #0a0a0a;
+  color: #f0f0f0;
+  font-family: 'Inter', 'Lato', sans-serif;
+  --violet: #7fa8d9; /* soft blue, legible on dark */
+  --rose:   #d97a72; /* warm coral red */
+  --gold:   #7fa8d9; /* accent — reuses the blue */
+  --mist:   #b0b0b0; /* body text tint */
+  --light:  #f0f0f0;
+  --border: rgba(255,255,255,0.1);
+}
+
+/* The two side-column boxes (account + nav) are theme-aware — driven by the
+   same --mod-* custom properties the theme picker sets on <body>. Fallback
+   values keep them looking right on pages that don't run the theme JS yet
+   (characters/chapters/gallery). */
+.mod-return-btn {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  text-decoration: none !important;
+  border: 1px solid var(--mod-accent-border, rgba(127, 168, 217, 0.4)) !important;
+  border-radius: 20px;
+  padding: 0.4rem 0.75rem !important;
+  color: var(--mod-text-primary, #f0f0f0) !important;
+  transition: background 0.2s, border-color 0.2s, color 0.2s !important;
+}
+.mod-return-btn:hover {
+  background: var(--mod-accent-bg, rgba(127, 168, 217, 0.1));
+  border-color: var(--violet);
+  color: var(--violet) !important;
+}
+
+.mod-account-box .nav-user-btn {
+  width: 100%;
+  background: var(--mod-accent2-bg, rgba(217, 122, 114, 0.08));
+  border: 1px solid var(--mod-accent2-border, rgba(217, 122, 114, 0.3));
+  color: var(--mod-text-primary, #f0f0f0);
+}
+.mod-account-box .nav-user-btn:hover { background: var(--mod-accent2-bg-hover, rgba(217, 122, 114, 0.14)); border-color: var(--rose); }
+.mod-account-box .nav-user-dropdown { background: var(--mod-card-bg, #161616); border: 1px solid var(--mod-card-border, rgba(255,255,255,0.1)); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+.mod-account-box .nav-user-dropdown a { color: var(--mod-text-primary, #f0f0f0); }
+.mod-account-box .nav-user-dropdown a:hover { background: var(--mod-accent-bg, #1e1e1e); color: var(--mod-text-primary, #fff); }
+
+.mod-placeholder-wrap {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+
+/* ── Cover ── */
+.wiki-cover {
+  position: relative;
+  width: 100%;
+  height: 560px;
+  overflow: hidden;
+}
+.wiki-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  opacity: 1;
+  transition: opacity 0.2s;
+  -webkit-user-drag: none; user-select: none; -webkit-user-select: none;
+}
+/* Hidden until JS confirms which image (the moderator's own, or the shared
+   fallback) actually belongs here — prevents a flash of the wrong banner. */
+.wiki-cover img.mod-banner-loading {
+  opacity: 0;
+  transition: none;
+}
+.wiki-cover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0) 55%, rgba(10,10,10,0.95) 100%);
+}
+
+/* Editing state — blur + greenish haze over the banner, Wattpad-style */
+.wiki-cover img { transition: filter 0.2s; }
+.wiki-cover.mod-editing-banner img { filter: blur(6px) saturate(0.85) brightness(0.9); }
+.wiki-cover.mod-editing-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(24, 74, 62, 0.55);
+  z-index: 2;
+}
+
+/* ── Inline "Wattpad-style" profile editing ─────────────────────────────────── */
+.mod-edit-toggle-btn {
+  position: absolute; right: 1.5rem; bottom: 1.25rem; z-index: 3;
+  display: flex; align-items: center; gap: 0.4rem;
+  background: rgba(0,0,0,0.55); color: #fff; border: none; border-radius: 20px;
+  padding: 0.5rem 1.1rem; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s;
+}
+.mod-edit-toggle-btn:hover { background: rgba(0,0,0,0.75); }
+
+/* Bookmark toggle — sits where Edit Story sits, but only for non-owners */
+.mod-bookmark-btn {
+  position: absolute; right: 1.5rem; bottom: 1.25rem; z-index: 3;
+  display: flex; align-items: center; gap: 0.4rem;
+  background: rgba(0,0,0,0.55); color: #fff; border: 1px solid rgba(255,255,255,0.25); border-radius: 20px;
+  padding: 0.5rem 1.1rem; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.mod-bookmark-btn:hover { background: rgba(0,0,0,0.75); }
+.mod-bookmark-btn.bookmarked {
+  background: rgba(127,168,217,0.28); border-color: #7fa8d9; color: #cfe0f5;
+  box-shadow: 0 0 16px rgba(127,168,217,0.55);
+}
+
+/* VeekitPaws-only VIP badge — top-left of her own story's banner. Purely a
+   data-driven check against the site's author_username, not a special file. */
+.mod-vip-badge {
+  position: absolute; top: 1.25rem; left: 1.5rem; z-index: 3;
+  display: flex; align-items: center; gap: 0.4rem;
+  background: linear-gradient(135deg, rgba(107,63,160,0.85), rgba(194,84,122,0.85));
+  border: 1px solid rgba(240,192,96,0.6); border-radius: 20px;
+  padding: 0.4rem 1rem; backdrop-filter: blur(4px);
+  color: #fff; font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 700;
+  box-shadow: 0 0 18px rgba(240,192,96,0.4);
+}
+.mod-vip-badge-star { color: #f0c060; text-shadow: 0 0 10px rgba(240,192,96,0.8); }
+
+/* "Written by" bubble — bottom-left of the banner, mirrors Edit Story's corner */
+.mod-written-by {
+  position: absolute; left: 1.5rem; bottom: 1.25rem; z-index: 3;
+  display: flex; align-items: center; gap: 0.6rem;
+  background: rgba(0,0,0,0.55); border-radius: 26px; padding: 0.4rem 1rem 0.4rem 0.4rem;
+  text-decoration: none; backdrop-filter: blur(4px); transition: background 0.15s;
+}
+.mod-written-by:hover { background: rgba(0,0,0,0.75); }
+/* .wiki-cover img { width:100%; height:100%; } outweighs a single class on
+   specificity, which is what blew this avatar up to fill the whole banner —
+   scoped selector here beats it back down to its intended 32px. */
+.wiki-cover img.mod-written-by-avatar {
+  width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #333; flex-shrink: 0;
+}
+.mod-written-by-avatar-fallback {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #7fa8d9, #d97a72); color: #fff; font-size: 0.8rem; font-weight: 700;
+}
+.mod-written-by-text { display: flex; flex-direction: column; line-height: 1.25; }
+.mod-written-by-label { font-size: 0.65rem; color: rgba(255,255,255,0.65); font-family: 'Inter', sans-serif; }
+.mod-written-by-name { font-size: 0.85rem; color: #fff; font-weight: 700; font-family: 'Inter', sans-serif; }
+
+/* Author box — sits directly under the Navigate side-nav box */
+.mod-author-box {
+  background: var(--mod-card-bg, #161616);
+  border: 1px solid var(--mod-card-border, rgba(255,255,255,0.08));
+  border-top: 3px solid var(--violet);
+  border-radius: 14px;
+  padding: 1.25rem 1rem;
+  margin-top: 1.25rem;
+}
+.mod-author-box-label {
+  font-family: 'Cinzel', serif; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.22em;
+  text-transform: uppercase; color: var(--violet); margin: 0 0 0.9rem; padding: 0 0.25rem;
+}
+.mod-author-box-row { display: flex; align-items: center; gap: 0.7rem; }
+.mod-author-box-link { display: flex; align-items: center; gap: 0.6rem; text-decoration: none; flex: 1; min-width: 0; }
+.mod-author-box-avatar { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; background: #333; flex-shrink: 0; }
+.mod-author-box-avatar-fallback {
+  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #7fa8d9, #d97a72); color: #fff; font-size: 0.9rem; font-weight: 700;
+}
+.mod-author-box-name {
+  font-size: 0.88rem; font-weight: 700; color: var(--mod-text-primary, #f0f0f0);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mod-author-box-btn {
+  flex-shrink: 0; border: none; cursor: pointer; text-decoration: none; display: inline-block;
+  font-family: 'Inter', sans-serif; font-size: 0.78rem; font-weight: 700;
+  padding: 0.4rem 0.85rem; border-radius: 16px;
+  background: var(--mod-accent-bg, rgba(127,168,217,0.15)); color: var(--violet);
+  border: 1px solid var(--mod-accent-border, rgba(127,168,217,0.4));
+}
+.mod-author-box-btn:hover { background: var(--mod-accent-bg-hover, rgba(127,168,217,0.22)); }
+.mod-author-box-btn.following { color: var(--mod-text-secondary, #999); border-color: var(--mod-card-border, rgba(255,255,255,0.15)); background: transparent; }
+
+/* ── Quick-nav cards — Characters/Chapters on top, Gallery centered below,
+   forming an upside-down triangle. Sized to sit only in the left/main
+   column, never spanning the page — hence the max-width cap. ── */
+.mod-quick-nav {
+  max-width: 560px;
+  margin-bottom: 2.5rem;
+}
+.mod-quick-nav-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.25rem;
+}
+.mod-quick-nav-row + .mod-quick-nav-row {
+  margin-top: 1.25rem;
+}
+.mod-quick-nav-row--single {
+  display: flex;
+  justify-content: center;
+}
+
+.mod-quick-nav-card {
+  position: relative; display: block; text-decoration: none;
+  width: 100%; aspect-ratio: 1 / 1;
+  border-radius: 14px; overflow: hidden;
+  background: #0a0a0a; border: 1px solid rgba(255,255,255,0.08);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+/* Matches the top row's per-card width: (100% - row gap) / 2 */
+.mod-quick-nav-row--single .mod-quick-nav-card { width: calc(50% - 1.125rem); }
+.mod-quick-nav-card:hover { border-color: var(--violet); box-shadow: 0 0 24px rgba(127,168,217,0.18); }
+.mod-quick-nav-card img {
+  width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.5s ease, filter 0.2s;
+  -webkit-user-drag: none; user-select: none; -webkit-user-select: none;
+}
+.mod-quick-nav-card:hover img { transform: scale(1.06); }
+.mod-quick-nav-card.mod-editing img { filter: blur(4px) brightness(0.7); }
+.mod-quick-nav-card.mod-editing:hover img { transform: none; }
+
+.mod-quick-nav-card-reposition {
+  position: absolute; bottom: 6px; left: 6px; z-index: 3; width: 84px;
+  display: none; flex-direction: column; gap: 3px;
+  background: rgba(0,0,0,0.6); border-radius: 6px; padding: 4px 6px;
+}
+.mod-quick-nav-card-reposition label { display: flex; align-items: center; gap: 4px; color: #fff; font-size: 0.55rem; font-family: 'Inter', sans-serif; }
+.mod-quick-nav-card-reposition input[type="range"] { flex: 1; width: 100%; height: 10px; }
+.mod-quick-nav-card-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.3) 45%, transparent 100%);
+  display: flex; align-items: flex-end; padding: 0.9rem 1rem;
+}
+.mod-quick-nav-card-label {
+  font-family: 'Cinzel', serif; font-size: 0.95rem; font-weight: 700; letter-spacing: 0.08em;
+  color: #fff; text-transform: uppercase; transition: color 0.3s;
+}
+.mod-quick-nav-card:hover .mod-quick-nav-card-label { color: var(--violet); }
+
+/* Owner-only camera badge, appears while editing */
+.mod-quick-nav-card-edit-btn {
+  position: absolute; top: 0.5rem; right: 0.5rem; z-index: 2;
+  width: 30px; height: 30px; border-radius: 50%; display: none;
+  align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.3); color: #fff;
+  font-size: 0.85rem; cursor: pointer;
+}
+.mod-quick-nav-card-edit-btn:hover { background: rgba(0,0,0,0.9); }
+
+@media (max-width: 560px) {
+  .mod-quick-nav { max-width: 100%; }
+}
+
+.mod-banner-edit-wrap {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 3;
+  display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+}
+.mod-banner-edit-btn {
+  display: flex; align-items: center; gap: 0.5rem;
+  background: rgba(0,0,0,0.65); color: #fff; border: 1px solid rgba(255,255,255,0.4); border-radius: 10px;
+  padding: 0.7rem 1.2rem; font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 600;
+  cursor: pointer; transition: background 0.15s;
+}
+.mod-banner-edit-btn:hover { background: rgba(0,0,0,0.8); }
+.mod-banner-edit-hint { color: rgba(255,255,255,0.85); font-size: 0.72rem; font-family: 'Inter', sans-serif; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+
+.mod-banner-reposition {
+  position: absolute; right: 1.5rem; top: 1.25rem; z-index: 3;
+  display: flex; align-items: center; gap: 0.5rem;
+  background: rgba(0,0,0,0.5); border-radius: 20px; padding: 0.4rem 0.9rem;
+}
+.mod-banner-reposition label { color: #fff; font-size: 0.72rem; font-family: 'Inter', sans-serif; white-space: nowrap; }
+.mod-banner-reposition input[type="range"] { width: 100px; }
+
+/* Fixed (not sticky) and glued directly under the fixed nav bar — same fix
+   applied to the profile editor's bar: sticky had nowhere to "stick" within
+   its container and just scrolled away. */
+.mod-edit-bar {
+  position: fixed; top: 64px; left: 0; right: 0; z-index: 150;
+  align-items: center; justify-content: space-between;
+  background: #161616; border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding: 0.75rem 1.5rem; font-family: 'Inter', sans-serif;
+}
+.mod-edit-bar-label { font-size: 0.85rem; font-weight: 600; color: #bbb; }
+.mod-edit-bar-actions { display: flex; gap: 0.9rem; align-items: center; }
+.mod-edit-bar-save {
+  background: #7fa8d9; color: #0a0a0a; border: none; border-radius: 20px;
+  padding: 0.5rem 1.3rem; font-weight: 700; cursor: pointer; font-size: 0.85rem;
+}
+.mod-edit-bar-cancel { background: none; border: none; color: #999; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+.mod-edit-bar-cancel:hover { color: #fff; }
+
+.mod-edit-bar-theme-btn {
+  background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 20px;
+  padding: 0.4rem 0.9rem; font-size: 0.82rem; font-weight: 600; color: #bbb; cursor: pointer;
+  display: flex; align-items: center; gap: 0.4rem;
+}
+.mod-edit-bar-theme-btn:hover { border-color: #7fa8d9; color: #7fa8d9; }
+
+/* ── Theme picker popover (Chrome-style) ─────────────────────────────────── */
+.mod-theme-picker { position: relative; }
+.mod-theme-popover {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+  background: #161616; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5); padding: 1rem; width: 260px;
+}
+.mod-theme-popover-label { font-size: 0.75rem; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; }
+.mod-theme-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; }
+.mod-theme-swatch {
+  width: 48px; height: 48px; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent; padding: 0; overflow: hidden;
+  display: flex; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+.mod-theme-swatch span { display: block; width: 50%; height: 100%; }
+.mod-theme-swatch.active { border-color: #7fa8d9; }
+.mod-theme-swatch--upload {
+  align-items: center; justify-content: center; background: #1e1e1e; color: #999; font-size: 1.1rem;
+}
+.mod-theme-swatch--upload:hover { background: #292929; }
+
+.mod-editable-block { position: relative; }
+.mod-edit-input { margin-top: 0.25rem; }
+
+/* Custom uploaded background — sits beneath the wiki-layout content only,
+   never overlapping the banner above it */
+.mod-page-bg-wrap { position: relative; }
+.mod-page-bg-img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; filter: blur(28px) brightness(0.95); z-index: 0;
+}
+.mod-page-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.72); z-index: 0; }
+
+/* ── Wiki layout ── */
+.wiki-layout {
+  position: relative;
+  z-index: 1;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 4.5rem 3rem 4rem;
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 3rem;
+  align-items: start;
+}
+
+.wiki-title {
+  font-family: 'Cinzel', serif;
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: #f0f0f0;
+  margin-bottom: 2.5rem;
+}
+
+.wiki-section { margin-bottom: 2.75rem; }
+
+.wiki-section-title {
+  display: inline-block;
+  font-family: 'Cinzel', serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #f0f0f0;
+  border-bottom: 3px solid var(--rose);
+  padding-bottom: 0.3rem;
+}
+
+.wiki-rule {
+  height: 1px;
+  background: rgba(255,255,255,0.1);
+  margin: 0.75rem 0 1.5rem;
+}
+
+.wiki-quote {
+  border-left: 3px solid var(--rose);
+  padding: 0.2rem 0 0.2rem 1.25rem;
+  font-style: italic;
+  color: #ccc;
+  font-size: 1.02rem;
+  line-height: 1.75;
+  white-space: pre-line; /* preserve line breaks from pasted text (e.g. Wattpad bios) */
+}
+
+/* About row — story description | book cover, same shape as BTW's own synopsis+cover.
+   The cover floats right so text wraps beside it and then runs full-width
+   once it scrolls past the bottom of the cover, instead of being stuck in a
+   fixed-height column. */
+.mod-about-row::after { content: ''; display: table; clear: both; }
+
+.mod-cover-wrap {
+  position: relative;
+  float: right;
+  margin: 0 0 1rem 2rem;
+  width: 220px;
+  height: 330px; /* 2:3 ratio, matches BTW's cover box */
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  flex-shrink: 0;
+}
+.mod-cover-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
+.mod-cover-placeholder {
+  width: 100%; height: 100%; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; text-align: center; padding: 1rem;
+  border: 2px dashed var(--mod-card-border, rgba(255,255,255,0.15));
+  background: var(--mod-card-bg, #161616);
+  color: var(--mod-text-secondary, #999);
+  font-size: 0.8rem;
+}
+
+.mod-cover-edit-btn {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 3;
+  background: rgba(0,0,0,0.65); color: #fff; border: 1px solid rgba(255,255,255,0.4); border-radius: 8px;
+  padding: 0.5rem 0.8rem; font-size: 0.78rem; font-family: 'Inter', sans-serif; font-weight: 600;
+  cursor: pointer; text-align: center;
+}
+.mod-cover-edit-btn:hover { background: rgba(0,0,0,0.8); }
+
+.mod-cover-reposition {
+  position: absolute; bottom: 8px; left: 8px; right: 8px; z-index: 3;
+  display: flex; flex-direction: column; gap: 5px;
+  background: rgba(0,0,0,0.55); border-radius: 8px; padding: 6px 8px;
+}
+.mod-cover-reposition label { display: flex; align-items: center; gap: 5px; color: #fff; font-size: 0.62rem; font-family: 'Inter', sans-serif; }
+.mod-cover-reposition input[type="range"] { flex: 1; width: 100%; }
+
+.wiki-section p {
+  color: #ccc;
+  font-size: 1rem;
+  line-height: 1.8;
+  white-space: pre-line; /* preserve line breaks from pasted text (e.g. Wattpad bios) */
+}
+
+/* "Meet Blue" split — bio text | vertical divider | links */
+.wiki-meet-split {
+  display: grid;
+  grid-template-columns: 1fr 1px 200px;
+  gap: 2rem;
+  align-items: start;
+}
+.wiki-meet-divider { align-self: stretch; background: rgba(255,255,255,0.1); }
+.wiki-meet-links-label {
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--rose);
+  margin-bottom: 0.75rem;
+}
+.wiki-links-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.wiki-links-list li { color: var(--mod-text-secondary, #999); font-size: 0.92rem; }
+
+/* Boxed link item, matching BTW's own Links card style — transparent by
+   default so it never clashes with whatever theme/background is active */
+.wiki-link-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--mod-text-primary, #f0f0f0);
+  background: transparent;
+  border: 1px solid var(--mod-card-border, rgba(255,255,255,0.1));
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.wiki-link-item:hover {
+  background: var(--mod-accent-bg, rgba(127, 168, 217, 0.1));
+  border-color: var(--violet);
+  color: var(--violet);
+}
+.wiki-link-item .link-icon { font-size: 1rem; flex-shrink: 0; }
+.wiki-link-item .link-name { flex: 1; font-size: 0.88rem; }
+.wiki-link-item .link-arrow { font-size: 0.8rem; opacity: 0.5; }
+
+/* Side column — account box + nav box, stacked. Not sticky/position:fixed —
+   stays where it's placed in the page and scrolls normally with the rest of
+   the content instead of trailing the viewport. */
+.wiki-side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Account box — profile / login + link back to Between Two Worlds */
+.mod-account-box {
+  background: var(--mod-card-bg, #161616);
+  border: 1px solid var(--mod-card-border, rgba(255,255,255,0.08));
+  border-top: 3px solid var(--violet);
+  border-radius: 14px;
+  padding: 1.25rem 1rem;
+}
+.mod-account-list { list-style: none; margin: 0 0 0.9rem; padding: 0; }
+.mod-account-list a.nav-login { color: var(--mod-text-primary, #f0f0f0) !important; }
+
+/* Side nav box — Home / Characters / Gallery / Chapters */
+.mod-side-nav {
+  background: var(--mod-card-bg, #161616);
+  border: 1px solid var(--mod-card-border, rgba(255,255,255,0.08));
+  border-top: 3px solid var(--rose);
+  border-radius: 14px;
+  padding: 1.5rem 1rem;
+}
+.mod-side-nav-label {
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--rose);
+  margin: 0 0 0.9rem;
+  padding: 0 0.5rem;
+}
+.mod-side-nav-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.mod-side-nav-link {
+  display: block;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  color: var(--mod-text-secondary, #aaa);
+  text-decoration: none;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  transition: background 0.15s, color 0.15s;
+}
+.mod-side-nav-link:hover { background: var(--mod-accent-bg, rgba(255,255,255,0.06)); color: var(--mod-text-primary, #fff); }
+.mod-side-nav-link.active {
+  background: var(--mod-accent-bg, rgba(127, 168, 217, 0.15));
+  color: var(--violet);
+  font-weight: 700;
+}
+
+/* ── Borrowed BTW templates (characters / chapters / gallery) ──────────────
+   These pages intentionally keep BTW's own dark styling/fonts untouched —
+   only the persistent account/nav side column (above) is added on top. */
+
+/* Adds a 3rd column to BTW's characters page grid for the side column */
+.chars-layout { grid-template-columns: 200px 1fr 220px; }
+
+/* Boxed "Explore the cast!" panel — same treatment as BTW's own character
+   sidebar, just re-skinned to the dark blue/red mod-theme instead of gold. */
+.chars-sidebar-label {
+  font-family: 'Cinzel', serif;
+  color: #f0f0f0;
+  font-size: 0.72rem;
+}
+.chars-tab {
+  color: #f0f0f0;
+  border-radius: 8px;
+  font-size: 1.02rem;
+  padding: 0.65em 0.9em;
+}
+.chars-tab:hover { background: rgba(127,168,217,0.1); color: #a8c6e8; }
+.chars-tab.active {
+  background: rgba(127,168,217,0.15);
+  color: #f0f0f0;
+  font-weight: 700;
+  border-left-color: #7fa8d9;
+}
+
+/* "Create New Character" — owner-only, its own little boxed card sitting
+   directly above "Explore the Cast", not squeezed inside it. */
+.chars-sidebar-col { display: flex; flex-direction: column; gap: 1rem; }
+
+.chars-create-box {
+  background: rgba(8,8,8,0.78); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 1rem;
+}
+
+/* Same violet→rose gradient glow as the site's age-gate button
+   (--violet/--rose get overridden to blue in mod-theme, so this uses the
+   real brand colors explicitly rather than the theme variables). */
+.chars-create-btn {
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+  width: 100%; box-sizing: border-box;
+  background: linear-gradient(135deg, #6b3fa0, #c2547a); border: none; border-radius: 10px;
+  padding: 0.75em 0.9em; cursor: pointer;
+  font-family: 'Inter', sans-serif; font-size: 0.92rem; font-weight: 700; color: #fff;
+  box-shadow: 0 0 16px rgba(107,63,160,0.5);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+.chars-create-btn:hover {
+  box-shadow: 0 0 26px rgba(107,63,160,0.75);
+  transform: translateY(-1px);
+}
+.chars-create-btn-icon { font-size: 1.1rem; line-height: 1; }
+
+/* ── Character editor modal ── */
+.char-editor-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(8,6,14,0.72); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center; padding: 2rem 1.25rem;
+}
+.char-editor-modal {
+  width: 100%; max-width: 880px; max-height: 88vh; overflow-y: auto;
+  background: #141018; border: 1px solid rgba(127,168,217,0.25); border-radius: 18px;
+  padding: 2.25rem 2.5rem; box-shadow: 0 30px 90px rgba(0,0,0,0.6);
+}
+.char-editor-title { font-family: 'Cinzel', serif; font-size: 1.6rem; color: #f0f0f0; margin-bottom: 1.75rem; }
+
+.char-editor-ref-wrap {
+  position: relative; width: 100%; max-width: 340px; aspect-ratio: 1 / 1; margin: 0 auto 1.75rem;
+  border-radius: 14px; overflow: hidden; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.char-editor-ref-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
+.char-editor-ref-placeholder { color: #888; font-size: 0.88rem; text-align: center; padding: 1rem; }
+.char-editor-ref-overlay {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.45); color: #fff; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600;
+  opacity: 0; transition: opacity 0.2s;
+}
+.char-editor-ref-wrap:hover .char-editor-ref-overlay { opacity: 1; }
+
+.char-editor-ref-reposition {
+  position: absolute; bottom: 6px; left: 6px; z-index: 3; width: 84px;
+  display: none; flex-direction: column; gap: 3px;
+  background: rgba(0,0,0,0.6); border-radius: 6px; padding: 4px 6px;
+}
+.char-editor-ref-reposition label { display: flex; align-items: center; gap: 4px; color: #fff; font-size: 0.55rem; font-family: 'Inter', sans-serif; }
+.char-editor-ref-reposition input[type="range"] { flex: 1; width: 100%; height: 10px; }
+
+.char-editor-facts-hint { color: #888; font-size: 0.75rem; margin-top: 0.6rem; margin-bottom: 1.25rem; }
+
+.char-editor-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; }
+
+/* Small centered confirm dialog — replaces the native browser confirm()
+   with something that matches the site instead of an OS-styled popup. */
+.mod-confirm-overlay {
+  position: fixed; inset: 0; z-index: 400;
+  background: rgba(8,6,14,0.72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+}
+.mod-confirm-modal {
+  width: 100%; max-width: 360px;
+  background: #141018; border: 1px solid rgba(255,255,255,0.12); border-top: 3px solid #d97a72;
+  border-radius: 16px; padding: 1.75rem; text-align: center;
+  box-shadow: 0 30px 90px rgba(0,0,0,0.6);
+}
+.mod-confirm-title { font-family: 'Cinzel', serif; font-size: 1.1rem; color: #fff; margin: 0 0 0.5rem; }
+.mod-confirm-text { color: #999; font-size: 0.88rem; margin: 0 0 1.5rem; }
+.mod-confirm-actions { display: flex; justify-content: center; gap: 0.75rem; }
+
+/* Relationship rows — Name (+ link button) | Type | remove */
+.char-rel-row {
+  display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center;
+}
+.char-rel-row-headings { margin-bottom: 0.35rem; }
+.char-rel-heading {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #999;
+}
+
+.char-rel-name-wrap { display: flex; gap: 0.35rem; }
+.char-rel-name-wrap .mod-input { flex: 1; min-width: 0; }
+.char-rel-link-btn {
+  flex-shrink: 0; width: 34px; border-radius: 8px; border: 1px solid rgba(127,168,217,0.4);
+  background: rgba(127,168,217,0.1); color: #7fa8d9; font-size: 1rem; font-weight: 700; cursor: pointer;
+}
+.char-rel-link-btn:hover { background: rgba(127,168,217,0.2); }
+.char-rel-link-btn.linked { border-color: #f0c060; background: rgba(240,192,96,0.15); color: #f0c060; }
+
+/* Link-picker mini-modal — sits on top of the character editor */
+.char-link-picker-overlay {
+  position: fixed; inset: 0; z-index: 320;
+  background: rgba(8,6,14,0.72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+}
+.char-link-picker-modal {
+  width: 100%; max-width: 420px; max-height: 70vh; overflow-y: auto;
+  background: #141018; border: 1px solid rgba(127,168,217,0.3); border-radius: 16px;
+  padding: 1.5rem; box-shadow: 0 30px 90px rgba(0,0,0,0.6);
+}
+.char-link-picker-title { font-family: 'Cinzel', serif; font-size: 1.15rem; color: #f0f0f0; margin-bottom: 1rem; }
+.char-link-picker-empty { color: #999; font-size: 0.88rem; line-height: 1.6; text-align: center; padding: 1rem 0; }
+.char-link-picker-item {
+  display: flex; align-items: center; gap: 0.7rem; width: 100%; text-align: left;
+  background: none; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+  padding: 0.5rem 0.7rem; margin-bottom: 0.5rem; cursor: pointer; color: #f0f0f0; font-size: 0.9rem;
+}
+.char-link-picker-item:hover { border-color: #7fa8d9; background: rgba(127,168,217,0.08); }
+.char-link-picker-item img {
+  width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #333; flex-shrink: 0;
+}
+
+/* ── Gallery post editor — category picker + consent checkbox ── */
+.gallery-cat-field { margin: 0.5rem 0 1.5rem; }
+.gallery-cat-label { font-size: 0.85rem; font-weight: 600; color: #ccc; margin: 0 0 0.5rem; }
+.gallery-cat-row { display: flex; gap: 0.6rem; }
+.gallery-cat-option {
+  position: relative; flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 0.55em 0.5em; border-radius: 10px; cursor: pointer;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12);
+  font-size: 0.88rem; font-weight: 600; color: #ccc; transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.gallery-cat-option input { position: absolute; opacity: 0; width: 0; height: 0; }
+.gallery-cat-option:has(input:checked) {
+  background: rgba(127,168,217,0.18); border-color: #7fa8d9; color: #fff;
+}
+.gallery-cat-option--spicy:has(input:checked) {
+  background: rgba(217,122,114,0.2); border-color: #d97a72; color: #fff;
+}
+
+.gallery-consent-row {
+  display: flex; align-items: flex-start; gap: 0.65rem; cursor: pointer;
+  font-size: 0.85rem; color: #bbb; line-height: 1.55; margin-bottom: 1.25rem;
+  background: rgba(217,122,114,0.08); border: 1px solid rgba(217,122,114,0.25); border-radius: 10px; padding: 0.85rem 1rem;
+}
+.gallery-consent-row input { margin-top: 0.2rem; width: 16px; height: 16px; flex-shrink: 0; }
+
+/* ── Gallery post detail page (reuses the site's .art-view-* classes from
+   style.css so it "feels special" the same way the main gallery does) ── */
+#gallery-detail-desc { white-space: pre-line; }
+#gallery-detail-view .art-view-image-wrap { max-height: 78vh; display: flex; align-items: center; justify-content: center; }
+#gallery-detail-view .art-view-image-wrap img { max-height: 78vh; width: auto; }
+
+/* Character name + Stats/Facts/Lore labels — same gold glow BTW's own
+   character pages use, bumped up a bit brighter per request. */
+.char-name { color: #f0c060; font-weight: 700; text-shadow: 0 0 36px rgba(240,192,96,0.65), 0 1px 3px rgba(0,0,0,0.4); }
+
+.char-box-title { color: #f0c060; font-weight: 700; text-shadow: 0 0 26px rgba(240,192,96,0.7); }
+.char-stat-label { color: #f0c060; font-weight: 700; text-shadow: 0 0 22px rgba(240,192,96,0.6); }
+.char-stat-value { color: #ccc; }
+.char-stat-row { border-bottom: 1px solid rgba(255,255,255,0.08); }
+
+/* Generic content + side-column row, used on the chapters & gallery pages */
+.mod-page-row {
+  position: relative; z-index: 1;
+  max-width: 1340px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 2rem;
+  align-items: start;
+}
+
+/* Nudge the Navigate box down so it doesn't sit flush against the top of the
+   page — matches how it naturally sits lower on the Characters page (offset
+   by the create-box above it there). */
+.mod-page-row .wiki-side-col {
+  margin-top: 5.5rem;
+}
+
+/* Unboxed "fandom style" chapters list — no card, just heading + rule + list */
+.mod-chapters-main { text-align: left; padding: 4rem 0; }
+.mod-chapters-main .hub-title { margin-bottom: 0.5rem; color: #f0f0f0; text-shadow: none; }
+.mod-chapters-main .chapters-list { text-align: left; margin-top: 1.5rem; }
+
+/* ── Chapter detail page (title + teaser + optional image on the left,
+   "Where to Read!" links + PDF button on the right) ── */
+.chapter-detail-view { text-align: left; padding: 3rem 0; }
+.chapter-detail-card {
+  display: grid; grid-template-columns: 1fr 260px; gap: 2.75rem; align-items: start;
+}
+.chapter-detail-title {
+  font-family: 'Cinzel', serif; font-size: clamp(1.6rem, 3.2vw, 2.4rem);
+  color: #f0c060; font-weight: 700; text-shadow: 0 0 30px rgba(240,192,96,0.55);
+  margin: 0 0 0.85rem; line-height: 1.25;
+}
+.chapter-detail-teaser { color: #ccc; font-size: 0.98rem; line-height: 1.8; margin: 0 0 1.75rem; }
+.chapter-detail-image-wrap {
+  border-radius: 14px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6); background: #0d0d0d;
+}
+.chapter-detail-image-wrap img { width: 100%; display: block; }
+.chapter-detail-side-label {
+  font-family: 'Cinzel', serif; font-size: 0.72rem; letter-spacing: 0.2em; text-transform: uppercase;
+  color: #999; margin: 0 0 1rem;
+}
+.chapter-detail-no-pdf { color: #888; font-size: 0.85rem; margin-top: 0.85rem; }
+
+#chapter-pdf-view { margin-top: 1.5rem; border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; overflow: hidden; }
+#chapter-pdf-view .chapter-pdf-viewer { width: 100%; height: 75vh; min-height: 0; background: #fff; }
+
+/* PDF/Docx attach row in the chapter editor */
+.chapter-doc-picker-row { display: flex; align-items: center; gap: 0.75rem; }
+.chapter-doc-picker-name { color: #999; font-size: 0.85rem; }
+
+@media (max-width: 760px) {
+  .chapter-detail-card { grid-template-columns: 1fr; }
+}
+
+/* Unboxed gallery — no card, plain wiki-style sidebar (SFW/Spicy toggles) that
+   just makes way for the card grid, MediaWiki-sidebar style */
+.mod-gallery-main {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 2.5rem;
+  align-items: start;
+  padding: 4rem 0;
+}
+.mod-gallery-sidebar-label {
+  font-family: 'Cinzel', serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #999;
+  margin: 0 0 0.9rem;
+}
+.mod-gallery-cat {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.92rem;
+  color: #7fa8d9;
+  padding: 0.35rem 0;
+  text-decoration: none;
+}
+.mod-gallery-cat:hover { text-decoration: underline; }
+.mod-gallery-cat.active { color: #f0f0f0; font-weight: 700; }
+
+.mod-gallery-content { min-width: 0; }
+.mod-gallery-eyebrow {
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #d97a72;
+  margin-bottom: 0.4rem;
+}
+
+.mod-gallery-locked { grid-column: 1 / -1; padding: 2rem 0; }
+.mod-gallery-locked-icon { font-size: 1.8rem; margin-bottom: 0.75rem; }
+.mod-gallery-locked-title { font-family: 'Cinzel', serif; font-size: 1.3rem; font-weight: 700; color: #f0f0f0; margin-bottom: 0.5rem; }
+.mod-gallery-locked-text { color: #aaa; font-size: 0.92rem; line-height: 1.7; margin-bottom: 1.2rem; }
+.mod-gallery-locked-btn { color: #7fa8d9; font-weight: 600; text-decoration: underline; }
+
+/* ── Creator Panel ────────────────────────────────────────────────────────── */
+.mod-panel-wrap { max-width: 900px; margin: 0 auto; padding: 3rem; }
+.mod-panel-title { font-family: 'Cinzel', serif; font-size: 2rem; font-weight: 700; color: #f0f0f0; margin-bottom: 0.25rem; }
+.mod-panel-sub { color: #999; font-size: 0.9rem; margin-bottom: 2rem; }
+
+.mod-panel-tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 2rem; }
+.mod-panel-tab {
+  background: none; border: none; cursor: pointer;
+  font-family: 'Inter', sans-serif; font-size: 0.9rem; color: #999;
+  padding: 0.6rem 0.9rem; border-bottom: 2px solid transparent;
+}
+.mod-panel-tab:hover { color: #f0f0f0; }
+.mod-panel-tab.active { color: #7fa8d9; border-bottom-color: #7fa8d9; font-weight: 700; }
+
+.mod-panel-section { display: none; }
+.mod-panel-section.active { display: block; }
+
+.mod-field { margin-bottom: 1.25rem; }
+.mod-field label { display: block; font-size: 0.8rem; font-weight: 600; color: #bbb; margin-bottom: 0.35rem; }
+.mod-input, .mod-textarea, .mod-select {
+  width: 100%; box-sizing: border-box; font-family: 'Inter', sans-serif; font-size: 0.9rem;
+  padding: 0.55rem 0.7rem; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #f0f0f0; background: #161616;
+}
+.mod-textarea { resize: vertical; min-height: 90px; }
+.mod-input:focus, .mod-textarea:focus, .mod-select:focus { outline: none; border-color: #7fa8d9; }
+
+.mod-btn {
+  display: inline-block; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.85rem;
+  padding: 0.5rem 1.1rem; border-radius: 20px; border: 1px solid #7fa8d9; color: #7fa8d9;
+  background: none; cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.mod-btn:hover { background: #7fa8d9; color: #0a0a0a; }
+.mod-btn--danger { border-color: #d97a72; color: #d97a72; }
+.mod-btn--danger:hover { background: #d97a72; color: #0a0a0a; }
+.mod-btn--small { padding: 0.3rem 0.7rem; font-size: 0.75rem; }
+
+.mod-panel-list { list-style: none; margin: 0 0 1.5rem; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.mod-panel-list-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: 0.65rem 0.9rem; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; background: #161616;
+}
+.mod-panel-list-item span { font-size: 0.88rem; color: #f0f0f0; }
+.mod-panel-list-item .mod-panel-list-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+
+.mod-panel-thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+.mod-panel-thumb { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); }
+.mod-panel-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mod-panel-thumb button {
+  position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.6); color: #fff; border: none;
+  border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: 0.75rem; line-height: 1;
+}
+
+.mod-panel-msg { font-size: 0.85rem; margin-bottom: 1rem; }
+.mod-panel-msg--error   { color: #d97a72; }
+.mod-panel-msg--success { color: #6fbf73; }
+
+.mod-stat-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center; }

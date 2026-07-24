@@ -26,6 +26,18 @@
     navList.addEventListener('click', (e) => { if (e.target.tagName === 'A') closeMenu(); });
   }
 
+  // "Where am I" — used to send people back here after logging in/registering
+  // or editing their profile, instead of stranding them on BTW's homepage.
+  // Works the same whether this is a root BTW page or a fanpage.
+  const here = window.location.pathname + window.location.search;
+
+  // Tag the login link with a return path regardless of auth state — this is
+  // exactly the case that matters, since only logged-out visitors see it.
+  const loginLinkEl = document.querySelector('a.nav-login');
+  if (loginLinkEl) {
+    loginLinkEl.href = `/login?from=${encodeURIComponent(here)}`;
+  }
+
   // ── Auth state — swap login link for display name + dropdown ─────────────
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const raw   = localStorage.getItem('btw_user')  || sessionStorage.getItem('btw_user');
@@ -53,14 +65,17 @@
     const avatarHtml = u.avatar
       ? `<img src="${u.avatar}" class="nav-user-avatar" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'nav-user-avatar nav-user-avatar--fallback',textContent:'${initial}'}))"/>`
       : `<div class="nav-user-avatar nav-user-avatar--fallback">${initial}</div>`;
+    const badgeHtml = (u.is_admin || u.is_moderator)
+      ? `<span class="nav-user-badge" title="Moderator">&#10003;</span>`
+      : '';
     const li = loginLink.parentElement;
     li.innerHTML = `
       <div class="nav-user">
         <button class="nav-user-btn" id="nav-user-btn" aria-haspopup="true" aria-expanded="false">
-          ${avatarHtml}${name} <span class="nav-user-caret">&#9662;</span>
+          ${avatarHtml}${name}${badgeHtml} <span class="nav-user-caret">&#9662;</span>
         </button>
         <div class="nav-user-dropdown" id="nav-user-dropdown" hidden>
-          <a href="/profile" id="nav-profile">Edit Profile</a>
+          <a href="/profile?from=${encodeURIComponent(here)}" id="nav-profile">Account Settings</a>
           <a href="#" id="nav-logout">Logout</a>
         </div>
       </div>
@@ -105,10 +120,14 @@
   }
   window._updateInboxBadge = updateInboxBadge;
 
-  // Verify token is still valid before rendering the user nav
+  // Verify token is still valid before rendering the user nav.
+  // Only a genuine 401/403 (actually invalid/expired token) should clear the
+  // stored session — a network blip or transient server error must not log
+  // the user out just because this particular page failed to reach the API.
   fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
     .then(r => {
-      if (!r.ok) throw new Error('invalid');
+      if (r.status === 401 || r.status === 403) { clearAuth(); throw new Error('unauthorized'); }
+      if (!r.ok) throw new Error('request failed');
       return r.json();
     })
     .then(data => {
@@ -134,7 +153,7 @@
         .catch(() => {});
     })
     .catch(() => {
-      clearAuth();
+      // Already cleared above if unauthorized; otherwise leave the session alone.
     });
 
   // ── Page view tracking (no PII) ───────────────────────────────────────────

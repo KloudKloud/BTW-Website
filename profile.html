@@ -23,13 +23,16 @@
     <li><a href="/spicy">Spicy</a></li>
         <li><a href="/characters">Characters</a></li>
     <li><a href="/discord">Discord</a></li>
-    <li><a href="/community">Community</a></li>
+    <li><a href="/community">Social</a></li>
+    <li><a href="/fanpages/join">Fanpages</a></li>
     <li><a href="/inbox">Inbox</a></li>
     <li><a href="/login" class="nav-login">Log In / Register</a></li>
   </ul>
 </nav>
 
 <main class="profile-wrapper" id="profile-main" hidden>
+
+  <a href="/" id="profile-back-link" class="btn btn-green" style="align-self: flex-start;">&larr; Return</a>
 
   <!-- Avatar + basic info -->
   <div class="profile-card">
@@ -43,6 +46,10 @@
         <button class="profile-avatar-btn" id="avatar-btn" type="button">Upload Photo</button>
         <input type="file" id="avatar-file" accept="image/*" style="display:none" />
         <span class="profile-avatar-note">JPG, PNG or WebP &mdash; max 10 MB &mdash; 200&times;200 px recommended</span>
+        <div class="profile-avatar-reposition" id="profile-avatar-reposition" hidden>
+          <label>H <input type="range" id="avatar-slider-x" min="0" max="100" value="50" /></label>
+          <label>V <input type="range" id="avatar-slider-y" min="0" max="100" value="50" /></label>
+        </div>
       </div>
     </div>
 
@@ -62,8 +69,11 @@
       <div class="profile-field profile-field--checkbox">
         <label class="profile-checkbox-label">
           <input type="checkbox" id="prof-newsletter" checked />
-          <span>Receive monthly emails about newsletters, book updates, and giveaways</span>
+          <span>Receive monthly emails about my newsletters, book updates, and giveaways?</span>
         </label>
+        <p class="profile-avatar-note" style="margin-top: 0.5rem;">
+          Just a heads up — there's an actual person behind all of this! Feel free to stop by my <a href="/" class="inline-link">page</a> and say hi sometime. &lt;3
+        </p>
       </div>
       <div id="profile-alert" class="profile-alert" hidden></div>
       <button class="profile-save-btn" id="profile-save-btn">Save Changes</button>
@@ -94,7 +104,7 @@
   <!-- Danger zone -->
   <div class="profile-card profile-card--danger">
     <p class="profile-card-title">Danger Zone</p>
-    <p class="danger-text">Permanently deletes your account and all your comments. This cannot be undone.</p>
+    <p class="danger-text">Permanently deletes your account and all your comments, stories, and posts inside of the community. This cannot be undone.</p>
     <button class="danger-btn" id="delete-account-btn">Delete My Account</button>
     <div id="delete-confirm" hidden style="margin-top:1rem;">
       <div class="profile-field" style="margin-bottom:.75rem;">
@@ -115,7 +125,7 @@
 <div id="profile-gate" hidden style="min-height:calc(100vh - 64px);display:flex;align-items:center;justify-content:center;padding:3rem 1.5rem;">
   <div style="text-align:center;">
     <p style="color:var(--mist);margin-bottom:1rem;">You need to be logged in to view this page.</p>
-    <a href="/login" class="spicy-gate-btn">Log In / Register</a>
+    <a href="/login" id="profile-gate-login" class="spicy-gate-btn">Log In / Register</a>
   </div>
 </div>
 
@@ -131,6 +141,12 @@
     // Show banner after email change confirmed — loaded before profile so we queue it
     window._emailVerifiedSuccess = true;
   }
+
+  // Wherever the user came from (a fanpage, the main site, etc.) — send them
+  // back there instead of always landing on BTW's homepage.
+  const returnTo = params.get('from') || '/';
+  document.getElementById('profile-back-link').href = returnTo;
+  document.getElementById('profile-gate-login').href = `/login?from=${encodeURIComponent(returnTo)}`;
 
   if (!token) {
     document.getElementById('profile-gate').hidden   = false;
@@ -157,10 +173,16 @@
       if (u.avatar) {
         const img = document.getElementById('profile-avatar-img');
         const ph  = document.getElementById('profile-avatar-placeholder');
+        const posX = u.avatar_position_x != null ? u.avatar_position_x : 50;
+        const posY = u.avatar_position_y != null ? u.avatar_position_y : 50;
         img.src = u.avatar;
+        img.style.objectPosition = `${posX}% ${posY}%`;
         img.style.display = 'block';
         img.removeAttribute('hidden');
         ph.style.display = 'none';
+        document.getElementById('avatar-slider-x').value = posX;
+        document.getElementById('avatar-slider-y').value = posY;
+        document.getElementById('profile-avatar-reposition').hidden = false;
       }
       if (window._emailVerifiedSuccess) {
         showAlert('profile-alert', 'Email address updated successfully!', 'success');
@@ -199,9 +221,13 @@
       const ph  = document.getElementById('profile-avatar-placeholder');
       const url = data.avatar + '?t=' + Date.now();
       img.src = url;
+      img.style.objectPosition = '50% 50%';
       img.style.display = 'block';
       img.removeAttribute('hidden');
       ph.style.display = 'none';
+      document.getElementById('avatar-slider-x').value = 50;
+      document.getElementById('avatar-slider-y').value = 50;
+      document.getElementById('profile-avatar-reposition').hidden = false;
 
       // Also update nav avatar immediately
       const navBtn = document.getElementById('nav-user-btn');
@@ -225,6 +251,26 @@
       showAlert('profile-alert', 'Profile picture updated!', 'success');
     } catch { showAlert('profile-alert', 'Upload failed. Please try again.', 'error'); }
   });
+
+  // Avatar reposition — same debounced-slider pattern used everywhere else on the site
+  let avatarRepoTimer = null;
+  function handleAvatarReposition() {
+    const x = document.getElementById('avatar-slider-x').value;
+    const y = document.getElementById('avatar-slider-y').value;
+    document.getElementById('profile-avatar-img').style.objectPosition = `${x}% ${y}%`;
+    clearTimeout(avatarRepoTimer);
+    avatarRepoTimer = setTimeout(async () => {
+      try {
+        await fetch(`${API}/auth/avatar-position`, {
+          method:  'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body:    JSON.stringify({ position_x: parseInt(x, 10), position_y: parseInt(y, 10) }),
+        });
+      } catch {}
+    }, 400);
+  }
+  document.getElementById('avatar-slider-x').addEventListener('input', handleAvatarReposition);
+  document.getElementById('avatar-slider-y').addEventListener('input', handleAvatarReposition);
 
   // Save profile
   document.getElementById('profile-save-btn').addEventListener('click', async () => {

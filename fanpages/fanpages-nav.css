@@ -1,0 +1,173 @@
+/* ── Shared persistent top bar for every /fanpages/* page ────────────────────
+   Injected by fanpages-nav.js into <div id="fanpages-topbar-root">. Loaded
+   independently of each page's own styling so it looks and behaves
+   identically on the hub, author profiles, and every story page. */
+
+/* #fanpages-topbar-root is exactly as tall as .fpnav-bar (its only child),
+   which gives position:sticky zero room to actually stick — the moment you
+   scroll past the bar's own height, its containing block has fully
+   scrolled by too, so it un-sticks and disappears. Fixed positioning avoids
+   that trap entirely; the root div keeps a matching height so page content
+   below it isn't yanked up when the bar leaves the flow. */
+#fanpages-topbar-root { height: 64px; }
+
+.fpnav-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  height: 64px;
+  padding: 0 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  background: #141414;
+  z-index: 200;
+  font-family: 'Lato', Arial, sans-serif;
+}
+.fpnav-bar a { text-decoration: none; }
+
+.fpnav-brand {
+  font-family: 'Cinzel', Georgia, serif;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #f0f0f0;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.fpnav-link {
+  position: relative;
+  color: #ccc;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding-bottom: 4px;
+}
+.fpnav-link::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: #7fa8d9;
+}
+.fpnav-link:hover { color: #7fa8d9; }
+
+.fpnav-search { flex: 1; max-width: 420px; margin: 0 auto; }
+.fpnav-search input {
+  width: 100%;
+  padding: 0.5rem 0.9rem;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.15);
+  font-size: 0.88rem;
+  font-family: inherit;
+  background: #1e1e1e;
+  color: #f0f0f0;
+}
+.fpnav-search input::placeholder { color: #888; }
+.fpnav-search input:focus { outline: none; border-color: #7fa8d9; background: #222; }
+
+.fpnav-right { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
+
+.fpnav-home-btn {
+  display: inline-block;
+  background: #2fbf5f;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.55rem 1.1rem;
+  border-radius: 20px;
+  white-space: nowrap;
+  box-shadow: 0 3px 12px rgba(47,191,95,0.3);
+}
+.fpnav-home-btn:hover { background: #29a852; }
+
+.fpnav-login-btn {
+  display: inline-block;
+  background: #7fa8d9;
+  color: #0a0a0a;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.55rem 1.1rem;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* Generic dropdown-trigger button */
+.fpnav-dropdown-wrap { position: relative; }
+.fpnav-trigger-btn {
+  display: flex; align-items: center; gap: 0.4rem;
+  background: none; border: 1px solid rgba(255,255,255,0.2); cursor: pointer;
+  color: #f0f0f0; font-family: inherit; font-size: 0.85rem; font-weight: 600;
+  padding: 0.5rem 0.9rem; border-radius: 20px; white-space: nowrap;
+}
+.fpnav-trigger-btn:hover { border-color: #7fa8d9; color: #7fa8d9; }
+.fpnav-caret { font-size: 0.65rem; opacity: 0.7; }
+
+.fpnav-avatar-btn {
+  display: flex; align-items: center; gap: 0.5rem;
+  background: none; border: none; cursor: pointer;
+  color: #f0f0f0; font-family: inherit; font-size: 0.85rem; font-weight: 600;
+  padding: 0.3rem 0.6rem 0.3rem 0.3rem; border-radius: 20px;
+}
+.fpnav-avatar-btn:hover { background: rgba(255,255,255,0.08); }
+.fpnav-avatar-btn img, .fpnav-avatar-fallback {
+  width: 30px; height: 30px; border-radius: 50%; object-fit: cover; display: block; flex-shrink: 0;
+}
+.fpnav-avatar-fallback {
+  background: linear-gradient(135deg, #7fa8d9, #d97a72);
+  color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700;
+}
+
+.fpnav-dropdown {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 210;
+  background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5); min-width: 180px; overflow: hidden; padding: 0.4rem;
+}
+.fpnav-dropdown a, .fpnav-dropdown button {
+  display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+  color: #f0f0f0; font-family: inherit; font-size: 0.88rem;
+  padding: 0.6rem 0.75rem; border-radius: 8px;
+}
+.fpnav-dropdown a:hover, .fpnav-dropdown button:hover { background: rgba(127,168,217,0.12); color: #7fa8d9; }
+
+/* ── Login/register gate modal (Wattpad-style) ── */
+/* :not([hidden]) so the `hidden` attribute (display:none) isn't overridden
+   by this rule's own display:flex — author CSS otherwise beats the
+   browser's default [hidden] styling and the modal would show on load. */
+.fpnav-modal-overlay:not([hidden]) {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1.5rem;
+}
+.fpnav-modal-card {
+  position: relative;
+  background: #161616; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+  max-width: 380px; width: 100%; padding: 2.5rem 2rem 2rem; text-align: center;
+}
+.fpnav-modal-close {
+  position: absolute; top: 0.9rem; right: 0.9rem;
+  background: none; border: none; color: #999; font-size: 1.1rem; cursor: pointer;
+  width: 30px; height: 30px; border-radius: 50%;
+}
+.fpnav-modal-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.fpnav-modal-title {
+  font-family: 'Cinzel', Georgia, serif; font-size: 1.3rem; color: #f0f0f0; margin-bottom: 0.6rem;
+}
+.fpnav-modal-text { color: #999; font-size: 0.9rem; line-height: 1.6; margin-bottom: 1.5rem; }
+.fpnav-modal-cta {
+  display: inline-block; width: 100%; box-sizing: border-box;
+  background: #7fa8d9; color: #0a0a0a; font-weight: 700; font-size: 0.95rem;
+  padding: 0.8rem 1rem; border-radius: 10px; text-decoration: none;
+}
+.fpnav-modal-cta:hover { background: #93b8e2; }
+
+@media (max-width: 720px) {
+  .fpnav-search { display: none; }
+  .fpnav-link { display: none; }
+}

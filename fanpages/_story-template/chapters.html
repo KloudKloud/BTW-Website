@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapters ✦ Fanpages</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+</head>
+<body class="mod-theme">
+
+<div id="fanpages-topbar-root"></div>
+<script src="/fanpages/fanpages-nav.js"></script>
+
+<div class="site-banner">
+  <div class="site-banner-inner">
+    <img id="page-banner-img" alt="Chapters — banner" />
+    <div class="mod-vip-badge" id="vip-badge" style="display:none;">
+      <span class="mod-vip-badge-star">⭐</span> VeekitPaws — Developer
+    </div>
+  </div>
+</div>
+
+<!-- Story's chosen background — same theme system as the story home page. -->
+<div class="mod-page-bg-wrap" id="page-bg-wrap">
+  <img class="mod-page-bg-img" id="page-bg-img" style="display:none;" alt="" />
+  <div class="mod-page-bg-overlay" id="page-bg-overlay" style="display:none;"></div>
+
+  <main class="mod-page-row" style="padding: 0 3rem; margin-top: 3rem;">
+
+    <div class="mod-chapters-main" id="chapters-list-view">
+
+      <h1 class="hub-title">Chapters</h1>
+
+      <div class="chapters-list" id="chapters-list">
+        <p class="gallery-empty-msg">Loading…</p>
+      </div>
+
+    </div>
+
+    <!-- Chapter detail "page" — swapped in for #chapters-list-view -->
+    <div class="chapter-detail-view" id="chapter-detail-view" style="display:none;">
+      <a class="art-view-back" href="#" id="chapter-detail-back">← Back to Chapters</a>
+
+      <div class="chapter-detail-card">
+        <div class="chapter-detail-main">
+          <h1 class="chapter-detail-title" id="chapter-detail-title"></h1>
+          <p class="chapter-detail-teaser" id="chapter-detail-teaser"></p>
+          <div class="chapter-detail-image-wrap" id="chapter-detail-image-wrap" style="display:none;">
+            <img id="chapter-detail-image" alt="" />
+          </div>
+        </div>
+
+        <div class="chapter-detail-side">
+          <p class="chapter-detail-side-label">Where to Read!</p>
+          <div class="chapter-view-links" id="chapter-detail-links"></div>
+          <button class="btn btn-outline chapter-read-btn" id="chapter-detail-pdf-btn" type="button" style="display:none; margin-top:0.5rem;">📄 Read as PDF?</button>
+          <p class="chapter-detail-no-pdf" id="chapter-detail-no-pdf" style="display:none;"><em>No PDF available to view</em></p>
+        </div>
+      </div>
+
+      <!-- In-page PDF reader -->
+      <div id="chapter-pdf-view" hidden>
+        <div class="chapter-pdf-header">
+          <button class="chapter-pdf-back" id="chapter-pdf-close" type="button">← Back to Chapter</button>
+          <a class="chapter-pdf-download" id="chapter-pdf-download" download>⬇ Download</a>
+        </div>
+        <iframe id="chapter-pdf-iframe" class="chapter-pdf-viewer" title="Chapter PDF"></iframe>
+      </div>
+    </div>
+
+    <div class="wiki-side-col">
+
+      <aside class="mod-side-nav">
+        <p class="mod-side-nav-label">Navigate</p>
+        <ul class="mod-side-nav-list">
+          <li><a href="#" id="nav-home" class="mod-side-nav-link">Home</a></li>
+          <li><a href="#" id="nav-characters" class="mod-side-nav-link">Characters</a></li>
+          <li><a href="#" id="nav-chapters" class="mod-side-nav-link active">Chapters</a></li>
+          <li><a href="#" id="nav-gallery" class="mod-side-nav-link">Gallery</a></li>
+        </ul>
+      </aside>
+
+      <aside class="chars-create-box" id="chapter-action-box" style="display:none;">
+        <button class="chars-create-btn" id="chapter-action-btn" type="button">
+          <span class="chars-create-btn-icon" id="chapter-action-icon">➕</span>
+          <span id="chapter-action-label">Create New Chapter</span>
+        </button>
+      </aside>
+
+    </div>
+
+  </main>
+</div>
+
+<!-- Chapter editor modal — owner only -->
+<div class="char-editor-overlay" id="chapter-editor-overlay" hidden>
+  <div class="char-editor-modal">
+    <h2 class="char-editor-title" id="chapter-editor-title">Create New Chapter</h2>
+
+    <div class="mod-field">
+      <label for="chapter-editor-title-input">Chapter Title</label>
+      <input class="mod-input" id="chapter-editor-title-input" maxlength="120" placeholder="Chapter 1: Winding Lakes" />
+      <p class="char-editor-facts-hint" style="margin-top:0.4rem;">e.g. "Chapter 1: Winding Lakes" ... "Chapter 13: Final Gambit"</p>
+    </div>
+
+    <div class="mod-field">
+      <label for="chapter-editor-teaser">Chapter Teaser</label>
+      <textarea class="mod-textarea" id="chapter-editor-teaser" placeholder="Give a teaser to let readers know what to expect this chapter~"></textarea>
+    </div>
+
+    <div class="mod-field">
+      <label>Links</label>
+      <div class="char-rel-row char-rel-row-headings">
+        <p class="char-rel-heading">Preview Name</p>
+        <p class="char-rel-heading">Link</p>
+      </div>
+      <div id="chapter-editor-links-rows"></div>
+      <button class="mod-btn mod-btn--small" id="chapter-editor-add-link" type="button" style="margin-top:0.5rem;">+ Add More Links?</button>
+    </div>
+
+    <div class="mod-field">
+      <label>Chapter Image</label>
+      <div class="char-editor-ref-wrap" id="chapter-editor-img-wrap" style="max-width: 320px; aspect-ratio: 4 / 3;">
+        <img id="chapter-editor-img" alt="" style="display:none;" draggable="false" />
+        <div class="char-editor-ref-placeholder" id="chapter-editor-img-placeholder">Click to upload an image</div>
+        <div class="char-editor-ref-overlay">📷 Change Image</div>
+      </div>
+      <input type="file" id="chapter-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+      <p class="char-editor-facts-hint">Add a special image for this chapter! Chapters will default to your story cover image when displayed, but you can individualize every chapter if you wish!</p>
+    </div>
+
+    <div class="mod-field">
+      <label>PDF/Docx File</label>
+      <div class="chapter-doc-picker-row">
+        <button class="mod-btn mod-btn--small" id="chapter-editor-doc-btn" type="button">📄 Attach PDF/Docx</button>
+        <span class="chapter-doc-picker-name" id="chapter-editor-doc-name">No file attached</span>
+      </div>
+      <input type="file" id="chapter-editor-doc-input" accept="application/pdf,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none;" />
+      <p class="char-editor-facts-hint">If you'd like to allow readers and everyone on the site to read your chapter directly, submit your PDF/Docx. This is pretty cool if you'd like to allow more options for readers to enjoy your story, such as downloading chapters/reading without having to close the website!</p>
+    </div>
+
+    <p class="mod-panel-msg" id="chapter-editor-msg"></p>
+
+    <div class="char-editor-actions">
+      <button class="mod-btn" id="chapter-editor-cancel" type="button">Cancel</button>
+      <button class="mod-btn mod-btn--danger" id="chapter-editor-delete" type="button" style="display:none;">Delete</button>
+      <button class="mod-btn" id="chapter-editor-save" type="button">Create</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <p>This story is a fan-made page hosted on Between Two Worlds.</p>
+</footer>
+
+<script src="/fanpages/fanpages-site.js"></script>
+<script>
+const PATH_PARTS = window.location.pathname.split('/').filter(Boolean);
+const SLUG = PATH_PARTS[1];
+const STORY_BASE = '/' + PATH_PARTS.slice(0, 3).join('/');
+
+document.getElementById('nav-home').href = STORY_BASE;
+document.getElementById('nav-characters').href = STORY_BASE + '/characters';
+document.getElementById('nav-chapters').href = STORY_BASE + '/chapters';
+document.getElementById('nav-gallery').href = STORY_BASE + '/gallery';
+
+const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+const authHeaders = () => ({ Authorization: `Bearer ${token}` });
+
+let CHAPTERS = [];
+let SITE = null;
+let IS_SELF = false;
+let currentDetailChapter = null;
+
+function renderVipBadge(s) {
+  document.getElementById('vip-badge').style.display =
+    (s.author_username || '').toLowerCase() === 'veekitpaws' ? 'flex' : 'none';
+}
+
+function hexToRgba(hex, alpha) {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+function applyStoryTheme(theme, bgUrl) {
+  const bgImg = document.getElementById('page-bg-img');
+  const bgOverlay = document.getElementById('page-bg-overlay');
+  if (theme === 'custom' && bgUrl) {
+    bgImg.src = bgUrl;
+    bgImg.style.display = 'block';
+    bgOverlay.style.background = hexToRgba('#0a0a0a', 0.78);
+    bgOverlay.style.display = 'block';
+  } else {
+    bgImg.style.display = 'none';
+    bgOverlay.style.display = 'none';
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── Chapter list ─────────────────────────────────────────────────────────
+function chapterThumb(ch) {
+  return ch.image_url || (SITE && SITE.cover_url) || '/images/gallery/pixernbath_13.png';
+}
+
+function renderChapterList() {
+  const list = document.getElementById('chapters-list');
+  if (!CHAPTERS.length) {
+    list.innerHTML = '<p class="gallery-empty-msg">No chapters yet — check back soon.</p>';
+    return;
+  }
+  list.innerHTML = '';
+  CHAPTERS.forEach(ch => {
+    const row = document.createElement('div');
+    row.className = 'chapter-row';
+    row.innerHTML = `
+      <a class="chapter-row-link" href="${STORY_BASE}/chapters?ch=${ch.id}">
+        <div class="cr-thumb"><img src="${chapterThumb(ch)}" alt="${escapeHtml(ch.title)} thumbnail" /></div>
+        <div class="cr-info"><span class="cr-title">${escapeHtml(ch.title)}</span></div>
+      </a>`;
+    row.querySelector('.chapter-row-link').addEventListener('click', (e) => {
+      e.preventDefault();
+      openChapterDetail(ch, true);
+    });
+    list.appendChild(row);
+  });
+}
+
+// ── Chapter detail "page" ───────────────────────────────────────────────
+function closePdfView() {
+  document.getElementById('chapter-pdf-view').hidden = true;
+  document.getElementById('chapter-detail-image-wrap').style.display =
+    currentDetailChapter && currentDetailChapter.image_url ? 'block' : 'none';
+  document.getElementById('chapter-pdf-iframe').src = '';
+}
+
+function openChapterDetail(ch, pushHistory) {
+  currentDetailChapter = ch;
+  closePdfView();
+
+  document.getElementById('chapter-detail-title').textContent = ch.title || 'Untitled Chapter';
+  document.getElementById('chapter-detail-teaser').textContent = ch.teaser && ch.teaser.trim() ? ch.teaser : 'No description provided';
+
+  const imgWrap = document.getElementById('chapter-detail-image-wrap');
+  const img = document.getElementById('chapter-detail-image');
+  if (ch.image_url) {
+    img.src = ch.image_url;
+    imgWrap.style.display = 'block';
+  } else {
+    imgWrap.style.display = 'none';
+  }
+
+  const linksWrap = document.getElementById('chapter-detail-links');
+  linksWrap.innerHTML = '';
+  (ch.links || []).forEach(l => {
+    const a = document.createElement('a');
+    a.className = 'btn btn-primary chapter-read-btn';
+    a.href = l.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = `📖 Read on ${l.label}`;
+    linksWrap.appendChild(a);
+  });
+
+  const pdfBtn = document.getElementById('chapter-detail-pdf-btn');
+  const noPdf = document.getElementById('chapter-detail-no-pdf');
+  if (ch.file_url) {
+    pdfBtn.style.display = 'block';
+    noPdf.style.display = 'none';
+  } else {
+    pdfBtn.style.display = 'none';
+    noPdf.style.display = 'block';
+  }
+
+  document.getElementById('chapters-list-view').style.display = 'none';
+  document.getElementById('chapter-detail-view').style.display = 'block';
+  document.title = `${ch.title || 'Chapter'} ✦ ${document.title.split('✦').pop().trim()}`;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  updateActionBox();
+
+  if (pushHistory) history.pushState({ ch: ch.id }, '', `${STORY_BASE}/chapters?ch=${ch.id}`);
+}
+
+function closeChapterDetail(pushHistory) {
+  currentDetailChapter = null;
+  closePdfView();
+  document.getElementById('chapter-detail-view').style.display = 'none';
+  document.getElementById('chapters-list-view').style.display = '';
+  updateActionBox();
+  if (pushHistory) history.pushState({}, '', `${STORY_BASE}/chapters`);
+}
+
+document.getElementById('chapter-detail-back').addEventListener('click', (e) => {
+  e.preventDefault();
+  closeChapterDetail(true);
+});
+
+document.getElementById('chapter-detail-pdf-btn').addEventListener('click', () => {
+  if (!currentDetailChapter || !currentDetailChapter.file_url) return;
+  const iframe = document.getElementById('chapter-pdf-iframe');
+  if (!iframe.src) iframe.src = currentDetailChapter.file_url;
+  document.getElementById('chapter-pdf-download').href = currentDetailChapter.file_url;
+  document.getElementById('chapter-pdf-download').setAttribute('download', currentDetailChapter.file_name || '');
+  document.getElementById('chapter-detail-image-wrap').style.display = 'none';
+  document.getElementById('chapter-pdf-view').hidden = false;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+document.getElementById('chapter-pdf-close').addEventListener('click', () => {
+  document.getElementById('chapter-pdf-view').hidden = true;
+  if (currentDetailChapter && currentDetailChapter.image_url) {
+    document.getElementById('chapter-detail-image-wrap').style.display = 'block';
+  }
+});
+
+window.addEventListener('popstate', () => {
+  const id = new URLSearchParams(window.location.search).get('ch');
+  if (!id) { closeChapterDetail(false); return; }
+  const ch = CHAPTERS.find(c => String(c.id) === String(id));
+  if (ch) openChapterDetail(ch, false);
+});
+
+// ── Owner-only action box (Create New Chapter / Edit *Title*) ──────────────
+function updateActionBox() {
+  const box = document.getElementById('chapter-action-box');
+  if (!IS_SELF) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  const icon = document.getElementById('chapter-action-icon');
+  const label = document.getElementById('chapter-action-label');
+  const btn = document.getElementById('chapter-action-btn');
+  if (currentDetailChapter) {
+    icon.textContent = '✏️';
+    label.textContent = `Edit ${currentDetailChapter.title || 'Chapter'}?`;
+    btn.onclick = () => openChapterEditor(currentDetailChapter);
+  } else {
+    icon.textContent = '➕';
+    label.textContent = 'Create New Chapter';
+    btn.onclick = () => openChapterEditor(null);
+  }
+}
+
+// ── Create/Edit modal ────────────────────────────────────────────────────
+let editingChapterId = null;
+let selectedChapterImage = null;
+let selectedChapterDoc = null;
+
+function addLinkRow(label, url, removable) {
+  if (removable === undefined) removable = true;
+  const wrap = document.createElement('div');
+  wrap.className = 'char-rel-row';
+  if (!removable) wrap.style.gridTemplateColumns = '1fr 1fr';
+  wrap.innerHTML = `
+    <input class="mod-input link-label" placeholder="AO3, Wattpad, Royal Road..." value="${(label || '').replace(/"/g, '&quot;')}" />
+    <input class="mod-input link-url" placeholder="https://..." value="${(url || '').replace(/"/g, '&quot;')}" />
+    ${removable ? '<button class="mod-btn mod-btn--small mod-btn--danger" type="button">✕</button>' : ''}`;
+  if (removable) wrap.querySelector('.mod-btn--danger').addEventListener('click', () => wrap.remove());
+  document.getElementById('chapter-editor-links-rows').appendChild(wrap);
+}
+document.getElementById('chapter-editor-add-link').addEventListener('click', () => addLinkRow('', '', true));
+
+function collectLinks() {
+  return [...document.querySelectorAll('#chapter-editor-links-rows .char-rel-row')]
+    .map(row => ({
+      label: row.querySelector('.link-label').value.trim(),
+      url: row.querySelector('.link-url').value.trim(),
+    }))
+    .filter(l => l.label && l.url);
+}
+
+function openChapterEditor(ch) {
+  editingChapterId = ch ? ch.id : null;
+  selectedChapterImage = null;
+  selectedChapterDoc = null;
+
+  document.getElementById('chapter-editor-title').textContent = ch ? 'Edit Chapter' : 'Create New Chapter';
+  document.getElementById('chapter-editor-cancel').style.display = ch ? 'none' : '';
+  document.getElementById('chapter-editor-delete').style.display = ch ? '' : 'none';
+  document.getElementById('chapter-editor-save').textContent = ch ? 'Save' : 'Create';
+
+  document.getElementById('chapter-editor-title-input').value = ch ? (ch.title || '') : '';
+  document.getElementById('chapter-editor-teaser').value = ch ? (ch.teaser || '') : '';
+
+  document.getElementById('chapter-editor-links-rows').innerHTML = '';
+  const existingLinks = (ch && ch.links) || [];
+  if (existingLinks.length) existingLinks.forEach((l, i) => addLinkRow(l.label, l.url, i > 0));
+  else addLinkRow('', '', false);
+
+  const img = document.getElementById('chapter-editor-img');
+  const placeholder = document.getElementById('chapter-editor-img-placeholder');
+  if (ch && ch.image_url) {
+    img.src = ch.image_url;
+    img.style.display = 'block';
+    placeholder.style.display = 'none';
+  } else {
+    img.style.display = 'none';
+    placeholder.style.display = 'block';
+  }
+
+  document.getElementById('chapter-editor-doc-name').textContent = (ch && ch.file_name) ? ch.file_name : 'No file attached';
+  document.getElementById('chapter-editor-msg').textContent = '';
+
+  document.getElementById('chapter-editor-overlay').hidden = false;
+}
+function closeChapterEditor() {
+  document.getElementById('chapter-editor-overlay').hidden = true;
+}
+
+document.getElementById('chapter-editor-cancel').addEventListener('click', closeChapterEditor);
+// No click-outside-to-close here on purpose — accidental clicks shouldn't wipe out a half-filled chapter.
+
+document.getElementById('chapter-editor-img-wrap').addEventListener('click', () => {
+  document.getElementById('chapter-editor-file-input').click();
+});
+document.getElementById('chapter-editor-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  selectedChapterImage = file;
+  const img = document.getElementById('chapter-editor-img');
+  img.src = URL.createObjectURL(file);
+  img.style.display = 'block';
+  document.getElementById('chapter-editor-img-placeholder').style.display = 'none';
+});
+
+document.getElementById('chapter-editor-doc-btn').addEventListener('click', () => {
+  document.getElementById('chapter-editor-doc-input').click();
+});
+document.getElementById('chapter-editor-doc-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  selectedChapterDoc = file;
+  document.getElementById('chapter-editor-doc-name').textContent = file.name;
+});
+
+async function reloadChapters(preferId) {
+  const data = await ModeratorSite.load(SLUG);
+  CHAPTERS = (data && data.chapters) || [];
+  renderChapterList();
+  if (preferId) {
+    const ch = CHAPTERS.find(c => String(c.id) === String(preferId));
+    if (ch) openChapterDetail(ch, true);
+  }
+}
+
+document.getElementById('chapter-editor-delete').addEventListener('click', async () => {
+  if (!editingChapterId) return;
+  if (!confirm('Are you sure you want to delete this chapter?')) return;
+
+  const deleteBtn = document.getElementById('chapter-editor-delete');
+  deleteBtn.disabled = true;
+  deleteBtn.textContent = 'Deleting…';
+  try {
+    await fetch(`/api/moderator/chapters/${editingChapterId}`, { method: 'DELETE', headers: authHeaders() });
+    closeChapterEditor();
+    closeChapterDetail(true);
+    await reloadChapters();
+  } catch {
+    document.getElementById('chapter-editor-msg').className = 'mod-panel-msg mod-panel-msg--error';
+    document.getElementById('chapter-editor-msg').textContent = 'Failed to delete. Please try again.';
+  } finally {
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = 'Delete';
+  }
+});
+
+document.getElementById('chapter-editor-save').addEventListener('click', async () => {
+  const title = document.getElementById('chapter-editor-title-input').value.trim();
+  const msgEl = document.getElementById('chapter-editor-msg');
+  msgEl.textContent = '';
+
+  if (!title) {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Chapter title is required.';
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('title', title);
+  fd.append('teaser', document.getElementById('chapter-editor-teaser').value.trim());
+  fd.append('links', JSON.stringify(collectLinks()));
+  if (selectedChapterImage) fd.append('image', selectedChapterImage);
+  if (selectedChapterDoc) fd.append('file', selectedChapterDoc);
+
+  const saveBtn = document.getElementById('chapter-editor-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = editingChapterId ? 'Saving…' : 'Creating…';
+  try {
+    const url = editingChapterId ? `/api/moderator/chapters/${editingChapterId}` : '/api/moderator/chapters';
+    const method = editingChapterId ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: authHeaders(), body: fd });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+      msgEl.textContent = data.error || 'Something went wrong. Please try again.';
+      return;
+    }
+    const { chapter } = await res.json();
+    closeChapterEditor();
+    await reloadChapters(chapter.id);
+  } catch {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Network error. Please try again.';
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = editingChapterId ? 'Save' : 'Create';
+  }
+});
+
+(async () => {
+  const data = await ModeratorSite.load(SLUG);
+  SITE = (data && data.site) || null;
+  ModeratorSite.applyBanner(document.getElementById('page-banner-img'), SITE);
+  if (SITE) renderVipBadge(SITE);
+  applyStoryTheme(SITE && SITE.theme, SITE && SITE.theme_bg_url);
+  if (SITE && SITE.site_title) document.title = `Chapters ✦ ${SITE.site_title}`;
+  IS_SELF = !!(SITE && SITE.is_self);
+
+  CHAPTERS = (data && data.chapters) || [];
+  renderChapterList();
+  updateActionBox();
+
+  const deepLinkId = new URLSearchParams(window.location.search).get('ch');
+  const deepLinkChapter = deepLinkId ? CHAPTERS.find(c => String(c.id) === String(deepLinkId)) : null;
+  if (deepLinkChapter) openChapterDetail(deepLinkChapter, false);
+})();
+</script>
+</body>
+</html>

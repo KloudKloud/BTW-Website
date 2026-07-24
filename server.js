@@ -158,6 +158,21 @@ async function initDb() {
 
   // Add email_hash column if missing
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_hash TEXT`).catch(() => {});
+  // Account-level fanpage profile fields — deliberately separate from a
+  // story's own "Meet <author>" text (moderator_sites.bio). This is the
+  // person's own /fanpages/:username About box.
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS pronouns TEXT NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS favorite_pokemon TEXT NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS account_bio TEXT NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS fun_fact TEXT NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS account_links JSONB NOT NULL DEFAULT '[]';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS account_banner_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS account_banner_position_x INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS account_banner_position_y INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_position_x INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_position_y INTEGER NOT NULL DEFAULT 50;
+  `).catch(e => console.error('account profile fields migration:', e.message));
   // Add newsletter opt-in column if missing (default true for existing users)
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_newsletter BOOLEAN DEFAULT true`).catch(() => {});
   // Inbox threading columns
@@ -180,6 +195,178 @@ async function initDb() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `).catch(() => {});
+
+  // ── Moderator creator panel ──────────────────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS moderator_sites (
+      id           SERIAL      PRIMARY KEY,
+      slug         TEXT        UNIQUE NOT NULL,
+      owner_user_id INTEGER    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      site_title   TEXT        NOT NULL DEFAULT 'Above All Else',
+      synopsis     TEXT        NOT NULL DEFAULT '',
+      bio          TEXT        NOT NULL DEFAULT '',
+      links        JSONB       NOT NULL DEFAULT '[]',
+      updated_at   TIMESTAMPTZ DEFAULT NOW(),
+      created_at   TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS moderator_chapters (
+      id         SERIAL      PRIMARY KEY,
+      site_id    INTEGER     NOT NULL REFERENCES moderator_sites(id) ON DELETE CASCADE,
+      title      TEXT        NOT NULL,
+      url        TEXT        NOT NULL DEFAULT '',
+      sort_order INTEGER     NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS moderator_characters (
+      id         SERIAL      PRIMARY KEY,
+      site_id    INTEGER     NOT NULL REFERENCES moderator_sites(id) ON DELETE CASCADE,
+      name        TEXT        NOT NULL,
+      ref_image   TEXT        NOT NULL DEFAULT '',
+      description TEXT        NOT NULL DEFAULT '',
+      stats      JSONB       NOT NULL DEFAULT '{}',
+      facts      JSONB       NOT NULL DEFAULT '[]',
+      lore       JSONB       NOT NULL DEFAULT '[]',
+      sort_order INTEGER     NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS moderator_gallery (
+      id         SERIAL      PRIMARY KEY,
+      site_id    INTEGER     NOT NULL REFERENCES moderator_sites(id) ON DELETE CASCADE,
+      category   TEXT        NOT NULL CHECK (category IN ('sfw','sketches','spicy')),
+      image_url  TEXT        NOT NULL,
+      title      TEXT        NOT NULL DEFAULT '',
+      sort_order INTEGER     NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(e => console.error('moderator tables migration:', e.message));
+
+  // Banner image + positioning + theme for the moderator's cover
+  await pool.query(`
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS banner_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS banner_position INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS theme_bg_url TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('moderator_sites banner/theme migration:', e.message));
+
+  // Book cover — sits beside the story description, like BTW's own synopsis-cover
+  await pool.query(`
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS cover_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS cover_position_x INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS cover_position_y INTEGER NOT NULL DEFAULT 50;
+  `).catch(e => console.error('moderator_sites cover migration:', e.message));
+
+  // Quick-nav card art — the Characters/Chapters/Gallery shortcut cards on the
+  // story home page. Blank until the author uploads their own, same as banner/cover.
+  await pool.query(`
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS characters_card_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS chapters_card_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS gallery_card_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS characters_card_position_x INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS characters_card_position_y INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS chapters_card_position_x INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS chapters_card_position_y INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS gallery_card_position_x INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS gallery_card_position_y INTEGER NOT NULL DEFAULT 50;
+  `).catch(e => console.error('moderator_sites nav-card migration:', e.message));
+
+  // Reference-image crop position for character cards
+  await pool.query(`
+    ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS ref_position_x INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS ref_position_y INTEGER NOT NULL DEFAULT 50;
+  `).catch(e => console.error('moderator_characters ref-position migration:', e.message));
+
+  // Structured relationships — replaces the old free-text stats.Relationships
+  // string. Each entry is { name, type, character_id }, where character_id
+  // (nullable) lets one character's relationship list link straight to
+  // another character in the same story for fast-travel on click.
+  await pool.query(`
+    ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS relationships JSONB NOT NULL DEFAULT '[]';
+  `).catch(e => console.error('moderator_characters relationships migration:', e.message));
+
+  // Bookmarks — lets any logged-in user save a fanpage to their hub profile
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS moderator_bookmarks (
+      id         SERIAL      PRIMARY KEY,
+      user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      site_id    INTEGER     NOT NULL REFERENCES moderator_sites(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, site_id)
+    );
+  `).catch(e => console.error('moderator_bookmarks migration:', e.message));
+
+  // story_path is the actual URL under /fanpages/ (e.g. "blue/above-all-else") —
+  // separate from slug (the moderator's own identity) since one person can
+  // eventually have more than one story nested under their own folder.
+  await pool.query(`ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS story_path TEXT`)
+    .catch(e => console.error('moderator_sites story_path migration:', e.message));
+  await pool.query(`UPDATE moderator_sites SET story_path = slug WHERE story_path IS NULL`)
+    .catch(e => console.error('moderator_sites story_path backfill:', e.message));
+  await pool.query(`UPDATE moderator_sites SET story_path = 'blue/above-all-else' WHERE slug = 'blue' AND story_path = 'blue'`)
+    .catch(e => console.error('moderator_sites blue story_path fix:', e.message));
+
+  // Following — generic user-to-user, powers each author's /fanpages/:username profile
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_follows (
+      id          SERIAL      PRIMARY KEY,
+      follower_id INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      followed_id INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at  TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(follower_id, followed_id)
+    );
+  `).catch(e => console.error('user_follows migration:', e.message));
+
+  // Featured Characters / Featured Gallery on a user's /fanpages/:username profile.
+  // Deliberately denormalized (cached title/image/link) rather than a strict
+  // foreign key, because a featured item can point at ANY story's character
+  // or gallery entry — including BTW's own hardcoded cast, which isn't a DB
+  // row at all. The future editor is what resolves a chosen item into these
+  // cached fields at selection time.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_featured_items (
+      id         SERIAL      PRIMARY KEY,
+      user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind       TEXT        NOT NULL CHECK (kind IN ('character','gallery')),
+      source     TEXT        NOT NULL CHECK (source IN ('btw','fanpage')),
+      site_slug  TEXT,
+      ref_id     TEXT        NOT NULL,
+      title      TEXT        NOT NULL DEFAULT '',
+      image_url  TEXT        NOT NULL DEFAULT '',
+      link_url   TEXT        NOT NULL DEFAULT '',
+      sort_order INTEGER     NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(e => console.error('user_featured_items migration:', e.message));
+
+  // Widen the gallery category constraint to include "sketches" (added after the original CHECK)
+  await pool.query(`
+    ALTER TABLE moderator_gallery DROP CONSTRAINT IF EXISTS moderator_gallery_category_check;
+    ALTER TABLE moderator_gallery ADD CONSTRAINT moderator_gallery_category_check CHECK (category IN ('sfw','sketches','spicy'));
+  `).catch(e => console.error('moderator_gallery category migration:', e.message));
+
+  await pool.query(`
+    ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('moderator_gallery description migration:', e.message));
+
+  // Chapter authoring: teaser blurb, multiple "where to read" links, an optional
+  // per-chapter cover image (falls back to the story cover when unset), and an
+  // optional PDF/Docx attachment readers can view in-page or download.
+  await pool.query(`
+    ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS teaser TEXT NOT NULL DEFAULT '';
+    ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]';
+    ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS file_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS file_name TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('moderator_chapters authoring migration:', e.message));
+
+  // Seed Blue's site row if it doesn't exist yet, once his account is registered
+  await pool.query(`
+    INSERT INTO moderator_sites (slug, owner_user_id)
+    SELECT 'blue', u.id FROM users u WHERE u.email_hash = $1
+    ON CONFLICT (slug) DO NOTHING
+  `, [hashEmail('xrcblue@gmail.com')]).catch(e => console.error('moderator site seed:', e.message));
 
   // Migrate plaintext emails → encrypted + hash
   const { rows: unmigratedUsers } = await pool.query('SELECT id, email FROM users WHERE email_hash IS NULL');
@@ -235,6 +422,16 @@ async function checkAdmin(req) {
   const { rows: [user] } = await pool.query('SELECT email_hash FROM users WHERE id = $1', [req.user.id]);
   if (!user) return false;
   return user.email_hash === process.env.ADMIN_EMAIL_HASH;
+}
+
+// ── Moderators ────────────────────────────────────────────────────────────────
+// "Moderator" just means "owns at least one story" — anyone who creates a
+// story via Create Story becomes one. No hardcoded allowlist: Blue owns a
+// moderator_sites row the same way any other user would after creating
+// their own story, so his page never needs special-cased code going forward.
+async function checkModerator(req) {
+  const { rows } = await pool.query('SELECT 1 FROM moderator_sites WHERE owner_user_id = $1 LIMIT 1', [req.user.id]);
+  return rows.length > 0;
 }
 
 // ── Email templates ───────────────────────────────────────────────────────────
@@ -318,7 +515,7 @@ const emailWelcome = (name, loginUrl) => emailShell(`
 // POST /api/auth/register
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { username, display_name, email, password } = req.body;
+    const { username, display_name, email, password, from } = req.body;
 
     if (!username || !email || !password)
       return res.status(400).json({ error: 'Username, email and password are required.' });
@@ -343,7 +540,8 @@ app.post('/api/auth/register', async (req, res) => {
       [username.toLowerCase(), dname, encryptEmail(email.toLowerCase()), hashEmail(email), password_hash, verify_token]
     );
 
-    const verifyUrl = `https://${process.env.SITE_HOST}/api/auth/verify?token=${verify_token}`;
+    const verifyUrl = `https://${process.env.SITE_HOST}/api/auth/verify?token=${verify_token}`
+      + (from ? `&from=${encodeURIComponent(from)}` : '');
 
     await resend.emails.send({
       from: 'Between Two Worlds <hello@btwfanfic.net>',
@@ -363,7 +561,7 @@ app.post('/api/auth/register', async (req, res) => {
 
 // GET /api/auth/verify?token=xxx — shows confirmation page (safe for email scanners)
 app.get('/api/auth/verify', async (req, res) => {
-  const { token } = req.query;
+  const { token, from } = req.query;
   if (!token) return res.redirect(`https://${process.env.SITE_HOST}/login`);
 
   // Check token exists but do NOT consume it — scanner-safe
@@ -409,7 +607,7 @@ async function activate() {
     const r = await fetch('/api/auth/verify', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({token: ${JSON.stringify(token)}})
+      body: JSON.stringify({token: ${JSON.stringify(token)}, from: ${JSON.stringify(from || '')}})
     });
     const d = await r.json();
     if (d.redirect) { window.location.href = d.redirect; }
@@ -421,7 +619,7 @@ async function activate() {
 
 // POST /api/auth/verify — actually activates the account
 app.post('/api/auth/verify', async (req, res) => {
-  const { token } = req.body;
+  const { token, from: fromPath } = req.body;
   if (!token) return res.status(400).json({ error: 'Missing token.' });
 
   const { rows: [user] } = await pool.query('SELECT * FROM users WHERE verify_token = $1', [token]);
@@ -430,7 +628,8 @@ app.post('/api/auth/verify', async (req, res) => {
   await pool.query('UPDATE users SET verified = true, verify_token = NULL WHERE id = $1', [user.id]);
 
   const autoToken = signToken(user.id);
-  const loginUrl  = `https://${process.env.SITE_HOST}/login?autotoken=${autoToken}`;
+  const loginUrl  = `https://${process.env.SITE_HOST}/login?autotoken=${autoToken}`
+    + (fromPath ? `&from=${encodeURIComponent(fromPath)}` : '');
 
   try {
     await resend.emails.send({
@@ -483,11 +682,17 @@ app.post('/api/auth/login', async (req, res) => {
 // GET /api/auth/me
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
-    'SELECT id, username, display_name, avatar, email_hash FROM users WHERE id = $1', [req.user.id]
+    'SELECT id, username, display_name, avatar, avatar_position_x, avatar_position_y, email_hash FROM users WHERE id = $1', [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
   const is_admin = user.email_hash === process.env.ADMIN_EMAIL_HASH;
-  res.json({ user: { id: user.id, username: user.username, display_name: user.display_name, avatar: user.avatar || null, is_admin } });
+  const { rows: modRows } = await pool.query('SELECT 1 FROM moderator_sites WHERE owner_user_id = $1 LIMIT 1', [user.id]);
+  const is_moderator = modRows.length > 0;
+  res.json({ user: {
+    id: user.id, username: user.username, display_name: user.display_name, avatar: user.avatar || null,
+    avatar_position_x: user.avatar_position_x, avatar_position_y: user.avatar_position_y,
+    is_admin, is_moderator,
+  } });
 });
 
 // POST /api/auth/logout
@@ -734,9 +939,21 @@ app.post('/api/auth/avatar', requireAuth, (req, res, next) => {
     });
 
     const avatarUrl = `/images/avatars/${req.file.filename}`;
-    await pool.query('UPDATE users SET avatar = $1 WHERE id = $2', [avatarUrl, req.user.id]);
-    res.json({ avatar: avatarUrl });
+    // Position resets to center on every new upload, same as banner/cover/character-ref uploads.
+    await pool.query(
+      'UPDATE users SET avatar = $1, avatar_position_x = 50, avatar_position_y = 50 WHERE id = $2',
+      [avatarUrl, req.user.id]
+    );
+    res.json({ avatar: avatarUrl, position_x: 50, position_y: 50 });
   });
+});
+
+app.put('/api/auth/avatar-position', requireAuth, async (req, res) => {
+  const x = parseInt(req.body.position_x, 10);
+  const y = parseInt(req.body.position_y, 10);
+  if (![x, y].every(n => Number.isFinite(n) && n >= 0 && n <= 100)) return res.status(400).json({ error: 'Positions must be 0-100.' });
+  await pool.query('UPDATE users SET avatar_position_x = $1, avatar_position_y = $2 WHERE id = $3', [x, y, req.user.id]);
+  res.json({ position_x: x, position_y: y });
 });
 
 app.delete('/api/auth/account', requireAuth, async (req, res) => {
@@ -1798,6 +2015,788 @@ app.post('/api/webhooks/paypal', express.urlencoded({ extended: true }), (req, r
   verifyReq.on('error', err => console.error('PayPal IPN verify error:', err));
   verifyReq.write(verifyBody);
   verifyReq.end();
+});
+
+// ── Moderator Creator Panel ─────────────────────────────────────────────────────
+const MOD_IMAGES_DIR = '/var/www/btw/images/moderators';
+if (!fs.existsSync(MOD_IMAGES_DIR)) fs.mkdirSync(MOD_IMAGES_DIR, { recursive: true });
+
+const uploadModImage = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, MOD_IMAGES_DIR),
+    filename: (req, file, cb) => {
+      const ext = ({ 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' })[file.mimetype] || '.jpg';
+      cb(null, `${req.user.id}_${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    cb(null, ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.mimetype));
+  },
+});
+
+// Chapter cover images share the moderator images dir; the readable PDF/Docx
+// attachment gets its own dir since it isn't an image and needs to keep its
+// original filename around for the download prompt.
+const MOD_CHAPTER_FILES_DIR = '/var/www/btw/moderators/files';
+if (!fs.existsSync(MOD_CHAPTER_FILES_DIR)) fs.mkdirSync(MOD_CHAPTER_FILES_DIR, { recursive: true });
+
+const CHAPTER_DOC_MIMES = {
+  'application/pdf': '.pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/msword': '.doc',
+};
+
+const uploadChapter = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, file.fieldname === 'file' ? MOD_CHAPTER_FILES_DIR : MOD_IMAGES_DIR),
+    filename: (req, file, cb) => {
+      if (file.fieldname === 'file') {
+        cb(null, `${req.user.id}_${Date.now()}${CHAPTER_DOC_MIMES[file.mimetype] || ''}`);
+        return;
+      }
+      const ext = ({ 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' })[file.mimetype] || '.jpg';
+      cb(null, `${req.user.id}_${Date.now()}_cover${ext}`);
+    },
+  }),
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.fieldname === 'file') {
+      cb(null, Object.keys(CHAPTER_DOC_MIMES).includes(file.mimetype));
+    } else {
+      cb(null, ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.mimetype));
+    }
+  },
+});
+
+async function getMySite(req) {
+  const { rows: [site] } = await pool.query('SELECT * FROM moderator_sites WHERE owner_user_id = $1', [req.user.id]);
+  return site || null;
+}
+
+// Confirms the user is a moderator AND has a site row, then attaches it to req.modSite
+async function requireModerator(req, res, next) {
+  if (!await checkModerator(req)) return res.status(403).json({ error: 'Forbidden.' });
+  const site = await getMySite(req);
+  if (!site) return res.status(404).json({ error: 'No moderator site found for this account.' });
+  req.modSite = site;
+  next();
+}
+
+// POST /api/moderator/site/create — the Create Story onboarding flow. One
+// story per account for now (mirrors "My Stories" and every other place in
+// the codebase that assumes a single moderator_sites row per owner). slug
+// doubles as the person's fanpage identity, so it's just their username;
+// story_path is the actual /fanpages/<slug>/<story> URL, slugified from the
+// title they chose and de-duped if it collides with an existing story.
+app.post('/api/moderator/site/create', requireAuth, async (req, res) => {
+  const title = String(req.body.title || '').trim().slice(0, 60);
+  if (!title) return res.status(400).json({ error: 'A title is required.' });
+
+  const { rows: existing } = await pool.query('SELECT id FROM moderator_sites WHERE owner_user_id = $1', [req.user.id]);
+  if (existing.length) return res.status(409).json({ error: 'You already have a story.' });
+
+  const { rows: [user] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
+  const slug = user.username.toLowerCase();
+
+  const baseStorySlug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'story';
+  let storyPath = `${slug}/${baseStorySlug}`;
+  let suffix = 2;
+  while ((await pool.query('SELECT 1 FROM moderator_sites WHERE story_path = $1', [storyPath])).rows.length) {
+    storyPath = `${slug}/${baseStorySlug}-${suffix}`;
+    suffix++;
+  }
+
+  const { rows: [site] } = await pool.query(
+    `INSERT INTO moderator_sites (slug, owner_user_id, site_title, story_path) VALUES ($1, $2, $3, $4) RETURNING *`,
+    [slug, req.user.id, title, storyPath]
+  );
+  res.json({ site });
+});
+
+// GET /api/moderator-sites — public list of every fanpage, for the hub's
+// browse/recommended rows. Includes each site's bookmark state when the
+// request carries a valid token.
+app.get('/api/moderator-sites', async (req, res) => {
+  let userId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { userId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+
+  const { rows: sites } = await pool.query(`
+    SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url,
+           u.username, u.display_name
+    FROM moderator_sites ms
+    JOIN users u ON u.id = ms.owner_user_id
+    ORDER BY ms.created_at ASC
+  `);
+
+  let bookmarkedIds = new Set();
+  if (userId) {
+    const { rows } = await pool.query('SELECT site_id FROM moderator_bookmarks WHERE user_id = $1', [userId]);
+    bookmarkedIds = new Set(rows.map(r => r.site_id));
+  }
+
+  res.json({
+    sites: sites.map(s => ({
+      slug: s.slug,
+      story_path: s.story_path || s.slug,
+      site_title: s.site_title,
+      cover_url: s.cover_url,
+      banner_url: s.banner_url,
+      author: s.display_name || s.username,
+      author_username: s.username,
+      bookmarked: bookmarkedIds.has(s.id),
+    })),
+  });
+});
+
+// ── Bookmarks — save a fanpage to your hub profile ────────────────────────────
+app.get('/api/bookmarks', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.username, u.display_name
+    FROM moderator_bookmarks mb
+    JOIN moderator_sites ms ON ms.id = mb.site_id
+    JOIN users u ON u.id = ms.owner_user_id
+    WHERE mb.user_id = $1
+    ORDER BY mb.created_at DESC
+  `, [req.user.id]);
+  res.json({
+    bookmarks: rows.map(r => ({
+      slug: r.slug, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url,
+      author: r.display_name || r.username, author_username: r.username,
+    })),
+  });
+});
+
+app.post('/api/bookmarks/:slug', requireAuth, async (req, res) => {
+  const { rows: [site] } = await pool.query('SELECT id FROM moderator_sites WHERE slug = $1', [req.params.slug]);
+  if (!site) return res.status(404).json({ error: 'Not found.' });
+  await pool.query(
+    'INSERT INTO moderator_bookmarks (user_id, site_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [req.user.id, site.id]
+  );
+  res.json({ message: 'Bookmarked.' });
+});
+
+app.delete('/api/bookmarks/:slug', requireAuth, async (req, res) => {
+  const { rows: [site] } = await pool.query('SELECT id FROM moderator_sites WHERE slug = $1', [req.params.slug]);
+  if (!site) return res.status(404).json({ error: 'Not found.' });
+  await pool.query('DELETE FROM moderator_bookmarks WHERE user_id = $1 AND site_id = $2', [req.user.id, site.id]);
+  res.json({ message: 'Removed.' });
+});
+
+// ── Author profile — /fanpages/:username, Twitter-style header + their stories ──
+app.get('/api/fanpage-profile/:username', async (req, res) => {
+  const { rows: [author] } = await pool.query(
+    `SELECT id, username, display_name, avatar, avatar_position_x, avatar_position_y,
+            pronouns, favorite_pokemon, account_bio, fun_fact, account_links,
+            account_banner_url, account_banner_position_x, account_banner_position_y
+     FROM users WHERE username = $1`,
+    [req.params.username.toLowerCase()]
+  );
+  if (!author) return res.status(404).json({ error: 'Not found.' });
+
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+
+  const [{ rows: sites }, followerCount, followingCount, isFollowing, featuredChars, featuredGallery] = await Promise.all([
+    pool.query(
+      'SELECT slug, story_path, site_title, cover_url, banner_url FROM moderator_sites WHERE owner_user_id = $1 ORDER BY created_at ASC',
+      [author.id]
+    ),
+    pool.query('SELECT COUNT(*)::int AS n FROM user_follows WHERE followed_id = $1', [author.id]),
+    pool.query('SELECT COUNT(*)::int AS n FROM user_follows WHERE follower_id = $1', [author.id]),
+    viewerId
+      ? pool.query('SELECT 1 FROM user_follows WHERE follower_id = $1 AND followed_id = $2', [viewerId, author.id])
+      : Promise.resolve({ rows: [] }),
+    pool.query(
+      `SELECT title, image_url, link_url FROM user_featured_items
+       WHERE user_id = $1 AND kind = 'character' ORDER BY sort_order LIMIT 3`,
+      [author.id]
+    ),
+    pool.query(
+      `SELECT title, image_url, link_url FROM user_featured_items
+       WHERE user_id = $1 AND kind = 'gallery' ORDER BY sort_order LIMIT 3`,
+      [author.id]
+    ),
+  ]);
+
+  res.json({
+    author: {
+      username: author.username,
+      display_name: author.display_name || author.username,
+      avatar: author.avatar || null,
+      avatar_position_x: author.avatar_position_x != null ? author.avatar_position_x : 50,
+      avatar_position_y: author.avatar_position_y != null ? author.avatar_position_y : 50,
+      // Deliberately NOT falling back to a story's banner_url here — the
+      // account profile banner is its own thing and must stay blank (falls
+      // through to the shared placeholder image on the frontend) until the
+      // user explicitly sets one via the profile editor.
+      banner_url: author.account_banner_url || '',
+      banner_position_x: author.account_banner_url ? author.account_banner_position_x : 50,
+      banner_position_y: author.account_banner_url ? author.account_banner_position_y : 50,
+      pronouns: author.pronouns || '',
+      favorite_pokemon: author.favorite_pokemon || '',
+      account_bio: author.account_bio || '',
+      fun_fact: author.fun_fact || '',
+      account_links: author.account_links || [],
+      featured_characters: featuredChars.rows,
+      featured_gallery: featuredGallery.rows,
+      is_self: viewerId === author.id,
+    },
+    stories: sites.map(s => ({
+      slug: s.slug, story_path: s.story_path || s.slug, site_title: s.site_title, cover_url: s.cover_url,
+    })),
+    follower_count: followerCount.rows[0].n,
+    following_count: followingCount.rows[0].n,
+    is_following: isFollowing.rows.length > 0,
+  });
+});
+
+app.post('/api/follows/:username', requireAuth, async (req, res) => {
+  const { rows: [target] } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]);
+  if (!target) return res.status(404).json({ error: 'Not found.' });
+  if (target.id === req.user.id) return res.status(400).json({ error: "You can't follow yourself." });
+  await pool.query(
+    'INSERT INTO user_follows (follower_id, followed_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [req.user.id, target.id]
+  );
+  res.json({ message: 'Followed.' });
+});
+
+app.delete('/api/follows/:username', requireAuth, async (req, res) => {
+  const { rows: [target] } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]);
+  if (!target) return res.status(404).json({ error: 'Not found.' });
+  await pool.query('DELETE FROM user_follows WHERE follower_id = $1 AND followed_id = $2', [req.user.id, target.id]);
+  res.json({ message: 'Unfollowed.' });
+});
+
+// PUT /api/account/profile — the in-line "Edit Profile" editor on a user's
+// own /fanpages/:username page writes the same about-section fields the
+// old root /profile page already exposed for reading.
+app.put('/api/account/profile', requireAuth, async (req, res) => {
+  const pronouns = String(req.body.pronouns || '').slice(0, 60);
+  const favoritePokemon = String(req.body.favorite_pokemon || '').slice(0, 60);
+  const accountBio = String(req.body.account_bio || '').slice(0, 1000);
+  const funFact = String(req.body.fun_fact || '').slice(0, 300);
+  const links = Array.isArray(req.body.account_links)
+    ? req.body.account_links
+        .filter(l => l && l.url)
+        .slice(0, 10)
+        .map(l => ({ label: String(l.label || l.url).slice(0, 40), url: String(l.url).slice(0, 300) }))
+    : [];
+
+  await pool.query(
+    `UPDATE users SET pronouns = $1, favorite_pokemon = $2, account_bio = $3, fun_fact = $4, account_links = $5
+     WHERE id = $6`,
+    [pronouns, favoritePokemon, accountBio, funFact, JSON.stringify(links), req.user.id]
+  );
+  res.json({ message: 'Profile updated.' });
+});
+
+// PUT /api/account/banner — the profile page's own banner image, distinct
+// from a moderator's story banner. Reuses the moderator image upload dir
+// since it's already public under /images/moderators/.
+app.put('/api/account/banner', requireAuth, uploadModImage.single('banner'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const bannerUrl = `/images/moderators/${req.file.filename}`;
+  const x = parseInt(req.body.position_x, 10);
+  const y = parseInt(req.body.position_y, 10);
+  const posX = Number.isFinite(x) ? x : 50;
+  const posY = Number.isFinite(y) ? y : 50;
+  await pool.query(
+    `UPDATE users SET account_banner_url = $1, account_banner_position_x = $2, account_banner_position_y = $3 WHERE id = $4`,
+    [bannerUrl, posX, posY, req.user.id]
+  );
+  res.json({ banner_url: bannerUrl, position_x: posX, position_y: posY });
+});
+
+app.put('/api/account/banner-position', requireAuth, async (req, res) => {
+  const x = parseInt(req.body.position_x, 10);
+  const y = parseInt(req.body.position_y, 10);
+  if (![x, y].every(n => Number.isFinite(n) && n >= 0 && n <= 100)) return res.status(400).json({ error: 'Positions must be 0-100.' });
+  await pool.query('UPDATE users SET account_banner_position_x = $1, account_banner_position_y = $2 WHERE id = $3', [x, y, req.user.id]);
+  res.json({ message: 'Updated.' });
+});
+
+// GET /api/featured-search — powers the Featured Characters / Featured
+// Gallery pickers in the in-line profile editor. Searches across every
+// fanpage story's characters/gallery (not just the viewer's own), so users
+// can feature a favorite from any community story. Results from the
+// viewer's own site(s) are surfaced first.
+app.get('/api/featured-search', requireAuth, async (req, res) => {
+  const kind = req.query.kind === 'gallery' ? 'gallery' : 'character';
+  const q = `%${String(req.query.q || '').slice(0, 60)}%`;
+
+  const { rows: mySites } = await pool.query('SELECT slug FROM moderator_sites WHERE owner_user_id = $1', [req.user.id]);
+  const mySlugs = mySites.map(s => s.slug);
+
+  let rows;
+  if (kind === 'character') {
+    ({ rows } = await pool.query(
+      `SELECT mc.id, mc.name AS title, mc.ref_image AS image_url, ms.slug, ms.story_path
+       FROM moderator_characters mc JOIN moderator_sites ms ON ms.id = mc.site_id
+       WHERE mc.name ILIKE $1 ORDER BY mc.name LIMIT 30`,
+      [q]
+    ));
+  } else {
+    ({ rows } = await pool.query(
+      `SELECT mg.id, mg.title AS title, mg.image_url AS image_url, ms.slug, ms.story_path
+       FROM moderator_gallery mg JOIN moderator_sites ms ON ms.id = mg.site_id
+       WHERE mg.category != 'spicy' AND mg.title ILIKE $1 ORDER BY mg.title LIMIT 30`,
+      [q]
+    ));
+  }
+
+  const results = rows
+    .map(r => ({
+      ref_id: String(r.id),
+      title: r.title || 'Untitled',
+      image_url: r.image_url || '',
+      link_url: `/fanpages/${r.story_path || r.slug}${kind === 'character' ? '/characters' : '/gallery'}`,
+      mine: mySlugs.includes(r.slug),
+    }))
+    .sort((a, b) => (b.mine - a.mine));
+
+  res.json({ results });
+});
+
+// PUT /api/account/featured — replaces the caller's featured-characters or
+// featured-gallery set (max 3) in one shot.
+app.put('/api/account/featured', requireAuth, async (req, res) => {
+  const kind = req.body.kind === 'gallery' ? 'gallery' : 'character';
+  const items = Array.isArray(req.body.items) ? req.body.items.slice(0, 3) : [];
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM user_featured_items WHERE user_id = $1 AND kind = $2', [req.user.id, kind]);
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      await client.query(
+        `INSERT INTO user_featured_items (user_id, kind, source, site_slug, ref_id, title, image_url, link_url, sort_order)
+         VALUES ($1, $2, 'fanpage', $3, $4, $5, $6, $7, $8)`,
+        [req.user.id, kind, it.site_slug || null, String(it.ref_id || ''), String(it.title || '').slice(0, 80),
+         String(it.image_url || '').slice(0, 300), String(it.link_url || '').slice(0, 300), i]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+  res.json({ message: 'Featured items updated.' });
+});
+
+// GET /api/moderator-sites/:slug — public read, powers the static moderator pages.
+// Spicy gallery items are only included when the request carries a valid token,
+// mirroring how BTW's own /spicy page gates content.
+app.get('/api/moderator-sites/:slug', async (req, res) => {
+  const { rows: [site] } = await pool.query(
+    `SELECT ms.*, u.display_name AS author_display_name, u.username AS author_username, u.avatar AS author_avatar
+     FROM moderator_sites ms JOIN users u ON u.id = ms.owner_user_id
+     WHERE ms.slug = $1`,
+    [req.params.slug]
+  );
+  if (!site) return res.status(404).json({ error: 'Not found.' });
+
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+  const loggedIn = viewerId !== null;
+
+  const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked] = await Promise.all([
+    pool.query('SELECT id, title, teaser, links, image_url, file_url, file_name FROM moderator_chapters WHERE site_id = $1 ORDER BY sort_order, id', [site.id]),
+    pool.query('SELECT id, name, ref_image, ref_position_x, ref_position_y, description, stats, facts, lore, relationships FROM moderator_characters WHERE site_id = $1 ORDER BY sort_order, id', [site.id]),
+    pool.query('SELECT id, category, image_url, title, description FROM moderator_gallery WHERE site_id = $1 ORDER BY sort_order, id', [site.id]),
+    viewerId
+      ? pool.query('SELECT 1 FROM user_follows WHERE follower_id = $1 AND followed_id = $2', [viewerId, site.owner_user_id])
+      : Promise.resolve({ rows: [] }),
+    viewerId
+      ? pool.query('SELECT 1 FROM moderator_bookmarks WHERE user_id = $1 AND site_id = $2', [viewerId, site.id])
+      : Promise.resolve({ rows: [] }),
+  ]);
+
+  res.json({
+    site: {
+      slug: site.slug, story_path: site.story_path, site_title: site.site_title, synopsis: site.synopsis,
+      bio: site.bio, links: site.links, banner_url: site.banner_url,
+      banner_position: site.banner_position, theme: site.theme, theme_bg_url: site.theme_bg_url,
+      cover_url: site.cover_url, cover_position_x: site.cover_position_x, cover_position_y: site.cover_position_y,
+      characters_card_url: site.characters_card_url, chapters_card_url: site.chapters_card_url, gallery_card_url: site.gallery_card_url,
+      characters_card_position_x: site.characters_card_position_x, characters_card_position_y: site.characters_card_position_y,
+      chapters_card_position_x: site.chapters_card_position_x, chapters_card_position_y: site.chapters_card_position_y,
+      gallery_card_position_x: site.gallery_card_position_x, gallery_card_position_y: site.gallery_card_position_y,
+      author_display_name: site.author_display_name, author_username: site.author_username,
+      author_avatar: site.author_avatar || null,
+      is_self: viewerId === site.owner_user_id,
+      is_following: isFollowing.rows.length > 0,
+      is_bookmarked: isBookmarked.rows.length > 0,
+    },
+    chapters,
+    characters,
+    gallery_sfw:      gallery.filter(g => g.category === 'sfw'),
+    gallery_sketches: gallery.filter(g => g.category === 'sketches'),
+    gallery_spicy:    loggedIn ? gallery.filter(g => g.category === 'spicy') : [],
+  });
+});
+
+// GET /api/moderator-sites/:slug/is-owner — does the logged-in user own THIS
+// specific site? (Not just "are they a moderator somewhere" — important once
+// there's more than one moderator, so one moderator never sees another's
+// Edit Profile button.)
+app.get('/api/moderator-sites/:slug/is-owner', requireAuth, async (req, res) => {
+  const { rows: [site] } = await pool.query('SELECT owner_user_id FROM moderator_sites WHERE slug = $1', [req.params.slug]);
+  res.json({ isOwner: !!site && site.owner_user_id === req.user.id });
+});
+
+// ── Site (Above All Else / Meet Blue text + links) ────────────────────────────
+app.get('/api/moderator/site', requireAuth, requireModerator, async (req, res) => {
+  res.json({ site: req.modSite });
+});
+
+app.put('/api/moderator/site/banner', requireAuth, requireModerator, uploadModImage.single('banner'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const bannerUrl = `/images/moderators/${req.file.filename}`;
+  const position = parseInt(req.body.position, 10);
+  const { rows: [site] } = await pool.query(
+    'UPDATE moderator_sites SET banner_url = $1, banner_position = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
+    [bannerUrl, Number.isFinite(position) ? position : 50, req.modSite.id]
+  );
+  res.json({ site });
+});
+
+app.put('/api/moderator/site/banner-position', requireAuth, requireModerator, async (req, res) => {
+  const position = parseInt(req.body.position, 10);
+  if (!Number.isFinite(position) || position < 0 || position > 100) return res.status(400).json({ error: 'Position must be 0-100.' });
+  const { rows: [site] } = await pool.query(
+    'UPDATE moderator_sites SET banner_position = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+    [position, req.modSite.id]
+  );
+  res.json({ site });
+});
+
+// ── Book cover — sits beside the story description on the About section ──────
+app.put('/api/moderator/site/cover', requireAuth, requireModerator, uploadModImage.single('cover'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const coverUrl = `/images/moderators/${req.file.filename}`;
+  const x = parseInt(req.body.position_x, 10);
+  const y = parseInt(req.body.position_y, 10);
+  const { rows: [site] } = await pool.query(
+    `UPDATE moderator_sites SET cover_url = $1, cover_position_x = $2, cover_position_y = $3, updated_at = NOW() WHERE id = $4 RETURNING *`,
+    [coverUrl, Number.isFinite(x) ? x : 50, Number.isFinite(y) ? y : 50, req.modSite.id]
+  );
+  res.json({ site });
+});
+
+app.put('/api/moderator/site/cover-position', requireAuth, requireModerator, async (req, res) => {
+  const x = parseInt(req.body.position_x, 10);
+  const y = parseInt(req.body.position_y, 10);
+  if (![x, y].every(n => Number.isFinite(n) && n >= 0 && n <= 100)) return res.status(400).json({ error: 'Positions must be 0-100.' });
+  const { rows: [site] } = await pool.query(
+    'UPDATE moderator_sites SET cover_position_x = $1, cover_position_y = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
+    [x, y, req.modSite.id]
+  );
+  res.json({ site });
+});
+
+// Uploaded custom blurred background image, used when theme = 'custom'
+app.put('/api/moderator/site/theme-bg', requireAuth, requireModerator, uploadModImage.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const bgUrl = `/images/moderators/${req.file.filename}`;
+  const { rows: [site] } = await pool.query(
+    `UPDATE moderator_sites SET theme_bg_url = $1, theme = 'custom', updated_at = NOW() WHERE id = $2 RETURNING *`,
+    [bgUrl, req.modSite.id]
+  );
+  res.json({ site });
+});
+
+// Quick-nav card art (Characters/Chapters/Gallery shortcut cards on the story
+// home page). :kind is checked against a fixed whitelist before being used
+// in the column names, so this is safe from injection despite the interpolation.
+const NAV_CARD_COLUMNS = {
+  characters: { url: 'characters_card_url', x: 'characters_card_position_x', y: 'characters_card_position_y' },
+  chapters:   { url: 'chapters_card_url',   x: 'chapters_card_position_x',   y: 'chapters_card_position_y' },
+  gallery:    { url: 'gallery_card_url',    x: 'gallery_card_position_x',    y: 'gallery_card_position_y' },
+};
+app.put('/api/moderator/site/nav-card/:kind', requireAuth, requireModerator, uploadModImage.single('image'), async (req, res) => {
+  const cols = NAV_CARD_COLUMNS[req.params.kind];
+  if (!cols) return res.status(400).json({ error: 'Invalid card.' });
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const url = `/images/moderators/${req.file.filename}`;
+  const { rows: [site] } = await pool.query(
+    `UPDATE moderator_sites SET ${cols.url} = $1, ${cols.x} = 50, ${cols.y} = 50, updated_at = NOW() WHERE id = $2 RETURNING *`,
+    [url, req.modSite.id]
+  );
+  res.json({ site });
+});
+
+app.put('/api/moderator/site/nav-card/:kind/position', requireAuth, requireModerator, async (req, res) => {
+  const cols = NAV_CARD_COLUMNS[req.params.kind];
+  if (!cols) return res.status(400).json({ error: 'Invalid card.' });
+  const x = parseInt(req.body.position_x, 10);
+  const y = parseInt(req.body.position_y, 10);
+  if (![x, y].every(n => Number.isFinite(n) && n >= 0 && n <= 100)) return res.status(400).json({ error: 'Positions must be 0-100.' });
+  const { rows: [site] } = await pool.query(
+    `UPDATE moderator_sites SET ${cols.x} = $1, ${cols.y} = $2, updated_at = NOW() WHERE id = $3 RETURNING *`,
+    [x, y, req.modSite.id]
+  );
+  res.json({ site });
+});
+
+app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) => {
+  const { site_title, synopsis, bio, links, theme } = req.body;
+  const { rows: [site] } = await pool.query(
+    `UPDATE moderator_sites SET
+       site_title = COALESCE($1, site_title),
+       synopsis   = COALESCE($2, synopsis),
+       bio        = COALESCE($3, bio),
+       links      = COALESCE($4, links),
+       theme      = COALESCE($5, theme),
+       updated_at = NOW()
+     WHERE id = $6 RETURNING *`,
+    [site_title, synopsis, bio, links !== undefined ? JSON.stringify(links) : null, theme, req.modSite.id]
+  );
+  res.json({ site });
+});
+
+// ── Chapters ───────────────────────────────────────────────────────────────────
+app.get('/api/moderator/chapters', requireAuth, requireModerator, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM moderator_chapters WHERE site_id = $1 ORDER BY sort_order, id', [req.modSite.id]);
+  res.json({ chapters: rows });
+});
+
+function parseChapterLinks(raw) {
+  let links = [];
+  try { links = JSON.parse(raw || '[]'); } catch { links = []; }
+  if (!Array.isArray(links)) return [];
+  return links
+    .filter(l => l && l.label && l.url)
+    .map(l => ({ label: String(l.label).trim(), url: String(l.url).trim() }));
+}
+
+app.post('/api/moderator/chapters', requireAuth, requireModerator, uploadChapter.fields([{ name: 'image', maxCount: 1 }, { name: 'file', maxCount: 1 }]), async (req, res) => {
+  const { title, teaser } = req.body;
+  if (!title || !title.trim()) return res.status(400).json({ error: 'Title is required.' });
+  const links = parseChapterLinks(req.body.links);
+
+  const imageFile = req.files && req.files.image && req.files.image[0];
+  const docFile   = req.files && req.files.file  && req.files.file[0];
+  const imageUrl  = imageFile ? `/images/moderators/${imageFile.filename}` : '';
+  const fileUrl   = docFile   ? `/moderators/files/${docFile.filename}`    : '';
+  const fileName  = docFile   ? docFile.originalname : '';
+
+  const { rows: [{ maxOrder }] } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM moderator_chapters WHERE site_id = $1', [req.modSite.id]
+  );
+  const { rows: [chapter] } = await pool.query(
+    `INSERT INTO moderator_chapters (site_id, title, teaser, links, image_url, file_url, file_name, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [req.modSite.id, title.trim(), (teaser || '').trim(), JSON.stringify(links), imageUrl, fileUrl, fileName, maxOrder + 1]
+  );
+  res.json({ chapter });
+});
+
+app.put('/api/moderator/chapters/:id', requireAuth, requireModerator, uploadChapter.fields([{ name: 'image', maxCount: 1 }, { name: 'file', maxCount: 1 }]), async (req, res) => {
+  const { rows: [existing] } = await pool.query(
+    'SELECT * FROM moderator_chapters WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+  );
+  if (!existing) return res.status(404).json({ error: 'Not found.' });
+
+  const { title, teaser } = req.body;
+  const links = req.body.links !== undefined ? parseChapterLinks(req.body.links) : existing.links;
+
+  const imageFile = req.files && req.files.image && req.files.image[0];
+  const docFile   = req.files && req.files.file  && req.files.file[0];
+
+  let imageUrl = existing.image_url;
+  if (imageFile) {
+    imageUrl = `/images/moderators/${imageFile.filename}`;
+    const oldPath = path.join('/var/www/btw', existing.image_url);
+    if (existing.image_url && fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+  let fileUrl = existing.file_url;
+  let fileName = existing.file_name;
+  if (docFile) {
+    fileUrl = `/moderators/files/${docFile.filename}`;
+    fileName = docFile.originalname;
+    const oldPath = path.join('/var/www/btw', existing.file_url);
+    if (existing.file_url && fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+
+  const { rows: [chapter] } = await pool.query(
+    `UPDATE moderator_chapters SET
+       title = COALESCE($1, title), teaser = COALESCE($2, teaser),
+       links = $3, image_url = $4, file_url = $5, file_name = $6
+     WHERE id = $7 RETURNING *`,
+    [title ? title.trim() : null, teaser !== undefined ? teaser.trim() : null, JSON.stringify(links), imageUrl, fileUrl, fileName, existing.id]
+  );
+  res.json({ chapter });
+});
+
+app.delete('/api/moderator/chapters/:id', requireAuth, requireModerator, async (req, res) => {
+  const { rows: [existing] } = await pool.query(
+    'SELECT * FROM moderator_chapters WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+  );
+  if (!existing) return res.status(404).json({ error: 'Not found.' });
+  const imgPath = path.join('/var/www/btw', existing.image_url);
+  if (existing.image_url && fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+  const filePath = path.join('/var/www/btw', existing.file_url);
+  if (existing.file_url && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  await pool.query('DELETE FROM moderator_chapters WHERE id = $1', [existing.id]);
+  res.json({ message: 'Deleted.' });
+});
+
+// ── Characters ─────────────────────────────────────────────────────────────────
+// Standalone image upload — returns a URL to embed as ref_image in the
+// character's create/update JSON payload, since the character doesn't need
+// to exist yet (or might just be having its image swapped) for this step.
+app.post('/api/moderator/character-image', requireAuth, requireModerator, uploadModImage.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  res.json({ url: `/images/moderators/${req.file.filename}` });
+});
+
+app.get('/api/moderator/characters', requireAuth, requireModerator, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM moderator_characters WHERE site_id = $1 ORDER BY sort_order, id', [req.modSite.id]);
+  res.json({ characters: rows });
+});
+
+app.post('/api/moderator/characters', requireAuth, requireModerator, async (req, res) => {
+  const { name, ref_image, description, stats, facts, lore, relationships } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
+  const { rows: [{ maxOrder }] } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM moderator_characters WHERE site_id = $1', [req.modSite.id]
+  );
+  const { rows: [character] } = await pool.query(
+    `INSERT INTO moderator_characters (site_id, name, ref_image, description, stats, facts, lore, relationships, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+    [req.modSite.id, name.trim(), ref_image || '', description || '',
+     JSON.stringify(stats || {}), JSON.stringify(facts || []), JSON.stringify(lore || []),
+     JSON.stringify(relationships || []), maxOrder + 1]
+  );
+  res.json({ character });
+});
+
+app.put('/api/moderator/characters/:id', requireAuth, requireModerator, async (req, res) => {
+  const { rows: [existing] } = await pool.query(
+    'SELECT * FROM moderator_characters WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+  );
+  if (!existing) return res.status(404).json({ error: 'Not found.' });
+  const { name, ref_image, description, stats, facts, lore, relationships, sort_order } = req.body;
+  const { rows: [character] } = await pool.query(
+    `UPDATE moderator_characters SET
+       name          = COALESCE($1, name),
+       ref_image     = COALESCE($2, ref_image),
+       description   = COALESCE($3, description),
+       stats         = COALESCE($4, stats),
+       facts         = COALESCE($5, facts),
+       lore          = COALESCE($6, lore),
+       relationships = COALESCE($7, relationships),
+       sort_order    = COALESCE($8, sort_order)
+     WHERE id = $9 RETURNING *`,
+    [name, ref_image, description,
+     stats !== undefined ? JSON.stringify(stats) : null,
+     facts !== undefined ? JSON.stringify(facts) : null,
+     lore !== undefined ? JSON.stringify(lore) : null,
+     relationships !== undefined ? JSON.stringify(relationships) : null,
+     sort_order, existing.id]
+  );
+  res.json({ character });
+});
+
+app.put('/api/moderator/characters/:id/position', requireAuth, requireModerator, async (req, res) => {
+  const x = parseInt(req.body.position_x, 10);
+  const y = parseInt(req.body.position_y, 10);
+  if (![x, y].every(n => Number.isFinite(n) && n >= 0 && n <= 100)) return res.status(400).json({ error: 'Positions must be 0-100.' });
+  const { rows: [existing] } = await pool.query(
+    'SELECT id FROM moderator_characters WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+  );
+  if (!existing) return res.status(404).json({ error: 'Not found.' });
+  const { rows: [character] } = await pool.query(
+    'UPDATE moderator_characters SET ref_position_x = $1, ref_position_y = $2 WHERE id = $3 RETURNING *',
+    [x, y, existing.id]
+  );
+  res.json({ character });
+});
+
+app.delete('/api/moderator/characters/:id', requireAuth, requireModerator, async (req, res) => {
+  const { rows: [existing] } = await pool.query(
+    'SELECT id FROM moderator_characters WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+  );
+  if (!existing) return res.status(404).json({ error: 'Not found.' });
+  await pool.query('DELETE FROM moderator_characters WHERE id = $1', [existing.id]);
+  res.json({ message: 'Deleted.' });
+});
+
+// ── Gallery (SFW + Spicy) ──────────────────────────────────────────────────────
+app.get('/api/moderator/gallery', requireAuth, requireModerator, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM moderator_gallery WHERE site_id = $1 ORDER BY sort_order, id', [req.modSite.id]);
+  res.json({ gallery: rows });
+});
+
+app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const { category, title, description } = req.body;
+  if (!['sfw', 'sketches', 'spicy'].includes(category)) return res.status(400).json({ error: 'Category must be sfw, sketches, or spicy.' });
+
+  const imageUrl = `/images/moderators/${req.file.filename}`;
+  const { rows: [{ maxOrder }] } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM moderator_gallery WHERE site_id = $1 AND category = $2',
+    [req.modSite.id, category]
+  );
+  const { rows: [item] } = await pool.query(
+    'INSERT INTO moderator_gallery (site_id, category, image_url, title, description, sort_order) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+    [req.modSite.id, category, imageUrl, (title || '').trim(), (description || '').trim(), maxOrder + 1]
+  );
+  res.json({ item });
+});
+
+app.put('/api/moderator/gallery/:id', requireAuth, requireModerator, uploadModImage.single('image'), async (req, res) => {
+  const { rows: [existing] } = await pool.query(
+    'SELECT * FROM moderator_gallery WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+  );
+  if (!existing) return res.status(404).json({ error: 'Not found.' });
+
+  const { category, title, description } = req.body;
+  if (category && !['sfw', 'sketches', 'spicy'].includes(category)) return res.status(400).json({ error: 'Category must be sfw, sketches, or spicy.' });
+
+  let imageUrl = existing.image_url;
+  if (req.file) {
+    imageUrl = `/images/moderators/${req.file.filename}`;
+    const oldPath = path.join('/var/www/btw', existing.image_url);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+
+  const { rows: [item] } = await pool.query(
+    `UPDATE moderator_gallery SET
+       category    = COALESCE($1, category),
+       title       = COALESCE($2, title),
+       description = COALESCE($3, description),
+       image_url   = $4
+     WHERE id = $5 RETURNING *`,
+    [category || null, title != null ? title.trim() : null, description != null ? description.trim() : null, imageUrl, existing.id]
+  );
+  res.json({ item });
+});
+
+app.delete('/api/moderator/gallery/:id', requireAuth, requireModerator, async (req, res) => {
+  const { rows: [item] } = await pool.query(
+    'SELECT * FROM moderator_gallery WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+  );
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  const filePath = path.join('/var/www/btw', item.image_url);
+  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  await pool.query('DELETE FROM moderator_gallery WHERE id = $1', [item.id]);
+  res.json({ message: 'Deleted.' });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────

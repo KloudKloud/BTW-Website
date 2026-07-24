@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fanpages ✦ Between Two Worlds</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0d0d0d;
+      color: #f0f0f0;
+      font-family: 'Lato', Arial, sans-serif;
+      min-height: 100vh;
+    }
+    a { color: inherit; }
+
+    /* ── Main ── */
+    .fp-main { max-width: 1200px; margin: 0 auto; padding: 2.5rem 2rem 5rem; }
+
+    /* Profile / welcome card */
+    .fp-profile-card {
+      display: flex; align-items: center; gap: 1.25rem;
+      background: linear-gradient(135deg, rgba(127,168,217,0.12), rgba(217,122,114,0.08));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 1.5rem 1.75rem;
+      margin-bottom: 3rem;
+    }
+    .fp-profile-card img, .fp-profile-card .fp-avatar-fallback {
+      width: 64px; height: 64px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    }
+    .fp-profile-card .fp-avatar-fallback {
+      font-size: 1.5rem; background: linear-gradient(135deg, #7fa8d9, #d97a72);
+      color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700;
+    }
+    .fp-profile-card-name { font-family: 'Cinzel', Georgia, serif; font-size: 1.3rem; margin-bottom: 0.2rem; }
+    .fp-profile-card-sub { font-size: 0.88rem; color: #bbb; }
+    .fp-profile-card-actions { margin-left: auto; display: flex; gap: 0.6rem; flex-shrink: 0; }
+    .fp-profile-card-btn {
+      display: inline-block; text-decoration: none; font-size: 0.82rem; font-weight: 600;
+      padding: 0.55rem 1.1rem; border-radius: 20px; white-space: nowrap;
+    }
+    .fp-profile-card-btn--edit { border: 1px solid rgba(255,255,255,0.2); color: #f0f0f0; }
+    .fp-profile-card-btn--edit:hover { border-color: #7fa8d9; color: #7fa8d9; }
+    .fp-profile-card-btn--login { background: #7fa8d9; color: #0a0a0a; }
+
+    /* Story rows */
+    .fp-row { margin-bottom: 3rem; }
+    .fp-row-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.25rem; margin-bottom: 1rem; }
+    .fp-row-empty { color: #999; font-size: 0.92rem; }
+    .fp-row-scroll { display: flex; gap: 1.1rem; overflow-x: auto; padding-bottom: 0.5rem; }
+    .fp-row-scroll::-webkit-scrollbar { height: 6px; }
+    .fp-row-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+    .fp-card {
+      position: relative;
+      flex: 0 0 150px;
+      text-decoration: none;
+      color: inherit;
+    }
+    .fp-card-cover {
+      width: 150px; height: 225px; object-fit: cover; border-radius: 10px; display: block;
+      background: #1e1e1e; border: 1px solid rgba(255,255,255,0.08);
+      transition: transform 0.15s;
+    }
+    .fp-card:hover .fp-card-cover { transform: translateY(-4px); }
+    .fp-card-title { font-size: 0.9rem; font-weight: 700; margin-top: 0.5rem; line-height: 1.3; }
+    .fp-card-author { font-size: 0.78rem; color: #999; margin-top: 0.15rem; }
+    .fp-card-author-link:hover { color: #7fa8d9; text-decoration: underline; }
+
+    .fp-bookmark-btn {
+      position: absolute; top: 8px; right: 8px; z-index: 2;
+      width: 30px; height: 30px; border-radius: 50%;
+      background: rgba(0,0,0,0.6); border: none; color: #fff; font-size: 0.95rem;
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+    .fp-bookmark-btn.saved { color: #d97a72; }
+  </style>
+</head>
+<body>
+
+<div id="fanpages-topbar-root"></div>
+
+<main class="fp-main">
+
+  <div class="fp-profile-card" id="fp-profile-card"><!-- filled by JS --></div>
+
+  <section class="fp-row">
+    <p class="fp-row-title">Your Saved Stories</p>
+    <div id="fp-saved-row"><p class="fp-row-empty">Log in to save stories to your shelf.</p></div>
+  </section>
+
+  <section class="fp-row">
+    <p class="fp-row-title">Recommended Stories</p>
+    <div id="fp-recommended-row"><p class="fp-row-empty">Loading…</p></div>
+  </section>
+
+</main>
+
+<script src="/fanpages/fanpages-nav.js"></script>
+<script>
+  const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+  const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
+
+  function storyCard(site, { showBookmark }) {
+    const a = document.createElement('a');
+    a.className = 'fp-card';
+    a.href = `/fanpages/${site.story_path || site.slug}`;
+    const cover = site.cover_url || '/images/gallery/kloudsaphbedroom_1.png';
+    a.innerHTML = `
+      <img class="fp-card-cover" src="${cover}" alt="${site.site_title} cover" loading="lazy" />
+      <p class="fp-card-title">${site.site_title}</p>
+      <p class="fp-card-author">by <span class="fp-card-author-link">${site.author}</span></p>
+    `;
+    // Author name links to their profile — nested <a> isn't valid HTML since
+    // the whole card is already a link, so this is a click-through instead.
+    if (site.author_username) {
+      const authorLink = a.querySelector('.fp-card-author-link');
+      authorLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = `/fanpages/${site.author_username}`;
+      });
+    }
+    if (showBookmark && token) {
+      const btn = document.createElement('button');
+      btn.className = 'fp-bookmark-btn' + (site.bookmarked ? ' saved' : '');
+      btn.type = 'button';
+      btn.textContent = site.bookmarked ? '♥' : '♡';
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const nowSaved = !btn.classList.contains('saved');
+        try {
+          await fetch(`/api/bookmarks/${site.slug}`, {
+            method: nowSaved ? 'POST' : 'DELETE',
+            headers: authHeaders(),
+          });
+          btn.classList.toggle('saved', nowSaved);
+          btn.textContent = nowSaved ? '♥' : '♡';
+          loadSaved();
+        } catch {}
+      });
+      a.appendChild(btn);
+    }
+    return a;
+  }
+
+  async function loadRecommended() {
+    const row = document.getElementById('fp-recommended-row');
+    try {
+      const res  = await fetch('/api/moderator-sites', { headers: authHeaders() });
+      const data = await res.json();
+      const sites = data.sites || [];
+      if (!sites.length) { row.innerHTML = '<p class="fp-row-empty">No stories yet — check back soon!</p>'; return; }
+      const scroller = document.createElement('div');
+      scroller.className = 'fp-row-scroll';
+      sites.forEach(s => scroller.appendChild(storyCard(s, { showBookmark: true })));
+      row.innerHTML = '';
+      row.appendChild(scroller);
+    } catch { row.innerHTML = '<p class="fp-row-empty">Couldn\'t load stories right now.</p>'; }
+  }
+
+  async function loadSaved() {
+    const row = document.getElementById('fp-saved-row');
+    if (!token) { row.innerHTML = '<p class="fp-row-empty">Log in to save stories to your shelf.</p>'; return; }
+    try {
+      const res  = await fetch('/api/bookmarks', { headers: authHeaders() });
+      const data = await res.json();
+      const saved = data.bookmarks || [];
+      if (!saved.length) { row.innerHTML = '<p class="fp-row-empty">You haven\'t saved any stories yet — tap the ♡ on a story below to add one!</p>'; return; }
+      const scroller = document.createElement('div');
+      scroller.className = 'fp-row-scroll';
+      saved.forEach(s => scroller.appendChild(storyCard({ ...s, bookmarked: true }, { showBookmark: true })));
+      row.innerHTML = '';
+      row.appendChild(scroller);
+    } catch { row.innerHTML = '<p class="fp-row-empty">Couldn\'t load your saved stories right now.</p>'; }
+  }
+
+  function renderProfileCard(user) {
+    const card = document.getElementById('fp-profile-card');
+    const initial = (user.display_name || user.username || '?').charAt(0).toUpperCase();
+    const avatarHtml = user.avatar
+      ? `<img src="${user.avatar}" alt="" />`
+      : `<div class="fp-avatar-fallback">${initial}</div>`;
+    card.innerHTML = `
+      ${avatarHtml}
+      <div>
+        <p class="fp-profile-card-name">${user.display_name || user.username}</p>
+        <p class="fp-profile-card-sub">Welcome back! Here's what's new on your shelf.</p>
+      </div>
+      <div class="fp-profile-card-actions">
+        <a class="fp-profile-card-btn fp-profile-card-btn--edit" href="/fanpages/${user.username}">My Profile</a>
+      </div>
+    `;
+  }
+
+  function renderLoggedOutCard() {
+    const card = document.getElementById('fp-profile-card');
+    card.innerHTML = `
+      <div class="fp-avatar-fallback">?</div>
+      <div>
+        <p class="fp-profile-card-name">Welcome to Fanpages!</p>
+        <p class="fp-profile-card-sub">Log in to save stories to your shelf and get personalized recommendations.</p>
+      </div>
+      <div class="fp-profile-card-actions">
+        <a class="fp-profile-card-btn fp-profile-card-btn--login" href="/login?from=${encodeURIComponent('/fanpages')}">Log In / Register</a>
+      </div>
+    `;
+  }
+
+  (async () => {
+    loadRecommended();
+
+    if (token) {
+      try {
+        const res  = await fetch('/api/auth/me', { headers: authHeaders() });
+        if (res.ok) {
+          const data = await res.json();
+          renderProfileCard(data.user);
+          loadSaved();
+        } else {
+          renderLoggedOutCard();
+        }
+      } catch { renderLoggedOutCard(); }
+    } else {
+      renderLoggedOutCard();
+    }
+  })();
+</script>
+
+</body>
+</html>

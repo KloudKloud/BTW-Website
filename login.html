@@ -18,7 +18,8 @@
     <li><a href="/spicy">Spicy</a></li>
         <li><a href="/characters">Characters</a></li>
     <li><a href="/discord">Discord</a></li>
-    <li><a href="/community">Community</a></li>
+    <li><a href="/community">Social</a></li>
+    <li><a href="/fanpages/join">Fanpages</a></li>
     <li><a href="/inbox">Inbox</a></li>
     <li><a href="/login" class="nav-login active">Log In / Register</a></li>
   </ul>
@@ -141,6 +142,7 @@
   // Auto-login from welcome email link — fetch user data first so nav shows name
   const autoToken = params.get('autotoken');
   if (autoToken) {
+    const autoFrom = params.get('from') || '/';
     fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${autoToken}` } })
       .then(r => r.json())
       .then(data => {
@@ -148,7 +150,7 @@
         if (data.user) localStorage.setItem('btw_user', JSON.stringify(data.user));
       })
       .catch(() => { localStorage.setItem('btw_token', autoToken); })
-      .finally(() => { window.location.href = '/'; });
+      .finally(() => { window.location.href = autoFrom; });
   }
 
   // Show "verified" banner if redirected from activation link
@@ -314,10 +316,11 @@
 
     setLoading(btn, true);
     try {
+      const from = new URLSearchParams(location.search).get('from') || '';
       const res  = await fetch(`${API}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, display_name: displayname, email, password }),
+        body: JSON.stringify({ username, display_name: displayname, email, password, from }),
       });
       const data = await res.json();
       if (!res.ok) {

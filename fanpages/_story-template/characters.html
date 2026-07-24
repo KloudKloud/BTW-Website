@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Characters ✦ Fanpages</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+</head>
+<body class="mod-theme">
+
+<div id="fanpages-topbar-root"></div>
+<script src="/fanpages/fanpages-nav.js"></script>
+
+<div class="site-banner">
+  <div class="site-banner-inner">
+    <img id="page-banner-img" alt="Characters — banner" />
+    <div class="mod-vip-badge" id="vip-badge" style="display:none;">
+      <span class="mod-vip-badge-star">⭐</span> VeekitPaws — Developer
+    </div>
+  </div>
+</div>
+
+<!-- Story's chosen background (plain dark by default, or the author's
+     uploaded blurred image) — same theme system as the story home page.
+     Wraps the actual content, since an empty wrapper with only absolutely-
+     positioned children collapses to zero height. -->
+<div class="mod-page-bg-wrap" id="page-bg-wrap">
+  <img class="mod-page-bg-img" id="page-bg-img" style="display:none;" alt="" />
+  <div class="mod-page-bg-overlay" id="page-bg-overlay" style="display:none;"></div>
+
+  <div class="chars-layout">
+
+    <div class="chars-sidebar-col">
+      <aside class="chars-create-box" id="chars-create-box" style="display:none;">
+        <button class="chars-create-btn" id="chars-create-btn" type="button">
+          <span class="chars-create-btn-icon">➕</span> Create New Character
+        </button>
+      </aside>
+
+      <aside class="chars-sidebar">
+        <span class="chars-sidebar-label">Explore the cast!</span>
+        <div class="chars-nav-scroller">
+          <div class="chars-nav" id="chars-nav"></div>
+        </div>
+      </aside>
+    </div>
+
+    <main class="chars-main">
+      <div id="char-profile" class="char-profile"></div>
+    </main>
+
+    <div class="wiki-side-col">
+
+      <aside class="mod-side-nav">
+        <p class="mod-side-nav-label">Navigate</p>
+        <ul class="mod-side-nav-list">
+          <li><a href="#" id="nav-home" class="mod-side-nav-link">Home</a></li>
+          <li><a href="#" id="nav-characters" class="mod-side-nav-link active">Characters</a></li>
+          <li><a href="#" id="nav-chapters" class="mod-side-nav-link">Chapters</a></li>
+          <li><a href="#" id="nav-gallery" class="mod-side-nav-link">Gallery</a></li>
+        </ul>
+      </aside>
+
+      <aside class="mod-author-box" id="char-edit-box" style="display:none;">
+        <div class="mod-author-box-row">
+          <button class="mod-author-box-btn" id="char-edit-btn" type="button" style="width:100%; text-align:center;"></button>
+        </div>
+      </aside>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- Character editor modal — owner only, covers most of the screen and blurs
+     everything behind it while creating/editing a character. -->
+<div class="char-editor-overlay" id="char-editor-overlay" hidden>
+  <div class="char-editor-modal">
+    <h2 class="char-editor-title" id="char-editor-title">Create New Character</h2>
+
+    <div class="char-editor-ref-wrap" id="char-editor-ref-wrap">
+      <img id="char-editor-ref-img" alt="" style="display:none;" draggable="false" />
+      <div class="char-editor-ref-placeholder" id="char-editor-ref-placeholder">Click to upload a reference image</div>
+      <div class="char-editor-ref-overlay">📷 Change Image</div>
+      <div class="char-editor-ref-reposition" id="char-editor-ref-reposition">
+        <label>H <input type="range" id="char-editor-ref-slider-x" min="0" max="100" value="50" /></label>
+        <label>V <input type="range" id="char-editor-ref-slider-y" min="0" max="100" value="50" /></label>
+      </div>
+    </div>
+    <input type="file" id="char-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+
+    <div class="mod-field">
+      <label for="char-editor-name">Name</label>
+      <input class="mod-input" id="char-editor-name" maxlength="40" placeholder="e.g. Kloud" />
+    </div>
+
+    <div class="mod-field">
+      <label for="char-editor-desc">Description <span style="font-weight:400;color:#888;">(use *word* for italics, **word** for bold)</span></label>
+      <textarea class="mod-textarea" id="char-editor-desc" placeholder="One paragraph per line. Each becomes its own line on the character's page."></textarea>
+    </div>
+
+    <div class="mod-field">
+      <label for="char-editor-age">Age</label>
+      <input class="mod-input" id="char-editor-age" placeholder="N/A" />
+    </div>
+
+    <div class="mod-field">
+      <label for="char-editor-species">Species</label>
+      <input class="mod-input" id="char-editor-species" placeholder="e.g. Umbreon, Espeon, Human, Kobald..." />
+    </div>
+
+    <div class="mod-field">
+      <label for="char-editor-interests">Interests <span style="font-weight:400;color:#888;">(use *word* for italics, **word** for bold)</span></label>
+      <textarea class="mod-textarea" id="char-editor-interests" placeholder="N/A"></textarea>
+    </div>
+
+    <div class="mod-field">
+      <label>Relationships</label>
+      <div class="char-rel-row char-rel-row-headings">
+        <span class="char-rel-heading">Name</span>
+        <span class="char-rel-heading">Type of Relationship</span>
+      </div>
+      <div id="char-editor-relationships-rows"></div>
+      <button class="mod-btn mod-btn--small" type="button" id="char-editor-add-relationship">+ Add Relationship</button>
+      <p class="char-editor-facts-hint">Just fill in the name and how they relate! The page will automatically show it as "Name — Type" for you. Click the <strong>+</strong> next to a name to link it to one of your existing characters, so readers can click it to fast-travel straight to their page.</p>
+    </div>
+
+    <div class="mod-field">
+      <label for="char-editor-theme-song">Theme Song <span style="font-weight:400;color:#888;">(Spotify or YouTube link)</span></label>
+      <input class="mod-input" id="char-editor-theme-song" placeholder="https://open.spotify.com/track/… or https://youtube.com/…" />
+    </div>
+
+    <div class="mod-field">
+      <label>Fun Facts</label>
+      <div id="char-editor-facts-rows"></div>
+      <button class="mod-btn mod-btn--small" type="button" id="char-editor-add-fact">+ Add Fun Fact</button>
+    </div>
+
+    <div class="mod-field">
+      <label for="char-editor-lore">Lore <span style="font-weight:400;color:#888;">(spoilered on the page! Click to reveal — *italic*/**bold** work here too)</span></label>
+      <textarea class="mod-textarea" id="char-editor-lore" placeholder="One paragraph per line. Each becomes its own line on the character's page."></textarea>
+    </div>
+
+    <p class="mod-panel-msg" id="char-editor-msg"></p>
+
+    <div class="char-editor-actions">
+      <button class="mod-btn" id="char-editor-cancel" type="button">Cancel</button>
+      <button class="mod-btn mod-btn--danger" id="char-editor-delete" type="button" style="display:none;">Delete</button>
+      <button class="mod-btn" id="char-editor-save" type="button">Save Character</button>
+    </div>
+  </div>
+</div>
+
+<!-- Link-picker — opens on top of the character editor to pick which
+     existing character a relationship's "Name" should fast-travel to. -->
+<div class="char-link-picker-overlay" id="char-link-picker-overlay" hidden>
+  <div class="char-link-picker-modal">
+    <h3 class="char-link-picker-title">Link to a Character</h3>
+    <div id="char-link-picker-list"></div>
+    <button class="mod-btn mod-btn--small" id="char-link-picker-close" type="button">Close</button>
+  </div>
+</div>
+
+<footer>
+  <p>This story is a fan-made page hosted on Between Two Worlds.</p>
+</footer>
+
+<script src="/fanpages/fanpages-site.js"></script>
+<script>
+const PATH_PARTS = window.location.pathname.split('/').filter(Boolean);
+const SLUG = PATH_PARTS[1];
+const STORY_BASE = '/' + PATH_PARTS.slice(0, 3).join('/');
+
+document.getElementById('nav-home').href = STORY_BASE;
+document.getElementById('nav-characters').href = STORY_BASE + '/characters';
+document.getElementById('nav-chapters').href = STORY_BASE + '/chapters';
+document.getElementById('nav-gallery').href = STORY_BASE + '/gallery';
+
+const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+const authHeaders = () => ({ Authorization: `Bearer ${token}` });
+
+let CHARACTERS = [];
+let STORY_TITLE = 'Fanpages';
+let IS_SELF = false;
+
+const DEFAULT_REF = '/images/characters/noreference.png';
+const NA = 'N/A';
+
+// ── Story theme background (default black, or the author's uploaded image) ──
+function hexToRgba(hex, alpha) {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+function renderVipBadge(s) {
+  document.getElementById('vip-badge').style.display =
+    (s.author_username || '').toLowerCase() === 'veekitpaws' ? 'flex' : 'none';
+}
+
+function applyStoryTheme(theme, bgUrl) {
+  const bgImg = document.getElementById('page-bg-img');
+  const bgOverlay = document.getElementById('page-bg-overlay');
+  if (theme === 'custom' && bgUrl) {
+    bgImg.src = bgUrl;
+    bgImg.style.display = 'block';
+    bgOverlay.style.background = hexToRgba('#0a0a0a', 0.78);
+    bgOverlay.style.display = 'block';
+  } else {
+    bgImg.style.display = 'none';
+    bgOverlay.style.display = 'none';
+  }
+}
+
+function getActiveId() {
+  return new URLSearchParams(window.location.search).get('char') || CHARACTERS[0].id;
+}
+
+function updateActiveTab(id) {
+  document.querySelectorAll('.chars-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.id === id);
+  });
+}
+
+function isBlank(v) { return !v || !v.trim() || v.trim() === NA; }
+
+// Lightweight, safe markup for Description/Interests/Fun Facts/Lore —
+// escapes everything first, then converts *italic* and **bold** the way
+// authors already write them. Never trusts raw HTML from the field itself.
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function richText(s) {
+  let out = escapeHtml(s || '');
+  out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  out = out.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  return out;
+}
+
+function renderProfile(char) {
+  const profile = document.getElementById('char-profile');
+  profile.innerHTML = '';
+
+  // Reference image
+  const refWrap = document.createElement('div');
+  refWrap.className = 'char-ref-wrap';
+  refWrap.style.aspectRatio = char.hasRef ? '1 / 1' : '13 / 10';
+  const imgSrc = char.ref || DEFAULT_REF;
+  const img = document.createElement('img');
+  img.alt = char.name;
+  img.src = imgSrc;
+  img.style.objectPosition = `${char.refPosX}% ${char.refPosY}%`;
+  img.onerror = function () {
+    refWrap.innerHTML = '<div class="char-ref-placeholder"><span>✦</span><span>No reference yet</span></div>';
+  };
+  refWrap.appendChild(img);
+  profile.appendChild(refWrap);
+
+  // Bio box
+  const bio = document.createElement('div');
+  bio.className = 'char-bio-box';
+
+  const nameEl = document.createElement('h1');
+  nameEl.className = 'char-name';
+  nameEl.textContent = char.name;
+  bio.appendChild(nameEl);
+
+  const descWrap = document.createElement('div');
+  descWrap.className = 'char-desc';
+  char.desc.forEach(text => {
+    const p = document.createElement('p');
+    p.innerHTML = richText(text);
+    descWrap.appendChild(p);
+  });
+  bio.appendChild(descWrap);
+  profile.appendChild(bio);
+
+  // Stats + Facts row
+  const row = document.createElement('div');
+  row.className = 'char-cards-row';
+
+  const statsBox = document.createElement('div');
+  statsBox.className = 'char-box';
+  const statsTitle = document.createElement('span');
+  statsTitle.className = 'char-box-title';
+  statsTitle.textContent = 'Stats';
+  statsBox.appendChild(statsTitle);
+
+  const stats = char.stats || {};
+  Object.entries(stats).forEach(([label, value]) => {
+    if (label === 'Theme Song') return;
+    const statRow = document.createElement('div');
+    statRow.className = 'char-stat-row';
+    const lbl = document.createElement('span');
+    lbl.className = 'char-stat-label';
+    lbl.textContent = label;
+    const val = document.createElement('span');
+    val.className = 'char-stat-value';
+    val.innerHTML = richText(value || NA);
+    statRow.appendChild(lbl);
+    statRow.appendChild(val);
+    statsBox.appendChild(statRow);
+  });
+
+  // Relationships — its own little list under the plain stat rows. Names
+  // linked to another character in this story fast-travel there on click.
+  const relationships = (char.relationships || []).filter(r => r && r.name);
+  if (relationships.length) {
+    const relDivider = document.createElement('div');
+    relDivider.style.cssText = 'border-top:1px solid rgba(255,255,255,0.08); margin:0.75rem 0 0.6rem;';
+    statsBox.appendChild(relDivider);
+
+    const relLabel = document.createElement('span');
+    relLabel.className = 'char-stat-label';
+    relLabel.textContent = 'Relationships';
+    relLabel.style.display = 'block';
+    relLabel.style.marginBottom = '0.4rem';
+    statsBox.appendChild(relLabel);
+
+    relationships.forEach(rel => {
+      const relLine = document.createElement('div');
+      relLine.style.cssText = 'font-size:0.88rem; color:#ccc; padding:0.15rem 0;';
+
+      const linkedChar = rel.character_id ? CHARACTERS.find(c => c.id === String(rel.character_id)) : null;
+      if (linkedChar) {
+        const nameLink = document.createElement('a');
+        nameLink.href = '#';
+        nameLink.style.cssText = 'color:#f0c060; font-weight:700; text-decoration:none; text-shadow:0 0 12px rgba(240,192,96,0.6); cursor:pointer;';
+        nameLink.textContent = rel.name;
+        nameLink.addEventListener('click', (e) => { e.preventDefault(); jumpToCharacter(linkedChar.id); });
+        relLine.appendChild(nameLink);
+      } else {
+        const nameSpan = document.createElement('span');
+        nameSpan.style.cssText = 'color:#f0c060; font-weight:700;';
+        nameSpan.textContent = rel.name;
+        relLine.appendChild(nameSpan);
+      }
+      if (!isBlank(rel.type)) {
+        relLine.appendChild(document.createTextNode(' — ' + rel.type));
+      }
+      statsBox.appendChild(relLine);
+    });
+  }
+
+  row.appendChild(statsBox);
+
+  const factsBox = document.createElement('div');
+  factsBox.className = 'char-box';
+  const factsTitle = document.createElement('span');
+  factsTitle.className = 'char-box-title';
+  factsTitle.textContent = 'Fun Facts';
+  factsBox.appendChild(factsTitle);
+
+  // Theme Song always comes first, as a real link when set
+  const themeSong = stats['Theme Song'];
+  const themeFact = document.createElement('div');
+  themeFact.className = 'char-fact';
+  const themeBullet = document.createElement('span');
+  themeBullet.className = 'char-fact-bullet';
+  themeBullet.textContent = '✦';
+  themeFact.appendChild(themeBullet);
+  const themeContent = document.createElement('span');
+  if (!isBlank(themeSong) && /^https?:\/\//i.test(themeSong.trim())) {
+    themeContent.innerHTML = '';
+    const a = document.createElement('a');
+    a.href = themeSong.trim();
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.style.color = '#f0c060';
+    a.textContent = 'Theme Song';
+    themeContent.appendChild(a);
+    themeContent.appendChild(document.createTextNode(' 🎵'));
+  } else {
+    themeContent.textContent = 'Theme Song: N/A';
+  }
+  themeFact.appendChild(themeContent);
+  factsBox.appendChild(themeFact);
+
+  char.facts.forEach(item => {
+    const fact = document.createElement('div');
+    fact.className = 'char-fact';
+    const bullet = document.createElement('span');
+    bullet.className = 'char-fact-bullet';
+    bullet.textContent = '✦';
+    const content = document.createElement('span');
+    content.innerHTML = richText(item);
+    fact.appendChild(bullet);
+    fact.appendChild(content);
+    factsBox.appendChild(fact);
+  });
+  row.appendChild(factsBox);
+
+  profile.appendChild(row);
+
+  // Lore spoiler box — always shown, N/A placeholder when empty
+  const loreBox = document.createElement('div');
+  loreBox.className = 'char-box char-lore-box';
+
+  const loreTitle = document.createElement('span');
+  loreTitle.className = 'char-box-title';
+  loreTitle.textContent = 'Lore';
+  loreBox.appendChild(loreTitle);
+
+  const spoiler = document.createElement('div');
+  spoiler.className = 'char-lore-spoiler';
+
+  const textWrap = document.createElement('div');
+  textWrap.className = 'char-lore-text';
+  const loreItems = (char.lore && char.lore.length) ? char.lore : [NA];
+  loreItems.forEach(item => {
+    const p = document.createElement('p');
+    p.innerHTML = richText(item);
+    textWrap.appendChild(p);
+  });
+  spoiler.appendChild(textWrap);
+
+  const revealBtn = document.createElement('button');
+  revealBtn.className = 'char-lore-reveal';
+  revealBtn.textContent = '⚠ Spoilers — click to reveal';
+  revealBtn.addEventListener('click', () => spoiler.classList.add('revealed'));
+  spoiler.appendChild(revealBtn);
+
+  loreBox.appendChild(spoiler);
+  profile.appendChild(loreBox);
+
+  // Edit box under Navigate — owner only, for whichever character is showing
+  const editBox = document.getElementById('char-edit-box');
+  const editBtn = document.getElementById('char-edit-btn');
+  if (IS_SELF) {
+    editBox.style.display = 'block';
+    editBtn.textContent = `✏️ Edit ${char.name}?`;
+    editBtn.onclick = () => openCharEditor(char);
+  } else {
+    editBox.style.display = 'none';
+  }
+}
+
+function jumpToCharacter(id) {
+  const char = CHARACTERS.find(c => c.id === id);
+  if (!char) return;
+  history.pushState(null, '', `?char=${char.id}`);
+  document.title = `${char.name} ✦ ${STORY_TITLE}`;
+  renderProfile(char);
+  updateActiveTab(char.id);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function buildNav() {
+  const nav = document.getElementById('chars-nav');
+  const activeId = getActiveId();
+  CHARACTERS.forEach(char => {
+    const btn = document.createElement('button');
+    btn.className = 'chars-tab' + (char.id === activeId ? ' active' : '');
+    btn.dataset.id = char.id;
+    btn.textContent = char.name;
+    btn.addEventListener('click', () => jumpToCharacter(char.id));
+    nav.appendChild(btn);
+  });
+}
+
+function renderCharList(rows, preferId) {
+  CHARACTERS = rows.map(r => ({
+    id: String(r.id),
+    name: r.name,
+    hasRef: !!r.ref_image,
+    ref: r.ref_image || null,
+    refPosX: r.ref_position_x != null ? r.ref_position_x : 50,
+    refPosY: r.ref_position_y != null ? r.ref_position_y : 50,
+    desc: (r.description || NA).split('\n').filter(Boolean),
+    stats: r.stats || {},
+    facts: (r.facts && r.facts.length) ? r.facts : [NA],
+    lore: r.lore || [],
+    relationships: r.relationships || [],
+  }));
+
+  document.getElementById('chars-nav').innerHTML = '';
+  if (!CHARACTERS.length) {
+    document.title = `Characters ✦ ${STORY_TITLE}`;
+    document.getElementById('char-profile').innerHTML =
+      '<p class="gallery-empty-msg">No characters yet! Check back soon~</p>';
+    document.getElementById('char-edit-box').style.display = 'none';
+    return;
+  }
+  buildNav();
+  const activeChar = CHARACTERS.find(c => c.id === (preferId || getActiveId())) || CHARACTERS[0];
+  if (preferId) history.pushState(null, '', `?char=${activeChar.id}`);
+  document.title = `${activeChar.name} ✦ ${STORY_TITLE}`;
+  renderProfile(activeChar);
+  updateActiveTab(activeChar.id);
+}
+
+// ── Character create/edit (owner only) ──────────────────────────────────────
+let uploadedRefUrl = '';
+let refPos = { x: 50, y: 50 };
+let editingCharId = null;
+
+function addFactRow(value, removable) {
+  if (removable === undefined) removable = true;
+  const wrap = document.createElement('div');
+  wrap.className = 'mod-stat-row';
+  wrap.style.gridTemplateColumns = removable ? '1fr auto' : '1fr';
+  wrap.innerHTML = `
+    <input class="mod-input fact-value" placeholder="e.g. Often referred to as &quot;battle bred&quot;." value="${value || ''}" />
+    ${removable ? '<button class="mod-btn mod-btn--small mod-btn--danger" type="button">✕</button>' : ''}`;
+  if (removable) wrap.querySelector('button').addEventListener('click', () => wrap.remove());
+  document.getElementById('char-editor-facts-rows').appendChild(wrap);
+}
+document.getElementById('char-editor-add-fact').addEventListener('click', () => addFactRow('', true));
+
+// ── Relationship rows + link picker ─────────────────────────────────────────
+let linkPickerTargetRow = null;
+
+function addRelationshipRow(name, type, characterId, removable) {
+  if (removable === undefined) removable = true;
+  const wrap = document.createElement('div');
+  wrap.className = 'char-rel-row';
+  if (!removable) wrap.style.gridTemplateColumns = '1fr 1fr';
+  wrap.dataset.charId = characterId || '';
+  wrap.innerHTML = `
+    <div class="char-rel-name-wrap">
+      <input class="mod-input rel-name" placeholder="Name" value="${(name || '').replace(/"/g, '&quot;')}" />
+      <button class="char-rel-link-btn${characterId ? ' linked' : ''}" type="button" title="Link to an existing character">+</button>
+    </div>
+    <input class="mod-input rel-type" placeholder="Mom, Dad, Friend, Sibling..." value="${(type || '').replace(/"/g, '&quot;')}" />
+    ${removable ? '<button class="mod-btn mod-btn--small mod-btn--danger" type="button">✕</button>' : ''}`;
+
+  const nameInput = wrap.querySelector('.rel-name');
+  const linkBtn = wrap.querySelector('.char-rel-link-btn');
+  // Typing the name manually breaks any existing link — it's no longer
+  // guaranteed to refer to whichever character was picked before.
+  nameInput.addEventListener('input', () => {
+    wrap.dataset.charId = '';
+    linkBtn.classList.remove('linked');
+  });
+  linkBtn.addEventListener('click', () => openLinkPicker(wrap));
+  if (removable) wrap.querySelector('.mod-btn--danger').addEventListener('click', () => wrap.remove());
+
+  document.getElementById('char-editor-relationships-rows').appendChild(wrap);
+}
+document.getElementById('char-editor-add-relationship').addEventListener('click', () => addRelationshipRow('', '', '', true));
+
+function openLinkPicker(row) {
+  linkPickerTargetRow = row;
+  const list = document.getElementById('char-link-picker-list');
+  list.innerHTML = '';
+  const others = CHARACTERS.filter(c => c.id !== editingCharId);
+  if (!others.length) {
+    list.innerHTML = '<p class="char-link-picker-empty">No characters created for your story yet! Come back after you create some characters to link here!</p>';
+  } else {
+    others.forEach(c => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'char-link-picker-item';
+      item.innerHTML = `<img src="${c.ref || '/images/characters/noreference.png'}" alt="" />${c.name}`;
+      item.addEventListener('click', () => {
+        row.querySelector('.rel-name').value = c.name;
+        row.dataset.charId = c.id;
+        row.querySelector('.char-rel-link-btn').classList.add('linked');
+        closeLinkPicker();
+      });
+      list.appendChild(item);
+    });
+  }
+  document.getElementById('char-link-picker-overlay').hidden = false;
+}
+function closeLinkPicker() {
+  document.getElementById('char-link-picker-overlay').hidden = true;
+  linkPickerTargetRow = null;
+}
+document.getElementById('char-link-picker-close').addEventListener('click', closeLinkPicker);
+
+function openCharEditor(char) {
+  editingCharId = char ? char.id : null;
+  uploadedRefUrl = char ? (char.ref || '') : '';
+  refPos = { x: char ? char.refPosX : 50, y: char ? char.refPosY : 50 };
+
+  document.getElementById('char-editor-title').textContent = char ? `Edit ${char.name}` : 'Create New Character';
+  document.getElementById('char-editor-cancel').style.display = char ? 'none' : '';
+  document.getElementById('char-editor-delete').style.display = char ? '' : 'none';
+  document.getElementById('char-editor-save').textContent = char ? 'Save' : 'Create';
+
+  const img = document.getElementById('char-editor-ref-img');
+  const placeholder = document.getElementById('char-editor-ref-placeholder');
+  const reposition = document.getElementById('char-editor-ref-reposition');
+  if (uploadedRefUrl) {
+    img.src = uploadedRefUrl;
+    img.style.objectPosition = `${refPos.x}% ${refPos.y}%`;
+    img.style.display = 'block';
+    placeholder.style.display = 'none';
+    reposition.style.display = 'flex';
+  } else {
+    img.style.display = 'none';
+    placeholder.style.display = 'block';
+    reposition.style.display = 'none';
+  }
+  document.getElementById('char-editor-ref-slider-x').value = refPos.x;
+  document.getElementById('char-editor-ref-slider-y').value = refPos.y;
+
+  document.getElementById('char-editor-name').value = char ? char.name : '';
+  document.getElementById('char-editor-desc').value = char ? char.desc.join('\n') : '';
+
+  const stats = char ? (char.stats || {}) : {};
+  document.getElementById('char-editor-age').value = !isBlank(stats['Age']) ? stats['Age'] : '';
+  document.getElementById('char-editor-species').value = !isBlank(stats['Species']) ? stats['Species'] : '';
+  document.getElementById('char-editor-interests').value = !isBlank(stats['Interests']) ? stats['Interests'] : '';
+  document.getElementById('char-editor-theme-song').value = !isBlank(stats['Theme Song']) ? stats['Theme Song'] : '';
+
+  // Fun Facts — always at least one box so it's obvious there's somewhere
+  // to type. The first slot is permanent (no ✕) since something always has
+  // to occupy it — leave it blank and it just shows as N/A on the page.
+  document.getElementById('char-editor-facts-rows').innerHTML = '';
+  const existingFacts = char ? char.facts.filter(f => f !== NA) : [];
+  if (existingFacts.length) existingFacts.forEach((f, i) => addFactRow(f, i > 0));
+  else addFactRow('', false);
+
+  // Relationships — same permanent-first-slot treatment.
+  document.getElementById('char-editor-relationships-rows').innerHTML = '';
+  const existingRels = char ? (char.relationships || []).filter(r => r && r.name) : [];
+  if (existingRels.length) existingRels.forEach((r, i) => addRelationshipRow(r.name, r.type, r.character_id, i > 0));
+  else addRelationshipRow('', '', '', false);
+
+  document.getElementById('char-editor-lore').value = char ? (char.lore || []).join('\n') : '';
+
+  document.getElementById('char-editor-msg').textContent = '';
+  document.getElementById('char-editor-overlay').hidden = false;
+}
+function closeCharEditor() {
+  document.getElementById('char-editor-overlay').hidden = true;
+}
+
+document.getElementById('chars-create-btn').addEventListener('click', () => openCharEditor(null));
+document.getElementById('char-editor-cancel').addEventListener('click', closeCharEditor);
+
+document.getElementById('char-editor-delete').addEventListener('click', async () => {
+  if (!editingCharId) return;
+  if (!confirm('Are you sure you want to delete this character?')) return;
+
+  const deleteBtn = document.getElementById('char-editor-delete');
+  deleteBtn.disabled = true;
+  deleteBtn.textContent = 'Deleting…';
+  try {
+    await fetch(`/api/moderator/characters/${editingCharId}`, { method: 'DELETE', headers: authHeaders() });
+    closeCharEditor();
+    const fresh = await ModeratorSite.load(SLUG);
+    renderCharList((fresh && fresh.characters) || []);
+  } catch {
+    document.getElementById('char-editor-msg').className = 'mod-panel-msg mod-panel-msg--error';
+    document.getElementById('char-editor-msg').textContent = 'Failed to delete. Please try again.';
+  } finally {
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = 'Delete';
+  }
+});
+// Deliberately no click-outside-to-close — an accidental click off the modal
+// used to wipe out everything typed so far. Cancel/Delete/Create/Save are
+// the only ways out now.
+
+document.getElementById('char-editor-ref-wrap').addEventListener('click', (e) => {
+  if (e.target.closest('.char-editor-ref-reposition')) return;
+  document.getElementById('char-editor-file-input').click();
+});
+document.getElementById('char-editor-file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const img = document.getElementById('char-editor-ref-img');
+  img.src = URL.createObjectURL(file);
+  img.style.objectPosition = '50% 50%';
+  img.style.display = 'block';
+  document.getElementById('char-editor-ref-placeholder').style.display = 'none';
+  refPos = { x: 50, y: 50 };
+  document.getElementById('char-editor-ref-slider-x').value = 50;
+  document.getElementById('char-editor-ref-slider-y').value = 50;
+
+  const fd = new FormData();
+  fd.append('image', file);
+  const res = await fetch('/api/moderator/character-image', { method: 'POST', headers: authHeaders(), body: fd });
+  if (res.ok) {
+    const data = await res.json();
+    uploadedRefUrl = data.url;
+    img.src = data.url;
+    document.getElementById('char-editor-ref-reposition').style.display = 'flex';
+  } else {
+    document.getElementById('char-editor-msg').className = 'mod-panel-msg mod-panel-msg--error';
+    document.getElementById('char-editor-msg').textContent = 'Image upload failed. Please try again.';
+  }
+});
+
+function handleRefReposition() {
+  refPos.x = +document.getElementById('char-editor-ref-slider-x').value;
+  refPos.y = +document.getElementById('char-editor-ref-slider-y').value;
+  document.getElementById('char-editor-ref-img').style.objectPosition = `${refPos.x}% ${refPos.y}%`;
+}
+document.getElementById('char-editor-ref-slider-x').addEventListener('input', handleRefReposition);
+document.getElementById('char-editor-ref-slider-y').addEventListener('input', handleRefReposition);
+
+document.getElementById('char-editor-save').addEventListener('click', async () => {
+  const name = document.getElementById('char-editor-name').value.trim();
+  const msgEl = document.getElementById('char-editor-msg');
+  if (!name) {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Name is required.';
+    return;
+  }
+
+  const stats = {
+    Age: document.getElementById('char-editor-age').value.trim() || NA,
+    Species: document.getElementById('char-editor-species').value.trim() || NA,
+    Interests: document.getElementById('char-editor-interests').value.trim() || NA,
+    'Theme Song': document.getElementById('char-editor-theme-song').value.trim() || NA,
+  };
+
+  const facts = Array.from(document.querySelectorAll('#char-editor-facts-rows .fact-value'))
+    .map(inp => inp.value.trim())
+    .filter(Boolean);
+
+  const relationships = Array.from(document.querySelectorAll('#char-editor-relationships-rows .char-rel-row'))
+    .map(row => ({
+      name: row.querySelector('.rel-name').value.trim(),
+      type: row.querySelector('.rel-type').value.trim(),
+      character_id: row.dataset.charId || null,
+    }))
+    .filter(r => r.name);
+
+  const body = {
+    name,
+    ref_image: uploadedRefUrl,
+    description: document.getElementById('char-editor-desc').value.trim(),
+    stats,
+    facts,
+    relationships,
+    lore: document.getElementById('char-editor-lore').value.split('\n').map(s => s.trim()).filter(Boolean),
+  };
+
+  const saveBtn = document.getElementById('char-editor-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+  try {
+    const url = editingCharId ? `/api/moderator/characters/${editingCharId}` : '/api/moderator/characters';
+    const method = editingCharId ? 'PUT' : 'POST';
+    const res = await fetch(url, {
+      method,
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+      msgEl.textContent = data.error || 'Something went wrong. Please try again.';
+      return;
+    }
+    const { character } = await res.json();
+
+    if (uploadedRefUrl && (refPos.x !== 50 || refPos.y !== 50)) {
+      await fetch(`/api/moderator/characters/${character.id}/position`, {
+        method: 'PUT',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position_x: refPos.x, position_y: refPos.y }),
+      });
+    }
+
+    closeCharEditor();
+    const fresh = await ModeratorSite.load(SLUG);
+    renderCharList((fresh && fresh.characters) || [], String(character.id));
+  } catch {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Network error. Please try again.';
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = editingCharId ? 'Save' : 'Create';
+  }
+});
+
+(async () => {
+  const data = await ModeratorSite.load(SLUG);
+  ModeratorSite.applyBanner(document.getElementById('page-banner-img'), data && data.site);
+  if (data && data.site) renderVipBadge(data.site);
+  STORY_TITLE = (data && data.site && data.site.site_title) || 'Fanpages';
+  IS_SELF = !!(data && data.site && data.site.is_self);
+  applyStoryTheme(data && data.site && data.site.theme, data && data.site && data.site.theme_bg_url);
+
+  if (IS_SELF) {
+    document.getElementById('chars-create-box').style.display = 'block';
+  }
+
+  renderCharList((data && data.characters) || []);
+})();
+</script>
+
+</body>
+</html>
