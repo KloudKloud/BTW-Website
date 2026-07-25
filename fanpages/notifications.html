@@ -1,0 +1,1914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Notifications ✦ Fanpages</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* Several elements on this page (modals, .dm-panel) set their own
+       display:flex unconditionally and rely on the [hidden] attribute to
+       hide — but that only works automatically on pages that also load
+       /style.css (which carries a global [hidden]{display:none!important}
+       reset). This page doesn't, so without this override, anything toggled
+       via .hidden = true stays visible. */
+    [hidden] { display: none !important; }
+    body {
+      background: #0d0d0d;
+      color: #f0f0f0;
+      font-family: 'Lato', Arial, sans-serif;
+      min-height: 100vh;
+    }
+    a { color: inherit; }
+
+    /* Reduced banner — slightly taller than the Chapter/Gallery banners on a
+       story page (320px), full-bleed under the topbar. */
+    .notif-banner { position: relative; width: 100%; height: 380px; overflow: hidden; background: #000; }
+    .notif-banner-bg { position: absolute; inset: 0; background-repeat: no-repeat; }
+    .notif-banner-edit-btn {
+      position: absolute; top: 1rem; right: 1rem; z-index: 5;
+      width: 38px; height: 38px; border-radius: 50%;
+      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.25); color: #fff;
+      font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .notif-banner-edit-btn:hover { background: rgba(0,0,0,0.78); }
+    @media (max-width: 640px) { .notif-banner { height: 230px; } }
+
+    /* Admin banner-position editor modal */
+    .notif-banner-preview-wrap {
+      position: relative; width: 100%; max-width: 440px; aspect-ratio: 3.6 / 1;
+      margin: 0 auto 1.25rem; border-radius: 10px; overflow: hidden; background: #000;
+    }
+    .notif-banner-preview-bg { position: absolute; inset: 0; background-repeat: no-repeat; }
+    .notif-banner-sliders { display: flex; flex-wrap: wrap; gap: 1.25rem; margin-bottom: 1.5rem; justify-content: center; }
+    .notif-banner-sliders label { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: #999; }
+    .notif-banner-sliders input[type="range"] { width: 130px; }
+
+    .notif-main { max-width: 1500px; margin: 0 auto; padding: 3rem 2rem 5rem; }
+    .notif-layout { display: flex; gap: 2.5rem; align-items: flex-start; }
+
+    /* Long box on the left — the same billboard slides as the hub, just
+       auto-cycling with no manual nav (no arrows, no dots). */
+    .notif-billboard {
+      position: relative;
+      width: 400px;
+      flex-shrink: 0;
+      min-height: 640px;
+      border-radius: 18px;
+      overflow: hidden;
+      background: #141018;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 24px 70px rgba(0,0,0,0.55);
+    }
+    .notif-billboard-track { position: absolute; inset: 0; }
+    .notif-billboard-slide {
+      position: absolute; inset: 0;
+      opacity: 0; transition: opacity 1.4s ease;
+      display: block;
+    }
+    .notif-billboard-slide.active { opacity: 1; z-index: 1; }
+    .notif-billboard-slide-bg { position: absolute; inset: 0; background-repeat: no-repeat; }
+    .notif-billboard-slide-scrim {
+      position: absolute; left: 0; right: 0; bottom: 0; padding: 1.75rem 1.5rem 1.25rem;
+      background: linear-gradient(to top, rgba(0,0,0,0.82), transparent);
+    }
+    .notif-billboard-slide-cap {
+      font-family: 'Cinzel', Georgia, serif; font-size: 1.15rem; font-weight: 700;
+      margin-bottom: 0.3rem; text-shadow: 0 2px 10px rgba(0,0,0,0.6);
+    }
+    .notif-billboard-slide-credit { font-size: 0.78rem; color: rgba(255,255,255,0.75); }
+    .notif-billboard-empty {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      color: #999; font-size: 0.9rem; text-align: center; padding: 2rem;
+    }
+
+    .notif-content { flex: 1; min-width: 0; }
+
+    .notif-tabs {
+      display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem;
+      border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 1.75rem;
+    }
+    .notif-tabs-group { display: flex; gap: 2rem; transition: margin-left 0.15s; }
+    /* On the Inbox tab the billboard is hidden and .notif-content spans full
+       width, so without this the tabs sit above the sidebar too — this lines
+       them back up with just the chats/messages box, matching the sidebar's
+       own width + gap. */
+    .notif-tabs-group--inbox-offset { margin-left: 240px; }
+
+    .notif-theme-picker { position: relative; padding-bottom: 0.6rem; }
+    .notif-theme-btn {
+      width: 42px; height: 42px; border-radius: 50%;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.15); color: #f0f0f0;
+      cursor: pointer; font-size: 1.25rem; display: flex; align-items: center; justify-content: center;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .notif-theme-btn:hover { border-color: #f0c060; background: rgba(240,192,96,0.1); }
+    .notif-theme-popover {
+      position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+      background: #161616; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.5); padding: 1rem; width: 200px;
+    }
+    .notif-theme-popover-label {
+      font-size: 0.72rem; font-weight: 700; color: #999; text-transform: uppercase;
+      letter-spacing: 0.08em; margin-bottom: 0.75rem;
+    }
+    .notif-theme-grid { display: flex; gap: 0.75rem; }
+    .notif-theme-swatch {
+      width: 44px; height: 44px; border-radius: 50%; cursor: pointer;
+      border: 2px solid transparent; padding: 0; overflow: hidden;
+      display: flex; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+    .notif-theme-swatch span { display: block; width: 100%; height: 100%; background: #0a0a0a; }
+    .notif-theme-swatch.active { border-color: #7fa8d9; }
+    .notif-theme-swatch--upload {
+      align-items: center; justify-content: center; background: #1e1e1e; color: #999; font-size: 1.1rem;
+    }
+    .notif-theme-swatch--upload:hover { background: #292929; }
+
+    /* Custom page background — scrolls with content like a story's theme
+       background, rather than staying fixed in the viewport. */
+    .notif-bg-wrap { position: relative; }
+    .notif-bg-img {
+      position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+      filter: blur(28px) brightness(0.9); z-index: 0; display: none;
+    }
+    .notif-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.72); z-index: 0; display: none; }
+    .notif-bg-wrap > *:not(.notif-bg-img):not(.notif-bg-overlay) { position: relative; z-index: 1; }
+    .notif-tab {
+      background: none; border: none; cursor: pointer; color: #999;
+      font-family: 'Lato', Arial, sans-serif; font-size: 1.28rem; font-weight: 700;
+      padding: 0.5rem 0.1rem 1rem; position: relative;
+    }
+    .notif-tab:hover { color: #ccc; }
+    .notif-tab.active { color: #f0f0f0; }
+    .notif-tab.active::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: -1px;
+      height: 3px; background: #f0c060; border-radius: 2px;
+    }
+    .notif-tab-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 18px; height: 18px; padding: 0 5px; margin-left: 0.35rem;
+      border-radius: 9px; background: #d97a72; color: #fff; font-size: 0.68rem; font-weight: 700;
+      vertical-align: middle;
+    }
+
+    .notif-item {
+      display: flex; gap: 1.1rem; align-items: flex-start;
+      padding: 1.4rem 1.6rem;
+      border-radius: 14px;
+      margin-bottom: 0.85rem;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      transition: background 0.15s;
+    }
+    .notif-item--unread { background: rgba(127,168,217,0.09); border-color: rgba(127,168,217,0.25); }
+    .notif-item[data-link] { cursor: pointer; }
+    .notif-item[data-link]:hover { background: rgba(255,255,255,0.06); }
+
+    .notif-avatar, .notif-avatar--fallback {
+      width: 50px; height: 50px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    }
+    .notif-avatar--fallback {
+      background: linear-gradient(135deg, #7fa8d9, #d97a72);
+      color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.2rem;
+    }
+
+    .notif-item-body { min-width: 0; }
+    .notif-item-text { font-size: 1.02rem; line-height: 1.55; }
+    .notif-item-text strong { font-weight: 700; }
+    .notif-item-time { font-size: 0.8rem; color: #999; margin-top: 0.3rem; }
+
+    .notif-empty { color: #999; font-size: 0.92rem; padding: 2rem 0; }
+
+    /* ── DM app (the "Inbox" tab) ── two separate boxes side by side: the
+       user/nav box on the left, the actual chats/messages box on the right —
+       not one box with an internal divider line. */
+    .dm-app {
+      display: flex; width: 100%; height: 600px; gap: 1.25rem;
+    }
+    .dm-sidebar {
+      width: 220px; flex-shrink: 0; background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+      padding: 1rem; display: flex; flex-direction: column; gap: 0.35rem;
+      overflow-y: auto;
+    }
+    .dm-user-block {
+      display: flex; align-items: center; gap: 0.6rem;
+      padding-bottom: 0.85rem; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .dm-user-block img, .dm-user-block-fallback {
+      width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    }
+    .dm-user-block-fallback {
+      background: linear-gradient(135deg, #7fa8d9, #d97a72); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem;
+    }
+    .dm-user-block-name { font-size: 0.88rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .dm-new-chat-btn {
+      background: #f0c060; color: #0d0d0d; border: none; border-radius: 20px;
+      padding: 0.6rem 0.9rem; font-weight: 700; font-size: 0.85rem; cursor: pointer;
+      font-family: inherit;
+    }
+    .dm-new-chat-btn:hover { background: #e0b050; }
+
+    .dm-sidebar-rule { height: 1px; background: rgba(255,255,255,0.08); margin: 0.5rem 0; }
+
+    .dm-side-tab {
+      display: flex; align-items: center; justify-content: space-between;
+      background: none; border: none; color: #ccc; text-align: left;
+      padding: 0.65rem 0.7rem; border-radius: 8px; cursor: pointer;
+      font-size: 0.88rem; font-weight: 600; font-family: inherit;
+    }
+    .dm-side-tab:hover { background: rgba(255,255,255,0.05); }
+    .dm-side-tab.active { background: rgba(240,192,96,0.12); color: #f0c060; }
+    .dm-req-badge {
+      background: #d97a72; color: #fff; font-size: 0.68rem; font-weight: 700;
+      border-radius: 9px; padding: 0.1rem 0.45rem;
+    }
+
+    .dm-content {
+      flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden;
+      background: rgba(255,255,255,0.015);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+    }
+    .dm-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    .dm-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+    .dm-empty-center {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      text-align: center; color: #ddd; font-size: 1.2rem; font-weight: 600;
+      line-height: 1.6; font-family: 'Lato', Arial, sans-serif; padding: 2rem;
+    }
+
+    .dm-subtabs {
+      display: flex; gap: 1.25rem; padding: 0.85rem 1.1rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0;
+    }
+    .dm-subtab {
+      background: none; border: none; color: #999; cursor: pointer; font-family: inherit;
+      font-size: 0.85rem; font-weight: 700; padding: 0 0 0.7rem; position: relative;
+    }
+    .dm-subtab:hover { color: #ccc; }
+    .dm-subtab.active { color: #f0c060; }
+    .dm-subtab.active::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+      background: #f0c060; border-radius: 2px;
+    }
+
+    .dm-priority-header {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      color: #e0b050; padding: 0.85rem 1.1rem 0.5rem;
+      text-shadow: 0 0 10px rgba(240,192,96,0.55);
+    }
+    .dm-flower-divider {
+      padding: 0.5rem 1.1rem; overflow: hidden; text-align: center;
+    }
+    .dm-flower-divider-fancy {
+      font-size: 0.72rem; letter-spacing: 0.1rem; color: #e0b050; opacity: 0.55;
+      white-space: nowrap; overflow: hidden; text-overflow: clip;
+    }
+    .dm-flower-divider-blooms {
+      font-size: 0.9rem; letter-spacing: 0.15rem; opacity: 0.6;
+      white-space: nowrap; overflow: hidden; margin: 0.2rem 0;
+    }
+    .dm-chats-header {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      color: #f0c060; padding: 0.85rem 1.1rem 0.5rem;
+    }
+    .dm-list-item--priority { background: rgba(240,192,96,0.06); }
+    .dm-list-item--priority:hover { background: rgba(240,192,96,0.1); }
+    .dm-list-item--priority.dm-list-item--unread {
+      background: rgba(240,192,96,0.13);
+      box-shadow: inset 3px 0 0 0 #f0c060, 0 0 16px rgba(240,192,96,0.3);
+    }
+    .dm-list-item--priority.dm-list-item--unread:hover { background: rgba(240,192,96,0.17); }
+    .dm-list-item--priority .dm-list-unread-dot { background: #f0c060; box-shadow: 0 0 7px rgba(240,192,96,0.9); }
+
+    .dm-list-item {
+      position: relative; display: flex; align-items: center; gap: 0.9rem;
+      padding: 0.85rem 1.1rem; border-bottom: 1px solid rgba(255,255,255,0.06); cursor: pointer;
+    }
+    .dm-list-item:hover { background: rgba(255,255,255,0.04); }
+    /* Unread glow — a soft accent border + shadow rather than just bolder
+       text, so a new message actually pops instead of blending into the
+       list once you're scanning quickly. */
+    .dm-list-item--unread {
+      background: rgba(127,168,217,0.08);
+      box-shadow: inset 3px 0 0 0 #7fa8d9, 0 0 16px rgba(127,168,217,0.25);
+    }
+    .dm-list-item--unread:hover { background: rgba(127,168,217,0.12); }
+    .dm-list-unread-dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+      background: #7fa8d9; box-shadow: 0 0 7px rgba(127,168,217,0.9); margin-left: 0.4rem;
+    }
+    .dm-list-item-content {
+      display: flex; gap: 0.9rem; align-items: center; flex: 1; min-width: 0;
+    }
+    /* Hover-reveal delete — only a small backdrop-blurred zone in the right
+       corner, not the whole card. Priority rows never render this element
+       at all, so there's nothing there to blur or reveal. */
+    .dm-list-delete-zone {
+      position: absolute; top: 0; right: 0; bottom: 0; width: 84px;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.15s;
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      -webkit-mask-image: linear-gradient(to right, transparent, black 35%);
+      mask-image: linear-gradient(to right, transparent, black 35%);
+    }
+    .dm-list-item:hover .dm-list-delete-zone { opacity: 1; pointer-events: auto; }
+    .dm-list-delete-btn {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: rgba(217,90,90,0.2); border: 1px solid rgba(217,90,90,0.45); color: #e07a7a;
+      display: flex; align-items: center; justify-content: center; font-size: 0.95rem;
+      cursor: pointer; font-family: inherit;
+    }
+    .dm-list-delete-btn:hover { background: rgba(217,90,90,0.35); }
+    .dm-list-avatar, .dm-list-avatar-fallback {
+      width: 46px; height: 46px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    }
+    .dm-list-avatar-fallback {
+      background: linear-gradient(135deg, #7fa8d9, #d97a72); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-weight: 700;
+    }
+    .dm-list-body { min-width: 0; flex: 1; }
+    .dm-list-row { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+    .dm-list-name { font-weight: 700; font-size: 0.94rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dm-list-time { font-size: 0.72rem; color: #888; flex-shrink: 0; }
+    .dm-list-preview {
+      font-size: 0.85rem; color: #999; margin-top: 0.2rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .dm-list-preview--unread { color: #f0f0f0; font-weight: 600; }
+    .dm-list-pending-tag { font-size: 0.72rem; color: #f0c060; margin-top: 0.2rem; }
+
+    .dm-request-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+    .dm-accept-btn, .dm-deny-btn {
+      border: none; border-radius: 8px; padding: 0.4rem 0.9rem; font-size: 0.8rem; font-weight: 700;
+      cursor: pointer; font-family: inherit;
+    }
+    .dm-accept-btn { background: #2fbf5f; color: #fff; }
+    .dm-accept-btn:hover { background: #29a852; }
+    .dm-deny-btn { background: none; border: 1px solid rgba(255,255,255,0.2); color: #ccc; }
+    .dm-deny-btn:hover { border-color: #d97a72; color: #d97a72; }
+
+    .dm-panel--thread { }
+    .dm-thread-header {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.85rem 1.1rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .dm-thread-back { background: none; border: none; color: #2fbf5f; font-weight: 700; cursor: pointer; font-size: 0.85rem; font-family: inherit; }
+    .dm-thread-back:hover { color: #29a852; }
+    .dm-thread-avatar, .dm-thread-avatar-fallback {
+      width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    }
+    .dm-thread-avatar-fallback {
+      background: linear-gradient(135deg, #7fa8d9, #d97a72); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.75rem;
+    }
+    .dm-thread-title { font-weight: 700; font-size: 0.95rem; }
+    .dm-thread-user-link {
+      display: flex; align-items: center; gap: 0.6rem; text-decoration: none; color: inherit;
+      min-width: 0; flex: 1;
+    }
+    .dm-thread-user-link:hover .dm-thread-title { color: #f0c060; text-decoration: underline; }
+    .dm-thread-dismiss-btn {
+      margin-left: auto; width: 30px; height: 30px; border-radius: 50%;
+      background: rgba(217,90,90,0.15); border: 1px solid rgba(217,90,90,0.45); color: #e07a7a;
+      display: flex; align-items: center; justify-content: center; font-size: 0.85rem;
+      cursor: pointer; font-family: inherit;
+    }
+    .dm-thread-dismiss-btn:hover { background: rgba(217,90,90,0.3); }
+    .dm-thread-messages {
+      flex: 1; overflow-y: auto; overflow-x: hidden; padding: 1rem 1.1rem;
+      display: flex; flex-direction: column; gap: 0.55rem; min-height: 300px;
+    }
+    /* Slim, mostly-invisible scrollbars across the DM app — just a soft
+       blue line that shows while actually scrolling/hovering. */
+    .dm-thread-messages, .dm-list, .dm-sidebar, .dm-following-list, .dm-gif-results {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(127,168,217,0.4) transparent;
+    }
+    .dm-thread-messages::-webkit-scrollbar,
+    .dm-list::-webkit-scrollbar,
+    .dm-sidebar::-webkit-scrollbar,
+    .dm-following-list::-webkit-scrollbar,
+    .dm-gif-results::-webkit-scrollbar { width: 5px; }
+    .dm-thread-messages::-webkit-scrollbar-track,
+    .dm-list::-webkit-scrollbar-track,
+    .dm-sidebar::-webkit-scrollbar-track,
+    .dm-following-list::-webkit-scrollbar-track,
+    .dm-gif-results::-webkit-scrollbar-track { background: transparent; }
+    .dm-thread-messages::-webkit-scrollbar-thumb,
+    .dm-list::-webkit-scrollbar-thumb,
+    .dm-sidebar::-webkit-scrollbar-thumb,
+    .dm-following-list::-webkit-scrollbar-thumb,
+    .dm-gif-results::-webkit-scrollbar-thumb {
+      background: rgba(127,168,217,0.35); border-radius: 10px;
+    }
+    .dm-thread-messages::-webkit-scrollbar-thumb:hover,
+    .dm-list::-webkit-scrollbar-thumb:hover,
+    .dm-sidebar::-webkit-scrollbar-thumb:hover,
+    .dm-following-list::-webkit-scrollbar-thumb:hover,
+    .dm-gif-results::-webkit-scrollbar-thumb:hover {
+      background: rgba(127,168,217,0.65);
+    }
+    .dm-pending-banner {
+      background: rgba(240,192,96,0.1); border: 1px solid rgba(240,192,96,0.3);
+      border-radius: 10px; padding: 0.7rem 0.9rem; font-size: 0.85rem; color: #e0c080;
+      line-height: 1.5; margin-bottom: 0.2rem;
+    }
+    .dm-pending-banner strong { color: #f0c060; }
+    .dm-day-divider {
+      align-self: center; font-size: 0.72rem; font-weight: 700; color: rgba(255,255,255,0.45);
+      letter-spacing: 0.02em; margin: 0.65rem 0 0.15rem; padding: 0.3rem 0.9rem;
+      background: rgba(255,255,255,0.06); border-radius: 20px;
+    }
+    .dm-bubble {
+      max-width: 68%; min-width: 0; padding: 0.6rem 0.9rem; border-radius: 14px;
+      font-size: 0.88rem; line-height: 1.45; box-sizing: border-box;
+    }
+    .dm-bubble-time {
+      display: block; text-align: right; font-size: 0.68rem; margin-top: 0.3rem; opacity: 0.6;
+    }
+    .dm-bubble--mine .dm-bubble-time { color: #3d2e08; }
+    .dm-bubble--theirs .dm-bubble-time { color: rgba(255,255,255,0.45); }
+    .dm-bubble p { margin: 0; white-space: pre-wrap; }
+    .dm-bubble--mine { align-self: flex-end; background: #f0c060; color: #0d0d0d; border-bottom-right-radius: 4px; }
+    .dm-bubble--theirs { align-self: flex-start; background: rgba(255,255,255,0.07); border-bottom-left-radius: 4px; }
+    .dm-bubble-attach-grid { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+    .dm-bubble-attach-img {
+      max-height: 260px; max-width: 280px; width: auto; height: auto;
+      border-radius: 10px; object-fit: contain; display: block;
+    }
+    img.dm-bubble-attach-img { cursor: zoom-in; transition: opacity 0.15s; }
+    img.dm-bubble-attach-img:hover { opacity: 0.88; }
+    .dm-bubble-attach-link { color: #7fa8d9; font-size: 0.82rem; text-decoration: none; display: block; margin-top: 0.2rem; }
+    .dm-bubble--mine .dm-bubble-attach-link { color: #5a4210; }
+    .dm-bubble-attach-link:hover { text-decoration: underline; }
+
+    /* Lightbox — click any sent image/GIF for a full, uncropped preview */
+    .dm-lightbox-overlay {
+      position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.88);
+      display: flex; align-items: center; justify-content: center; padding: 3rem;
+    }
+    .dm-lightbox-img { max-width: 90vw; max-height: 88vh; object-fit: contain; border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+    .dm-lightbox-close {
+      position: absolute; top: 1.25rem; right: 1.5rem; width: 40px; height: 40px; border-radius: 50%;
+      background: rgba(255,255,255,0.12); border: none; color: #fff; font-size: 1.3rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; transition: background 0.15s;
+    }
+    .dm-lightbox-close:hover { background: rgba(255,255,255,0.22); }
+
+    .dm-thread-reply { padding: 0.85rem 1.1rem; border-top: 1px solid rgba(255,255,255,0.08); }
+    .dm-reply-msg { font-size: 0.78rem; color: #d97a72; margin-bottom: 0.4rem; }
+
+    /* Unified typing box — same feel as the main BTW Inbox's compose/reply box */
+    .dm-input-box {
+      border: 1px solid rgba(180,140,255,0.25); border-radius: 14px;
+      background: rgba(10,6,22,0.55); overflow: hidden; display: flex; flex-direction: column;
+    }
+    .dm-input-textarea {
+      border: none; background: transparent; resize: none; outline: none;
+      padding: 0.75rem 0.9rem 0.4rem; color: #f0f0f0; font-family: inherit;
+      font-size: 0.9rem; width: 100%; box-sizing: border-box; min-height: 54px;
+    }
+    .dm-input-previews { display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0 0.75rem 0.45rem; }
+    .dm-input-footer {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.5rem 0.75rem; border-top: 1px solid rgba(180,140,255,0.15);
+      background: rgba(0,0,0,0.18);
+    }
+    .dm-attach-btn { cursor: pointer; font-size: 1.05rem; line-height: 1; padding: 0.2rem 0.4rem; border-radius: 8px; transition: background 0.15s; user-select: none; }
+    .dm-attach-btn:hover { background: rgba(180,140,255,0.15); }
+    .dm-attach-count { font-size: 0.72rem; color: rgba(200,184,232,0.55); min-width: 2.5ch; }
+    .dm-gif-btn {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px;
+      color: rgba(200,184,232,0.7); font-family: inherit; font-size: 0.68rem; font-weight: 700;
+      letter-spacing: 0.05em; padding: 0.28rem 0.5rem; cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    .dm-gif-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+    .dm-gif-picker {
+      position: fixed; z-index: 400; width: 260px;
+      background: rgba(15,10,26,0.97); border: 1px solid rgba(255,255,255,0.13); border-radius: 14px;
+      box-shadow: 0 14px 48px rgba(0,0,0,0.75); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    .dm-gif-picker-top { padding: 0.6rem 0.7rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.07); }
+    .dm-gif-search {
+      width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.11);
+      border-radius: 8px; color: #f0f0f0; font-family: inherit; font-size: 0.85rem; padding: 0.4rem 0.7rem; outline: none;
+      transition: border-color 0.15s;
+    }
+    .dm-gif-search:focus { border-color: #7fa8d9; }
+    .dm-gif-label {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+      color: rgba(200,184,232,0.4); padding: 0.4rem 0.7rem 0.2rem;
+    }
+    .dm-gif-results {
+      display: grid; grid-template-columns: repeat(3, 1fr); align-content: start;
+      gap: 3px; max-height: 264px; overflow-y: auto; padding: 3px;
+    }
+    .dm-gif-item {
+      width: 100%; aspect-ratio: 1; object-fit: contain; background: rgba(255,255,255,0.04);
+      cursor: pointer; border-radius: 4px; display: block; transition: opacity 0.14s, transform 0.11s;
+    }
+    .dm-gif-item:hover { opacity: 0.8; transform: scale(0.95); }
+    .dm-gif-loading { grid-column: 1 / -1; text-align: center; color: rgba(200,184,232,0.4); font-size: 0.78rem; padding: 1.5rem; }
+    .dm-send-btn {
+      margin-left: auto; background: #f0c060; color: #0d0d0d; border: none; border-radius: 8px;
+      padding: 0.45rem 1.1rem; font-weight: 700; font-size: 0.82rem; cursor: pointer; font-family: inherit;
+    }
+    .dm-send-btn:hover { background: #e0b050; }
+
+    .dm-preview-item {
+      position: relative; border-radius: 9px; overflow: hidden; flex: 0 0 auto;
+      background: rgba(0,0,0,0.4); border: 1px solid rgba(180,140,255,0.2);
+    }
+    .dm-preview-thumb { display: block; max-height: 76px; max-width: 96px; width: auto; height: auto; object-fit: contain; border-radius: 8px; }
+    .dm-preview-file-icon { display: flex; align-items: center; justify-content: center; width: 64px; height: 48px; font-size: 1.3rem; }
+    .dm-preview-name {
+      font-size: 0.62rem; color: rgba(200,184,232,0.6); padding: 0.12rem 0.3rem 0.16rem;
+      max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .dm-preview-remove {
+      position: absolute; top: 3px; right: 3px; background: rgba(0,0,0,0.68); border: none;
+      border-radius: 50%; color: #fff; width: 18px; height: 18px; font-size: 0.62rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .dm-preview-remove:hover { background: #d97a72; }
+
+    .dm-following-list { max-height: 280px; overflow-y: auto; margin: 1rem 0; }
+    .dm-following-item {
+      display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem; border-radius: 8px; cursor: pointer;
+    }
+    .dm-following-item:hover { background: rgba(255,255,255,0.05); }
+    .dm-following-item img, .dm-following-item-fallback {
+      width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    }
+    .dm-following-item-fallback {
+      background: linear-gradient(135deg, #7fa8d9, #d97a72); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.82rem;
+    }
+    .dm-following-item-name { font-size: 0.88rem; font-weight: 600; }
+
+    @media (max-width: 720px) {
+      .notif-layout { flex-direction: column; }
+      .notif-billboard { width: 100%; min-height: 260px; }
+      .dm-app { flex-direction: column; height: auto; }
+      .dm-sidebar { width: 100%; height: auto; flex-direction: row; flex-wrap: wrap; }
+      .dm-content { height: 500px; }
+      .dm-sidebar-rule { display: none; }
+      .notif-tabs-group--inbox-offset { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="fanpages-topbar-root"></div>
+
+<section class="notif-banner" id="notif-banner">
+  <div class="notif-banner-bg" id="notif-banner-bg"></div>
+  <button class="notif-banner-edit-btn" id="notif-banner-edit-btn" type="button" title="Adjust banner" style="display:none;">✏️</button>
+</section>
+
+<div class="char-editor-overlay" id="notif-banner-editor-overlay" hidden>
+  <div class="char-editor-modal" style="max-width: 480px;">
+    <h2 class="char-editor-title">Adjust Banner</h2>
+
+    <div class="char-editor-ref-wrap notif-banner-preview-wrap" id="notif-banner-preview-wrap">
+      <div class="notif-banner-preview-bg" id="notif-banner-preview-bg"></div>
+      <div class="char-editor-ref-overlay">📷 Change Image</div>
+    </div>
+    <input type="file" id="notif-banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+
+    <div class="notif-banner-sliders">
+      <label>Horizontal <input type="range" id="notif-banner-pos-x" min="0" max="100" value="50" /></label>
+      <label>Vertical <input type="range" id="notif-banner-pos-y" min="0" max="100" value="40" /></label>
+      <label>Zoom <input type="range" id="notif-banner-zoom" min="100" max="400" value="100" /></label>
+    </div>
+
+    <p class="mod-panel-msg" id="notif-banner-editor-msg"></p>
+
+    <div class="char-editor-actions">
+      <button class="mod-btn" id="notif-banner-editor-cancel" type="button">Cancel</button>
+      <button class="mod-btn" id="notif-banner-editor-save" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="dm-lightbox-overlay" id="dm-lightbox-overlay" hidden>
+  <button class="dm-lightbox-close" id="dm-lightbox-close" type="button" aria-label="Close">✕</button>
+  <img class="dm-lightbox-img" id="dm-lightbox-img" src="" alt="" />
+</div>
+
+<div class="char-editor-overlay" id="dm-new-chat-overlay" hidden>
+  <div class="char-editor-modal" style="max-width: 440px;">
+    <h2 class="char-editor-title" id="dm-new-chat-title">New Chat</h2>
+
+    <input class="mod-input" id="dm-new-chat-search" placeholder="Search accounts you follow…" />
+    <div id="dm-new-chat-results" class="dm-following-list"><p class="notif-empty">Loading…</p></div>
+
+    <div class="char-editor-actions">
+      <button class="mod-btn" id="dm-new-chat-cancel" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="notif-bg-wrap">
+  <img class="notif-bg-img" id="notif-theme-bg-img" alt="" />
+  <div class="notif-bg-overlay" id="notif-theme-bg-overlay"></div>
+
+<main class="notif-main">
+  <div class="notif-layout">
+
+    <aside class="notif-billboard" id="notif-billboard">
+      <div class="notif-billboard-track" id="notif-billboard-track"></div>
+      <div class="notif-billboard-empty" id="notif-billboard-empty">
+        <p>✨ Something fun is coming to this spot soon!</p>
+      </div>
+    </aside>
+
+    <section class="notif-content">
+      <div class="notif-tabs">
+        <div class="notif-tabs-group">
+          <button class="notif-tab active" id="notif-tab-notifications" type="button">Notifications</button>
+          <button class="notif-tab" id="notif-tab-inbox" type="button">Inbox <span class="notif-tab-badge" id="notif-tab-inbox-badge" hidden></span></button>
+        </div>
+        <div class="notif-theme-picker" id="notif-theme-picker" style="display:none;">
+          <button type="button" class="notif-theme-btn" id="notif-theme-btn" title="Change background">🎨</button>
+          <div class="notif-theme-popover" id="notif-theme-popover" hidden>
+            <p class="notif-theme-popover-label">Page Background</p>
+            <div class="notif-theme-grid" id="notif-theme-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="notif-list"><p class="notif-empty">Loading…</p></div>
+
+      <div id="notif-inbox" style="display:none;">
+        <div class="dm-app" id="dm-app">
+          <aside class="dm-sidebar">
+            <div class="dm-user-block" id="dm-user-block"></div>
+            <button class="dm-new-chat-btn" id="dm-new-chat-btn" type="button">+ New Chat</button>
+            <div class="dm-sidebar-rule"></div>
+            <button class="dm-side-tab active" id="dm-tab-chats" type="button">
+              <span>💬 Chats</span>
+            </button>
+            <button class="dm-side-tab" id="dm-tab-requests" type="button">
+              <span>📮 Requests</span>
+              <span class="dm-req-badge" id="dm-req-badge" hidden></span>
+            </button>
+          </aside>
+
+          <div class="dm-content">
+            <div id="dm-panel-chats" class="dm-panel">
+              <div id="dm-chats-list" class="dm-list"><p class="notif-empty">Loading…</p></div>
+            </div>
+            <div id="dm-panel-requests" class="dm-panel" hidden>
+              <div class="dm-subtabs">
+                <button class="dm-subtab active" id="dm-subtab-pending" type="button">Pending</button>
+                <button class="dm-subtab" id="dm-subtab-ongoing" type="button">Ongoing</button>
+              </div>
+              <div id="dm-requests-list" class="dm-list"><p class="notif-empty">Loading…</p></div>
+            </div>
+            <div id="dm-panel-thread" class="dm-panel dm-panel--thread" hidden>
+              <div class="dm-thread-header">
+                <button class="dm-thread-back" id="dm-thread-back" type="button">← Back</button>
+                <a class="dm-thread-user-link" id="dm-thread-user-link" href="#">
+                  <span id="dm-thread-avatar-wrap"></span>
+                  <span class="dm-thread-title" id="dm-thread-title"></span>
+                </a>
+                <button class="dm-thread-dismiss-btn" id="dm-thread-dismiss-btn" type="button" title="Dismiss" hidden>🗑️</button>
+              </div>
+              <div class="dm-thread-messages" id="dm-thread-messages"></div>
+              <div class="dm-thread-reply">
+                <p class="dm-reply-msg" id="dm-reply-msg" hidden></p>
+                <div class="dm-input-box">
+                  <textarea class="dm-input-textarea" id="dm-reply-input" placeholder="Type a message…" maxlength="4000"></textarea>
+                  <div class="dm-input-previews" id="dm-reply-previews"></div>
+                  <div class="dm-input-footer">
+                    <label class="dm-attach-btn" title="Attach up to 4 files">
+                      📎
+                      <input type="file" id="dm-reply-file" accept="image/*,video/mp4,video/webm,application/pdf" multiple style="display:none;" />
+                    </label>
+                    <button class="dm-gif-btn" id="dm-reply-gif-btn" type="button">GIF</button>
+                    <span class="dm-attach-count" id="dm-reply-file-count"></span>
+                    <button class="dm-send-btn" id="dm-reply-send" type="button">Send</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+</div> <!-- /.notif-bg-wrap -->
+
+<script src="/fanpages/fanpages-nav.js"></script>
+<script>
+  const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+  const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function formatTime(iso) {
+    const d = new Date(iso);
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (sameDay) return `today at ${time}`;
+    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${time}`;
+  }
+
+  // ── Page background theme — same default/custom-upload pattern as the
+  // profile page's theme picker, scoped to this page's own bg fields. ──────
+  let notifCurrentThemeBgUrl = '';
+
+  function applyNotifTheme(themeId, bgUrl) {
+    const bgImg = document.getElementById('notif-theme-bg-img');
+    const bgOverlay = document.getElementById('notif-theme-bg-overlay');
+    if (themeId === 'custom' && bgUrl) {
+      bgImg.src = bgUrl;
+      bgImg.style.display = 'block';
+      bgOverlay.style.display = 'block';
+    } else {
+      bgImg.style.display = 'none';
+      bgOverlay.style.display = 'none';
+    }
+    document.querySelectorAll('.notif-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
+  }
+
+  function buildNotifThemeGrid() {
+    const grid = document.getElementById('notif-theme-grid');
+    grid.innerHTML = '';
+
+    const defaultBtn = document.createElement('button');
+    defaultBtn.className = 'notif-theme-swatch';
+    defaultBtn.type = 'button';
+    defaultBtn.title = 'Default (plain dark)';
+    defaultBtn.dataset.theme = 'default';
+    defaultBtn.innerHTML = '<span></span>';
+    defaultBtn.addEventListener('click', () => selectNotifTheme('default'));
+    grid.appendChild(defaultBtn);
+
+    const uploadBtn = document.createElement('button');
+    uploadBtn.className = 'notif-theme-swatch notif-theme-swatch--upload';
+    uploadBtn.type = 'button';
+    uploadBtn.title = 'Upload a custom background image';
+    uploadBtn.textContent = '+';
+    uploadBtn.addEventListener('click', () => document.getElementById('notif-theme-bg-file-input').click());
+    grid.appendChild(uploadBtn);
+  }
+
+  async function selectNotifTheme(themeId) {
+    applyNotifTheme(themeId, notifCurrentThemeBgUrl);
+    await fetch('/api/account/notif-theme', {
+      method: 'PUT',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme: themeId }),
+    });
+  }
+
+  const notifThemeBgFileInput = document.createElement('input');
+  notifThemeBgFileInput.type = 'file';
+  notifThemeBgFileInput.accept = 'image/png,image/jpeg,image/webp,image/gif';
+  notifThemeBgFileInput.id = 'notif-theme-bg-file-input';
+  notifThemeBgFileInput.hidden = true;
+  document.body.appendChild(notifThemeBgFileInput);
+  notifThemeBgFileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    applyNotifTheme('custom', URL.createObjectURL(file)); // instant preview
+    const fd = new FormData();
+    fd.append('image', file);
+    const res = await fetch('/api/account/notif-theme-bg', { method: 'PUT', headers: authHeaders(), body: fd });
+    if (res.ok) {
+      const data = await res.json();
+      notifCurrentThemeBgUrl = data.theme_bg_url;
+      applyNotifTheme('custom', data.theme_bg_url);
+    }
+  });
+
+  buildNotifThemeGrid();
+
+  document.getElementById('notif-theme-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('notif-theme-popover').hidden = !document.getElementById('notif-theme-popover').hidden;
+  });
+  document.addEventListener('click', (e) => {
+    const picker = document.getElementById('notif-theme-picker');
+    if (picker && !picker.contains(e.target)) document.getElementById('notif-theme-popover').hidden = true;
+  });
+
+  if (token) {
+    fetch('/api/auth/me', { headers: authHeaders() })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (!data || !data.user) return;
+        document.getElementById('notif-theme-picker').style.display = '';
+        notifCurrentThemeBgUrl = data.user.notif_theme_bg_url || '';
+        applyNotifTheme(data.user.notif_theme || 'default', notifCurrentThemeBgUrl);
+      })
+      .catch(() => {});
+  }
+
+  // ── Billboard — same slides/data source as the hub, auto-cycling only ────
+  let billboardSlides = [];
+  let billboardIndex = 0;
+  let billboardTimer = null;
+
+  const billboardImgDims = {};
+  function loadImageDims(url) {
+    if (billboardImgDims[url]) return Promise.resolve(billboardImgDims[url]);
+    return new Promise(resolve => {
+      const probe = new Image();
+      probe.onload = () => { const d = { w: probe.naturalWidth || 1, h: probe.naturalHeight || 1 }; billboardImgDims[url] = d; resolve(d); };
+      probe.onerror = () => resolve({ w: 1, h: 1 });
+      probe.src = url;
+    });
+  }
+  function coverBgSize(dims, boxW, boxH, zoomPercent) {
+    const scale = Math.max(boxW / dims.w, boxH / dims.h) || 1;
+    const renderedW = dims.w * scale, renderedH = dims.h * scale;
+    const factor = (zoomPercent || 100) / 100;
+    return { w: (renderedW / (boxW || 1)) * 100 * factor, h: (renderedH / (boxH || 1)) * 100 * factor };
+  }
+
+  async function renderBillboard(slides) {
+    billboardSlides = slides;
+    const track = document.getElementById('notif-billboard-track');
+    const empty = document.getElementById('notif-billboard-empty');
+
+    if (!slides.length) {
+      empty.style.display = 'flex';
+      track.innerHTML = '';
+      return;
+    }
+    empty.style.display = 'none';
+
+    await Promise.all(slides.map(s => loadImageDims(s.image_url)));
+
+    track.innerHTML = '';
+    slides.forEach((slide, i) => {
+      const el = document.createElement('div');
+      el.className = 'notif-billboard-slide' + (i === 0 ? ' active' : '');
+      el.innerHTML = `
+        <div class="notif-billboard-slide-bg"></div>
+        ${(slide.caption || slide.credit) ? `
+          <div class="notif-billboard-slide-scrim">
+            ${slide.caption ? `<p class="notif-billboard-slide-cap">${escapeHtml(slide.caption)}</p>` : ''}
+            ${slide.credit ? `<p class="notif-billboard-slide-credit">${escapeHtml(slide.credit)}</p>` : ''}
+          </div>` : ''}
+      `;
+      track.appendChild(el);
+    });
+
+    billboardIndex = 0;
+    playSlideAnimation(0);
+    restartBillboardTimer();
+  }
+
+  const BILLBOARD_INTERVAL_MS = 15000;
+
+  function playSlideAnimation(index) {
+    const slide = billboardSlides[index];
+    if (!slide) return;
+    const el = document.querySelectorAll('.notif-billboard-slide')[index];
+    if (!el) return;
+    const bg = el.querySelector('.notif-billboard-slide-bg');
+    const dims = billboardImgDims[slide.image_url];
+    if (!dims) return;
+    const boxW = el.clientWidth, boxH = el.clientHeight;
+
+    bg.style.transition = 'none';
+    bg.style.backgroundImage = `url(${slide.image_url})`;
+    const startSize = coverBgSize(dims, boxW, boxH, slide.zoom);
+    bg.style.backgroundSize = `${startSize.w}% ${startSize.h}%`;
+    bg.style.backgroundPosition = `${slide.position_x}% ${slide.position_y}%`;
+    void bg.offsetWidth;
+
+    if (slide.animation_type && slide.animation_type !== 'none') {
+      bg.style.transition = `background-position ${BILLBOARD_INTERVAL_MS}ms linear, background-size ${BILLBOARD_INTERVAL_MS}ms linear`;
+      requestAnimationFrame(() => {
+        if (slide.animation_type === 'pan_v') {
+          bg.style.backgroundPosition = `${slide.position_x}% ${slide.end_position_y}%`;
+        } else if (slide.animation_type === 'pan_h') {
+          bg.style.backgroundPosition = `${slide.end_position_x}% ${slide.position_y}%`;
+        } else if (slide.animation_type === 'zoom') {
+          const endSize = coverBgSize(dims, boxW, boxH, slide.end_zoom);
+          bg.style.backgroundSize = `${endSize.w}% ${endSize.h}%`;
+        }
+      });
+    }
+  }
+
+  window.addEventListener('resize', () => { if (billboardSlides.length) playSlideAnimation(billboardIndex); });
+
+  function goToSlide(i) {
+    if (!billboardSlides.length) return;
+    billboardIndex = (i + billboardSlides.length) % billboardSlides.length;
+    document.querySelectorAll('.notif-billboard-slide').forEach((el, idx) => el.classList.toggle('active', idx === billboardIndex));
+    playSlideAnimation(billboardIndex);
+    restartBillboardTimer();
+  }
+
+  function restartBillboardTimer() {
+    if (billboardTimer) clearInterval(billboardTimer);
+    if (billboardSlides.length > 1) {
+      billboardTimer = setInterval(() => goToSlide(billboardIndex + 1), BILLBOARD_INTERVAL_MS);
+    }
+  }
+
+  fetch('/api/hub-billboard')
+    .then(r => r.ok ? r.json() : { slides: [] })
+    .then(data => renderBillboard(data.slides || []))
+    .catch(() => renderBillboard([]));
+
+  // ── Reduced banner (admin-adjustable crop) ────────────────────────────────
+  let bannerData = null;
+
+  function renderBannerBg(el, dims, banner) {
+    if (!dims) return;
+    const boxW = el.clientWidth, boxH = el.clientHeight;
+    const size = coverBgSize(dims, boxW, boxH, banner.zoom);
+    el.style.backgroundImage = `url(${banner.image_url})`;
+    el.style.backgroundSize = `${size.w}% ${size.h}%`;
+    el.style.backgroundPosition = `${banner.position_x}% ${banner.position_y}%`;
+  }
+
+  async function loadBanner() {
+    try {
+      const res = await fetch('/api/notifications-banner');
+      const data = await res.json();
+      bannerData = data.banner;
+      if (!bannerData) return;
+      const dims = await loadImageDims(bannerData.image_url);
+      renderBannerBg(document.getElementById('notif-banner-bg'), dims, bannerData);
+    } catch {}
+  }
+  window.addEventListener('resize', () => {
+    if (bannerData) renderBannerBg(document.getElementById('notif-banner-bg'), billboardImgDims[bannerData.image_url], bannerData);
+  });
+  loadBanner();
+
+  // ── Admin banner editor — pencil icon only shows for the admin account ───
+  const bannerEditBtn = document.getElementById('notif-banner-edit-btn');
+  const bannerEditorOverlay = document.getElementById('notif-banner-editor-overlay');
+  const bannerPreviewWrap = document.getElementById('notif-banner-preview-wrap');
+  const bannerPreviewBg = document.getElementById('notif-banner-preview-bg');
+  const bannerFileInput = document.getElementById('notif-banner-file-input');
+  const bannerPosXInput = document.getElementById('notif-banner-pos-x');
+  const bannerPosYInput = document.getElementById('notif-banner-pos-y');
+  const bannerZoomInput = document.getElementById('notif-banner-zoom');
+  const bannerEditorMsg = document.getElementById('notif-banner-editor-msg');
+  const bannerEditorSave = document.getElementById('notif-banner-editor-save');
+
+  // While the modal is open, the preview shows either the saved image or a
+  // freshly-picked one (not yet uploaded) — pendingFile/pendingImageUrl track
+  // that swap so Save knows whether to send a new image along with the crop.
+  let pendingFile = null;
+  let pendingImageUrl = null;
+
+  function updateBannerPreview() {
+    if (!bannerData) return;
+    const url = pendingImageUrl || bannerData.image_url;
+    renderBannerBg(bannerPreviewBg, billboardImgDims[url], {
+      image_url: url,
+      position_x: bannerPosXInput.value,
+      position_y: bannerPosYInput.value,
+      zoom: bannerZoomInput.value,
+    });
+  }
+  [bannerPosXInput, bannerPosYInput, bannerZoomInput].forEach(input => {
+    input.addEventListener('input', updateBannerPreview);
+  });
+
+  bannerPreviewWrap.addEventListener('click', () => bannerFileInput.click());
+  bannerFileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    pendingFile = file;
+    pendingImageUrl = URL.createObjectURL(file);
+    const dims = await loadImageDims(pendingImageUrl);
+    billboardImgDims[pendingImageUrl] = dims;
+    updateBannerPreview();
+  });
+
+  bannerEditBtn.addEventListener('click', () => {
+    if (!bannerData) return;
+    pendingFile = null;
+    pendingImageUrl = null;
+    bannerFileInput.value = '';
+    bannerPosXInput.value = bannerData.position_x;
+    bannerPosYInput.value = bannerData.position_y;
+    bannerZoomInput.value = bannerData.zoom;
+    bannerEditorMsg.textContent = '';
+    bannerEditorOverlay.hidden = false;
+    requestAnimationFrame(updateBannerPreview);
+  });
+  document.getElementById('notif-banner-editor-cancel').addEventListener('click', () => { bannerEditorOverlay.hidden = true; });
+
+  bannerEditorSave.addEventListener('click', async () => {
+    bannerEditorSave.disabled = true;
+    bannerEditorMsg.className = 'mod-panel-msg';
+    bannerEditorMsg.textContent = '';
+    try {
+      const formData = new FormData();
+      formData.append('position_x', bannerPosXInput.value);
+      formData.append('position_y', bannerPosYInput.value);
+      formData.append('zoom', bannerZoomInput.value);
+      if (pendingFile) formData.append('image', pendingFile);
+
+      const res = await fetch('/api/admin/notifications-banner', {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save.');
+      bannerData = data.banner;
+      pendingFile = null;
+      pendingImageUrl = null;
+      const dims = await loadImageDims(bannerData.image_url);
+      renderBannerBg(document.getElementById('notif-banner-bg'), dims, bannerData);
+      bannerEditorOverlay.hidden = true;
+    } catch (err) {
+      bannerEditorMsg.className = 'mod-panel-msg mod-panel-msg--error';
+      bannerEditorMsg.textContent = err.message || 'Something went wrong.';
+    } finally {
+      bannerEditorSave.disabled = false;
+    }
+  });
+
+  if (token) {
+    fetch('/api/auth/me', { headers: authHeaders() })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (data && data.user && data.user.is_admin) bannerEditBtn.style.display = 'flex';
+      })
+      .catch(() => {});
+  }
+
+  // ── Notifications / Inbox tabs ────────────────────────────────────────────
+  const notifTabNotifications = document.getElementById('notif-tab-notifications');
+  const notifTabInbox = document.getElementById('notif-tab-inbox');
+  const notifListEl = document.getElementById('notif-list');
+  const notifInboxEl = document.getElementById('notif-inbox');
+  const notifBillboardEl = document.getElementById('notif-billboard');
+
+  function switchNotifTab(tab, pushHash) {
+    const isInbox = tab === 'inbox';
+    notifTabInbox.classList.toggle('active', isInbox);
+    notifTabNotifications.classList.toggle('active', !isInbox);
+    notifInboxEl.style.display = isInbox ? '' : 'none';
+    notifListEl.style.display = isInbox ? 'none' : '';
+    notifBillboardEl.style.display = isInbox ? 'none' : '';
+    document.querySelector('.notif-tabs-group').classList.toggle('notif-tabs-group--inbox-offset', isInbox);
+    if (isInbox) initDmAppOnce();
+    if (pushHash !== false) location.hash = tab;
+  }
+
+  notifTabNotifications.addEventListener('click', () => switchNotifTab('notifications'));
+  notifTabInbox.addEventListener('click', () => switchNotifTab('inbox'));
+
+  // ── DM app ("Inbox" tab) — a real user-to-user chat system, separate from
+  // the admin-only /inbox note system. Starting a chat requires following
+  // the other person first; it stays a pending "request" until they accept.
+  let dmActiveThreadId = null;
+
+  const dmTabChats = document.getElementById('dm-tab-chats');
+  const dmTabRequests = document.getElementById('dm-tab-requests');
+  const dmPanelChats = document.getElementById('dm-panel-chats');
+  const dmPanelRequests = document.getElementById('dm-panel-requests');
+  const dmPanelThread = document.getElementById('dm-panel-thread');
+  const dmChatsList = document.getElementById('dm-chats-list');
+  const dmRequestsList = document.getElementById('dm-requests-list');
+  const dmReqBadge = document.getElementById('dm-req-badge');
+
+  function dmShowPanel(which) {
+    dmPanelChats.hidden = which !== 'chats';
+    dmPanelRequests.hidden = which !== 'requests';
+    dmPanelThread.hidden = which !== 'thread';
+    if (which !== 'thread') {
+      dmTabChats.classList.toggle('active', which === 'chats');
+      dmTabRequests.classList.toggle('active', which === 'requests');
+    }
+  }
+
+  dmTabChats.addEventListener('click', () => { dmShowPanel('chats'); loadDmChats(); });
+  dmTabRequests.addEventListener('click', () => {
+    dmShowPanel('requests');
+    dmRequestsDirection = 'received';
+    dmSubtabPending.classList.add('active');
+    dmSubtabOngoing.classList.remove('active');
+    loadDmRequests();
+  });
+
+  // ── Requests sub-tabs: Pending (incoming) / Ongoing (my own sent) ────────
+  let dmRequestsDirection = 'received';
+  const dmSubtabPending = document.getElementById('dm-subtab-pending');
+  const dmSubtabOngoing = document.getElementById('dm-subtab-ongoing');
+  dmSubtabPending.addEventListener('click', () => {
+    dmRequestsDirection = 'received';
+    dmSubtabPending.classList.add('active');
+    dmSubtabOngoing.classList.remove('active');
+    loadDmRequests();
+  });
+  dmSubtabOngoing.addEventListener('click', () => {
+    dmRequestsDirection = 'sent';
+    dmSubtabOngoing.classList.add('active');
+    dmSubtabPending.classList.remove('active');
+    loadDmRequests();
+  });
+
+  function dmAvatarHtml(user, cls, fbCls) {
+    const name = user.display_name || user.username || '?';
+    return user.avatar
+      ? `<img src="${user.avatar}" class="${cls}" alt="" />`
+      : `<div class="${fbCls}">${escapeHtml(name.charAt(0).toUpperCase())}</div>`;
+  }
+
+  function dmEmptyCenter(text) {
+    const div = document.createElement('div');
+    div.className = 'dm-empty-center';
+    div.innerHTML = `<p>${text}</p>`;
+    return div;
+  }
+
+  function dmChatItem(c) {
+    const div = document.createElement('div');
+    const name = c.other_user.display_name || c.other_user.username;
+    const previewText = c.last_message ? (c.last_message.is_mine ? 'You: ' : '') + c.last_message.body : '';
+    const unread = c.unread_count > 0;
+    div.className = 'dm-list-item' + (unread ? ' dm-list-item--unread' : '');
+    div.innerHTML = `
+      <div class="dm-list-item-content">
+        ${dmAvatarHtml(c.other_user, 'dm-list-avatar', 'dm-list-avatar-fallback')}
+        <div class="dm-list-body">
+          <div class="dm-list-row">
+            <span class="dm-list-name">${escapeHtml(name)}${unread ? '<span class="dm-list-unread-dot"></span>' : ''}</span>
+            ${c.last_message ? `<span class="dm-list-time">${formatTime(c.last_message.created_at)}</span>` : ''}
+          </div>
+          ${c.status === 'pending'
+            ? `<p class="dm-list-pending-tag">Request sent — awaiting response</p>`
+            : `<p class="dm-list-preview${unread ? ' dm-list-preview--unread' : ''}">${escapeHtml(previewText || 'No messages yet')}</p>`}
+        </div>
+      </div>
+      <div class="dm-list-delete-zone">
+        <button class="dm-list-delete-btn" type="button" title="Delete chat">🗑️</button>
+      </div>
+    `;
+    div.querySelector('.dm-list-delete-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm(`Delete your chat with ${name}? This can't be undone.`)) return;
+      e.currentTarget.disabled = true;
+      await fetch(`/api/dm/${c.id}`, { method: 'DELETE', headers: authHeaders() });
+      loadDmChats();
+    });
+    div.addEventListener('click', () => openDmThread(c.id, name, c.other_user, false));
+    return div;
+  }
+
+  function dmPriorityItem(p) {
+    const div = document.createElement('div');
+    const name = p.other_user.display_name || p.other_user.username;
+    const previewText = p.last_message ? p.last_message.body : '';
+    const unread = p.unread_count > 0;
+    div.className = 'dm-list-item dm-list-item--priority' + (unread ? ' dm-list-item--unread' : '');
+    div.innerHTML = `
+      <div class="dm-list-item-content">
+        ${dmAvatarHtml(p.other_user, 'dm-list-avatar', 'dm-list-avatar-fallback')}
+        <div class="dm-list-body">
+          <div class="dm-list-row">
+            <span class="dm-list-name">${escapeHtml(name)}${unread ? '<span class="dm-list-unread-dot"></span>' : ''}</span>
+            ${p.last_message ? `<span class="dm-list-time">${formatTime(p.last_message.created_at)}</span>` : ''}
+          </div>
+          <p class="dm-list-preview${unread ? ' dm-list-preview--unread' : ''}">${escapeHtml(previewText)}</p>
+        </div>
+      </div>
+    `;
+    div.addEventListener('click', () => openDmThread(p.id, name, p.other_user, true));
+    return div;
+  }
+
+  async function loadDmChats() {
+    dmChatsList.innerHTML = '<p class="notif-empty">Loading…</p>';
+    try {
+      const res = await fetch('/api/dm/chats', { headers: authHeaders() });
+      const data = await res.json();
+      const priority = data.priority || [];
+      const chats = data.chats || [];
+
+      dmChatsList.innerHTML = '';
+
+      if (priority.length) {
+        const header = document.createElement('p');
+        header.className = 'dm-priority-header';
+        header.textContent = '⚠️ High Priority';
+        dmChatsList.appendChild(header);
+        priority.forEach(p => dmChatsList.appendChild(dmPriorityItem(p)));
+        const fancyLine = '⊹₊˚‧︵‿₊⊱·✶·⊰₊‿︵‧˚₊⊹';
+        const divider = document.createElement('div');
+        divider.className = 'dm-flower-divider';
+        divider.innerHTML = `
+          <div class="dm-flower-divider-fancy">${fancyLine}</div>
+          <div class="dm-flower-divider-blooms">${'🌸 '.repeat(15).trim()}</div>
+          <div class="dm-flower-divider-fancy">${fancyLine}</div>
+        `;
+        dmChatsList.appendChild(divider);
+      }
+
+      const chatsHeader = document.createElement('p');
+      chatsHeader.className = 'dm-chats-header';
+      chatsHeader.textContent = 'Chats';
+      dmChatsList.appendChild(chatsHeader);
+
+      if (!chats.length) {
+        dmChatsList.appendChild(dmEmptyCenter('No chats yet.<br>Start one from the "+ New Chat" button!'));
+      } else {
+        chats.forEach(c => dmChatsList.appendChild(dmChatItem(c)));
+      }
+    } catch {
+      dmChatsList.innerHTML = '<p class="notif-empty">Couldn\'t load chats right now.</p>';
+    }
+  }
+
+  function dmRequestItem(r, direction) {
+    const div = document.createElement('div');
+    div.className = 'dm-list-item';
+    const name = r.other_user.display_name || r.other_user.username;
+    const actionsHtml = direction === 'received'
+      ? `<div class="dm-request-actions">
+           <button class="dm-accept-btn" type="button">Accept</button>
+           <button class="dm-deny-btn" type="button">Deny</button>
+         </div>`
+      : `<p class="dm-list-pending-tag">Awaiting response</p>`;
+    div.innerHTML = `
+      ${dmAvatarHtml(r.other_user, 'dm-list-avatar', 'dm-list-avatar-fallback')}
+      <div class="dm-list-body">
+        <div class="dm-list-row">
+          <span class="dm-list-name">${escapeHtml(name)}</span>
+          <span class="dm-list-time">${formatTime(r.created_at)}</span>
+        </div>
+        <p class="dm-list-preview">${escapeHtml(r.first_message)}</p>
+        ${actionsHtml}
+      </div>
+    `;
+    if (direction === 'received') {
+      div.querySelector('.dm-accept-btn').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        e.currentTarget.disabled = true;
+        await fetch(`/api/dm/${r.id}/accept`, { method: 'POST', headers: authHeaders() });
+        loadDmRequests();
+        dmRefreshRequestBadge();
+      });
+      div.querySelector('.dm-deny-btn').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        e.currentTarget.disabled = true;
+        await fetch(`/api/dm/${r.id}/deny`, { method: 'POST', headers: authHeaders() });
+        loadDmRequests();
+        dmRefreshRequestBadge();
+      });
+    }
+    div.addEventListener('click', () => openDmThread(r.id, name, r.other_user));
+    return div;
+  }
+
+  async function loadDmRequests() {
+    const direction = dmRequestsDirection;
+    dmRequestsList.innerHTML = '<p class="notif-empty">Loading…</p>';
+    try {
+      const res = await fetch(`/api/dm/requests?direction=${direction}`, { headers: authHeaders() });
+      const data = await res.json();
+      const requests = data.requests || [];
+      dmRequestsList.innerHTML = '';
+      if (!requests.length) {
+        dmRequestsList.appendChild(dmEmptyCenter(direction === 'sent' ? 'No ongoing requests.' : 'No pending requests.'));
+      } else {
+        requests.forEach(r => dmRequestsList.appendChild(dmRequestItem(r, direction)));
+      }
+    } catch {
+      dmRequestsList.innerHTML = '<p class="notif-empty">Couldn\'t load requests right now.</p>';
+    }
+  }
+
+  async function dmRefreshRequestBadge() {
+    try {
+      const [reqRes, unreadRes] = await Promise.all([
+        fetch('/api/dm/requests', { headers: authHeaders() }),
+        fetch('/api/dm/unread-count', { headers: authHeaders() }),
+      ]);
+      const reqData = await reqRes.json();
+      const unreadData = await unreadRes.json();
+      const requestCount = (reqData.requests || []).length;
+
+      if (requestCount > 0) { dmReqBadge.textContent = requestCount; dmReqBadge.hidden = false; }
+      else dmReqBadge.hidden = true;
+
+      // Inbox tab badge — requests waiting on me + unread chat messages.
+      const inboxBadge = document.getElementById('notif-tab-inbox-badge');
+      const total = requestCount + (unreadData.count || 0);
+      if (total > 0) { inboxBadge.textContent = total > 99 ? '99+' : total; inboxBadge.hidden = false; }
+      else inboxBadge.hidden = true;
+    } catch {}
+  }
+
+  // ── Thread view ────────────────────────────────────────────────────────
+  let dmPendingTargetUser = null; // set while composing a brand-new chat (no thread yet)
+  let dmReplyFiles = [];
+  let dmLastRenderedDay = null; // tracks the day of the last message appended, for day dividers
+
+  function dmDayKey(dateStr) { return new Date(dateStr).toDateString(); }
+
+  function dmDayLabel(dateStr) {
+    const d = new Date(dateStr);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return 'Today';
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    const sameYear = d.getFullYear() === now.getFullYear();
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: sameYear ? undefined : 'numeric' });
+  }
+
+  function dmTimeLabel(dateStr) {
+    return new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function dmDayDivider(dateStr) {
+    const div = document.createElement('div');
+    div.className = 'dm-day-divider';
+    div.textContent = dmDayLabel(dateStr);
+    return div;
+  }
+
+  // Appends a message, inserting a centered day-divider first whenever it
+  // falls on a different day than the last message rendered into this thread.
+  function dmAppendMessage(msgWrap, m) {
+    const day = dmDayKey(m.created_at);
+    if (day !== dmLastRenderedDay) {
+      msgWrap.appendChild(dmDayDivider(m.created_at));
+      dmLastRenderedDay = day;
+    }
+    msgWrap.appendChild(dmBubble(m));
+  }
+
+  // Scrolls the message pane all the way down. Images/GIFs load in async
+  // and grow the pane's height afterward, so a single scroll right after
+  // appending bubbles can land short — re-run once each image settles too.
+  function dmScrollToBottom(msgWrap) {
+    const jump = () => { msgWrap.scrollTop = msgWrap.scrollHeight; };
+    requestAnimationFrame(() => requestAnimationFrame(jump));
+    msgWrap.querySelectorAll('img').forEach(img => {
+      if (img.complete) return;
+      img.addEventListener('load', jump);
+      img.addEventListener('error', jump);
+    });
+  }
+
+  // ── Lightbox — click any sent image/GIF for a full, uncropped preview ──
+  const dmLightboxOverlay = document.getElementById('dm-lightbox-overlay');
+  const dmLightboxImg = document.getElementById('dm-lightbox-img');
+  function dmOpenLightbox(url) {
+    dmLightboxImg.src = url;
+    dmLightboxOverlay.hidden = false;
+  }
+  function dmCloseLightbox() {
+    dmLightboxOverlay.hidden = true;
+    dmLightboxImg.src = '';
+  }
+  document.getElementById('dm-lightbox-close').addEventListener('click', dmCloseLightbox);
+  dmLightboxOverlay.addEventListener('click', (e) => { if (e.target === dmLightboxOverlay) dmCloseLightbox(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !dmLightboxOverlay.hidden) dmCloseLightbox(); });
+
+  function dmBubble(m) {
+    const div = document.createElement('div');
+    div.className = 'dm-bubble ' + (m.is_mine ? 'dm-bubble--mine' : 'dm-bubble--theirs');
+    if (m.body) {
+      const p = document.createElement('p');
+      p.textContent = m.body;
+      div.appendChild(p);
+    }
+    const atts = m.attachments || [];
+    if (atts.length) {
+      const grid = document.createElement('div');
+      grid.className = 'dm-bubble-attach-grid';
+      atts.forEach(att => {
+        if (/\.(jpe?g|png|webp|gif|avif)$/i.test(att.url)) {
+          const img = document.createElement('img');
+          img.src = att.url; img.alt = att.name || 'Image'; img.className = 'dm-bubble-attach-img';
+          img.addEventListener('click', () => dmOpenLightbox(att.url));
+          grid.appendChild(img);
+        } else if (/\.(mp4|webm)$/i.test(att.url)) {
+          const vid = document.createElement('video');
+          vid.src = att.url; vid.controls = true; vid.className = 'dm-bubble-attach-img';
+          grid.appendChild(vid);
+        } else {
+          const a = document.createElement('a');
+          a.href = att.url; a.target = '_blank'; a.rel = 'noopener';
+          a.textContent = '📎 ' + (att.name || 'View attachment');
+          a.className = 'dm-bubble-attach-link';
+          grid.appendChild(a);
+        }
+      });
+      div.appendChild(grid);
+    }
+    const time = document.createElement('span');
+    time.className = 'dm-bubble-time';
+    time.textContent = dmTimeLabel(m.created_at);
+    div.appendChild(time);
+    return div;
+  }
+
+  let dmSelectedGifUrl = null;
+
+  function dmRenderReplyPreviews() {
+    const el = document.getElementById('dm-reply-previews');
+    el.querySelectorAll('img[data-blob],video[data-blob]').forEach(n => URL.revokeObjectURL(n.src));
+    el.innerHTML = '';
+    if (dmSelectedGifUrl) {
+      const item = document.createElement('div');
+      item.className = 'dm-preview-item';
+      const img = document.createElement('img');
+      img.className = 'dm-preview-thumb';
+      img.src = dmSelectedGifUrl;
+      item.appendChild(img);
+      const name = document.createElement('span');
+      name.className = 'dm-preview-name';
+      name.textContent = 'GIF';
+      item.appendChild(name);
+      const rm = document.createElement('button');
+      rm.className = 'dm-preview-remove';
+      rm.type = 'button';
+      rm.textContent = '✕';
+      rm.addEventListener('click', () => {
+        dmSelectedGifUrl = null;
+        dmRenderReplyPreviews();
+        dmUpdateReplyCount();
+      });
+      item.appendChild(rm);
+      el.appendChild(item);
+    }
+    dmReplyFiles.forEach((f, i) => {
+      const item = document.createElement('div');
+      item.className = 'dm-preview-item';
+      if (/^image\//.test(f.type)) {
+        const img = document.createElement('img');
+        img.className = 'dm-preview-thumb'; img.src = URL.createObjectURL(f); img.setAttribute('data-blob', '1');
+        item.appendChild(img);
+      } else if (/^video\//.test(f.type)) {
+        const vid = document.createElement('video');
+        vid.className = 'dm-preview-thumb'; vid.src = URL.createObjectURL(f); vid.setAttribute('data-blob', '1'); vid.controls = true;
+        item.appendChild(vid);
+      } else {
+        const icon = document.createElement('div');
+        icon.className = 'dm-preview-file-icon';
+        icon.textContent = '📄';
+        item.appendChild(icon);
+      }
+      const name = document.createElement('span');
+      name.className = 'dm-preview-name';
+      name.textContent = f.name.length > 16 ? f.name.slice(0, 13) + '…' : f.name;
+      item.appendChild(name);
+      const rm = document.createElement('button');
+      rm.className = 'dm-preview-remove';
+      rm.type = 'button';
+      rm.textContent = '✕';
+      rm.addEventListener('click', () => {
+        dmReplyFiles.splice(i, 1);
+        dmRenderReplyPreviews();
+        dmUpdateReplyCount();
+      });
+      item.appendChild(rm);
+      el.appendChild(item);
+    });
+  }
+  function dmAttachCount() { return dmReplyFiles.length + (dmSelectedGifUrl ? 1 : 0); }
+  function dmUpdateReplyCount() {
+    const n = dmAttachCount();
+    document.getElementById('dm-reply-file-count').textContent = n ? `${n}/4` : '';
+  }
+  function dmResetReplyBox() {
+    document.getElementById('dm-reply-input').value = '';
+    dmReplyFiles = [];
+    dmSelectedGifUrl = null;
+    dmRenderReplyPreviews();
+    dmUpdateReplyCount();
+    const msgEl = document.getElementById('dm-reply-msg');
+    msgEl.hidden = true;
+    msgEl.textContent = '';
+  }
+  document.getElementById('dm-reply-file').addEventListener('change', function () {
+    for (const f of Array.from(this.files)) {
+      if (dmAttachCount() >= 4) break;
+      if (f.size > 10 * 1024 * 1024) continue;
+      dmReplyFiles.push(f);
+    }
+    this.value = '';
+    dmRenderReplyPreviews();
+    dmUpdateReplyCount();
+  });
+
+  // ── GIF picker — floating popover, positioned under the GIF button ───────
+  const dmGifBtn = document.getElementById('dm-reply-gif-btn');
+  const dmGifPickerWrap = document.createElement('div');
+  dmGifPickerWrap.className = 'dm-gif-picker';
+  dmGifPickerWrap.hidden = true;
+  dmGifPickerWrap.innerHTML = `
+    <div class="dm-gif-picker-top"><input type="text" class="dm-gif-search" id="dm-gif-search" placeholder="🔍 Search GIFs…" /></div>
+    <div class="dm-gif-label" id="dm-gif-label">✨ Trending</div>
+    <div class="dm-gif-results" id="dm-gif-results"></div>
+  `;
+  document.body.appendChild(dmGifPickerWrap);
+
+  const dmGifSearch = document.getElementById('dm-gif-search');
+  const dmGifLabel = document.getElementById('dm-gif-label');
+  const dmGifResults = document.getElementById('dm-gif-results');
+  let dmGifTrendingCache = null;
+  let dmGifTimer = null;
+
+  function dmPopulateGifResults(gifs) {
+    dmGifResults.innerHTML = '';
+    if (!gifs.length) { dmGifResults.innerHTML = '<div class="dm-gif-loading">No GIFs found.</div>'; return; }
+    gifs.forEach(gif => {
+      const img = document.createElement('img');
+      img.src = gif.preview; img.title = gif.title; img.className = 'dm-gif-item'; img.loading = 'lazy';
+      img.addEventListener('click', () => {
+        if (dmAttachCount() >= 4 && !dmSelectedGifUrl) return;
+        dmSelectedGifUrl = gif.url;
+        dmRenderReplyPreviews();
+        dmUpdateReplyCount();
+        dmGifPickerWrap.hidden = true;
+        dmGifSearch.value = '';
+        dmGifLabel.textContent = '✨ Trending';
+      });
+      dmGifResults.appendChild(img);
+    });
+  }
+  async function dmLoadTrendingGifs() {
+    if (dmGifTrendingCache) { dmPopulateGifResults(dmGifTrendingCache); return; }
+    dmGifResults.innerHTML = '<div class="dm-gif-loading">Loading…</div>';
+    try {
+      const res = await fetch('/api/giphy/trending');
+      const data = await res.json();
+      dmGifTrendingCache = data.gifs || [];
+      dmPopulateGifResults(dmGifTrendingCache);
+    } catch { dmGifResults.innerHTML = '<div class="dm-gif-loading">Could not load.</div>'; }
+  }
+  async function dmSearchGifs(q) {
+    dmGifResults.innerHTML = '<div class="dm-gif-loading">Searching…</div>';
+    try {
+      const res = await fetch('/api/giphy/search?q=' + encodeURIComponent(q));
+      const data = await res.json();
+      dmPopulateGifResults(data.gifs || []);
+    } catch { dmGifResults.innerHTML = '<div class="dm-gif-loading">Failed to load.</div>'; }
+  }
+  dmGifSearch.addEventListener('input', () => {
+    clearTimeout(dmGifTimer);
+    const q = dmGifSearch.value.trim();
+    if (!q) { dmGifLabel.textContent = '✨ Trending'; dmGifTimer = setTimeout(dmLoadTrendingGifs, 150); return; }
+    dmGifLabel.textContent = 'Results';
+    dmGifTimer = setTimeout(() => dmSearchGifs(q), 350);
+  });
+
+  function dmPositionGifPicker() {
+    const rect = dmGifBtn.getBoundingClientRect();
+    const pw = 260;
+    // Estimated rather than measured — the picker is display:none right up
+    // until this runs, so offsetHeight would just read 0.
+    const estHeight = 360;
+
+    let left = rect.left;
+    if (left + pw > window.innerWidth - 10) left = window.innerWidth - pw - 10;
+    left = Math.max(10, left);
+    dmGifPickerWrap.style.left = left + 'px';
+
+    const spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow < estHeight + 10 && rect.top > estHeight + 10) {
+      // Not enough room below — open upward instead so it never runs off
+      // the bottom of the screen.
+      dmGifPickerWrap.style.top = 'auto';
+      dmGifPickerWrap.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+      dmGifPickerWrap.style.maxHeight = Math.min(estHeight, rect.top - 16) + 'px';
+    } else {
+      dmGifPickerWrap.style.bottom = 'auto';
+      dmGifPickerWrap.style.top = (rect.bottom + 6) + 'px';
+      dmGifPickerWrap.style.maxHeight = Math.min(estHeight, spaceBelow - 16) + 'px';
+    }
+  }
+  dmGifBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (dmGifPickerWrap.hidden) {
+      dmPositionGifPicker();
+      dmGifPickerWrap.hidden = false;
+      dmLoadTrendingGifs();
+      setTimeout(() => dmGifSearch.focus(), 50);
+    } else {
+      dmGifPickerWrap.hidden = true;
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!dmGifPickerWrap.hidden && !dmGifPickerWrap.contains(e.target) && e.target !== dmGifBtn) {
+      dmGifPickerWrap.hidden = true;
+    }
+  });
+  window.addEventListener('resize', () => { if (!dmGifPickerWrap.hidden) dmPositionGifPicker(); });
+
+  function dmSetThreadHeader(user, name, isPriority) {
+    document.getElementById('dm-thread-title').textContent = name;
+    const avatarWrap = document.getElementById('dm-thread-avatar-wrap');
+    avatarWrap.innerHTML = user ? dmAvatarHtml(user, 'dm-thread-avatar', 'dm-thread-avatar-fallback') : '';
+    const userLink = document.getElementById('dm-thread-user-link');
+    // The BTW Team system account has no real profile page — leave it inert there.
+    if (user && user.username && user.username !== 'btwteam') {
+      userLink.href = `/fanpages/${user.username}`;
+    } else {
+      userLink.removeAttribute('href');
+    }
+    document.getElementById('dm-thread-dismiss-btn').hidden = !isPriority;
+  }
+
+  // otherName/otherUser/isPriority are just hints for an instant paint before
+  // the fetch resolves — the response's own thread.other_user is the source
+  // of truth, so calling this with just a threadId (e.g. restoring straight
+  // from a #inbox/<id> URL on refresh) still renders a correct header.
+  async function openDmThread(threadId, otherName, otherUser, isPriority) {
+    dmActiveThreadId = threadId;
+    dmPendingTargetUser = null;
+    if (otherName) dmSetThreadHeader(otherUser, otherName, isPriority);
+    dmResetReplyBox();
+    dmShowPanel('thread');
+    location.hash = `inbox/${threadId}`;
+    const msgWrap = document.getElementById('dm-thread-messages');
+    if (!otherName) msgWrap.innerHTML = '<p class="notif-empty">Loading…</p>';
+    try {
+      const res = await fetch(`/api/dm/${threadId}/messages`, { headers: authHeaders() });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const msgs = data.messages || [];
+      const resolvedName = data.thread.other_user
+        ? (data.thread.other_user.display_name || data.thread.other_user.username)
+        : (otherName || 'Unknown');
+      dmSetThreadHeader(data.thread.other_user || otherUser, resolvedName, data.thread.is_priority);
+      msgWrap.innerHTML = '';
+
+      // Only the initiator of a still-pending thread sees this — the very
+      // first message in the thread being "mine" is how we know that's me.
+      if (data.thread.status === 'pending' && msgs.length && msgs[0].is_mine) {
+        const banner = document.createElement('div');
+        banner.className = 'dm-pending-banner';
+        banner.innerHTML = `Your message has been sent to <strong>${escapeHtml(resolvedName)}</strong>'s Requests! After they accept, you'll see this log appear in your Chats!`;
+        msgWrap.appendChild(banner);
+      }
+
+      dmLastRenderedDay = null;
+      if (!msgs.length) {
+        msgWrap.innerHTML = '<p class="notif-empty">No messages yet.</p>';
+      } else {
+        msgs.forEach(m => dmAppendMessage(msgWrap, m));
+        dmScrollToBottom(msgWrap);
+      }
+      dmRefreshRequestBadge();
+    } catch {
+      msgWrap.innerHTML = '<p class="notif-empty">Couldn\'t load this chat right now.</p>';
+    }
+  }
+
+  // Immediately opens a full chatroom view for someone picked from "New
+  // Chat" — same header/typing box as a real thread, just no messages yet
+  // and no thread_id until the first Send actually creates one.
+  function startDmWithUser(user) {
+    dmNewChatOverlay.hidden = true;
+    dmActiveThreadId = null;
+    dmPendingTargetUser = user;
+    dmLastRenderedDay = null;
+    const name = user.display_name || user.username;
+    dmSetThreadHeader(user, name);
+    dmResetReplyBox();
+    dmShowPanel('thread');
+    location.hash = 'inbox'; // no thread_id yet — first Send creates it and updates this
+    document.getElementById('dm-thread-messages').innerHTML =
+      `<p class="notif-empty">Say hello to ${escapeHtml(name)}!</p>`;
+  }
+
+  document.getElementById('dm-thread-back').addEventListener('click', () => {
+    dmActiveThreadId = null;
+    dmPendingTargetUser = null;
+    dmShowPanel('chats');
+    loadDmChats();
+    location.hash = 'inbox';
+  });
+
+  // Only ever shown for the High Priority thread — the sole way to scrap
+  // a broadcast, since the list row itself deliberately has no trashcan.
+  document.getElementById('dm-thread-dismiss-btn').addEventListener('click', async () => {
+    if (!dmActiveThreadId) return;
+    if (!confirm('Dismiss this message? It\'ll come back if another announcement is sent.')) return;
+    await fetch(`/api/dm/${dmActiveThreadId}/dismiss`, { method: 'POST', headers: authHeaders() });
+    dmActiveThreadId = null;
+    dmShowPanel('chats');
+    loadDmChats();
+    location.hash = 'inbox';
+  });
+
+  document.getElementById('dm-reply-send').addEventListener('click', async () => {
+    const input = document.getElementById('dm-reply-input');
+    const body = input.value.trim();
+    if (!body && !dmAttachCount()) return;
+    const btn = document.getElementById('dm-reply-send');
+    const msgEl = document.getElementById('dm-reply-msg');
+    btn.disabled = true;
+    msgEl.hidden = true;
+    try {
+      const formData = new FormData();
+      formData.append('body', body);
+      dmReplyFiles.forEach(f => formData.append('attachments', f));
+      if (dmSelectedGifUrl) formData.append('gif_url', dmSelectedGifUrl);
+
+      if (!dmActiveThreadId && dmPendingTargetUser) {
+        formData.append('username', dmPendingTargetUser.username);
+        const res = await fetch('/api/dm/start', { method: 'POST', headers: authHeaders(), body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+        const targetUser = dmPendingTargetUser;
+        await openDmThread(data.thread_id, targetUser.display_name || targetUser.username, targetUser);
+      } else if (dmActiveThreadId) {
+        const res = await fetch(`/api/dm/${dmActiveThreadId}/messages`, { method: 'POST', headers: authHeaders(), body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+        input.value = '';
+        dmReplyFiles = [];
+        dmSelectedGifUrl = null;
+        dmRenderReplyPreviews();
+        dmUpdateReplyCount();
+        const msgWrap = document.getElementById('dm-thread-messages');
+        dmAppendMessage(msgWrap, data.message);
+        dmScrollToBottom(msgWrap);
+      }
+    } catch (err) {
+      msgEl.textContent = err.message || 'Something went wrong.';
+      msgEl.hidden = false;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  document.getElementById('dm-reply-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      document.getElementById('dm-reply-send').click();
+    }
+  });
+
+  // ── New Chat modal — just a picker now; picking someone opens the real
+  // chatroom view above instead of composing inside the modal. ───────────
+  const dmNewChatOverlay = document.getElementById('dm-new-chat-overlay');
+  const dmNewChatResults = document.getElementById('dm-new-chat-results');
+  const dmNewChatSearch = document.getElementById('dm-new-chat-search');
+
+  function dmFollowingItem(u) {
+    const div = document.createElement('div');
+    div.className = 'dm-following-item';
+    const name = u.display_name || u.username;
+    div.innerHTML = `
+      ${dmAvatarHtml(u, '', 'dm-following-item-fallback')}
+      <span class="dm-following-item-name">${escapeHtml(name)}</span>
+    `;
+    div.addEventListener('click', () => startDmWithUser(u));
+    return div;
+  }
+
+  async function dmLoadFollowing(q) {
+    dmNewChatResults.innerHTML = '<p class="notif-empty">Loading…</p>';
+    try {
+      const res = await fetch(`/api/dm/following${q ? `?q=${encodeURIComponent(q)}` : ''}`, { headers: authHeaders() });
+      const data = await res.json();
+      const users = data.users || [];
+      if (!users.length) {
+        dmNewChatResults.innerHTML = '<p class="notif-empty">Follow someone first to start a chat with them.</p>';
+      } else {
+        dmNewChatResults.innerHTML = '';
+        users.forEach(u => dmNewChatResults.appendChild(dmFollowingItem(u)));
+      }
+    } catch {
+      dmNewChatResults.innerHTML = '<p class="notif-empty">Couldn\'t load your follows right now.</p>';
+    }
+  }
+
+  let dmSearchDebounce = null;
+  dmNewChatSearch.addEventListener('input', () => {
+    clearTimeout(dmSearchDebounce);
+    dmSearchDebounce = setTimeout(() => dmLoadFollowing(dmNewChatSearch.value.trim()), 250);
+  });
+
+  document.getElementById('dm-new-chat-btn').addEventListener('click', () => {
+    dmNewChatSearch.value = '';
+    dmNewChatOverlay.hidden = false;
+    dmLoadFollowing('');
+  });
+
+  document.getElementById('dm-new-chat-cancel').addEventListener('click', () => { dmNewChatOverlay.hidden = true; });
+
+  // ── User block + lazy init on first Inbox-tab visit ──────────────────────
+  function dmRenderUserBlock(u) {
+    const block = document.getElementById('dm-user-block');
+    const name = u.display_name || u.username;
+    block.innerHTML = `
+      ${dmAvatarHtml(u, '', 'dm-user-block-fallback')}
+      <span class="dm-user-block-name">${escapeHtml(name)}</span>
+    `;
+  }
+
+  let dmInitialized = false;
+  async function initDmAppOnce() {
+    if (dmInitialized) return;
+    dmInitialized = true;
+    if (!token) {
+      dmChatsList.innerHTML = `<p class="notif-empty"><a href="/login?from=${encodeURIComponent('/fanpages/notifications')}" style="color:#7fa8d9;">Log in</a> to chat with people you follow.</p>`;
+      document.getElementById('dm-new-chat-btn').style.display = 'none';
+      return;
+    }
+    try {
+      const res = await fetch('/api/auth/me', { headers: authHeaders() });
+      const data = await res.json();
+      if (data && data.user) dmRenderUserBlock(data.user);
+    } catch {}
+    loadDmChats();
+    dmRefreshRequestBadge();
+  }
+
+  // ── Notification list ─────────────────────────────────────────────────────
+  function notifItem(n) {
+    const div = document.createElement('div');
+    div.className = 'notif-item' + (n.is_read ? '' : ' notif-item--unread');
+    const actorName = n.actor_display_name || n.actor_username || 'Between Two Worlds';
+    const avatarHtml = n.actor_avatar
+      ? `<img src="${n.actor_avatar}" class="notif-avatar" alt="" />`
+      : `<div class="notif-avatar--fallback">${escapeHtml(actorName.charAt(0).toUpperCase())}</div>`;
+    div.innerHTML = `
+      ${avatarHtml}
+      <div class="notif-item-body">
+        <p class="notif-item-text"><strong>${escapeHtml(actorName)}</strong> ${escapeHtml(n.message)}</p>
+        <p class="notif-item-time">${formatTime(n.created_at)}</p>
+      </div>
+    `;
+    if (n.link) {
+      div.dataset.link = n.link;
+      div.addEventListener('click', () => { window.location.href = n.link; });
+    }
+    return div;
+  }
+
+  (async () => {
+    const list = document.getElementById('notif-list');
+    if (!token) {
+      list.innerHTML = `<p class="notif-empty"><a href="/login?from=${encodeURIComponent('/fanpages/notifications')}" style="color:#7fa8d9;">Log in</a> to see your notifications.</p>`;
+      return;
+    }
+    try {
+      const res = await fetch('/api/notifications', { headers: authHeaders() });
+      const data = await res.json();
+      const notifs = data.notifications || [];
+
+      if (!notifs.length) {
+        list.innerHTML = '<p class="notif-empty">No notifications yet.</p>';
+      } else {
+        list.innerHTML = '';
+        notifs.forEach(n => list.appendChild(notifItem(n)));
+      }
+
+      fetch('/api/notifications/mark-read', { method: 'POST', headers: authHeaders() }).catch(() => {});
+    } catch {
+      list.innerHTML = '<p class="notif-empty">Couldn\'t load your notifications right now.</p>';
+    }
+  })();
+
+  // Refreshing the page (or following a link with #inbox) should land back
+  // on whichever tab — and whichever open chatroom — was showing, not always
+  // reset to Notifications. Runs last so everything switchNotifTab/
+  // initDmAppOnce/openDmThread touch is already defined.
+  const notifThreadHashMatch = location.hash.match(/^#inbox\/(\d+)$/);
+  if (notifThreadHashMatch) {
+    switchNotifTab('inbox', false);
+    if (token) openDmThread(parseInt(notifThreadHashMatch[1], 10));
+  } else {
+    switchNotifTab(location.hash === '#inbox' ? 'inbox' : 'notifications', false);
+  }
+
+  // The Inbox tab badge should show up immediately, even before that tab's
+  // ever been clicked (mirrors the bell in the topbar).
+  if (token) dmRefreshRequestBadge();
+</script>
+
+</body>
+</html>

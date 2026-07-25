@@ -11,24 +11,36 @@
     body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; }
     a { color: inherit; }
 
-    /* Custom profile theme — identical pattern to a story's theme background
-       (fanpages.css .mod-page-bg-*): the image is absolutely positioned to
-       this wrapper's full content height and scrolls along with the page,
-       rather than staying pinned like a fixed background would. */
+    /* Custom profile theme — the background image is pinned to the viewport
+       (position: fixed) instead of scrolling with the page content, same
+       as the Fanpage Hub's background. .fp-bg-wrap itself stays a normal,
+       non-fixed container so the actual page content inside it still flows
+       and scrolls like everything else. */
     .fp-bg-wrap { position: relative; background: #0d0d0d; }
-    .fp-bg-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(28px) brightness(0.95); z-index: 0; display: none; }
-    .fp-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.72); z-index: 0; display: none; }
+    .fp-bg-img { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(28px) brightness(0.95); z-index: 0; display: none; }
+    .fp-bg-overlay { position: fixed; inset: 0; background: rgba(10,10,10,0.72); z-index: 0; display: none; }
     .fp-bg-wrap > *:not(.fp-bg-img):not(.fp-bg-overlay) { position: relative; z-index: 1; }
 
     .fp-theme-picker { position: relative; }
+    /* Floats top-right of the whole below-the-banner content area (see
+       .fp-main-area below) and only fades in while hovering anywhere in
+       that area — never over the banner, which has its own pencil. */
+    .fp-theme-picker--floating {
+      position: absolute; top: 1.1rem; right: 1.1rem; z-index: 20;
+      opacity: 0; pointer-events: none; transition: opacity 0.18s;
+    }
+    .fp-main-area { position: relative; }
+    .fp-main-area:hover .fp-theme-picker--floating { opacity: 1; pointer-events: auto; }
+    body.fp-editing .fp-theme-picker--floating { display: none !important; }
     .fp-theme-btn {
       background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #f0f0f0;
-      cursor: pointer; font-family: inherit; font-size: 0.85rem; font-weight: 700;
-      padding: 0.55rem 1.1rem; border-radius: 6px;
+      cursor: pointer; font-size: 1.1rem;
+      width: 44px; height: 44px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
     }
-    .fp-theme-btn:hover { border-color: #f0f0f0; }
+    .fp-theme-btn:hover { border-color: #f0f0f0; background: rgba(255,255,255,0.08); }
     .fp-theme-popover {
-      position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
+      position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
       background: #161616; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
       box-shadow: 0 12px 32px rgba(0,0,0,0.5); padding: 1rem; width: 220px;
     }
@@ -47,7 +59,7 @@
     .fp-theme-swatch--upload:hover { background: #292929; }
 
     /* ── Banner + avatar bleed (Twitter-style) ── */
-    .fp-banner-wrap { position: relative; width: 100%; height: 560px; background: #1a1a1a; overflow: hidden; }
+    .fp-banner-wrap { position: relative; width: 100%; height: 500px; background: #1a1a1a; overflow: hidden; }
     .fp-banner-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; transition: filter 0.2s; }
     /* Blurred any time the profile owner is editing — a visual cue that
        this is the "click the camera to change it" surface, not a judgment
@@ -80,24 +92,42 @@
     .fp-banner-reposition label { color: #fff; font-size: 0.72rem; white-space: nowrap; }
     .fp-banner-reposition input[type="range"] { width: 100px; }
 
+    /* Owner-only shortcut into the banner's image editor — fades in on
+       hover instead of sitting there all the time, and disappears once
+       already editing (the full banner-camera controls take over then). */
+    .fp-banner-edit-pencil {
+      position: absolute; bottom: 1.1rem; right: 1.1rem; z-index: 6;
+      width: 44px; height: 44px; border-radius: 50%;
+      background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.35); color: #fff;
+      font-size: 1.05rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.18s, background 0.15s;
+    }
+    .fp-banner-wrap:hover .fp-banner-edit-pencil { opacity: 1; }
+    .fp-banner-edit-pencil:hover { background: rgba(0,0,0,0.85); }
+    body.fp-editing .fp-banner-edit-pencil { display: none !important; }
+
     .fp-header { max-width: 1200px; margin: 0 auto; padding: 0 2rem; position: relative; }
-    .fp-avatar-wrap { position: absolute; top: -64px; left: 2rem; width: 128px; height: 128px; }
+    .fp-avatar-wrap { position: absolute; top: -64px; left: 50%; transform: translateX(-50%); width: 128px; height: 128px; }
     .fp-avatar {
       width: 128px; height: 128px; border-radius: 50%;
-      border: 5px solid #0d0d0d; object-fit: cover; background: #222;
+      object-fit: cover; background: #222;
     }
     .fp-avatar-fallback {
       display: flex; align-items: center; justify-content: center;
       font-size: 2.5rem; font-weight: 700; color: #fff;
       background: linear-gradient(135deg, #7fa8d9, #d97a72);
     }
+    /* Centered pill overlay, matching the banner's "Change Banner Image"
+       treatment, instead of a small corner camera badge. */
     .fp-avatar-camera-btn {
-      position: absolute; bottom: 2px; right: 2px; width: 34px; height: 34px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      background: rgba(10,10,10,0.85); border: 2px solid #0d0d0d; color: #f0f0f0;
-      font-size: 1rem; cursor: pointer; z-index: 5;
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 5;
+      display: flex; align-items: center; gap: 0.3rem;
+      background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.4); border-radius: 8px;
+      color: #fff; font-family: inherit; font-size: 0.66rem; font-weight: 600;
+      padding: 0.4rem 0.55rem; cursor: pointer; white-space: nowrap; text-align: center;
     }
-    .fp-avatar-camera-btn:hover { color: #7fa8d9; }
+    .fp-avatar-camera-btn:hover { background: rgba(0,0,0,0.85); }
     .fp-avatar-reposition {
       position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); z-index: 5;
       display: none; flex-direction: column; gap: 3px; width: 84px;
@@ -105,38 +135,128 @@
     }
     .fp-avatar-reposition label { display: flex; align-items: center; gap: 4px; color: #fff; font-size: 0.55rem; }
     .fp-avatar-reposition input[type="range"] { flex: 1; width: 100%; height: 10px; }
-    /* Sits beside the avatar (not stacked below it, which collided with the
-       username/handle block) — positioned relative to .fp-header, same as
-       .fp-avatar-wrap, roughly level with the camera badge at the avatar's
-       bottom-right. */
+    /* Centered under the now-centered avatar, just below its bottom edge. */
     .fp-avatar-hint {
-      position: absolute; left: calc(2rem + 128px + 14px); top: 46px; width: 150px;
-      text-align: left; font-size: 0.7rem; line-height: 1.4; color: #999;
+      position: absolute; left: 50%; transform: translateX(-50%); top: 70px; width: 200px;
+      text-align: center; font-size: 0.7rem; line-height: 1.4; color: #999;
     }
 
-    .fp-header-row { display: flex; align-items: flex-end; justify-content: flex-end; padding-top: 1rem; min-height: 72px; }
-    .fp-header-action { display: flex; gap: 0.6rem; }
+    .fp-header-row { padding-top: 1rem; min-height: 72px; }
+    .fp-header-action { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
     .fp-action-btn {
       display: inline-block; text-decoration: none; border: none; cursor: pointer;
-      font-family: inherit; font-size: 0.88rem; font-weight: 700;
-      padding: 0.6rem 1.4rem; border-radius: 22px; white-space: nowrap;
+      font-family: inherit; font-size: 1rem; font-weight: 700;
+      padding: 0.75rem 1.7rem; border-radius: 24px; white-space: nowrap;
     }
-    .fp-action-btn--edit { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #f0f0f0; }
+    .fp-action-btn--edit {
+      background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #f0f0f0;
+      display: inline-flex; align-items: center; gap: 0.55rem;
+      font-size: 1.02rem; padding: 0.8rem 1.8rem;
+    }
     .fp-action-btn--edit:hover { border-color: #7fa8d9; color: #7fa8d9; }
+    .fp-action-btn--edit-gear { font-size: 1.1rem; line-height: 1; }
     .fp-action-btn--follow { background: #f0f0f0; color: #0d0d0d; }
     .fp-action-btn--follow:hover { background: #cfcfcf; }
-    .fp-action-btn--following { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #f0f0f0; }
+    .fp-action-btn--following {
+      background: #1fb6a8; color: #fff; border: none;
+      display: inline-flex; align-items: center; gap: 0.45rem;
+    }
+    .fp-action-btn--following:hover { background: #d97a72; }
+    .fp-action-btn--following .fp-follow-check { font-weight: 700; }
     .fp-action-btn--login { background: #7fa8d9; color: #0a0a0a; }
 
-    .fp-name { font-family: 'Cinzel', Georgia, serif; font-size: 1.6rem; margin-top: 0.75rem; }
-    .fp-handle { color: #999; font-size: 0.92rem; margin-top: 0.15rem; }
+    .fp-name-row { display: flex; align-items: center; justify-content: center; margin-top: 0.75rem; }
+    .fp-name {
+      font-family: 'Fredoka', 'Lato', Arial, sans-serif; font-weight: 700;
+      font-size: 2.3rem; text-align: center;
+    }
+    /* Edit-mode replacement for .fp-name — same visual weight, but an
+       editable box instead of static text (only shown while editing). */
+    .fp-name-edit-box { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
+    .fp-name-edit-label {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #999;
+    }
+    .fp-name-edit-input {
+      font-family: 'Fredoka', 'Lato', Arial, sans-serif; font-weight: 700; font-size: 1.5rem; text-align: center;
+      background: #1e1e1e; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
+      color: #f0f0f0; padding: 0.5rem 1.25rem; min-width: 260px;
+    }
+    .fp-name-edit-input:focus { outline: none; border-color: #7fa8d9; }
+    .fp-handle {
+      font-family: 'Fredoka', 'Lato', Arial, sans-serif;
+      color: #999; font-size: 1.1rem; margin-top: 0.2rem; text-align: center;
+    }
 
-    .fp-stats { display: flex; gap: 1.5rem; margin-top: 1rem; padding-bottom: 1.25rem; }
-    .fp-stat b { font-size: 0.95rem; }
-    .fp-stat span { color: #999; font-size: 0.85rem; margin-left: 0.3rem; }
+    .fp-stats {
+      display: flex; justify-content: center; gap: 1.75rem; margin-top: 1.1rem; padding-bottom: 1.25rem;
+      font-family: 'Fredoka', 'Lato', Arial, sans-serif;
+    }
+    .fp-stat {
+      background: none; border: none; cursor: pointer; font-family: inherit; color: inherit;
+      padding: 0.15rem 0.3rem; border-radius: 8px; transition: background 0.15s;
+    }
+    .fp-stat:hover { background: rgba(255,255,255,0.08); }
+    .fp-stat b { font-size: 1.15rem; }
+    .fp-stat span { color: #999; font-size: 1rem; margin-left: 0.3rem; }
 
-    /* ── Home / Activity tabs (Wattpad-style) ── */
-    .fp-tabs { display: flex; gap: 2rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    /* ── Followers / Following list modal (Wattpad-style) ── */
+    .fp-follow-modal-overlay {
+      position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
+      display: flex; align-items: flex-start; justify-content: center; padding: 4vh 1rem;
+    }
+    .fp-follow-modal {
+      background: #171717; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+      width: 100%; max-width: 480px; max-height: 88vh; display: flex; flex-direction: column;
+      box-shadow: 0 24px 70px rgba(0,0,0,0.6);
+    }
+    .fp-follow-modal-header {
+      position: relative; padding: 1.4rem 1.5rem; text-align: center;
+      border-bottom: 1px solid rgba(255,255,255,0.1); flex-shrink: 0;
+    }
+    .fp-follow-modal-title { font-family: 'Fredoka', 'Lato', Arial, sans-serif; font-size: 1.2rem; font-weight: 700; }
+    .fp-follow-modal-close {
+      position: absolute; top: 0.9rem; right: 1rem; width: 32px; height: 32px; border-radius: 50%;
+      background: none; border: none; color: #999; font-size: 1.15rem; cursor: pointer;
+    }
+    .fp-follow-modal-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .fp-follow-list { overflow-y: auto; padding: 0.5rem; }
+    .fp-follow-row {
+      display: flex; align-items: center; gap: 0.85rem; padding: 0.7rem 0.75rem; border-radius: 10px;
+    }
+    .fp-follow-row:hover { background: rgba(255,255,255,0.05); }
+    .fp-follow-avatar, .fp-follow-avatar-fallback {
+      width: 46px; height: 46px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    }
+    .fp-follow-avatar-fallback {
+      background: linear-gradient(135deg, #7fa8d9, #d97a72); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-weight: 700;
+    }
+    .fp-follow-info { min-width: 0; flex: 1; }
+    .fp-follow-name-row { display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; }
+    .fp-follow-name { font-weight: 700; font-size: 0.95rem; text-decoration: none; color: inherit; }
+    .fp-follow-name:hover { color: #7fa8d9; }
+    .fp-follow-handle { color: #999; font-size: 0.82rem; }
+    .fp-follow-sub { color: #888; font-size: 0.78rem; margin-top: 0.1rem; }
+    .fp-follow-btn {
+      flex-shrink: 0; border: none; cursor: pointer; font-family: inherit;
+      font-size: 0.8rem; font-weight: 700; padding: 0.5rem 1.1rem; border-radius: 20px;
+    }
+    .fp-follow-btn--follow { background: #f0f0f0; color: #0d0d0d; }
+    .fp-follow-btn--follow:hover { background: #cfcfcf; }
+    .fp-follow-btn--following {
+      background: #1fb6a8; color: #fff; border: none;
+      display: inline-flex; align-items: center; gap: 0.4rem;
+    }
+    .fp-follow-btn--following:hover { background: #d97a72; }
+    .fp-follow-btn--following .fp-follow-check { font-weight: 700; }
+    .fp-follow-empty, .fp-follow-loading { text-align: center; color: #888; font-size: 0.88rem; padding: 2.5rem 1rem; }
+
+    /* ── Home / Characters / Gallery tabs (Wattpad-style) ── */
+    .fp-tabs-row {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .fp-tabs { display: flex; align-items: baseline; gap: 2rem; }
     .fp-tab {
       background: none; border: none; cursor: pointer; color: #999;
       font-family: inherit; font-size: 0.95rem; font-weight: 700;
@@ -149,17 +269,13 @@
       height: 3px; background: #f0c060; border-radius: 2px;
     }
 
-    .fp-activity-view { max-width: 1200px; margin: 0 auto; padding: 2rem; }
-    .fp-activity-empty {
+    .fp-tab-view { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    .fp-tab-view-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1.25rem; }
+    .fp-tab-view-grid .fp-featured-card { width: auto; }
+    .fp-tab-view-empty {
       text-align: center; color: #999; font-size: 0.9rem; padding: 3rem 1rem;
-      border: 1px dashed rgba(255,255,255,0.12); border-radius: 14px;
+      border: 1px dashed rgba(255,255,255,0.12); border-radius: 14px; grid-column: 1 / -1;
     }
-    .fp-activity-item {
-      display: flex; gap: 0.9rem; padding: 1rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-    .fp-activity-icon { font-size: 1.2rem; flex-shrink: 0; }
-    .fp-activity-text { font-size: 0.9rem; color: #ddd; }
-    .fp-activity-time { display: block; color: #777; font-size: 0.78rem; margin-top: 0.2rem; }
 
     /* ── Body: About (~33%) | Stories | Links ── */
     .fp-body {
@@ -301,29 +417,53 @@
     .fp-disclaimer-sig { display: block; margin-top: 0.75rem; color: #ccc; }
 
     /* ── In-line editor bar ──
-       Fixed (not sticky) and glued directly under the nav bar, so it never
-       scrolls away — matches .fpnav-bar's own fixed positioning above it. */
+       While editing, this replaces the main Fanpages nav bar entirely
+       (rather than stacking below it) — fixed at the very top, same spot
+       the nav bar normally occupies. */
     .fp-edit-bar {
-      position: fixed; top: 64px; left: 0; right: 0; width: 100%; height: 56px;
+      position: fixed; top: 0; left: 0; right: 0; width: 100%; height: 80px;
       z-index: 150; box-sizing: border-box;
       display: flex; align-items: center; justify-content: space-between;
       background: #1a1a1a; border-bottom: 1px solid rgba(255,255,255,0.1);
       padding: 0 2rem;
     }
-    /* Reserves the edit bar's height in the flow while it's shown, so fixed
-       positioning doesn't yank the banner up underneath it. */
-    body.fp-editing .fp-banner-wrap { margin-top: 56px; }
-    .fp-edit-bar-label { font-size: 0.9rem; color: #ccc; font-weight: 700; }
-    .fp-edit-bar-actions { display: flex; gap: 0.6rem; }
+    /* The main nav bar's reserved space (#fanpages-topbar-root) disappears
+       along with it in edit mode, so the edit bar's own height is the only
+       offset the banner needs to compensate for. */
+    body.fp-editing #fanpages-topbar-root { display: none; }
+    body.fp-editing .fp-banner-wrap { margin-top: 80px; }
+    .fp-edit-bar-label { font-size: 1rem; color: #ccc; font-weight: 700; }
+    .fp-edit-bar-actions { display: flex; align-items: center; gap: 0.75rem; margin-right: 8vw; }
+    /* Deliberately not Lato/inherit (that's what Wattpad's own save/cancel
+       buttons use) — Fredoka gives these a distinct, rounder look. */
     .fp-edit-btn {
-      border: none; cursor: pointer; font-family: inherit; font-size: 0.85rem; font-weight: 700;
-      padding: 0.55rem 1.3rem; border-radius: 6px;
+      border: none; cursor: pointer; font-family: 'Fredoka', 'Lato', Arial, sans-serif;
+      font-size: 1rem; font-weight: 600;
+      padding: 0.75rem 1.7rem; border-radius: 22px;
     }
     .fp-edit-btn--cancel { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #f0f0f0; }
     .fp-edit-btn--cancel:hover { border-color: #f0f0f0; }
-    .fp-edit-btn--save { background: #e2542d; color: #fff; }
-    .fp-edit-btn--save:hover { background: #c8492a; }
+    .fp-edit-btn--save { background: #1fb6a8; color: #fff; }
+    .fp-edit-btn--save:hover { background: #1a9d91; }
     .fp-edit-btn:disabled { opacity: 0.6; cursor: default; }
+
+    /* ── Edit-mode layout reorganization — hides everything that isn't
+       actually editable here (handle/follow stats, tabs, the clickable
+       story grid that used to boot you off the page, Featured Characters/
+       Gallery, the disclaimer) and pulls About + Links into a centered,
+       ~2-column layout instead of the normal 3-column About/Stories/Links
+       spread. ── */
+    body.fp-editing .fp-handle,
+    body.fp-editing .fp-stats,
+    body.fp-editing .fp-tabs-row,
+    body.fp-editing .fp-stories-panel,
+    body.fp-editing .fp-featured,
+    body.fp-editing .fp-disclaimer {
+      display: none !important;
+    }
+    body.fp-editing .fp-body {
+      grid-template-columns: 1fr 320px; max-width: 800px;
+    }
 
     [hidden] { display: none !important; }
 
@@ -339,13 +479,6 @@
 <div class="fp-edit-bar" id="fp-edit-bar" hidden>
   <span class="fp-edit-bar-label">Currently editing your profile</span>
   <div class="fp-edit-bar-actions">
-    <div class="fp-theme-picker">
-      <button type="button" class="fp-theme-btn" id="fp-theme-btn">🎨 Theme</button>
-      <div class="fp-theme-popover" id="fp-theme-popover" hidden>
-        <p class="fp-theme-popover-label">Profile Background</p>
-        <div class="fp-theme-grid" id="fp-theme-grid"></div>
-      </div>
-    </div>
     <button type="button" id="fp-edit-save" class="fp-edit-btn fp-edit-btn--save">Save Changes</button>
     <button type="button" id="fp-edit-cancel" class="fp-edit-btn fp-edit-btn--cancel">Cancel</button>
   </div>
@@ -362,6 +495,8 @@
 <div class="fp-banner-wrap" id="fp-banner-wrap">
   <img id="fp-banner-img" alt="Banner" />
 
+  <button type="button" class="fp-banner-edit-pencil" id="fp-banner-edit-pencil" hidden title="Edit banner image">✏️</button>
+
   <div class="fp-banner-camera-wrap" id="fp-banner-camera-wrap" hidden>
     <button type="button" class="fp-banner-camera-btn" id="fp-banner-camera-btn">📷 Change Banner Image</button>
     <span class="fp-banner-camera-hint">Recommended size: 1500 × 500px</span>
@@ -374,11 +509,24 @@
   </div>
 </div>
 
+<!-- Everything below the banner — the theme-wheel shortcut is anchored to
+     this wrapper and only fades in while hovering somewhere in here, never
+     over the banner itself (which has its own pencil shortcut instead). -->
+<div class="fp-main-area" id="fp-main-area">
+
+  <div class="fp-theme-picker fp-theme-picker--floating" id="fp-theme-picker-wrap" hidden>
+    <button type="button" class="fp-theme-btn" id="fp-theme-btn" title="Change profile background">🎨</button>
+    <div class="fp-theme-popover" id="fp-theme-popover" hidden>
+      <p class="fp-theme-popover-label">Profile Background</p>
+      <div class="fp-theme-grid" id="fp-theme-grid"></div>
+    </div>
+  </div>
+
 <div class="fp-header">
   <div class="fp-avatar-wrap">
     <img class="fp-avatar" id="fp-avatar-img" alt="" style="display:none;" draggable="false" />
     <div class="fp-avatar fp-avatar-fallback" id="fp-avatar-fallback">?</div>
-    <button type="button" class="fp-avatar-camera-btn" id="fp-avatar-camera-btn" hidden>📷</button>
+    <button type="button" class="fp-avatar-camera-btn" id="fp-avatar-camera-btn" hidden>📷 Change Pfp</button>
     <input type="file" id="fp-avatar-file-input" accept="image/*" hidden />
     <div class="fp-avatar-reposition" id="fp-avatar-reposition" hidden>
       <label>H <input type="range" id="fp-avatar-slider-x" min="0" max="100" value="50" /></label>
@@ -387,21 +535,30 @@
   </div>
   <p class="fp-avatar-hint" id="fp-avatar-hint" hidden>Recommended: 400 × 400px</p>
 
-  <div class="fp-header-row">
-    <div class="fp-header-action" id="fp-header-actions"></div>
-  </div>
+  <div class="fp-header-row"></div>
 
-  <h1 class="fp-name" id="fp-name">Loading…</h1>
+  <div class="fp-name-row">
+    <h1 class="fp-name" id="fp-name">Loading…</h1>
+    <div class="fp-name-edit-box" id="fp-name-edit-box" hidden>
+      <span class="fp-name-edit-label">Name</span>
+      <input type="text" class="fp-name-edit-input" id="fp-name-edit-input" maxlength="20" placeholder="Display name" />
+    </div>
+  </div>
   <p class="fp-handle" id="fp-handle"></p>
 
   <div class="fp-stats">
-    <span class="fp-stat"><b id="fp-following-count">0</b><span>Following</span></span>
-    <span class="fp-stat"><b id="fp-follower-count">0</b><span>Followers</span></span>
+    <button type="button" class="fp-stat" id="fp-following-stat"><b id="fp-following-count">0</b><span>Following</span></button>
+    <button type="button" class="fp-stat" id="fp-follower-stat"><b id="fp-follower-count">0</b><span>Followers</span></button>
   </div>
 
-  <div class="fp-tabs">
-    <button class="fp-tab active" id="fp-tab-home" type="button">Home</button>
-    <button class="fp-tab" id="fp-tab-activity" type="button">Activity</button>
+  <div class="fp-tabs-row">
+    <div class="fp-tabs">
+      <button class="fp-tab active" id="fp-tab-home" type="button">Home</button>
+      <button class="fp-tab" id="fp-tab-characters" type="button">Characters</button>
+      <button class="fp-tab" id="fp-tab-gallery" type="button">Gallery</button>
+      <button class="fp-tab" id="fp-tab-stories" type="button">Stories</button>
+    </div>
+    <div class="fp-header-action" id="fp-header-actions"></div>
   </div>
 </div>
 
@@ -414,7 +571,7 @@
       <div id="fp-about-rows"></div>
     </div>
 
-    <div>
+    <div class="fp-stories-panel">
       <p class="fp-stories-title">Stories</p>
       <div class="fp-story-grid" id="fp-story-grid"></div>
     </div>
@@ -448,9 +605,7 @@
       <p>
         <span class="fp-disclaimer-highlight">btwfanfic.net</span> is a website made by <a href="/">VeekitPaws</a>, the author of <strong>Between Two Worlds</strong>.
         Consider supporting our website and the original book by <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donating Here</a>.
-      </p>
-      <p>
-        Donations are completely optional, and they help host this website and support my solo developer dreams as I keep designing features for all of you to enjoy! I appreciate each and every one of you! &lt;3
+        Donations are completely optional, and they help support this site + keep this little 'vee nice and fed! I appreciate you all for hanging out! &lt;3
       </p>
       <span class="fp-disclaimer-sig">— VeekitPaws</span>
     </div>
@@ -458,11 +613,31 @@
 
 </div>
 
-<div class="fp-activity-view" id="fp-activity-view" hidden>
-  <div id="fp-activity-list"></div>
+<div class="fp-tab-view" id="fp-characters-view" hidden>
+  <div class="fp-tab-view-grid" id="fp-characters-grid"></div>
 </div>
 
+<div class="fp-tab-view" id="fp-gallery-view" hidden>
+  <div class="fp-tab-view-grid" id="fp-gallery-grid"></div>
+</div>
+
+<div class="fp-tab-view" id="fp-stories-view" hidden>
+  <div class="fp-story-grid" id="fp-stories-grid"></div>
+</div>
+
+</div> <!-- /.fp-main-area -->
+
 </div> <!-- /.fp-bg-wrap -->
+
+<div class="fp-follow-modal-overlay" id="fp-follow-modal-overlay" hidden>
+  <div class="fp-follow-modal">
+    <div class="fp-follow-modal-header">
+      <p class="fp-follow-modal-title" id="fp-follow-modal-title">Followers</p>
+      <button type="button" class="fp-follow-modal-close" id="fp-follow-modal-close" aria-label="Close">✕</button>
+    </div>
+    <div class="fp-follow-list" id="fp-follow-list"><p class="fp-follow-loading">Loading…</p></div>
+  </div>
+</div>
 
 <script src="/fanpages/fanpages-nav.js"></script>
 <script>
@@ -472,9 +647,53 @@
   const here = window.location.pathname;
 
   let currentAuthor = null;
+  let currentStories = [];
   let editMode = false;
   let editLinks = [];
   let editFeatured = { character: [], gallery: [] };
+
+  function storyCardEl(s) {
+    const card = document.createElement('a');
+    card.className = 'fp-story-card';
+    card.href = `/fanpages/${s.story_path || s.slug}`;
+
+    if (s.cover_url) {
+      const img = document.createElement('img');
+      img.className = 'fp-story-cover';
+      img.src = s.cover_url;
+      img.alt = `${s.site_title} cover`;
+      card.appendChild(img);
+    } else {
+      // No custom cover? Fake one out of a blurred, zoomed-in crop of
+      // this author's own avatar with the story title lettered on it.
+      const wrap = document.createElement('div');
+      wrap.className = 'fp-story-cover fp-story-cover--generated';
+      const bg = document.createElement('div');
+      bg.className = 'fp-story-cover-bg';
+      if (currentAuthor && currentAuthor.avatar) bg.style.backgroundImage = `url(${currentAuthor.avatar})`;
+      wrap.appendChild(bg);
+      const title = document.createElement('span');
+      title.className = 'fp-story-cover-title';
+      title.textContent = s.site_title || 'Untitled Story';
+      wrap.appendChild(title);
+      card.appendChild(wrap);
+    }
+
+    const caption = document.createElement('p');
+    caption.className = 'fp-story-card-title';
+    caption.textContent = s.site_title;
+    card.appendChild(caption);
+    return card;
+  }
+
+  function renderStoriesGrid(grid) {
+    grid.innerHTML = '';
+    if (!currentStories.length) {
+      grid.innerHTML = '<p style="color:#999;font-size:0.9rem;">No stories yet.</p>';
+      return;
+    }
+    currentStories.forEach(s => grid.appendChild(storyCardEl(s)));
+  }
 
   // ── Profile theme — default (plain dark) or a custom blurred background ──
   function applyProfileTheme(themeId, bgUrl) {
@@ -565,21 +784,195 @@
   }
 
   // ── Tabs ──────────────────────────────────────────────────────────────
-  document.getElementById('fp-tab-home').addEventListener('click', () => switchTab('home'));
-  document.getElementById('fp-tab-activity').addEventListener('click', () => switchTab('activity'));
+  const TAB_NAMES = ['home', 'characters', 'gallery', 'stories'];
+  TAB_NAMES.forEach(t => document.getElementById(`fp-tab-${t}`).addEventListener('click', () => switchTab(t)));
 
   function switchTab(tab) {
-    document.getElementById('fp-tab-home').classList.toggle('active', tab === 'home');
-    document.getElementById('fp-tab-activity').classList.toggle('active', tab === 'activity');
-    document.getElementById('fp-home-view').hidden = tab !== 'home';
-    document.getElementById('fp-activity-view').hidden = tab !== 'activity';
-    if (tab === 'activity') renderActivity();
+    TAB_NAMES.forEach(t => {
+      document.getElementById(`fp-tab-${t}`).classList.toggle('active', t === tab);
+      document.getElementById(`fp-${t === 'home' ? 'home' : t}-view`).hidden = t !== tab;
+    });
+    if (tab === 'characters') loadCharactersTab();
+    if (tab === 'gallery') loadGalleryTab();
+    if (tab === 'stories') renderStoriesGrid(document.getElementById('fp-stories-grid'));
   }
 
-  function renderActivity() {
-    const list = document.getElementById('fp-activity-list');
-    list.innerHTML = `<p class="fp-activity-empty">No activity yet. When @${USERNAME} posts, comments, bookmarks, or updates their stories, it will show up here!</p>`;
+  // href is null for standalone (unlinked) characters/art — nothing useful
+  // to navigate to yet, so it renders as a plain non-clickable card instead
+  // of a dead link. deleteFn, when passed (owner viewing their own profile),
+  // adds a small trash button — the only way to permanently remove a
+  // standalone item now that story "remove" buttons just unlink.
+  function tabViewCard(href, imgSrc, posX, posY, title, deleteFn) {
+    const el = document.createElement(href ? 'a' : 'div');
+    el.className = 'fp-featured-card';
+    if (href) el.href = href;
+    const img = document.createElement('img');
+    img.className = 'fp-featured-card-img';
+    img.src = imgSrc;
+    img.alt = '';
+    img.style.objectPosition = `${posX != null ? posX : 50}% ${posY != null ? posY : 50}%`;
+    const p = document.createElement('p');
+    p.className = 'fp-featured-card-title';
+    p.textContent = title || 'Untitled';
+    el.appendChild(img);
+    el.appendChild(p);
+    if (deleteFn) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'fp-featured-remove';
+      btn.title = 'Delete permanently';
+      btn.textContent = '✕';
+      btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); deleteFn(); });
+      el.appendChild(btn);
+    }
+    return el;
   }
+
+  async function loadCharactersTab() {
+    const grid = document.getElementById('fp-characters-grid');
+    grid.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
+    try {
+      const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-characters`);
+      const data = await res.json();
+      const chars = data.characters || [];
+      if (!chars.length) {
+        grid.innerHTML = `<p class="fp-tab-view-empty">@${USERNAME} hasn't added any characters yet.</p>`;
+        return;
+      }
+      grid.innerHTML = '';
+      chars.forEach(c => grid.appendChild(tabViewCard(
+        `/fanpages/character?id=${c.id}`,
+        c.image || '/images/defaultchar.jpg', c.position_x, c.position_y, c.name,
+        (currentAuthor && currentAuthor.is_self) ? async () => {
+          if (!confirm(`Delete "${c.name}" permanently? This can't be undone.`)) return;
+          await fetch(`/api/characters/${c.id}`, { method: 'DELETE', headers: authHeaders() });
+          loadCharactersTab();
+        } : null
+      )));
+    } catch {
+      grid.innerHTML = '<p class="fp-tab-view-empty">Couldn\'t load characters right now.</p>';
+    }
+  }
+
+  async function loadGalleryTab() {
+    const grid = document.getElementById('fp-gallery-grid');
+    grid.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
+    try {
+      const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-gallery`);
+      const data = await res.json();
+      const items = data.gallery || [];
+      if (!items.length) {
+        grid.innerHTML = `<p class="fp-tab-view-empty">@${USERNAME} hasn't posted any gallery art yet.</p>`;
+        return;
+      }
+      grid.innerHTML = '';
+      items.forEach(g => grid.appendChild(tabViewCard(
+        g.story_path ? `/fanpages/${g.story_path}/gallery` : null,
+        g.image, g.position_x, g.position_y, g.title,
+        (currentAuthor && currentAuthor.is_self) ? async () => {
+          if (!confirm(`Delete "${g.title || 'this post'}" permanently? This can't be undone.`)) return;
+          await fetch(`/api/gallery/${g.id}`, { method: 'DELETE', headers: authHeaders() });
+          loadGalleryTab();
+        } : null
+      )));
+    } catch {
+      grid.innerHTML = '<p class="fp-tab-view-empty">Couldn\'t load gallery art right now.</p>';
+    }
+  }
+
+  // ── Followers / Following modal ─────────────────────────────────────────
+  const fpFollowModalOverlay = document.getElementById('fp-follow-modal-overlay');
+  const fpFollowModalTitle = document.getElementById('fp-follow-modal-title');
+  const fpFollowList = document.getElementById('fp-follow-list');
+
+  function fpFollowRow(u) {
+    const row = document.createElement('div');
+    row.className = 'fp-follow-row';
+
+    const avatarWrap = document.createElement('a');
+    avatarWrap.href = `/fanpages/${u.username}`;
+    if (u.avatar) {
+      const img = document.createElement('img');
+      img.className = 'fp-follow-avatar';
+      img.src = u.avatar;
+      img.alt = '';
+      avatarWrap.appendChild(img);
+    } else {
+      const fallback = document.createElement('span');
+      fallback.className = 'fp-follow-avatar-fallback';
+      fallback.textContent = (u.display_name || u.username).charAt(0).toUpperCase();
+      avatarWrap.appendChild(fallback);
+    }
+    row.appendChild(avatarWrap);
+
+    const info = document.createElement('div');
+    info.className = 'fp-follow-info';
+    const nameRow = document.createElement('div');
+    nameRow.className = 'fp-follow-name-row';
+    const nameLink = document.createElement('a');
+    nameLink.className = 'fp-follow-name';
+    nameLink.href = `/fanpages/${u.username}`;
+    nameLink.textContent = u.display_name;
+    const handle = document.createElement('span');
+    handle.className = 'fp-follow-handle';
+    handle.textContent = `@${u.username}`;
+    nameRow.appendChild(nameLink);
+    nameRow.appendChild(handle);
+    const sub = document.createElement('p');
+    sub.className = 'fp-follow-sub';
+    sub.textContent = `${u.works_count} ${u.works_count === 1 ? 'Story' : 'Stories'} • ${u.follower_count} ${u.follower_count === 1 ? 'Follower' : 'Followers'}`;
+    info.appendChild(nameRow);
+    info.appendChild(sub);
+    row.appendChild(info);
+
+    if (!u.is_self && token) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      let following = u.is_following;
+      function paint() {
+        btn.className = 'fp-follow-btn ' + (following ? 'fp-follow-btn--following' : 'fp-follow-btn--follow');
+        btn.innerHTML = following ? '<span class="fp-follow-check">✓</span> Following' : 'Follow';
+      }
+      paint();
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await fetch(`/api/follows/${u.username}`, { method: following ? 'DELETE' : 'POST', headers: authHeaders() });
+          following = !following;
+          paint();
+          if (u.username === USERNAME || following !== u.is_following) loadProfile();
+        } catch {}
+        btn.disabled = false;
+      });
+      row.appendChild(btn);
+    }
+
+    return row;
+  }
+
+  async function openFollowModal(kind) {
+    fpFollowModalTitle.textContent = kind === 'followers' ? 'Followers' : 'Following';
+    fpFollowList.innerHTML = '<p class="fp-follow-loading">Loading…</p>';
+    fpFollowModalOverlay.hidden = false;
+    try {
+      const res = await fetch(`/api/fanpage-profile/${USERNAME}/${kind}`, { headers: authHeaders() });
+      const data = await res.json();
+      const users = data.users || [];
+      if (!users.length) {
+        fpFollowList.innerHTML = `<p class="fp-follow-empty">No ${kind === 'followers' ? 'followers' : 'following'} yet.</p>`;
+        return;
+      }
+      fpFollowList.innerHTML = '';
+      users.forEach(u => fpFollowList.appendChild(fpFollowRow(u)));
+    } catch {
+      fpFollowList.innerHTML = '<p class="fp-follow-empty">Couldn\'t load this list right now.</p>';
+    }
+  }
+
+  document.getElementById('fp-following-stat').addEventListener('click', () => openFollowModal('following'));
+  document.getElementById('fp-follower-stat').addEventListener('click', () => openFollowModal('followers'));
+  document.getElementById('fp-follow-modal-close').addEventListener('click', () => { fpFollowModalOverlay.hidden = true; });
+  fpFollowModalOverlay.addEventListener('click', (e) => { if (e.target === fpFollowModalOverlay) fpFollowModalOverlay.hidden = true; });
 
   // ── Featured rows (display mode) ────────────────────────────────────────
   function renderFeaturedRow(containerId, items, emptyText) {
@@ -613,7 +1006,7 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'fp-action-btn fp-action-btn--edit';
-      btn.textContent = 'Edit Profile';
+      btn.innerHTML = '<span class="fp-action-btn--edit-gear">⚙️</span> Edit Profile';
       btn.addEventListener('click', enterEditMode);
       wrap.appendChild(btn);
       return;
@@ -633,7 +1026,7 @@
     let following = isFollowing;
     function paint() {
       btn.className = 'fp-action-btn ' + (following ? 'fp-action-btn--following' : 'fp-action-btn--follow');
-      btn.textContent = following ? 'Following' : 'Follow';
+      btn.innerHTML = following ? '<span class="fp-follow-check">✓</span> Following' : 'Follow';
     }
     paint();
     btn.addEventListener('click', async () => {
@@ -686,6 +1079,10 @@
     document.getElementById('fp-avatar-camera-btn').hidden = false;
     document.getElementById('fp-avatar-hint').hidden = false;
 
+    document.getElementById('fp-name').hidden = true;
+    document.getElementById('fp-name-edit-box').hidden = false;
+    document.getElementById('fp-name-edit-input').value = currentAuthor.display_name || '';
+
     bannerPos = currentAuthor.banner_position_y != null ? currentAuthor.banner_position_y : 50;
     document.getElementById('fp-banner-slider').value = bannerPos;
     document.getElementById('fp-banner-reposition').hidden = isDefaultBanner();
@@ -718,8 +1115,13 @@
     document.getElementById('fp-featured-characters').hidden = false;
     document.getElementById('fp-featured-gallery-editor').hidden = true;
     document.getElementById('fp-featured-gallery').hidden = false;
+    document.getElementById('fp-name').hidden = false;
+    document.getElementById('fp-name-edit-box').hidden = true;
     loadProfile();
   }
+
+  // Hover-revealed shortcut straight into edit mode from the banner itself.
+  document.getElementById('fp-banner-edit-pencil').addEventListener('click', enterEditMode);
 
   // Banner image upload — instant local preview, then real upload; the
   // reposition slider follows the story-editor pattern (debounced auto-save).
@@ -831,6 +1233,8 @@
         if (el) fields[key] = el.value;
       });
       fields.account_links = editLinks.filter(l => l.url);
+      const nameVal = document.getElementById('fp-name-edit-input').value.trim();
+      if (nameVal) fields.display_name = nameVal;
 
       await fetch('/api/account/profile', {
         method: 'PUT',
@@ -989,6 +1393,9 @@
         ? `center ${a.banner_position_y != null ? a.banner_position_y : 50}%`
         : 'center';
 
+      document.getElementById('fp-banner-edit-pencil').hidden = !a.is_self;
+      document.getElementById('fp-theme-picker-wrap').hidden = !a.is_self;
+
       if (a.avatar) {
         const img = document.getElementById('fp-avatar-img');
         img.src = a.avatar;
@@ -1032,46 +1439,8 @@
       renderFeaturedRow('fp-featured-gallery', a.featured_gallery, 'No featured gallery.');
 
       // Stories
-      const grid = document.getElementById('fp-story-grid');
-      grid.innerHTML = '';
-      if (!data.stories.length) {
-        grid.innerHTML = '<p style="color:#999;font-size:0.9rem;">No stories yet.</p>';
-      } else {
-        data.stories.forEach(s => {
-          const card = document.createElement('a');
-          card.className = 'fp-story-card';
-          card.href = `/fanpages/${s.story_path || s.slug}`;
-
-          if (s.cover_url) {
-            const img = document.createElement('img');
-            img.className = 'fp-story-cover';
-            img.src = s.cover_url;
-            img.alt = `${s.site_title} cover`;
-            card.appendChild(img);
-          } else {
-            // No custom cover? Fake one out of a blurred, zoomed-in crop of
-            // this author's own avatar with the story title lettered on it.
-            const wrap = document.createElement('div');
-            wrap.className = 'fp-story-cover fp-story-cover--generated';
-            const bg = document.createElement('div');
-            bg.className = 'fp-story-cover-bg';
-            if (a.avatar) bg.style.backgroundImage = `url(${a.avatar})`;
-            wrap.appendChild(bg);
-            const title = document.createElement('span');
-            title.className = 'fp-story-cover-title';
-            title.textContent = s.site_title || 'Untitled Story';
-            wrap.appendChild(title);
-            card.appendChild(wrap);
-          }
-
-          const caption = document.createElement('p');
-          caption.className = 'fp-story-card-title';
-          caption.textContent = s.site_title;
-          card.appendChild(caption);
-
-          grid.appendChild(card);
-        });
-      }
+      currentStories = data.stories || [];
+      renderStoriesGrid(document.getElementById('fp-story-grid'));
 
       renderActions(a, data.is_following);
 
@@ -1085,6 +1454,9 @@
 
   buildThemeGrid();
   loadProfile();
+
+  const initialTab = ['characters', 'gallery', 'stories'].includes(location.hash.slice(1)) ? location.hash.slice(1) : null;
+  if (initialTab) switchTab(initialTab);
 </script>
 
 </body>

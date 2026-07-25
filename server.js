@@ -174,6 +174,8 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_position_y INTEGER NOT NULL DEFAULT 50;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_theme TEXT NOT NULL DEFAULT 'default';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_theme_bg_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_theme TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_theme_bg_url TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('account profile fields migration:', e.message));
   // Add newsletter opt-in column if missing (default true for existing users)
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_newsletter BOOLEAN DEFAULT true`).catch(() => {});
@@ -340,6 +342,48 @@ async function initDb() {
     ALTER TABLE hub_billboard_slides ADD COLUMN IF NOT EXISTS end_zoom INTEGER NOT NULL DEFAULT 100;
   `).catch(e => console.error('hub_billboard_slides animation migration:', e.message));
 
+  // Notifications — the bell icon on Fanpages. Covers system messages (the
+  // welcome note) today; bookmark/follow/like/comment/social activity gets
+  // wired up to insert rows here as those features land.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id            SERIAL      PRIMARY KEY,
+      user_id       INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      actor_user_id INTEGER     REFERENCES users(id) ON DELETE SET NULL,
+      type          TEXT        NOT NULL DEFAULT 'system',
+      message       TEXT        NOT NULL,
+      link          TEXT,
+      is_read       BOOLEAN     NOT NULL DEFAULT FALSE,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);
+  `).catch(e => console.error('notifications migration:', e.message));
+
+  // Notifications page banner — single-row admin-adjustable crop, mirrors the
+  // billboard's position_x/y + zoom fields but with no animation.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS notif_page_banner (
+      id         INTEGER PRIMARY KEY DEFAULT 1,
+      image_url  TEXT    NOT NULL DEFAULT '/images/gallery/autumnleave_11.png',
+      position_x INTEGER NOT NULL DEFAULT 50,
+      position_y INTEGER NOT NULL DEFAULT 40,
+      zoom       INTEGER NOT NULL DEFAULT 100,
+      CONSTRAINT notif_page_banner_singleton CHECK (id = 1)
+    );
+    INSERT INTO notif_page_banner (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+  `).catch(e => console.error('notif_page_banner migration:', e.message));
+
+  // Backfill the default welcome notification for every user who doesn't
+  // have one yet (covers both existing accounts on first deploy and any
+  // account created before this migration ran on a given restart).
+  await pool.query(`
+    INSERT INTO notifications (user_id, actor_user_id, type, message)
+    SELECT u.id, (SELECT id FROM users WHERE email_hash = $1), 'welcome',
+           'Welcome to Between Two Worlds! Where adventure awaits~'
+    FROM users u
+    WHERE NOT EXISTS (SELECT 1 FROM notifications n WHERE n.user_id = u.id AND n.type = 'welcome')
+  `, [process.env.ADMIN_EMAIL_HASH]).catch(e => console.error('notifications welcome backfill:', e.message));
+
   // story_path is the actual URL under /fanpages/ (e.g. "blue/above-all-else") —
   // separate from slug (the moderator's own identity) since one person can
   // eventually have more than one story nested under their own folder.
@@ -368,6 +412,56 @@ async function initDb() {
       UNIQUE(follower_id, followed_id)
     );
   `).catch(e => console.error('user_follows migration:', e.message));
+
+  // Fanpages DM system — a genuine user-to-user chat (separate from the
+  // admin-only /inbox note system). Starting a chat with someone requires
+  // already following them, and creates a 'pending' thread; the recipient
+  // has to accept before it counts as a real conversation.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS dm_threads (
+      id          SERIAL      PRIMARY KEY,
+      user_a_id   INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_b_id   INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status      TEXT        NOT NULL DEFAULT 'pending',
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      accepted_at TIMESTAMPTZ,
+      CHECK (user_a_id <> user_b_id)
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_dm_threads_pair
+      ON dm_threads (LEAST(user_a_id, user_b_id), GREATEST(user_a_id, user_b_id));
+
+    CREATE TABLE IF NOT EXISTS dm_messages (
+      id         SERIAL      PRIMARY KEY,
+      thread_id  INTEGER     NOT NULL REFERENCES dm_threads(id) ON DELETE CASCADE,
+      sender_id  INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body       TEXT        NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      read_at    TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_dm_messages_thread ON dm_messages(thread_id, created_at);
+  `).catch(e => console.error('dm_threads/dm_messages migration:', e.message));
+
+  // High Priority broadcasts — every newsletter also lands as a dismissible
+  // chat from the "BTW Team" system account instead of just an email.
+  await pool.query(`
+    ALTER TABLE dm_threads ADD COLUMN IF NOT EXISTS is_priority BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE dm_threads ADD COLUMN IF NOT EXISTS dismissed_at TIMESTAMPTZ;
+  `).catch(e => console.error('dm_threads priority migration:', e.message));
+
+  await pool.query(`
+    ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]';
+  `).catch(e => console.error('dm_messages attachments migration:', e.message));
+
+  await (async () => {
+    const { rows: [existing] } = await pool.query("SELECT id FROM users WHERE username = 'btwteam'");
+    if (existing) return;
+    const teamPasswordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
+    await pool.query(
+      `INSERT INTO users (username, display_name, email, email_hash, password_hash, verified, avatar)
+       VALUES ('btwteam', 'BTW Team', $1, $2, $3, true, '/images/gallery/pixiegarden_5.png')`,
+      [encryptEmail('btwteam@system.internal'), hashEmail('btwteam@system.internal'), teamPasswordHash]
+    );
+  })().catch(e => console.error('btwteam system user create:', e.message));
 
   // Featured Characters / Featured Gallery on a user's /fanpages/:username profile.
   // Deliberately denormalized (cached title/image/link) rather than a strict
@@ -408,6 +502,55 @@ async function initDb() {
     ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS position_x INTEGER NOT NULL DEFAULT 50;
     ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS position_y INTEGER NOT NULL DEFAULT 50;
   `).catch(e => console.error('moderator_gallery position migration:', e.message));
+
+  // Characters and gallery posts become independent of any single story:
+  // ownership moves to the creating user (site_id becomes optional/legacy),
+  // and a junction table tracks which stories a character/gallery post is
+  // linked into — many-to-many, so e.g. one recurring character can be
+  // linked into ten different one-shots at once.
+  await pool.query(`
+    ALTER TABLE moderator_characters ALTER COLUMN site_id DROP NOT NULL;
+    ALTER TABLE moderator_gallery ALTER COLUMN site_id DROP NOT NULL;
+    ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS owner_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+    ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS owner_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+
+    UPDATE moderator_characters mc SET owner_user_id = ms.owner_user_id
+      FROM moderator_sites ms WHERE ms.id = mc.site_id AND mc.owner_user_id IS NULL;
+    UPDATE moderator_gallery mg SET owner_user_id = ms.owner_user_id
+      FROM moderator_sites ms WHERE ms.id = mg.site_id AND mg.owner_user_id IS NULL;
+
+    CREATE TABLE IF NOT EXISTS character_story_links (
+      id           SERIAL      PRIMARY KEY,
+      character_id INTEGER     NOT NULL REFERENCES moderator_characters(id) ON DELETE CASCADE,
+      site_id      INTEGER     NOT NULL REFERENCES moderator_sites(id) ON DELETE CASCADE,
+      sort_order   INTEGER     NOT NULL DEFAULT 0,
+      created_at   TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(character_id, site_id)
+    );
+    CREATE TABLE IF NOT EXISTS gallery_story_links (
+      id         SERIAL      PRIMARY KEY,
+      gallery_id INTEGER     NOT NULL REFERENCES moderator_gallery(id) ON DELETE CASCADE,
+      site_id    INTEGER     NOT NULL REFERENCES moderator_sites(id) ON DELETE CASCADE,
+      sort_order INTEGER     NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(gallery_id, site_id)
+    );
+
+    INSERT INTO character_story_links (character_id, site_id, sort_order)
+      SELECT id, site_id, sort_order FROM moderator_characters WHERE site_id IS NOT NULL
+      ON CONFLICT (character_id, site_id) DO NOTHING;
+    INSERT INTO gallery_story_links (gallery_id, site_id, sort_order)
+      SELECT id, site_id, sort_order FROM moderator_gallery WHERE site_id IS NOT NULL
+      ON CONFLICT (gallery_id, site_id) DO NOTHING;
+
+    -- site_id is now fully superseded by the link tables above (and new rows
+    -- never set it going forward) — null it out so the column's original
+    -- "ON DELETE CASCADE REFERENCES moderator_sites" FK can never again
+    -- delete a character/gallery post just because ONE of its linked
+    -- stories was deleted.
+    UPDATE moderator_characters SET site_id = NULL WHERE site_id IS NOT NULL;
+    UPDATE moderator_gallery SET site_id = NULL WHERE site_id IS NOT NULL;
+  `).catch(e => console.error('character/gallery story-links migration:', e.message));
 
   // Chapter authoring: teaser blurb, multiple "where to read" links, an optional
   // per-chapter cover image (falls back to the story cover when unset), and an
@@ -601,10 +744,17 @@ app.post('/api/auth/register', async (req, res) => {
     const verify_token  = crypto.randomBytes(32).toString('hex');
     const dname         = (display_name?.trim() || username).slice(0, 20);
 
-    await pool.query(
-      'INSERT INTO users (username, display_name, email, email_hash, password_hash, verify_token) VALUES ($1, $2, $3, $4, $5, $6)',
+    const { rows: [newUser] } = await pool.query(
+      'INSERT INTO users (username, display_name, email, email_hash, password_hash, verify_token) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
       [username.toLowerCase(), dname, encryptEmail(email.toLowerCase()), hashEmail(email), password_hash, verify_token]
     );
+
+    await pool.query(
+      `INSERT INTO notifications (user_id, actor_user_id, type, message)
+       VALUES ($1, (SELECT id FROM users WHERE email_hash = $2), 'welcome',
+               'Welcome to Between Two Worlds! Where adventure awaits~')`,
+      [newUser.id, process.env.ADMIN_EMAIL_HASH]
+    ).catch(e => console.error('welcome notification insert:', e.message));
 
     const verifyUrl = `https://${process.env.SITE_HOST}/api/auth/verify?token=${verify_token}`
       + (from ? `&from=${encodeURIComponent(from)}` : '');
@@ -748,7 +898,9 @@ app.post('/api/auth/login', async (req, res) => {
 // GET /api/auth/me
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
-    'SELECT id, username, display_name, avatar, avatar_position_x, avatar_position_y, email_hash FROM users WHERE id = $1', [req.user.id]
+    `SELECT id, username, display_name, avatar, avatar_position_x, avatar_position_y, email_hash,
+            notif_theme, notif_theme_bg_url
+     FROM users WHERE id = $1`, [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
   const is_admin = user.email_hash === process.env.ADMIN_EMAIL_HASH;
@@ -758,6 +910,7 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
     id: user.id, username: user.username, display_name: user.display_name, avatar: user.avatar || null,
     avatar_position_x: user.avatar_position_x, avatar_position_y: user.avatar_position_y,
     is_admin, is_moderator,
+    notif_theme: user.notif_theme || 'default', notif_theme_bg_url: user.notif_theme_bg_url || '',
   } });
 });
 
@@ -1904,10 +2057,13 @@ app.post('/api/admin/newsletter', requireAuth, uploadInbox.array('attachments', 
   const attachmentUrl  = attachments[0]?.url  || null;
   const attachmentName = attachments[0]?.name || null;
 
-  const { rows } = await pool.query(
+  // Two different audiences: EVERY user gets the in-app notice (main-site
+  // inbox + Fanpages High Priority chat) — only opted-in, verified users
+  // also get the actual email.
+  const { rows: allUsers } = await pool.query("SELECT id FROM users WHERE username <> 'btwteam'");
+  const { rows: emailRows } = await pool.query(
     `SELECT id, email FROM users WHERE email_newsletter = true AND verified = true`
   );
-  if (!rows.length) return res.json({ sent: 0 });
 
   const escaped = body.trim()
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -1918,8 +2074,9 @@ app.post('/api/admin/newsletter', requireAuth, uploadInbox.array('attachments', 
     .map(a => `<div style="margin-top:12px;"><img src="https://${process.env.SITE_HOST}${a.url}" alt="${a.name}" style="max-width:100%;border-radius:8px;" /></div>`)
     .join('');
 
+  // Actual email — opted-in + verified only.
   let sent = 0;
-  for (const row of rows) {
+  for (const row of emailRows) {
     const to = decryptEmail(row.email);
     if (!to || !to.includes('@')) continue;
     try {
@@ -1933,18 +2090,40 @@ app.post('/api/admin/newsletter', requireAuth, uploadInbox.array('attachments', 
       });
       sent++;
     } catch (err) { console.error('Newsletter send error to', to, err.message); }
+  }
 
-    // Also deliver to the user's inbox
+  // Main-site /inbox delivery + Fanpages High Priority chat — every user,
+  // regardless of email opt-in, since both are native in-app channels.
+  const { rows: [teamUser] } = await pool.query("SELECT id FROM users WHERE username = 'btwteam'");
+  const priorityBody = `📢 ${subject.trim()}\n\n${body.trim()}`;
+  for (const u of allUsers) {
     try {
       const { rows: [nm] } = await pool.query(
         'INSERT INTO inbox_messages (to_user_id, body, subject, is_admin, attachment_url, attachment_name, attachments) VALUES ($1, $2, $3, true, $4, $5, $6) RETURNING id',
-        [row.id, body.trim(), subject.trim(), attachmentUrl, attachmentName, JSON.stringify(attachments)]
+        [u.id, body.trim(), subject.trim(), attachmentUrl, attachmentName, JSON.stringify(attachments)]
       );
       await pool.query('UPDATE inbox_messages SET thread_id = $1 WHERE id = $1', [nm.id]);
     } catch (err) { console.error('Newsletter inbox delivery error:', err.message); }
+
+    if (teamUser) {
+      try {
+        const { rows: [thread] } = await pool.query(
+          `INSERT INTO dm_threads (user_a_id, user_b_id, status, is_priority, accepted_at, dismissed_at)
+           VALUES ($1, $2, 'accepted', true, NOW(), NULL)
+           ON CONFLICT (LEAST(user_a_id, user_b_id), GREATEST(user_a_id, user_b_id))
+           DO UPDATE SET is_priority = true, status = 'accepted', dismissed_at = NULL
+           RETURNING id`,
+          [teamUser.id, u.id]
+        );
+        await pool.query(
+          'INSERT INTO dm_messages (thread_id, sender_id, body, attachments) VALUES ($1, $2, $3, $4)',
+          [thread.id, teamUser.id, priorityBody, JSON.stringify(attachments)]
+        );
+      } catch (err) { console.error('Newsletter high-priority broadcast error:', err.message); }
+    }
   }
 
-  res.json({ sent, total: rows.length });
+  res.json({ sent, total: emailRows.length, notified: allUsers.length });
 });
 
 // GET /api/admin/newsletter/count — how many opted-in users
@@ -2243,6 +2422,34 @@ app.delete('/api/admin/hub-billboard/:id', requireAuth, requireAdmin, async (req
   res.json({ message: 'Deleted.' });
 });
 
+// ── Notifications page banner (admin-adjustable crop) ───────────────────────
+app.get('/api/notifications-banner', async (req, res) => {
+  const { rows: [banner] } = await pool.query('SELECT * FROM notif_page_banner WHERE id = 1');
+  res.json({ banner });
+});
+
+app.put('/api/admin/notifications-banner', requireAuth, requireAdmin, uploadModImage.single('image'), async (req, res) => {
+  const { rows: [existing] } = await pool.query('SELECT * FROM notif_page_banner WHERE id = 1');
+  const positionX = clampPosition(req.body.position_x);
+  const positionY = clampPosition(req.body.position_y);
+  const zoom = clampZoom(req.body.zoom, 100);
+
+  let imageUrl = existing.image_url;
+  if (req.file) {
+    imageUrl = `/images/moderators/${req.file.filename}`;
+    if (existing.image_url.startsWith('/images/moderators/')) {
+      const oldPath = path.join('/var/www/btw', existing.image_url);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+  }
+
+  const { rows: [banner] } = await pool.query(
+    'UPDATE notif_page_banner SET image_url = $1, position_x = $2, position_y = $3, zoom = $4 WHERE id = 1 RETURNING *',
+    [imageUrl, positionX, positionY, zoom]
+  );
+  res.json({ banner });
+});
+
 // POST /api/moderator/site/create — the Create Story onboarding flow.
 // Authors can have multiple stories; slug stays their username (their
 // fanpage identity), while story_path is the unique per-story
@@ -2443,6 +2650,101 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
   });
 });
 
+// Shared by the followers/following list modal — each row carries enough to
+// render a Wattpad-style card (avatar, works count, follower count) plus
+// whether the viewer already follows that row, for an inline Follow button.
+async function fanpageFollowList(req, res, direction) {
+  const { rows: [author] } = await pool.query(
+    'SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]
+  );
+  if (!author) return res.status(404).json({ error: 'Not found.' });
+
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+
+  const joinCol = direction === 'followers' ? 'f.follower_id' : 'f.followed_id';
+  const whereCol = direction === 'followers' ? 'f.followed_id' : 'f.follower_id';
+  const { rows } = await pool.query(
+    `SELECT u.id, u.username, u.display_name, u.avatar,
+            (SELECT COUNT(*)::int FROM moderator_sites WHERE owner_user_id = u.id) AS works_count,
+            (SELECT COUNT(*)::int FROM user_follows WHERE followed_id = u.id) AS follower_count,
+            EXISTS(SELECT 1 FROM user_follows WHERE follower_id = $2 AND followed_id = u.id) AS is_following
+     FROM user_follows f
+     JOIN users u ON u.id = ${joinCol}
+     WHERE ${whereCol} = $1
+     ORDER BY f.created_at DESC`,
+    [author.id, viewerId || 0]
+  );
+  res.json({
+    users: rows.map(r => ({
+      username: r.username, display_name: r.display_name || r.username, avatar: r.avatar || null,
+      works_count: r.works_count, follower_count: r.follower_count,
+      is_following: r.is_following, is_self: viewerId === r.id,
+    })),
+  });
+}
+app.get('/api/fanpage-profile/:username/followers', (req, res) => fanpageFollowList(req, res, 'followers'));
+app.get('/api/fanpage-profile/:username/following', (req, res) => fanpageFollowList(req, res, 'following'));
+
+// Full Characters / Gallery tabs on a user's profile — every character or
+// gallery post across ALL of that user's stories, not just the 3 featured
+// picks shown on Home. Gallery is filtered to sfw+sketches, same rule as
+// everywhere else spicy content is kept out of public-facing feeds.
+app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
+  const { rows: [author] } = await pool.query(
+    'SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]
+  );
+  if (!author) return res.status(404).json({ error: 'Not found.' });
+  const { rows } = await pool.query(
+    `SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y,
+            ms.story_path, ms.slug, ms.site_title
+     FROM moderator_characters mc
+     LEFT JOIN LATERAL (
+       SELECT site_id FROM character_story_links WHERE character_id = mc.id ORDER BY site_id LIMIT 1
+     ) csl ON true
+     LEFT JOIN moderator_sites ms ON ms.id = csl.site_id
+     WHERE mc.owner_user_id = $1
+     ORDER BY mc.created_at DESC`,
+    [author.id]
+  );
+  res.json({
+    characters: rows.map(r => ({
+      id: r.id, name: r.name, image: r.ref_image || null,
+      position_x: r.ref_position_x, position_y: r.ref_position_y,
+      story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
+    })),
+  });
+});
+
+app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
+  const { rows: [author] } = await pool.query(
+    'SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]
+  );
+  if (!author) return res.status(404).json({ error: 'Not found.' });
+  const { rows } = await pool.query(
+    `SELECT mg.id, mg.image_url, mg.title, mg.position_x, mg.position_y,
+            ms.story_path, ms.slug, ms.site_title
+     FROM moderator_gallery mg
+     LEFT JOIN LATERAL (
+       SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1
+     ) gsl ON true
+     LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
+     WHERE mg.owner_user_id = $1 AND mg.category IN ('sfw', 'sketches')
+     ORDER BY mg.created_at DESC`,
+    [author.id]
+  );
+  res.json({
+    gallery: rows.map(r => ({
+      id: r.id, image: r.image_url, title: r.title,
+      position_x: r.position_x, position_y: r.position_y,
+      story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
+    })),
+  });
+});
+
 app.post('/api/follows/:username', requireAuth, async (req, res) => {
   const { rows: [target] } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]);
   if (!target) return res.status(404).json({ error: 'Not found.' });
@@ -2461,25 +2763,266 @@ app.delete('/api/follows/:username', requireAuth, async (req, res) => {
   res.json({ message: 'Unfollowed.' });
 });
 
+// ── Fanpages DM system ───────────────────────────────────────────────────────
+async function findDmThread(id, userId) {
+  const { rows: [thread] } = await pool.query(
+    'SELECT * FROM dm_threads WHERE id = $1 AND (user_a_id = $2 OR user_b_id = $2)',
+    [id, userId]
+  );
+  return thread || null;
+}
+
+// Chats = accepted conversations, plus my own pending sent requests (so I can
+// see them awaiting the other person's response instead of them vanishing).
+app.get('/api/dm/chats', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT t.id, t.status, t.is_priority, t.user_a_id, t.user_b_id,
+            u.id AS other_id, u.username AS other_username, u.display_name AS other_display_name, u.avatar AS other_avatar,
+            m.body AS last_body, m.attachments AS last_attachments, m.created_at AS last_at, m.sender_id AS last_sender_id,
+            (SELECT COUNT(*)::int FROM dm_messages WHERE thread_id = t.id AND sender_id <> $1 AND read_at IS NULL) AS unread_count
+     FROM dm_threads t
+     JOIN users u ON u.id = (CASE WHEN t.user_a_id = $1 THEN t.user_b_id ELSE t.user_a_id END)
+     LEFT JOIN LATERAL (
+       SELECT body, attachments, created_at, sender_id FROM dm_messages WHERE thread_id = t.id ORDER BY created_at DESC LIMIT 1
+     ) m ON true
+     WHERE (t.user_a_id = $1 OR t.user_b_id = $1)
+       AND (
+         (t.is_priority = true AND t.dismissed_at IS NULL)
+         OR (t.is_priority = false AND t.status = 'accepted')
+         OR (t.is_priority = false AND t.status = 'pending' AND t.user_a_id = $1)
+       )
+     ORDER BY t.is_priority DESC, COALESCE(m.created_at, t.created_at) DESC`,
+    [req.user.id]
+  );
+  const mapped = rows.map(r => ({
+    id: r.id,
+    status: r.status,
+    is_priority: r.is_priority,
+    other_user: { username: r.other_username, display_name: r.other_display_name || r.other_username, avatar: r.other_avatar || null },
+    last_message: r.last_at
+      ? { body: r.last_body || (r.last_attachments && r.last_attachments.length ? '📎 Attachment' : ''), created_at: r.last_at, is_mine: r.last_sender_id === req.user.id }
+      : null,
+    unread_count: r.unread_count,
+  }));
+  res.json({
+    priority: mapped.filter(c => c.is_priority),
+    chats: mapped.filter(c => !c.is_priority),
+  });
+});
+
+// Requests = pending threads. Default (direction=received) is people who
+// messaged me, awaiting my accept/deny. direction=sent is the flip side —
+// my own outgoing requests still awaiting the other person's decision.
+app.get('/api/dm/requests', requireAuth, async (req, res) => {
+  const sent = req.query.direction === 'sent';
+  const otherCol = sent ? 't.user_b_id' : 't.user_a_id';
+  const meCol    = sent ? 't.user_a_id' : 't.user_b_id';
+  const { rows } = await pool.query(
+    `SELECT t.id, t.created_at,
+            u.username AS other_username, u.display_name AS other_display_name, u.avatar AS other_avatar,
+            m.body AS first_body
+     FROM dm_threads t
+     JOIN users u ON u.id = ${otherCol}
+     LEFT JOIN LATERAL (
+       SELECT body FROM dm_messages WHERE thread_id = t.id ORDER BY created_at ASC LIMIT 1
+     ) m ON true
+     WHERE t.status = 'pending' AND t.is_priority = false AND ${meCol} = $1
+     ORDER BY t.created_at DESC`,
+    [req.user.id]
+  );
+  res.json({
+    requests: rows.map(r => ({
+      id: r.id,
+      created_at: r.created_at,
+      other_user: { username: r.other_username, display_name: r.other_display_name || r.other_username, avatar: r.other_avatar || null },
+      first_message: r.first_body || '',
+    })),
+  });
+});
+
+// Who can I start a new chat with — accounts I follow, optionally filtered.
+app.get('/api/dm/following', requireAuth, async (req, res) => {
+  const q = (req.query.q || '').trim().toLowerCase();
+  const { rows } = await pool.query(
+    `SELECT u.username, u.display_name, u.avatar
+     FROM user_follows f
+     JOIN users u ON u.id = f.followed_id
+     WHERE f.follower_id = $1 ${q ? 'AND (LOWER(u.username) LIKE $2 OR LOWER(u.display_name) LIKE $2)' : ''}
+     ORDER BY u.username ASC LIMIT 30`,
+    q ? [req.user.id, `%${q}%`] : [req.user.id]
+  );
+  res.json({ users: rows });
+});
+
+app.post('/api/dm/start', requireAuth, uploadInbox.array('attachments', 4), async (req, res) => {
+  const username = String(req.body.username || '').toLowerCase();
+  const body = String(req.body.body || '').trim().slice(0, 4000);
+  const files = req.files || [];
+  const attachments = files.map(f => ({ url: '/images/inbox/' + f.filename, name: f.originalname }));
+  const gifUrl = (req.body.gif_url || '').trim();
+  if (gifUrl) attachments.push({ url: gifUrl, name: 'GIF' });
+  if (!body && !attachments.length) return res.status(400).json({ error: 'Message is required.' });
+
+  const { rows: [target] } = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
+  if (!target) return res.status(404).json({ error: 'User not found.' });
+  if (target.id === req.user.id) return res.status(400).json({ error: "You can't chat with yourself." });
+
+  const { rows: [isFollowing] } = await pool.query(
+    'SELECT 1 FROM user_follows WHERE follower_id = $1 AND followed_id = $2', [req.user.id, target.id]
+  );
+  if (!isFollowing) return res.status(403).json({ error: 'You can only start a chat with someone you follow.' });
+
+  let { rows: [thread] } = await pool.query(
+    'SELECT * FROM dm_threads WHERE (user_a_id = $1 AND user_b_id = $2) OR (user_a_id = $2 AND user_b_id = $1)',
+    [req.user.id, target.id]
+  );
+  if (!thread) {
+    ({ rows: [thread] } = await pool.query(
+      `INSERT INTO dm_threads (user_a_id, user_b_id) VALUES ($1, $2) RETURNING *`,
+      [req.user.id, target.id]
+    ));
+  }
+  await pool.query(
+    'INSERT INTO dm_messages (thread_id, sender_id, body, attachments) VALUES ($1, $2, $3, $4)',
+    [thread.id, req.user.id, body, JSON.stringify(attachments)]
+  );
+  res.json({ thread_id: thread.id, status: thread.status });
+});
+
+app.post('/api/dm/:id/accept', requireAuth, async (req, res) => {
+  const { rows: [thread] } = await pool.query(
+    "SELECT * FROM dm_threads WHERE id = $1 AND user_b_id = $2 AND status = 'pending'", [req.params.id, req.user.id]
+  );
+  if (!thread) return res.status(404).json({ error: 'Not found.' });
+  await pool.query("UPDATE dm_threads SET status = 'accepted', accepted_at = NOW() WHERE id = $1", [thread.id]);
+  res.json({ message: 'Accepted.' });
+});
+
+app.post('/api/dm/:id/deny', requireAuth, async (req, res) => {
+  const { rows: [thread] } = await pool.query(
+    "SELECT * FROM dm_threads WHERE id = $1 AND user_b_id = $2 AND status = 'pending'", [req.params.id, req.user.id]
+  );
+  if (!thread) return res.status(404).json({ error: 'Not found.' });
+  await pool.query('DELETE FROM dm_threads WHERE id = $1', [thread.id]);
+  res.json({ message: 'Denied.' });
+});
+
+// "Scrap" a High Priority broadcast — hides it until the next newsletter
+// brings it back (dismissed_at is cleared whenever a new one goes out).
+app.post('/api/dm/:id/dismiss', requireAuth, async (req, res) => {
+  const { rows: [thread] } = await pool.query(
+    'SELECT * FROM dm_threads WHERE id = $1 AND is_priority = true AND (user_a_id = $2 OR user_b_id = $2)',
+    [req.params.id, req.user.id]
+  );
+  if (!thread) return res.status(404).json({ error: 'Not found.' });
+  await pool.query('UPDATE dm_threads SET dismissed_at = NOW() WHERE id = $1', [thread.id]);
+  res.json({ message: 'Dismissed.' });
+});
+
+// Deletes a regular chat outright (not for High Priority — those only ever
+// go through /dismiss, since a future newsletter needs to be able to bring
+// them back).
+app.delete('/api/dm/:id', requireAuth, async (req, res) => {
+  const { rows: [thread] } = await pool.query(
+    'SELECT * FROM dm_threads WHERE id = $1 AND is_priority = false AND (user_a_id = $2 OR user_b_id = $2)',
+    [req.params.id, req.user.id]
+  );
+  if (!thread) return res.status(404).json({ error: 'Not found.' });
+  await pool.query('DELETE FROM dm_threads WHERE id = $1', [thread.id]);
+  res.json({ message: 'Deleted.' });
+});
+
+app.get('/api/dm/:id/messages', requireAuth, async (req, res) => {
+  const thread = await findDmThread(req.params.id, req.user.id);
+  if (!thread) return res.status(404).json({ error: 'Not found.' });
+
+  // Included so a thread can be opened directly (e.g. restoring from a URL
+  // hash on refresh) without the caller already knowing who's on the other end.
+  const otherId = thread.user_a_id === req.user.id ? thread.user_b_id : thread.user_a_id;
+  const { rows: [otherUser] } = await pool.query(
+    'SELECT username, display_name, avatar FROM users WHERE id = $1', [otherId]
+  );
+
+  const { rows } = await pool.query(
+    'SELECT id, sender_id, body, attachments, created_at FROM dm_messages WHERE thread_id = $1 ORDER BY created_at ASC',
+    [thread.id]
+  );
+  await pool.query(
+    'UPDATE dm_messages SET read_at = NOW() WHERE thread_id = $1 AND sender_id <> $2 AND read_at IS NULL',
+    [thread.id, req.user.id]
+  );
+  res.json({
+    thread: {
+      id: thread.id, status: thread.status, is_priority: thread.is_priority,
+      other_user: otherUser
+        ? { username: otherUser.username, display_name: otherUser.display_name || otherUser.username, avatar: otherUser.avatar || null }
+        : null,
+    },
+    messages: rows.map(m => ({
+      id: m.id, body: m.body, attachments: m.attachments || [],
+      created_at: m.created_at, is_mine: m.sender_id === req.user.id,
+    })),
+  });
+});
+
+app.post('/api/dm/:id/messages', requireAuth, uploadInbox.array('attachments', 4), async (req, res) => {
+  const thread = await findDmThread(req.params.id, req.user.id);
+  if (!thread) return res.status(404).json({ error: 'Not found.' });
+  const body = String(req.body.body || '').trim().slice(0, 4000);
+  const files = req.files || [];
+  const attachments = files.map(f => ({ url: '/images/inbox/' + f.filename, name: f.originalname }));
+  const gifUrl = (req.body.gif_url || '').trim();
+  if (gifUrl) attachments.push({ url: gifUrl, name: 'GIF' });
+  if (!body && !attachments.length) return res.status(400).json({ error: 'Message is required.' });
+  const { rows: [msg] } = await pool.query(
+    'INSERT INTO dm_messages (thread_id, sender_id, body, attachments) VALUES ($1, $2, $3, $4) RETURNING id, body, attachments, created_at',
+    [thread.id, req.user.id, body, JSON.stringify(attachments)]
+  );
+  res.json({ message: { id: msg.id, body: msg.body, attachments: msg.attachments || [], created_at: msg.created_at, is_mine: true } });
+});
+
+app.get('/api/dm/unread-count', requireAuth, async (req, res) => {
+  const { rows: [{ count }] } = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM dm_messages m
+     JOIN dm_threads t ON t.id = m.thread_id AND t.status = 'accepted'
+     WHERE (t.user_a_id = $1 OR t.user_b_id = $1) AND m.sender_id <> $1 AND m.read_at IS NULL`,
+    [req.user.id]
+  );
+  res.json({ count });
+});
+
 // PUT /api/account/profile — the in-line "Edit Profile" editor on a user's
 // own /fanpages/:username page writes the same about-section fields the
 // old root /profile page already exposed for reading.
+// Every field here is opt-in via COALESCE — omitting a key from the request
+// body leaves that column untouched, so a caller updating just one field
+// (e.g. the display-name-only modal) can't accidentally blank out the rest.
 app.put('/api/account/profile', requireAuth, async (req, res) => {
-  const pronouns = String(req.body.pronouns || '').slice(0, 60);
-  const favoritePokemon = String(req.body.favorite_pokemon || '').slice(0, 60);
-  const accountBio = String(req.body.account_bio || '').slice(0, 1000);
-  const funFact = String(req.body.fun_fact || '').slice(0, 300);
+  const pronouns = req.body.pronouns !== undefined ? String(req.body.pronouns).slice(0, 60) : null;
+  const favoritePokemon = req.body.favorite_pokemon !== undefined ? String(req.body.favorite_pokemon).slice(0, 60) : null;
+  const accountBio = req.body.account_bio !== undefined ? String(req.body.account_bio).slice(0, 1000) : null;
+  const funFact = req.body.fun_fact !== undefined ? String(req.body.fun_fact).slice(0, 300) : null;
   const links = Array.isArray(req.body.account_links)
-    ? req.body.account_links
+    ? JSON.stringify(req.body.account_links
         .filter(l => l && l.url)
         .slice(0, 10)
-        .map(l => ({ label: String(l.label || l.url).slice(0, 40), url: String(l.url).slice(0, 300) }))
-    : [];
+        .map(l => ({ label: String(l.label || l.url).slice(0, 40), url: String(l.url).slice(0, 300) })))
+    : null;
+  // display_name is shared account-wide (main BTW site, Fanpages, chat, etc).
+  const displayName = req.body.display_name !== undefined
+    ? String(req.body.display_name).trim().slice(0, 20) || null
+    : null;
 
   await pool.query(
-    `UPDATE users SET pronouns = $1, favorite_pokemon = $2, account_bio = $3, fun_fact = $4, account_links = $5
+    `UPDATE users SET
+       pronouns = COALESCE($1, pronouns),
+       favorite_pokemon = COALESCE($2, favorite_pokemon),
+       account_bio = COALESCE($3, account_bio),
+       fun_fact = COALESCE($4, fun_fact),
+       account_links = COALESCE($5, account_links),
+       display_name = COALESCE($7, display_name)
      WHERE id = $6`,
-    [pronouns, favoritePokemon, accountBio, funFact, JSON.stringify(links), req.user.id]
+    [pronouns, favoritePokemon, accountBio, funFact, links, req.user.id, displayName]
   );
   res.json({ message: 'Profile updated.' });
 });
@@ -2496,6 +3039,21 @@ app.put('/api/account/theme-bg', requireAuth, uploadModImage.single('image'), as
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
   const bgUrl = `/images/moderators/${req.file.filename}`;
   await pool.query(`UPDATE users SET profile_theme_bg_url = $1, profile_theme = 'custom' WHERE id = $2`, [bgUrl, req.user.id]);
+  res.json({ theme: 'custom', theme_bg_url: bgUrl });
+});
+
+// Same default/custom-background pattern, scoped to the Notifications/Inbox
+// page instead of the profile page — its own separate background.
+app.put('/api/account/notif-theme', requireAuth, async (req, res) => {
+  const theme = req.body.theme === 'custom' ? 'custom' : 'default';
+  await pool.query('UPDATE users SET notif_theme = $1 WHERE id = $2', [theme, req.user.id]);
+  res.json({ theme });
+});
+
+app.put('/api/account/notif-theme-bg', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const bgUrl = `/images/moderators/${req.file.filename}`;
+  await pool.query(`UPDATE users SET notif_theme_bg_url = $1, notif_theme = 'custom' WHERE id = $2`, [bgUrl, req.user.id]);
   res.json({ theme: 'custom', theme_bg_url: bgUrl });
 });
 
@@ -2533,21 +3091,33 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
   const kind = req.query.kind === 'gallery' ? 'gallery' : 'character';
   const q = `%${String(req.query.q || '').slice(0, 60)}%`;
 
-  const { rows: mySites } = await pool.query('SELECT slug FROM moderator_sites WHERE owner_user_id = $1', [req.user.id]);
-  const mySlugs = mySites.map(s => s.slug);
-
+  // Characters/gallery can now be linked to zero, one, or several stories —
+  // pick any ONE linked story (if any) just to build a link_url; when none
+  // exists, the item lives standalone on its owner's profile instead.
   let rows;
   if (kind === 'character') {
     ({ rows } = await pool.query(
-      `SELECT mc.id, mc.name AS title, mc.ref_image AS image_url, ms.slug, ms.story_path
-       FROM moderator_characters mc JOIN moderator_sites ms ON ms.id = mc.site_id
+      `SELECT mc.id, mc.name AS title, mc.ref_image AS image_url, mc.owner_user_id,
+              ms.story_path, ms.slug, u.username AS owner_username
+       FROM moderator_characters mc
+       LEFT JOIN LATERAL (
+         SELECT site_id FROM character_story_links WHERE character_id = mc.id ORDER BY site_id LIMIT 1
+       ) csl ON true
+       LEFT JOIN moderator_sites ms ON ms.id = csl.site_id
+       JOIN users u ON u.id = mc.owner_user_id
        WHERE mc.name ILIKE $1 ORDER BY mc.name LIMIT 30`,
       [q]
     ));
   } else {
     ({ rows } = await pool.query(
-      `SELECT mg.id, mg.title AS title, mg.image_url AS image_url, ms.slug, ms.story_path
-       FROM moderator_gallery mg JOIN moderator_sites ms ON ms.id = mg.site_id
+      `SELECT mg.id, mg.title AS title, mg.image_url AS image_url, mg.owner_user_id,
+              ms.story_path, ms.slug, u.username AS owner_username
+       FROM moderator_gallery mg
+       LEFT JOIN LATERAL (
+         SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1
+       ) gsl ON true
+       LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
+       JOIN users u ON u.id = mg.owner_user_id
        WHERE mg.category != 'spicy' AND mg.title ILIKE $1 ORDER BY mg.title LIMIT 30`,
       [q]
     ));
@@ -2558,8 +3128,10 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
       ref_id: String(r.id),
       title: r.title || 'Untitled',
       image_url: r.image_url || '',
-      link_url: `/fanpages/${r.story_path || r.slug}${kind === 'character' ? '/characters' : '/gallery'}`,
-      mine: mySlugs.includes(r.slug),
+      link_url: r.story_path || r.slug
+        ? `/fanpages/${r.story_path || r.slug}${kind === 'character' ? '/characters' : '/gallery'}`
+        : `/fanpages/${r.owner_username}`,
+      mine: r.owner_user_id === req.user.id,
     }))
     .sort((a, b) => (b.mine - a.mine));
 
@@ -2635,11 +3207,16 @@ async function sendSiteLookup(query, params, req, res) {
 
   const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds] = await Promise.all([
     pool.query('SELECT id, title, teaser, links, image_url, file_url, file_name FROM moderator_chapters WHERE site_id = $1 ORDER BY sort_order, id', [site.id]),
-    pool.query('SELECT id, name, ref_image, ref_position_x, ref_position_y, description, stats, facts, lore, relationships FROM moderator_characters WHERE site_id = $1 ORDER BY sort_order, id', [site.id]),
+    pool.query(`
+      SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.description, mc.stats, mc.facts, mc.lore, mc.relationships
+      FROM character_story_links csl JOIN moderator_characters mc ON mc.id = csl.character_id
+      WHERE csl.site_id = $1 ORDER BY csl.sort_order, mc.id
+    `, [site.id]),
     pool.query(`
       SELECT mg.id, mg.category, mg.image_url, mg.title, mg.description, mg.position_x, mg.position_y,
              (SELECT count(*) FROM moderator_gallery_likes WHERE gallery_id = mg.id) AS like_count
-      FROM moderator_gallery mg WHERE mg.site_id = $1 ORDER BY mg.sort_order, mg.id
+      FROM gallery_story_links gsl JOIN moderator_gallery mg ON mg.id = gsl.gallery_id
+      WHERE gsl.site_id = $1 ORDER BY gsl.sort_order, mg.id
     `, [site.id]),
     viewerId
       ? pool.query('SELECT 1 FROM user_follows WHERE follower_id = $1 AND followed_id = $2', [viewerId, site.owner_user_id])
@@ -2848,16 +3425,15 @@ app.delete('/api/moderator/site', requireAuth, requireModerator, async (req, res
     if (fs.existsSync(fp)) fs.unlinkSync(fp);
   };
 
-  const [{ rows: chars }, { rows: gallery }, { rows: chapters }] = await Promise.all([
-    pool.query('SELECT ref_image FROM moderator_characters WHERE site_id = $1', [site.id]),
-    pool.query('SELECT image_url FROM moderator_gallery WHERE site_id = $1', [site.id]),
-    pool.query('SELECT image_url, file_url FROM moderator_chapters WHERE site_id = $1', [site.id]),
-  ]);
+  // Characters and gallery posts are independent entities now (may be linked
+  // to other stories, or standalone on the profile) — deleting a site must
+  // NOT touch their images. Only chapters still belong exclusively to a site.
+  const { rows: chapters } = await pool.query(
+    'SELECT image_url, file_url FROM moderator_chapters WHERE site_id = $1', [site.id]
+  );
 
   [site.banner_url, site.cover_url, site.theme_bg_url, site.characters_card_url, site.chapters_card_url, site.gallery_card_url]
     .forEach(unlinkIfUploaded);
-  chars.forEach(c => unlinkIfUploaded(c.ref_image));
-  gallery.forEach(g => unlinkIfUploaded(g.image_url));
   chapters.forEach(c => { unlinkIfUploaded(c.image_url); unlinkIfUploaded(c.file_url); });
 
   await pool.query('DELETE FROM moderator_sites WHERE id = $1', [site.id]);
@@ -2960,35 +3536,55 @@ app.delete('/api/moderator/chapters/:id', requireAuth, requireModerator, async (
 // Standalone image upload — returns a URL to embed as ref_image in the
 // character's create/update JSON payload, since the character doesn't need
 // to exist yet (or might just be having its image swapped) for this step.
-app.post('/api/moderator/character-image', requireAuth, requireModerator, uploadModImage.single('image'), async (req, res) => {
+app.post('/api/moderator/character-image', requireAuth, uploadModImage.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
   res.json({ url: `/images/moderators/${req.file.filename}` });
 });
 
+// A story's Characters roster — now a many-to-many via character_story_links,
+// so this lists whatever's linked to the CURRENT story, not everything the
+// user owns.
 app.get('/api/moderator/characters', requireAuth, requireModerator, async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM moderator_characters WHERE site_id = $1 ORDER BY sort_order, id', [req.modSite.id]);
+  const { rows } = await pool.query(
+    `SELECT mc.*, csl.sort_order AS link_sort_order
+     FROM character_story_links csl
+     JOIN moderator_characters mc ON mc.id = csl.character_id
+     WHERE csl.site_id = $1
+     ORDER BY csl.sort_order, mc.id`,
+    [req.modSite.id]
+  );
   res.json({ characters: rows });
 });
 
+// Instant "create + attach to this story" — same one-click flow authors are
+// used to. Ownership lives on the character itself (owner_user_id); the
+// link to this story is a separate row, so the same character can later be
+// linked into other stories too without being duplicated.
 app.post('/api/moderator/characters', requireAuth, requireModerator, async (req, res) => {
   const { name, ref_image, description, stats, facts, lore, relationships } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
-  const { rows: [{ maxOrder }] } = await pool.query(
-    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM moderator_characters WHERE site_id = $1', [req.modSite.id]
-  );
   const { rows: [character] } = await pool.query(
-    `INSERT INTO moderator_characters (site_id, name, ref_image, description, stats, facts, lore, relationships, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-    [req.modSite.id, name.trim(), ref_image || '', description || '',
+    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(stats || {}), JSON.stringify(facts || []), JSON.stringify(lore || []),
-     JSON.stringify(relationships || []), maxOrder + 1]
+     JSON.stringify(relationships || [])]
+  );
+  const { rows: [{ maxOrder }] } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM character_story_links WHERE site_id = $1', [req.modSite.id]
+  );
+  await pool.query(
+    'INSERT INTO character_story_links (character_id, site_id, sort_order) VALUES ($1, $2, $3)',
+    [character.id, req.modSite.id, maxOrder + 1]
   );
   res.json({ character });
 });
 
-app.put('/api/moderator/characters/:id', requireAuth, requireModerator, async (req, res) => {
+// Editing a character is about owning it, not which story screen you're on —
+// works the same whether it's linked to one story, ten, or none at all.
+app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
   const { rows: [existing] } = await pool.query(
-    'SELECT * FROM moderator_characters WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+    'SELECT * FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
   );
   if (!existing) return res.status(404).json({ error: 'Not found.' });
   const { name, ref_image, description, stats, facts, lore, relationships, sort_order } = req.body;
@@ -3013,12 +3609,12 @@ app.put('/api/moderator/characters/:id', requireAuth, requireModerator, async (r
   res.json({ character });
 });
 
-app.put('/api/moderator/characters/:id/position', requireAuth, requireModerator, async (req, res) => {
+app.put('/api/moderator/characters/:id/position', requireAuth, async (req, res) => {
   const x = parseInt(req.body.position_x, 10);
   const y = parseInt(req.body.position_y, 10);
   if (![x, y].every(n => Number.isFinite(n) && n >= 0 && n <= 100)) return res.status(400).json({ error: 'Positions must be 0-100.' });
   const { rows: [existing] } = await pool.query(
-    'SELECT id FROM moderator_characters WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+    'SELECT id FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
   );
   if (!existing) return res.status(404).json({ error: 'Not found.' });
   const { rows: [character] } = await pool.query(
@@ -3028,9 +3624,123 @@ app.put('/api/moderator/characters/:id/position', requireAuth, requireModerator,
   res.json({ character });
 });
 
+// "Remove" from a story's roster now means UNLINK, not delete — the same
+// character might be linked into other stories, or exist standalone on the
+// owner's profile, and neither should vanish just because it was pulled out
+// of this one book. Permanent deletion lives at DELETE /api/characters/:id.
 app.delete('/api/moderator/characters/:id', requireAuth, requireModerator, async (req, res) => {
+  const { rowCount } = await pool.query(
+    'DELETE FROM character_story_links WHERE character_id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Not found.' });
+  res.json({ message: 'Unlinked from this story.' });
+});
+
+// Search the current user's OWN characters not yet linked to this story —
+// feeds the "+ Link Existing" picker.
+// Every character the requesting user owns, regardless of story links —
+// backs the relationship "tag an existing character" picker, which cares
+// only about "does this character exist," not whether it's on the current
+// story's roster (a relationship can point anywhere, in or out of context).
+app.get('/api/characters/mine', requireAuth, async (req, res) => {
+  const q = `%${(req.query.q || '').trim()}%`;
+  const { rows } = await pool.query(
+    `SELECT id, name, ref_image FROM moderator_characters WHERE owner_user_id = $1 AND name ILIKE $2 ORDER BY name LIMIT 30`,
+    [req.user.id, q]
+  );
+  res.json({ characters: rows });
+});
+
+// Cross-owner character search — the "Other Characters" tab of the
+// relationship picker, so e.g. tagging a friend's character (a different
+// Hydra than your own) on one of yours is findable. Always includes the
+// owner's name/avatar alongside each result so same-named characters from
+// different people are never ambiguous before you click one.
+app.get('/api/characters/search', requireAuth, async (req, res) => {
+  const q = `%${(req.query.q || '').trim()}%`;
+  const { rows } = await pool.query(
+    `SELECT mc.id, mc.name, mc.ref_image, u.username AS owner_username, u.display_name AS owner_display_name
+     FROM moderator_characters mc
+     JOIN users u ON u.id = mc.owner_user_id
+     WHERE mc.owner_user_id <> $1 AND mc.name ILIKE $2
+     ORDER BY mc.name LIMIT 30`,
+    [req.user.id, q]
+  );
+  res.json({
+    characters: rows.map(r => ({
+      id: r.id, name: r.name, ref_image: r.ref_image,
+      owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
+    })),
+  });
+});
+
+app.get('/api/moderator/characters/linkable', requireAuth, requireModerator, async (req, res) => {
+  const q = `%${(req.query.q || '').trim()}%`;
+  const { rows } = await pool.query(
+    `SELECT id, name, ref_image
+     FROM moderator_characters
+     WHERE owner_user_id = $1 AND name ILIKE $2
+       AND id NOT IN (SELECT character_id FROM character_story_links WHERE site_id = $3)
+     ORDER BY name LIMIT 30`,
+    [req.user.id, q, req.modSite.id]
+  );
+  res.json({ characters: rows });
+});
+
+app.post('/api/moderator/characters/:id/link', requireAuth, requireModerator, async (req, res) => {
+  const { rows: [character] } = await pool.query(
+    'SELECT id FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
+  );
+  if (!character) return res.status(404).json({ error: 'Not found.' });
+  const { rows: [{ maxOrder }] } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM character_story_links WHERE site_id = $1', [req.modSite.id]
+  );
+  await pool.query(
+    'INSERT INTO character_story_links (character_id, site_id, sort_order) VALUES ($1, $2, $3) ON CONFLICT (character_id, site_id) DO NOTHING',
+    [character.id, req.modSite.id, maxOrder + 1]
+  );
+  res.json({ message: 'Linked.' });
+});
+
+// Public, unscoped character lookup — fetches ANY character by id regardless
+// of who owns it or which story (if any) it's linked to. Backs two things:
+// the standalone canonical character page, and the "ghost slot" that shows
+// a relationship-linked character who isn't part of the current story's
+// cast (or the current profile's roster) without navigating away.
+app.get('/api/characters/:id', async (req, res) => {
+  const { rows: [character] } = await pool.query(
+    `SELECT mc.*, u.username AS owner_username, u.display_name AS owner_display_name
+     FROM moderator_characters mc
+     JOIN users u ON u.id = mc.owner_user_id
+     WHERE mc.id = $1`,
+    [req.params.id]
+  );
+  if (!character) return res.status(404).json({ error: 'Not found.' });
+  res.json({ character });
+});
+
+// Standalone creation — no story context at all, lands on the owner's
+// profile Characters tab. Requires nothing beyond a regular account (not
+// requireModerator — RPers/artists with zero stories should still be able
+// to make characters).
+app.post('/api/characters', requireAuth, async (req, res) => {
+  const { name, ref_image, description, stats, facts, lore, relationships } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
+  const { rows: [character] } = await pool.query(
+    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
+     JSON.stringify(stats || {}), JSON.stringify(facts || []), JSON.stringify(lore || []),
+     JSON.stringify(relationships || [])]
+  );
+  res.json({ character });
+});
+
+// Permanent delete — the only way a character actually goes away. Cascades
+// character_story_links automatically via FK.
+app.delete('/api/characters/:id', requireAuth, async (req, res) => {
   const { rows: [existing] } = await pool.query(
-    'SELECT id FROM moderator_characters WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+    'SELECT id FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
   );
   if (!existing) return res.status(404).json({ error: 'Not found.' });
   await pool.query('DELETE FROM moderator_characters WHERE id = $1', [existing.id]);
@@ -3038,8 +3748,17 @@ app.delete('/api/moderator/characters/:id', requireAuth, requireModerator, async
 });
 
 // ── Gallery (SFW + Spicy) ──────────────────────────────────────────────────────
+// A story's Gallery roster — many-to-many via gallery_story_links, same
+// pattern as characters (lists what's linked to THIS story).
 app.get('/api/moderator/gallery', requireAuth, requireModerator, async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM moderator_gallery WHERE site_id = $1 ORDER BY sort_order, id', [req.modSite.id]);
+  const { rows } = await pool.query(
+    `SELECT mg.*, gsl.sort_order AS link_sort_order
+     FROM gallery_story_links gsl
+     JOIN moderator_gallery mg ON mg.id = gsl.gallery_id
+     WHERE gsl.site_id = $1
+     ORDER BY gsl.sort_order, mg.id`,
+    [req.modSite.id]
+  );
   res.json({ gallery: rows });
 });
 
@@ -3048,6 +3767,7 @@ function clampPosition(v) {
   return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 50;
 }
 
+// Instant "create + attach to this story" — mirrors the character flow.
 app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
   const { category, title, description } = req.body;
@@ -3056,21 +3776,26 @@ app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage
   const imageUrl = `/images/moderators/${req.file.filename}`;
   const positionX = clampPosition(req.body.position_x);
   const positionY = clampPosition(req.body.position_y);
-  const { rows: [{ maxOrder }] } = await pool.query(
-    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM moderator_gallery WHERE site_id = $1 AND category = $2',
-    [req.modSite.id, category]
-  );
   const { rows: [item] } = await pool.query(
-    `INSERT INTO moderator_gallery (site_id, category, image_url, title, description, position_x, position_y, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-    [req.modSite.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY, maxOrder + 1]
+    `INSERT INTO moderator_gallery (owner_user_id, category, image_url, title, description, position_x, position_y)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [req.user.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY]
+  );
+  const { rows: [{ maxOrder }] } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM gallery_story_links WHERE site_id = $1', [req.modSite.id]
+  );
+  await pool.query(
+    'INSERT INTO gallery_story_links (gallery_id, site_id, sort_order) VALUES ($1, $2, $3)',
+    [item.id, req.modSite.id, maxOrder + 1]
   );
   res.json({ item });
 });
 
-app.put('/api/moderator/gallery/:id', requireAuth, requireModerator, uploadModImage.single('image'), async (req, res) => {
+// Editing/deleting a gallery post is about owning it, same as characters —
+// works from any context, story-linked or standalone.
+app.put('/api/moderator/gallery/:id', requireAuth, uploadModImage.single('image'), async (req, res) => {
   const { rows: [existing] } = await pool.query(
-    'SELECT * FROM moderator_gallery WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+    'SELECT * FROM moderator_gallery WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
   );
   if (!existing) return res.status(404).json({ error: 'Not found.' });
 
@@ -3103,9 +3828,67 @@ app.put('/api/moderator/gallery/:id', requireAuth, requireModerator, uploadModIm
   res.json({ item });
 });
 
+// "Remove" from a story's gallery now means UNLINK, not delete — same
+// reasoning as characters. Permanent deletion lives at DELETE /api/gallery/:id.
 app.delete('/api/moderator/gallery/:id', requireAuth, requireModerator, async (req, res) => {
+  const { rowCount } = await pool.query(
+    'DELETE FROM gallery_story_links WHERE gallery_id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Not found.' });
+  res.json({ message: 'Unlinked from this story.' });
+});
+
+// Search the current user's OWN gallery posts not yet linked to this story —
+// feeds the "+ Link Existing" picker.
+app.get('/api/moderator/gallery/linkable', requireAuth, requireModerator, async (req, res) => {
+  const q = `%${(req.query.q || '').trim()}%`;
+  const { rows } = await pool.query(
+    `SELECT id, title, image_url
+     FROM moderator_gallery
+     WHERE owner_user_id = $1 AND title ILIKE $2
+       AND id NOT IN (SELECT gallery_id FROM gallery_story_links WHERE site_id = $3)
+     ORDER BY title LIMIT 30`,
+    [req.user.id, q, req.modSite.id]
+  );
+  res.json({ gallery: rows });
+});
+
+app.post('/api/moderator/gallery/:id/link', requireAuth, requireModerator, async (req, res) => {
   const { rows: [item] } = await pool.query(
-    'SELECT * FROM moderator_gallery WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+    'SELECT id FROM moderator_gallery WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
+  );
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  const { rows: [{ maxOrder }] } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM gallery_story_links WHERE site_id = $1', [req.modSite.id]
+  );
+  await pool.query(
+    'INSERT INTO gallery_story_links (gallery_id, site_id, sort_order) VALUES ($1, $2, $3) ON CONFLICT (gallery_id, site_id) DO NOTHING',
+    [item.id, req.modSite.id, maxOrder + 1]
+  );
+  res.json({ message: 'Linked.' });
+});
+
+// Standalone creation — no story context, lands on the owner's profile
+// Gallery tab. Plain requireAuth, same reasoning as standalone characters.
+app.post('/api/gallery', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const { category, title, description } = req.body;
+  if (!['sfw', 'sketches', 'spicy'].includes(category)) return res.status(400).json({ error: 'Category must be sfw, sketches, or spicy.' });
+  const imageUrl = `/images/moderators/${req.file.filename}`;
+  const positionX = clampPosition(req.body.position_x);
+  const positionY = clampPosition(req.body.position_y);
+  const { rows: [item] } = await pool.query(
+    `INSERT INTO moderator_gallery (owner_user_id, category, image_url, title, description, position_x, position_y)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [req.user.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY]
+  );
+  res.json({ item });
+});
+
+// Permanent delete — cascades gallery_story_links automatically via FK.
+app.delete('/api/gallery/:id', requireAuth, async (req, res) => {
+  const { rows: [item] } = await pool.query(
+    'SELECT * FROM moderator_gallery WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
   );
   if (!item) return res.status(404).json({ error: 'Not found.' });
   if (item.image_url.startsWith('/images/moderators/')) {
@@ -3147,10 +3930,14 @@ app.get('/api/library', requireAuth, async (req, res) => {
       ORDER BY mb.created_at DESC
     `, [req.user.id]),
     pool.query(`
-      SELECT mg.id, mg.image_url, mg.title, mg.category, ms.slug, ms.story_path, ms.site_title
+      SELECT mg.id, mg.image_url, mg.title, mg.category, ms.slug, ms.story_path, ms.site_title, u.username AS owner_username
       FROM moderator_gallery_likes mgl
       JOIN moderator_gallery mg ON mg.id = mgl.gallery_id
-      JOIN moderator_sites ms ON ms.id = mg.site_id
+      LEFT JOIN LATERAL (
+        SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1
+      ) gsl ON true
+      LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
+      JOIN users u ON u.id = mg.owner_user_id
       WHERE mgl.user_id = $1
       ORDER BY mgl.created_at DESC
     `, [req.user.id]),
@@ -3162,7 +3949,178 @@ app.get('/api/library', requireAuth, async (req, res) => {
     })),
     gallery: gallery.map(r => ({
       id: r.id, image_url: r.image_url, title: r.title, category: r.category,
-      story_path: r.story_path || r.slug, site_title: r.site_title,
+      story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
+      owner_username: r.owner_username,
+    })),
+  });
+});
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+app.get('/api/notifications', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT n.id, n.type, n.message, n.link, n.is_read, n.created_at,
+           u.username AS actor_username, u.display_name AS actor_display_name, u.avatar AS actor_avatar
+    FROM notifications n
+    LEFT JOIN users u ON u.id = n.actor_user_id
+    WHERE n.user_id = $1
+    ORDER BY n.created_at DESC
+    LIMIT 100
+  `, [req.user.id]);
+  res.json({ notifications: rows });
+});
+
+app.get('/api/notifications/unread-count', requireAuth, async (req, res) => {
+  const { rows: [{ count }] } = await pool.query(
+    'SELECT COUNT(*)::int AS count FROM notifications WHERE user_id = $1 AND is_read = false',
+    [req.user.id]
+  );
+  res.json({ count });
+});
+
+app.post('/api/notifications/mark-read', requireAuth, async (req, res) => {
+  await pool.query('UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false', [req.user.id]);
+  res.json({ ok: true });
+});
+
+// ── Fanpages hub spotlight boxes — random picks across every story ──────────
+app.get('/api/spotlight/characters', async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit, 10) || 12, 30);
+  const { rows } = await pool.query(
+    `SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y,
+            ms.story_path, ms.slug, ms.site_title, u.username AS owner_username, u.display_name AS owner_display_name
+     FROM moderator_characters mc
+     LEFT JOIN LATERAL (
+       SELECT site_id FROM character_story_links WHERE character_id = mc.id ORDER BY site_id LIMIT 1
+     ) csl ON true
+     LEFT JOIN moderator_sites ms ON ms.id = csl.site_id
+     JOIN users u ON u.id = mc.owner_user_id
+     WHERE mc.ref_image IS NOT NULL AND mc.ref_image <> '' AND mc.ref_image <> '/images/defaultchar.jpg'
+     ORDER BY RANDOM() LIMIT $1`,
+    [limit]
+  );
+  res.json({
+    characters: rows.map(r => ({
+      id: r.id, name: r.name, image: r.ref_image,
+      position_x: r.ref_position_x, position_y: r.ref_position_y,
+      story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
+      owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
+    })),
+  });
+});
+
+app.get('/api/spotlight/gallery', async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit, 10) || 12, 30);
+  const { rows } = await pool.query(
+    `SELECT mg.id, mg.image_url, mg.title, mg.position_x, mg.position_y,
+            ms.story_path, ms.slug, ms.site_title, u.username AS owner_username, u.display_name AS owner_display_name
+     FROM moderator_gallery mg
+     LEFT JOIN LATERAL (
+       SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1
+     ) gsl ON true
+     LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
+     JOIN users u ON u.id = mg.owner_user_id
+     WHERE mg.category IN ('sfw', 'sketches')
+     ORDER BY RANDOM() LIMIT $1`,
+    [limit]
+  );
+  res.json({
+    gallery: rows.map(r => ({
+      id: r.id, image: r.image_url, title: r.title,
+      position_x: r.position_x, position_y: r.position_y,
+      story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
+      owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
+    })),
+  });
+});
+
+app.get('/api/spotlight/stories', async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit, 10) || 12, 30);
+  const { rows } = await pool.query(
+    `SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.username, u.display_name, u.avatar
+     FROM moderator_sites ms
+     JOIN users u ON u.id = ms.owner_user_id
+     ORDER BY RANDOM() LIMIT $1`,
+    [limit]
+  );
+  res.json({
+    stories: rows.map(r => ({
+      slug: r.slug, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url,
+      author: r.display_name || r.username, author_username: r.username, author_avatar: r.avatar || null,
+    })),
+  });
+});
+
+// ── Recent Submissions feed — newest stories/chapters/art/characters across
+// every fanpage, newest first. Gallery is filtered to sfw+sketches only. ────
+app.get('/api/activity-feed', async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit, 10) || 24, 40);
+  const { rows } = await pool.query(
+    `SELECT * FROM (
+       SELECT 'story' AS type, ms.id AS item_id, ms.created_at AS created_at,
+              ms.site_title AS title, ms.cover_url AS image,
+              ms.cover_position_x AS position_x, ms.cover_position_y AS position_y,
+              ms.story_path, ms.site_title AS site_title,
+              u.username, u.display_name, u.avatar
+       FROM moderator_sites ms
+       JOIN users u ON u.id = ms.owner_user_id
+
+       UNION ALL
+
+       SELECT 'chapter', mc.id, mc.created_at,
+              mc.title, ms.cover_url,
+              ms.cover_position_x, ms.cover_position_y,
+              ms.story_path, ms.site_title,
+              u.username, u.display_name, u.avatar
+       FROM moderator_chapters mc
+       JOIN moderator_sites ms ON ms.id = mc.site_id
+       JOIN users u ON u.id = ms.owner_user_id
+
+       UNION ALL
+
+       SELECT 'art', mg.id, mg.created_at,
+              mg.title, mg.image_url,
+              mg.position_x, mg.position_y,
+              ms.story_path, ms.site_title,
+              u.username, u.display_name, u.avatar
+       FROM moderator_gallery mg
+       LEFT JOIN LATERAL (
+         SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1
+       ) gsl ON true
+       LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
+       JOIN users u ON u.id = mg.owner_user_id
+       WHERE mg.category IN ('sfw', 'sketches')
+
+       UNION ALL
+
+       SELECT 'character', mch.id, mch.created_at,
+              mch.name, mch.ref_image,
+              mch.ref_position_x, mch.ref_position_y,
+              ms.story_path, ms.site_title,
+              u.username, u.display_name, u.avatar
+       FROM moderator_characters mch
+       LEFT JOIN LATERAL (
+         SELECT site_id FROM character_story_links WHERE character_id = mch.id ORDER BY site_id LIMIT 1
+       ) csl ON true
+       LEFT JOIN moderator_sites ms ON ms.id = csl.site_id
+       JOIN users u ON u.id = mch.owner_user_id
+     ) feed
+     ORDER BY created_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+  res.json({
+    items: rows.map(r => ({
+      type: r.type,
+      id: r.item_id,
+      created_at: r.created_at,
+      title: r.title,
+      image: r.image || null,
+      position_x: r.position_x, position_y: r.position_y,
+      story_path: r.story_path,
+      site_title: r.site_title,
+      author: r.display_name || r.username,
+      author_username: r.username,
+      author_avatar: r.avatar || null,
     })),
   });
 });

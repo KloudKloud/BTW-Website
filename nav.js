@@ -101,6 +101,25 @@
       clearAuth();
       window.location.href = homeHref;
     });
+
+    // ── Admin dropdown (Hub Image Builder / Stats) — hidden until an
+    // is_admin check comes back, sits as its own pill to the right of
+    // the profile menu rather than buried inside Account Settings.
+    const adminLi = document.getElementById('nav-admin-li');
+    if (adminLi) {
+      const adminBtn = document.getElementById('nav-admin-btn');
+      const adminDropdown = document.getElementById('nav-admin-dropdown');
+      adminBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = !adminDropdown.hidden;
+        adminDropdown.hidden = open;
+        adminBtn.setAttribute('aria-expanded', String(!open));
+      });
+      document.addEventListener('click', () => {
+        adminDropdown.hidden = true;
+        adminBtn.setAttribute('aria-expanded', 'false');
+      });
+    }
   }
 
   function updateInboxBadge(count) {
@@ -135,15 +154,10 @@
       storage.setItem('btw_user', JSON.stringify(data.user));
       renderUserNav(data.user);
 
-      // Inject Stats link for admin
+      // Reveal the Admin pill (Hub Image Builder / Stats) for admins only
       if (data.user.is_admin) {
-        const dropdown = document.getElementById('nav-user-dropdown');
-        if (dropdown) {
-          const statsLink = document.createElement('a');
-          statsLink.href = '/stats';
-          statsLink.textContent = 'Stats';
-          dropdown.appendChild(statsLink);
-        }
+        const adminLi = document.getElementById('nav-admin-li');
+        if (adminLi) adminLi.style.display = '';
       }
 
       // Fetch unread inbox count for badge

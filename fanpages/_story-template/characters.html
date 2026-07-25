@@ -38,6 +38,9 @@
         <button class="chars-create-btn" id="chars-create-btn" type="button">
           <span class="chars-create-btn-icon">➕</span> Create New Character
         </button>
+        <button class="chars-create-btn" id="chars-link-btn" type="button" style="margin-top:0.6rem; background:transparent; border:1px solid rgba(255,255,255,0.25); box-shadow:none;">
+          <span class="chars-create-btn-icon">🔗</span> Link Existing
+        </button>
       </aside>
 
       <aside class="chars-sidebar">
@@ -72,6 +75,19 @@
 
     </div>
 
+  </div>
+</div>
+
+<!-- Link Existing picker — search the owner's own characters (standalone or
+     already linked elsewhere) and add one to this story's roster. -->
+<div class="char-editor-overlay" id="char-link-overlay" hidden>
+  <div class="char-editor-modal" style="max-width:440px;">
+    <h2 class="char-editor-title">Link Existing Character</h2>
+    <input class="mod-input" id="char-link-search" placeholder="Search your characters…" style="margin-bottom:1rem;" />
+    <div id="char-link-results" style="display:flex; flex-direction:column; gap:0.5rem; max-height:320px; overflow-y:auto;"></div>
+    <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
+      <button type="button" class="mod-btn" id="char-link-cancel">Close</button>
+    </div>
   </div>
 </div>
 
@@ -147,7 +163,8 @@
     <p class="mod-panel-msg" id="char-editor-msg"></p>
 
     <div class="char-editor-actions">
-      <button class="mod-btn mod-btn--danger" id="char-editor-delete" type="button" style="display:none;">Delete</button>
+      <button class="mod-btn mod-btn--danger" id="char-editor-delete-forever" type="button" style="display:none;">Delete</button>
+      <button class="mod-btn mod-btn--danger" id="char-editor-delete" type="button" style="display:none;">Remove from Story</button>
       <button class="mod-btn" id="char-editor-cancel" type="button">Cancel</button>
       <button class="mod-btn" id="char-editor-save" type="button">Save Character</button>
     </div>
@@ -157,10 +174,20 @@
 <!-- Link-picker — opens on top of the character editor to pick which
      existing character a relationship's "Name" should fast-travel to. -->
 <div class="char-link-picker-overlay" id="char-link-picker-overlay" hidden>
-  <div class="char-link-picker-modal">
+  <div class="char-link-picker-modal" style="max-width:480px;">
     <h3 class="char-link-picker-title">Link to a Character</h3>
-    <div id="char-link-picker-list"></div>
-    <button class="mod-btn mod-btn--small" id="char-link-picker-close" type="button">Close</button>
+    <div class="char-link-picker-tabs">
+      <button type="button" class="char-link-picker-tab active" id="char-link-tab-mine">Characters You Own</button>
+      <button type="button" class="char-link-picker-tab" id="char-link-tab-other">Other Characters</button>
+    </div>
+    <div id="char-link-picker-mine">
+      <div class="char-link-picker-scroll" id="char-link-picker-mine-list"></div>
+    </div>
+    <div id="char-link-picker-other" hidden>
+      <input class="mod-input" id="char-link-other-search" placeholder="Search characters by name…" style="margin-bottom:0.75rem;" />
+      <div class="char-link-picker-scroll" id="char-link-picker-other-list"></div>
+    </div>
+    <button class="mod-btn mod-btn--small" id="char-link-picker-close" type="button" style="margin-top:0.75rem;">Close</button>
   </div>
 </div>
 
@@ -185,6 +212,11 @@ const authHeaders = () => ({ Authorization: `Bearer ${token}`, 'X-Story-Path': S
 let CHARACTERS = [];
 let STORY_TITLE = 'Fanpages';
 let IS_SELF = false;
+// The relationship-linked character currently being viewed, when they're NOT
+// part of this story's own cast (character_story_links) — a "ghost slot"
+// shown at the top of the sidebar instead of navigating away from the page.
+// Cleared the instant you land back on any character who IS in CHARACTERS.
+let GHOST_CHAR = null;
 
 const DEFAULT_REF = '/images/characters/noreference.png';
 const NA = 'N/A';
@@ -304,8 +336,10 @@ function renderProfile(char) {
     statsBox.appendChild(statRow);
   });
 
-  // Relationships — its own little list under the plain stat rows. Names
-  // linked to another character in this story fast-travel there on click.
+  // Relationships — its own little list under the plain stat rows. Any
+  // tagged character is clickable now, whether they're in this story's cast
+  // or not — if not, viewCharacter() fetches them and shows a "ghost slot"
+  // instead of leaving the page.
   const relationships = (char.relationships || []).filter(r => r && r.name);
   if (relationships.length) {
     const relDivider = document.createElement('div');
@@ -323,13 +357,12 @@ function renderProfile(char) {
       const relLine = document.createElement('div');
       relLine.style.cssText = 'font-size:0.88rem; color:#ccc; padding:0.15rem 0;';
 
-      const linkedChar = rel.character_id ? CHARACTERS.find(c => c.id === String(rel.character_id)) : null;
-      if (linkedChar) {
+      if (rel.character_id) {
         const nameLink = document.createElement('a');
         nameLink.href = '#';
         nameLink.style.cssText = 'color:#f0c060; font-weight:700; text-decoration:none; text-shadow:0 0 12px rgba(240,192,96,0.6); cursor:pointer;';
         nameLink.textContent = rel.name;
-        nameLink.addEventListener('click', (e) => { e.preventDefault(); jumpToCharacter(linkedChar.id); });
+        nameLink.addEventListener('click', (e) => { e.preventDefault(); viewCharacter(rel.character_id); });
         relLine.appendChild(nameLink);
       } else {
         const nameSpan = document.createElement('span');
@@ -437,31 +470,10 @@ function renderProfile(char) {
   }
 }
 
-function jumpToCharacter(id) {
-  const char = CHARACTERS.find(c => c.id === id);
-  if (!char) return;
-  history.pushState(null, '', `?char=${char.id}`);
-  document.title = `${char.name} ✦ ${STORY_TITLE}`;
-  renderProfile(char);
-  updateActiveTab(char.id);
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function buildNav() {
-  const nav = document.getElementById('chars-nav');
-  const activeId = getActiveId();
-  CHARACTERS.forEach(char => {
-    const btn = document.createElement('button');
-    btn.className = 'chars-tab' + (char.id === activeId ? ' active' : '');
-    btn.dataset.id = char.id;
-    btn.textContent = char.name;
-    btn.addEventListener('click', () => jumpToCharacter(char.id));
-    nav.appendChild(btn);
-  });
-}
-
-function renderCharList(rows, preferId) {
-  CHARACTERS = rows.map(r => ({
+// Normalizes a raw character row (from either this story's own list or the
+// cross-story /api/characters/:id lookup) into the shape renderProfile expects.
+function normalizeChar(r) {
+  return {
     id: String(r.id),
     name: r.name,
     hasRef: !!r.ref_image,
@@ -473,7 +485,75 @@ function renderCharList(rows, preferId) {
     facts: (r.facts && r.facts.length) ? r.facts : [NA],
     lore: r.lore || [],
     relationships: r.relationships || [],
-  }));
+  };
+}
+
+// The single navigation entry point for both the persistent sidebar AND
+// relationship links. If the id is part of this story's own cast, it's a
+// normal instant switch. If not, it fetches the character (regardless of
+// owner/story) and shows them via the temporary "ghost slot" instead of
+// leaving the page — replacing whatever ghost was showing before, if any.
+async function viewCharacter(id) {
+  id = String(id);
+  const known = CHARACTERS.find(c => c.id === id);
+  if (known) {
+    GHOST_CHAR = null;
+    history.pushState(null, '', `?char=${known.id}`);
+    document.title = `${known.name} ✦ ${STORY_TITLE}`;
+    renderProfile(known);
+    buildNav();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+  try {
+    const res = await fetch(`/api/characters/${id}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    GHOST_CHAR = normalizeChar(data.character);
+    history.pushState(null, '', `?char=${GHOST_CHAR.id}`);
+    document.title = `${GHOST_CHAR.name} ✦ ${STORY_TITLE}`;
+    renderProfile(GHOST_CHAR);
+    buildNav();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch {}
+}
+
+function buildNav() {
+  const nav = document.getElementById('chars-nav');
+  nav.innerHTML = '';
+  const activeId = getActiveId();
+
+  if (GHOST_CHAR) {
+    const label = document.createElement('span');
+    label.className = 'chars-ghost-label';
+    label.textContent = 'Currently Viewing';
+    nav.appendChild(label);
+
+    const ghostBtn = document.createElement('button');
+    ghostBtn.type = 'button';
+    ghostBtn.className = 'chars-tab--ghost';
+    ghostBtn.textContent = GHOST_CHAR.name;
+    ghostBtn.disabled = true;
+    nav.appendChild(ghostBtn);
+
+    const divider = document.createElement('div');
+    divider.className = 'chars-ghost-divider';
+    nav.appendChild(divider);
+  }
+
+  CHARACTERS.forEach(char => {
+    const btn = document.createElement('button');
+    btn.className = 'chars-tab' + (char.id === activeId ? ' active' : '');
+    btn.dataset.id = char.id;
+    btn.textContent = char.name;
+    btn.addEventListener('click', () => viewCharacter(char.id));
+    nav.appendChild(btn);
+  });
+}
+
+function renderCharList(rows, preferId) {
+  GHOST_CHAR = null;
+  CHARACTERS = rows.map(normalizeChar);
 
   document.getElementById('chars-nav').innerHTML = '';
   if (!CHARACTERS.length) {
@@ -495,6 +575,7 @@ function renderCharList(rows, preferId) {
 let uploadedRefUrl = '';
 let refPos = { x: 50, y: 50 };
 let editingCharId = null;
+let editingCharName = '';
 
 function addFactRow(value, removable) {
   if (removable === undefined) removable = true;
@@ -516,7 +597,10 @@ function addRelationshipRow(name, type, characterId, removable) {
   if (removable === undefined) removable = true;
   const wrap = document.createElement('div');
   wrap.className = 'char-rel-row';
-  if (!removable) wrap.style.gridTemplateColumns = '1fr 1fr';
+  // Same grid-template-columns for every row regardless of removability —
+  // the permanent first row keeps an invisible (but space-reserving) ✕ slot
+  // instead of dropping the column, so its inputs line up at the exact same
+  // width as every row added after it.
   wrap.dataset.charId = characterId || '';
   wrap.innerHTML = `
     <div class="char-rel-name-wrap">
@@ -524,7 +608,7 @@ function addRelationshipRow(name, type, characterId, removable) {
       <button class="char-rel-link-btn${characterId ? ' linked' : ''}" type="button" title="Link to an existing character">+</button>
     </div>
     <input class="mod-input rel-type" placeholder="Mom, Dad, Friend, Sibling..." value="${(type || '').replace(/"/g, '&quot;')}" />
-    ${removable ? '<button class="mod-btn mod-btn--small mod-btn--danger" type="button">✕</button>' : ''}`;
+    <button class="mod-btn mod-btn--small mod-btn--danger" type="button" style="${removable ? '' : 'visibility:hidden;'}">✕</button>`;
 
   const nameInput = wrap.querySelector('.rel-name');
   const linkBtn = wrap.querySelector('.char-rel-link-btn');
@@ -541,29 +625,88 @@ function addRelationshipRow(name, type, characterId, removable) {
 }
 document.getElementById('char-editor-add-relationship').addEventListener('click', () => addRelationshipRow('', '', '', true));
 
-function openLinkPicker(row) {
-  linkPickerTargetRow = row;
-  const list = document.getElementById('char-link-picker-list');
-  list.innerHTML = '';
-  const others = CHARACTERS.filter(c => c.id !== editingCharId);
-  if (!others.length) {
-    list.innerHTML = '<p class="char-link-picker-empty">No characters created for your story yet! Come back after you create some characters to link here!</p>';
-  } else {
-    others.forEach(c => {
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.className = 'char-link-picker-item';
-      item.innerHTML = `<img src="${c.ref || '/images/characters/noreference.png'}" alt="" />${c.name}`;
-      item.addEventListener('click', () => {
-        row.querySelector('.rel-name').value = c.name;
-        row.dataset.charId = c.id;
-        row.querySelector('.char-rel-link-btn').classList.add('linked');
-        closeLinkPicker();
-      });
-      list.appendChild(item);
-    });
+// Relationships care about "does this character exist," not "is it linked
+// to this story" — and now they can point to ANYONE's character, not just
+// your own (a friend's character tagged on yours). "Characters You Own"
+// defaults first since that's the common case; "Other Characters" is a
+// live search across everyone, always showing the owner's name so two
+// people's same-named characters are never ambiguous before you click one.
+let linkPickerOtherDebounce;
+
+function charLinkItemEl(c, showOwner) {
+  const item = document.createElement('button');
+  item.type = 'button';
+  item.className = 'char-link-picker-item--big';
+  item.innerHTML = `
+    <img src="${c.ref_image || '/images/characters/noreference.png'}" alt="" />
+    <span>
+      <span class="char-link-picker-item-name">${c.name}</span>
+      ${showOwner ? `<span class="char-link-picker-item-owner">${c.owner_display_name || c.owner_username}</span>` : ''}
+    </span>
+  `;
+  item.addEventListener('click', () => {
+    linkPickerTargetRow.querySelector('.rel-name').value = c.name;
+    linkPickerTargetRow.dataset.charId = c.id;
+    linkPickerTargetRow.querySelector('.char-rel-link-btn').classList.add('linked');
+    closeLinkPicker();
+  });
+  return item;
+}
+
+function switchLinkPickerTab(tab) {
+  document.getElementById('char-link-tab-mine').classList.toggle('active', tab === 'mine');
+  document.getElementById('char-link-tab-other').classList.toggle('active', tab === 'other');
+  document.getElementById('char-link-picker-mine').hidden = tab !== 'mine';
+  document.getElementById('char-link-picker-other').hidden = tab !== 'other';
+  if (tab === 'other') {
+    document.getElementById('char-link-other-search').value = '';
+    runOtherCharacterSearch('');
   }
+}
+document.getElementById('char-link-tab-mine').addEventListener('click', () => switchLinkPickerTab('mine'));
+document.getElementById('char-link-tab-other').addEventListener('click', () => switchLinkPickerTab('other'));
+document.getElementById('char-link-other-search').addEventListener('input', (e) => {
+  clearTimeout(linkPickerOtherDebounce);
+  linkPickerOtherDebounce = setTimeout(() => runOtherCharacterSearch(e.target.value.trim()), 300);
+});
+
+async function runOtherCharacterSearch(q) {
+  const list = document.getElementById('char-link-picker-other-list');
+  list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
+  try {
+    const res = await fetch(`/api/characters/search?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+    const data = await res.json();
+    const results = data.characters || [];
+    if (!results.length) {
+      list.innerHTML = '<p class="char-link-picker-empty">No matching characters found.</p>';
+      return;
+    }
+    list.innerHTML = '';
+    results.forEach(c => list.appendChild(charLinkItemEl(c, true)));
+  } catch {
+    list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t search right now.</p>';
+  }
+}
+
+async function openLinkPicker(row) {
+  linkPickerTargetRow = row;
   document.getElementById('char-link-picker-overlay').hidden = false;
+  switchLinkPickerTab('mine');
+  const list = document.getElementById('char-link-picker-mine-list');
+  list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
+  try {
+    const res = await fetch('/api/characters/mine', { headers: authHeaders() });
+    const data = await res.json();
+    const others = (data.characters || []).filter(c => String(c.id) !== editingCharId);
+    if (!others.length) {
+      list.innerHTML = '<p class="char-link-picker-empty">No other characters yet! Come back after you create some to link here!</p>';
+      return;
+    }
+    list.innerHTML = '';
+    others.forEach(c => list.appendChild(charLinkItemEl(c, false)));
+  } catch {
+    list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t load your characters right now.</p>';
+  }
 }
 function closeLinkPicker() {
   document.getElementById('char-link-picker-overlay').hidden = true;
@@ -573,11 +716,13 @@ document.getElementById('char-link-picker-close').addEventListener('click', clos
 
 function openCharEditor(char) {
   editingCharId = char ? char.id : null;
+  editingCharName = char ? char.name : '';
   uploadedRefUrl = char ? (char.ref || '') : '';
   refPos = { x: char ? char.refPosX : 50, y: char ? char.refPosY : 50 };
 
   document.getElementById('char-editor-title').textContent = char ? `Edit ${char.name}` : 'Create New Character';
   document.getElementById('char-editor-delete').style.display = char ? '' : 'none';
+  document.getElementById('char-editor-delete-forever').style.display = char ? '' : 'none';
   document.getElementById('char-editor-save').textContent = char ? 'Save and Close' : 'Create';
 
   const img = document.getElementById('char-editor-ref-img');
@@ -632,15 +777,67 @@ function closeCharEditor() {
 document.getElementById('chars-create-btn').addEventListener('click', () => openCharEditor(null));
 document.getElementById('char-editor-cancel').addEventListener('click', closeCharEditor);
 
-document.getElementById('char-editor-delete').addEventListener('click', async () => {
-  if (!editingCharId) return;
-  if (!confirm('Are you sure you want to delete this character?')) return;
+// ── Link Existing — search the owner's own characters not yet on this
+// story's roster, and add one without duplicating it. ──
+let charLinkDebounce;
+async function runCharLinkSearch(q) {
+  const resultsWrap = document.getElementById('char-link-results');
+  resultsWrap.innerHTML = '<p style="color:#888;font-size:0.85rem;">Loading…</p>';
+  try {
+    const res = await fetch(`/api/moderator/characters/linkable?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+    const data = await res.json();
+    const chars = data.characters || [];
+    if (!chars.length) {
+      resultsWrap.innerHTML = '<p style="color:#888;font-size:0.85rem;">No matching characters — try Create New instead.</p>';
+      return;
+    }
+    resultsWrap.innerHTML = '';
+    chars.forEach(c => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'mod-panel-list-item';
+      row.style.cssText = 'width:100%; text-align:left; background:#161616; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:0.5rem 0.75rem; cursor:pointer;';
+      row.innerHTML = `
+        <span style="display:flex; align-items:center; gap:0.6rem;">
+          <img src="${c.ref_image || '/images/defaultchar.jpg'}" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" />
+          ${c.name}
+        </span>
+      `;
+      row.addEventListener('click', async () => {
+        row.disabled = true;
+        await fetch(`/api/moderator/characters/${c.id}/link`, { method: 'POST', headers: authHeaders() });
+        document.getElementById('char-link-overlay').hidden = true;
+        const fresh = await ModeratorSite.load(SLUG);
+        renderCharList((fresh && fresh.characters) || []);
+      });
+      resultsWrap.appendChild(row);
+    });
+  } catch {
+    resultsWrap.innerHTML = '<p style="color:#888;font-size:0.85rem;">Couldn\'t load your characters right now.</p>';
+  }
+}
+document.getElementById('chars-link-btn').addEventListener('click', () => {
+  document.getElementById('char-link-search').value = '';
+  document.getElementById('char-link-overlay').hidden = false;
+  runCharLinkSearch('');
+});
+document.getElementById('char-link-cancel').addEventListener('click', () => {
+  document.getElementById('char-link-overlay').hidden = true;
+});
+document.getElementById('char-link-search').addEventListener('input', (e) => {
+  clearTimeout(charLinkDebounce);
+  charLinkDebounce = setTimeout(() => runCharLinkSearch(e.target.value.trim()), 300);
+});
 
-  const deleteBtn = document.getElementById('char-editor-delete');
+document.getElementById('char-editor-delete-forever').addEventListener('click', async () => {
+  if (!editingCharId) return;
+  if (!confirm(`Are you sure you want to delete ${editingCharName}? This will remove them from your profile, story, and account permanently?`)) return;
+
+  const deleteBtn = document.getElementById('char-editor-delete-forever');
   deleteBtn.disabled = true;
   deleteBtn.textContent = 'Deleting…';
   try {
-    await fetch(`/api/moderator/characters/${editingCharId}`, { method: 'DELETE', headers: authHeaders() });
+    await fetch(`/api/characters/${editingCharId}`, { method: 'DELETE', headers: authHeaders() });
     closeCharEditor();
     const fresh = await ModeratorSite.load(SLUG);
     renderCharList((fresh && fresh.characters) || []);
@@ -650,6 +847,30 @@ document.getElementById('char-editor-delete').addEventListener('click', async ()
   } finally {
     deleteBtn.disabled = false;
     deleteBtn.textContent = 'Delete';
+  }
+});
+
+document.getElementById('char-editor-delete').addEventListener('click', async () => {
+  if (!editingCharId) return;
+  // This only unlinks the character from THIS story now — it can be linked
+  // into other stories or standalone, and survives untouched either way.
+  // Permanent deletion happens from the character's own profile card.
+  if (!confirm('Remove this character from this story? It will still exist on your profile (and any other stories it\'s linked to).')) return;
+
+  const deleteBtn = document.getElementById('char-editor-delete');
+  deleteBtn.disabled = true;
+  deleteBtn.textContent = 'Removing…';
+  try {
+    await fetch(`/api/moderator/characters/${editingCharId}`, { method: 'DELETE', headers: authHeaders() });
+    closeCharEditor();
+    const fresh = await ModeratorSite.load(SLUG);
+    renderCharList((fresh && fresh.characters) || []);
+  } catch {
+    document.getElementById('char-editor-msg').className = 'mod-panel-msg mod-panel-msg--error';
+    document.getElementById('char-editor-msg').textContent = 'Failed to remove. Please try again.';
+  } finally {
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = 'Remove from Story';
   }
 });
 // Deliberately no click-outside-to-close — an accidental click off the modal
@@ -784,6 +1005,14 @@ document.getElementById('char-editor-save').addEventListener('click', async () =
   }
 
   renderCharList((data && data.characters) || []);
+
+  // Direct link to a relationship-linked character not in this story's cast
+  // (e.g. a shared URL) should show them as a ghost slot on load too, same
+  // as arriving there by clicking a relationship tag mid-visit.
+  const urlCharId = new URLSearchParams(window.location.search).get('char');
+  if (urlCharId && !CHARACTERS.some(c => c.id === urlCharId)) {
+    viewCharacter(urlCharId);
+  }
 })();
 </script>
 

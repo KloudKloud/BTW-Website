@@ -18,20 +18,38 @@
     <div class="fpnav-bar">
       <a class="fpnav-brand" href="/fanpages">Fanpages</a>
       <a class="fpnav-link${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Social</a>
+
+      <a class="fpnav-home-btn" href="${homeHref}">BTW Homepage</a>
+
+      <div class="fpnav-dropdown-wrap" id="fpnav-admin-wrap" style="display:none;">
+        <button class="fpnav-trigger-btn fpnav-admin-btn" id="fpnav-admin-btn" type="button">Admin <span class="fpnav-caret">▾</span></button>
+        <div class="fpnav-dropdown" id="fpnav-admin-dropdown" hidden>
+          <a href="/fanpages/hub-builder">Hub Image Builder</a>
+          <a href="/stats">Stats</a>
+        </div>
+      </div>
+
       <div class="fpnav-search"><input type="search" id="fpnav-search-input" placeholder="🔍 Search stories…" /></div>
       <div class="fpnav-right">
 
         <div class="fpnav-dropdown-wrap">
-          <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Upload <span class="fpnav-caret">▾</span></button>
+          <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
           <div class="fpnav-dropdown" id="fpnav-upload-dropdown" hidden>
-            <a href="/fanpages/create" data-gate="/fanpages/create">Create Story</a>
+            <a href="/fanpages/create" data-gate="/fanpages/create"><span class="fpnav-plus-badge">+</span> Create Story</a>
+            <a href="/fanpages/create-character" data-gate="/fanpages/create-character"><span class="fpnav-plus-badge">+</span> Create Character</a>
+            <a href="/fanpages/create-gallery" data-gate="/fanpages/create-gallery"><span class="fpnav-plus-badge">+</span> Create Gallery</a>
+            <div class="fpnav-dropdown-divider"></div>
             <a href="/fanpages/my-stories" data-gate="/fanpages/my-stories">My Stories</a>
           </div>
         </div>
 
-        <a class="fpnav-home-btn" href="${homeHref}">BTW Homepage</a>
-
         <a class="fpnav-login-btn" id="fpnav-login-btn" href="/login?from=${encodeURIComponent(here)}">Log In / Register</a>
+
+        <button class="fpnav-icon-btn fpnav-icon-btn--labeled" id="fpnav-notif-btn" type="button" aria-label="Notifications" style="display:none;">
+          <span class="fpnav-icon-btn-label">Updates</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+          <span class="fpnav-notif-badge" id="fpnav-notif-badge" hidden></span>
+        </button>
 
         <div class="fpnav-dropdown-wrap" id="fpnav-avatar-wrap" style="display:none;">
           <button class="fpnav-avatar-btn" id="fpnav-avatar-btn" type="button">
@@ -40,8 +58,12 @@
           </button>
           <div class="fpnav-dropdown" id="fpnav-avatar-dropdown" hidden>
             <a href="#" id="fpnav-my-profile-link">My Profile</a>
+            <div class="fpnav-dropdown-divider"></div>
             <a href="/fanpages/library" id="fpnav-library-link">Library</a>
+            <a href="/fanpages/notifications#inbox" id="fpnav-updates-link">Inbox</a>
+            <div class="fpnav-dropdown-divider"></div>
             <a href="#" id="fpnav-edit-profile-link">Account Settings</a>
+            <a href="#" id="fpnav-logout-link">Logout</a>
           </div>
         </div>
 
@@ -82,8 +104,19 @@
   }
   wireDropdown('fpnav-upload-btn', 'fpnav-upload-dropdown');
   wireDropdown('fpnav-avatar-btn', 'fpnav-avatar-dropdown');
+  wireDropdown('fpnav-admin-btn', 'fpnav-admin-dropdown');
   document.addEventListener('click', () => {
     document.querySelectorAll('.fpnav-dropdown').forEach(el => { el.hidden = true; });
+  });
+
+  document.getElementById('fpnav-logout-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    if (!confirm('Are you sure you want to log out?')) return;
+    localStorage.removeItem('btw_token');
+    localStorage.removeItem('btw_user');
+    sessionStorage.removeItem('btw_token');
+    sessionStorage.removeItem('btw_user');
+    window.location.href = '/fanpages';
   });
 
   // ── Login-gated links (Create Story / My Stories) ───────────────────────
@@ -96,6 +129,12 @@
   }
   document.getElementById('fpnav-modal-close').addEventListener('click', () => { modalOverlay.hidden = true; });
   modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) modalOverlay.hidden = true; });
+
+  // ── Notification bell ────────────────────────────────────────────────────
+  document.getElementById('fpnav-notif-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    window.location.href = '/fanpages/notifications';
+  });
 
   root.querySelectorAll('[data-gate]').forEach(link => {
     link.addEventListener('click', (e) => {
@@ -119,6 +158,24 @@
 
       document.getElementById('fpnav-login-btn').style.display = 'none';
       document.getElementById('fpnav-avatar-wrap').style.display = '';
+      document.getElementById('fpnav-notif-btn').style.display = '';
+
+      // Bell lights up for anything unread across all three: notifications,
+      // unread chat messages, AND pending chat requests waiting on you.
+      Promise.all([
+        fetch('/api/notifications/unread-count', { headers: authHeaders() }).then(r => r.ok ? r.json() : { count: 0 }).catch(() => ({ count: 0 })),
+        fetch('/api/dm/unread-count', { headers: authHeaders() }).then(r => r.ok ? r.json() : { count: 0 }).catch(() => ({ count: 0 })),
+        fetch('/api/dm/requests', { headers: authHeaders() }).then(r => r.ok ? r.json() : { requests: [] }).catch(() => ({ requests: [] })),
+      ]).then(([notifData, dmData, reqData]) => {
+        const badge = document.getElementById('fpnav-notif-badge');
+        const count = (notifData.count || 0) + (dmData.count || 0) + (reqData.requests || []).length;
+        if (count > 0) {
+          badge.textContent = count > 99 ? '99+' : count;
+          badge.hidden = false;
+        } else {
+          badge.hidden = true;
+        }
+      }).catch(() => {});
 
       document.getElementById('fpnav-avatar-img-wrap').innerHTML = u.avatar
         ? `<img src="${u.avatar}" alt="" />`
@@ -128,24 +185,12 @@
       document.getElementById('fpnav-my-profile-link').href = `/fanpages/${u.username}`;
       document.getElementById('fpnav-edit-profile-link').href = `/profile?from=${encodeURIComponent(here)}`;
 
-      // Same admin-only Stats link the root site's nav shows — kept visible
-      // here too so the lead dev never loses it while inside Fanpages.
+      // Reveal the standalone Admin pill (Hub Image Builder / Stats) —
+      // its own dropdown next to the profile menu rather than buried
+      // inside Account Settings.
       if (u.is_admin) {
-        const dropdown = document.getElementById('fpnav-avatar-dropdown');
-        if (dropdown && !document.getElementById('fpnav-hub-builder-link')) {
-          const hubBuilderLink = document.createElement('a');
-          hubBuilderLink.id = 'fpnav-hub-builder-link';
-          hubBuilderLink.href = '/fanpages/hub-builder';
-          hubBuilderLink.textContent = 'Hub Image Builder';
-          dropdown.appendChild(hubBuilderLink);
-        }
-        if (dropdown && !document.getElementById('fpnav-stats-link')) {
-          const statsLink = document.createElement('a');
-          statsLink.id = 'fpnav-stats-link';
-          statsLink.href = '/stats';
-          statsLink.textContent = 'Stats';
-          dropdown.appendChild(statsLink);
-        }
+        const adminWrap = document.getElementById('fpnav-admin-wrap');
+        if (adminWrap) adminWrap.style.display = '';
       }
     })
     .catch(() => {});

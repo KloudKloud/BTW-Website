@@ -37,6 +37,9 @@
           <button class="chars-create-btn" id="gallery-create-btn" type="button">
             <span class="chars-create-btn-icon">➕</span> Create Gallery Post
           </button>
+          <button class="chars-create-btn" id="gallery-link-btn" type="button" style="margin-top:0.6rem; background:transparent; border:1px solid rgba(255,255,255,0.25); box-shadow:none;">
+            <span class="chars-create-btn-icon">🔗</span> Link Existing
+          </button>
         </aside>
 
         <aside class="chars-create-box">
@@ -97,6 +100,19 @@
     </div>
 
   </main>
+</div>
+
+<!-- Link Existing picker — search the owner's own gallery posts (standalone
+     or already linked elsewhere) and add one to this story's gallery. -->
+<div class="char-editor-overlay" id="gallery-link-overlay" hidden>
+  <div class="char-editor-modal" style="max-width:440px;">
+    <h2 class="char-editor-title">Link Existing Gallery Post</h2>
+    <input class="mod-input" id="gallery-link-search" placeholder="Search your gallery posts…" style="margin-bottom:1rem;" />
+    <div id="gallery-link-results" style="display:flex; flex-direction:column; gap:0.5rem; max-height:320px; overflow-y:auto;"></div>
+    <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
+      <button type="button" class="mod-btn" id="gallery-link-cancel">Close</button>
+    </div>
+  </div>
 </div>
 
 <!-- Gallery post editor modal — owner only -->
@@ -161,7 +177,7 @@
     <p class="mod-panel-msg" id="gallery-editor-msg"></p>
 
     <div class="char-editor-actions">
-      <button class="mod-btn mod-btn--danger" id="gallery-editor-delete" type="button" style="display:none;">Delete</button>
+      <button class="mod-btn mod-btn--danger" id="gallery-editor-delete" type="button" style="display:none;">Remove from Story</button>
       <button class="mod-btn" id="gallery-editor-cancel" type="button">Cancel</button>
       <button class="mod-btn" id="gallery-editor-save" type="button" disabled>Post</button>
     </div>
@@ -171,11 +187,11 @@
 <!-- Delete confirmation — centered on-page modal, not the native browser confirm() -->
 <div class="mod-confirm-overlay" id="gallery-delete-confirm-overlay" hidden>
   <div class="mod-confirm-modal">
-    <p class="mod-confirm-title">Delete this gallery post?</p>
-    <p class="mod-confirm-text">This can't be undone.</p>
+    <p class="mod-confirm-title">Remove this post from this story?</p>
+    <p class="mod-confirm-text">It'll still exist on your profile (and any other stories it's linked to) — this only removes it from here.</p>
     <div class="mod-confirm-actions">
       <button class="mod-btn" id="gallery-delete-confirm-cancel" type="button">Cancel</button>
-      <button class="mod-btn mod-btn--danger" id="gallery-delete-confirm-yes" type="button">Delete</button>
+      <button class="mod-btn mod-btn--danger" id="gallery-delete-confirm-yes" type="button">Remove</button>
     </div>
   </div>
 </div>
@@ -574,6 +590,57 @@ document.getElementById('gallery-create-btn').addEventListener('click', () => op
 document.getElementById('gallery-editor-cancel').addEventListener('click', closeGalleryEditor);
 // No click-outside-to-close here on purpose — accidental clicks shouldn't wipe out a half-filled post.
 
+// ── Link Existing — search the owner's own gallery posts not yet on this
+// story's roster, and add one without duplicating it. ──
+let galleryLinkDebounce;
+async function runGalleryLinkSearch(q) {
+  const resultsWrap = document.getElementById('gallery-link-results');
+  resultsWrap.innerHTML = '<p style="color:#888;font-size:0.85rem;">Loading…</p>';
+  try {
+    const res = await fetch(`/api/moderator/gallery/linkable?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+    const data = await res.json();
+    const items = data.gallery || [];
+    if (!items.length) {
+      resultsWrap.innerHTML = '<p style="color:#888;font-size:0.85rem;">No matching posts — try Create instead.</p>';
+      return;
+    }
+    resultsWrap.innerHTML = '';
+    items.forEach(g => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'mod-panel-list-item';
+      row.style.cssText = 'width:100%; text-align:left; background:#161616; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:0.5rem 0.75rem; cursor:pointer;';
+      row.innerHTML = `
+        <span style="display:flex; align-items:center; gap:0.6rem;">
+          <img src="${g.image_url}" alt="" style="width:36px;height:36px;border-radius:6px;object-fit:cover;" />
+          ${g.title || 'Untitled'}
+        </span>
+      `;
+      row.addEventListener('click', async () => {
+        row.disabled = true;
+        await fetch(`/api/moderator/gallery/${g.id}/link`, { method: 'POST', headers: authHeaders() });
+        document.getElementById('gallery-link-overlay').hidden = true;
+        reloadGallery();
+      });
+      resultsWrap.appendChild(row);
+    });
+  } catch {
+    resultsWrap.innerHTML = '<p style="color:#888;font-size:0.85rem;">Couldn\'t load your gallery posts right now.</p>';
+  }
+}
+document.getElementById('gallery-link-btn').addEventListener('click', () => {
+  document.getElementById('gallery-link-search').value = '';
+  document.getElementById('gallery-link-overlay').hidden = false;
+  runGalleryLinkSearch('');
+});
+document.getElementById('gallery-link-cancel').addEventListener('click', () => {
+  document.getElementById('gallery-link-overlay').hidden = true;
+});
+document.getElementById('gallery-link-search').addEventListener('input', (e) => {
+  clearTimeout(galleryLinkDebounce);
+  galleryLinkDebounce = setTimeout(() => runGalleryLinkSearch(e.target.value.trim()), 300);
+});
+
 document.getElementById('gallery-editor-img-wrap').addEventListener('click', () => {
   document.getElementById('gallery-editor-file-input').click();
 });
@@ -636,7 +703,7 @@ document.getElementById('gallery-editor-delete').addEventListener('click', async
 
   const deleteBtn = document.getElementById('gallery-editor-delete');
   deleteBtn.disabled = true;
-  deleteBtn.textContent = 'Deleting…';
+  deleteBtn.textContent = 'Removing…';
   try {
     await fetch(`/api/moderator/gallery/${editingPostId}`, { method: 'DELETE', headers: authHeaders() });
     closeGalleryEditor();
@@ -644,10 +711,10 @@ document.getElementById('gallery-editor-delete').addEventListener('click', async
     await reloadGallery(activeCategory);
   } catch {
     document.getElementById('gallery-editor-msg').className = 'mod-panel-msg mod-panel-msg--error';
-    document.getElementById('gallery-editor-msg').textContent = 'Failed to delete. Please try again.';
+    document.getElementById('gallery-editor-msg').textContent = 'Failed to remove. Please try again.';
   } finally {
     deleteBtn.disabled = false;
-    deleteBtn.textContent = 'Delete';
+    deleteBtn.textContent = 'Remove from Story';
   }
 });
 

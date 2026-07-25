@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Character ✦ Fanpages</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <style>
+    body { background: #0d0d0d; }
+    .char-page-eyebrow {
+      max-width: 1240px; margin: 0 auto; padding: 2.5rem 2rem 0;
+      font-family: 'Cinzel', serif; font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--gold); position: relative; z-index: 1;
+    }
+    .char-page-owner-link { color: var(--gold); text-decoration: none; }
+    .char-page-owner-link:hover { text-decoration: underline; }
+    .chars-layout { padding-top: 1rem; }
+    .char-page-manage {
+      margin-top: 0.75rem; font-size: 0.78rem; color: #999; text-align: center; line-height: 1.6;
+    }
+    .char-page-manage a { color: #7fa8d9; }
+  </style>
+</head>
+<body class="mod-theme">
+
+<div id="fanpages-topbar-root"></div>
+<script src="/fanpages/fanpages-nav.js"></script>
+
+<p class="char-page-eyebrow" id="char-page-eyebrow"></p>
+
+<div class="chars-layout">
+
+  <div class="chars-sidebar-col">
+    <aside class="chars-sidebar">
+      <span class="chars-sidebar-label" id="chars-sidebar-label">More Characters</span>
+      <div class="chars-nav-scroller">
+        <div class="chars-nav" id="chars-nav"></div>
+      </div>
+    </aside>
+  </div>
+
+  <main class="chars-main">
+    <div id="char-profile" class="char-profile"></div>
+    <p class="char-page-manage" id="char-page-manage" hidden></p>
+  </main>
+
+</div>
+
+<script>
+  const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+  const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
+
+  const DEFAULT_REF = '/images/defaultchar.jpg';
+  const NA = 'N/A';
+
+  let CHARACTERS = [];   // the owner's other characters — the persistent list here
+  let GHOST_CHAR = null; // a relationship-linked character not owned by this same profile
+  let CURRENT = null;
+  let OWNER_USERNAME = '';
+
+  function isBlank(v) { return !v || !v.trim() || v.trim() === NA; }
+  function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function richText(s) {
+    let out = escapeHtml(s || '');
+    out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    out = out.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    return out;
+  }
+
+  function normalizeChar(r) {
+    return {
+      id: String(r.id),
+      name: r.name,
+      hasRef: !!(r.ref_image || r.image),
+      ref: r.ref_image || r.image || null,
+      refPosX: (r.ref_position_x != null ? r.ref_position_x : r.position_x) != null ? (r.ref_position_x != null ? r.ref_position_x : r.position_x) : 50,
+      refPosY: (r.ref_position_y != null ? r.ref_position_y : r.position_y) != null ? (r.ref_position_y != null ? r.ref_position_y : r.position_y) : 50,
+      desc: (r.description || NA).split('\n').filter(Boolean),
+      stats: r.stats || {},
+      facts: (r.facts && r.facts.length) ? r.facts : [NA],
+      lore: r.lore || [],
+      relationships: r.relationships || [],
+      owner_username: r.owner_username || OWNER_USERNAME,
+      owner_display_name: r.owner_display_name || null,
+    };
+  }
+
+  function renderProfile(char) {
+    const profile = document.getElementById('char-profile');
+    profile.innerHTML = '';
+
+    const refWrap = document.createElement('div');
+    refWrap.className = 'char-ref-wrap';
+    refWrap.style.aspectRatio = char.hasRef ? '1 / 1' : '13 / 10';
+    const img = document.createElement('img');
+    img.alt = char.name;
+    img.src = char.ref || DEFAULT_REF;
+    img.style.objectPosition = `${char.refPosX}% ${char.refPosY}%`;
+    img.onerror = function () {
+      refWrap.innerHTML = '<div class="char-ref-placeholder"><span>✦</span><span>No reference yet</span></div>';
+    };
+    refWrap.appendChild(img);
+    profile.appendChild(refWrap);
+
+    const bio = document.createElement('div');
+    bio.className = 'char-bio-box';
+    const nameEl = document.createElement('h1');
+    nameEl.className = 'char-name';
+    nameEl.textContent = char.name;
+    bio.appendChild(nameEl);
+    const descWrap = document.createElement('div');
+    descWrap.className = 'char-desc';
+    char.desc.forEach(text => {
+      const p = document.createElement('p');
+      p.innerHTML = richText(text);
+      descWrap.appendChild(p);
+    });
+    bio.appendChild(descWrap);
+    profile.appendChild(bio);
+
+    const row = document.createElement('div');
+    row.className = 'char-cards-row';
+
+    const statsBox = document.createElement('div');
+    statsBox.className = 'char-box';
+    const statsTitle = document.createElement('span');
+    statsTitle.className = 'char-box-title';
+    statsTitle.textContent = 'Stats';
+    statsBox.appendChild(statsTitle);
+
+    const stats = char.stats || {};
+    Object.entries(stats).forEach(([label, value]) => {
+      if (label === 'Theme Song') return;
+      const statRow = document.createElement('div');
+      statRow.className = 'char-stat-row';
+      const lbl = document.createElement('span');
+      lbl.className = 'char-stat-label';
+      lbl.textContent = label;
+      const val = document.createElement('span');
+      val.className = 'char-stat-value';
+      val.innerHTML = richText(value || NA);
+      statRow.appendChild(lbl);
+      statRow.appendChild(val);
+      statsBox.appendChild(statRow);
+    });
+
+    const relationships = (char.relationships || []).filter(r => r && r.name);
+    if (relationships.length) {
+      const relDivider = document.createElement('div');
+      relDivider.style.cssText = 'border-top:1px solid rgba(255,255,255,0.08); margin:0.75rem 0 0.6rem;';
+      statsBox.appendChild(relDivider);
+
+      const relLabel = document.createElement('span');
+      relLabel.className = 'char-stat-label';
+      relLabel.textContent = 'Relationships';
+      relLabel.style.display = 'block';
+      relLabel.style.marginBottom = '0.4rem';
+      statsBox.appendChild(relLabel);
+
+      relationships.forEach(rel => {
+        const relLine = document.createElement('div');
+        relLine.style.cssText = 'font-size:0.88rem; color:#ccc; padding:0.15rem 0;';
+        if (rel.character_id) {
+          const nameLink = document.createElement('a');
+          nameLink.href = '#';
+          nameLink.style.cssText = 'color:#f0c060; font-weight:700; text-decoration:none; text-shadow:0 0 12px rgba(240,192,96,0.6); cursor:pointer;';
+          nameLink.textContent = rel.name;
+          nameLink.addEventListener('click', (e) => { e.preventDefault(); viewCharacter(rel.character_id); });
+          relLine.appendChild(nameLink);
+        } else {
+          const nameSpan = document.createElement('span');
+          nameSpan.style.cssText = 'color:#f0c060; font-weight:700;';
+          nameSpan.textContent = rel.name;
+          relLine.appendChild(nameSpan);
+        }
+        if (!isBlank(rel.type)) relLine.appendChild(document.createTextNode(' — ' + rel.type));
+        statsBox.appendChild(relLine);
+      });
+    }
+    row.appendChild(statsBox);
+
+    const factsBox = document.createElement('div');
+    factsBox.className = 'char-box';
+    const factsTitle = document.createElement('span');
+    factsTitle.className = 'char-box-title';
+    factsTitle.textContent = 'Fun Facts';
+    factsBox.appendChild(factsTitle);
+
+    const themeSong = stats['Theme Song'];
+    const themeFact = document.createElement('div');
+    themeFact.className = 'char-fact';
+    const themeBullet = document.createElement('span');
+    themeBullet.className = 'char-fact-bullet';
+    themeBullet.textContent = '✦';
+    themeFact.appendChild(themeBullet);
+    const themeContent = document.createElement('span');
+    if (!isBlank(themeSong) && /^https?:\/\//i.test(themeSong.trim())) {
+      const a = document.createElement('a');
+      a.href = themeSong.trim();
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.style.color = '#f0c060';
+      a.textContent = 'Theme Song';
+      themeContent.appendChild(a);
+      themeContent.appendChild(document.createTextNode(' 🎵'));
+    } else {
+      themeContent.textContent = 'Theme Song: N/A';
+    }
+    themeFact.appendChild(themeContent);
+    factsBox.appendChild(themeFact);
+
+    char.facts.forEach(item => {
+      const fact = document.createElement('div');
+      fact.className = 'char-fact';
+      const bullet = document.createElement('span');
+      bullet.className = 'char-fact-bullet';
+      bullet.textContent = '✦';
+      const content = document.createElement('span');
+      content.innerHTML = richText(item);
+      fact.appendChild(bullet);
+      fact.appendChild(content);
+      factsBox.appendChild(fact);
+    });
+    row.appendChild(factsBox);
+    profile.appendChild(row);
+
+    const loreBox = document.createElement('div');
+    loreBox.className = 'char-box char-lore-box';
+    const loreTitle = document.createElement('span');
+    loreTitle.className = 'char-box-title';
+    loreTitle.textContent = 'Lore';
+    loreBox.appendChild(loreTitle);
+
+    const spoiler = document.createElement('div');
+    spoiler.className = 'char-lore-spoiler';
+    const textWrap = document.createElement('div');
+    textWrap.className = 'char-lore-text';
+    const loreItems = (char.lore && char.lore.length) ? char.lore : [NA];
+    loreItems.forEach(item => {
+      const p = document.createElement('p');
+      p.innerHTML = richText(item);
+      textWrap.appendChild(p);
+    });
+    spoiler.appendChild(textWrap);
+    const revealBtn = document.createElement('button');
+    revealBtn.className = 'char-lore-reveal';
+    revealBtn.textContent = '⚠ Spoilers — click to reveal';
+    revealBtn.addEventListener('click', () => spoiler.classList.add('revealed'));
+    spoiler.appendChild(revealBtn);
+    loreBox.appendChild(spoiler);
+    profile.appendChild(loreBox);
+
+    // Eyebrow — links back to the owner's profile
+    const eyebrow = document.getElementById('char-page-eyebrow');
+    eyebrow.innerHTML = `<a class="char-page-owner-link" href="/fanpages/${char.owner_username}">${escapeHtml(char.owner_display_name || char.owner_username)}</a>'s Character`;
+    document.title = `${char.name} ✦ Fanpages`;
+
+    // Owner-only management note — full editing happens from wherever the
+    // character is actually linked (a story) or from the profile's own
+    // Characters tab (delete); this page is the read view.
+    const manage = document.getElementById('char-page-manage');
+    if (token) {
+      manage.hidden = false;
+      manage.innerHTML = `Manage this character from <a href="/fanpages/${char.owner_username}#characters">your profile</a>, or from any story it's linked to.`;
+    } else {
+      manage.hidden = true;
+    }
+  }
+
+  function buildNav() {
+    const nav = document.getElementById('chars-nav');
+    nav.innerHTML = '';
+    const activeId = CURRENT ? CURRENT.id : null;
+
+    if (GHOST_CHAR) {
+      const label = document.createElement('span');
+      label.className = 'chars-ghost-label';
+      label.textContent = 'Currently Viewing';
+      nav.appendChild(label);
+
+      const ghostBtn = document.createElement('button');
+      ghostBtn.type = 'button';
+      ghostBtn.className = 'chars-tab--ghost';
+      ghostBtn.textContent = GHOST_CHAR.name;
+      ghostBtn.disabled = true;
+      nav.appendChild(ghostBtn);
+
+      const divider = document.createElement('div');
+      divider.className = 'chars-ghost-divider';
+      nav.appendChild(divider);
+    }
+
+    if (!CHARACTERS.length) {
+      const empty = document.createElement('p');
+      empty.style.cssText = 'color:#888; font-size:0.82rem; padding:0 0.6rem;';
+      empty.textContent = GHOST_CHAR ? '' : 'No other characters yet.';
+      nav.appendChild(empty);
+      return;
+    }
+    CHARACTERS.forEach(char => {
+      const btn = document.createElement('button');
+      btn.className = 'chars-tab' + (char.id === activeId ? ' active' : '');
+      btn.dataset.id = char.id;
+      btn.textContent = char.name;
+      btn.addEventListener('click', () => viewCharacter(char.id));
+      nav.appendChild(btn);
+    });
+  }
+
+  // Same "ghost slot" rule as the story characters page: known list member =
+  // instant switch; anyone else = fetched fresh and shown as a temporary
+  // glowing entry instead of navigating away.
+  async function viewCharacter(id) {
+    id = String(id);
+    const known = CHARACTERS.find(c => c.id === id);
+    if (known) {
+      GHOST_CHAR = null;
+      CURRENT = known;
+      history.pushState(null, '', `/fanpages/character?id=${known.id}`);
+      renderProfile(known);
+      buildNav();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    try {
+      const res = await fetch(`/api/characters/${id}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const normalized = normalizeChar(data.character);
+      GHOST_CHAR = normalized;
+      CURRENT = normalized;
+      history.pushState(null, '', `/fanpages/character?id=${normalized.id}`);
+      renderProfile(normalized);
+      buildNav();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch {}
+  }
+
+  (async () => {
+    const id = new URLSearchParams(window.location.search).get('id');
+    if (!id) {
+      document.getElementById('char-profile').innerHTML = '<p class="gallery-empty-msg">No character specified.</p>';
+      return;
+    }
+    const res = await fetch(`/api/characters/${id}`);
+    if (!res.ok) {
+      document.getElementById('char-profile').innerHTML = '<p class="gallery-empty-msg">Character not found.</p>';
+      return;
+    }
+    const data = await res.json();
+    CURRENT = normalizeChar(data.character);
+    OWNER_USERNAME = CURRENT.owner_username;
+    document.getElementById('chars-sidebar-label').textContent =
+      `More by ${CURRENT.owner_display_name || CURRENT.owner_username}`;
+
+    const rosterRes = await fetch(`/api/fanpage-profile/${OWNER_USERNAME}/all-characters`);
+    const rosterData = rosterRes.ok ? await rosterRes.json() : { characters: [] };
+    CHARACTERS = (rosterData.characters || []).map(normalizeChar);
+
+    const inRoster = CHARACTERS.some(c => c.id === CURRENT.id);
+    GHOST_CHAR = inRoster ? null : CURRENT;
+    renderProfile(CURRENT);
+    buildNav();
+  })();
+</script>
+
+</body>
+</html>
