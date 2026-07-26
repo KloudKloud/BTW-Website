@@ -135,19 +135,24 @@
       font-size: 2.5rem; font-weight: 700; color: #fff;
       background: linear-gradient(135deg, #7fa8d9, #d97a72);
     }
-    /* Centered pill overlay, matching the banner's "Change Banner Image"
-       treatment, instead of a small corner camera badge. */
+    /* Just the camera emoji, centered over the avatar — no pill/text, so it
+       doesn't compete for space with the Recrop badge sitting outside the
+       circle. */
     .fp-avatar-camera-btn {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 5;
-      display: flex; align-items: center; gap: 0.3rem;
-      background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.4); border-radius: 8px;
-      color: #fff; font-family: inherit; font-size: 0.66rem; font-weight: 600;
-      padding: 0.4rem 0.55rem; cursor: pointer; white-space: nowrap; text-align: center;
+      display: flex; align-items: center; justify-content: center;
+      width: 42px; height: 42px; border-radius: 50%; box-sizing: border-box;
+      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.4);
+      color: #fff; font-size: 1.15rem; cursor: pointer;
     }
-    .fp-avatar-camera-btn:hover { background: rgba(0,0,0,0.85); }
+    .fp-avatar-camera-btn:hover { background: rgba(0,0,0,0.8); }
+    /* A small pencil badge outside the avatar circle (bottom-right), instead
+       of a "Recrop" pill sitting on top of the picture itself. */
     .fp-recrop-btn--avatar {
-      position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); z-index: 5;
-      font-size: 0.6rem; padding: 0.3rem 0.55rem; white-space: nowrap;
+      position: absolute; bottom: 2px; right: -4px; z-index: 6;
+      display: flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; border-radius: 50%; box-sizing: border-box;
+      font-size: 0.85rem; padding: 0;
     }
     /* Centered under the now-centered avatar, just below its bottom edge. */
     .fp-avatar-hint {
@@ -798,9 +803,9 @@
   <div class="fp-avatar-wrap">
     <div class="fp-avatar" id="fp-avatar-img" style="display:none;"></div>
     <div class="fp-avatar fp-avatar-fallback" id="fp-avatar-fallback">?</div>
-    <button type="button" class="fp-avatar-camera-btn" id="fp-avatar-camera-btn" hidden>📷 Change Pfp</button>
+    <button type="button" class="fp-avatar-camera-btn" id="fp-avatar-camera-btn" hidden title="Change Pfp">📷</button>
     <input type="file" id="fp-avatar-file-input" accept="image/*" hidden />
-    <button type="button" class="fp-recrop-btn fp-recrop-btn--avatar" id="fp-avatar-recrop-btn" hidden>🔲 Recrop</button>
+    <button type="button" class="fp-recrop-btn fp-recrop-btn--avatar" id="fp-avatar-recrop-btn" hidden title="Recrop">✏️</button>
   </div>
   <p class="fp-avatar-hint" id="fp-avatar-hint" hidden>Recommended: 400 × 400px</p>
 
@@ -2386,14 +2391,18 @@
     cropModalOnSave = onSave;
     document.getElementById('crop-modal-overlay').hidden = false;
     if (cropModalCropper) { cropModalCropper.destroy(); cropModalCropper = null; }
-    const init = () => {
+    // Force a fresh load every time, even if imageSrc happens to match the
+    // element's current src (recropping the same image twice in a row) —
+    // otherwise "onload" may never fire (browsers can skip it for an
+    // unchanged src), Cropper never initializes, and Save silently does
+    // nothing because cropModalCropper stays null.
+    img.removeAttribute('src');
+    img.onload = () => {
       cropModalCropper = new Cropper(img, {
         aspectRatio, viewMode: 1, dragMode: 'move', autoCropArea: 1, background: false, responsive: true,
       });
     };
-    img.onload = init;
     img.src = imageSrc;
-    if (img.complete && img.naturalWidth) init();
   }
   function closeCropModal() {
     document.getElementById('crop-modal-overlay').hidden = true;
@@ -2402,16 +2411,24 @@
   }
   document.getElementById('crop-modal-cancel').addEventListener('click', closeCropModal);
   document.getElementById('crop-modal-save').addEventListener('click', async () => {
-    if (!cropModalCropper || !cropModalOnSave) return;
+    if (!cropModalCropper || !cropModalOnSave) {
+      console.error('Crop modal Save clicked before Cropper finished initializing.');
+      return;
+    }
     const btn = document.getElementById('crop-modal-save');
     btn.disabled = true;
     btn.textContent = 'Saving…';
     try {
       const canvas = cropModalCropper.getCroppedCanvas();
-      await new Promise(resolve => {
-        canvas.toBlob(async (blob) => { await cropModalOnSave(blob); resolve(); }, 'image/jpeg', 0.92);
+      await new Promise((resolve, reject) => {
+        canvas.toBlob(async (blob) => {
+          if (!blob) { reject(new Error('Could not export the cropped image.')); return; }
+          try { await cropModalOnSave(blob); resolve(); } catch (err) { reject(err); }
+        }, 'image/jpeg', 0.92);
       });
       closeCropModal();
+    } catch (err) {
+      console.error('Crop save failed:', err);
     } finally {
       btn.disabled = false;
       btn.textContent = 'Save Crop';
