@@ -6,6 +6,12 @@
   <title>Fanpage ✦ Fanpages</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <!-- Pulls in the shared character-profile (.chars-*/.char-*) and gallery
+       (.mod-gallery-*/.gallery-*/.art-view-*) styling used by the
+       story-context pages, so the Characters/Gallery tabs can reuse that
+       exact layout instead of the old simple thumbnail grid. -->
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; }
@@ -270,6 +276,10 @@
     }
 
     .fp-tab-view { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    /* Characters/Gallery reuse the story-context layouts (.chars-layout,
+       .mod-gallery-main), which already carry their own max-width/padding —
+       let them own the spacing instead of double-boxing inside .fp-tab-view. */
+    #fp-characters-view, #fp-gallery-view { max-width: none; margin: 0; padding: 0; }
     .fp-tab-view-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1.25rem; }
     .fp-tab-view-grid .fp-featured-card { width: auto; }
     .fp-tab-view-empty {
@@ -613,12 +623,60 @@
 
 </div>
 
+<!-- Characters tab — same layout as a story's Characters page: a sidebar
+     list of every character (spotlights) next to a full single-character
+     display, instead of the old flat thumbnail grid. View-only for now. -->
 <div class="fp-tab-view" id="fp-characters-view" hidden>
-  <div class="fp-tab-view-grid" id="fp-characters-grid"></div>
+  <div class="chars-layout">
+    <div class="chars-sidebar-col">
+      <aside class="chars-sidebar">
+        <span class="chars-sidebar-label">Character Spotlights</span>
+        <div class="chars-nav-scroller">
+          <div class="chars-nav" id="fp-chars-nav"></div>
+        </div>
+      </aside>
+    </div>
+    <main class="chars-main">
+      <div id="fp-char-profile" class="char-profile"></div>
+    </main>
+  </div>
 </div>
 
+<!-- Gallery tab — same layout as a story's Gallery page: a Browse sidebar
+     (category filter) next to the tile grid, with a click-through detail
+     view. View-only for now — spicy is intentionally excluded here, same
+     rule as the rest of the public-facing profile. -->
 <div class="fp-tab-view" id="fp-gallery-view" hidden>
-  <div class="fp-tab-view-grid" id="fp-gallery-grid"></div>
+  <div class="mod-gallery-main" id="fp-gallery-grid-view">
+    <div class="chars-sidebar-col">
+      <aside class="chars-create-box">
+        <p class="mod-gallery-sidebar-label">Browse</p>
+        <button class="mod-gallery-cat active" id="fp-cat-art" type="button">SFW</button>
+        <button class="mod-gallery-cat" id="fp-cat-sketches" type="button">Sketches</button>
+      </aside>
+    </div>
+    <div class="mod-gallery-content">
+      <p class="mod-gallery-eyebrow" id="fp-gallery-eyebrow">Fan Art &amp; Illustrations</p>
+      <h1 class="wiki-title" id="fp-gallery-title-text">SFW</h1>
+      <div class="wiki-rule"></div>
+      <div class="gallery-grid" id="fp-gallery-grid"></div>
+    </div>
+  </div>
+
+  <div class="art-view-wrapper" id="fp-gallery-detail-view" style="display:none; max-width:none; margin:0; padding:0;">
+    <a class="art-view-back" href="#" id="fp-gallery-detail-back">← Back to Gallery</a>
+    <div class="art-view-image-wrap">
+      <img id="fp-gallery-detail-img" src="" alt="" />
+    </div>
+    <div class="art-view-info">
+      <h1 class="art-view-title" id="fp-gallery-detail-title"></h1>
+    </div>
+    <button class="art-view-like" id="fp-gallery-detail-like" type="button" aria-label="Like">
+      <span id="fp-gallery-detail-like-icon">♡</span> <span id="fp-gallery-detail-like-count">0</span>
+    </button>
+    <div class="art-view-desc" id="fp-gallery-detail-desc"></div>
+    <div id="fp-gallery-detail-nav" class="art-nav"></div>
+  </div>
 </div>
 
 <div class="fp-tab-view" id="fp-stories-view" hidden>
@@ -797,84 +855,385 @@
     if (tab === 'stories') renderStoriesGrid(document.getElementById('fp-stories-grid'));
   }
 
-  // href is null for standalone (unlinked) characters/art — nothing useful
-  // to navigate to yet, so it renders as a plain non-clickable card instead
-  // of a dead link. deleteFn, when passed (owner viewing their own profile),
-  // adds a small trash button — the only way to permanently remove a
-  // standalone item now that story "remove" buttons just unlink.
-  function tabViewCard(href, imgSrc, posX, posY, title, deleteFn) {
-    const el = document.createElement(href ? 'a' : 'div');
-    el.className = 'fp-featured-card';
-    if (href) el.href = href;
+  // ── Characters tab — same layout as a story's Characters page: sidebar
+  // list of every character next to a full single-character display.
+  // View-only for now (no create/edit/delete here — that's still the job of
+  // the account-level character editor and the canonical /character page). ──
+  const NA = 'N/A';
+  const DEFAULT_REF = '/images/defaultchar.jpg';
+  function isBlank(v) { return !v || !v.trim() || v.trim() === NA; }
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function richText(s) {
+    let out = escapeHtml(s || '');
+    out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    out = out.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    return out;
+  }
+  function renderGalleryText(s) {
+    if (!s) return '<span style="color:#888;">No description provided</span>';
+    const tokens = [];
+    const working = String(s).replace(/\[([^\]]+)\]<([^>]+)>/g, (m, label, url) => {
+      const safeUrl = /^https?:\/\//i.test(url.trim()) ? url.trim() : '#';
+      tokens.push({ label, url: safeUrl });
+      return ` TOKEN${tokens.length - 1} `;
+    });
+    let out = richText(working);
+    tokens.forEach((t, i) => {
+      out = out.replace(` TOKEN${i} `, `<a href="${t.url}" target="_blank" rel="noopener" style="color:#7fa8d9;">${escapeHtml(t.label)}</a>`);
+    });
+    return out;
+  }
+
+  let FP_CHARACTERS = [];
+  let fpActiveCharId = null;
+  let fpCharactersLoaded = false;
+
+  function normalizeFpChar(r) {
+    return {
+      id: String(r.id),
+      name: r.name,
+      hasRef: !!r.ref_image,
+      ref: r.ref_image || null,
+      refPosX: r.ref_position_x != null ? r.ref_position_x : 50,
+      refPosY: r.ref_position_y != null ? r.ref_position_y : 50,
+      desc: (r.description || NA).split('\n').filter(Boolean),
+      stats: r.stats || {},
+      facts: (r.facts && r.facts.length) ? r.facts : [NA],
+      lore: r.lore || [],
+      relationships: r.relationships || [],
+    };
+  }
+
+  function renderFpCharProfile(char) {
+    const profile = document.getElementById('fp-char-profile');
+    profile.innerHTML = '';
+
+    const refWrap = document.createElement('div');
+    refWrap.className = 'char-ref-wrap';
+    refWrap.style.aspectRatio = char.hasRef ? '1 / 1' : '13 / 10';
     const img = document.createElement('img');
-    img.className = 'fp-featured-card-img';
-    img.src = imgSrc;
-    img.alt = '';
-    img.style.objectPosition = `${posX != null ? posX : 50}% ${posY != null ? posY : 50}%`;
-    const p = document.createElement('p');
-    p.className = 'fp-featured-card-title';
-    p.textContent = title || 'Untitled';
-    el.appendChild(img);
-    el.appendChild(p);
-    if (deleteFn) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'fp-featured-remove';
-      btn.title = 'Delete permanently';
-      btn.textContent = '✕';
-      btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); deleteFn(); });
-      el.appendChild(btn);
+    img.alt = char.name;
+    img.src = char.ref || DEFAULT_REF;
+    img.style.objectPosition = `${char.refPosX}% ${char.refPosY}%`;
+    img.onerror = function () {
+      refWrap.innerHTML = '<div class="char-ref-placeholder"><span>✦</span><span>No reference yet</span></div>';
+    };
+    refWrap.appendChild(img);
+    profile.appendChild(refWrap);
+
+    const bio = document.createElement('div');
+    bio.className = 'char-bio-box';
+    const nameEl = document.createElement('h1');
+    nameEl.className = 'char-name';
+    nameEl.textContent = char.name;
+    bio.appendChild(nameEl);
+    const descWrap = document.createElement('div');
+    descWrap.className = 'char-desc';
+    char.desc.forEach(text => {
+      const p = document.createElement('p');
+      p.innerHTML = richText(text);
+      descWrap.appendChild(p);
+    });
+    bio.appendChild(descWrap);
+    profile.appendChild(bio);
+
+    const row = document.createElement('div');
+    row.className = 'char-cards-row';
+
+    const statsBox = document.createElement('div');
+    statsBox.className = 'char-box';
+    const statsTitle = document.createElement('span');
+    statsTitle.className = 'char-box-title';
+    statsTitle.textContent = 'Stats';
+    statsBox.appendChild(statsTitle);
+
+    const stats = char.stats || {};
+    Object.entries(stats).forEach(([label, value]) => {
+      if (label === 'Theme Song') return;
+      const statRow = document.createElement('div');
+      statRow.className = 'char-stat-row';
+      const lbl = document.createElement('span');
+      lbl.className = 'char-stat-label';
+      lbl.textContent = label;
+      const val = document.createElement('span');
+      val.className = 'char-stat-value';
+      val.innerHTML = richText(value || NA);
+      statRow.appendChild(lbl);
+      statRow.appendChild(val);
+      statsBox.appendChild(statRow);
+    });
+
+    const relationships = (char.relationships || []).filter(r => r && r.name);
+    if (relationships.length) {
+      const relDivider = document.createElement('div');
+      relDivider.style.cssText = 'border-top:1px solid rgba(255,255,255,0.08); margin:0.75rem 0 0.6rem;';
+      statsBox.appendChild(relDivider);
+      const relLabel = document.createElement('span');
+      relLabel.className = 'char-stat-label';
+      relLabel.textContent = 'Relationships';
+      relLabel.style.display = 'block';
+      relLabel.style.marginBottom = '0.4rem';
+      statsBox.appendChild(relLabel);
+      relationships.forEach(rel => {
+        const relLine = document.createElement('div');
+        relLine.style.cssText = 'font-size:0.88rem; color:#ccc; padding:0.15rem 0;';
+        if (rel.character_id) {
+          const nameLink = document.createElement('a');
+          nameLink.href = `/fanpages/character?id=${rel.character_id}`;
+          nameLink.style.cssText = 'color:#f0c060; font-weight:700; text-decoration:none; text-shadow:0 0 12px rgba(240,192,96,0.6);';
+          nameLink.textContent = rel.name;
+          relLine.appendChild(nameLink);
+        } else {
+          const nameSpan = document.createElement('span');
+          nameSpan.style.cssText = 'color:#f0c060; font-weight:700;';
+          nameSpan.textContent = rel.name;
+          relLine.appendChild(nameSpan);
+        }
+        if (!isBlank(rel.type)) relLine.appendChild(document.createTextNode(' — ' + rel.type));
+        statsBox.appendChild(relLine);
+      });
     }
-    return el;
+    row.appendChild(statsBox);
+
+    const factsBox = document.createElement('div');
+    factsBox.className = 'char-box';
+    const factsTitle = document.createElement('span');
+    factsTitle.className = 'char-box-title';
+    factsTitle.textContent = 'Fun Facts';
+    factsBox.appendChild(factsTitle);
+
+    const themeSong = stats['Theme Song'];
+    const themeFact = document.createElement('div');
+    themeFact.className = 'char-fact';
+    const themeBullet = document.createElement('span');
+    themeBullet.className = 'char-fact-bullet';
+    themeBullet.textContent = '✦';
+    themeFact.appendChild(themeBullet);
+    const themeContent = document.createElement('span');
+    if (!isBlank(themeSong) && /^https?:\/\//i.test(themeSong.trim())) {
+      const a = document.createElement('a');
+      a.href = themeSong.trim();
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.style.color = '#f0c060';
+      a.textContent = 'Theme Song';
+      themeContent.appendChild(a);
+      themeContent.appendChild(document.createTextNode(' 🎵'));
+    } else {
+      themeContent.textContent = 'Theme Song: N/A';
+    }
+    themeFact.appendChild(themeContent);
+    factsBox.appendChild(themeFact);
+
+    char.facts.forEach(item => {
+      const fact = document.createElement('div');
+      fact.className = 'char-fact';
+      const bullet = document.createElement('span');
+      bullet.className = 'char-fact-bullet';
+      bullet.textContent = '✦';
+      const content = document.createElement('span');
+      content.innerHTML = richText(item);
+      fact.appendChild(bullet);
+      fact.appendChild(content);
+      factsBox.appendChild(fact);
+    });
+    row.appendChild(factsBox);
+    profile.appendChild(row);
+
+    const loreBox = document.createElement('div');
+    loreBox.className = 'char-box char-lore-box';
+    const loreTitle = document.createElement('span');
+    loreTitle.className = 'char-box-title';
+    loreTitle.textContent = 'Lore';
+    loreBox.appendChild(loreTitle);
+    const spoiler = document.createElement('div');
+    spoiler.className = 'char-lore-spoiler';
+    const textWrap = document.createElement('div');
+    textWrap.className = 'char-lore-text';
+    const loreItems = (char.lore && char.lore.length) ? char.lore : [NA];
+    loreItems.forEach(item => {
+      const p = document.createElement('p');
+      p.innerHTML = richText(item);
+      textWrap.appendChild(p);
+    });
+    spoiler.appendChild(textWrap);
+    const revealBtn = document.createElement('button');
+    revealBtn.className = 'char-lore-reveal';
+    revealBtn.textContent = '⚠ Spoilers — click to reveal';
+    revealBtn.addEventListener('click', () => spoiler.classList.add('revealed'));
+    spoiler.appendChild(revealBtn);
+    loreBox.appendChild(spoiler);
+    profile.appendChild(loreBox);
+  }
+
+  function buildFpCharsNav() {
+    const nav = document.getElementById('fp-chars-nav');
+    nav.innerHTML = '';
+    FP_CHARACTERS.forEach(char => {
+      const btn = document.createElement('button');
+      btn.className = 'chars-tab' + (char.id === fpActiveCharId ? ' active' : '');
+      btn.dataset.id = char.id;
+      btn.textContent = char.name;
+      btn.addEventListener('click', () => selectFpCharacter(char.id));
+      nav.appendChild(btn);
+    });
+  }
+
+  function selectFpCharacter(id) {
+    id = String(id);
+    const char = FP_CHARACTERS.find(c => c.id === id);
+    if (!char) return;
+    fpActiveCharId = id;
+    renderFpCharProfile(char);
+    buildFpCharsNav();
   }
 
   async function loadCharactersTab() {
-    const grid = document.getElementById('fp-characters-grid');
-    grid.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
+    if (fpCharactersLoaded) return;
+    const nav = document.getElementById('fp-chars-nav');
+    const profile = document.getElementById('fp-char-profile');
+    nav.innerHTML = '';
+    profile.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
     try {
       const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-characters`);
       const data = await res.json();
-      const chars = data.characters || [];
-      if (!chars.length) {
-        grid.innerHTML = `<p class="fp-tab-view-empty">@${USERNAME} hasn't added any characters yet.</p>`;
+      FP_CHARACTERS = (data.characters || []).map(normalizeFpChar);
+      if (!FP_CHARACTERS.length) {
+        profile.innerHTML = `<p class="fp-tab-view-empty">@${USERNAME} hasn't added any characters yet.</p>`;
         return;
       }
-      grid.innerHTML = '';
-      chars.forEach(c => grid.appendChild(tabViewCard(
-        `/fanpages/character?id=${c.id}`,
-        c.image || '/images/defaultchar.jpg', c.position_x, c.position_y, c.name,
-        (currentAuthor && currentAuthor.is_self) ? async () => {
-          if (!confirm(`Delete "${c.name}" permanently? This can't be undone.`)) return;
-          await fetch(`/api/characters/${c.id}`, { method: 'DELETE', headers: authHeaders() });
-          loadCharactersTab();
-        } : null
-      )));
+      fpCharactersLoaded = true;
+      fpActiveCharId = FP_CHARACTERS[0].id;
+      buildFpCharsNav();
+      renderFpCharProfile(FP_CHARACTERS[0]);
     } catch {
-      grid.innerHTML = '<p class="fp-tab-view-empty">Couldn\'t load characters right now.</p>';
+      profile.innerHTML = '<p class="fp-tab-view-empty">Couldn\'t load characters right now.</p>';
     }
   }
 
+  // ── Gallery tab — same layout as a story's Gallery page: a Browse sidebar
+  // (category filter) next to the tile grid, with a click-through detail
+  // view. Spicy is intentionally excluded — same rule as everywhere else
+  // spicy content is kept out of public-facing profile feeds. ──────────────
+  let FP_GALLERY_ART = [];
+  let FP_GALLERY_SKETCHES = [];
+  let fpGalleryLoaded = false;
+  let fpGalleryCurrentDetailItem = null;
+  let fpGalleryNavPrev = null;
+  let fpGalleryNavNext = null;
+
+  function fpSiblingsForCategory(cat) {
+    return cat === 'sketches' ? FP_GALLERY_SKETCHES : FP_GALLERY_ART;
+  }
+  function fpTruncateLabel(s, n) { return s.length > n ? s.slice(0, n).trimEnd() + '…' : s; }
+
+  function renderFpGalleryTiles(items, emptyMsg) {
+    const grid = document.getElementById('fp-gallery-grid');
+    if (!items.length) {
+      grid.innerHTML = `<p class="gallery-empty-msg">${emptyMsg}</p>`;
+      return;
+    }
+    grid.innerHTML = '';
+    items.forEach(g => {
+      const a = document.createElement('a');
+      a.className = 'gallery-tile';
+      a.href = '#';
+      const posX = g.position_x != null ? g.position_x : 50;
+      const posY = g.position_y != null ? g.position_y : 50;
+      a.innerHTML = `<img src="${g.image}" alt="${g.title || 'Gallery image'}" loading="lazy" draggable="false" style="object-position: ${posX}% ${posY}%;" />`;
+      a.addEventListener('click', (e) => { e.preventDefault(); openFpGalleryDetail(g); });
+      grid.appendChild(a);
+    });
+  }
+
+  function setFpGalleryCategory(cat) {
+    document.getElementById('fp-cat-art').classList.toggle('active', cat === 'sfw');
+    document.getElementById('fp-cat-sketches').classList.toggle('active', cat === 'sketches');
+    document.getElementById('fp-gallery-eyebrow').textContent = cat === 'sketches' ? 'Sketches & WIPs' : 'Fan Art & Illustrations';
+    document.getElementById('fp-gallery-title-text').textContent = cat === 'sketches' ? 'Sketches' : 'SFW';
+    renderFpGalleryTiles(fpSiblingsForCategory(cat), cat === 'sketches' ? 'No sketches yet — check back soon.' : 'No art yet — check back soon.');
+  }
+  document.getElementById('fp-cat-art').addEventListener('click', () => { closeFpGalleryDetail(); setFpGalleryCategory('sfw'); });
+  document.getElementById('fp-cat-sketches').addEventListener('click', () => { closeFpGalleryDetail(); setFpGalleryCategory('sketches'); });
+
+  function renderFpGalleryDetailNav(item) {
+    const siblings = fpSiblingsForCategory(item.category);
+    const idx = siblings.findIndex(g => String(g.id) === String(item.id));
+    fpGalleryNavPrev = idx > 0 ? siblings[idx - 1] : null;
+    fpGalleryNavNext = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : null;
+    const navEl = document.getElementById('fp-gallery-detail-nav');
+    navEl.innerHTML = '';
+    if (fpGalleryNavPrev) {
+      const a = document.createElement('a');
+      a.className = 'art-nav-btn art-nav-prev';
+      a.href = '#';
+      a.innerHTML = `← <span class="art-nav-label">${escapeHtml(fpTruncateLabel(fpGalleryNavPrev.title || 'Previous', 28))}</span>`;
+      a.addEventListener('click', (e) => { e.preventDefault(); openFpGalleryDetail(fpGalleryNavPrev); });
+      navEl.appendChild(a);
+    }
+    if (fpGalleryNavNext) {
+      const a = document.createElement('a');
+      a.className = 'art-nav-btn art-nav-next';
+      a.href = '#';
+      a.innerHTML = `<span class="art-nav-label">${escapeHtml(fpTruncateLabel(fpGalleryNavNext.title || 'Next', 28))}</span> →`;
+      a.addEventListener('click', (e) => { e.preventDefault(); openFpGalleryDetail(fpGalleryNavNext); });
+      navEl.appendChild(a);
+    }
+  }
+
+  function updateFpGalleryLikeUI(item) {
+    document.getElementById('fp-gallery-detail-like-icon').textContent = item.liked ? '♥' : '♡';
+    document.getElementById('fp-gallery-detail-like-count').textContent = item.like_count || 0;
+    document.getElementById('fp-gallery-detail-like').classList.toggle('liked', !!item.liked);
+  }
+
+  function openFpGalleryDetail(item) {
+    fpGalleryCurrentDetailItem = item;
+    document.getElementById('fp-gallery-detail-img').src = item.image;
+    document.getElementById('fp-gallery-detail-img').alt = item.title || '';
+    document.getElementById('fp-gallery-detail-title').textContent = item.title || 'No title provided';
+    document.getElementById('fp-gallery-detail-desc').innerHTML = renderGalleryText(item.description);
+    renderFpGalleryDetailNav(item);
+    updateFpGalleryLikeUI(item);
+    document.getElementById('fp-gallery-grid-view').style.display = 'none';
+    document.getElementById('fp-gallery-detail-view').style.display = 'block';
+  }
+  function closeFpGalleryDetail() {
+    fpGalleryCurrentDetailItem = null;
+    document.getElementById('fp-gallery-detail-view').style.display = 'none';
+    document.getElementById('fp-gallery-grid-view').style.display = '';
+  }
+  document.getElementById('fp-gallery-detail-back').addEventListener('click', (e) => { e.preventDefault(); closeFpGalleryDetail(); });
+
+  document.getElementById('fp-gallery-detail-like').addEventListener('click', async () => {
+    if (!token) { window.location.href = `/login?from=${encodeURIComponent(window.location.pathname)}`; return; }
+    if (!fpGalleryCurrentDetailItem) return;
+    const item = fpGalleryCurrentDetailItem;
+    const method = item.liked ? 'DELETE' : 'POST';
+    try {
+      const res = await fetch(`/api/moderator/gallery/${item.id}/like`, { method, headers: authHeaders() });
+      if (!res.ok) return;
+      const data = await res.json();
+      item.liked = data.liked;
+      item.like_count = data.like_count;
+      updateFpGalleryLikeUI(item);
+    } catch {}
+  });
+
   async function loadGalleryTab() {
+    if (fpGalleryLoaded) return;
     const grid = document.getElementById('fp-gallery-grid');
     grid.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
     try {
       const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-gallery`);
       const data = await res.json();
       const items = data.gallery || [];
-      if (!items.length) {
-        grid.innerHTML = `<p class="fp-tab-view-empty">@${USERNAME} hasn't posted any gallery art yet.</p>`;
-        return;
-      }
-      grid.innerHTML = '';
-      items.forEach(g => grid.appendChild(tabViewCard(
-        g.story_path ? `/fanpages/${g.story_path}/gallery` : null,
-        g.image, g.position_x, g.position_y, g.title,
-        (currentAuthor && currentAuthor.is_self) ? async () => {
-          if (!confirm(`Delete "${g.title || 'this post'}" permanently? This can't be undone.`)) return;
-          await fetch(`/api/gallery/${g.id}`, { method: 'DELETE', headers: authHeaders() });
-          loadGalleryTab();
-        } : null
-      )));
+      FP_GALLERY_ART = items.filter(g => g.category !== 'sketches');
+      FP_GALLERY_SKETCHES = items.filter(g => g.category === 'sketches');
+      fpGalleryLoaded = true;
+      setFpGalleryCategory('sfw');
     } catch {
       grid.innerHTML = '<p class="fp-tab-view-empty">Couldn\'t load gallery art right now.</p>';
     }

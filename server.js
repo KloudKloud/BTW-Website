@@ -2710,6 +2710,7 @@ app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
   if (!author) return res.status(404).json({ error: 'Not found.' });
   const { rows } = await pool.query(
     `SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y,
+            mc.description, mc.stats, mc.facts, mc.lore, mc.relationships,
             ms.story_path, ms.slug, ms.site_title
      FROM moderator_characters mc
      LEFT JOIN LATERAL (
@@ -2724,6 +2725,11 @@ app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
     characters: rows.map(r => ({
       id: r.id, name: r.name, image: r.ref_image || null,
       position_x: r.ref_position_x, position_y: r.ref_position_y,
+      // Full-detail fields — used by the profile's "Characters" tab, which
+      // renders a complete character page (not just a nav-list thumbnail).
+      ref_image: r.ref_image || null, ref_position_x: r.ref_position_x, ref_position_y: r.ref_position_y,
+      description: r.description, stats: r.stats || {}, facts: r.facts || [],
+      lore: r.lore || [], relationships: r.relationships || [],
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
     })),
   });
@@ -2734,9 +2740,18 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
     'SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]
   );
   if (!author) return res.status(404).json({ error: 'Not found.' });
+
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+
   const { rows } = await pool.query(
-    `SELECT mg.id, mg.image_url, mg.title, mg.position_x, mg.position_y,
-            ms.story_path, ms.slug, ms.site_title
+    `SELECT mg.id, mg.image_url, mg.title, mg.description, mg.category, mg.position_x, mg.position_y,
+            ms.story_path, ms.slug, ms.site_title,
+            (SELECT COUNT(*)::int FROM moderator_gallery_likes WHERE gallery_id = mg.id) AS like_count,
+            EXISTS(SELECT 1 FROM moderator_gallery_likes WHERE gallery_id = mg.id AND user_id = $2) AS liked
      FROM moderator_gallery mg
      LEFT JOIN LATERAL (
        SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1
@@ -2744,12 +2759,13 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
      LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
      WHERE mg.owner_user_id = $1 AND mg.category IN ('sfw', 'sketches')
      ORDER BY mg.created_at DESC`,
-    [author.id]
+    [author.id, viewerId || 0]
   );
   res.json({
     gallery: rows.map(r => ({
-      id: r.id, image: r.image_url, title: r.title,
+      id: r.id, image: r.image_url, title: r.title, description: r.description, category: r.category,
       position_x: r.position_x, position_y: r.position_y,
+      like_count: r.like_count, liked: r.liked,
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
     })),
   });
