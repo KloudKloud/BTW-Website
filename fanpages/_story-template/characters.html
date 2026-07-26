@@ -451,20 +451,23 @@ function renderProfile(char) {
   themeFact.appendChild(themeContent);
   factsBox.appendChild(themeFact);
 
-  // Stories — every story this character is linked to, as small clickable
-  // cover-art cards. Fetched fresh per character since it's not part of the
-  // roster payload.
-  const storiesLabel = document.createElement('span');
-  storiesLabel.className = 'char-box-title';
-  storiesLabel.style.cssText = 'display:block; font-size:0.8rem; margin:0.75rem 0 0.5rem; padding-top:0.65rem; border-top:1px solid rgba(255,255,255,0.08);';
-  storiesLabel.textContent = 'Stories';
-  factsBox.appendChild(storiesLabel);
+  // Stories — its own bullet, same as Theme Song, with the linked-story
+  // cards nested underneath it instead of a separate boxed section.
+  const storiesFact = document.createElement('div');
+  storiesFact.className = 'char-fact';
+  const storiesBullet = document.createElement('span');
+  storiesBullet.className = 'char-fact-bullet';
+  storiesBullet.textContent = '✦';
+  storiesFact.appendChild(storiesBullet);
+  const storiesContent = document.createElement('div');
+  storiesContent.style.cssText = 'flex:1; min-width:0;';
+  storiesContent.appendChild(document.createTextNode('Stories'));
   const storiesWrap = document.createElement('div');
+  storiesWrap.style.cssText = 'margin-top:0.55rem;';
   storiesWrap.innerHTML = '<p style="color:#888; font-size:0.82rem;">Loading…</p>';
-  factsBox.appendChild(storiesWrap);
-  const storiesDivider = document.createElement('div');
-  storiesDivider.style.cssText = 'border-top:1px solid rgba(255,255,255,0.08); margin:0.75rem 0 0;';
-  factsBox.appendChild(storiesDivider);
+  storiesContent.appendChild(storiesWrap);
+  storiesFact.appendChild(storiesContent);
+  factsBox.appendChild(storiesFact);
   fetch(`/api/characters/${char.id}/stories`)
     .then(r => r.ok ? r.json() : { stories: [] })
     .then(data => {
