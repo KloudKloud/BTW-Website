@@ -43,7 +43,7 @@
           </div>
         </div>
 
-        <a class="fpnav-login-btn" id="fpnav-login-btn" href="/login?from=${encodeURIComponent(here)}">Log In / Register</a>
+        <a class="fpnav-login-btn" id="fpnav-login-btn" href="/fanpages/login?from=${encodeURIComponent(here)}">Log In / Register</a>
 
         <button class="fpnav-icon-btn fpnav-icon-btn--labeled" id="fpnav-notif-btn" type="button" aria-label="Notifications" style="display:none;">
           <span class="fpnav-icon-btn-label">Updates</span>
@@ -59,7 +59,7 @@
           <div class="fpnav-dropdown" id="fpnav-avatar-dropdown" hidden>
             <a href="#" id="fpnav-my-profile-link">My Profile</a>
             <div class="fpnav-dropdown-divider"></div>
-            <a href="/fanpages/library" id="fpnav-library-link">Library</a>
+            <a href="/fanpages/library" id="fpnav-library-link">Bookmarks</a>
             <a href="/fanpages/notifications#inbox" id="fpnav-updates-link">Inbox</a>
             <div class="fpnav-dropdown-divider"></div>
             <a href="#" id="fpnav-edit-profile-link">Account Settings</a>
@@ -75,7 +75,7 @@
         <button class="fpnav-modal-close" id="fpnav-modal-close" type="button">✕</button>
         <p class="fpnav-modal-title">Log in to continue</p>
         <p class="fpnav-modal-text">You'll need a free Between Two Worlds account to create or manage stories on Fanpages.</p>
-        <a class="fpnav-modal-cta" id="fpnav-modal-cta" href="/login">Log In / Register</a>
+        <a class="fpnav-modal-cta" id="fpnav-modal-cta" href="/fanpages/login">Log In / Register</a>
       </div>
     </div>
   `;
@@ -124,7 +124,7 @@
   const modalCta      = document.getElementById('fpnav-modal-cta');
 
   function openGateModal(dest) {
-    modalCta.href = `/login?from=${encodeURIComponent(dest)}`;
+    modalCta.href = `/fanpages/login?from=${encodeURIComponent(dest)}`;
     modalOverlay.hidden = false;
   }
   document.getElementById('fpnav-modal-close').addEventListener('click', () => { modalOverlay.hidden = true; });

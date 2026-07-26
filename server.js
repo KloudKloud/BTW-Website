@@ -2631,6 +2631,40 @@ app.get('/api/moderator-sites', async (req, res) => {
   });
 });
 
+// ── Recommended Followers — for the Fanpage Hub's "Recommended Followers"
+// row. Only recommends users who actually own a fanpage (story), never the
+// BTW Team system account, and never anyone the viewer already follows —
+// once you follow VeekitPaws she naturally drops out of her own pinned
+// slot the same way everyone else does. ───────────────────────────────────
+app.get('/api/recommended-followers', async (req, res) => {
+  let userId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { userId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+
+  const { rows } = await pool.query(`
+    SELECT u.id, u.username, u.display_name, u.avatar
+    FROM users u
+    WHERE u.username != 'btwteam'
+      AND EXISTS (SELECT 1 FROM moderator_sites ms WHERE ms.owner_user_id = u.id)
+      AND ($1::int IS NULL OR u.id != $1)
+      AND NOT EXISTS (
+        SELECT 1 FROM user_follows f WHERE f.follower_id = $1 AND f.followed_id = u.id
+      )
+    ORDER BY (u.username = 'veekitpaws') DESC, random()
+    LIMIT 5
+  `, [userId]);
+
+  res.json({
+    users: rows.map(u => ({
+      username: u.username,
+      display_name: u.display_name || u.username,
+      avatar: u.avatar || null,
+    })),
+  });
+});
+
 // ── Bookmarks — save a fanpage to your hub profile ────────────────────────────
 app.get('/api/bookmarks', requireAuth, async (req, res) => {
   const { rows } = await pool.query(`

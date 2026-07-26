@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Library ✦ Fanpages</title>
+  <title>Bookmarks ✦ Fanpages</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -21,18 +22,15 @@
     .lib-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.78); }
 
     .lib-main { max-width: 1100px; margin: 0 auto; padding: 3rem 2rem 5rem; }
-    .lib-header-row { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 1.5rem; }
+    .lib-header-row { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 2rem; }
     .lib-title { font-family: 'Cinzel', Georgia, serif; font-size: 2.2rem; }
     .lib-private { display: flex; align-items: center; gap: 0.4rem; color: #999; font-size: 0.85rem; }
 
-    .lib-tabs { display: flex; gap: 2rem; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 2.5rem; }
-    .lib-tab {
-      background: none; border: none; color: #999; font-size: 0.95rem; font-weight: 700;
-      padding: 0.85rem 0; cursor: pointer; border-bottom: 2px solid transparent;
-      font-family: inherit;
-    }
-    .lib-tab.active { color: #f0f0f0; border-bottom-color: #d97a72; }
-    .lib-tab:hover { color: #f0f0f0; }
+    /* Sidebar (left) + active section (right) — same "Browse"/"Explore the
+       Cast" boxed-nav pattern used on the character/gallery pages, reusing
+       those exact classes for visual consistency instead of tabs. */
+    .lib-layout { display: grid; grid-template-columns: 200px 1fr; gap: 2.5rem; align-items: start; }
+    .lib-sidebar { position: sticky; top: 90px; }
 
     .lib-section-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 1.25rem; }
     .lib-empty { color: #999; font-size: 0.92rem; padding: 2rem 0; }
@@ -70,13 +68,12 @@
     .lib-gallery-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .lib-gallery-story { font-size: 0.76rem; color: #999; margin-top: 0.4rem; }
 
-    @media (max-width: 640px) {
+    @media (max-width: 760px) {
       .lib-main { padding: 2rem 1.1rem 3.5rem; }
       .lib-header-row { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
       .lib-title { font-size: 1.7rem; }
-      .lib-tabs { gap: 1.25rem; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-      .lib-tabs::-webkit-scrollbar { display: none; }
-      .lib-tab { white-space: nowrap; }
+      .lib-layout { grid-template-columns: 1fr; gap: 1.25rem; }
+      .lib-sidebar { position: static; }
       .lib-story-grid, .lib-gallery-grid { grid-template-columns: repeat(auto-fill, minmax(115px, 1fr)); gap: 0.85rem; }
     }
   </style>
@@ -92,30 +89,29 @@
 
 <main class="lib-main">
   <div class="lib-header-row">
-    <h1 class="lib-title">Library</h1>
+    <h1 class="lib-title">Bookmarks</h1>
     <span class="lib-private">🔒 Private</span>
   </div>
 
-  <div class="lib-tabs">
-    <button class="lib-tab active" id="lib-tab-stories" type="button">Stories</button>
-    <button class="lib-tab" id="lib-tab-gallery" type="button">Galleries</button>
-    <button class="lib-tab" id="lib-tab-bookmarked-gallery" type="button">Bookmarked Art</button>
+  <div class="lib-layout">
+    <aside class="chars-create-box lib-sidebar">
+      <p class="mod-gallery-sidebar-label">Browse</p>
+      <button class="mod-gallery-cat active" id="lib-tab-stories" type="button">Stories</button>
+      <button class="mod-gallery-cat" id="lib-tab-gallery" type="button">Galleries</button>
+    </aside>
+
+    <div>
+      <section id="lib-stories-section">
+        <p class="lib-section-title">Bookmarked Stories</p>
+        <div id="lib-stories-grid"><p class="lib-empty">Loading…</p></div>
+      </section>
+
+      <section id="lib-gallery-section" style="display:none;">
+        <p class="lib-section-title">Bookmarked Art</p>
+        <div id="lib-gallery-grid"><p class="lib-empty">Loading…</p></div>
+      </section>
+    </div>
   </div>
-
-  <section id="lib-stories-section">
-    <p class="lib-section-title">Bookmarked Stories</p>
-    <div id="lib-stories-grid"><p class="lib-empty">Loading…</p></div>
-  </section>
-
-  <section id="lib-gallery-section" style="display:none;">
-    <p class="lib-section-title">Liked Art</p>
-    <div id="lib-gallery-grid"><p class="lib-empty">Loading…</p></div>
-  </section>
-
-  <section id="lib-bookmarked-gallery-section" style="display:none;">
-    <p class="lib-section-title">🔖 Bookmarked Art</p>
-    <div id="lib-bookmarked-gallery-grid"><p class="lib-empty">Loading…</p></div>
-  </section>
 </main>
 
 <script src="/fanpages/fanpages-nav.js"></script>
@@ -180,7 +176,6 @@
   const tabs = {
     stories: { btn: document.getElementById('lib-tab-stories'), section: document.getElementById('lib-stories-section') },
     gallery: { btn: document.getElementById('lib-tab-gallery'), section: document.getElementById('lib-gallery-section') },
-    bookmarkedGallery: { btn: document.getElementById('lib-tab-bookmarked-gallery'), section: document.getElementById('lib-bookmarked-gallery-section') },
   };
   function switchLibTab(name) {
     Object.entries(tabs).forEach(([key, t]) => {
@@ -190,7 +185,6 @@
   }
   tabs.stories.btn.addEventListener('click', () => switchLibTab('stories'));
   tabs.gallery.btn.addEventListener('click', () => switchLibTab('gallery'));
-  tabs.bookmarkedGallery.btn.addEventListener('click', () => switchLibTab('bookmarkedGallery'));
 
   function renderGalleryGrid(elId, items, emptyMsg) {
     const el = document.getElementById(elId);
@@ -204,10 +198,9 @@
 
   (async () => {
     if (!token) {
-      const loginMsg = `<p class="lib-empty"><a href="/login?from=${encodeURIComponent('/fanpages/library')}" style="color:#7fa8d9;">Log in</a> to see this.</p>`;
+      const loginMsg = `<p class="lib-empty"><a href="/fanpages/login?from=${encodeURIComponent('/fanpages/library')}" style="color:#7fa8d9;">Log in</a> to see this.</p>`;
       document.getElementById('lib-stories-grid').innerHTML = loginMsg;
       document.getElementById('lib-gallery-grid').innerHTML = loginMsg;
-      document.getElementById('lib-bookmarked-gallery-grid').innerHTML = loginMsg;
       return;
     }
     try {
@@ -226,12 +219,10 @@
         storiesGrid.appendChild(grid);
       }
 
-      renderGalleryGrid('lib-gallery-grid', data.gallery || [], 'You haven\'t liked any art yet — hit the ♡ on a gallery piece to save it here.');
-      renderGalleryGrid('lib-bookmarked-gallery-grid', data.bookmarked_gallery || [], 'You haven\'t bookmarked any art yet — hit the 🔖 on a gallery piece to save it here.');
+      renderGalleryGrid('lib-gallery-grid', data.bookmarked_gallery || [], 'You haven\'t bookmarked any art yet — hit the bookmark icon on a gallery piece to save it here.');
     } catch {
-      document.getElementById('lib-stories-grid').innerHTML = '<p class="lib-empty">Couldn\'t load your library right now.</p>';
-      document.getElementById('lib-gallery-grid').innerHTML = '<p class="lib-empty">Couldn\'t load your library right now.</p>';
-      document.getElementById('lib-bookmarked-gallery-grid').innerHTML = '<p class="lib-empty">Couldn\'t load your library right now.</p>';
+      document.getElementById('lib-stories-grid').innerHTML = '<p class="lib-empty">Couldn\'t load your bookmarks right now.</p>';
+      document.getElementById('lib-gallery-grid').innerHTML = '<p class="lib-empty">Couldn\'t load your bookmarks right now.</p>';
     }
   })();
 </script>

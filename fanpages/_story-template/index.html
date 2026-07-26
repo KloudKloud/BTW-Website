@@ -68,7 +68,9 @@
     </span>
   </a>
 
-  <button class="mod-bookmark-btn" id="bookmark-btn" style="display:none;" type="button">🔖 Bookmark?</button>
+  <button class="mod-bookmark-btn" id="bookmark-btn" style="display:none;" type="button" title="Bookmark">
+    <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
+  </button>
 </div>
 
 <!-- Custom theme background (blurred, only shown when a custom image is set) -->
@@ -598,6 +600,7 @@ function enterEditMode() {
   toggle(document.getElementById('edit-profile-btn'), false);
   document.getElementById('banner-edit-pencil').style.display = 'none';
   document.getElementById('theme-picker-wrap').style.display = 'none';
+  document.getElementById('bookmark-btn').style.display = 'none';
   document.getElementById('banner-edit-wrap').style.display = 'flex';
   document.getElementById('banner-recrop-btn').style.display = s.banner_url ? 'block' : 'none';
   document.getElementById('wiki-cover').classList.add('mod-editing-banner');
@@ -656,6 +659,7 @@ function exitEditMode() {
   document.getElementById('edit-profile-btn').style.display = 'flex';
   document.getElementById('banner-edit-pencil').style.display = isSelf ? 'flex' : 'none';
   document.getElementById('theme-picker-wrap').style.display = isSelf ? 'block' : 'none';
+  document.getElementById('bookmark-btn').style.display = 'flex';
   document.getElementById('banner-edit-wrap').style.display = 'none';
   document.getElementById('banner-recrop-btn').style.display = 'none';
   document.getElementById('wiki-cover').classList.remove('mod-editing-banner');
@@ -971,7 +975,7 @@ function renderAuthorBox(s) {
   if (!token) {
     btn.textContent = 'Follow';
     btn.classList.remove('following');
-    btn.onclick = () => { window.location.href = `/login?from=${encodeURIComponent(window.location.pathname)}`; };
+    btn.onclick = () => { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname)}`; };
     return;
   }
   let following = !!s.is_following;
@@ -993,16 +997,15 @@ function renderAuthorBox(s) {
 
 function renderBookmarkBtn(s) {
   const btn = document.getElementById('bookmark-btn');
-  if (s.is_self) { btn.style.display = 'none'; return; }
-  btn.style.display = 'flex';
+  btn.style.display = editing ? 'none' : 'flex';
   let bookmarked = !!s.is_bookmarked;
   const paint = () => {
-    btn.textContent = bookmarked ? '✓ Bookmarked' : '🔖 Bookmark?';
     btn.classList.toggle('bookmarked', bookmarked);
+    btn.title = bookmarked ? 'Bookmarked' : 'Bookmark';
   };
   paint();
   btn.onclick = async () => {
-    if (!token) { window.location.href = `/login?from=${encodeURIComponent(window.location.pathname)}`; return; }
+    if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname)}`; return; }
     btn.disabled = true;
     try {
       await fetch(`/api/bookmarks/by-path/${SLUG}`, { method: bookmarked ? 'DELETE' : 'POST', headers: authHeaders() });
