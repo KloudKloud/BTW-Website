@@ -3402,7 +3402,7 @@ async function sendSiteLookup(query, params, req, res) {
   const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds] = await Promise.all([
     pool.query('SELECT id, title, teaser, links, image_url, file_url, file_name FROM moderator_chapters WHERE site_id = $1 ORDER BY sort_order, id', [site.id]),
     pool.query(`
-      SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.description, mc.stats, mc.facts, mc.lore, mc.relationships
+      SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.description, mc.stats, mc.facts, mc.lore, mc.relationships, mc.owner_user_id
       FROM character_story_links csl JOIN moderator_characters mc ON mc.id = csl.character_id
       WHERE csl.site_id = $1 ORDER BY csl.sort_order, mc.id
     `, [site.id]),
@@ -3427,6 +3427,14 @@ async function sendSiteLookup(query, params, req, res) {
   gallery.forEach(g => {
     g.like_count = Number(g.like_count);
     g.liked = likedSet.has(g.id);
+  });
+
+  // "Is this MY character" (I own it), not just "am I the story owner" —
+  // a story owner can link a friend's character onto their roster, and that
+  // borrowed character must never be editable through this story's page.
+  characters.forEach(c => {
+    c.is_mine = viewerId !== null && viewerId === c.owner_user_id;
+    delete c.owner_user_id;
   });
 
   res.json({
@@ -3942,6 +3950,12 @@ app.get('/api/characters/:id', async (req, res) => {
     [req.params.id]
   );
   if (!character) return res.status(404).json({ error: 'Not found.' });
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+  character.is_mine = viewerId !== null && viewerId === character.owner_user_id;
   res.json({ character });
 });
 

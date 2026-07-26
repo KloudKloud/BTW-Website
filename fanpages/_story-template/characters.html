@@ -564,16 +564,37 @@ function renderProfile(char) {
   loreBox.appendChild(spoiler);
   profile.appendChild(loreBox);
 
-  // Edit box under Navigate — owner only, for whichever character is showing
+  // Edit box under Navigate — story owner only, for whichever character is
+  // showing. A character linked onto the story by its actual owner (e.g. a
+  // friend's character tagged in via "Link Existing") isn't yours to edit —
+  // show a remove-only option there instead of opening their whole editor.
   const editBox = document.getElementById('char-edit-box');
   const editBtn = document.getElementById('char-edit-btn');
-  if (IS_SELF) {
+  if (IS_SELF && char.isMine) {
     editBox.style.display = 'block';
+    editBtn.className = 'chars-create-btn chars-create-btn--edit';
     editBtn.textContent = `✏️ Edit ${char.name}?`;
     editBtn.onclick = () => openCharEditor(char);
+  } else if (IS_SELF && !char.isMine) {
+    editBox.style.display = 'block';
+    editBtn.className = 'chars-create-btn chars-create-btn--danger';
+    editBtn.textContent = 'Remove From Book?';
+    editBtn.onclick = () => removeBorrowedCharacter(char);
   } else {
     editBox.style.display = 'none';
   }
+}
+
+// A character that isn't yours — only ever unlinked from this story's
+// roster, never edited or permanently deleted (that stays entirely up to
+// its actual owner).
+async function removeBorrowedCharacter(char) {
+  if (!confirm(`Remove ${char.name} from this story? They aren't your character, so this only unlinks them here — they'll stay untouched on their owner's profile.`)) return;
+  try {
+    await fetch(`/api/moderator/characters/${char.id}`, { method: 'DELETE', headers: authHeaders() });
+    const fresh = await ModeratorSite.load(SLUG);
+    renderCharList((fresh && fresh.characters) || []);
+  } catch {}
 }
 
 // Normalizes a raw character row (from either this story's own list or the
@@ -591,6 +612,7 @@ function normalizeChar(r) {
     facts: (r.facts && r.facts.length) ? r.facts : [NA],
     lore: r.lore || [],
     relationships: r.relationships || [],
+    isMine: !!r.is_mine,
   };
 }
 
