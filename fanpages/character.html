@@ -163,7 +163,23 @@
       relationships.forEach(rel => {
         const relLine = document.createElement('div');
         relLine.style.cssText = 'font-size:0.88rem; color:#ccc; padding:0.15rem 0;';
+
+        const avatar = document.createElement('img');
+        avatar.className = 'char-rel-avatar';
+        avatar.alt = '';
+        avatar.src = DEFAULT_REF;
+        relLine.appendChild(avatar);
+
         if (rel.character_id) {
+          const known = CHARACTERS.find(c => c.id === String(rel.character_id));
+          if (known && known.ref) {
+            avatar.src = known.ref;
+          } else {
+            fetch(`/api/characters/${rel.character_id}`)
+              .then(r => r.ok ? r.json() : null)
+              .then(d => { if (d && d.character && d.character.ref_image) avatar.src = d.character.ref_image; })
+              .catch(() => {});
+          }
           const nameLink = document.createElement('a');
           nameLink.href = '#';
           nameLink.style.cssText = 'color:#f0c060; font-weight:700; text-decoration:none; text-shadow:0 0 12px rgba(240,192,96,0.6); cursor:pointer;';
@@ -211,6 +227,43 @@
     }
     themeFact.appendChild(themeContent);
     factsBox.appendChild(themeFact);
+
+    // Stories — every story this character is linked to, as small clickable
+    // cover-art cards.
+    const storiesLabel = document.createElement('span');
+    storiesLabel.className = 'char-box-title';
+    storiesLabel.style.cssText = 'display:block; font-size:0.8rem; margin:0.75rem 0 0.5rem; padding-top:0.65rem; border-top:1px solid rgba(255,255,255,0.08);';
+    storiesLabel.textContent = 'Stories';
+    factsBox.appendChild(storiesLabel);
+    const storiesWrap = document.createElement('div');
+    storiesWrap.innerHTML = '<p style="color:#888; font-size:0.82rem;">Loading…</p>';
+    factsBox.appendChild(storiesWrap);
+    fetch(`/api/characters/${char.id}/stories`)
+      .then(r => r.ok ? r.json() : { stories: [] })
+      .then(data => {
+        const stories = data.stories || [];
+        storiesWrap.innerHTML = '';
+        if (!stories.length) {
+          storiesWrap.innerHTML = `<p style="color:#888; font-size:0.82rem;">No linked stories with ${escapeHtml(char.name)} yet.</p>`;
+          return;
+        }
+        const storiesRow = document.createElement('div');
+        storiesRow.style.cssText = 'display:flex; flex-wrap:wrap; gap:0.6rem;';
+        stories.forEach(s => {
+          const a = document.createElement('a');
+          a.href = `/fanpages/${s.story_path}`;
+          a.style.cssText = 'display:flex; align-items:center; gap:0.5rem; text-decoration:none; background:#1a1a1a; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:0.35rem 0.6rem 0.35rem 0.35rem; max-width:180px;';
+          a.innerHTML = `
+            <img src="${s.cover_url || DEFAULT_REF}" alt="" style="width:28px; height:38px; object-fit:cover; border-radius:4px; flex-shrink:0; background:#222;" />
+            <span style="font-size:0.8rem; color:#ddd; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(s.site_title)}</span>
+          `;
+          storiesRow.appendChild(a);
+        });
+        storiesWrap.appendChild(storiesRow);
+      })
+      .catch(() => {
+        storiesWrap.innerHTML = '<p style="color:#888; font-size:0.82rem;">Couldn\'t load linked stories right now.</p>';
+      });
 
     char.facts.forEach(item => {
       const fact = document.createElement('div');

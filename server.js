@@ -3775,6 +3775,23 @@ app.get('/api/characters/:id', async (req, res) => {
   res.json({ character });
 });
 
+// Every story a character is linked to — backs the "Stories" section on the
+// character viewer (small cover-art cards, click through to that story's
+// home page).
+app.get('/api/characters/:id/stories', async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url
+     FROM character_story_links csl
+     JOIN moderator_sites ms ON ms.id = csl.site_id
+     WHERE csl.character_id = $1
+     ORDER BY csl.sort_order, ms.id`,
+    [req.params.id]
+  );
+  res.json({
+    stories: rows.map(r => ({ story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url })),
+  });
+});
+
 // Standalone creation — no story context at all, lands on the owner's
 // profile Characters tab. Requires nothing beyond a regular account (not
 // requireModerator — RPers/artists with zero stories should still be able
