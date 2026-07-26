@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Editor Hub ✦ Fanpages</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; margin: 0; padding: 0; }
+    a { color: inherit; }
+    [hidden] { display: none !important; }
+
+    .ed-page { max-width: 1100px; margin: 0 auto; padding: 6rem 1.5rem 5rem; }
+    .ed-title {
+      font-family: 'Cinzel', serif; font-size: 2.1rem; font-weight: 700; color: #f0f0f0;
+      margin: 0 0 1.5rem;
+    }
+    .ed-tabs {
+      display: flex; gap: 2rem; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 2rem;
+    }
+    .ed-tab {
+      background: none; border: none; cursor: pointer; color: #999;
+      font-family: 'Inter', sans-serif; font-size: 0.95rem; font-weight: 700;
+      padding: 0.9rem 0.1rem; position: relative;
+    }
+    .ed-tab:hover { color: #ccc; }
+    .ed-tab.active { color: #f0f0f0; }
+    .ed-tab.active::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: -1px;
+      height: 3px; background: #f0c060; border-radius: 2px;
+    }
+
+    .ed-layout { display: grid; grid-template-columns: 220px 1fr; gap: 2rem; align-items: start; }
+
+    .ed-create-btn {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem;
+      width: 100%; min-height: 160px; box-sizing: border-box;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); border: none; border-radius: 16px;
+      padding: 1.5rem 1rem; cursor: pointer; text-decoration: none;
+      font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 700; color: #fff; text-align: center;
+      box-shadow: 0 0 20px rgba(107,63,160,0.5);
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .ed-create-btn:hover { box-shadow: 0 0 30px rgba(107,63,160,0.75); transform: translateY(-2px); }
+    .ed-create-btn-icon { font-size: 2.2rem; line-height: 1; }
+
+    .ed-list-col { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+    .ed-empty {
+      color: #999; font-size: 0.9rem; padding: 3rem 1rem; text-align: center;
+      border: 1px dashed rgba(255,255,255,0.12); border-radius: 14px;
+    }
+
+    /* Wattpad-style horizontal card */
+    .ed-card {
+      display: flex; align-items: center; gap: 1.1rem;
+      background: #161616; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+      padding: 0.9rem 1.1rem; text-decoration: none; color: inherit;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .ed-card:hover { border-color: rgba(240,192,96,0.4); background: #1a1a1a; }
+    .ed-card-img {
+      width: 56px; height: 56px; border-radius: 10px; object-fit: cover; flex-shrink: 0;
+      background: #222; border: 1px solid rgba(255,255,255,0.1);
+    }
+    .ed-card-img--story { width: 46px; height: 66px; border-radius: 6px; }
+    .ed-card-info { flex: 1; min-width: 0; }
+    .ed-card-title {
+      font-size: 1rem; font-weight: 700; margin: 0 0 0.2rem;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .ed-card-sub { font-size: 0.82rem; color: #999; margin: 0; }
+    .ed-card-arrow { flex-shrink: 0; color: #666; font-size: 1.3rem; }
+    .ed-card:hover .ed-card-arrow { color: #f0c060; }
+
+    @media (max-width: 700px) {
+      .ed-layout { grid-template-columns: 1fr; }
+      .ed-create-btn { min-height: 90px; flex-direction: row; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="fanpages-topbar-root"></div>
+
+<main class="ed-page">
+  <h1 class="ed-title">My Editor Hub</h1>
+
+  <div class="ed-tabs">
+    <button class="ed-tab active" id="ed-tab-stories" type="button" data-tab="stories">Stories</button>
+    <button class="ed-tab" id="ed-tab-characters" type="button" data-tab="characters">Characters</button>
+    <button class="ed-tab" id="ed-tab-gallery" type="button" data-tab="gallery">Gallery</button>
+  </div>
+
+  <div class="ed-layout">
+    <div class="ed-create-col">
+      <a class="ed-create-btn" id="ed-create-btn" href="/fanpages/create">
+        <span class="ed-create-btn-icon">➕</span>
+        <span id="ed-create-btn-label">Create New Story</span>
+      </a>
+    </div>
+    <div class="ed-list-col" id="ed-list"><p class="ed-empty">Loading…</p></div>
+  </div>
+</main>
+
+<script src="/fanpages/fanpages-nav.js"></script>
+<script>
+  const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+  const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
+  if (!token) window.location.href = `/login?from=${encodeURIComponent(window.location.pathname)}`;
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  const TABS = ['stories', 'characters', 'gallery'];
+  const CREATE_CONFIG = {
+    stories:    { href: '/fanpages/create',          label: 'Create New Story' },
+    characters: { href: '/fanpages/create-character', label: 'Create New Character' },
+    gallery:    { href: '/fanpages/create-gallery',   label: 'Create New Gallery' },
+  };
+
+  let USERNAME = null;
+  const cache = { stories: null, characters: null, gallery: null };
+
+  function switchEdTab(tab) {
+    TABS.forEach(t => document.getElementById(`ed-tab-${t}`).classList.toggle('active', t === tab));
+    document.getElementById('ed-create-btn').href = CREATE_CONFIG[tab].href;
+    document.getElementById('ed-create-btn-label').textContent = CREATE_CONFIG[tab].label;
+    history.replaceState(null, '', tab === 'stories' ? location.pathname : `#${tab}`);
+    renderTab(tab);
+  }
+  TABS.forEach(t => document.getElementById(`ed-tab-${t}`).addEventListener('click', () => switchEdTab(t)));
+
+  function edCard(href, imgSrc, imgClass, title, sub) {
+    const a = document.createElement('a');
+    a.className = 'ed-card';
+    a.href = href;
+    a.innerHTML = `
+      <img class="ed-card-img ${imgClass || ''}" src="${imgSrc}" alt="" />
+      <div class="ed-card-info">
+        <p class="ed-card-title">${escapeHtml(title)}</p>
+        <p class="ed-card-sub">${escapeHtml(sub)}</p>
+      </div>
+      <span class="ed-card-arrow">→</span>
+    `;
+    return a;
+  }
+
+  async function loadStories() {
+    if (cache.stories) return cache.stories;
+    const res = await fetch('/api/moderator/my-sites', { headers: authHeaders() });
+    const data = await res.json();
+    cache.stories = data.sites || [];
+    return cache.stories;
+  }
+  async function loadCharacters() {
+    if (cache.characters) return cache.characters;
+    const res = await fetch('/api/characters/mine', { headers: authHeaders() });
+    const data = await res.json();
+    cache.characters = data.characters || [];
+    return cache.characters;
+  }
+  async function loadGallery() {
+    if (cache.gallery) return cache.gallery;
+    if (!USERNAME) {
+      const me = await fetch('/api/auth/me', { headers: authHeaders() }).then(r => r.json()).catch(() => null);
+      USERNAME = me && me.user ? me.user.username : null;
+    }
+    if (!USERNAME) { cache.gallery = []; return cache.gallery; }
+    const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-gallery`, { headers: authHeaders() });
+    const data = await res.json();
+    cache.gallery = data.gallery || [];
+    return cache.gallery;
+  }
+
+  async function renderTab(tab) {
+    const list = document.getElementById('ed-list');
+    list.innerHTML = '<p class="ed-empty">Loading…</p>';
+    try {
+      if (tab === 'stories') {
+        const sites = await loadStories();
+        if (!sites.length) { list.innerHTML = '<p class="ed-empty">No stories yet — create your first one!</p>'; return; }
+        list.innerHTML = '';
+        sites.forEach(s => list.appendChild(edCard(
+          `/fanpages/${s.story_path || s.slug}`,
+          s.cover_url || '/images/gallery/kloudsaphbedroom_1.png', 'ed-card-img--story',
+          s.site_title, 'View & manage this story →'
+        )));
+      } else if (tab === 'characters') {
+        const chars = await loadCharacters();
+        if (!chars.length) { list.innerHTML = '<p class="ed-empty">No characters yet — create your first one!</p>'; return; }
+        list.innerHTML = '';
+        chars.forEach(c => list.appendChild(edCard(
+          `/fanpages/create-character?id=${c.id}`,
+          c.ref_image || '/images/defaultchar.jpg', '',
+          c.name, 'Click to edit or delete'
+        )));
+      } else {
+        const items = await loadGallery();
+        if (!items.length) { list.innerHTML = '<p class="ed-empty">No gallery posts yet — create your first one!</p>'; return; }
+        list.innerHTML = '';
+        items.forEach(g => list.appendChild(edCard(
+          `/fanpages/create-gallery?id=${g.id}`,
+          g.image, '',
+          g.title || 'Untitled', `${(g.category || 'sfw').toUpperCase()} — Click to edit or delete`
+        )));
+      }
+    } catch {
+      list.innerHTML = '<p class="ed-empty">Couldn\'t load this right now.</p>';
+    }
+  }
+
+  const initialTab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'stories';
+  switchEdTab(initialTab);
+</script>
+
+</body>
+</html>

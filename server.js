@@ -3960,6 +3960,36 @@ app.post('/api/moderator/gallery/:id/link', requireAuth, requireModerator, async
 
 // Standalone creation — no story context, lands on the owner's profile
 // Gallery tab. Plain requireAuth, same reasoning as standalone characters.
+// Public, unscoped gallery-post lookup — backs the standalone edit page.
+app.get('/api/gallery/:id', async (req, res) => {
+  const { rows: [item] } = await pool.query('SELECT * FROM moderator_gallery WHERE id = $1', [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  res.json({ item });
+});
+
+// Every story and character a gallery post is linked to — pre-fills the
+// "Link To:" section when editing an existing post.
+app.get('/api/gallery/:id/links', async (req, res) => {
+  const [{ rows: stories }, { rows: characters }] = await Promise.all([
+    pool.query(
+      `SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url
+       FROM gallery_story_links gsl JOIN moderator_sites ms ON ms.id = gsl.site_id
+       WHERE gsl.gallery_id = $1 ORDER BY gsl.sort_order, ms.id`,
+      [req.params.id]
+    ),
+    pool.query(
+      `SELECT mc.id, mc.name, mc.ref_image
+       FROM gallery_character_links gcl JOIN moderator_characters mc ON mc.id = gcl.character_id
+       WHERE gcl.gallery_id = $1 ORDER BY mc.id`,
+      [req.params.id]
+    ),
+  ]);
+  res.json({
+    stories: stories.map(r => ({ story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url })),
+    characters,
+  });
+});
+
 app.post('/api/gallery', requireAuth, uploadModImage.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
   const { category, title, description } = req.body;

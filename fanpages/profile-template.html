@@ -383,7 +383,11 @@
       color: #f0c060; text-align: left; margin-bottom: 1.25rem;
     }
     .fp-featured-empty { color: #999; font-size: 0.88rem; }
-    .fp-featured-row { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+    /* Fixed 3-column grid (max 3 featured items) so a full row of three
+       actually spreads to fill the available width instead of clumping
+       left with dead space on the right. */
+    .fp-featured-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
+    .fp-featured-row .fp-featured-card { width: 100%; }
     .fp-featured-card {
       display: block; width: 150px; text-decoration: none; color: inherit; position: relative;
     }
@@ -402,22 +406,6 @@
     .fp-featured-editor-note {
       font-size: 0.85rem; color: #999; line-height: 1.6; margin-bottom: 1rem; max-width: 700px;
     }
-    .fp-featured-search {
-      width: 100%; max-width: 420px; background: #1e1e1e; border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 20px; color: #f0f0f0; font-family: inherit; font-size: 0.88rem; padding: 0.55rem 1rem;
-      margin-bottom: 1rem;
-    }
-    .fp-featured-search:focus { outline: none; border-color: #7fa8d9; }
-    .fp-featured-results {
-      display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.25rem; max-height: 220px; overflow-y: auto;
-    }
-    .fp-featured-result {
-      display: flex; align-items: center; gap: 0.5rem; background: #161616; border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 20px; padding: 0.3rem 0.8rem 0.3rem 0.3rem; cursor: pointer; font-size: 0.82rem;
-    }
-    .fp-featured-result:hover { border-color: #7fa8d9; }
-    .fp-featured-result img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
-    .fp-featured-result-mine { color: #f0c060; font-size: 0.7rem; margin-left: 0.3rem; }
 
     /* Disclaimer */
     .fp-disclaimer {
@@ -712,6 +700,18 @@
   </div>
 </div>
 
+<!-- Featured Characters/Gallery picker — same shopping-style multi-select
+     (toggle cards, max 3) as the "Link To:" pickers on the character/gallery
+     editors. -->
+<div class="char-link-picker-overlay" id="fp-featured-picker-overlay" hidden>
+  <div class="char-link-picker-modal" style="max-width:480px;">
+    <h3 class="char-link-picker-title" id="fp-featured-picker-title">Feature Characters</h3>
+    <input class="mod-input" id="fp-featured-picker-search" placeholder="Search…" style="margin-bottom:0.75rem;" />
+    <div class="char-link-picker-scroll" id="fp-featured-picker-list"><p class="char-link-picker-empty">Start typing to search…</p></div>
+    <button class="mod-btn mod-btn--small" id="fp-featured-picker-done" type="button" style="margin-top:0.75rem;">Done</button>
+  </div>
+</div>
+
 <script src="/fanpages/fanpages-nav.js"></script>
 <script>
   const USERNAME = window.location.pathname.split('/').filter(Boolean).pop().toLowerCase();
@@ -865,6 +865,10 @@
       document.getElementById(`fp-tab-${t}`).classList.toggle('active', t === tab);
       document.getElementById(`fp-${t === 'home' ? 'home' : t}-view`).hidden = t !== tab;
     });
+    // Reflect the active tab in the URL hash so a refresh (or a shared
+    // link) lands back on the same tab instead of always falling back to
+    // Home — this is what's read on load below.
+    history.replaceState(null, '', tab === 'home' ? location.pathname + location.search : `#${tab}`);
     if (tab === 'characters') loadCharactersTab();
     if (tab === 'gallery') loadGalleryTab();
     if (tab === 'stories') renderStoriesGrid(document.getElementById('fp-stories-grid'));
@@ -1450,7 +1454,10 @@
   fpFollowModalOverlay.addEventListener('click', (e) => { if (e.target === fpFollowModalOverlay) fpFollowModalOverlay.hidden = true; });
 
   // ── Featured rows (display mode) ────────────────────────────────────────
-  function renderFeaturedRow(containerId, items, emptyText) {
+  // Links straight to the specific character/gallery entry on the
+  // Characters/Gallery tab (via ?char=/gallery=#tab, read on load below)
+  // instead of a generic story link.
+  function renderFeaturedRow(containerId, items, emptyText, kind) {
     const wrap = document.getElementById(containerId);
     wrap.innerHTML = '';
     if (!items || !items.length) {
@@ -1462,7 +1469,9 @@
     items.forEach(item => {
       const card = document.createElement('a');
       card.className = 'fp-featured-card';
-      card.href = item.link_url || '#';
+      card.href = kind === 'character'
+        ? `/fanpages/${USERNAME}?char=${encodeURIComponent(item.ref_id)}#characters`
+        : `/fanpages/${USERNAME}?gallery=${encodeURIComponent(item.ref_id)}#gallery`;
       card.innerHTML = `
         <img class="fp-featured-card-img" src="${item.image_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="${item.title}" />
         <p class="fp-featured-card-title">${item.title}</p>
@@ -1783,6 +1792,9 @@
     paint();
   }
 
+  // Featured Characters/Gallery editor — the same shopping-style multi-select
+  // (toggle cards in an overlay picker, "+ " add-tile, max 3) as the
+  // "Link To:" sections on the character/gallery editors.
   function renderFeaturedEditor(kind, note) {
     const displayId = kind === 'character' ? 'fp-featured-characters' : 'fp-featured-gallery';
     const editorId = kind === 'character' ? 'fp-featured-characters-editor' : 'fp-featured-gallery-editor';
@@ -1792,59 +1804,97 @@
 
     wrap.innerHTML = `
       <p class="fp-featured-editor-note">${note}</p>
-      <input type="search" class="fp-featured-search" placeholder="Search ${kind === 'character' ? 'characters' : 'gallery posts'} across Fanpages…" />
-      <div class="fp-featured-results"></div>
-      <div class="fp-featured-row" id="${editorId}-selected"></div>
+      <div class="gallery-linkto-grid" id="${editorId}-grid"></div>
     `;
 
-    const input = wrap.querySelector('.fp-featured-search');
-    const resultsWrap = wrap.querySelector('.fp-featured-results');
-    let debounce;
-
     function paintSelected() {
-      const sel = wrap.querySelector(`#${editorId}-selected`);
-      sel.innerHTML = '';
+      const grid = wrap.querySelector(`#${editorId}-grid`);
+      grid.innerHTML = '';
+      if (editFeatured[kind].length < 3) {
+        const tile = document.createElement('button');
+        tile.type = 'button';
+        tile.className = 'gallery-linkto-add-tile';
+        tile.innerHTML = `<span class="gallery-linkto-add-tile-icon">+</span> ${kind === 'character' ? 'Character' : 'Gallery'}`;
+        tile.addEventListener('click', () => openFeaturedPicker(kind, paintSelected));
+        grid.appendChild(tile);
+      }
       editFeatured[kind].forEach((item, i) => {
         const card = document.createElement('div');
-        card.className = 'fp-featured-card';
+        card.className = 'gallery-linkto-card';
         card.innerHTML = `
-          <button type="button" class="fp-featured-remove" data-i="${i}">✕</button>
-          <img class="fp-featured-card-img" src="${item.image_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="${item.title}" />
-          <p class="fp-featured-card-title">${item.title}</p>
+          <img class="gallery-linkto-card-img" src="${item.image_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="" />
+          <p class="gallery-linkto-card-name">${item.title}</p>
+          <button type="button" class="gallery-linkto-card-remove">✕</button>
         `;
-        sel.appendChild(card);
-      });
-      sel.querySelectorAll('.fp-featured-remove').forEach(btn => {
-        btn.addEventListener('click', () => { editFeatured[kind].splice(+btn.dataset.i, 1); paintSelected(); });
+        card.querySelector('.gallery-linkto-card-remove').addEventListener('click', () => {
+          editFeatured[kind].splice(i, 1);
+          paintSelected();
+        });
+        grid.appendChild(card);
       });
     }
     paintSelected();
-
-    input.addEventListener('input', () => {
-      clearTimeout(debounce);
-      const q = input.value.trim();
-      if (!q) { resultsWrap.innerHTML = ''; return; }
-      debounce = setTimeout(async () => {
-        try {
-          const res = await fetch(`/api/featured-search?kind=${kind}&q=${encodeURIComponent(q)}`, { headers: authHeaders() });
-          const data = await res.json();
-          resultsWrap.innerHTML = '';
-          (data.results || []).forEach(r => {
-            const chip = document.createElement('div');
-            chip.className = 'fp-featured-result';
-            chip.innerHTML = `<img src="${r.image_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="" />${r.title}${r.mine ? '<span class="fp-featured-result-mine">MINE</span>' : ''}`;
-            chip.addEventListener('click', () => {
-              if (editFeatured[kind].length >= 3) return;
-              if (editFeatured[kind].some(it => it.ref_id === r.ref_id)) return;
-              editFeatured[kind].push({ ref_id: r.ref_id, title: r.title, image_url: r.image_url, link_url: r.link_url, site_slug: r.slug || null });
-              paintSelected();
-            });
-            resultsWrap.appendChild(chip);
-          });
-        } catch {}
-      }, 300);
-    });
   }
+
+  // ── Featured picker overlay — shared by both kinds ──────────────────────
+  let featuredPickerKind = null;
+  let featuredPickerOnChange = null;
+  function openFeaturedPicker(kind, onChange) {
+    featuredPickerKind = kind;
+    featuredPickerOnChange = onChange;
+    document.getElementById('fp-featured-picker-title').textContent = kind === 'character' ? 'Feature Characters' : 'Feature Gallery';
+    document.getElementById('fp-featured-picker-search').value = '';
+    document.getElementById('fp-featured-picker-list').innerHTML = '<p class="char-link-picker-empty">Start typing to search…</p>';
+    document.getElementById('fp-featured-picker-overlay').hidden = false;
+  }
+  document.getElementById('fp-featured-picker-done').addEventListener('click', () => {
+    document.getElementById('fp-featured-picker-overlay').hidden = true;
+  });
+  let featuredPickerDebounce;
+  document.getElementById('fp-featured-picker-search').addEventListener('input', (e) => {
+    clearTimeout(featuredPickerDebounce);
+    const q = e.target.value.trim();
+    const list = document.getElementById('fp-featured-picker-list');
+    if (!q) { list.innerHTML = '<p class="char-link-picker-empty">Start typing to search…</p>'; return; }
+    featuredPickerDebounce = setTimeout(async () => {
+      list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
+      try {
+        const res = await fetch(`/api/featured-search?kind=${featuredPickerKind}&q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+        const data = await res.json();
+        const results = data.results || [];
+        if (!results.length) { list.innerHTML = '<p class="char-link-picker-empty">No matches found.</p>'; return; }
+        list.innerHTML = '';
+        results.forEach(r => {
+          const selected = editFeatured[featuredPickerKind].some(it => it.ref_id === r.ref_id);
+          const item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'char-link-picker-item--big' + (selected ? ' selected' : '');
+          item.innerHTML = `
+            <img src="${r.image_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="" />
+            <span>
+              <span class="char-link-picker-item-name">${r.title}</span>
+              ${r.mine ? '' : `<span class="char-link-picker-item-owner">${r.owner_username || ''}</span>`}
+            </span>
+            <span class="char-link-picker-item-check">✓</span>
+          `;
+          item.addEventListener('click', () => {
+            const arr = editFeatured[featuredPickerKind];
+            const idx = arr.findIndex(it => it.ref_id === r.ref_id);
+            if (idx >= 0) {
+              arr.splice(idx, 1);
+              item.classList.remove('selected');
+            } else {
+              if (arr.length >= 3) return;
+              arr.push({ ref_id: r.ref_id, title: r.title, image_url: r.image_url, link_url: r.link_url, site_slug: r.slug || null });
+              item.classList.add('selected');
+            }
+            if (featuredPickerOnChange) featuredPickerOnChange();
+          });
+          list.appendChild(item);
+        });
+      } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t search right now.</p>'; }
+    }, 300);
+  });
 
   // ── Load profile ─────────────────────────────────────────────────────────
   async function loadProfile() {
@@ -1910,8 +1960,8 @@
       });
 
       // Featured Characters / Featured Gallery
-      renderFeaturedRow('fp-featured-characters', a.featured_characters, 'No featured characters.');
-      renderFeaturedRow('fp-featured-gallery', a.featured_gallery, 'No featured gallery.');
+      renderFeaturedRow('fp-featured-characters', a.featured_characters, 'No featured characters.', 'character');
+      renderFeaturedRow('fp-featured-gallery', a.featured_gallery, 'No featured gallery.', 'gallery');
 
       // Stories
       currentStories = data.stories || [];
@@ -1932,6 +1982,21 @@
 
   const initialTab = ['characters', 'gallery', 'stories'].includes(location.hash.slice(1)) ? location.hash.slice(1) : null;
   if (initialTab) switchTab(initialTab);
+
+  // Deep-link straight to a specific Featured Character/Gallery entry
+  // (?char=/gallery=) once its tab's data has loaded.
+  const deepParams = new URLSearchParams(window.location.search);
+  const deepCharId = deepParams.get('char');
+  const deepGalleryId = deepParams.get('gallery');
+  if (initialTab === 'characters' && deepCharId) {
+    loadCharactersTab().then(() => selectFpCharacter(deepCharId));
+  } else if (initialTab === 'gallery' && deepGalleryId) {
+    loadGalleryTab().then(() => {
+      const all = [...FP_GALLERY_ART, ...FP_GALLERY_SKETCHES, ...FP_GALLERY_SPICY];
+      const item = all.find(g => String(g.id) === String(deepGalleryId));
+      if (item) { setFpGalleryCategory(item.category); openFpGalleryDetail(item); }
+    });
+  }
 </script>
 
 </body>

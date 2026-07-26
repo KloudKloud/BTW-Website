@@ -112,6 +112,7 @@
     <p class="mod-panel-msg" id="gallery-editor-msg"></p>
 
     <div class="char-editor-actions">
+      <button class="mod-btn mod-btn--danger" id="gallery-editor-delete-forever" type="button" style="display:none;">Delete</button>
       <a class="mod-btn" href="/fanpages">Cancel</a>
       <button class="mod-btn" id="gallery-editor-save" type="button">Post</button>
     </div>
@@ -223,6 +224,11 @@
   // can reasonably be linked to several stories and/or characters at once.
   let selectedLinkStories = new Map();
   let selectedLinkCharacters = new Map();
+  // Already-linked stories/characters, in edit mode — shown as locked
+  // (non-removable) cards since there's no unlink endpoint here; the
+  // pickers only ever add more.
+  let existingLinkedStories = [];
+  let existingLinkedCharacters = [];
 
   function makeLinkCard(entry, img, name, onRemove) {
     const wrap = document.createElement('div');
@@ -237,12 +243,14 @@
     nameEl.className = 'gallery-linkto-card-name';
     nameEl.textContent = name;
     wrap.appendChild(nameEl);
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'gallery-linkto-card-remove';
-    removeBtn.textContent = '✕';
-    removeBtn.addEventListener('click', onRemove);
-    wrap.appendChild(removeBtn);
+    if (onRemove) {
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'gallery-linkto-card-remove';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', onRemove);
+      wrap.appendChild(removeBtn);
+    }
     return wrap;
   }
 
@@ -259,6 +267,11 @@
     const storiesGrid = document.getElementById('gallery-linkto-stories-grid');
     storiesGrid.innerHTML = '';
     storiesGrid.appendChild(makeAddTile('Story', openStoryLinkPicker));
+    existingLinkedStories.forEach(s => {
+      const card = makeLinkCard(s, s.cover_url, s.site_title, null);
+      card.classList.add('gallery-linkto-card--locked');
+      storiesGrid.appendChild(card);
+    });
     selectedLinkStories.forEach(s => storiesGrid.appendChild(makeLinkCard(s, s.cover_url, s.site_title, () => {
       selectedLinkStories.delete(s.id);
       renderLinkToCards();
@@ -268,6 +281,11 @@
     const charsGrid = document.getElementById('gallery-linkto-characters-grid');
     charsGrid.innerHTML = '';
     charsGrid.appendChild(makeAddTile('Characters', openCharLinkPicker));
+    existingLinkedCharacters.forEach(c => {
+      const card = makeLinkCard(c, c.ref_image, c.name, null);
+      card.classList.add('gallery-linkto-card--locked');
+      charsGrid.appendChild(card);
+    });
     selectedLinkCharacters.forEach(c => charsGrid.appendChild(makeLinkCard(c, c.ref_image, c.name, () => {
       selectedLinkCharacters.delete(c.id);
       renderLinkToCards();
@@ -423,15 +441,16 @@
     msgEl.textContent = '';
     errorBanner.classList.remove('show');
 
-    if (!selectedFile || !name) {
+    const missingFile = !editingGalleryId && !selectedFile;
+    if (missingFile || !name) {
       errorBannerText.textContent = 'All Gallery posts must have a media file and name!';
       errorBanner.classList.add('show');
-      if (!selectedFile) flashField(document.getElementById('gallery-editor-img-wrap'));
+      if (missingFile) flashField(document.getElementById('gallery-editor-img-wrap'));
       if (!name) { flashField(document.getElementById('gallery-editor-name')); document.getElementById('gallery-editor-name').focus(); }
       errorBanner.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
-    if (!consent) {
+    if (!editingGalleryId && !consent) {
       msgEl.className = 'mod-panel-msg mod-panel-msg--error';
       msgEl.textContent = 'Please confirm the art belongs to you before posting.';
       document.querySelector('.gallery-consent-row').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -439,7 +458,7 @@
     }
 
     const fd = new FormData();
-    fd.append('image', selectedFile);
+    if (selectedFile) fd.append('image', selectedFile);
     fd.append('category', getSelectedCategory());
     fd.append('title', name);
     fd.append('description', document.getElementById('gallery-editor-desc').value.trim());
@@ -448,9 +467,11 @@
 
     const saveBtn = document.getElementById('gallery-editor-save');
     saveBtn.disabled = true;
-    saveBtn.textContent = 'Posting…';
+    saveBtn.textContent = editingGalleryId ? 'Saving…' : 'Posting…';
     try {
-      const res = await fetch('/api/gallery', { method: 'POST', headers: authHeaders(), body: fd });
+      const url = editingGalleryId ? `/api/moderator/gallery/${editingGalleryId}` : '/api/gallery';
+      const method = editingGalleryId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: authHeaders(), body: fd });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         msgEl.className = 'mod-panel-msg mod-panel-msg--error';
@@ -469,6 +490,10 @@
         }).catch(() => {});
       }
 
+      if (editingGalleryId) {
+        window.location.href = '/fanpages/editor#gallery';
+        return;
+      }
       const me = await fetch('/api/auth/me', { headers: authHeaders() }).then(r => r.json()).catch(() => null);
       window.location.href = me && me.user ? `/fanpages/${me.user.username}#gallery` : '/fanpages';
     } catch {
@@ -476,9 +501,69 @@
       msgEl.textContent = 'Network error. Please try again.';
     } finally {
       saveBtn.disabled = false;
-      saveBtn.textContent = 'Post';
+      saveBtn.textContent = editingGalleryId ? 'Save Changes' : 'Post';
     }
   });
+
+  document.getElementById('gallery-editor-delete-forever').addEventListener('click', async () => {
+    if (!editingGalleryId) return;
+    const nm = document.getElementById('gallery-editor-name').value.trim() || 'this post';
+    if (!confirm(`Are you sure you want to delete "${nm}"? This can't be undone.`)) return;
+    const btn = document.getElementById('gallery-editor-delete-forever');
+    btn.disabled = true;
+    btn.textContent = 'Deleting…';
+    try {
+      await fetch(`/api/gallery/${editingGalleryId}`, { method: 'DELETE', headers: authHeaders() });
+      window.location.href = '/fanpages/editor#gallery';
+    } catch {
+      btn.disabled = false;
+      btn.textContent = 'Delete';
+    }
+  });
+
+  // ── Edit mode — populated from ?id= instead of starting blank ───────────
+  let editingGalleryId = null;
+  (async function initEditMode() {
+    const id = new URLSearchParams(window.location.search).get('id');
+    if (!id) return;
+    editingGalleryId = id;
+    try {
+      const [itemRes, linksRes] = await Promise.all([
+        fetch(`/api/gallery/${id}`),
+        fetch(`/api/gallery/${id}/links`),
+      ]);
+      if (!itemRes.ok) return;
+      const { item } = await itemRes.json();
+      const linksData = linksRes.ok ? await linksRes.json() : { stories: [], characters: [] };
+
+      document.querySelector('.char-editor-title').textContent = 'Edit Gallery Post';
+      document.querySelector('.cg-eyebrow').textContent = 'Edit';
+      document.querySelector('.cg-sub').textContent = 'Editing this gallery post. Changes save directly to it.';
+      document.getElementById('gallery-editor-save').textContent = 'Save Changes';
+      document.getElementById('gallery-editor-delete-forever').style.display = '';
+      // Consent was already given when the post was first created — only a
+      // brand-new post needs it (re)checked.
+      document.getElementById('gallery-editor-consent').checked = true;
+
+      document.getElementById('gallery-editor-name').value = item.title || '';
+      document.getElementById('gallery-editor-desc').value = item.description || '';
+      const catInput = document.querySelector(`input[name="gallery-editor-category"][value="${item.category || 'sfw'}"]`);
+      if (catInput) catInput.checked = true;
+
+      galleryPos = { x: item.position_x != null ? item.position_x : 50, y: item.position_y != null ? item.position_y : 50 };
+      document.getElementById('gallery-editor-pos-x').value = galleryPos.x;
+      document.getElementById('gallery-editor-pos-y').value = galleryPos.y;
+      const img = document.getElementById('gallery-editor-img');
+      img.src = item.image_url;
+      img.style.display = 'block';
+      document.getElementById('gallery-editor-img-placeholder').style.display = 'none';
+      showGalleryPreview(item.image_url);
+
+      existingLinkedStories = linksData.stories || [];
+      existingLinkedCharacters = (linksData.characters || []).map(c => ({ id: c.id, name: c.name, ref_image: c.ref_image }));
+      renderLinkToCards();
+    } catch {}
+  })();
 </script>
 
 </body>

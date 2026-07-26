@@ -117,6 +117,7 @@
     <p class="mod-panel-msg" id="char-editor-msg"></p>
 
     <div class="char-editor-actions">
+      <button class="mod-btn mod-btn--danger" id="char-editor-delete-forever" type="button" style="display:none;">Delete</button>
       <a class="mod-btn" href="/fanpages">Cancel</a>
       <button class="mod-btn" id="char-editor-save" type="button">Create</button>
     </div>
@@ -325,6 +326,11 @@
   // since a character can reasonably belong to several stories at once.
   // Mirrors the gallery editor's "Link To: Story" picker exactly. ──────────
   let selectedLinkStories = new Map();
+  // Stories the character is ALREADY linked to, in edit mode — shown as
+  // locked (non-removable) cards since this page has no unlink endpoint;
+  // the picker only ever adds more, same additive-only rule as the gallery
+  // editor's Link To section.
+  let existingLinkedStories = [];
 
   function makeLinkCard(entry, img, name, onRemove) {
     const wrap = document.createElement('div');
@@ -363,6 +369,11 @@
     const storiesGrid = document.getElementById('char-linkto-stories-grid');
     storiesGrid.innerHTML = '';
     storiesGrid.appendChild(makeAddTile('Story', openStoryLinkPicker));
+    existingLinkedStories.forEach(s => {
+      const card = makeLinkCard(s, s.cover_url, s.site_title, null);
+      card.classList.add('gallery-linkto-card--locked');
+      storiesGrid.appendChild(card);
+    });
     selectedLinkStories.forEach(s => storiesGrid.appendChild(makeLinkCard(s, s.cover_url, s.site_title, () => {
       selectedLinkStories.delete(s.id);
       renderLinkToCards();
@@ -539,10 +550,12 @@
 
     const saveBtn = document.getElementById('char-editor-save');
     saveBtn.disabled = true;
-    saveBtn.textContent = 'Creating…';
+    saveBtn.textContent = editingCharacterId ? 'Saving…' : 'Creating…';
     try {
-      const res = await fetch('/api/characters', {
-        method: 'POST',
+      const url = editingCharacterId ? `/api/moderator/characters/${editingCharacterId}` : '/api/characters';
+      const method = editingCharacterId ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
@@ -570,6 +583,10 @@
         }).catch(() => {});
       }
 
+      if (editingCharacterId) {
+        window.location.href = '/fanpages/editor#characters';
+        return;
+      }
       const me = await fetch('/api/auth/me', { headers: authHeaders() }).then(r => r.json()).catch(() => null);
       window.location.href = me && me.user ? `/fanpages/${me.user.username}#characters` : '/fanpages';
     } catch {
@@ -577,9 +594,98 @@
       msgEl.textContent = 'Network error. Please try again.';
     } finally {
       saveBtn.disabled = false;
-      saveBtn.textContent = 'Create';
+      saveBtn.textContent = editingCharacterId ? 'Save Changes' : 'Create';
     }
   });
+
+  document.getElementById('char-editor-delete-forever').addEventListener('click', async () => {
+    if (!editingCharacterId) return;
+    const nm = document.getElementById('char-editor-name').value.trim() || 'this character';
+    if (!confirm(`Are you sure you want to delete ${nm}? This will remove them from your profile, story, and account permanently?`)) return;
+    const btn = document.getElementById('char-editor-delete-forever');
+    btn.disabled = true;
+    btn.textContent = 'Deleting…';
+    try {
+      await fetch(`/api/characters/${editingCharacterId}`, { method: 'DELETE', headers: authHeaders() });
+      window.location.href = '/fanpages/editor#characters';
+    } catch {
+      btn.disabled = false;
+      btn.textContent = 'Delete';
+    }
+  });
+
+  // ── Edit mode — populated from ?id= instead of starting blank ───────────
+  let editingCharacterId = null;
+  (async function initEditMode() {
+    const id = new URLSearchParams(window.location.search).get('id');
+    if (!id) return;
+    editingCharacterId = id;
+    try {
+      const [charRes, storiesRes] = await Promise.all([
+        fetch(`/api/characters/${id}`),
+        fetch(`/api/characters/${id}/stories`),
+      ]);
+      if (!charRes.ok) return;
+      const { character } = await charRes.json();
+      const storiesData = storiesRes.ok ? await storiesRes.json() : { stories: [] };
+
+      document.querySelector('.char-editor-title').textContent = `Edit ${character.name}`;
+      document.querySelector('.cc-eyebrow').textContent = 'Edit';
+      document.querySelector('.cc-sub').textContent = `Editing ${character.name}. Changes save directly to this character.`;
+      document.getElementById('char-editor-save').textContent = 'Save Changes';
+      document.getElementById('char-editor-delete-forever').style.display = '';
+
+      document.getElementById('char-editor-name').value = character.name || '';
+      document.getElementById('char-editor-desc').value = character.description || '';
+      const stats = character.stats || {};
+      document.getElementById('char-editor-age').value = !isBlank(stats['Age']) ? stats['Age'] : '';
+      document.getElementById('char-editor-species').value = !isBlank(stats['Species']) ? stats['Species'] : '';
+      document.getElementById('char-editor-interests').value = !isBlank(stats['Interests']) ? stats['Interests'] : '';
+      document.getElementById('char-editor-theme-song').value = !isBlank(stats['Theme Song']) ? stats['Theme Song'] : '';
+      document.getElementById('char-editor-lore').value = (character.lore || []).join('\n');
+
+      if (character.ref_image) {
+        uploadedRefUrl = character.ref_image;
+        refPos = {
+          x: character.ref_position_x != null ? character.ref_position_x : 50,
+          y: character.ref_position_y != null ? character.ref_position_y : 50,
+        };
+        const img = document.getElementById('char-editor-ref-img');
+        img.src = uploadedRefUrl;
+        img.style.objectPosition = `${refPos.x}% ${refPos.y}%`;
+        img.style.display = 'block';
+        document.getElementById('char-editor-ref-placeholder').style.display = 'none';
+        document.getElementById('char-editor-ref-reposition').style.display = 'flex';
+        document.getElementById('char-editor-ref-slider-x').value = refPos.x;
+        document.getElementById('char-editor-ref-slider-y').value = refPos.y;
+      }
+
+      document.getElementById('char-editor-facts-rows').innerHTML = '';
+      const existingFacts = (character.facts || []).filter(f => f && f !== NA);
+      if (existingFacts.length) existingFacts.forEach((f, i) => addFactRow(f, i > 0));
+      else addFactRow('', false);
+
+      document.getElementById('char-editor-relationships-rows').innerHTML = '';
+      addRelationshipAddTile();
+      (character.relationships || []).filter(r => r && r.name).forEach(r => {
+        addRelationshipRow(r.name, r.type, r.character_id);
+        if (r.character_id) {
+          fetch(`/api/characters/${r.character_id}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(d => {
+              if (!d || !d.character || !d.character.ref_image) return;
+              const rows = document.querySelectorAll('#char-editor-relationships-rows .char-rel-card');
+              const row = [...rows].find(el => el.dataset.charId === String(r.character_id));
+              if (row) row.querySelector('.char-rel-card-avatar').src = d.character.ref_image;
+            })
+            .catch(() => {});
+        }
+      });
+
+      existingLinkedStories = storiesData.stories || [];
+      renderLinkToCards();
+    } catch {}
+  })();
 </script>
 
 </body>
