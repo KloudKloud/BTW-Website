@@ -396,7 +396,11 @@
       background: #1e1e1e; border: 1px solid rgba(255,255,255,0.08); transition: transform 0.15s;
     }
     .fp-featured-card:hover .fp-featured-card-img { transform: translateY(-4px); }
-    .fp-featured-card-title { font-size: 0.85rem; font-weight: 700; margin-top: 0.5rem; }
+    .fp-featured-card-title {
+      font-family: 'Cinzel', Georgia, serif; font-size: 1.02rem; font-weight: 700; margin-top: 0.65rem;
+      color: #f0c060; letter-spacing: 0.02em; line-height: 1.35;
+      text-shadow: 0 0 18px rgba(240,192,96,0.5), 0 1px 3px rgba(0,0,0,0.5);
+    }
     .fp-featured-remove {
       position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;
       background: rgba(0,0,0,0.7); border: none; color: #f0f0f0; cursor: pointer; font-size: 0.75rem;
@@ -1867,56 +1871,59 @@
     featuredPickerOnChange = onChange;
     document.getElementById('fp-featured-picker-title').textContent = kind === 'character' ? 'Feature Characters' : 'Feature Gallery';
     document.getElementById('fp-featured-picker-search').value = '';
-    document.getElementById('fp-featured-picker-list').innerHTML = '<p class="char-link-picker-empty">Start typing to search…</p>';
     document.getElementById('fp-featured-picker-overlay').hidden = false;
+    // Preload the full scrollable list (yours first) immediately, instead
+    // of only showing something once you start typing — searching just
+    // narrows this same list.
+    runFeaturedPickerSearch('');
   }
   document.getElementById('fp-featured-picker-done').addEventListener('click', () => {
     document.getElementById('fp-featured-picker-overlay').hidden = true;
   });
   let featuredPickerDebounce;
+  async function runFeaturedPickerSearch(q) {
+    const list = document.getElementById('fp-featured-picker-list');
+    list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
+    try {
+      const res = await fetch(`/api/featured-search?kind=${featuredPickerKind}&q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+      const data = await res.json();
+      const results = data.results || [];
+      if (!results.length) { list.innerHTML = `<p class="char-link-picker-empty">${q ? 'No matches found.' : 'Nothing to feature yet.'}</p>`; return; }
+      list.innerHTML = '';
+      results.forEach(r => {
+        const selected = editFeatured[featuredPickerKind].some(it => it.ref_id === r.ref_id);
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'char-link-picker-item--big' + (selected ? ' selected' : '');
+        item.innerHTML = `
+          <img src="${r.image_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="" />
+          <span>
+            <span class="char-link-picker-item-name">${r.title}</span>
+            <span class="char-link-picker-item-owner">${r.mine ? 'You' : (r.owner_username || '')}</span>
+          </span>
+          <span class="char-link-picker-item-check">✓</span>
+        `;
+        item.addEventListener('click', () => {
+          const arr = editFeatured[featuredPickerKind];
+          const idx = arr.findIndex(it => it.ref_id === r.ref_id);
+          if (idx >= 0) {
+            arr.splice(idx, 1);
+            item.classList.remove('selected');
+          } else {
+            if (arr.length >= 3) return;
+            arr.push({ ref_id: r.ref_id, title: r.title, image_url: r.image_url, link_url: r.link_url, site_slug: r.slug || null });
+            item.classList.add('selected');
+          }
+          if (featuredPickerOnChange) featuredPickerOnChange();
+        });
+        list.appendChild(item);
+      });
+    } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t load right now.</p>'; }
+  }
   document.getElementById('fp-featured-picker-search').addEventListener('input', (e) => {
     clearTimeout(featuredPickerDebounce);
     const q = e.target.value.trim();
-    const list = document.getElementById('fp-featured-picker-list');
-    if (!q) { list.innerHTML = '<p class="char-link-picker-empty">Start typing to search…</p>'; return; }
-    featuredPickerDebounce = setTimeout(async () => {
-      list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
-      try {
-        const res = await fetch(`/api/featured-search?kind=${featuredPickerKind}&q=${encodeURIComponent(q)}`, { headers: authHeaders() });
-        const data = await res.json();
-        const results = data.results || [];
-        if (!results.length) { list.innerHTML = '<p class="char-link-picker-empty">No matches found.</p>'; return; }
-        list.innerHTML = '';
-        results.forEach(r => {
-          const selected = editFeatured[featuredPickerKind].some(it => it.ref_id === r.ref_id);
-          const item = document.createElement('button');
-          item.type = 'button';
-          item.className = 'char-link-picker-item--big' + (selected ? ' selected' : '');
-          item.innerHTML = `
-            <img src="${r.image_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="" />
-            <span>
-              <span class="char-link-picker-item-name">${r.title}</span>
-              ${r.mine ? '' : `<span class="char-link-picker-item-owner">${r.owner_username || ''}</span>`}
-            </span>
-            <span class="char-link-picker-item-check">✓</span>
-          `;
-          item.addEventListener('click', () => {
-            const arr = editFeatured[featuredPickerKind];
-            const idx = arr.findIndex(it => it.ref_id === r.ref_id);
-            if (idx >= 0) {
-              arr.splice(idx, 1);
-              item.classList.remove('selected');
-            } else {
-              if (arr.length >= 3) return;
-              arr.push({ ref_id: r.ref_id, title: r.title, image_url: r.image_url, link_url: r.link_url, site_slug: r.slug || null });
-              item.classList.add('selected');
-            }
-            if (featuredPickerOnChange) featuredPickerOnChange();
-          });
-          list.appendChild(item);
-        });
-      } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t search right now.</p>'; }
-    }, 300);
+    featuredPickerDebounce = setTimeout(() => runFeaturedPickerSearch(q), 300);
   });
 
   // ── Load profile ─────────────────────────────────────────────────────────

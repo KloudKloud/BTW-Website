@@ -3159,6 +3159,7 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
         ? `/fanpages/${r.story_path || r.slug}${kind === 'character' ? '/characters' : '/gallery'}`
         : `/fanpages/${r.owner_username}`,
       mine: r.owner_user_id === req.user.id,
+      owner_username: r.owner_username,
     }))
     .sort((a, b) => (b.mine - a.mine));
 
