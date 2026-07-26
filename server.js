@@ -452,6 +452,32 @@ async function initDb() {
     ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]';
   `).catch(e => console.error('dm_messages attachments migration:', e.message));
 
+  // Newspaper — a lightweight journal/blog an account owner can post to
+  // (story updates, shout-outs, hellos to followers). Attachments reuse the
+  // same {url,name} shape as DM attachments, since it supports the same
+  // kinds of media (images/gifs/video via upload, or an external gif url).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS newspaper_posts (
+      id          SERIAL      PRIMARY KEY,
+      user_id     INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title       TEXT        NOT NULL DEFAULT '',
+      body        TEXT        NOT NULL DEFAULT '',
+      attachments JSONB       NOT NULL DEFAULT '[]',
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_newspaper_posts_user ON newspaper_posts(user_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS newspaper_comments (
+      id         SERIAL      PRIMARY KEY,
+      post_id    INTEGER     NOT NULL REFERENCES newspaper_posts(id) ON DELETE CASCADE,
+      user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body       TEXT        NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_newspaper_comments_post ON newspaper_comments(post_id, created_at);
+  `).catch(e => console.error('newspaper migration:', e.message));
+
   await (async () => {
     const { rows: [existing] } = await pool.query("SELECT id FROM users WHERE username = 'btwteam'");
     if (existing) return;
@@ -2606,7 +2632,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
 
   const [{ rows: sites }, followerCount, followingCount, isFollowing, featuredChars, featuredGallery] = await Promise.all([
     pool.query(
-      'SELECT slug, story_path, site_title, cover_url, banner_url FROM moderator_sites WHERE owner_user_id = $1 ORDER BY created_at ASC',
+      'SELECT id, slug, story_path, site_title, cover_url, banner_url, synopsis FROM moderator_sites WHERE owner_user_id = $1 ORDER BY created_at ASC',
       [author.id]
     ),
     pool.query('SELECT COUNT(*)::int AS n FROM user_follows WHERE followed_id = $1', [author.id]),
@@ -2625,6 +2651,22 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       [author.id]
     ),
   ]);
+
+  // A few tagged-character thumbnails per story, for the Stories tab's
+  // teaser cards — batched into one query instead of one per story.
+  const siteIds = sites.map(s => s.id);
+  const charsBySite = {};
+  if (siteIds.length) {
+    const { rows: siteChars } = await pool.query(
+      `SELECT csl.site_id, mc.id, mc.name, mc.ref_image FROM character_story_links csl
+       JOIN moderator_characters mc ON mc.id = csl.character_id
+       WHERE csl.site_id = ANY($1::int[]) ORDER BY csl.sort_order LIMIT 200`,
+      [siteIds]
+    );
+    siteChars.forEach(c => {
+      (charsBySite[c.site_id] = charsBySite[c.site_id] || []).push({ id: c.id, name: c.name, ref_image: c.ref_image });
+    });
+  }
 
   res.json({
     author: {
@@ -2653,6 +2695,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     },
     stories: sites.map(s => ({
       slug: s.slug, story_path: s.story_path || s.slug, site_title: s.site_title, cover_url: s.cover_url,
+      synopsis: s.synopsis || '', characters: (charsBySite[s.id] || []).slice(0, 4),
     })),
     follower_count: followerCount.rows[0].n,
     following_count: followingCount.rows[0].n,
@@ -2698,6 +2741,127 @@ async function fanpageFollowList(req, res, direction) {
 }
 app.get('/api/fanpage-profile/:username/followers', (req, res) => fanpageFollowList(req, res, 'followers'));
 app.get('/api/fanpage-profile/:username/following', (req, res) => fanpageFollowList(req, res, 'following'));
+
+// ── Newspaper — a lightweight journal/blog on an author's profile ──────────
+function mapNewspaperPost(r) {
+  return {
+    id: r.id,
+    title: r.title || '',
+    body: r.body || '',
+    attachments: r.attachments || [],
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+    comment_count: r.comment_count != null ? Number(r.comment_count) : 0,
+    author: { username: r.username, display_name: r.display_name || r.username, avatar: r.avatar || null },
+  };
+}
+
+// Every post by a user, newest first — backs both the Home tab's "latest
+// post" preview (just takes [0]) and the full Newspapers tab list.
+app.get('/api/fanpage-profile/:username/newspaper', async (req, res) => {
+  const { rows: [author] } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]);
+  if (!author) return res.status(404).json({ error: 'Not found.' });
+  const { rows } = await pool.query(
+    `SELECT np.*, u.username, u.display_name, u.avatar,
+            (SELECT COUNT(*)::int FROM newspaper_comments WHERE post_id = np.id) AS comment_count
+     FROM newspaper_posts np JOIN users u ON u.id = np.user_id
+     WHERE np.user_id = $1 ORDER BY np.created_at DESC LIMIT 100`,
+    [author.id]
+  );
+  res.json({ posts: rows.map(mapNewspaperPost) });
+});
+
+app.get('/api/newspaper/post/:id', async (req, res) => {
+  const { rows: [row] } = await pool.query(
+    `SELECT np.*, u.username, u.display_name, u.avatar,
+            (SELECT COUNT(*)::int FROM newspaper_comments WHERE post_id = np.id) AS comment_count
+     FROM newspaper_posts np JOIN users u ON u.id = np.user_id
+     WHERE np.id = $1`,
+    [req.params.id]
+  );
+  if (!row) return res.status(404).json({ error: 'Not found.' });
+  res.json({ post: mapNewspaperPost(row) });
+});
+
+app.post('/api/newspaper', requireAuth, uploadInbox.array('attachments', 4), async (req, res) => {
+  const title = String(req.body.title || '').trim().slice(0, 120);
+  const body = String(req.body.body || '').trim().slice(0, 8000);
+  const files = req.files || [];
+  const attachments = files.map(f => ({ url: '/images/inbox/' + f.filename, name: f.originalname }));
+  const gifUrl = (req.body.gif_url || '').trim();
+  if (gifUrl) attachments.push({ url: gifUrl, name: 'GIF' });
+  if (!title && !body && !attachments.length) return res.status(400).json({ error: 'A newspaper post needs at least a title, body, or attachment.' });
+
+  const { rows: [post] } = await pool.query(
+    `INSERT INTO newspaper_posts (user_id, title, body, attachments) VALUES ($1, $2, $3, $4) RETURNING *`,
+    [req.user.id, title, body, JSON.stringify(attachments)]
+  );
+  res.json({ post: { ...post, comment_count: 0 } });
+});
+
+app.put('/api/newspaper/:id', requireAuth, async (req, res) => {
+  const { rows: [existing] } = await pool.query(
+    'SELECT id FROM newspaper_posts WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]
+  );
+  if (!existing) return res.status(404).json({ error: 'Not found.' });
+  const title = req.body.title != null ? String(req.body.title).trim().slice(0, 120) : null;
+  const body = req.body.body != null ? String(req.body.body).trim().slice(0, 8000) : null;
+  const { rows: [post] } = await pool.query(
+    `UPDATE newspaper_posts SET title = COALESCE($1, title), body = COALESCE($2, body), updated_at = NOW()
+     WHERE id = $3 RETURNING *`,
+    [title, body, existing.id]
+  );
+  res.json({ post });
+});
+
+app.delete('/api/newspaper/:id', requireAuth, async (req, res) => {
+  const { rowCount } = await pool.query(
+    'DELETE FROM newspaper_posts WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Not found.' });
+  res.json({ message: 'Deleted.' });
+});
+
+app.get('/api/newspaper/post/:id/comments', async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT nc.id, nc.body, nc.created_at, u.username, u.display_name, u.avatar
+     FROM newspaper_comments nc JOIN users u ON u.id = nc.user_id
+     WHERE nc.post_id = $1 ORDER BY nc.created_at ASC LIMIT 500`,
+    [req.params.id]
+  );
+  res.json({
+    comments: rows.map(r => ({
+      id: r.id, body: r.body, created_at: r.created_at,
+      author: { username: r.username, display_name: r.display_name || r.username, avatar: r.avatar || null },
+    })),
+  });
+});
+
+app.post('/api/newspaper/post/:id/comments', requireAuth, async (req, res) => {
+  const body = String(req.body.body || '').trim().slice(0, 2000);
+  if (!body) return res.status(400).json({ error: 'Comment cannot be empty.' });
+  const { rows: [post] } = await pool.query('SELECT id FROM newspaper_posts WHERE id = $1', [req.params.id]);
+  if (!post) return res.status(404).json({ error: 'Post not found.' });
+  const { rows: [comment] } = await pool.query(
+    `INSERT INTO newspaper_comments (post_id, user_id, body) VALUES ($1, $2, $3) RETURNING id, body, created_at`,
+    [post.id, req.user.id, body]
+  );
+  const { rows: [me] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
+  res.json({
+    comment: {
+      id: comment.id, body: comment.body, created_at: comment.created_at,
+      author: { username: me.username, display_name: me.display_name || me.username, avatar: me.avatar || null },
+    },
+  });
+});
+
+app.delete('/api/newspaper/comments/:id', requireAuth, async (req, res) => {
+  const { rowCount } = await pool.query(
+    'DELETE FROM newspaper_comments WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Not found.' });
+  res.json({ message: 'Deleted.' });
+});
 
 // Full Characters / Gallery tabs on a user's profile — every character or
 // gallery post across ALL of that user's stories, not just the 3 featured

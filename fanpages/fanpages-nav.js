@@ -35,12 +35,11 @@
         <div class="fpnav-dropdown-wrap">
           <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
           <div class="fpnav-dropdown" id="fpnav-upload-dropdown" hidden>
+            <a href="/fanpages/editor" data-gate="/fanpages/editor">Creator Hub</a>
+            <div class="fpnav-dropdown-divider"></div>
             <a href="/fanpages/create" data-gate="/fanpages/create"><span class="fpnav-plus-badge">+</span> Story</a>
             <a href="/fanpages/create-character" data-gate="/fanpages/create-character"><span class="fpnav-plus-badge">+</span> Character</a>
             <a href="/fanpages/create-gallery" data-gate="/fanpages/create-gallery"><span class="fpnav-plus-badge">+</span> Gallery</a>
-            <div class="fpnav-dropdown-divider"></div>
-            <a href="/fanpages/editor" data-gate="/fanpages/editor">My Editor Hub</a>
-            <a href="/fanpages/my-stories" data-gate="/fanpages/my-stories">My Stories</a>
           </div>
         </div>
 
