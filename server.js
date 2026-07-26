@@ -2615,12 +2615,12 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       ? pool.query('SELECT 1 FROM user_follows WHERE follower_id = $1 AND followed_id = $2', [viewerId, author.id])
       : Promise.resolve({ rows: [] }),
     pool.query(
-      `SELECT title, image_url, link_url FROM user_featured_items
+      `SELECT ref_id, title, image_url, link_url FROM user_featured_items
        WHERE user_id = $1 AND kind = 'character' ORDER BY sort_order LIMIT 3`,
       [author.id]
     ),
     pool.query(
-      `SELECT title, image_url, link_url FROM user_featured_items
+      `SELECT ref_id, title, image_url, link_url FROM user_featured_items
        WHERE user_id = $1 AND kind = 'gallery' ORDER BY sort_order LIMIT 3`,
       [author.id]
     ),
