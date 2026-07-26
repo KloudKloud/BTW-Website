@@ -144,7 +144,10 @@
         <p class="gallery-linkto-section-label">Linked Characters</p>
         <div class="gallery-linkto-grid" id="char-editor-relationships-rows"></div>
       </div>
-      <p class="mod-tip-box">💡 Just fill in the name and how they relate! The page will automatically show it as "Name — Type" for you. Click the <strong>+</strong> on the avatar to link it to <strong>any</strong> character — yours or someone else's — so readers can click it to fast-travel straight to their page. (Just like tagging another artist's character in a gallery piece!)</p>
+      <div class="mod-tip-box">
+        <p>💡 Just fill in the name and how they relate! The page will automatically show it as "Name — Type" for you. If you'd like to directly link another character (yours or someone else's) to a particular relationship, select the <strong>+</strong> button on the avatar above and find that character specifically! You can have as many relationships as you'd like~</p>
+        <p style="margin-top:0.6rem; opacity:0.85;">e.g. Kloud belongs to you. Saphero belongs to you. When building Kloud's relationships, insert Saphero into the name field, and "Best Friend" in the type field. If Saphero has a page that exists, click the "+" button and select Saphero from your characters. Alternatively, if you have Kloud, and your best friend has Saphero, fill in the same info for the name and type field, but link his Saphero page through the "+" button :)</p>
+      </div>
     </div>
 
     <div class="mod-field">
@@ -606,13 +609,9 @@ document.getElementById('char-editor-add-fact').addEventListener('click', () => 
 // ── Relationship rows + link picker ─────────────────────────────────────────
 let linkPickerTargetRow = null;
 
-function addRelationshipRow(name, type, characterId, removable, avatarUrl) {
-  if (removable === undefined) removable = true;
+function addRelationshipRow(name, type, characterId, avatarUrl) {
   const wrap = document.createElement('div');
   wrap.className = 'char-rel-card';
-  // Same markup for every card regardless of removability — the permanent
-  // first card keeps an invisible (but space-reserving) remove badge
-  // instead of dropping it, so every card lines up at the same width.
   wrap.dataset.charId = characterId || '';
   wrap.innerHTML = `
     <div class="char-rel-card-avatar-wrap">
@@ -620,10 +619,12 @@ function addRelationshipRow(name, type, characterId, removable, avatarUrl) {
       <button class="char-rel-card-link-btn${characterId ? ' linked' : ''}" type="button" title="Link to an existing character">+</button>
     </div>
     <div class="char-rel-card-fields">
+      <label class="char-rel-card-field-label">Name:</label>
       <input class="mod-input rel-name" placeholder="Name" value="${(name || '').replace(/"/g, '&quot;')}" />
+      <label class="char-rel-card-field-label">Relation:</label>
       <input class="mod-input rel-type" placeholder="Mom, Dad, Friend, Sibling..." value="${(type || '').replace(/"/g, '&quot;')}" />
     </div>
-    <button class="char-rel-card-remove" type="button" style="${removable ? '' : 'visibility:hidden;'}">✕</button>`;
+    <button class="char-rel-card-remove" type="button">✕</button>`;
 
   const nameInput = wrap.querySelector('.rel-name');
   const linkBtn = wrap.querySelector('.char-rel-card-link-btn');
@@ -636,7 +637,7 @@ function addRelationshipRow(name, type, characterId, removable, avatarUrl) {
     avatarImg.src = '/images/characters/noreference.png';
   });
   linkBtn.addEventListener('click', () => openLinkPicker(wrap));
-  if (removable) wrap.querySelector('.char-rel-card-remove').addEventListener('click', () => wrap.remove());
+  wrap.querySelector('.char-rel-card-remove').addEventListener('click', () => wrap.remove());
 
   document.getElementById('char-editor-relationships-rows').appendChild(wrap);
 }
@@ -645,7 +646,7 @@ function addRelationshipAddTile() {
   tile.type = 'button';
   tile.className = 'char-rel-add-tile';
   tile.innerHTML = '<span class="char-rel-add-tile-icon">+</span> Add Relationship';
-  tile.addEventListener('click', () => addRelationshipRow('', '', '', true));
+  tile.addEventListener('click', () => addRelationshipRow('', '', ''));
   document.getElementById('char-editor-relationships-rows').appendChild(tile);
 }
 
@@ -811,8 +812,7 @@ function openCharEditor(char) {
   document.getElementById('char-editor-relationships-rows').innerHTML = '';
   addRelationshipAddTile();
   const existingRels = char ? (char.relationships || []).filter(r => r && r.name) : [];
-  if (existingRels.length) existingRels.forEach((r, i) => addRelationshipRow(r.name, r.type, r.character_id, i > 0));
-  else addRelationshipRow('', '', '', false);
+  existingRels.forEach(r => addRelationshipRow(r.name, r.type, r.character_id));
 
   document.getElementById('char-editor-lore').value = char ? (char.lore || []).join('\n') : '';
 
