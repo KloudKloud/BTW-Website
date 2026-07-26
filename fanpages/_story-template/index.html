@@ -20,8 +20,8 @@
 <!-- Edit bar — only shown while editing -->
 <div class="mod-edit-bar" id="edit-bar" style="display:none;">
   <div class="mod-edit-bar-left">
-    <button class="mod-edit-bar-delete" id="delete-story-btn" type="button">🗑️ Delete Story</button>
     <span class="mod-edit-bar-label">Currently editing your story</span>
+    <button class="mod-edit-bar-delete" id="delete-story-btn" type="button">🗑️ Delete Story</button>
   </div>
   <div class="mod-edit-bar-actions">
     <button class="mod-edit-bar-save" id="save-edit-btn">Save Changes</button>
@@ -149,7 +149,7 @@
           </div>
 
           <div class="mod-editable-block">
-            <span class="mod-field-label">Description</span>
+            <span class="mod-field-label">Story Description</span>
             <blockquote class="wiki-quote" id="site-synopsis-display">N/A</blockquote>
             <textarea class="mod-textarea mod-edit-input" id="site-synopsis-input" style="display:none;"></textarea>
           </div>
@@ -161,7 +161,7 @@
         <div class="wiki-rule"></div>
         <div class="wiki-meet-split">
           <div class="wiki-meet-text mod-editable-block">
-            <span class="mod-field-label">Bio</span>
+            <span class="mod-field-label" id="bio-field-label">Meet the Author</span>
             <p id="site-bio-display">N/A</p>
             <textarea class="mod-textarea mod-edit-input" id="site-bio-input" style="display:none;"></textarea>
           </div>
@@ -411,7 +411,9 @@ function populateDisplay() {
   document.getElementById('site-title-display').textContent    = title;
   document.getElementById('site-synopsis-display').textContent = s.synopsis   || 'N/A';
   document.getElementById('site-bio-display').textContent      = s.bio        || 'N/A';
-  document.getElementById('meet-heading').textContent = 'Meet ' + (s.author_display_name || s.author_username || 'the Author');
+  const meetText = 'Meet ' + (s.author_display_name || s.author_username || 'the Author');
+  document.getElementById('meet-heading').textContent = meetText;
+  document.getElementById('bio-field-label').textContent = meetText;
   document.getElementById('footer-text').textContent = `${title} is a fan-made page hosted on Between Two Worlds.`;
   document.title = `${title} ✦ Fanpages`;
 
@@ -614,6 +616,7 @@ function enterEditMode() {
   links.forEach(l => addLinkEditRow(l.label, l.url));
 
   toggle(document.getElementById('site-tags-display'), false);
+  document.getElementById('site-tags-fade').hidden = true;
   document.getElementById('site-tags-editor').style.display = 'block';
   document.getElementById('tags-tip-icon').style.display = 'flex';
   document.getElementById('tags-count').style.display = 'inline';
@@ -660,6 +663,9 @@ function exitEditMode() {
   document.getElementById('tags-tip-icon').style.display = 'none';
   document.getElementById('tags-count').style.display = 'none';
   document.getElementById('tags-tip-popover').hidden = true;
+  // Re-check whether the "show all tags" fade is actually needed now that
+  // the display view is back — Cancel doesn't otherwise re-render tags.
+  renderTagsDisplay(siteData.site.tags || []);
 }
 
 document.getElementById('edit-profile-btn').addEventListener('click', enterEditMode);
