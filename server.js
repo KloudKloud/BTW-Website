@@ -4008,7 +4008,7 @@ app.get('/api/characters/:id', async (req, res) => {
 // home page).
 app.get('/api/characters/:id/stories', async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url
+    `SELECT ms.id AS site_id, ms.slug, ms.story_path, ms.site_title, ms.cover_url
      FROM character_story_links csl
      JOIN moderator_sites ms ON ms.id = csl.site_id
      WHERE csl.character_id = $1
@@ -4016,8 +4016,22 @@ app.get('/api/characters/:id/stories', async (req, res) => {
     [req.params.id]
   );
   res.json({
-    stories: rows.map(r => ({ story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url })),
+    stories: rows.map(r => ({ id: r.site_id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url })),
   });
+});
+
+// Unlink a story from a character — the owner's own call (not the story
+// moderator's), since a character's "Link To Story" section can point to
+// stories the character's owner doesn't moderate at all.
+app.delete('/api/characters/:id/link/:siteId', requireAuth, async (req, res) => {
+  const { rows: [character] } = await pool.query(
+    'SELECT id FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
+  );
+  if (!character) return res.status(404).json({ error: 'Not found.' });
+  await pool.query(
+    'DELETE FROM character_story_links WHERE character_id = $1 AND site_id = $2', [character.id, req.params.siteId]
+  );
+  res.json({ message: 'Unlinked.' });
 });
 
 // Standalone creation — no story context at all, lands on the owner's
@@ -4200,22 +4214,47 @@ app.get('/api/gallery/:id', async (req, res) => {
 app.get('/api/gallery/:id/links', async (req, res) => {
   const [{ rows: stories }, { rows: characters }] = await Promise.all([
     pool.query(
-      `SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url
+      `SELECT ms.id AS site_id, ms.slug, ms.story_path, ms.site_title, ms.cover_url
        FROM gallery_story_links gsl JOIN moderator_sites ms ON ms.id = gsl.site_id
        WHERE gsl.gallery_id = $1 ORDER BY gsl.sort_order, ms.id`,
       [req.params.id]
     ),
     pool.query(
-      `SELECT mc.id, mc.name, mc.ref_image
-       FROM gallery_character_links gcl JOIN moderator_characters mc ON mc.id = gcl.character_id
+      `SELECT mc.id, mc.name, mc.ref_image, mc.ref_is_nsfw, mc.stats,
+              u.username AS owner_username, u.display_name AS owner_display_name
+       FROM gallery_character_links gcl
+       JOIN moderator_characters mc ON mc.id = gcl.character_id
+       JOIN users u ON u.id = mc.owner_user_id
        WHERE gcl.gallery_id = $1 ORDER BY mc.id`,
       [req.params.id]
     ),
   ]);
   res.json({
-    stories: stories.map(r => ({ story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url })),
+    stories: stories.map(r => ({ id: r.site_id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url })),
     characters,
   });
+});
+
+// Unlink a story/character from a gallery post — the post owner's own call.
+app.delete('/api/gallery/:id/link/:siteId', requireAuth, async (req, res) => {
+  const { rows: [item] } = await pool.query(
+    'SELECT id FROM moderator_gallery WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
+  );
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  await pool.query(
+    'DELETE FROM gallery_story_links WHERE gallery_id = $1 AND site_id = $2', [item.id, req.params.siteId]
+  );
+  res.json({ message: 'Unlinked.' });
+});
+app.delete('/api/gallery/:id/link-character/:characterId', requireAuth, async (req, res) => {
+  const { rows: [item] } = await pool.query(
+    'SELECT id FROM moderator_gallery WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
+  );
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  await pool.query(
+    'DELETE FROM gallery_character_links WHERE gallery_id = $1 AND character_id = $2', [item.id, req.params.characterId]
+  );
+  res.json({ message: 'Unlinked.' });
 });
 
 app.post('/api/gallery', requireAuth, uploadModImage.single('image'), async (req, res) => {

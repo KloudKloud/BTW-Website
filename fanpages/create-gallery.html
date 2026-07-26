@@ -235,9 +235,10 @@
   // can reasonably be linked to several stories and/or characters at once.
   let selectedLinkStories = new Map();
   let selectedLinkCharacters = new Map();
-  // Already-linked stories/characters, in edit mode — shown as locked
-  // (non-removable) cards since there's no unlink endpoint here; the
-  // pickers only ever add more.
+  // Already-linked stories/characters, in edit mode — shown with a gold
+  // "already saved" border and a real remove button that unlinks
+  // immediately (unlike freshly-picked-but-unsaved selections below, which
+  // just clear local state until Save).
   let existingLinkedStories = [];
   let existingLinkedCharacters = [];
 
@@ -279,7 +280,15 @@
     storiesGrid.innerHTML = '';
     storiesGrid.appendChild(makeAddTile('Story', openStoryLinkPicker));
     existingLinkedStories.forEach(s => {
-      const card = makeLinkCard(s, s.cover_url, s.site_title, null);
+      const card = makeLinkCard(s, s.cover_url, s.site_title, async () => {
+        if (!editingGalleryId) return;
+        card.querySelector('.gallery-linkto-card-remove').disabled = true;
+        try {
+          await fetch(`/api/gallery/${editingGalleryId}/link/${s.id}`, { method: 'DELETE', headers: authHeaders() });
+          existingLinkedStories = existingLinkedStories.filter(x => x.id !== s.id);
+          renderLinkToCards();
+        } catch {}
+      });
       card.classList.add('gallery-linkto-card--locked');
       storiesGrid.appendChild(card);
     });
@@ -293,7 +302,15 @@
     charsGrid.innerHTML = '';
     charsGrid.appendChild(makeAddTile('Characters', openCharLinkPicker));
     existingLinkedCharacters.forEach(c => {
-      const card = makeLinkCard(c, c.ref_image, c.name, null);
+      const card = makeLinkCard(c, c.ref_image, c.name, async () => {
+        if (!editingGalleryId) return;
+        card.querySelector('.gallery-linkto-card-remove').disabled = true;
+        try {
+          await fetch(`/api/gallery/${editingGalleryId}/link-character/${c.id}`, { method: 'DELETE', headers: authHeaders() });
+          existingLinkedCharacters = existingLinkedCharacters.filter(x => x.id !== c.id);
+          renderLinkToCards();
+        } catch {}
+      });
       card.classList.add('gallery-linkto-card--locked');
       charsGrid.appendChild(card);
     });

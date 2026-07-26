@@ -346,10 +346,10 @@
   // since a character can reasonably belong to several stories at once.
   // Mirrors the gallery editor's "Link To: Story" picker exactly. ──────────
   let selectedLinkStories = new Map();
-  // Stories the character is ALREADY linked to, in edit mode — shown as
-  // locked (non-removable) cards since this page has no unlink endpoint;
-  // the picker only ever adds more, same additive-only rule as the gallery
-  // editor's Link To section.
+  // Stories the character is ALREADY linked to, in edit mode — shown with a
+  // gold "already saved" border and their own real remove button (unlike
+  // freshly-picked-but-unsaved selections, removing one of these calls the
+  // unlink endpoint immediately rather than just clearing local state).
   let existingLinkedStories = [];
 
   function makeLinkCard(entry, img, name, onRemove) {
@@ -390,7 +390,15 @@
     storiesGrid.innerHTML = '';
     storiesGrid.appendChild(makeAddTile('Story', openStoryLinkPicker));
     existingLinkedStories.forEach(s => {
-      const card = makeLinkCard(s, s.cover_url, s.site_title, null);
+      const card = makeLinkCard(s, s.cover_url, s.site_title, async () => {
+        if (!editingCharacterId) return;
+        card.querySelector('.gallery-linkto-card-remove').disabled = true;
+        try {
+          await fetch(`/api/characters/${editingCharacterId}/link/${s.id}`, { method: 'DELETE', headers: authHeaders() });
+          existingLinkedStories = existingLinkedStories.filter(x => x.id !== s.id);
+          renderLinkToCards();
+        } catch {}
+      });
       card.classList.add('gallery-linkto-card--locked');
       storiesGrid.appendChild(card);
     });
