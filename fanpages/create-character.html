@@ -46,7 +46,7 @@
     <input type="file" id="char-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
 
     <div class="mod-field">
-      <label for="char-editor-name">Name</label>
+      <label for="char-editor-name">Name <span class="mod-required-star">*</span></label>
       <input class="mod-input" id="char-editor-name" maxlength="40" placeholder="e.g. Kloud" />
     </div>
 
@@ -313,12 +313,20 @@
   document.getElementById('char-editor-ref-slider-y').addEventListener('input', handleRefReposition);
 
   // ── Save ──────────────────────────────────────────────────────────────────
+  document.getElementById('char-editor-name').addEventListener('input', (e) => e.target.classList.remove('mod-input--flash-error'));
+
   document.getElementById('char-editor-save').addEventListener('click', async () => {
-    const name = document.getElementById('char-editor-name').value.trim();
+    const nameInput = document.getElementById('char-editor-name');
+    const name = nameInput.value.trim();
     const msgEl = document.getElementById('char-editor-msg');
     if (!name) {
       msgEl.className = 'mod-panel-msg mod-panel-msg--error';
-      msgEl.textContent = 'Name is required.';
+      msgEl.textContent = 'Characters MUST include the name field.';
+      nameInput.classList.remove('mod-input--flash-error');
+      void nameInput.offsetWidth;
+      nameInput.classList.add('mod-input--flash-error');
+      nameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      nameInput.focus();
       return;
     }
 

@@ -535,6 +535,16 @@ async function initDb() {
       created_at TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE(gallery_id, site_id)
     );
+    -- "Feature this character in this art piece" tags — purely descriptive/
+    -- discovery (unlike the story links, nothing renders a roster off this),
+    -- added via the gallery editor's "Link To: Characters" picker.
+    CREATE TABLE IF NOT EXISTS gallery_character_links (
+      id           SERIAL      PRIMARY KEY,
+      gallery_id   INTEGER     NOT NULL REFERENCES moderator_gallery(id) ON DELETE CASCADE,
+      character_id INTEGER     NOT NULL REFERENCES moderator_characters(id) ON DELETE CASCADE,
+      created_at   TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(gallery_id, character_id)
+    );
 
     INSERT INTO character_story_links (character_id, site_id, sort_order)
       SELECT id, site_id, sort_order FROM moderator_characters WHERE site_id IS NOT NULL
@@ -3674,6 +3684,35 @@ app.get('/api/characters/search', requireAuth, async (req, res) => {
   });
 });
 
+// Same "You Own" / "Other" split as characters, for the gallery editor's
+// "Link To: Story" picker.
+app.get('/api/stories/mine', requireAuth, async (req, res) => {
+  const q = `%${(req.query.q || '').trim()}%`;
+  const { rows } = await pool.query(
+    `SELECT id, story_path, slug, site_title, cover_url FROM moderator_sites WHERE owner_user_id = $1 AND site_title ILIKE $2 ORDER BY site_title LIMIT 30`,
+    [req.user.id, q]
+  );
+  res.json({ stories: rows.map(r => ({ id: r.id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url })) });
+});
+
+app.get('/api/stories/search', requireAuth, async (req, res) => {
+  const q = `%${(req.query.q || '').trim()}%`;
+  const { rows } = await pool.query(
+    `SELECT ms.id, ms.story_path, ms.slug, ms.site_title, ms.cover_url, u.username AS owner_username, u.display_name AS owner_display_name
+     FROM moderator_sites ms
+     JOIN users u ON u.id = ms.owner_user_id
+     WHERE ms.owner_user_id <> $1 AND ms.site_title ILIKE $2
+     ORDER BY ms.site_title LIMIT 30`,
+    [req.user.id, q]
+  );
+  res.json({
+    stories: rows.map(r => ({
+      id: r.id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url,
+      owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
+    })),
+  });
+});
+
 app.get('/api/moderator/characters/linkable', requireAuth, requireModerator, async (req, res) => {
   const q = `%${(req.query.q || '').trim()}%`;
   const { rows } = await pool.query(
@@ -3883,6 +3922,32 @@ app.post('/api/gallery', requireAuth, uploadModImage.single('image'), async (req
     [req.user.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY]
   );
   res.json({ item });
+});
+
+// Additive-only linking — used right after creating (or editing) a gallery
+// post to attach it to any number of extra stories and/or characters picked
+// in the "Link To:" section. Never removes an existing link (e.g. the
+// default story link made at creation time), only adds new ones.
+app.post('/api/gallery/:id/link-many', requireAuth, async (req, res) => {
+  const { rows: [item] } = await pool.query(
+    'SELECT id FROM moderator_gallery WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
+  );
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+
+  const siteIds = Array.isArray(req.body.site_ids) ? req.body.site_ids.filter(Number.isFinite) : [];
+  const characterIds = Array.isArray(req.body.character_ids) ? req.body.character_ids.filter(Number.isFinite) : [];
+
+  await Promise.all([
+    ...siteIds.map(siteId => pool.query(
+      'INSERT INTO gallery_story_links (gallery_id, site_id) VALUES ($1, $2) ON CONFLICT (gallery_id, site_id) DO NOTHING',
+      [item.id, siteId]
+    )),
+    ...characterIds.map(characterId => pool.query(
+      'INSERT INTO gallery_character_links (gallery_id, character_id) VALUES ($1, $2) ON CONFLICT (gallery_id, character_id) DO NOTHING',
+      [item.id, characterId]
+    )),
+  ]);
+  res.json({ message: 'Linked.' });
 });
 
 // Permanent delete — cascades gallery_story_links automatically via FK.
