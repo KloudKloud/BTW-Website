@@ -175,21 +175,10 @@
     /* Recent Submissions, embedded inside the Fanpage Hub card instead of
        its own standalone section — no outer shine-card chrome of its own
        (the parent already provides it), just the header/body split. */
-    .rs-box--embedded { background: none; border: none; backdrop-filter: none; box-shadow: none; }
-    .rs-box--embedded::before { display: none; }
-    /* Header reads like a plain sub-heading (same treatment as "Fanpage
-       Hub" itself) instead of sitting in its own dark bar — the grid below
-       keeps a soft glass card of its own so the submissions still feel
-       contained. */
-    .rs-box--embedded .rs-box-header { background: none; border-bottom: none; padding: 0 0 1rem; }
-    .rs-box--embedded .rs-box-title { font-size: 1.2rem; }
-    .rs-box--embedded .rs-box-body {
-      padding: 1.25rem;
-      background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 14px;
-      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    }
+    /* "Recent Submissions" sits outside/above the grid as a plain title —
+       same treatment as "Fanpage Hub" itself — and the grid underneath is
+       fully transparent, just the posts themselves. */
+    .rs-standalone-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.2rem; font-weight: 700; color: #f0c060; margin-bottom: 1rem; }
 
     /* ── Recommended Stories/Followers (left) + Feedback Wanted (right) ── */
     .fp-discover-row { display: grid; grid-template-columns: 1fr 300px; gap: 1.75rem; align-items: start; margin-bottom: 3rem; }
@@ -203,28 +192,90 @@
     .fp-feedback-text:last-child { margin-bottom: 0; }
     @media (max-width: 900px) { .fp-feedback-card { position: static; } }
 
-    /* ── Recommended Followers row — same card shape as story cards ── */
+    /* ── Recommended Followers row — Instagram/Twitter-style suggestion
+       cards: dismissable, big centered avatar, name + subtitle, full-width
+       follow button. ── */
     .fp-follower-card {
-      flex: 0 0 130px; text-decoration: none; color: inherit; text-align: center;
-      display: flex; flex-direction: column; align-items: center; gap: 0.6rem;
+      position: relative; flex: 0 0 210px; text-decoration: none; color: inherit;
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+      background: #161616; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+      padding: 1.75rem 1.25rem 1.5rem; box-sizing: border-box;
     }
+    .fp-follower-dismiss {
+      position: absolute; top: 0.75rem; right: 0.75rem; z-index: 2;
+      width: 26px; height: 26px; border-radius: 50%; border: none;
+      background: rgba(255,255,255,0.08); color: #ccc; font-size: 0.85rem; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .fp-follower-dismiss:hover { background: rgba(255,255,255,0.18); color: #fff; }
+    .fp-follower-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: inherit; }
     .fp-follower-avatar, .fp-follower-avatar-fallback {
-      width: 84px; height: 84px; border-radius: 50%; object-fit: cover;
-      border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 8px 20px rgba(0,0,0,0.4);
-      transition: transform 0.15s;
+      width: 100px; height: 100px; border-radius: 50%; object-fit: cover; margin-bottom: 1rem;
     }
-    .fp-follower-card:hover .fp-follower-avatar, .fp-follower-card:hover .fp-follower-avatar-fallback { transform: translateY(-3px); }
     .fp-follower-avatar-fallback {
       display: flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 1.6rem;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 2rem;
     }
-    .fp-follower-name { font-size: 0.86rem; font-weight: 700; color: #fff; line-height: 1.25; }
+    .fp-follower-name { font-size: 1.05rem; font-weight: 700; color: #fff; margin-bottom: 0.25rem; }
+    .fp-follower-sub { font-size: 0.84rem; color: #999; margin-bottom: 1.25rem; }
     .fp-follower-follow-btn {
-      display: inline-block; font-size: 0.76rem; font-weight: 700; color: #fff;
-      background: linear-gradient(135deg, #6b3fa0, #c2547a); border: none; border-radius: 20px;
-      padding: 0.4rem 1rem; cursor: pointer; box-shadow: 0 4px 14px rgba(107,63,160,0.35);
+      width: 100%; box-sizing: border-box; font-size: 0.92rem; font-weight: 700; color: #fff;
+      background: #5b52e6; border: none; border-radius: 10px; padding: 0.7rem 1rem; cursor: pointer;
     }
+    .fp-follower-follow-btn:hover { background: #6c63f0; }
     .fp-follower-follow-btn.following { background: #1fb6a8; }
+
+    /* "See More" card — same shape as a follower card, opens the expanded
+       suggestions modal. */
+    .fp-follower-more-card {
+      flex: 0 0 210px; box-sizing: border-box; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 0.6rem; text-align: center;
+      background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.2); border-radius: 16px;
+      color: #ccc; cursor: pointer; font-family: inherit;
+    }
+    .fp-follower-more-card:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.35); color: #fff; }
+    .fp-follower-more-icon {
+      width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.25);
+      display: flex; align-items: center; justify-content: center; font-size: 1.4rem;
+    }
+    .fp-follower-more-label { font-size: 0.9rem; font-weight: 700; }
+
+    /* ── "See More" suggestions modal ── */
+    .fp-followers-modal-overlay {
+      position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+    }
+    .fp-followers-modal-card {
+      position: relative; width: 100%; max-width: 420px; max-height: 80vh; overflow-y: auto;
+      background: #161616; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 1.75rem;
+    }
+    .fp-followers-modal-close {
+      position: absolute; top: 1rem; right: 1rem; width: 30px; height: 30px; border-radius: 50%;
+      border: none; background: rgba(255,255,255,0.08); color: #ccc; font-size: 1rem; cursor: pointer;
+    }
+    .fp-followers-modal-close:hover { background: rgba(255,255,255,0.18); color: #fff; }
+    .fp-followers-modal-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.25rem; color: #f0c060; margin-bottom: 1.25rem; }
+    .fp-followers-modal-row {
+      display: flex; align-items: center; gap: 0.85rem; padding: 0.75rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .fp-followers-modal-row:last-child { border-bottom: none; }
+    .fp-followers-modal-avatar, .fp-followers-modal-avatar-fallback {
+      width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    }
+    .fp-followers-modal-avatar-fallback {
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700;
+    }
+    .fp-followers-modal-info { flex: 1; min-width: 0; }
+    .fp-followers-modal-name { font-weight: 700; color: #fff; font-size: 0.94rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fp-followers-modal-sub { font-size: 0.78rem; color: #999; }
+    .fp-followers-modal-follow-btn {
+      flex-shrink: 0; font-size: 0.82rem; font-weight: 700; color: #fff;
+      background: #5b52e6; border: none; border-radius: 8px; padding: 0.5rem 0.9rem; cursor: pointer;
+    }
+    .fp-followers-modal-follow-btn:hover { background: #6c63f0; }
+    .fp-followers-modal-follow-btn.following { background: #1fb6a8; }
     .fp-hub-card-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.7rem; font-weight: 700; color: #f0c060; margin-bottom: 0.6rem; }
     .fp-hub-card-sub { color: #e5ddf0; font-size: 0.96rem; line-height: 1.65; margin-bottom: 1.5rem; max-width: 700px; }
     .fp-hub-card-rule { width: 100%; height: 1px; background: linear-gradient(to right, rgba(240,192,96,0.5), transparent); margin-bottom: 1.5rem; }
@@ -464,15 +515,9 @@
       <p class="fp-hub-card-sub">The only hub you'll ever need. Stories. Fanfics. Characters. Writing. Your world, in one place. ^w^</p>
       <div class="fp-hub-card-rule"></div>
 
-      <div class="rs-box rs-box--embedded">
-        <div class="rs-box-header">
-          <p class="rs-box-title">Recent Submissions</p>
-        </div>
-        <div class="rs-box-body">
-          <div class="rs-grid" id="fp-recent-submissions">
-            <p class="fp-row-empty">Loading…</p>
-          </div>
-        </div>
+      <p class="rs-standalone-title">Recent Submissions</p>
+      <div class="rs-grid" id="fp-recent-submissions">
+        <p class="fp-row-empty">Loading…</p>
       </div>
     </div>
   </section>
@@ -508,6 +553,16 @@
   </section>
 
 </main>
+
+<div class="fp-followers-modal-overlay" id="fp-followers-modal-overlay" hidden>
+  <div class="fp-followers-modal-card">
+    <button class="fp-followers-modal-close" id="fp-followers-modal-close" type="button" aria-label="Close">✕</button>
+    <h2 class="fp-followers-modal-title">Suggested For You</h2>
+    <div class="fp-followers-modal-list" id="fp-followers-modal-list">
+      <p class="fp-row-empty">Loading…</p>
+    </div>
+  </div>
+</div>
 
 <div class="fp-disclaimer">
   <div class="fp-disclaimer-box">
@@ -766,52 +821,130 @@
 
   // ── Recommended Followers — VeekitPaws is always the pinned first pick
   // until you actually follow her (server excludes anyone already
-  // followed), never includes the BTW Team system account. ────────────────
+  // followed), never includes the BTW Team system account. Any registered
+  // account is eligible, not just ones with an active fanpage, so brand
+  // new accounts are still discoverable before they've posted anything. ──
+  function followerAvatarHtml(u, cls, fallbackCls) {
+    return u.avatar
+      ? `<img class="${cls}" src="${u.avatar}" alt="" />`
+      : `<span class="${fallbackCls}">${escapeHtml((u.display_name || u.username).charAt(0).toUpperCase())}</span>`;
+  }
+
+  function wireFollowBtn(btn, username) {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      btn.disabled = true;
+      try {
+        await fetch(`/api/follows/${username}`, { method: 'POST', headers: authHeaders() });
+        btn.textContent = 'Following';
+        btn.classList.add('following');
+      } catch { btn.disabled = false; }
+    });
+  }
+
   function followerCard(u) {
-    const a = document.createElement('a');
-    a.className = 'fp-follower-card';
-    a.href = `/fanpages/${u.username}`;
-    const avatarHtml = u.avatar
-      ? `<img class="fp-follower-avatar" src="${u.avatar}" alt="" />`
-      : `<span class="fp-follower-avatar-fallback">${escapeHtml((u.display_name || u.username).charAt(0).toUpperCase())}</span>`;
-    a.innerHTML = `
-      ${avatarHtml}
+    const card = document.createElement('div');
+    card.className = 'fp-follower-card';
+
+    const dismiss = document.createElement('button');
+    dismiss.className = 'fp-follower-dismiss';
+    dismiss.type = 'button';
+    dismiss.setAttribute('aria-label', 'Dismiss');
+    dismiss.textContent = '✕';
+    dismiss.addEventListener('click', () => card.remove());
+    card.appendChild(dismiss);
+
+    const link = document.createElement('a');
+    link.className = 'fp-follower-link';
+    link.href = `/fanpages/${u.username}`;
+    link.innerHTML = `
+      ${followerAvatarHtml(u, 'fp-follower-avatar', 'fp-follower-avatar-fallback')}
       <span class="fp-follower-name">${escapeHtml(u.display_name)}</span>
+      <span class="fp-follower-sub">${u.username === 'veekitpaws' ? "It's me!" : 'Suggested for you'}</span>
     `;
+    card.appendChild(link);
+
     if (token) {
       const btn = document.createElement('button');
       btn.className = 'fp-follower-follow-btn';
       btn.type = 'button';
       btn.textContent = 'Follow';
-      btn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        btn.disabled = true;
-        try {
-          await fetch(`/api/follows/${u.username}`, { method: 'POST', headers: authHeaders() });
-          btn.textContent = 'Following';
-          btn.classList.add('following');
-        } catch { btn.disabled = false; }
-      });
-      a.appendChild(btn);
+      wireFollowBtn(btn, u.username);
+      card.appendChild(btn);
     }
-    return a;
+    return card;
+  }
+
+  function followerMoreCard() {
+    const btn = document.createElement('button');
+    btn.className = 'fp-follower-more-card';
+    btn.type = 'button';
+    btn.innerHTML = `<span class="fp-follower-more-icon">→</span><span class="fp-follower-more-label">See More</span>`;
+    btn.addEventListener('click', openFollowersModal);
+    return btn;
   }
 
   async function loadRecommendedFollowers() {
     const row = document.getElementById('fp-followers-row');
     try {
-      const res  = await fetch('/api/recommended-followers', { headers: authHeaders() });
+      const res  = await fetch('/api/recommended-followers?limit=5', { headers: authHeaders() });
       const data = await res.json();
       const users = data.users || [];
       if (!users.length) { row.innerHTML = '<p class="fp-row-empty">No one to recommend just yet!</p>'; return; }
       const scroller = document.createElement('div');
       scroller.className = 'fp-row-scroll';
       users.forEach(u => scroller.appendChild(followerCard(u)));
+      scroller.appendChild(followerMoreCard());
       row.innerHTML = '';
       row.appendChild(scroller);
     } catch { row.innerHTML = '<p class="fp-row-empty">Couldn\'t load recommendations right now.</p>'; }
   }
+
+  // ── "See More" expanded suggestions modal ──────────────────────────────
+  async function openFollowersModal() {
+    const overlay = document.getElementById('fp-followers-modal-overlay');
+    const list = document.getElementById('fp-followers-modal-list');
+    overlay.hidden = false;
+    list.innerHTML = '<p class="fp-row-empty">Loading…</p>';
+    try {
+      const res  = await fetch('/api/recommended-followers?limit=50', { headers: authHeaders() });
+      const data = await res.json();
+      const users = data.users || [];
+      if (!users.length) { list.innerHTML = '<p class="fp-row-empty">No one to recommend just yet!</p>'; return; }
+      list.innerHTML = '';
+      users.forEach(u => {
+        const row = document.createElement('div');
+        row.className = 'fp-followers-modal-row';
+        const link = document.createElement('a');
+        link.href = `/fanpages/${u.username}`;
+        link.style.cssText = 'display:flex;align-items:center;gap:0.85rem;flex:1;min-width:0;text-decoration:none;color:inherit;';
+        link.innerHTML = `
+          ${followerAvatarHtml(u, 'fp-followers-modal-avatar', 'fp-followers-modal-avatar-fallback')}
+          <span class="fp-followers-modal-info">
+            <span class="fp-followers-modal-name">${escapeHtml(u.display_name)}</span><br />
+            <span class="fp-followers-modal-sub">${u.username === 'veekitpaws' ? "It's me!" : 'Suggested for you'}</span>
+          </span>
+        `;
+        row.appendChild(link);
+        if (token) {
+          const btn = document.createElement('button');
+          btn.className = 'fp-followers-modal-follow-btn';
+          btn.type = 'button';
+          btn.textContent = 'Follow';
+          wireFollowBtn(btn, u.username);
+          row.appendChild(btn);
+        }
+        list.appendChild(row);
+      });
+    } catch { list.innerHTML = '<p class="fp-row-empty">Couldn\'t load recommendations right now.</p>'; }
+  }
+  document.getElementById('fp-followers-modal-close').addEventListener('click', () => {
+    document.getElementById('fp-followers-modal-overlay').hidden = true;
+  });
+  document.getElementById('fp-followers-modal-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'fp-followers-modal-overlay') e.currentTarget.hidden = true;
+  });
 
   async function loadSaved() {
     const row = document.getElementById('fp-saved-row');
