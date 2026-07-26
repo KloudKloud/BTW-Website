@@ -1251,6 +1251,13 @@
     // Home — this is what's read on load below.
     history.replaceState(null, '', tab === 'home' ? location.pathname + location.search : `#${tab}`);
     if (currentAuthor && currentAuthor.is_self) renderActions(currentAuthor, false);
+    // Banner edit pencil + theme wheel are a Home-tab-only shortcut — on
+    // every other tab they'd float over content that isn't the banner/about
+    // section they actually edit, so hide them there even for the owner.
+    if (currentAuthor && currentAuthor.is_self) {
+      document.getElementById('fp-banner-edit-pencil').hidden = tab !== 'home';
+      document.getElementById('fp-theme-picker-wrap').hidden = tab !== 'home';
+    }
     if (tab === 'characters') loadCharactersTab();
     if (tab === 'gallery') loadGalleryTab();
     if (tab === 'stories') renderStoriesTeaserList(document.getElementById('fp-stories-grid'));
@@ -3129,8 +3136,10 @@
         ? `center ${a.banner_position_y != null ? a.banner_position_y : 50}%`
         : 'center';
 
-      document.getElementById('fp-banner-edit-pencil').hidden = !a.is_self;
-      document.getElementById('fp-theme-picker-wrap').hidden = !a.is_self;
+      // Home-tab-only shortcut — also respects whichever tab a deep link
+      // (?char=/gallery=/news=, or #tab) landed us on before this resolved.
+      document.getElementById('fp-banner-edit-pencil').hidden = !a.is_self || activeTabName !== 'home';
+      document.getElementById('fp-theme-picker-wrap').hidden = !a.is_self || activeTabName !== 'home';
 
       if (a.avatar) {
         const img = document.getElementById('fp-avatar-img');
