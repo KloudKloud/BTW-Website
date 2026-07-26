@@ -123,16 +123,18 @@
         <div class="mod-editor-cover-slot" id="editor-cover-slot"></div>
       </div>
 
+      <!-- Editor-only box: while editing, this reads as one continuous
+           form (Title → Description → Bio → Links → Tags) via
+           body.mod-editing-active CSS. Display mode leaves the title in its
+           original spot above and the three sections exactly as they were —
+           this wrapper carries no styling of its own outside that class. -->
+      <div class="mod-editor-form-box" id="editor-form-box">
+
       <div class="mod-editable-block">
         <span class="mod-field-label">Title</span>
         <h1 class="wiki-title" id="site-title-display">Untitled Story</h1>
         <input class="mod-input mod-edit-input" id="site-title-input" style="display:none;" maxlength="60" />
       </div>
-
-      <!-- Editor-only box: while editing, this reads as one continuous
-           form (Description → Bio → Links → Tags) via body.mod-editing-active
-           CSS. Display mode leaves the three sections exactly as they were. -->
-      <div class="mod-editor-form-box" id="editor-form-box">
 
       <section class="wiki-section">
         <h2 class="wiki-section-title">About</h2>
@@ -149,7 +151,10 @@
           </div>
 
           <div class="mod-editable-block">
-            <span class="mod-field-label">Story Description</span>
+            <div class="mod-field-label-row">
+              <span class="mod-field-label">Story Description</span>
+              <span class="mod-field-hint">Use *text* for italics, **text** for bold.</span>
+            </div>
             <blockquote class="wiki-quote" id="site-synopsis-display">N/A</blockquote>
             <textarea class="mod-textarea mod-edit-input" id="site-synopsis-input" style="display:none;"></textarea>
           </div>
@@ -161,7 +166,10 @@
         <div class="wiki-rule"></div>
         <div class="wiki-meet-split">
           <div class="wiki-meet-text mod-editable-block">
-            <span class="mod-field-label" id="bio-field-label">Meet the Author</span>
+            <div class="mod-field-label-row">
+              <span class="mod-field-label" id="bio-field-label">Meet the Author</span>
+              <span class="mod-field-hint">Use *text* for italics, **text** for bold.</span>
+            </div>
             <p id="site-bio-display">N/A</p>
             <textarea class="mod-textarea mod-edit-input" id="site-bio-input" style="display:none;"></textarea>
           </div>
@@ -409,8 +417,8 @@ function populateDisplay() {
   const s = siteData.site || {};
   const title = s.site_title || 'Untitled Story';
   document.getElementById('site-title-display').textContent    = title;
-  document.getElementById('site-synopsis-display').textContent = s.synopsis   || 'N/A';
-  document.getElementById('site-bio-display').textContent      = s.bio        || 'N/A';
+  document.getElementById('site-synopsis-display').innerHTML = renderMarkdownLite(s.synopsis || 'N/A');
+  document.getElementById('site-bio-display').innerHTML      = renderMarkdownLite(s.bio       || 'N/A');
   const meetText = 'Meet ' + (s.author_display_name || s.author_username || 'the Author');
   document.getElementById('meet-heading').textContent = meetText;
   document.getElementById('bio-field-label').textContent = meetText;
@@ -486,6 +494,16 @@ let workingTags = [];
 
 function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Tiny markdown subset for the Description/Bio fields — **bold** and
+// *italic* only. Escapes first so raw HTML in the text can't inject
+// anything; ** is matched before * so bold pairs don't get eaten by the
+// italic pass first.
+function renderMarkdownLite(text) {
+  return escapeHtml(text)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
 }
 
 function renderTagsDisplay(tags) {
@@ -572,7 +590,7 @@ function enterEditMode() {
 
   document.body.classList.add('mod-editing-active');
   document.getElementById('edit-bar').style.display = 'flex';
-  document.getElementById('wiki-cover').style.marginTop = '56px';
+  document.getElementById('wiki-cover').style.marginTop = '68px';
   toggle(document.getElementById('edit-profile-btn'), false);
   document.getElementById('banner-edit-pencil').style.display = 'none';
   document.getElementById('theme-picker-wrap').style.display = 'none';
