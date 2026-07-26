@@ -2701,8 +2701,9 @@ app.get('/api/fanpage-profile/:username/following', (req, res) => fanpageFollowL
 
 // Full Characters / Gallery tabs on a user's profile — every character or
 // gallery post across ALL of that user's stories, not just the 3 featured
-// picks shown on Home. Gallery is filtered to sfw+sketches, same rule as
-// everywhere else spicy content is kept out of public-facing feeds.
+// picks shown on Home. Gallery includes every category (spicy included) —
+// same as a story's own gallery feed, the client is what gates spicy behind
+// a login wall, not the API.
 app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
   const { rows: [author] } = await pool.query(
     'SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]
@@ -2757,7 +2758,7 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
        SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1
      ) gsl ON true
      LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
-     WHERE mg.owner_user_id = $1 AND mg.category IN ('sfw', 'sketches')
+     WHERE mg.owner_user_id = $1
      ORDER BY mg.created_at DESC`,
     [author.id, viewerId || 0]
   );

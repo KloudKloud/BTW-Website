@@ -280,6 +280,10 @@
        .mod-gallery-main), which already carry their own max-width/padding —
        let them own the spacing instead of double-boxing inside .fp-tab-view. */
     #fp-characters-view, #fp-gallery-view { max-width: none; margin: 0; padding: 0; }
+    /* .mod-gallery-main has no max-width of its own (it relies on the
+       story page's .mod-page-row wrapper for that) — give it an equivalent
+       here so the tile grid doesn't stretch edge-to-edge on a wide screen. */
+    .fp-gallery-page-row { max-width: 1340px; margin: 0 auto; padding: 0 2rem; }
     .fp-tab-view-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1.25rem; }
     .fp-tab-view-grid .fp-featured-card { width: auto; }
     .fp-tab-view-empty {
@@ -643,16 +647,19 @@
 </div>
 
 <!-- Gallery tab — same layout as a story's Gallery page: a Browse sidebar
-     (category filter) next to the tile grid, with a click-through detail
-     view. View-only for now — spicy is intentionally excluded here, same
-     rule as the rest of the public-facing profile. -->
+     (category filter, spicy included) next to the tile grid, with a
+     click-through detail view. Spicy is gated client-side behind a login
+     wall exactly like a story's own gallery — the API includes it, the
+     page just won't render it for a logged-out visitor. -->
 <div class="fp-tab-view" id="fp-gallery-view" hidden>
+  <div class="fp-gallery-page-row">
   <div class="mod-gallery-main" id="fp-gallery-grid-view">
     <div class="chars-sidebar-col">
       <aside class="chars-create-box">
         <p class="mod-gallery-sidebar-label">Browse</p>
         <button class="mod-gallery-cat active" id="fp-cat-art" type="button">SFW</button>
         <button class="mod-gallery-cat" id="fp-cat-sketches" type="button">Sketches</button>
+        <button class="mod-gallery-cat" id="fp-cat-spicy" type="button">Spicy</button>
       </aside>
     </div>
     <div class="mod-gallery-content">
@@ -676,6 +683,7 @@
     </button>
     <div class="art-view-desc" id="fp-gallery-detail-desc"></div>
     <div id="fp-gallery-detail-nav" class="art-nav"></div>
+  </div>
   </div>
 </div>
 
@@ -1114,18 +1122,21 @@
   }
 
   // ── Gallery tab — same layout as a story's Gallery page: a Browse sidebar
-  // (category filter) next to the tile grid, with a click-through detail
-  // view. Spicy is intentionally excluded — same rule as everywhere else
-  // spicy content is kept out of public-facing profile feeds. ──────────────
+  // (category filter, spicy included) next to the tile grid, with a
+  // click-through detail view. Spicy is gated client-side behind a login
+  // wall exactly like a story's own gallery feed. ──────────────────────────
   let FP_GALLERY_ART = [];
   let FP_GALLERY_SKETCHES = [];
+  let FP_GALLERY_SPICY = [];
   let fpGalleryLoaded = false;
   let fpGalleryCurrentDetailItem = null;
   let fpGalleryNavPrev = null;
   let fpGalleryNavNext = null;
 
   function fpSiblingsForCategory(cat) {
-    return cat === 'sketches' ? FP_GALLERY_SKETCHES : FP_GALLERY_ART;
+    if (cat === 'sketches') return FP_GALLERY_SKETCHES;
+    if (cat === 'spicy') return FP_GALLERY_SPICY;
+    return FP_GALLERY_ART;
   }
   function fpTruncateLabel(s, n) { return s.length > n ? s.slice(0, n).trimEnd() + '…' : s; }
 
@@ -1151,12 +1162,36 @@
   function setFpGalleryCategory(cat) {
     document.getElementById('fp-cat-art').classList.toggle('active', cat === 'sfw');
     document.getElementById('fp-cat-sketches').classList.toggle('active', cat === 'sketches');
+    document.getElementById('fp-cat-spicy').classList.toggle('active', cat === 'spicy');
+
+    if (cat === 'spicy') {
+      document.getElementById('fp-gallery-eyebrow').textContent = 'Mature Content — 18+';
+      document.getElementById('fp-gallery-title-text').textContent = 'Spicy';
+      const grid = document.getElementById('fp-gallery-grid');
+      if (!token) {
+        grid.innerHTML = `
+          <div class="mod-gallery-locked">
+            <div class="mod-gallery-locked-icon">🔒</div>
+            <p class="mod-gallery-locked-title">Members Only</p>
+            <p class="mod-gallery-locked-text">
+              This section contains mature content intended for adults.<br />
+              You must be <strong>18 or older</strong> and logged in to view it.
+            </p>
+            <a href="/login?from=${encodeURIComponent(window.location.pathname)}" class="mod-gallery-locked-btn">Log In / Register →</a>
+          </div>`;
+        return;
+      }
+      renderFpGalleryTiles(FP_GALLERY_SPICY, 'Nothing here yet — check back soon.');
+      return;
+    }
+
     document.getElementById('fp-gallery-eyebrow').textContent = cat === 'sketches' ? 'Sketches & WIPs' : 'Fan Art & Illustrations';
     document.getElementById('fp-gallery-title-text').textContent = cat === 'sketches' ? 'Sketches' : 'SFW';
     renderFpGalleryTiles(fpSiblingsForCategory(cat), cat === 'sketches' ? 'No sketches yet — check back soon.' : 'No art yet — check back soon.');
   }
   document.getElementById('fp-cat-art').addEventListener('click', () => { closeFpGalleryDetail(); setFpGalleryCategory('sfw'); });
   document.getElementById('fp-cat-sketches').addEventListener('click', () => { closeFpGalleryDetail(); setFpGalleryCategory('sketches'); });
+  document.getElementById('fp-cat-spicy').addEventListener('click', () => { closeFpGalleryDetail(); setFpGalleryCategory('spicy'); });
 
   function renderFpGalleryDetailNav(item) {
     const siblings = fpSiblingsForCategory(item.category);
@@ -1227,11 +1262,12 @@
     const grid = document.getElementById('fp-gallery-grid');
     grid.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
     try {
-      const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-gallery`);
+      const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-gallery`, { headers: authHeaders() });
       const data = await res.json();
       const items = data.gallery || [];
-      FP_GALLERY_ART = items.filter(g => g.category !== 'sketches');
+      FP_GALLERY_ART = items.filter(g => g.category === 'sfw');
       FP_GALLERY_SKETCHES = items.filter(g => g.category === 'sketches');
+      FP_GALLERY_SPICY = items.filter(g => g.category === 'spicy');
       fpGalleryLoaded = true;
       setFpGalleryCategory('sfw');
     } catch {
