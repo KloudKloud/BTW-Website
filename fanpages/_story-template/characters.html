@@ -67,6 +67,14 @@
         </ul>
       </aside>
 
+      <aside class="mod-book-box" id="mod-book-box" hidden>
+        <a class="mod-book-box-cover-link" id="mod-book-cover-link" href="#">
+          <img class="mod-book-box-cover" id="mod-book-cover" alt="" />
+        </a>
+        <p class="mod-book-box-title" id="mod-book-title"></p>
+        <div class="mod-book-box-author-row" id="mod-book-author-row"></div>
+      </aside>
+
       <aside class="mod-author-box" id="char-edit-box" style="display:none;">
         <div class="mod-author-box-row">
           <button class="mod-author-box-btn" id="char-edit-btn" type="button" style="width:100%; text-align:center;"></button>
@@ -1056,10 +1064,80 @@ document.getElementById('char-editor-save').addEventListener('click', async () =
   }
 });
 
+// Book box — the story's own cover + a follow-the-author row, under the
+// Navigate box, so browsing feels anchored to this specific book instead of
+// a generic character feed. No follow control on your own story.
+function renderBookBox(site) {
+  const box = document.getElementById('mod-book-box');
+  if (!site) { box.hidden = true; return; }
+  box.hidden = false;
+
+  document.getElementById('mod-book-cover-link').href = STORY_BASE;
+  const coverImg = document.getElementById('mod-book-cover');
+  coverImg.src = site.cover_url || DEFAULT_REF;
+  coverImg.alt = `${site.site_title} cover`;
+  document.getElementById('mod-book-title').textContent = site.site_title || 'Untitled Story';
+
+  const authorRow = document.getElementById('mod-book-author-row');
+  authorRow.innerHTML = '';
+
+  const authorLink = document.createElement('a');
+  authorLink.className = 'mod-book-box-author-link';
+  authorLink.href = `/fanpages/${site.author_username}`;
+  if (site.author_avatar) {
+    const img = document.createElement('img');
+    img.className = 'mod-book-box-author-avatar';
+    img.src = site.author_avatar;
+    img.alt = '';
+    authorLink.appendChild(img);
+  } else {
+    const fallback = document.createElement('span');
+    fallback.className = 'mod-book-box-author-avatar-fallback';
+    fallback.textContent = (site.author_display_name || site.author_username || '?').charAt(0).toUpperCase();
+    authorLink.appendChild(fallback);
+  }
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'mod-book-box-author-name';
+  nameSpan.textContent = site.author_display_name || site.author_username;
+  authorLink.appendChild(nameSpan);
+  authorRow.appendChild(authorLink);
+
+  if (site.is_self) return;
+
+  if (!token) {
+    const loginLink = document.createElement('a');
+    loginLink.className = 'mod-book-box-follow-btn';
+    loginLink.href = `/login?from=${encodeURIComponent(window.location.pathname)}`;
+    loginLink.textContent = 'Log In to Follow';
+    authorRow.appendChild(loginLink);
+    return;
+  }
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  let following = !!site.is_following;
+  function paint() {
+    btn.className = 'mod-book-box-follow-btn' + (following ? ' following' : '');
+    btn.textContent = following ? '✓ Following' : 'Follow';
+  }
+  paint();
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      await fetch(`/api/follows/${site.author_username}`, { method: following ? 'DELETE' : 'POST', headers: authHeaders() });
+      following = !following;
+      paint();
+    } catch {}
+    btn.disabled = false;
+  });
+  authorRow.appendChild(btn);
+}
+
 (async () => {
   const data = await ModeratorSite.load(SLUG);
   ModeratorSite.applyBanner(document.getElementById('page-banner-img'), data && data.site);
   if (data && data.site) renderVipBadge(data.site);
+  renderBookBox(data && data.site);
   STORY_TITLE = (data && data.site && data.site.site_title) || 'Fanpages';
   STORY_COVER_URL = (data && data.site && data.site.cover_url) || '';
   IS_SELF = !!(data && data.site && data.site.is_self);
