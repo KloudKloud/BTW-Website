@@ -1393,26 +1393,33 @@
           avatar.src = DEFAULT_REF;
           relLine.appendChild(avatar);
 
+          // Non-story-context: a relationship link always goes to whichever
+          // account actually owns that character's Characters tab (never the
+          // old standalone "/fanpages/character" page), and opens straight
+          // to that character via the same ?char=ID#characters deep link
+          // used everywhere else on the profile.
+          const nameLink = document.createElement('a');
+          nameLink.style.cssText = 'color:#f0c060; font-weight:700; text-decoration:none; text-shadow:0 0 12px rgba(240,192,96,0.6);';
+          nameLink.textContent = rel.name;
+          relLine.appendChild(nameLink);
+
           const known = FP_CHARACTERS.find(c => c.id === String(rel.character_id));
-          if (known && known.ref) {
-            avatar.src = known.ref;
-          } else if (!known) {
+          if (known) {
+            if (known.ref) avatar.src = known.ref;
+            nameLink.href = `/fanpages/${USERNAME}?char=${rel.character_id}#characters`;
+          } else {
             fetch(`/api/characters/${rel.character_id}`)
               .then(r => r.ok ? r.json() : null)
               .then(d => {
                 if (d && d.character) {
                   if (d.character.ref_image) avatar.src = d.character.ref_image;
+                  nameLink.href = `/fanpages/${d.character.owner_username}?char=${rel.character_id}#characters`;
                 } else {
                   avatar.remove();
                 }
               })
               .catch(() => avatar.remove());
           }
-          const nameLink = document.createElement('a');
-          nameLink.href = `/fanpages/character?id=${rel.character_id}`;
-          nameLink.style.cssText = 'color:#f0c060; font-weight:700; text-decoration:none; text-shadow:0 0 12px rgba(240,192,96,0.6);';
-          nameLink.textContent = rel.name;
-          relLine.appendChild(nameLink);
         } else {
           const nameSpan = document.createElement('span');
           nameSpan.style.cssText = 'color:#f0c060; font-weight:700;';
