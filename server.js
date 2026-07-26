@@ -326,6 +326,37 @@ async function initDb() {
     );
   `).catch(e => console.error('moderator_gallery_likes migration:', e.message));
 
+  // Bookmarks on individual gallery posts — distinct from moderator_bookmarks
+  // (which bookmarks a whole story). Feeds the Library's "Bookmarked Art" tab.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS moderator_gallery_bookmarks (
+      id         SERIAL      PRIMARY KEY,
+      user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      gallery_id INTEGER     NOT NULL REFERENCES moderator_gallery(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, gallery_id)
+    );
+  `).catch(e => console.error('moderator_gallery_bookmarks migration:', e.message));
+
+  // Universal comments — target_type/target_id makes this reusable for
+  // gallery posts now, and Newspaper/Social posts later, without a new
+  // table each time. Replies are exactly one level deep: a reply's
+  // parent_id always points at a ROOT comment (never at another reply) —
+  // enforced in the POST handler, not the schema.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS content_comments (
+      id                SERIAL      PRIMARY KEY,
+      target_type       TEXT        NOT NULL,
+      target_id         INTEGER     NOT NULL,
+      user_id           INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      parent_id         INTEGER     REFERENCES content_comments(id) ON DELETE CASCADE,
+      reply_to_username TEXT,
+      body              TEXT        NOT NULL,
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_content_comments_target ON content_comments(target_type, target_id, created_at);
+  `).catch(e => console.error('content_comments migration:', e.message));
+
   // Fanpages hub billboard — admin-managed promo carousel on /fanpages.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS hub_billboard_slides (
@@ -2950,7 +2981,8 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
     `SELECT mg.id, mg.image_url, mg.title, mg.description, mg.category, mg.position_x, mg.position_y,
             ms.story_path, ms.slug, ms.site_title,
             (SELECT COUNT(*)::int FROM moderator_gallery_likes WHERE gallery_id = mg.id) AS like_count,
-            EXISTS(SELECT 1 FROM moderator_gallery_likes WHERE gallery_id = mg.id AND user_id = $2) AS liked
+            EXISTS(SELECT 1 FROM moderator_gallery_likes WHERE gallery_id = mg.id AND user_id = $2) AS liked,
+            EXISTS(SELECT 1 FROM moderator_gallery_bookmarks WHERE gallery_id = mg.id AND user_id = $2) AS bookmarked
      FROM moderator_gallery mg
      LEFT JOIN LATERAL (
        SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1
@@ -2964,7 +2996,7 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
     gallery: rows.map(r => ({
       id: r.id, image: r.image_url, title: r.title, description: r.description, category: r.category,
       position_x: r.position_x, position_y: r.position_y,
-      like_count: r.like_count, liked: r.liked,
+      like_count: r.like_count, liked: r.liked, bookmarked: r.bookmarked,
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
     })),
     spicy_lock: spicyLock,
@@ -3441,7 +3473,7 @@ async function sendSiteLookup(query, params, req, res) {
   // + NSFW mode -> full access.
   const spicyLock = !loggedIn ? 'login' : (!viewerNsfwEnabled ? 'sfw_mode' : null);
 
-  const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds] = await Promise.all([
+  const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds, bookmarkedGalleryIds] = await Promise.all([
     pool.query('SELECT id, title, teaser, links, image_url, file_url, file_name FROM moderator_chapters WHERE site_id = $1 ORDER BY sort_order, id', [site.id]),
     pool.query(`
       SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.description, mc.stats, mc.facts, mc.lore, mc.relationships, mc.owner_user_id, mc.ref_is_nsfw
@@ -3463,12 +3495,17 @@ async function sendSiteLookup(query, params, req, res) {
     viewerId
       ? pool.query('SELECT gallery_id FROM moderator_gallery_likes WHERE user_id = $1', [viewerId])
       : Promise.resolve({ rows: [] }),
+    viewerId
+      ? pool.query('SELECT gallery_id FROM moderator_gallery_bookmarks WHERE user_id = $1', [viewerId])
+      : Promise.resolve({ rows: [] }),
   ]);
 
   const likedSet = new Set(likedGalleryIds.rows.map(r => r.gallery_id));
+  const bookmarkedSet = new Set(bookmarkedGalleryIds.rows.map(r => r.gallery_id));
   gallery.forEach(g => {
     g.like_count = Number(g.like_count);
     g.liked = likedSet.has(g.id);
+    g.bookmarked = bookmarkedSet.has(g.id);
   });
 
   // "Is this MY character" (I own it), not just "am I the story owner" —
@@ -4212,6 +4249,7 @@ app.get('/api/gallery/:id', async (req, res) => {
 // Every story and character a gallery post is linked to — pre-fills the
 // "Link To:" section when editing an existing post.
 app.get('/api/gallery/:id/links', async (req, res) => {
+  const { nsfwAllowed } = await getViewerNsfwAccess(req);
   const [{ rows: stories }, { rows: characters }] = await Promise.all([
     pool.query(
       `SELECT ms.id AS site_id, ms.slug, ms.story_path, ms.site_title, ms.cover_url
@@ -4231,7 +4269,17 @@ app.get('/api/gallery/:id/links', async (req, res) => {
   ]);
   res.json({
     stories: stories.map(r => ({ id: r.site_id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url })),
-    characters,
+    // Same blur-not-hide treatment as Character Spotlight — an NSFW ref
+    // stays listed for everyone, but a viewer who can't see NSFW never
+    // gets the real image bytes.
+    characters: characters.map(c => {
+      const locked = c.ref_is_nsfw && !nsfwAllowed;
+      return {
+        id: c.id, name: c.name, image: locked ? null : c.ref_image, nsfw_locked: !!locked,
+        species: (c.stats && c.stats['Species']) || '',
+        owner_username: c.owner_username, owner_display_name: c.owner_display_name || c.owner_username,
+      };
+    }),
   });
 });
 
@@ -4330,10 +4378,148 @@ app.delete('/api/moderator/gallery/:id/like', requireAuth, async (req, res) => {
   res.json({ liked: false, like_count: Number(count) });
 });
 
+app.post('/api/moderator/gallery/:id/bookmark', requireAuth, async (req, res) => {
+  const { rows: [item] } = await pool.query('SELECT id FROM moderator_gallery WHERE id = $1', [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  await pool.query(
+    'INSERT INTO moderator_gallery_bookmarks (user_id, gallery_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [req.user.id, item.id]
+  );
+  res.json({ bookmarked: true });
+});
+
+app.delete('/api/moderator/gallery/:id/bookmark', requireAuth, async (req, res) => {
+  await pool.query('DELETE FROM moderator_gallery_bookmarks WHERE user_id = $1 AND gallery_id = $2', [req.user.id, req.params.id]);
+  res.json({ bookmarked: false });
+});
+
+// ── Universal comments — target_type/target_id, reusable for gallery posts
+// now and Newspaper/Social posts later. Replies are exactly one level deep:
+// a reply's parent_id always points at a ROOT comment, enforced here by
+// flattening (replying to a reply re-parents onto that reply's root). ──────
+
+// Resolves a {title, link} pair per target type, for notification text —
+// add a case here whenever a new target_type gets comments wired up.
+async function commentTargetInfo(targetType, targetId) {
+  if (targetType === 'gallery') {
+    const { rows: [g] } = await pool.query(
+      `SELECT mg.title, u.username AS owner_username
+       FROM moderator_gallery mg JOIN users u ON u.id = mg.owner_user_id
+       WHERE mg.id = $1`,
+      [targetId]
+    );
+    if (!g) return null;
+    return { title: g.title || 'Untitled', link: `/fanpages/${g.owner_username}?gallery=${targetId}#gallery` };
+  }
+  return null;
+}
+
+app.get('/api/content-comments', async (req, res) => {
+  const targetType = String(req.query.target_type || '');
+  const targetId = parseInt(req.query.target_id, 10);
+  if (!targetType || !targetId) return res.json({ comments: [] });
+  const { rows } = await pool.query(
+    `SELECT cc.id, cc.parent_id, cc.reply_to_username, cc.body, cc.created_at, cc.user_id,
+            u.username, u.display_name, u.avatar
+     FROM content_comments cc JOIN users u ON u.id = cc.user_id
+     WHERE cc.target_type = $1 AND cc.target_id = $2
+     ORDER BY cc.created_at ASC`,
+    [targetType, targetId]
+  );
+  const byId = {};
+  const roots = [];
+  rows.forEach(r => {
+    const c = {
+      id: r.id, body: r.body, created_at: r.created_at, reply_to_username: r.reply_to_username,
+      user_id: r.user_id, username: r.username, display_name: r.display_name, avatar: r.avatar, replies: [],
+    };
+    byId[c.id] = c;
+    if (r.parent_id && byId[r.parent_id]) byId[r.parent_id].replies.push(c);
+    else if (!r.parent_id) roots.push(c);
+  });
+  res.json({ comments: roots, count: rows.length });
+});
+
+app.post('/api/content-comments', requireAuth, async (req, res) => {
+  const targetType = String(req.body.target_type || '');
+  const targetId = parseInt(req.body.target_id, 10);
+  const text = String(req.body.body || '').trim();
+  const parentId = req.body.parent_id ? parseInt(req.body.parent_id, 10) : null;
+  if (!targetType || !targetId) return res.status(400).json({ error: 'target_type and target_id are required.' });
+  if (!text) return res.status(400).json({ error: 'Comment cannot be empty.' });
+  if (text.length > 2000) return res.status(400).json({ error: 'Comment is too long (max 2000 characters).' });
+
+  let rootParentId = null;
+  let replyToUsername = null;
+  let directParentUserId = null;
+  if (parentId) {
+    const { rows: [parent] } = await pool.query(
+      'SELECT id, parent_id, user_id FROM content_comments WHERE id = $1 AND target_type = $2 AND target_id = $3',
+      [parentId, targetType, targetId]
+    );
+    if (!parent) return res.status(404).json({ error: 'Comment not found.' });
+    // Flatten to exactly one level — replying to a reply attaches to that reply's root.
+    rootParentId = parent.parent_id || parent.id;
+    directParentUserId = parent.user_id;
+    const { rows: [replyTarget] } = await pool.query('SELECT username FROM users WHERE id = $1', [parent.user_id]);
+    replyToUsername = replyTarget ? replyTarget.username : null;
+  }
+
+  const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
+  const { rows: [comment] } = await pool.query(
+    `INSERT INTO content_comments (target_type, target_id, user_id, parent_id, reply_to_username, body)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`,
+    [targetType, targetId, req.user.id, rootParentId, replyToUsername, text]
+  );
+
+  // Notify: the comment you directly replied to gets "replied to your
+  // comment"; everyone else who's posted anywhere in this thread gets a
+  // lighter "thread you're in got a new reply" notice. Never notify yourself.
+  if (rootParentId) {
+    const { rows: participants } = await pool.query(
+      'SELECT DISTINCT user_id FROM content_comments WHERE id = $1 OR parent_id = $1',
+      [rootParentId]
+    );
+    const info = await commentTargetInfo(targetType, targetId);
+    const actorName = author.display_name || author.username;
+    await Promise.all(
+      participants
+        .map(r => r.user_id)
+        .filter(uid => uid !== req.user.id)
+        .map(uid => {
+          const isDirect = uid === directParentUserId;
+          const message = isDirect
+            ? `${actorName} replied to your comment${info ? ` on "${info.title}"` : ''}.`
+            : `${actorName} added a new reply in a thread you're part of${info ? ` on "${info.title}"` : ''}.`;
+          return pool.query(
+            `INSERT INTO notifications (user_id, actor_user_id, type, message, link) VALUES ($1, $2, $3, $4, $5)`,
+            [uid, req.user.id, isDirect ? 'comment_reply' : 'comment_thread_update', message, info ? info.link : null]
+          ).catch(() => {});
+        })
+    );
+  }
+
+  res.json({
+    comment: {
+      id: comment.id, body: text, created_at: comment.created_at, reply_to_username: replyToUsername,
+      user_id: req.user.id, username: author.username, display_name: author.display_name, avatar: author.avatar,
+      parent_id: rootParentId, replies: [],
+    },
+  });
+});
+
+app.delete('/api/content-comments/:id', requireAuth, async (req, res) => {
+  const { rows: [comment] } = await pool.query('SELECT * FROM content_comments WHERE id = $1', [req.params.id]);
+  if (!comment) return res.status(404).json({ error: 'Not found.' });
+  if (comment.user_id !== req.user.id && !await checkAdmin(req)) return res.status(403).json({ error: 'Not your comment.' });
+  await pool.query('DELETE FROM content_comments WHERE id = $1', [req.params.id]);
+  res.json({ message: 'Deleted.' });
+});
+
 // GET /api/library — bookmarked stories + liked gallery art, across every
 // story, for the avatar dropdown's "Library" page.
 app.get('/api/library', requireAuth, async (req, res) => {
-  const [{ rows: stories }, { rows: gallery }] = await Promise.all([
+  const [{ rows: stories }, { rows: gallery }, { rows: bookmarkedGallery }] = await Promise.all([
     pool.query(`
       SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.username, u.display_name, u.avatar
       FROM moderator_bookmarks mb
@@ -4354,6 +4540,18 @@ app.get('/api/library', requireAuth, async (req, res) => {
       WHERE mgl.user_id = $1
       ORDER BY mgl.created_at DESC
     `, [req.user.id]),
+    pool.query(`
+      SELECT mg.id, mg.image_url, mg.title, mg.category, ms.slug, ms.story_path, ms.site_title, u.username AS owner_username
+      FROM moderator_gallery_bookmarks mgb
+      JOIN moderator_gallery mg ON mg.id = mgb.gallery_id
+      LEFT JOIN LATERAL (
+        SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1
+      ) gsl ON true
+      LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
+      JOIN users u ON u.id = mg.owner_user_id
+      WHERE mgb.user_id = $1
+      ORDER BY mgb.created_at DESC
+    `, [req.user.id]),
   ]);
   res.json({
     stories: stories.map(r => ({
@@ -4361,6 +4559,11 @@ app.get('/api/library', requireAuth, async (req, res) => {
       author: r.display_name || r.username, author_username: r.username, author_avatar: r.avatar || null,
     })),
     gallery: gallery.map(r => ({
+      id: r.id, image_url: r.image_url, title: r.title, category: r.category,
+      story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
+      owner_username: r.owner_username,
+    })),
+    bookmarked_gallery: bookmarkedGallery.map(r => ({
       id: r.id, image_url: r.image_url, title: r.title, category: r.category,
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
       owner_username: r.owner_username,

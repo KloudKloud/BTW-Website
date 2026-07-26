@@ -72,14 +72,28 @@
 
       <div class="art-view-info">
         <h1 class="art-view-title" id="gallery-detail-title"></h1>
+        <div class="art-view-actions">
+          <button class="art-view-like art-view-like--big" id="gallery-detail-like" type="button" aria-label="Like">
+            <span id="gallery-detail-like-icon">♡</span> <span id="gallery-detail-like-count">0</span>
+          </button>
+          <button class="art-view-bookmark-btn" id="gallery-detail-bookmark" type="button" aria-label="Bookmark">🔖</button>
+        </div>
       </div>
-      <button class="art-view-like" id="gallery-detail-like" type="button" aria-label="Like">
-        <span id="gallery-detail-like-icon">♡</span> <span id="gallery-detail-like-count">0</span>
-      </button>
 
       <div class="art-view-desc" id="gallery-detail-desc"></div>
 
       <div id="gallery-detail-nav" class="art-nav"></div>
+
+      <div class="art-view-tags-section" id="gallery-detail-tags"></div>
+
+      <div class="cc-section" id="gallery-detail-comments">
+        <p class="cc-title">💬 Comments</p>
+        <div class="cc-compose" id="cc-compose" style="display:none;">
+          <textarea id="cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
+          <button class="cc-compose-btn" id="cc-compose-btn" type="button">Post</button>
+        </div>
+        <div class="cc-list" id="cc-list"><p class="cc-empty">Loading…</p></div>
+      </div>
     </div>
 
     <div class="wiki-side-col">
@@ -501,6 +515,9 @@ function openPostDetail(item, pushHistory) {
   document.getElementById('gallery-detail-back').textContent = backLabelFor(item.category);
   renderDetailNav(item);
   updateLikeUI(item);
+  updateBookmarkUI(item);
+  loadGalleryTagsSection(item);
+  ccInitSection('gallery', item.id);
 
   document.getElementById('gallery-grid-view').style.display = 'none';
   document.getElementById('gallery-detail-view').style.display = 'block';
@@ -537,19 +554,253 @@ function updateLikeUI(item) {
   document.getElementById('gallery-detail-like').classList.toggle('liked', !!item.liked);
 }
 
-document.getElementById('gallery-detail-like').addEventListener('click', async () => {
+document.getElementById('gallery-detail-like').addEventListener('click', async (e) => {
   if (!token) { window.location.href = `/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
   if (!currentDetailItem) return;
+  const btn = e.currentTarget;
+  if (btn.disabled) return; // in-flight guard — stops rapid double-clicks racing each other
   const item = currentDetailItem;
   const method = item.liked ? 'DELETE' : 'POST';
+  btn.disabled = true;
   try {
     const res = await fetch(`/api/moderator/gallery/${item.id}/like`, { method, headers: authHeaders() });
-    if (!res.ok) return;
+    if (!res.ok) {
+      if (res.status === 401) window.location.href = `/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      return;
+    }
     const data = await res.json();
     item.liked = data.liked;
     item.like_count = data.like_count;
     updateLikeUI(item);
+  } catch {} finally { btn.disabled = false; }
+});
+
+// ── Gallery post bookmarks ───────────────────────────────────────────────
+function updateBookmarkUI(item) {
+  document.getElementById('gallery-detail-bookmark').classList.toggle('bookmarked', !!item.bookmarked);
+}
+document.getElementById('gallery-detail-bookmark').addEventListener('click', async (e) => {
+  if (!token) { window.location.href = `/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+  if (!currentDetailItem) return;
+  const btn = e.currentTarget;
+  if (btn.disabled) return;
+  const item = currentDetailItem;
+  const method = item.bookmarked ? 'DELETE' : 'POST';
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/api/moderator/gallery/${item.id}/bookmark`, { method, headers: authHeaders() });
+    if (!res.ok) {
+      if (res.status === 401) window.location.href = `/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      return;
+    }
+    const data = await res.json();
+    item.bookmarked = data.bookmarked;
+    updateBookmarkUI(item);
+  } catch {} finally { btn.disabled = false; }
+});
+
+// ── Characters Featured / Relevant Stories — tagged content under the
+// description. NSFW character refs use the same blur-not-hide treatment as
+// Character Spotlight; "Relevant Stories" only ever appears when a story is
+// actually tagged, and "No tagged characters" is the only empty-state text
+// (no equivalent message for stories, per design). ──────────────────────
+async function loadGalleryTagsSection(item) {
+  const wrap = document.getElementById('gallery-detail-tags');
+  wrap.innerHTML = '<hr class="art-view-tags-hr" />';
+  try {
+    const res = await fetch(`/api/gallery/${item.id}/links`, { headers: authHeaders() });
+    const data = await res.json();
+    const chars = data.characters || [];
+    const stories = data.stories || [];
+
+    const charsBlock = document.createElement('div');
+    charsBlock.innerHTML = '<p class="art-view-tags-label">Characters Featured:</p>';
+    if (!chars.length) {
+      charsBlock.innerHTML += '<p class="art-view-tags-empty">No tagged characters</p>';
+    } else {
+      const row = document.createElement('div');
+      row.className = 'art-view-tags-row';
+      chars.forEach(c => row.appendChild(galleryCharTagCard(c)));
+      charsBlock.appendChild(row);
+    }
+    wrap.appendChild(charsBlock);
+
+    if (stories.length) {
+      const storiesBlock = document.createElement('div');
+      storiesBlock.innerHTML = '<p class="art-view-tags-label">Relevant Stories</p>';
+      const row = document.createElement('div');
+      row.className = 'art-view-tags-row';
+      stories.forEach(s => row.appendChild(galleryStoryTagCard(s)));
+      storiesBlock.appendChild(row);
+      wrap.appendChild(storiesBlock);
+    }
+  } catch {
+    wrap.innerHTML += '<p class="art-view-tags-empty">Couldn\'t load tagged content right now.</p>';
+  }
+}
+function galleryCharTagCard(c) {
+  const a = document.createElement('a');
+  a.className = 'art-view-char-card';
+  a.href = `/fanpages/${c.owner_username}?char=${c.id}#characters`;
+  if (c.nsfw_locked) {
+    const lockMsg = token ? 'NSFW content must be enabled in Account Settings' : 'Only logged-in users can see this content';
+    a.innerHTML = `
+      <div class="art-view-char-card-imgwrap">
+        <img class="art-view-char-card-img--blurred" src="/images/defaultchar.jpg" alt="" />
+        <span class="art-view-char-card-lock-msg">${escapeHtml(lockMsg)}</span>
+      </div>
+      <span class="art-view-char-card-name">${escapeHtml(c.name)}</span>
+    `;
+  } else {
+    a.innerHTML = `
+      <div class="art-view-char-card-imgwrap"><img src="${c.image || '/images/defaultchar.jpg'}" alt="" /></div>
+      <span class="art-view-char-card-name">${escapeHtml(c.name)}</span>
+      ${c.species ? `<span class="art-view-char-card-species">${escapeHtml(c.species)}</span>` : ''}
+    `;
+  }
+  return a;
+}
+function galleryStoryTagCard(s) {
+  const a = document.createElement('a');
+  a.className = 'art-view-story-card';
+  a.href = `/fanpages/${s.story_path}`;
+  a.innerHTML = `
+    <div class="art-view-char-card-imgwrap art-view-story-card-imgwrap"><img src="${s.cover_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="" /></div>
+    <span class="art-view-story-card-name">${escapeHtml(s.site_title || 'Untitled')}</span>
+  `;
+  return a;
+}
+
+// ── Universal comments (target_type/target_id) — one level of replies,
+// "@username" prefix on a reply, avatar-card layout. Reused as-is on the
+// account-level profile gallery view; will back Newspaper/Social later. ──
+const CURRENT_USER = (() => {
+  try { return JSON.parse(localStorage.getItem('btw_user') || sessionStorage.getItem('btw_user') || 'null'); } catch { return null; }
+})();
+let ccTargetType = null, ccTargetId = null;
+
+function ccAvatarHtml(c) {
+  const name = c.display_name || c.username || '?';
+  const initial = escapeHtml(name.charAt(0).toUpperCase());
+  return c.avatar
+    ? `<img class="cc-avatar" src="${c.avatar}" alt="" />`
+    : `<span class="cc-avatar-fallback">${initial}</span>`;
+}
+function ccTimeAgo(iso) {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 2592000) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+function ccIsMine(c) { return CURRENT_USER && CURRENT_USER.id === c.user_id; }
+
+function ccCommentEl(c, isReply) {
+  const wrap = document.createElement('div');
+  wrap.className = 'cc-item';
+  const avatarHolder = document.createElement('div');
+  avatarHolder.innerHTML = ccAvatarHtml(c);
+  wrap.appendChild(avatarHolder.firstElementChild);
+
+  const body = document.createElement('div');
+  body.className = 'cc-body-wrap';
+  body.innerHTML = `
+    <div class="cc-bubble">
+      <span class="cc-name"><a href="/fanpages/${encodeURIComponent(c.username)}">${escapeHtml(c.display_name || c.username)}</a></span>
+      <span class="cc-time">${ccTimeAgo(c.created_at)}</span>
+      <p class="cc-text">${c.reply_to_username ? `<span class="cc-mention">@${escapeHtml(c.reply_to_username)}</span> ` : ''}${escapeHtml(c.body)}</p>
+    </div>
+    <div class="cc-actions">
+      ${token && !isReply ? '<button class="cc-action-btn" data-action="reply">Reply</button>' : ''}
+      ${ccIsMine(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : ''}
+    </div>
+  `;
+  wrap.appendChild(body);
+
+  const replyBtn = body.querySelector('[data-action="reply"]');
+  if (replyBtn) replyBtn.addEventListener('click', () => ccOpenReplyBox(body, c));
+  const deleteBtn = body.querySelector('[data-action="delete"]');
+  if (deleteBtn) deleteBtn.addEventListener('click', () => ccDeleteComment(c.id));
+
+  if (!isReply && (c.replies || []).length) {
+    const repliesWrap = document.createElement('div');
+    repliesWrap.className = 'cc-replies';
+    c.replies.forEach(r => repliesWrap.appendChild(ccCommentEl(r, true)));
+    body.appendChild(repliesWrap);
+  }
+  return wrap;
+}
+
+function ccOpenReplyBox(bodyEl, parentComment) {
+  const existing = bodyEl.querySelector('.cc-reply-box');
+  if (existing) { existing.querySelector('textarea').focus(); return; }
+  const box = document.createElement('div');
+  box.className = 'cc-reply-box';
+  box.innerHTML = `
+    <textarea placeholder="Reply to ${escapeHtml(parentComment.display_name || parentComment.username)}…" maxlength="2000"></textarea>
+    <button class="cc-compose-btn" type="button">Reply</button>
+  `;
+  const textarea = box.querySelector('textarea');
+  box.querySelector('button').addEventListener('click', async () => {
+    const text = textarea.value.trim();
+    if (!text) return;
+    const btn = box.querySelector('button');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/content-comments', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ target_type: ccTargetType, target_id: ccTargetId, body: text, parent_id: parentComment.id }),
+      });
+      if (res.ok) await ccLoadComments();
+    } finally { btn.disabled = false; }
+  });
+  const repliesWrap = bodyEl.querySelector('.cc-replies');
+  bodyEl.insertBefore(box, repliesWrap || null);
+  textarea.focus();
+}
+
+async function ccDeleteComment(id) {
+  if (!confirm('Delete this comment?')) return;
+  try {
+    await fetch(`/api/content-comments/${id}`, { method: 'DELETE', headers: authHeaders() });
+    ccLoadComments();
   } catch {}
+}
+
+async function ccLoadComments() {
+  const list = document.getElementById('cc-list');
+  if (!list) return;
+  try {
+    const res = await fetch(`/api/content-comments?target_type=${ccTargetType}&target_id=${ccTargetId}`);
+    const data = await res.json();
+    const comments = data.comments || [];
+    list.innerHTML = '';
+    if (!comments.length) { list.innerHTML = '<p class="cc-empty">No comments yet — be the first!</p>'; return; }
+    comments.forEach(c => list.appendChild(ccCommentEl(c, false)));
+  } catch { list.innerHTML = '<p class="cc-empty">Couldn\'t load comments right now.</p>'; }
+}
+
+function ccInitSection(targetType, targetId) {
+  ccTargetType = targetType;
+  ccTargetId = targetId;
+  document.getElementById('cc-compose').style.display = token ? 'flex' : 'none';
+  ccLoadComments();
+}
+
+document.getElementById('cc-compose-btn').addEventListener('click', async () => {
+  const input = document.getElementById('cc-compose-input');
+  const text = input.value.trim();
+  if (!text || !ccTargetType) return;
+  const btn = document.getElementById('cc-compose-btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/content-comments', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ target_type: ccTargetType, target_id: ccTargetId, body: text }),
+    });
+    if (res.ok) { input.value = ''; await ccLoadComments(); }
+  } finally { btn.disabled = false; }
 });
 
 window.addEventListener('popstate', () => {

@@ -89,6 +89,7 @@
   <div class="lib-tabs">
     <button class="lib-tab active" id="lib-tab-stories" type="button">Stories</button>
     <button class="lib-tab" id="lib-tab-gallery" type="button">Galleries</button>
+    <button class="lib-tab" id="lib-tab-bookmarked-gallery" type="button">Bookmarked Art</button>
   </div>
 
   <section id="lib-stories-section">
@@ -99,6 +100,11 @@
   <section id="lib-gallery-section" style="display:none;">
     <p class="lib-section-title">Liked Art</p>
     <div id="lib-gallery-grid"><p class="lib-empty">Loading…</p></div>
+  </section>
+
+  <section id="lib-bookmarked-gallery-section" style="display:none;">
+    <p class="lib-section-title">🔖 Bookmarked Art</p>
+    <div id="lib-bookmarked-gallery-grid"><p class="lib-empty">Loading…</p></div>
   </section>
 </main>
 
@@ -161,28 +167,37 @@
     return a;
   }
 
-  const tabStories = document.getElementById('lib-tab-stories');
-  const tabGallery = document.getElementById('lib-tab-gallery');
-  const sectionStories = document.getElementById('lib-stories-section');
-  const sectionGallery = document.getElementById('lib-gallery-section');
+  const tabs = {
+    stories: { btn: document.getElementById('lib-tab-stories'), section: document.getElementById('lib-stories-section') },
+    gallery: { btn: document.getElementById('lib-tab-gallery'), section: document.getElementById('lib-gallery-section') },
+    bookmarkedGallery: { btn: document.getElementById('lib-tab-bookmarked-gallery'), section: document.getElementById('lib-bookmarked-gallery-section') },
+  };
+  function switchLibTab(name) {
+    Object.entries(tabs).forEach(([key, t]) => {
+      t.btn.classList.toggle('active', key === name);
+      t.section.style.display = key === name ? 'block' : 'none';
+    });
+  }
+  tabs.stories.btn.addEventListener('click', () => switchLibTab('stories'));
+  tabs.gallery.btn.addEventListener('click', () => switchLibTab('gallery'));
+  tabs.bookmarkedGallery.btn.addEventListener('click', () => switchLibTab('bookmarkedGallery'));
 
-  tabStories.addEventListener('click', () => {
-    tabStories.classList.add('active');
-    tabGallery.classList.remove('active');
-    sectionStories.style.display = 'block';
-    sectionGallery.style.display = 'none';
-  });
-  tabGallery.addEventListener('click', () => {
-    tabGallery.classList.add('active');
-    tabStories.classList.remove('active');
-    sectionGallery.style.display = 'block';
-    sectionStories.style.display = 'none';
-  });
+  function renderGalleryGrid(elId, items, emptyMsg) {
+    const el = document.getElementById(elId);
+    if (!items.length) { el.innerHTML = `<p class="lib-empty">${emptyMsg}</p>`; return; }
+    const grid = document.createElement('div');
+    grid.className = 'lib-gallery-grid';
+    items.forEach(g => grid.appendChild(galleryCard(g)));
+    el.innerHTML = '';
+    el.appendChild(grid);
+  }
 
   (async () => {
     if (!token) {
-      document.getElementById('lib-stories-grid').innerHTML = `<p class="lib-empty"><a href="/login?from=${encodeURIComponent('/fanpages/library')}" style="color:#7fa8d9;">Log in</a> to see your bookmarked stories and liked art.</p>`;
-      document.getElementById('lib-gallery-grid').innerHTML = '<p class="lib-empty">Log in to see your liked art.</p>';
+      const loginMsg = `<p class="lib-empty"><a href="/login?from=${encodeURIComponent('/fanpages/library')}" style="color:#7fa8d9;">Log in</a> to see this.</p>`;
+      document.getElementById('lib-stories-grid').innerHTML = loginMsg;
+      document.getElementById('lib-gallery-grid').innerHTML = loginMsg;
+      document.getElementById('lib-bookmarked-gallery-grid').innerHTML = loginMsg;
       return;
     }
     try {
@@ -201,20 +216,12 @@
         storiesGrid.appendChild(grid);
       }
 
-      const galleryGrid = document.getElementById('lib-gallery-grid');
-      const gallery = data.gallery || [];
-      if (!gallery.length) {
-        galleryGrid.innerHTML = '<p class="lib-empty">You haven\'t liked any art yet — hit the ♡ on a gallery piece to save it here.</p>';
-      } else {
-        const grid = document.createElement('div');
-        grid.className = 'lib-gallery-grid';
-        gallery.forEach(g => grid.appendChild(galleryCard(g)));
-        galleryGrid.innerHTML = '';
-        galleryGrid.appendChild(grid);
-      }
+      renderGalleryGrid('lib-gallery-grid', data.gallery || [], 'You haven\'t liked any art yet — hit the ♡ on a gallery piece to save it here.');
+      renderGalleryGrid('lib-bookmarked-gallery-grid', data.bookmarked_gallery || [], 'You haven\'t bookmarked any art yet — hit the 🔖 on a gallery piece to save it here.');
     } catch {
       document.getElementById('lib-stories-grid').innerHTML = '<p class="lib-empty">Couldn\'t load your library right now.</p>';
       document.getElementById('lib-gallery-grid').innerHTML = '<p class="lib-empty">Couldn\'t load your library right now.</p>';
+      document.getElementById('lib-bookmarked-gallery-grid').innerHTML = '<p class="lib-empty">Couldn\'t load your library right now.</p>';
     }
   })();
 </script>
