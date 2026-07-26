@@ -3281,6 +3281,8 @@ app.put('/api/account/banner-position', requireAuth, async (req, res) => {
 app.get('/api/featured-search', requireAuth, async (req, res) => {
   const kind = req.query.kind === 'gallery' ? 'gallery' : 'character';
   const q = `%${String(req.query.q || '').slice(0, 60)}%`;
+  const scope = req.query.scope === 'other' ? 'other' : 'mine';
+  const ownerFilter = scope === 'mine' ? '=' : '!=';
 
   // Characters/gallery can now be linked to zero, one, or several stories —
   // pick any ONE linked story (if any) just to build a link_url; when none
@@ -3296,8 +3298,8 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
        ) csl ON true
        LEFT JOIN moderator_sites ms ON ms.id = csl.site_id
        JOIN users u ON u.id = mc.owner_user_id
-       WHERE mc.name ILIKE $1 ORDER BY mc.name LIMIT 30`,
-      [q]
+       WHERE mc.name ILIKE $1 AND mc.owner_user_id ${ownerFilter} $2 ORDER BY mc.name LIMIT 30`,
+      [q, req.user.id]
     ));
   } else {
     ({ rows } = await pool.query(
@@ -3309,8 +3311,8 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
        ) gsl ON true
        LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
        JOIN users u ON u.id = mg.owner_user_id
-       WHERE mg.category != 'spicy' AND mg.title ILIKE $1 ORDER BY mg.title LIMIT 30`,
-      [q]
+       WHERE mg.category != 'spicy' AND mg.title ILIKE $1 AND mg.owner_user_id ${ownerFilter} $2 ORDER BY mg.title LIMIT 30`,
+      [q, req.user.id]
     ));
   }
 

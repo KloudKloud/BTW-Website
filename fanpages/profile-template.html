@@ -357,7 +357,11 @@
       font-family: 'Cinzel', Georgia, serif; font-weight: 700; font-size: 0.92rem; line-height: 1.35;
       text-shadow: 0 2px 10px rgba(0,0,0,0.85);
     }
-    .fp-story-card-title { font-size: 0.9rem; font-weight: 700; margin-top: 0.5rem; }
+    .fp-story-card-title {
+      font-family: 'Cinzel', Georgia, serif; font-size: 0.9rem; font-weight: 700; margin-top: 0.5rem;
+      color: #7fa8d9; letter-spacing: 0.02em;
+      text-shadow: 0 0 14px rgba(127,168,217,0.5), 0 1px 3px rgba(0,0,0,0.5);
+    }
 
     /* Stories TAB — one big teaser card per row instead of a cover grid */
     .fp-story-teaser-list { display: flex; flex-direction: column; gap: 1.25rem; }
@@ -373,8 +377,9 @@
     }
     .fp-story-teaser-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
     .fp-story-teaser-title {
-      font-family: 'Cinzel', Georgia, serif; font-size: 1.25rem; font-weight: 700; color: #f0f0f0;
-      margin-bottom: 0.6rem;
+      font-family: 'Cinzel', Georgia, serif; font-size: 1.25rem; font-weight: 700;
+      color: #7fa8d9; letter-spacing: 0.02em; margin-bottom: 0.6rem;
+      text-shadow: 0 0 18px rgba(127,168,217,0.55), 0 1px 3px rgba(0,0,0,0.5);
     }
     .fp-story-teaser-synopsis { font-size: 0.9rem; color: #ccc; line-height: 1.6; margin-bottom: auto; }
     .fp-story-teaser-chars { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
@@ -612,6 +617,7 @@
     body.fp-editing .fp-stats,
     body.fp-editing .fp-tabs-row,
     body.fp-editing .fp-stories-panel,
+    body.fp-editing .fp-newspaper-home,
     body.fp-editing .fp-disclaimer {
       display: none !important;
     }
@@ -874,8 +880,17 @@
 <div class="char-link-picker-overlay" id="fp-featured-picker-overlay" hidden>
   <div class="char-link-picker-modal" style="max-width:480px;">
     <h3 class="char-link-picker-title" id="fp-featured-picker-title">Feature Characters</h3>
-    <input class="mod-input" id="fp-featured-picker-search" placeholder="Search…" style="margin-bottom:0.75rem;" />
-    <div class="char-link-picker-scroll" id="fp-featured-picker-list"><p class="char-link-picker-empty">Start typing to search…</p></div>
+    <div class="char-link-picker-tabs">
+      <button type="button" class="char-link-picker-tab active" id="fp-featured-tab-mine">Your Characters</button>
+      <button type="button" class="char-link-picker-tab" id="fp-featured-tab-other">Other Characters</button>
+    </div>
+    <div id="fp-featured-picker-mine">
+      <div class="char-link-picker-scroll" id="fp-featured-picker-mine-list"><p class="char-link-picker-empty">Loading…</p></div>
+    </div>
+    <div id="fp-featured-picker-other" hidden>
+      <input class="mod-input" id="fp-featured-picker-other-search" placeholder="Search…" style="margin-bottom:0.75rem;" />
+      <div class="char-link-picker-scroll" id="fp-featured-picker-other-list"></div>
+    </div>
     <button class="mod-btn mod-btn--small" id="fp-featured-picker-done" type="button" style="margin-top:0.75rem;">Done</button>
   </div>
 </div>
@@ -1883,8 +1898,8 @@
 
     renderAboutEditor();
     renderLinksEditor();
-    renderFeaturedEditor('character', 'Feature your top three favorite characters from stories you love! Can be your own if you\'re a creator, or the three characters from stories within this community that stand out to you!');
-    renderFeaturedEditor('gallery', 'Feature your top three favorite art pieces from stories you love! Can be your own if you\'re a creator, or the three gallery posts from stories within this community that stand out to you!');
+    renderFeaturedEditor('character', 'Feature your top three favorite characters! Can be your own characters, if you\'ve made them, or three characters from stories/art/people you love! Feel free to search for those that stand out to you~');
+    renderFeaturedEditor('gallery', 'Feature your top three favorite gallery pieces! Can be your own artwork, if you\'ve posted your commissions/art here, or three art pieces from stories/artists you love on the site! Feel free to search for those that stand out to you~');
   }
 
   function exitEditMode() {
@@ -2140,67 +2155,84 @@
     paintSelected();
   }
 
-  // ── Featured picker overlay — shared by both kinds ──────────────────────
+  // ── Featured picker overlay — shared by both kinds, with "Your X" /
+  // "Other X" tabs matching the relationship/link-to pickers exactly. ─────
   let featuredPickerKind = null;
   let featuredPickerOnChange = null;
   function openFeaturedPicker(kind, onChange) {
     featuredPickerKind = kind;
     featuredPickerOnChange = onChange;
-    document.getElementById('fp-featured-picker-title').textContent = kind === 'character' ? 'Feature Characters' : 'Feature Gallery';
-    document.getElementById('fp-featured-picker-search').value = '';
+    const label = kind === 'character' ? 'Characters' : 'Gallery';
+    document.getElementById('fp-featured-picker-title').textContent = `Feature ${label}`;
+    document.getElementById('fp-featured-tab-mine').textContent = `Your ${label}`;
+    document.getElementById('fp-featured-tab-other').textContent = `Other ${label}`;
     document.getElementById('fp-featured-picker-overlay').hidden = false;
-    // Preload the full scrollable list (yours first) immediately, instead
-    // of only showing something once you start typing — searching just
-    // narrows this same list.
-    runFeaturedPickerSearch('');
+    switchFeaturedPickerTab('mine');
   }
   document.getElementById('fp-featured-picker-done').addEventListener('click', () => {
     document.getElementById('fp-featured-picker-overlay').hidden = true;
   });
-  let featuredPickerDebounce;
-  async function runFeaturedPickerSearch(q) {
-    const list = document.getElementById('fp-featured-picker-list');
+
+  function switchFeaturedPickerTab(tab) {
+    document.getElementById('fp-featured-tab-mine').classList.toggle('active', tab === 'mine');
+    document.getElementById('fp-featured-tab-other').classList.toggle('active', tab === 'other');
+    document.getElementById('fp-featured-picker-mine').hidden = tab !== 'mine';
+    document.getElementById('fp-featured-picker-other').hidden = tab !== 'other';
+    if (tab === 'mine') runFeaturedPickerSearch('mine', '');
+    else { document.getElementById('fp-featured-picker-other-search').value = ''; runFeaturedPickerSearch('other', ''); }
+  }
+  document.getElementById('fp-featured-tab-mine').addEventListener('click', () => switchFeaturedPickerTab('mine'));
+  document.getElementById('fp-featured-tab-other').addEventListener('click', () => switchFeaturedPickerTab('other'));
+
+  function featuredPickerItemEl(r) {
+    const selected = editFeatured[featuredPickerKind].some(it => it.ref_id === r.ref_id);
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'char-link-picker-item--big' + (selected ? ' selected' : '');
+    item.innerHTML = `
+      <img src="${r.image_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="" />
+      <span>
+        <span class="char-link-picker-item-name">${r.title}</span>
+        <span class="char-link-picker-item-owner">${r.mine ? 'You' : (r.owner_username || '')}</span>
+      </span>
+      <span class="char-link-picker-item-check">✓</span>
+    `;
+    item.addEventListener('click', () => {
+      const arr = editFeatured[featuredPickerKind];
+      const idx = arr.findIndex(it => it.ref_id === r.ref_id);
+      if (idx >= 0) {
+        arr.splice(idx, 1);
+        item.classList.remove('selected');
+      } else {
+        if (arr.length >= 3) return;
+        arr.push({ ref_id: r.ref_id, title: r.title, image_url: r.image_url, link_url: r.link_url, site_slug: r.slug || null });
+        item.classList.add('selected');
+      }
+      if (featuredPickerOnChange) featuredPickerOnChange();
+    });
+    return item;
+  }
+
+  async function runFeaturedPickerSearch(scope, q) {
+    const list = document.getElementById(scope === 'mine' ? 'fp-featured-picker-mine-list' : 'fp-featured-picker-other-list');
     list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
     try {
-      const res = await fetch(`/api/featured-search?kind=${featuredPickerKind}&q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+      const res = await fetch(`/api/featured-search?kind=${featuredPickerKind}&scope=${scope}&q=${encodeURIComponent(q)}`, { headers: authHeaders() });
       const data = await res.json();
       const results = data.results || [];
-      if (!results.length) { list.innerHTML = `<p class="char-link-picker-empty">${q ? 'No matches found.' : 'Nothing to feature yet.'}</p>`; return; }
+      if (!results.length) {
+        list.innerHTML = `<p class="char-link-picker-empty">${q ? 'No matches found.' : (scope === 'mine' ? 'Nothing to feature yet.' : 'No matching results.')}</p>`;
+        return;
+      }
       list.innerHTML = '';
-      results.forEach(r => {
-        const selected = editFeatured[featuredPickerKind].some(it => it.ref_id === r.ref_id);
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = 'char-link-picker-item--big' + (selected ? ' selected' : '');
-        item.innerHTML = `
-          <img src="${r.image_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="" />
-          <span>
-            <span class="char-link-picker-item-name">${r.title}</span>
-            <span class="char-link-picker-item-owner">${r.mine ? 'You' : (r.owner_username || '')}</span>
-          </span>
-          <span class="char-link-picker-item-check">✓</span>
-        `;
-        item.addEventListener('click', () => {
-          const arr = editFeatured[featuredPickerKind];
-          const idx = arr.findIndex(it => it.ref_id === r.ref_id);
-          if (idx >= 0) {
-            arr.splice(idx, 1);
-            item.classList.remove('selected');
-          } else {
-            if (arr.length >= 3) return;
-            arr.push({ ref_id: r.ref_id, title: r.title, image_url: r.image_url, link_url: r.link_url, site_slug: r.slug || null });
-            item.classList.add('selected');
-          }
-          if (featuredPickerOnChange) featuredPickerOnChange();
-        });
-        list.appendChild(item);
-      });
+      results.forEach(r => list.appendChild(featuredPickerItemEl(r)));
     } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t load right now.</p>'; }
   }
-  document.getElementById('fp-featured-picker-search').addEventListener('input', (e) => {
-    clearTimeout(featuredPickerDebounce);
+  let featuredPickerOtherDebounce;
+  document.getElementById('fp-featured-picker-other-search').addEventListener('input', (e) => {
+    clearTimeout(featuredPickerOtherDebounce);
     const q = e.target.value.trim();
-    featuredPickerDebounce = setTimeout(() => runFeaturedPickerSearch(q), 300);
+    featuredPickerOtherDebounce = setTimeout(() => runFeaturedPickerSearch('other', q), 300);
   });
 
   // ── Newspaper ─────────────────────────────────────────────────────────────
