@@ -182,6 +182,12 @@ async function initDb() {
   // NSFW viewing mode — everyone agreed to 18+ at signup, so default ON for
   // both new and existing accounts; flipping it OFF opts into SFW Mode.
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS nsfw_enabled BOOLEAN NOT NULL DEFAULT true`).catch(() => {});
+  // Zoom for the account banner/avatar crop — same 100-400 scale as the hub
+  // billboard's zoom, 100 = no zoom (matches the pre-existing default crop).
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS account_banner_zoom INTEGER NOT NULL DEFAULT 100;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_zoom INTEGER NOT NULL DEFAULT 100;
+  `).catch(e => console.error('banner/avatar zoom migration:', e.message));
   // Inbox threading columns
   await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS thread_id INTEGER`).catch(e => console.error('migration thread_id:', e.message));
   await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS subject TEXT DEFAULT 'No Subject'`).catch(e => console.error('migration subject:', e.message));
@@ -1254,12 +1260,12 @@ app.post('/api/auth/avatar', requireAuth, (req, res, next) => {
     });
 
     const avatarUrl = `/images/avatars/${req.file.filename}`;
-    // Position resets to center on every new upload, same as banner/cover/character-ref uploads.
+    // Position/zoom reset to center/1x on every new upload, same as banner/cover/character-ref uploads.
     await pool.query(
-      'UPDATE users SET avatar = $1, avatar_position_x = 50, avatar_position_y = 50 WHERE id = $2',
+      'UPDATE users SET avatar = $1, avatar_position_x = 50, avatar_position_y = 50, avatar_zoom = 100 WHERE id = $2',
       [avatarUrl, req.user.id]
     );
-    res.json({ avatar: avatarUrl, position_x: 50, position_y: 50 });
+    res.json({ avatar: avatarUrl, position_x: 50, position_y: 50, zoom: 100 });
   });
 });
 
@@ -1267,8 +1273,9 @@ app.put('/api/auth/avatar-position', requireAuth, async (req, res) => {
   const x = parseInt(req.body.position_x, 10);
   const y = parseInt(req.body.position_y, 10);
   if (![x, y].every(n => Number.isFinite(n) && n >= 0 && n <= 100)) return res.status(400).json({ error: 'Positions must be 0-100.' });
-  await pool.query('UPDATE users SET avatar_position_x = $1, avatar_position_y = $2 WHERE id = $3', [x, y, req.user.id]);
-  res.json({ position_x: x, position_y: y });
+  const zoom = clampZoom(req.body.zoom, 100);
+  await pool.query('UPDATE users SET avatar_position_x = $1, avatar_position_y = $2, avatar_zoom = $3 WHERE id = $4', [x, y, zoom, req.user.id]);
+  res.json({ position_x: x, position_y: y, zoom });
 });
 
 app.delete('/api/auth/account', requireAuth, async (req, res) => {
@@ -2675,9 +2682,9 @@ app.delete(['/api/bookmarks/:slug', '/api/bookmarks/by-path/:owner/:story'], req
 // ── Author profile — /fanpages/:username, Twitter-style header + their stories ──
 app.get('/api/fanpage-profile/:username', async (req, res) => {
   const { rows: [author] } = await pool.query(
-    `SELECT id, username, display_name, avatar, avatar_position_x, avatar_position_y,
+    `SELECT id, username, display_name, avatar, avatar_position_x, avatar_position_y, avatar_zoom,
             pronouns, favorite_pokemon, account_bio, fun_fact, account_links,
-            account_banner_url, account_banner_position_x, account_banner_position_y,
+            account_banner_url, account_banner_position_x, account_banner_position_y, account_banner_zoom,
             profile_theme, profile_theme_bg_url
      FROM users WHERE username = $1`,
     [req.params.username.toLowerCase()]
@@ -2735,6 +2742,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       avatar: author.avatar || null,
       avatar_position_x: author.avatar_position_x != null ? author.avatar_position_x : 50,
       avatar_position_y: author.avatar_position_y != null ? author.avatar_position_y : 50,
+      avatar_zoom: author.avatar_zoom || 100,
       // Deliberately NOT falling back to a story's banner_url here — the
       // account profile banner is its own thing and must stay blank (falls
       // through to the shared placeholder image on the frontend) until the
@@ -2742,6 +2750,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       banner_url: author.account_banner_url || '',
       banner_position_x: author.account_banner_url ? author.account_banner_position_x : 50,
       banner_position_y: author.account_banner_url ? author.account_banner_position_y : 50,
+      banner_zoom: author.account_banner_url ? (author.account_banner_zoom || 100) : 100,
       pronouns: author.pronouns || '',
       favorite_pokemon: author.favorite_pokemon || '',
       account_bio: author.account_bio || '',
@@ -3325,19 +3334,21 @@ app.put('/api/account/banner', requireAuth, uploadModImage.single('banner'), asy
   const y = parseInt(req.body.position_y, 10);
   const posX = Number.isFinite(x) ? x : 50;
   const posY = Number.isFinite(y) ? y : 50;
+  // New upload resets zoom to 1x, same as avatar/cover/character-ref uploads.
   await pool.query(
-    `UPDATE users SET account_banner_url = $1, account_banner_position_x = $2, account_banner_position_y = $3 WHERE id = $4`,
+    `UPDATE users SET account_banner_url = $1, account_banner_position_x = $2, account_banner_position_y = $3, account_banner_zoom = 100 WHERE id = $4`,
     [bannerUrl, posX, posY, req.user.id]
   );
-  res.json({ banner_url: bannerUrl, position_x: posX, position_y: posY });
+  res.json({ banner_url: bannerUrl, position_x: posX, position_y: posY, zoom: 100 });
 });
 
 app.put('/api/account/banner-position', requireAuth, async (req, res) => {
   const x = parseInt(req.body.position_x, 10);
   const y = parseInt(req.body.position_y, 10);
   if (![x, y].every(n => Number.isFinite(n) && n >= 0 && n <= 100)) return res.status(400).json({ error: 'Positions must be 0-100.' });
-  await pool.query('UPDATE users SET account_banner_position_x = $1, account_banner_position_y = $2 WHERE id = $3', [x, y, req.user.id]);
-  res.json({ message: 'Updated.' });
+  const zoom = clampZoom(req.body.zoom, 100);
+  await pool.query('UPDATE users SET account_banner_position_x = $1, account_banner_position_y = $2, account_banner_zoom = $3 WHERE id = $4', [x, y, zoom, req.user.id]);
+  res.json({ message: 'Updated.', zoom });
 });
 
 // GET /api/featured-search — powers the Featured Characters / Featured
@@ -4252,7 +4263,7 @@ app.get('/api/gallery/:id/links', async (req, res) => {
   const { nsfwAllowed } = await getViewerNsfwAccess(req);
   const [{ rows: stories }, { rows: characters }] = await Promise.all([
     pool.query(
-      `SELECT ms.id AS site_id, ms.slug, ms.story_path, ms.site_title, ms.cover_url
+      `SELECT ms.id AS site_id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.synopsis
        FROM gallery_story_links gsl JOIN moderator_sites ms ON ms.id = gsl.site_id
        WHERE gsl.gallery_id = $1 ORDER BY gsl.sort_order, ms.id`,
       [req.params.id]
@@ -4268,7 +4279,7 @@ app.get('/api/gallery/:id/links', async (req, res) => {
     ),
   ]);
   res.json({
-    stories: stories.map(r => ({ id: r.site_id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url })),
+    stories: stories.map(r => ({ id: r.site_id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url, synopsis: r.synopsis || '' })),
     // Same blur-not-hide treatment as Character Spotlight — an NSFW ref
     // stays listed for everyone, but a viewer who can't see NSFW never
     // gets the real image bytes.

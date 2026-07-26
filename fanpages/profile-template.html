@@ -66,12 +66,18 @@
 
     /* ── Banner + avatar bleed (Twitter-style) ── */
     .fp-banner-wrap { position: relative; width: 100%; height: 500px; background: #1a1a1a; overflow: hidden; }
-    .fp-banner-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; transition: filter 0.2s; }
+    /* Pan + zoom via background-image/background-size instead of
+       object-fit + transform:scale() — the two don't compose (scale()
+       happens after object-fit places the image, so position sliders can
+       never reach the newly-revealed edges once zoomed). background-size
+       is resolved against the *current* zoom, so sliders always work. */
+    #fp-banner-img { width: 100%; height: 100%; background-repeat: no-repeat; transition: filter 0.2s; }
     /* Blurred any time the profile owner is editing — a visual cue that
        this is the "click the camera to change it" surface, not a judgment
-       on whether an image has been set yet. */
-    body.fp-editing .fp-banner-wrap img { filter: blur(5px) brightness(0.55); }
-    body.fp-editing .fp-avatar { filter: blur(4px) brightness(0.7); }
+       on whether an image has been set yet. Avatar uses the exact same
+       blur/darken as the banner for visual consistency. */
+    body.fp-editing #fp-banner-img { filter: blur(5px) brightness(0.55); }
+    body.fp-editing .fp-avatar { filter: blur(5px) brightness(0.55); }
 
     /* Matches the story editor's banner controls exactly: centered
        button+hint stack, and a small "Reposition" pill tucked in the
@@ -92,11 +98,13 @@
 
     .fp-banner-reposition {
       position: absolute; right: 1.5rem; top: 1.25rem; z-index: 5;
-      display: flex; align-items: center; gap: 0.5rem;
-      background: rgba(0,0,0,0.5); border-radius: 20px; padding: 0.4rem 0.9rem;
+      display: flex; flex-direction: column; gap: 0.4rem;
+      background: rgba(0,0,0,0.55); border-radius: 12px; padding: 0.6rem 0.9rem;
     }
-    .fp-banner-reposition label { color: #fff; font-size: 0.72rem; white-space: nowrap; }
-    .fp-banner-reposition input[type="range"] { width: 100px; }
+    .fp-banner-reposition label {
+      display: flex; align-items: center; gap: 0.5rem; color: #fff; font-size: 0.72rem; white-space: nowrap;
+    }
+    .fp-banner-reposition input[type="range"] { width: 110px; }
 
     /* Owner-only shortcut into the banner's image editor — fades in on
        hover instead of sitting there all the time, and disappears once
@@ -117,7 +125,7 @@
     .fp-avatar-wrap { position: absolute; top: -64px; left: 50%; transform: translateX(-50%); width: 128px; height: 128px; }
     .fp-avatar {
       width: 128px; height: 128px; border-radius: 50%;
-      object-fit: cover; background: #222;
+      background: #222; background-repeat: no-repeat; transition: filter 0.2s;
     }
     .fp-avatar-fallback {
       display: flex; align-items: center; justify-content: center;
@@ -739,7 +747,7 @@
   <div class="fp-bg-overlay" id="fp-bg-overlay"></div>
 
 <div class="fp-banner-wrap" id="fp-banner-wrap">
-  <img id="fp-banner-img" alt="Banner" />
+  <div id="fp-banner-img"></div>
 
   <button type="button" class="fp-banner-edit-pencil" id="fp-banner-edit-pencil" hidden title="Edit banner image">✏️</button>
 
@@ -750,8 +758,9 @@
   <input type="file" id="fp-banner-file-input" accept="image/*" hidden />
 
   <div class="fp-banner-reposition" id="fp-banner-reposition" hidden>
-    <label for="fp-banner-slider">Reposition</label>
-    <input type="range" id="fp-banner-slider" min="0" max="100" value="50" />
+    <label>H <input type="range" id="fp-banner-slider-x" min="0" max="100" value="50" /></label>
+    <label>V <input type="range" id="fp-banner-slider-y" min="0" max="100" value="50" /></label>
+    <label>Zoom <input type="range" id="fp-banner-slider-zoom" min="100" max="300" value="100" /></label>
   </div>
 </div>
 
@@ -770,13 +779,14 @@
 
 <div class="fp-header">
   <div class="fp-avatar-wrap">
-    <img class="fp-avatar" id="fp-avatar-img" alt="" style="display:none;" draggable="false" />
+    <div class="fp-avatar" id="fp-avatar-img" style="display:none;"></div>
     <div class="fp-avatar fp-avatar-fallback" id="fp-avatar-fallback">?</div>
     <button type="button" class="fp-avatar-camera-btn" id="fp-avatar-camera-btn" hidden>📷 Change Pfp</button>
     <input type="file" id="fp-avatar-file-input" accept="image/*" hidden />
     <div class="fp-avatar-reposition" id="fp-avatar-reposition" hidden>
       <label>H <input type="range" id="fp-avatar-slider-x" min="0" max="100" value="50" /></label>
       <label>V <input type="range" id="fp-avatar-slider-y" min="0" max="100" value="50" /></label>
+      <label>Zoom <input type="range" id="fp-avatar-slider-zoom" min="100" max="300" value="100" /></label>
     </div>
   </div>
   <p class="fp-avatar-hint" id="fp-avatar-hint" hidden>Recommended: 400 × 400px</p>
@@ -925,9 +935,11 @@
         <button class="art-view-bookmark-btn" id="fp-gallery-detail-bookmark" type="button" aria-label="Bookmark">🔖</button>
       </div>
     </div>
-    <div class="art-view-desc" id="fp-gallery-detail-desc"></div>
+    <div class="art-view-desc" id="fp-gallery-detail-desc-box">
+      <div id="fp-gallery-detail-desc"></div>
+      <div class="art-view-tags-section" id="fp-gallery-detail-tags"></div>
+    </div>
     <div id="fp-gallery-detail-nav" class="art-nav"></div>
-    <div class="art-view-tags-section" id="fp-gallery-detail-tags"></div>
     <div class="cc-section" id="fp-gallery-detail-comments">
       <p class="cc-title">💬 Comments</p>
       <div class="cc-compose" id="fp-cc-compose" style="display:none;">
@@ -1024,6 +1036,38 @@
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
   const here = window.location.pathname;
+
+  // Pan + zoom via background-image/background-size — same technique as the
+  // Fanpage hub billboard/Hub Image Builder. object-fit + transform:scale()
+  // doesn't compose the way position sliders need (the scale happens after
+  // object-fit places the image, so sliders can never reach the newly-
+  // revealed edges once zoomed); background-size is resolved against the
+  // *current* zoom, so panning always works no matter the zoom level.
+  const imgDimsCache = {};
+  function loadImageDims(url) {
+    if (imgDimsCache[url]) return Promise.resolve(imgDimsCache[url]);
+    return new Promise(resolve => {
+      const probe = new Image();
+      probe.onload = () => { const d = { w: probe.naturalWidth || 1, h: probe.naturalHeight || 1 }; imgDimsCache[url] = d; resolve(d); };
+      probe.onerror = () => resolve({ w: 1, h: 1 });
+      probe.src = url;
+    });
+  }
+  function coverBgSize(dims, boxW, boxH, zoomPercent) {
+    const scale = Math.max(boxW / dims.w, boxH / dims.h) || 1;
+    const renderedW = dims.w * scale, renderedH = dims.h * scale;
+    const factor = (zoomPercent || 100) / 100;
+    return { w: (renderedW / (boxW || 1)) * 100 * factor, h: (renderedH / (boxH || 1)) * 100 * factor };
+  }
+  async function applyBgCrop(el, url, x, y, zoom) {
+    if (!url) { el.style.backgroundImage = ''; return; }
+    el.style.backgroundImage = `url(${url})`;
+    const dims = await loadImageDims(url);
+    const boxW = el.clientWidth || 1, boxH = el.clientHeight || 1;
+    const size = coverBgSize(dims, boxW, boxH, zoom);
+    el.style.backgroundSize = `${size.w}% ${size.h}%`;
+    el.style.backgroundPosition = `${x}% ${y}%`;
+  }
 
   let currentAuthor = null;
   let activeTabName = 'home';
@@ -1840,33 +1884,40 @@
   }
   function fpGalleryCharTagCard(c) {
     const a = document.createElement('a');
-    a.className = 'art-view-char-card';
+    a.className = 'art-view-tag-card';
     a.href = `/fanpages/${c.owner_username}?char=${c.id}#characters`;
     if (c.nsfw_locked) {
       const lockMsg = token ? 'NSFW content must be enabled in Account Settings' : 'Only logged-in users can see this content';
       a.innerHTML = `
-        <div class="art-view-char-card-imgwrap">
-          <img class="art-view-char-card-img--blurred" src="/images/defaultchar.jpg" alt="" />
-          <span class="art-view-char-card-lock-msg">${escapeHtml(lockMsg)}</span>
+        <div class="art-view-tag-card-imgwrap">
+          <img class="art-view-tag-card-img--blurred" src="/images/defaultchar.jpg" alt="" />
+          <span class="art-view-tag-card-lock-msg">${escapeHtml(lockMsg)}</span>
         </div>
-        <span class="art-view-char-card-name">${escapeHtml(c.name)}</span>
+        <div class="art-view-tag-card-info">
+          <span class="art-view-tag-card-name">${escapeHtml(c.name)}</span>
+        </div>
       `;
     } else {
       a.innerHTML = `
-        <div class="art-view-char-card-imgwrap"><img src="${c.image || '/images/defaultchar.jpg'}" alt="" /></div>
-        <span class="art-view-char-card-name">${escapeHtml(c.name)}</span>
-        ${c.species ? `<span class="art-view-char-card-species">${escapeHtml(c.species)}</span>` : ''}
+        <div class="art-view-tag-card-imgwrap"><img src="${c.image || '/images/defaultchar.jpg'}" alt="" /></div>
+        <div class="art-view-tag-card-info">
+          <span class="art-view-tag-card-name">${escapeHtml(c.name)}</span>
+          ${c.species ? `<span class="art-view-tag-card-sub">${escapeHtml(c.species)}</span>` : ''}
+        </div>
       `;
     }
     return a;
   }
   function fpGalleryStoryTagCard(s) {
     const a = document.createElement('a');
-    a.className = 'art-view-story-card';
+    a.className = 'art-view-tag-card';
     a.href = `/fanpages/${s.story_path}`;
     a.innerHTML = `
-      <div class="art-view-char-card-imgwrap art-view-story-card-imgwrap"><img src="${s.cover_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="" /></div>
-      <span class="art-view-story-card-name">${escapeHtml(s.site_title || 'Untitled')}</span>
+      <div class="art-view-tag-card-imgwrap art-view-tag-card-imgwrap--story"><img src="${s.cover_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="" /></div>
+      <div class="art-view-tag-card-info">
+        <span class="art-view-tag-card-name">${escapeHtml(s.site_title || 'Untitled')}</span>
+        ${s.synopsis ? `<span class="art-view-tag-card-sub">${escapeHtml(truncate(s.synopsis, 90))}</span>` : ''}
+      </div>
     `;
     return a;
   }
@@ -2240,8 +2291,8 @@
   // Single-axis reposition, matching the story editor's banner control
   // exactly: image stays horizontally centered, one slider adjusts the
   // vertical crop (object-position: center Y%).
-  let bannerPos = 50;
-  let avatarPos = { x: 50, y: 50 };
+  let bannerPos = { x: 50, y: 50, zoom: 100 };
+  let avatarPos = { x: 50, y: 50, zoom: 100 };
 
   function isDefaultBanner() {
     return !currentAuthor || !currentAuthor.banner_url;
@@ -2264,14 +2315,22 @@
     document.getElementById('fp-name-edit-box').hidden = false;
     document.getElementById('fp-name-edit-input').value = currentAuthor.display_name || '';
 
-    bannerPos = currentAuthor.banner_position_y != null ? currentAuthor.banner_position_y : 50;
-    document.getElementById('fp-banner-slider').value = bannerPos;
+    bannerPos = {
+      x: currentAuthor.banner_position_x != null ? currentAuthor.banner_position_x : 50,
+      y: currentAuthor.banner_position_y != null ? currentAuthor.banner_position_y : 50,
+      zoom: currentAuthor.banner_zoom || 100,
+    };
+    document.getElementById('fp-banner-slider-x').value = bannerPos.x;
+    document.getElementById('fp-banner-slider-y').value = bannerPos.y;
+    document.getElementById('fp-banner-slider-zoom').value = bannerPos.zoom;
     document.getElementById('fp-banner-reposition').hidden = isDefaultBanner();
 
     avatarPos.x = currentAuthor.avatar_position_x != null ? currentAuthor.avatar_position_x : 50;
     avatarPos.y = currentAuthor.avatar_position_y != null ? currentAuthor.avatar_position_y : 50;
+    avatarPos.zoom = currentAuthor.avatar_zoom || 100;
     document.getElementById('fp-avatar-slider-x').value = avatarPos.x;
     document.getElementById('fp-avatar-slider-y').value = avatarPos.y;
+    document.getElementById('fp-avatar-slider-zoom').value = avatarPos.zoom;
     document.getElementById('fp-avatar-reposition').hidden = !currentAuthor.avatar;
 
     renderAboutEditor();
@@ -2312,41 +2371,50 @@
   document.getElementById('fp-banner-file-input').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    document.getElementById('fp-banner-img').src = URL.createObjectURL(file);
-    bannerPos = 50;
-    document.getElementById('fp-banner-slider').value = 50;
+    bannerPos = { x: 50, y: 50, zoom: 100 };
+    document.getElementById('fp-banner-slider-x').value = 50;
+    document.getElementById('fp-banner-slider-y').value = 50;
+    document.getElementById('fp-banner-slider-zoom').value = 100;
     document.getElementById('fp-banner-reposition').hidden = false;
+    await applyBgCrop(document.getElementById('fp-banner-img'), URL.createObjectURL(file), 50, 50, 100);
 
     const fd = new FormData();
     fd.append('banner', file);
     fd.append('position_x', 50);
-    fd.append('position_y', bannerPos);
+    fd.append('position_y', 50);
     try {
       const res = await fetch('/api/account/banner', { method: 'PUT', headers: authHeaders(), body: fd });
       const data = await res.json();
       if (data.banner_url) {
         currentAuthor.banner_url = data.banner_url;
+        currentAuthor.banner_position_x = data.position_x;
         currentAuthor.banner_position_y = data.position_y;
-        document.getElementById('fp-banner-img').src = data.banner_url;
+        currentAuthor.banner_zoom = data.zoom;
+        await applyBgCrop(document.getElementById('fp-banner-img'), data.banner_url, 50, 50, 100);
       }
     } catch {}
   });
 
   let bannerRepoTimer = null;
-  document.getElementById('fp-banner-slider').addEventListener('input', () => {
-    bannerPos = +document.getElementById('fp-banner-slider').value;
-    document.getElementById('fp-banner-img').style.objectPosition = `center ${bannerPos}%`;
+  function handleBannerReposition() {
+    bannerPos.x = +document.getElementById('fp-banner-slider-x').value;
+    bannerPos.y = +document.getElementById('fp-banner-slider-y').value;
+    bannerPos.zoom = +document.getElementById('fp-banner-slider-zoom').value;
+    applyBgCrop(document.getElementById('fp-banner-img'), currentAuthor.banner_url, bannerPos.x, bannerPos.y, bannerPos.zoom);
     clearTimeout(bannerRepoTimer);
     bannerRepoTimer = setTimeout(async () => {
       try {
         await fetch('/api/account/banner-position', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', ...authHeaders() },
-          body: JSON.stringify({ position_x: 50, position_y: bannerPos }),
+          body: JSON.stringify({ position_x: bannerPos.x, position_y: bannerPos.y, zoom: bannerPos.zoom }),
         });
       } catch {}
     }, 400);
-  });
+  }
+  document.getElementById('fp-banner-slider-x').addEventListener('input', handleBannerReposition);
+  document.getElementById('fp-banner-slider-y').addEventListener('input', handleBannerReposition);
+  document.getElementById('fp-banner-slider-zoom').addEventListener('input', handleBannerReposition);
 
   // Avatar upload — reuses the existing account-avatar endpoint used elsewhere on the site.
   document.getElementById('fp-avatar-camera-btn').addEventListener('click', () => {
@@ -2356,14 +2424,14 @@
     const file = e.target.files[0];
     if (!file) return;
     const img = document.getElementById('fp-avatar-img');
-    img.src = URL.createObjectURL(file);
-    img.style.objectPosition = '50% 50%';
     img.style.display = 'block';
     document.getElementById('fp-avatar-fallback').style.display = 'none';
-    avatarPos = { x: 50, y: 50 };
+    avatarPos = { x: 50, y: 50, zoom: 100 };
     document.getElementById('fp-avatar-slider-x').value = 50;
     document.getElementById('fp-avatar-slider-y').value = 50;
+    document.getElementById('fp-avatar-slider-zoom').value = 100;
     document.getElementById('fp-avatar-reposition').hidden = false;
+    await applyBgCrop(img, URL.createObjectURL(file), 50, 50, 100);
 
     const fd = new FormData();
     fd.append('avatar', file);
@@ -2377,7 +2445,8 @@
         currentAuthor.avatar = data.avatar;
         currentAuthor.avatar_position_x = data.position_x;
         currentAuthor.avatar_position_y = data.position_y;
-        img.src = data.avatar + '?t=' + Date.now();
+        currentAuthor.avatar_zoom = data.zoom;
+        await applyBgCrop(img, data.avatar + '?t=' + Date.now(), 50, 50, 100);
       }
     } catch {}
   });
@@ -2386,20 +2455,22 @@
   function handleAvatarReposition() {
     avatarPos.x = +document.getElementById('fp-avatar-slider-x').value;
     avatarPos.y = +document.getElementById('fp-avatar-slider-y').value;
-    document.getElementById('fp-avatar-img').style.objectPosition = `${avatarPos.x}% ${avatarPos.y}%`;
+    avatarPos.zoom = +document.getElementById('fp-avatar-slider-zoom').value;
+    applyBgCrop(document.getElementById('fp-avatar-img'), currentAuthor.avatar, avatarPos.x, avatarPos.y, avatarPos.zoom);
     clearTimeout(avatarRepoTimer);
     avatarRepoTimer = setTimeout(async () => {
       try {
         await fetch('/api/auth/avatar-position', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', ...authHeaders() },
-          body: JSON.stringify({ position_x: avatarPos.x, position_y: avatarPos.y }),
+          body: JSON.stringify({ position_x: avatarPos.x, position_y: avatarPos.y, zoom: avatarPos.zoom }),
         });
       } catch {}
     }, 400);
   }
   document.getElementById('fp-avatar-slider-x').addEventListener('input', handleAvatarReposition);
   document.getElementById('fp-avatar-slider-y').addEventListener('input', handleAvatarReposition);
+  document.getElementById('fp-avatar-slider-zoom').addEventListener('input', handleAvatarReposition);
 
   document.getElementById('fp-edit-cancel').addEventListener('click', exitEditMode);
 
@@ -3131,10 +3202,12 @@
       applyProfileTheme(a.profile_theme, a.profile_theme_bg_url);
 
       const bannerImg = document.getElementById('fp-banner-img');
-      bannerImg.src = a.banner_url || '/images/gallery/pixernbath_13.png';
-      bannerImg.style.objectPosition = a.banner_url
-        ? `center ${a.banner_position_y != null ? a.banner_position_y : 50}%`
-        : 'center';
+      applyBgCrop(
+        bannerImg, a.banner_url || '/images/gallery/pixernbath_13.png',
+        a.banner_url && a.banner_position_x != null ? a.banner_position_x : 50,
+        a.banner_url && a.banner_position_y != null ? a.banner_position_y : 50,
+        a.banner_url ? (a.banner_zoom || 100) : 100
+      );
 
       // Home-tab-only shortcut — also respects whichever tab a deep link
       // (?char=/gallery=/news=, or #tab) landed us on before this resolved.
@@ -3143,8 +3216,12 @@
 
       if (a.avatar) {
         const img = document.getElementById('fp-avatar-img');
-        img.src = a.avatar;
-        img.style.objectPosition = `${a.avatar_position_x != null ? a.avatar_position_x : 50}% ${a.avatar_position_y != null ? a.avatar_position_y : 50}%`;
+        applyBgCrop(
+          img, a.avatar,
+          a.avatar_position_x != null ? a.avatar_position_x : 50,
+          a.avatar_position_y != null ? a.avatar_position_y : 50,
+          a.avatar_zoom || 100
+        );
         img.style.display = 'block';
         document.getElementById('fp-avatar-fallback').style.display = 'none';
       } else {
