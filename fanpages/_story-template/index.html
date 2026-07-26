@@ -6,7 +6,7 @@
   <title>Story ✦ Fanpages</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="/style.css" />
-  <link rel="stylesheet" href="/fanpages/fanpages.css?v=20260726" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css?v=20260726b" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
 </head>
@@ -416,6 +416,9 @@ function linkIcon(label, url) {
 function populateDisplay() {
   const s = siteData.site || {};
   const title = s.site_title || 'Untitled Story';
+  // Belt-and-suspenders: force these editor-only hints/labels hidden via
+  // inline style (wins over any stylesheet) rather than trusting CSS alone.
+  document.querySelectorAll('.mod-field-label-row').forEach(el => { el.style.display = editing ? 'flex' : 'none'; });
   document.getElementById('site-title-display').textContent    = title;
   document.getElementById('site-synopsis-display').innerHTML = renderMarkdownLite(s.synopsis || 'N/A');
   document.getElementById('site-bio-display').innerHTML      = renderMarkdownLite(s.bio       || 'N/A');
@@ -589,6 +592,7 @@ function enterEditMode() {
   const s = siteData.site || {};
 
   document.body.classList.add('mod-editing-active');
+  document.querySelectorAll('.mod-field-label-row').forEach(el => { el.style.display = 'flex'; });
   document.getElementById('edit-bar').style.display = 'flex';
   document.getElementById('wiki-cover').style.marginTop = '68px';
   toggle(document.getElementById('edit-profile-btn'), false);
@@ -644,6 +648,7 @@ function enterEditMode() {
 
 function exitEditMode() {
   editing = false;
+  document.querySelectorAll('.mod-field-label-row').forEach(el => { el.style.display = 'none'; });
   document.body.classList.remove('mod-editing-active');
   document.getElementById('edit-bar').style.display = 'none';
   document.getElementById('wiki-cover').style.marginTop = '';
