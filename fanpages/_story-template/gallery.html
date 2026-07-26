@@ -179,10 +179,15 @@
     <div class="mod-field gallery-linkto-box">
       <label>Link To:</label>
       <p class="gallery-linkto-note" id="gallery-linkto-story-note"></p>
-      <div class="gallery-linkto-row">
-        <button type="button" class="mod-btn mod-btn--small" id="gallery-linkto-char-btn">+ Characters</button>
+
+      <div class="gallery-linkto-section">
+        <div class="gallery-linkto-grid" id="gallery-linkto-stories-grid"></div>
       </div>
-      <div class="gallery-linkto-chips" id="gallery-linkto-chips"></div>
+
+      <div class="gallery-linkto-section">
+        <p class="gallery-linkto-section-label">Characters</p>
+        <div class="gallery-linkto-grid" id="gallery-linkto-characters-grid"></div>
+      </div>
     </div>
 
     <label class="gallery-consent-row">
@@ -252,6 +257,7 @@ let GALLERY_SKETCHES = [];
 let GALLERY_SPICY    = [];
 let IS_SELF = false;
 let STORY_TITLE = 'this story';
+let STORY_COVER_URL = '';
 
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
 const authHeaders = () => ({ Authorization: `Bearer ${token}`, 'X-Story-Path': SLUG });
@@ -589,30 +595,60 @@ document.getElementById('gallery-editor-consent').addEventListener('change', upd
 // editor (see the "Link To" note above). Selections are additive on save. ──
 let selectedLinkCharacters = new Map();
 
-function renderLinkToChips() {
-  const wrap = document.getElementById('gallery-linkto-chips');
-  wrap.innerHTML = '';
-  const chip = (label, img, onRemove) => {
-    const el = document.createElement('span');
-    el.className = 'gallery-linkto-chip';
-    const imgEl = document.createElement('img');
-    imgEl.src = img || '/images/characters/noreference.png';
-    imgEl.alt = '';
-    el.appendChild(imgEl);
-    el.appendChild(document.createTextNode(label));
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'gallery-linkto-chip-remove';
-    btn.textContent = '✕';
-    btn.addEventListener('click', onRemove);
-    el.appendChild(btn);
-    return el;
-  };
-  selectedLinkCharacters.forEach(c => wrap.appendChild(chip(c.name, c.ref_image, () => {
+function makeLinkCard(entry, img, name, onRemove) {
+  const wrap = document.createElement('div');
+  wrap.className = 'gallery-linkto-card';
+  wrap.dataset.id = entry.id;
+  const imgEl = document.createElement('img');
+  imgEl.className = 'gallery-linkto-card-img';
+  imgEl.src = img || '/images/characters/noreference.png';
+  imgEl.alt = '';
+  wrap.appendChild(imgEl);
+  const nameEl = document.createElement('p');
+  nameEl.className = 'gallery-linkto-card-name';
+  nameEl.textContent = name;
+  wrap.appendChild(nameEl);
+  if (onRemove) {
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'gallery-linkto-card-remove';
+    removeBtn.textContent = '✕';
+    removeBtn.addEventListener('click', onRemove);
+    wrap.appendChild(removeBtn);
+  }
+  return wrap;
+}
+
+function makeAddTile(label, onClick) {
+  const tile = document.createElement('button');
+  tile.type = 'button';
+  tile.className = 'gallery-linkto-add-tile';
+  tile.innerHTML = `<span class="gallery-linkto-add-tile-icon">+</span> ${label}`;
+  tile.addEventListener('click', onClick);
+  return tile;
+}
+
+function renderLinkToCards() {
+  const charsGrid = document.getElementById('gallery-linkto-characters-grid');
+  charsGrid.innerHTML = '';
+  charsGrid.appendChild(makeAddTile('Characters', openCharLinkPicker));
+  selectedLinkCharacters.forEach(c => charsGrid.appendChild(makeLinkCard(c, c.ref_image, c.name, () => {
     selectedLinkCharacters.delete(c.id);
-    renderLinkToChips();
+    renderLinkToCards();
     document.querySelectorAll(`#gallery-char-picker-mine-list [data-id="${c.id}"], #gallery-char-picker-other-list [data-id="${c.id}"]`).forEach(el => el.classList.remove('selected'));
   })));
+}
+
+// The default story link (this post always belongs to the current story)
+// shown as a locked, non-removable card — unlinking a story only happens
+// from the account-level gallery editor, never from here.
+function renderLockedStoryCard() {
+  const grid = document.getElementById('gallery-linkto-stories-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const card = makeLinkCard({ id: 'story' }, STORY_COVER_URL, STORY_TITLE, null);
+  card.classList.add('gallery-linkto-card--locked');
+  grid.appendChild(card);
 }
 
 function linkPickerToggleItem(entry, imgSrc, name, ownerLabel, selectedMap) {
@@ -632,7 +668,7 @@ function linkPickerToggleItem(entry, imgSrc, name, ownerLabel, selectedMap) {
     if (selectedMap.has(entry.id)) selectedMap.delete(entry.id);
     else selectedMap.set(entry.id, entry);
     item.classList.toggle('selected');
-    renderLinkToChips();
+    renderLinkToCards();
   });
   return item;
 }
@@ -671,10 +707,10 @@ async function searchOtherCharactersForLink(q) {
     chars.forEach(c => list.appendChild(linkPickerToggleItem(c, c.ref_image || '/images/characters/noreference.png', c.name, c.owner_display_name || c.owner_username, selectedLinkCharacters)));
   } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t search right now.</p>'; }
 }
-document.getElementById('gallery-linkto-char-btn').addEventListener('click', () => {
+function openCharLinkPicker() {
   document.getElementById('gallery-char-picker-overlay').hidden = false;
   switchCharLinkPickerTab('mine');
-});
+}
 document.getElementById('gallery-char-tab-mine').addEventListener('click', () => switchCharLinkPickerTab('mine'));
 document.getElementById('gallery-char-tab-other').addEventListener('click', () => switchCharLinkPickerTab('other'));
 document.getElementById('gallery-char-mine-search').addEventListener('input', (e) => {
@@ -693,7 +729,7 @@ function openGalleryEditor(item) {
   editingPostId = item ? item.id : null;
   selectedFile = null;
   selectedLinkCharacters = new Map();
-  renderLinkToChips();
+  renderLinkToCards();
 
   document.getElementById('gallery-editor-title').textContent = item ? 'Edit Gallery Post' : 'Create Gallery Post';
   document.getElementById('gallery-editor-delete').style.display = item ? '' : 'none';
@@ -983,11 +1019,14 @@ function applyStoryTheme(theme, bgUrl) {
   applyStoryTheme(data && data.site && data.site.theme, data && data.site && data.site.theme_bg_url);
   if (data && data.site && data.site.site_title) document.title = `Gallery ✦ ${data.site.site_title}`;
   STORY_TITLE = (data && data.site && data.site.site_title) || 'this story';
+  STORY_COVER_URL = (data && data.site && data.site.cover_url) || '';
   IS_SELF = !!(data && data.site && data.site.is_self);
   const splashEl = document.getElementById('gallery-editor-splash');
   if (splashEl) splashEl.textContent = `This art piece will post onto your general profile as well as be linked to ${STORY_TITLE} by default! You can also link existing characters, if applicable, to give it more shine! :3`;
   const linkNoteEl = document.getElementById('gallery-linkto-story-note');
   if (linkNoteEl) linkNoteEl.innerHTML = `This story is linked to <strong>${escapeHtml(STORY_TITLE)}</strong>! To add more stories or unlink added novels, you can manage your gallery posts through the gallery editor on your account :3`;
+  renderLockedStoryCard();
+  renderLinkToCards();
 
   if (IS_SELF) {
     document.getElementById('gallery-create-box').style.display = 'block';
