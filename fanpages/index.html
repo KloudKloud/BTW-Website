@@ -813,11 +813,14 @@
       const res = await fetch('/api/spotlight/characters?limit=12');
       const data = await res.json();
       const chars = (data.characters || []).filter(c => c.image);
+      // Always credits + links to the poster's account (deep-linked to this
+      // exact character on their Characters tab) — only Story Spotlight
+      // links to a story.
       startSpotlightCycle(chars, el, c => spotlightItem(
         c.image, c.position_x, c.position_y, c.name,
-        c.story_path ? `/fanpages/${c.story_path}/characters` : `/fanpages/${c.owner_username}`,
-        c.site_title ? 'from' : 'by', c.site_title || c.owner_display_name,
-        c.story_path ? `/fanpages/${c.story_path}` : `/fanpages/${c.owner_username}`
+        `/fanpages/${c.owner_username}?char=${c.id}#characters`,
+        'from', c.owner_display_name,
+        `/fanpages/${c.owner_username}`
       ), 20000);
     } catch {
       el.innerHTML = '<p class="fp-spotlight-empty">Couldn\'t load characters right now.</p>';
@@ -832,9 +835,9 @@
       const items = data.gallery || [];
       startSpotlightCycle(items, el, g => spotlightItem(
         g.image, g.position_x, g.position_y, g.title || 'Untitled',
-        g.story_path ? `/fanpages/${g.story_path}/gallery` : `/fanpages/${g.owner_username}`,
-        g.site_title ? 'from' : 'by', g.site_title || g.owner_display_name,
-        g.story_path ? `/fanpages/${g.story_path}` : `/fanpages/${g.owner_username}`
+        `/fanpages/${g.owner_username}?gallery=${g.id}#gallery`,
+        'from', g.owner_display_name,
+        `/fanpages/${g.owner_username}`
       ), 20000);
     } catch {
       el.innerHTML = '<p class="fp-spotlight-empty">Couldn\'t load gallery art right now.</p>';
@@ -929,7 +932,7 @@
   function rsArtCard(it) {
     const a = document.createElement('a');
     a.className = 'rs-card';
-    a.href = it.story_path ? `/fanpages/${it.story_path}/gallery` : `/fanpages/${it.author_username}`;
+    a.href = `/fanpages/${it.author_username}?gallery=${it.id}#gallery`;
     const posX = it.position_x != null ? it.position_x : 50;
     const posY = it.position_y != null ? it.position_y : 50;
     a.innerHTML = `
@@ -962,7 +965,7 @@
       return rsPortraitCard(it, '📖', it.title || 'Untitled Chapter', `/fanpages/${it.story_path}/chapters?ch=${it.id}`);
     }
     if (it.type === 'character') {
-      const href = it.story_path ? `/fanpages/${it.story_path}/characters` : `/fanpages/${it.author_username}`;
+      const href = `/fanpages/${it.author_username}?char=${it.id}#characters`;
       return rsPortraitCard(it, '🧍', it.title || 'Unnamed', href);
     }
     return document.createElement('span');
