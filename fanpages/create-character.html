@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
   <style>
     * { box-sizing: border-box; }
     body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; margin: 0; padding: 0; }
@@ -51,10 +52,7 @@
       <img id="char-editor-ref-img" alt="" style="display:none;" draggable="false" />
       <div class="char-editor-ref-placeholder" id="char-editor-ref-placeholder">Click to upload a reference image</div>
       <div class="char-editor-ref-overlay">📷 Change Image</div>
-      <div class="char-editor-ref-reposition" id="char-editor-ref-reposition">
-        <label>H <input type="range" id="char-editor-ref-slider-x" min="0" max="100" value="50" /></label>
-        <label>V <input type="range" id="char-editor-ref-slider-y" min="0" max="100" value="50" /></label>
-      </div>
+      <button type="button" class="fp-recrop-btn" id="char-editor-ref-recrop-btn" style="display:none; position:absolute; bottom:6px; right:6px; z-index:3; font-size:0.68rem; padding:0.3rem 0.6rem;">✏️ Recrop</button>
     </div>
     <input type="file" id="char-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
 
@@ -178,6 +176,8 @@
 </div>
 
 <script src="/fanpages/fanpages-nav.js"></script>
+<script src="/fanpages/vendor/cropper.min.js"></script>
+<script src="/fanpages/crop-modal.js"></script>
 <script>
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
@@ -193,7 +193,6 @@
   function isBlank(v) { return !v || !v.trim() || v.trim() === NA; }
 
   let uploadedRefUrl = '';
-  let refPos = { x: 50, y: 50 };
 
   function addFactRow(value, removable) {
     if (removable === undefined) removable = true;
@@ -484,45 +483,50 @@
     document.getElementById('char-story-picker-overlay').hidden = true;
   });
 
-  // ── Reference image upload + reposition ──────────────────────────────────
+  // ── Reference image upload — crop-and-upload via the shared Cropper.js
+  // modal (1:1, matching .char-editor-ref-wrap's square shape). The crop is
+  // baked into the uploaded image itself, so no reposition metadata/step
+  // is needed afterward. ────────────────────────────────────────────────
   document.getElementById('char-editor-ref-wrap').addEventListener('click', (e) => {
-    if (e.target.closest('.char-editor-ref-reposition')) return;
+    if (e.target.closest('#char-editor-ref-recrop-btn')) return;
     document.getElementById('char-editor-file-input').click();
   });
-  document.getElementById('char-editor-file-input').addEventListener('change', async (e) => {
+  document.getElementById('char-editor-file-input').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    openCropModal({
+      title: 'Crop Reference Image', imageSrc: URL.createObjectURL(file), aspectRatio: 1, round: false,
+      onSave: uploadRefImage,
+    });
+    e.target.value = '';
+  });
+  document.getElementById('char-editor-ref-recrop-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!uploadedRefUrl) return;
+    openCropModal({
+      title: 'Crop Reference Image', imageSrc: uploadedRefUrl, aspectRatio: 1, round: false,
+      onSave: uploadRefImage,
+    });
+  });
+  async function uploadRefImage(blob) {
     const img = document.getElementById('char-editor-ref-img');
-    img.src = URL.createObjectURL(file);
-    img.style.objectPosition = '50% 50%';
-    img.style.display = 'block';
-    document.getElementById('char-editor-ref-placeholder').style.display = 'none';
-    refPos = { x: 50, y: 50 };
-    document.getElementById('char-editor-ref-slider-x').value = 50;
-    document.getElementById('char-editor-ref-slider-y').value = 50;
-
     const fd = new FormData();
-    fd.append('image', file);
+    fd.append('image', blob, 'ref.jpg');
     const res = await fetch('/api/moderator/character-image', { method: 'POST', headers: authHeaders(), body: fd });
     if (res.ok) {
       const data = await res.json();
       uploadedRefUrl = data.url;
-      img.src = data.url;
-      document.getElementById('char-editor-ref-reposition').style.display = 'flex';
+      img.src = data.url + '?t=' + Date.now();
+      img.style.objectPosition = 'center';
+      img.style.display = 'block';
+      document.getElementById('char-editor-ref-placeholder').style.display = 'none';
+      document.getElementById('char-editor-ref-recrop-btn').style.display = 'block';
       document.getElementById('char-editor-nsfw-field').style.display = 'block';
     } else {
       document.getElementById('char-editor-msg').className = 'mod-panel-msg mod-panel-msg--error';
       document.getElementById('char-editor-msg').textContent = 'Image upload failed. Please try again.';
     }
-  });
-
-  function handleRefReposition() {
-    refPos.x = +document.getElementById('char-editor-ref-slider-x').value;
-    refPos.y = +document.getElementById('char-editor-ref-slider-y').value;
-    document.getElementById('char-editor-ref-img').style.objectPosition = `${refPos.x}% ${refPos.y}%`;
   }
-  document.getElementById('char-editor-ref-slider-x').addEventListener('input', handleRefReposition);
-  document.getElementById('char-editor-ref-slider-y').addEventListener('input', handleRefReposition);
 
   // ── Save ──────────────────────────────────────────────────────────────────
   document.getElementById('char-editor-name').addEventListener('input', (e) => {
@@ -597,14 +601,6 @@
       }
       const { character } = await res.json();
 
-      if (uploadedRefUrl && (refPos.x !== 50 || refPos.y !== 50)) {
-        await fetch(`/api/moderator/characters/${character.id}/position`, {
-          method: 'PUT',
-          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-          body: JSON.stringify({ position_x: refPos.x, position_y: refPos.y }),
-        });
-      }
-
       if (selectedLinkStories.size) {
         await fetch(`/api/characters/${character.id}/link-many`, {
           method: 'POST',
@@ -676,19 +672,13 @@
 
       if (character.ref_image) {
         uploadedRefUrl = character.ref_image;
-        refPos = {
-          x: character.ref_position_x != null ? character.ref_position_x : 50,
-          y: character.ref_position_y != null ? character.ref_position_y : 50,
-        };
         const img = document.getElementById('char-editor-ref-img');
         img.src = uploadedRefUrl;
-        img.style.objectPosition = `${refPos.x}% ${refPos.y}%`;
+        img.style.objectPosition = 'center';
         img.style.display = 'block';
         document.getElementById('char-editor-ref-placeholder').style.display = 'none';
-        document.getElementById('char-editor-ref-reposition').style.display = 'flex';
-        document.getElementById('char-editor-ref-slider-x').value = refPos.x;
-        document.getElementById('char-editor-ref-slider-y').value = refPos.y;
         if (character.ref_image !== '/images/defaultchar.jpg') {
+          document.getElementById('char-editor-ref-recrop-btn').style.display = 'block';
           document.getElementById('char-editor-nsfw-field').style.display = 'block';
           document.getElementById('char-editor-nsfw-toggle').checked = !!character.ref_is_nsfw;
         }

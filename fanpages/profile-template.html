@@ -98,16 +98,10 @@
     .fp-banner-camera-hint { color: rgba(255,255,255,0.85); font-size: 0.72rem; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
 
     /* Recrop shortcut — reopens the Cropper.js modal on the existing image
-       without needing to pick a new file. Banner's sits top-right like the
-       old reposition pill did; avatar's is a small pill under the avatar
-       (see .fp-recrop-btn--avatar below). */
-    .fp-recrop-btn {
-      position: absolute; right: 1.5rem; top: 1.25rem; z-index: 5;
-      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.3); border-radius: 20px;
-      color: #fff; font-family: inherit; font-size: 0.78rem; font-weight: 600;
-      padding: 0.45rem 0.9rem; cursor: pointer; transition: background 0.15s;
-    }
-    .fp-recrop-btn:hover { background: rgba(0,0,0,0.8); }
+       without needing to pick a new file (base .fp-recrop-btn pill style
+       lives in fanpages.css, shared across every uploader). Banner's sits
+       top-right like the old reposition pill did. */
+    .fp-banner-recrop-btn { position: absolute; right: 1.5rem; top: 1.25rem; z-index: 5; }
 
     /* Owner-only shortcut into the banner's image editor — fades in on
        hover instead of sitting there all the time, and disappears once
@@ -159,27 +153,6 @@
       position: absolute; left: 50%; transform: translateX(-50%); top: 70px; width: 200px;
       text-align: center; font-size: 0.7rem; line-height: 1.4; color: #999;
     }
-
-    /* ── Cropper.js crop modal — shared by banner (3:1) and avatar (1:1,
-       circular) uploads/recrops. ── */
-    .crop-modal-overlay {
-      position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
-      display: flex; align-items: center; justify-content: center; padding: 2rem 1rem;
-    }
-    .crop-modal-box {
-      background: #171717; border: 1px solid rgba(255,255,255,0.12); border-radius: 16px;
-      padding: 1.5rem; width: 100%; max-width: 640px; box-shadow: 0 24px 70px rgba(0,0,0,0.6);
-    }
-    .crop-modal-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.15rem; font-weight: 700; color: #f0f0f0; margin: 0 0 1rem; }
-    .crop-modal-img-wrap { width: 100%; max-height: 60vh; background: #0a0a0a; border-radius: 10px; overflow: hidden; }
-    .crop-modal-img-wrap img { display: block; max-width: 100%; }
-    /* Cropper.js's standard trick for a circular crop preview — the square
-       crop box still saves a square image, matching how the avatar itself
-       is displayed (border-radius:50% on a normal square image). */
-    .crop-modal-img-wrap.crop-modal-img-wrap--round .cropper-view-box,
-    .crop-modal-img-wrap.crop-modal-img-wrap--round .cropper-face { border-radius: 50%; }
-    .crop-modal-hint { color: #999; font-size: 0.8rem; margin: 0.85rem 0 0; }
-    .crop-modal-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 1.25rem; }
 
     .fp-header-row { padding-top: 1rem; min-height: 72px; }
     .fp-header-action { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
@@ -783,7 +756,7 @@
   </div>
   <input type="file" id="fp-banner-file-input" accept="image/*" hidden />
 
-  <button type="button" class="fp-recrop-btn" id="fp-banner-recrop-btn" hidden>🔲 Recrop</button>
+  <button type="button" class="fp-recrop-btn fp-banner-recrop-btn" id="fp-banner-recrop-btn" hidden>✏️ Recrop</button>
 </div>
 
 <!-- Everything below the banner — the theme-wheel shortcut is anchored to
@@ -989,22 +962,6 @@
 
 </div> <!-- /.fp-bg-wrap -->
 
-<!-- Shared Cropper.js crop modal — used for both the banner (3:1) and
-     avatar (1:1, circular) uploads/recrops. -->
-<div class="crop-modal-overlay" id="crop-modal-overlay" hidden>
-  <div class="crop-modal-box">
-    <p class="crop-modal-title" id="crop-modal-title">Crop Image</p>
-    <div class="crop-modal-img-wrap" id="crop-modal-img-wrap">
-      <img id="crop-modal-img" alt="" />
-    </div>
-    <p class="crop-modal-hint">Drag to move, scroll or pinch to zoom, drag the corners to resize the crop box.</p>
-    <div class="crop-modal-actions">
-      <button type="button" class="mod-btn" id="crop-modal-cancel">Cancel</button>
-      <button type="button" class="mod-btn" id="crop-modal-save">Save Crop</button>
-    </div>
-  </div>
-</div>
-
 <div class="fp-follow-modal-overlay" id="fp-follow-modal-overlay" hidden>
   <div class="fp-follow-modal">
     <div class="fp-follow-modal-header">
@@ -1066,6 +1023,7 @@
 
 <script src="/fanpages/fanpages-nav.js"></script>
 <script src="/fanpages/vendor/cropper.min.js"></script>
+<script src="/fanpages/crop-modal.js"></script>
 <script>
   const USERNAME = window.location.pathname.split('/').filter(Boolean).pop().toLowerCase();
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
@@ -2377,63 +2335,10 @@
   // Hover-revealed shortcut straight into edit mode from the banner itself.
   document.getElementById('fp-banner-edit-pencil').addEventListener('click', enterEditMode);
 
-  // ── Shared Cropper.js crop modal — banner (3:1) and avatar (1:1,
-  // circular) both funnel through this. The exported crop is the exact
-  // final image (no more separate position_x/y/zoom reposition step) —
-  // uploads always save with position 50/50 and zoom 100 since the crop
-  // is already baked into the image itself. ──────────────────────────────
-  let cropModalCropper = null;
-  let cropModalOnSave = null;
-  function openCropModal({ title, imageSrc, aspectRatio, round, onSave }) {
-    document.getElementById('crop-modal-title').textContent = title;
-    document.getElementById('crop-modal-img-wrap').classList.toggle('crop-modal-img-wrap--round', !!round);
-    const img = document.getElementById('crop-modal-img');
-    cropModalOnSave = onSave;
-    document.getElementById('crop-modal-overlay').hidden = false;
-    if (cropModalCropper) { cropModalCropper.destroy(); cropModalCropper = null; }
-    // Force a fresh load every time, even if imageSrc happens to match the
-    // element's current src (recropping the same image twice in a row) —
-    // otherwise "onload" may never fire (browsers can skip it for an
-    // unchanged src), Cropper never initializes, and Save silently does
-    // nothing because cropModalCropper stays null.
-    img.removeAttribute('src');
-    img.onload = () => {
-      cropModalCropper = new Cropper(img, {
-        aspectRatio, viewMode: 1, dragMode: 'move', autoCropArea: 1, background: false, responsive: true,
-      });
-    };
-    img.src = imageSrc;
-  }
-  function closeCropModal() {
-    document.getElementById('crop-modal-overlay').hidden = true;
-    if (cropModalCropper) { cropModalCropper.destroy(); cropModalCropper = null; }
-    cropModalOnSave = null;
-  }
-  document.getElementById('crop-modal-cancel').addEventListener('click', closeCropModal);
-  document.getElementById('crop-modal-save').addEventListener('click', async () => {
-    if (!cropModalCropper || !cropModalOnSave) {
-      console.error('Crop modal Save clicked before Cropper finished initializing.');
-      return;
-    }
-    const btn = document.getElementById('crop-modal-save');
-    btn.disabled = true;
-    btn.textContent = 'Saving…';
-    try {
-      const canvas = cropModalCropper.getCroppedCanvas();
-      await new Promise((resolve, reject) => {
-        canvas.toBlob(async (blob) => {
-          if (!blob) { reject(new Error('Could not export the cropped image.')); return; }
-          try { await cropModalOnSave(blob); resolve(); } catch (err) { reject(err); }
-        }, 'image/jpeg', 0.92);
-      });
-      closeCropModal();
-    } catch (err) {
-      console.error('Crop save failed:', err);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Save Crop';
-    }
-  });
+  // Banner/avatar both funnel through the shared window.openCropModal (see
+  // fanpages/crop-modal.js). The exported crop is the exact final image, so
+  // uploads always save with position 50/50 and zoom 100 — the crop is
+  // already baked into the image itself.
 
   // Banner image upload/recrop — reuses the existing account-banner endpoint.
   document.getElementById('fp-banner-camera-btn').addEventListener('click', () => {

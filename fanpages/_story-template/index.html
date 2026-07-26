@@ -8,11 +8,14 @@
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
 </head>
 <body class="mod-theme">
 
 <div id="fanpages-topbar-root"></div>
 <script src="/fanpages/fanpages-nav.js"></script>
+<script src="/fanpages/vendor/cropper.min.js"></script>
+<script src="/fanpages/crop-modal.js"></script>
 
 <!-- Edit bar — only shown while editing -->
 <div class="mod-edit-bar" id="edit-bar" style="display:none;">
@@ -137,10 +140,7 @@
             <button class="mod-cover-edit-btn" id="cover-edit-btn" type="button" style="display:none;">📷 Change Cover</button>
             <input type="file" id="cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
 
-            <div class="mod-cover-reposition" id="cover-reposition" style="display:none;">
-              <label>H <input type="range" id="cover-position-x-slider" min="0" max="100" value="50" /></label>
-              <label>V <input type="range" id="cover-position-y-slider" min="0" max="100" value="50" /></label>
-            </div>
+            <button class="fp-recrop-btn" id="cover-recrop-btn" type="button" style="display:none; position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
           </div>
 
           <div class="mod-editable-block">
@@ -448,13 +448,9 @@ function populateDisplay() {
 
   const coverImg = document.getElementById('cover-img');
   const coverPlaceholder = document.getElementById('cover-placeholder');
-  const coverX = s.cover_position_x != null ? s.cover_position_x : 50;
-  const coverY = s.cover_position_y != null ? s.cover_position_y : 50;
-  document.getElementById('cover-position-x-slider').value = coverX;
-  document.getElementById('cover-position-y-slider').value = coverY;
   if (s.cover_url) {
     coverImg.src = s.cover_url;
-    coverImg.style.objectPosition = `${coverX}% ${coverY}%`;
+    coverImg.style.objectPosition = 'center';
     coverImg.style.display = 'block';
     coverPlaceholder.style.display = 'none';
   } else {
@@ -572,7 +568,7 @@ function enterEditMode() {
   document.getElementById('wiki-cover').classList.add('mod-editing-banner');
 
   document.getElementById('cover-edit-btn').style.display = 'block';
-  document.getElementById('cover-reposition').style.display = 'flex';
+  document.getElementById('cover-recrop-btn').style.display = (siteData.site && siteData.site.cover_url) ? 'block' : 'none';
 
   ['characters', 'chapters', 'gallery'].forEach(kind => {
     document.getElementById(`qn-${kind}-edit-btn`).style.display = 'flex';
@@ -621,7 +617,7 @@ function exitEditMode() {
   document.getElementById('wiki-cover').classList.remove('mod-editing-banner');
 
   document.getElementById('cover-edit-btn').style.display = 'none';
-  document.getElementById('cover-reposition').style.display = 'none';
+  document.getElementById('cover-recrop-btn').style.display = 'none';
 
   ['characters', 'chapters', 'gallery'].forEach(kind => {
     document.getElementById(`qn-${kind}-edit-btn`).style.display = 'none';
@@ -758,52 +754,47 @@ document.getElementById('banner-position-slider').addEventListener('input', (e) 
   }, 400);
 });
 
-// ── Book cover + reposition ─────────────────────────────────────────────────
+// ── Book cover — crop-and-upload via the shared Cropper.js modal (2:3,
+// matching .mod-cover-wrap's ratio). The crop is baked into the uploaded
+// image itself, so no separate reposition step/metadata is needed. ────────
 document.getElementById('cover-edit-btn').addEventListener('click', () => {
   document.getElementById('cover-file-input').click();
 });
-document.getElementById('cover-file-input').addEventListener('change', async (e) => {
+document.getElementById('cover-file-input').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
-
-  const localUrl = URL.createObjectURL(file);
+  openCropModal({
+    title: 'Crop Book Cover', imageSrc: URL.createObjectURL(file), aspectRatio: 2 / 3, round: false,
+    onSave: uploadCover,
+  });
+  e.target.value = '';
+});
+document.getElementById('cover-recrop-btn').addEventListener('click', () => {
+  if (!siteData.site || !siteData.site.cover_url) return;
+  openCropModal({
+    title: 'Crop Book Cover', imageSrc: siteData.site.cover_url, aspectRatio: 2 / 3, round: false,
+    onSave: uploadCover,
+  });
+});
+async function uploadCover(blob) {
   const coverImg = document.getElementById('cover-img');
-  coverImg.src = localUrl;
-  coverImg.style.display = 'block';
-  document.getElementById('cover-placeholder').style.display = 'none';
-
   const fd = new FormData();
-  fd.append('cover', file);
-  fd.append('position_x', document.getElementById('cover-position-x-slider').value);
-  fd.append('position_y', document.getElementById('cover-position-y-slider').value);
+  fd.append('cover', blob, 'cover.jpg');
+  fd.append('position_x', 50);
+  fd.append('position_y', 50);
   const res = await fetch('/api/moderator/site/cover', { method: 'PUT', headers: authHeaders(), body: fd });
   if (res.ok) {
     const { site } = await res.json();
     siteData.site = { ...siteData.site, ...site };
-    coverImg.src = site.cover_url;
-    URL.revokeObjectURL(localUrl);
+    coverImg.src = site.cover_url + '?t=' + Date.now();
+    coverImg.style.objectPosition = 'center';
+    coverImg.style.display = 'block';
+    document.getElementById('cover-placeholder').style.display = 'none';
+    document.getElementById('cover-recrop-btn').style.display = 'block';
   } else {
     alert('Cover upload failed. Please try again.');
   }
-});
-
-let coverRepositionTimer = null;
-function handleCoverReposition() {
-  const x = document.getElementById('cover-position-x-slider').value;
-  const y = document.getElementById('cover-position-y-slider').value;
-  document.getElementById('cover-img').style.objectPosition = `${x}% ${y}%`;
-  clearTimeout(coverRepositionTimer);
-  coverRepositionTimer = setTimeout(async () => {
-    const res = await fetch('/api/moderator/site/cover-position', {
-      method: 'PUT',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ position_x: parseInt(x, 10), position_y: parseInt(y, 10) }),
-    });
-    if (res.ok) siteData.site = { ...siteData.site, ...(await res.json()).site };
-  }, 400);
 }
-document.getElementById('cover-position-x-slider').addEventListener('input', handleCoverReposition);
-document.getElementById('cover-position-y-slider').addEventListener('input', handleCoverReposition);
 
 // ── Quick-nav card art (Characters/Chapters/Gallery) ────────────────────────
 const NAV_CARD_FIELD = { characters: 'characters_card_url', chapters: 'chapters_card_url', gallery: 'gallery_card_url' };

@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
   <style>
     * { box-sizing: border-box; }
     body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; margin: 0; padding: 0; }
@@ -55,13 +56,9 @@
 
     <div class="mod-field" id="gallery-editor-preview-field" style="display:none;">
       <label>Gallery Preview Crop</label>
-      <p class="char-editor-facts-hint" style="margin-top:0; margin-bottom:0.6rem;">Gallery tiles are smaller and cropped — drag the sliders to pick the best part of your art to show off.</p>
+      <p class="char-editor-facts-hint" style="margin-top:0; margin-bottom:0.6rem;">Gallery tiles are smaller and cropped — drag to pick the best part of your art to show off. Your full-size art is never cropped, only the tile preview.</p>
       <div class="gallery-preview-crop-wrap">
         <img id="gallery-editor-preview-img" alt="" draggable="false" />
-      </div>
-      <div class="gallery-preview-sliders">
-        <label>H <input type="range" id="gallery-editor-pos-x" min="0" max="100" value="50" /></label>
-        <label>V <input type="range" id="gallery-editor-pos-y" min="0" max="100" value="50" /></label>
       </div>
     </div>
 
@@ -165,6 +162,7 @@
 </div>
 
 <script src="/fanpages/fanpages-nav.js"></script>
+<script src="/fanpages/vendor/cropper.min.js"></script>
 <script>
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
@@ -179,23 +177,43 @@
   let selectedFile = null;
   let galleryPos = { x: 50, y: 50 };
 
-  function applyGalleryPreviewPosition() {
-    document.getElementById('gallery-editor-preview-img').style.objectPosition = `${galleryPos.x}% ${galleryPos.y}%`;
-  }
+  // Live drag-to-pan Cropper.js crop box (6:7, matching the gallery tile
+  // shape), fixed size/non-resizable since there's no zoom concept here —
+  // dragging moves the ART underneath a stationary frame. This only ever
+  // adjusts the TILE preview crop metadata (position_x/position_y); the
+  // full-size art itself is never re-cropped or re-uploaded.
+  let galleryPreviewCropper = null;
   function showGalleryPreview(src) {
     const previewImg = document.getElementById('gallery-editor-preview-img');
-    previewImg.src = src;
-    applyGalleryPreviewPosition();
     document.getElementById('gallery-editor-preview-field').style.display = 'block';
+    if (galleryPreviewCropper) { galleryPreviewCropper.destroy(); galleryPreviewCropper = null; }
+    previewImg.removeAttribute('src');
+    previewImg.onload = () => {
+      galleryPreviewCropper = new Cropper(previewImg, {
+        aspectRatio: 6 / 7, viewMode: 1, dragMode: 'move', autoCropArea: 1,
+        cropBoxResizable: false, cropBoxMovable: false, background: false, responsive: true,
+        ready() {
+          const data = galleryPreviewCropper.getData();
+          const imgData = galleryPreviewCropper.getImageData();
+          const maxX = imgData.naturalWidth - data.width;
+          const maxY = imgData.naturalHeight - data.height;
+          galleryPreviewCropper.setData({
+            x: maxX > 0 ? (galleryPos.x / 100) * maxX : data.x,
+            y: maxY > 0 ? (galleryPos.y / 100) * maxY : data.y,
+          });
+        },
+        crop(event) {
+          const data = event.detail;
+          const imgData = galleryPreviewCropper.getImageData();
+          const maxX = imgData.naturalWidth - data.width;
+          const maxY = imgData.naturalHeight - data.height;
+          galleryPos.x = maxX > 0 ? Math.round((data.x / maxX) * 100) : 50;
+          galleryPos.y = maxY > 0 ? Math.round((data.y / maxY) * 100) : 50;
+        },
+      });
+    };
+    previewImg.src = src;
   }
-  document.getElementById('gallery-editor-pos-x').addEventListener('input', (e) => {
-    galleryPos.x = parseInt(e.target.value, 10);
-    applyGalleryPreviewPosition();
-  });
-  document.getElementById('gallery-editor-pos-y').addEventListener('input', (e) => {
-    galleryPos.y = parseInt(e.target.value, 10);
-    applyGalleryPreviewPosition();
-  });
 
   function getSelectedCategory() {
     const checked = document.querySelector('input[name="gallery-editor-category"]:checked');
@@ -224,8 +242,6 @@
     img.style.display = 'block';
     document.getElementById('gallery-editor-img-placeholder').style.display = 'none';
     galleryPos = { x: 50, y: 50 };
-    document.getElementById('gallery-editor-pos-x').value = 50;
-    document.getElementById('gallery-editor-pos-y').value = 50;
     showGalleryPreview(objectUrl);
     updateSaveButtonState();
   });
@@ -579,8 +595,6 @@
       if (catInput) catInput.checked = true;
 
       galleryPos = { x: item.position_x != null ? item.position_x : 50, y: item.position_y != null ? item.position_y : 50 };
-      document.getElementById('gallery-editor-pos-x').value = galleryPos.x;
-      document.getElementById('gallery-editor-pos-y').value = galleryPos.y;
       const img = document.getElementById('gallery-editor-img');
       img.src = item.image_url;
       img.style.display = 'block';

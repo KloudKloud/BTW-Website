@@ -8,8 +8,12 @@
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
   <style>
     body { background: #0d0d0d; }
+    .hb-frame-toggle { display: flex; justify-content: center; gap: 0.6rem; margin: 0 0 0.6rem; }
+    .hb-frame-tab { opacity: 0.55; }
+    .hb-frame-tab.active { opacity: 1; background: #7fa8d9; color: #0a0a0a; }
     .hb-wrap { max-width: 1000px; margin: 0 auto; padding: 3rem 2rem 5rem; }
     .hb-title { font-family: 'Cinzel', serif; font-size: 1.8rem; color: #f0f0f0; margin-bottom: 0.5rem; }
     .hb-sub { color: #999; font-size: 0.92rem; margin-bottom: 2rem; max-width: 640px; line-height: 1.7; }
@@ -27,19 +31,15 @@
     .hb-card-actions { display: flex; gap: 0.5rem; }
     .hb-empty-state { color: #999; font-size: 0.92rem; padding: 2rem 0; text-align: center; }
     .hb-forbidden { max-width: 500px; margin: 6rem auto; text-align: center; color: #999; }
-    .hb-sliders { display: flex; flex-wrap: wrap; gap: 1.25rem; margin: 0 0 1.5rem; justify-content: center; }
     .hb-sliders-caption { text-align: center; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #999; margin-bottom: 0.5rem; }
     .hb-preview-bg { position: absolute; inset: 0; background-repeat: no-repeat; }
-    .hb-sliders label { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: #999; }
-    .hb-slider-locked { opacity: 0.4; }
-    .hb-slider-locked input[type="range"] { cursor: not-allowed; }
-    .hb-sliders input[type="range"] { width: 130px; }
   </style>
 </head>
 <body class="mod-theme">
 
 <div id="fanpages-topbar-root"></div>
 <script src="/fanpages/fanpages-nav.js"></script>
+<script src="/fanpages/vendor/cropper.min.js"></script>
 
 <div class="hb-wrap" id="hb-wrap" style="display:none;">
   <h1 class="hb-title">🖼️ Hub Image Builder</h1>
@@ -61,19 +61,18 @@
   <div class="char-editor-modal">
     <h2 class="char-editor-title" id="hb-editor-title">Add New Slide</h2>
 
-    <div class="char-editor-ref-wrap" id="hb-editor-img-wrap" style="max-width: 520px; aspect-ratio: 21 / 9;">
-      <div id="hb-editor-preview-bg" class="hb-preview-bg"></div>
+    <div class="char-editor-ref-wrap" id="hb-editor-img-wrap" style="max-width: 520px; aspect-ratio: 21 / 9; cursor: default;">
+      <img id="hb-editor-crop-img" alt="" style="display:none;" draggable="false" />
       <div class="char-editor-ref-placeholder" id="hb-editor-img-placeholder">Click to upload an image</div>
-      <div class="char-editor-ref-overlay">📷 Change Image</div>
     </div>
     <input type="file" id="hb-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+    <button type="button" class="mod-btn mod-btn--small" id="hb-editor-change-img-btn" style="display:none; margin: 0.6rem auto 1rem;">📷 Change Image</button>
 
-    <p class="hb-sliders-caption">Start Frame</p>
-    <div class="hb-sliders">
-      <label>Horizontal <input type="range" id="hb-pos-x" min="0" max="100" value="50" /></label>
-      <label>Vertical <input type="range" id="hb-pos-y" min="0" max="100" value="50" /></label>
-      <label>Zoom <input type="range" id="hb-zoom" min="100" max="400" value="100" /></label>
+    <div class="hb-frame-toggle" id="hb-frame-toggle" style="display:none;">
+      <button type="button" class="mod-btn mod-btn--small hb-frame-tab active" id="hb-frame-tab-start" data-frame="start">Start Frame</button>
+      <button type="button" class="mod-btn mod-btn--small hb-frame-tab" id="hb-frame-tab-end" data-frame="end">End Frame</button>
     </div>
+    <p class="char-editor-facts-hint" id="hb-crop-hint" style="text-align:center;">Drag to move, scroll or pinch to zoom, drag the corners to resize the crop box.</p>
 
     <div class="mod-field">
       <label>Animation</label>
@@ -83,20 +82,15 @@
         <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="pan_h" /><span>Pan ↔</span></label>
         <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="zoom" /><span>Zoom</span></label>
       </div>
-      <p class="char-editor-facts-hint">Slowly eases from the start frame above to the end frame below over the slide's full 15 seconds on screen. Picking an animation locks the start frame sliders above exactly where they are — adjust the crop first, then choose the animation.</p>
+      <p class="char-editor-facts-hint">Slowly eases from the Start Frame to the End Frame over the slide's full 15 seconds on screen. Picking an animation locks the Start Frame crop exactly where it was — use the Start Frame/End Frame tabs above to switch which one you're adjusting.</p>
     </div>
 
     <div id="hb-end-frame-field" style="display:none;">
-      <p class="hb-sliders-caption">End Frame</p>
-      <div class="char-editor-ref-wrap" id="hb-end-preview-wrap" style="max-width: 520px; aspect-ratio: 21 / 9; cursor: default;">
-        <div id="hb-end-preview-bg" class="hb-preview-bg"></div>
+      <p class="hb-sliders-caption">Animation Preview</p>
+      <div class="char-editor-ref-wrap" id="hb-anim-preview-wrap" style="max-width: 520px; aspect-ratio: 21 / 9; cursor: default;">
+        <div id="hb-anim-preview-bg" class="hb-preview-bg"></div>
       </div>
-      <div class="hb-sliders">
-        <label id="hb-end-pos-x-label" style="display:none;">Horizontal <input type="range" id="hb-end-pos-x" min="0" max="100" value="50" /></label>
-        <label id="hb-end-pos-y-label" style="display:none;">Vertical <input type="range" id="hb-end-pos-y" min="0" max="100" value="50" /></label>
-        <label id="hb-end-zoom-label" style="display:none;">Zoom <input type="range" id="hb-end-zoom" min="100" max="400" value="100" /></label>
-      </div>
-      <button class="mod-btn mod-btn--small" id="hb-preview-btn" type="button" style="display:block; margin: 0 auto 1rem;">▶ Preview Animation (3s)</button>
+      <button class="mod-btn mod-btn--small" id="hb-preview-btn" type="button" style="display:block; margin: 0.75rem auto 1rem;">▶ Preview Animation (3s)</button>
     </div>
 
     <div class="mod-field">
@@ -170,69 +164,120 @@ function coverBgSize(dims, boxW, boxH, zoomPercent) {
   return { w: (renderedW / (boxW || 1)) * 100 * factor, h: (renderedH / (boxH || 1)) * 100 * factor };
 }
 
-function applyEditorPreview() {
-  const bg = document.getElementById('hb-editor-preview-bg');
-  bg.style.transition = 'none';
-  if (!currentImageDims) return;
-  const boxW = bg.clientWidth, boxH = bg.clientHeight;
-  const size = coverBgSize(currentImageDims, boxW, boxH, slidePos.zoom);
-  bg.style.backgroundSize = `${size.w}% ${size.h}%`;
-  bg.style.backgroundPosition = `${slidePos.x}% ${slidePos.y}%`;
-}
-// End-frame preview — shows exactly what the animation will settle on, live
-// as any of the start/end sliders move (the axis not being animated stays
-// pinned to the start value, matching what playSlideAnimation() actually does).
-function updateEndPreview() {
-  const bg = document.getElementById('hb-end-preview-bg');
-  bg.style.transition = 'none';
-  if (!currentImageDims || slidePos.animationType === 'none') return;
-  const boxW = bg.clientWidth, boxH = bg.clientHeight;
-  let x = slidePos.x, y = slidePos.y, zoom = slidePos.zoom;
-  if (slidePos.animationType === 'pan_v') y = slidePos.endY;
-  else if (slidePos.animationType === 'pan_h') x = slidePos.endX;
-  else if (slidePos.animationType === 'zoom') zoom = slidePos.endZoom;
-  const size = coverBgSize(currentImageDims, boxW, boxH, zoom);
-  bg.style.backgroundImage = `url(${currentImageUrl})`;
-  bg.style.backgroundSize = `${size.w}% ${size.h}%`;
-  bg.style.backgroundPosition = `${x}% ${y}%`;
-}
+// ── Start/End frame crop, via a single Cropper.js instance shared between
+// both frames — switching tabs saves the current crop box into slidePos
+// (x/y/zoom or endX/endY/endZoom) and loads the other frame's stored crop
+// back in. Math converts between Cropper's pixel-space crop box and the
+// site's existing position%/zoom% storage (same semantics coverBgSize
+// already assumes elsewhere), so the billboard's live rendering needs no
+// changes at all. ──────────────────────────────────────────────────────
+const HB_ASPECT = 21 / 9;
+let hbCropper = null;
+let hbActiveFrame = 'start'; // 'start' | 'end'
 
-document.getElementById('hb-pos-x').addEventListener('input', (e) => { slidePos.x = parseInt(e.target.value, 10); applyEditorPreview(); updateEndPreview(); });
-document.getElementById('hb-pos-y').addEventListener('input', (e) => { slidePos.y = parseInt(e.target.value, 10); applyEditorPreview(); updateEndPreview(); });
-document.getElementById('hb-zoom').addEventListener('input', (e) => { slidePos.zoom = parseInt(e.target.value, 10); applyEditorPreview(); updateEndPreview(); });
-document.getElementById('hb-end-pos-x').addEventListener('input', (e) => { slidePos.endX = parseInt(e.target.value, 10); updateEndPreview(); });
-document.getElementById('hb-end-pos-y').addEventListener('input', (e) => { slidePos.endY = parseInt(e.target.value, 10); updateEndPreview(); });
-document.getElementById('hb-end-zoom').addEventListener('input', (e) => { slidePos.endZoom = parseInt(e.target.value, 10); updateEndPreview(); });
+function hbCropperToPosition(cropper) {
+  const data = cropper.getData();
+  const imgData = cropper.getImageData();
+  const maxX = imgData.naturalWidth - data.width;
+  const maxY = imgData.naturalHeight - data.height;
+  const referenceCropWidth = Math.min(imgData.naturalWidth, imgData.naturalHeight * HB_ASPECT);
+  return {
+    x: maxX > 0 ? Math.round((data.x / maxX) * 100) : 50,
+    y: maxY > 0 ? Math.round((data.y / maxY) * 100) : 50,
+    zoom: Math.max(100, Math.min(400, Math.round((referenceCropWidth / data.width) * 100))),
+  };
+}
+function hbPositionToCropBox(cropper, pos) {
+  const imgData = cropper.getImageData();
+  const referenceCropWidth = Math.min(imgData.naturalWidth, imgData.naturalHeight * HB_ASPECT);
+  const width = referenceCropWidth / ((pos.zoom || 100) / 100);
+  const height = width / HB_ASPECT;
+  const maxX = imgData.naturalWidth - width;
+  const maxY = imgData.naturalHeight - height;
+  return {
+    x: maxX > 0 ? (pos.x / 100) * maxX : 0,
+    y: maxY > 0 ? (pos.y / 100) * maxY : 0,
+    width, height,
+  };
+}
+function hbSaveCropperToFrame() {
+  if (!hbCropper) return;
+  const pos = hbCropperToPosition(hbCropper);
+  if (hbActiveFrame === 'start') { slidePos.x = pos.x; slidePos.y = pos.y; slidePos.zoom = pos.zoom; }
+  else { slidePos.endX = pos.x; slidePos.endY = pos.y; slidePos.endZoom = pos.zoom; }
+}
+function hbApplyFrameToCropper() {
+  if (!hbCropper) return;
+  const pos = hbActiveFrame === 'start'
+    ? { x: slidePos.x, y: slidePos.y, zoom: slidePos.zoom }
+    : { x: slidePos.endX, y: slidePos.endY, zoom: slidePos.endZoom };
+  hbCropper.setData(hbPositionToCropBox(hbCropper, pos));
+}
+function hbUpdateLockState() {
+  if (!hbCropper) return;
+  const locked = hbActiveFrame === 'start' && slidePos.animationType !== 'none';
+  if (locked) hbCropper.disable(); else hbCropper.enable();
+  document.getElementById('hb-crop-hint').textContent = locked
+    ? 'Start Frame is locked once an animation is picked — switch to End Frame to adjust the animation target.'
+    : 'Drag to move, scroll or pinch to zoom, drag the corners to resize the crop box.';
+}
+function hbSwitchFrame(frame) {
+  hbSaveCropperToFrame();
+  hbActiveFrame = frame;
+  document.getElementById('hb-frame-tab-start').classList.toggle('active', frame === 'start');
+  document.getElementById('hb-frame-tab-end').classList.toggle('active', frame === 'end');
+  hbApplyFrameToCropper();
+  hbUpdateLockState();
+}
+document.getElementById('hb-frame-tab-start').addEventListener('click', () => hbSwitchFrame('start'));
+document.getElementById('hb-frame-tab-end').addEventListener('click', () => hbSwitchFrame('end'));
+
+function hbInitCropper(imageSrc) {
+  const img = document.getElementById('hb-editor-crop-img');
+  if (hbCropper) { hbCropper.destroy(); hbCropper = null; }
+  img.removeAttribute('src');
+  img.style.display = 'block';
+  document.getElementById('hb-editor-img-placeholder').style.display = 'none';
+  document.getElementById('hb-editor-change-img-btn').style.display = 'block';
+  img.onload = () => {
+    hbCropper = new Cropper(img, {
+      aspectRatio: HB_ASPECT, viewMode: 1, dragMode: 'move', autoCropArea: 1, background: false, responsive: true,
+      ready() { hbApplyFrameToCropper(); hbUpdateLockState(); },
+      crop() { hbSaveCropperToFrame(); },
+    });
+  };
+  img.src = imageSrc;
+}
 
 function updateAnimationFieldVisibility() {
   const type = slidePos.animationType;
   document.getElementById('hb-end-frame-field').style.display = type === 'none' ? 'none' : 'block';
-  document.getElementById('hb-end-pos-x-label').style.display = type === 'pan_h' ? 'flex' : 'none';
-  document.getElementById('hb-end-pos-y-label').style.display = type === 'pan_v' ? 'flex' : 'none';
-  document.getElementById('hb-end-zoom-label').style.display = type === 'zoom' ? 'flex' : 'none';
-
-  // Once an animation is picked, the start frame is locked exactly where it
-  // was at that moment — the end frame then animates FROM that locked point,
-  // instead of the start sliders being free to drift out from under it.
-  const locked = type !== 'none';
-  ['hb-pos-x', 'hb-pos-y', 'hb-zoom'].forEach(id => {
-    const input = document.getElementById(id);
-    input.disabled = locked;
-    input.closest('label').classList.toggle('hb-slider-locked', locked);
-  });
-
-  updateEndPreview();
+  document.getElementById('hb-frame-toggle').style.display = type === 'none' ? 'none' : 'flex';
 }
 document.querySelectorAll('input[name="hb-animation-type"]').forEach(radio => {
   radio.addEventListener('change', () => {
     slidePos.animationType = radio.value;
     updateAnimationFieldVisibility();
+    // Once an animation is picked, jump straight into editing the End
+    // Frame — the Start Frame is now locked exactly where it was.
+    hbSwitchFrame(slidePos.animationType === 'none' ? 'start' : 'end');
   });
 });
 
+function applyAnimPreviewStart() {
+  const bg = document.getElementById('hb-anim-preview-bg');
+  bg.style.transition = 'none';
+  if (!currentImageDims) return;
+  const boxW = bg.clientWidth, boxH = bg.clientHeight;
+  const size = coverBgSize(currentImageDims, boxW, boxH, slidePos.zoom);
+  bg.style.backgroundImage = `url(${currentImageUrl})`;
+  bg.style.backgroundSize = `${size.w}% ${size.h}%`;
+  bg.style.backgroundPosition = `${slidePos.x}% ${slidePos.y}%`;
+}
 document.getElementById('hb-preview-btn').addEventListener('click', () => {
-  const bg = document.getElementById('hb-editor-preview-bg');
-  applyEditorPreview();
+  hbSaveCropperToFrame(); // capture whatever was just dragged before animating
+  const bg = document.getElementById('hb-anim-preview-bg');
+  applyAnimPreviewStart();
   void bg.offsetWidth;
   const type = slidePos.animationType;
   if (type === 'none' || !currentImageDims) return;
@@ -298,18 +343,21 @@ async function openEditor(slide) {
   document.getElementById('hb-editor-delete').style.display = slide ? '' : 'none';
   document.getElementById('hb-editor-save').textContent = slide ? 'Save and Close' : 'Create';
 
-  const bg = document.getElementById('hb-editor-preview-bg');
   const placeholder = document.getElementById('hb-editor-img-placeholder');
+  hbActiveFrame = 'start';
+  document.getElementById('hb-frame-tab-start').classList.add('active');
+  document.getElementById('hb-frame-tab-end').classList.remove('active');
   if (slide) {
     currentImageUrl = slide.image_url;
     currentImageDims = await loadImageDims(slide.image_url);
-    bg.style.backgroundImage = `url(${slide.image_url})`;
     placeholder.style.display = 'none';
   } else {
     currentImageUrl = null;
     currentImageDims = null;
-    bg.style.backgroundImage = '';
     placeholder.style.display = 'block';
+    document.getElementById('hb-editor-crop-img').style.display = 'none';
+    document.getElementById('hb-editor-change-img-btn').style.display = 'none';
+    if (hbCropper) { hbCropper.destroy(); hbCropper = null; }
   }
 
   slidePos = slide
@@ -317,15 +365,9 @@ async function openEditor(slide) {
         endX: slide.end_position_x, endY: slide.end_position_y, endZoom: slide.end_zoom || 100,
         animationType: slide.animation_type || 'none' }
     : { x: 50, y: 50, zoom: 100, endX: 50, endY: 50, endZoom: 100, animationType: 'none' };
-  document.getElementById('hb-pos-x').value = slidePos.x;
-  document.getElementById('hb-pos-y').value = slidePos.y;
-  document.getElementById('hb-zoom').value = slidePos.zoom;
-  document.getElementById('hb-end-pos-x').value = slidePos.endX;
-  document.getElementById('hb-end-pos-y').value = slidePos.endY;
-  document.getElementById('hb-end-zoom').value = slidePos.endZoom;
   document.querySelectorAll('input[name="hb-animation-type"]').forEach(r => { r.checked = r.value === slidePos.animationType; });
   updateAnimationFieldVisibility();
-  applyEditorPreview();
+  if (slide) hbInitCropper(slide.image_url);
 
   document.getElementById('hb-caption').value = slide ? (slide.caption || '') : '';
   document.getElementById('hb-credit').value = slide ? (slide.credit || '') : '';
@@ -347,7 +389,13 @@ function updateSaveButtonState() {
   document.getElementById('hb-editor-save').disabled = !hasImage;
 }
 
-document.getElementById('hb-editor-img-wrap').addEventListener('click', () => {
+// Only the placeholder (no image yet) opens the file picker on click —
+// once Cropper.js is attached, the wrap is a drag-to-crop surface instead,
+// so picking a new image goes through the explicit "Change Image" button.
+document.getElementById('hb-editor-img-placeholder').addEventListener('click', () => {
+  document.getElementById('hb-editor-file-input').click();
+});
+document.getElementById('hb-editor-change-img-btn').addEventListener('click', () => {
   document.getElementById('hb-editor-file-input').click();
 });
 document.getElementById('hb-editor-file-input').addEventListener('change', async (e) => {
@@ -357,19 +405,14 @@ document.getElementById('hb-editor-file-input').addEventListener('change', async
   const objectUrl = URL.createObjectURL(file);
   currentImageUrl = objectUrl;
   currentImageDims = await loadImageDims(objectUrl);
-  const bg = document.getElementById('hb-editor-preview-bg');
-  bg.style.backgroundImage = `url(${objectUrl})`;
   document.getElementById('hb-editor-img-placeholder').style.display = 'none';
   slidePos = { x: 50, y: 50, zoom: 100, endX: 50, endY: 50, endZoom: 100, animationType: 'none' };
-  document.getElementById('hb-pos-x').value = 50;
-  document.getElementById('hb-pos-y').value = 50;
-  document.getElementById('hb-zoom').value = 100;
-  document.getElementById('hb-end-pos-x').value = 50;
-  document.getElementById('hb-end-pos-y').value = 50;
-  document.getElementById('hb-end-zoom').value = 100;
+  hbActiveFrame = 'start';
+  document.getElementById('hb-frame-tab-start').classList.add('active');
+  document.getElementById('hb-frame-tab-end').classList.remove('active');
   document.querySelectorAll('input[name="hb-animation-type"]').forEach(r => { r.checked = r.value === 'none'; });
   updateAnimationFieldVisibility();
-  applyEditorPreview();
+  hbInitCropper(objectUrl);
   updateSaveButtonState();
 });
 
@@ -382,6 +425,7 @@ document.getElementById('hb-editor-save').addEventListener('click', async () => 
     msgEl.textContent = 'Please upload an image.';
     return;
   }
+  hbSaveCropperToFrame(); // flush whatever was just dragged into slidePos
 
   const fd = new FormData();
   if (selectedFile) fd.append('image', selectedFile);
