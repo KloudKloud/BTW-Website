@@ -154,6 +154,16 @@
       background-color: rgba(255,255,255,0.05);
     }
     .fp-spotlight-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    /* NSFW character ref, viewer not allowed to see it — a blurred default
+       silhouette with a small locked message overlaid, instead of the real
+       image (which is never even sent to the client in this case). */
+    .fp-spotlight-img-wrap--locked { position: relative; }
+    .fp-spotlight-img--blurred { filter: blur(9px) brightness(0.6); transform: scale(1.08); }
+    .fp-spotlight-locked-msg {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      text-align: center; padding: 0 1rem; font-size: 0.72rem; font-weight: 700; color: #fff;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+    }
     .fp-spotlight-name { font-family: 'Cinzel', Georgia, serif; font-weight: 700; font-size: 1.05rem; color: #fff; }
     .fp-spotlight-from { font-size: 0.8rem; color: #d8cdf0; margin-top: 0.2rem; }
     .fp-spotlight-from-link { color: #f0c060; }
@@ -276,6 +286,7 @@
       background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
       font-size: 0.75rem; z-index: 2;
     }
+    .rs-card .fp-spotlight-locked-msg--card { z-index: 2; font-size: 0.66rem; padding: 0 0.5rem; }
     .rs-card-tip {
       position: absolute; left: 0; right: 0; bottom: 0; z-index: 1;
       padding: 1.6rem 0.6rem 0.5rem; background: linear-gradient(to top, rgba(0,0,0,0.92), transparent);
@@ -790,15 +801,27 @@
   // as the story cards' author-name link. The card itself still goes to
   // mainHref (the characters/gallery page); the credit goes to the story
   // home (or the owner's profile, if standalone) instead.
-  function spotlightItem(imgUrl, posX, posY, name, mainHref, creditPrefix, creditName, creditHref) {
+  function spotlightItem(imgUrl, posX, posY, name, mainHref, creditPrefix, creditName, creditHref, nsfwLocked) {
     const a = document.createElement('a');
     a.className = 'fp-spotlight-item';
     a.href = mainHref;
-    a.innerHTML = `
-      <div class="fp-spotlight-img-wrap"><img class="fp-spotlight-img" src="${imgUrl}" alt="" style="object-position:${posX}% ${posY}%;" /></div>
-      <p class="fp-spotlight-name">${escapeHtml(name)}</p>
-      <p class="fp-spotlight-from">${creditPrefix} <span class="fp-spotlight-from-link">${escapeHtml(creditName)}</span></p>
-    `;
+    if (nsfwLocked) {
+      const lockMsg = token ? 'NSFW content must be enabled in Account Settings' : 'Only logged-in users can see this content';
+      a.innerHTML = `
+        <div class="fp-spotlight-img-wrap fp-spotlight-img-wrap--locked">
+          <img class="fp-spotlight-img fp-spotlight-img--blurred" src="/images/defaultchar.jpg" alt="" />
+          <span class="fp-spotlight-locked-msg">${escapeHtml(lockMsg)}</span>
+        </div>
+        <p class="fp-spotlight-name">${escapeHtml(name)}</p>
+        <p class="fp-spotlight-from">${creditPrefix} <span class="fp-spotlight-from-link">${escapeHtml(creditName)}</span></p>
+      `;
+    } else {
+      a.innerHTML = `
+        <div class="fp-spotlight-img-wrap"><img class="fp-spotlight-img" src="${imgUrl}" alt="" style="object-position:${posX}% ${posY}%;" /></div>
+        <p class="fp-spotlight-name">${escapeHtml(name)}</p>
+        <p class="fp-spotlight-from">${creditPrefix} <span class="fp-spotlight-from-link">${escapeHtml(creditName)}</span></p>
+      `;
+    }
     a.querySelector('.fp-spotlight-from-link').addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -810,9 +833,11 @@
   async function loadCharacterSpotlight() {
     const el = document.getElementById('fp-char-spotlight');
     try {
-      const res = await fetch('/api/spotlight/characters?limit=12');
+      const res = await fetch('/api/spotlight/characters?limit=12', { headers: authHeaders() });
       const data = await res.json();
-      const chars = (data.characters || []).filter(c => c.image);
+      // NSFW-flagged refs stay in the rotation even when locked (image is
+      // null in that case) — only genuinely imageless characters drop out.
+      const chars = (data.characters || []).filter(c => c.image || c.nsfw_locked);
       // Always credits + links to the poster's account (deep-linked to this
       // exact character on their Characters tab) — only Story Spotlight
       // links to a story.
@@ -820,7 +845,8 @@
         c.image, c.position_x, c.position_y, c.name,
         `/fanpages/${c.owner_username}?char=${c.id}#characters`,
         'from', c.owner_display_name,
-        `/fanpages/${c.owner_username}`
+        `/fanpages/${c.owner_username}`,
+        c.nsfw_locked
       ), 20000);
     } catch {
       el.innerHTML = '<p class="fp-spotlight-empty">Couldn\'t load characters right now.</p>';
@@ -830,7 +856,7 @@
   async function loadGallerySpotlight() {
     const el = document.getElementById('fp-gallery-spotlight');
     try {
-      const res = await fetch('/api/spotlight/gallery?limit=12');
+      const res = await fetch('/api/spotlight/gallery?limit=12', { headers: authHeaders() });
       const data = await res.json();
       const items = data.gallery || [];
       startSpotlightCycle(items, el, g => spotlightItem(
@@ -950,6 +976,16 @@
     const imgSrc = it.image || '/images/defaultchar.jpg';
     const posX = it.position_x != null ? it.position_x : 50;
     const posY = it.position_y != null ? it.position_y : 50;
+    if (it.nsfw_locked) {
+      const lockMsg = token ? 'NSFW content must be enabled in Account Settings' : 'Only logged-in users can see this content';
+      a.innerHTML = `
+        <img class="fp-spotlight-img--blurred" src="/images/defaultchar.jpg" alt="" />
+        <span class="rs-card-badge">${icon}</span>
+        <span class="fp-spotlight-locked-msg fp-spotlight-locked-msg--card">${escapeHtml(lockMsg)}</span>
+        ${rsCardTip(tipTitle, it.author)}
+      `;
+      return a;
+    }
     a.innerHTML = `
       <img src="${imgSrc}" alt="" style="object-position:${posX}% ${posY}%;" />
       <span class="rs-card-badge">${icon}</span>
@@ -974,7 +1010,7 @@
   async function loadActivityFeed() {
     const wrap = document.getElementById('fp-recent-submissions');
     try {
-      const res = await fetch('/api/activity-feed?limit=40');
+      const res = await fetch('/api/activity-feed?limit=40', { headers: authHeaders() });
       const data = await res.json();
       const items = data.items || [];
       if (!items.length) { wrap.innerHTML = '<p class="fp-row-empty">No recent activity yet — check back soon!</p>'; return; }

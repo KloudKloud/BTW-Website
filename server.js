@@ -179,6 +179,9 @@ async function initDb() {
   `).catch(e => console.error('account profile fields migration:', e.message));
   // Add newsletter opt-in column if missing (default true for existing users)
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_newsletter BOOLEAN DEFAULT true`).catch(() => {});
+  // NSFW viewing mode — everyone agreed to 18+ at signup, so default ON for
+  // both new and existing accounts; flipping it OFF opts into SFW Mode.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS nsfw_enabled BOOLEAN NOT NULL DEFAULT true`).catch(() => {});
   // Inbox threading columns
   await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS thread_id INTEGER`).catch(e => console.error('migration thread_id:', e.message));
   await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS subject TEXT DEFAULT 'No Subject'`).catch(e => console.error('migration subject:', e.message));
@@ -294,6 +297,12 @@ async function initDb() {
   await pool.query(`
     ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS relationships JSONB NOT NULL DEFAULT '[]';
   `).catch(e => console.error('moderator_characters relationships migration:', e.message));
+
+  // Reference image NSFW flag — every existing ref image predates this
+  // toggle and was SFW-only, so default false (SFW) backfills them correctly.
+  await pool.query(`
+    ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS ref_is_nsfw BOOLEAN NOT NULL DEFAULT false;
+  `).catch(e => console.error('moderator_characters ref_is_nsfw migration:', e.message));
 
   // Bookmarks — lets any logged-in user save a fanpage to their hub profile
   await pool.query(`
@@ -658,6 +667,22 @@ function requireAuth(req, res, next) {
   }
 }
 
+// Resolves the optional (not required) viewer from a Bearer token, and
+// whether they're allowed to see NSFW content: logged in AND haven't opted
+// into SFW Mode. Used anywhere spicy/NSFW content might get shuffled into
+// a public, no-auth-required feed (spotlights, activity feed) so it can be
+// filtered/blurred server-side instead of trusting the client.
+async function getViewerNsfwAccess(req) {
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+  if (viewerId === null) return { viewerId: null, nsfwAllowed: false };
+  const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
+  return { viewerId, nsfwAllowed: !!(row && row.nsfw_enabled) };
+}
+
 async function checkAdmin(req) {
   const { rows: [user] } = await pool.query('SELECT email_hash FROM users WHERE id = $1', [req.user.id]);
   if (!user) return false;
@@ -935,7 +960,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
     `SELECT id, username, display_name, avatar, avatar_position_x, avatar_position_y, email_hash,
-            notif_theme, notif_theme_bg_url
+            notif_theme, notif_theme_bg_url, nsfw_enabled
      FROM users WHERE id = $1`, [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
@@ -945,7 +970,7 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
   res.json({ user: {
     id: user.id, username: user.username, display_name: user.display_name, avatar: user.avatar || null,
     avatar_position_x: user.avatar_position_x, avatar_position_y: user.avatar_position_y,
-    is_admin, is_moderator,
+    is_admin, is_moderator, nsfw_enabled: user.nsfw_enabled,
     notif_theme: user.notif_theme || 'default', notif_theme_bg_url: user.notif_theme_bg_url || '',
   } });
 });
@@ -1032,7 +1057,7 @@ app.delete('/api/comments/:id', requireAuth, async (req, res) => {
 
 app.put('/api/auth/profile', requireAuth, async (req, res) => {
   try {
-    const { display_name, email, current_password, email_newsletter } = req.body;
+    const { display_name, email, current_password, email_newsletter, nsfw_enabled } = req.body;
     const { rows: [user] } = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
@@ -1046,6 +1071,10 @@ app.put('/api/auth/profile', requireAuth, async (req, res) => {
 
     if (email_newsletter !== undefined) {
       updates.email_newsletter = !!email_newsletter;
+    }
+
+    if (nsfw_enabled !== undefined) {
+      updates.nsfw_enabled = !!nsfw_enabled;
     }
 
     if (email !== undefined && hashEmail(email) !== user.email_hash) {
@@ -1093,7 +1122,7 @@ app.put('/api/auth/profile', requireAuth, async (req, res) => {
     );
 
     const { rows: [updated] } = await pool.query(
-      'SELECT id, username, display_name, email, avatar FROM users WHERE id = $1', [user.id]
+      'SELECT id, username, display_name, email, avatar, nsfw_enabled FROM users WHERE id = $1', [user.id]
     );
     res.json({ message: 'Profile updated.', user: updated });
   } catch (err) {
@@ -1260,7 +1289,7 @@ app.get('/api/auth/confirm-email', async (req, res) => {
 
 app.get('/api/auth/profile', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
-    'SELECT id, username, display_name, email, avatar, email_newsletter FROM users WHERE id = $1', [req.user.id]
+    'SELECT id, username, display_name, email, avatar, email_newsletter, nsfw_enabled FROM users WHERE id = $1', [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
   res.json({ user: { ...user, email: decryptEmail(user.email) } });
@@ -2911,6 +2940,11 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
   if (auth && auth.startsWith('Bearer ')) {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
+  const loggedIn = viewerId !== null;
+  const viewerNsfwEnabled = loggedIn
+    ? (await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId])).rows[0]?.nsfw_enabled
+    : false;
+  const spicyLock = !loggedIn ? 'login' : (!viewerNsfwEnabled ? 'sfw_mode' : null);
 
   const { rows } = await pool.query(
     `SELECT mg.id, mg.image_url, mg.title, mg.description, mg.category, mg.position_x, mg.position_y,
@@ -2922,9 +2956,9 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
        SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1
      ) gsl ON true
      LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
-     WHERE mg.owner_user_id = $1
+     WHERE mg.owner_user_id = $1 AND (mg.category != 'spicy' OR $3 = false)
      ORDER BY mg.created_at DESC`,
-    [author.id, viewerId || 0]
+    [author.id, viewerId || 0, !!spicyLock]
   );
   res.json({
     gallery: rows.map(r => ({
@@ -2933,6 +2967,7 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
       like_count: r.like_count, liked: r.liked,
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
     })),
+    spicy_lock: spicyLock,
   });
 });
 
@@ -3398,11 +3433,18 @@ async function sendSiteLookup(query, params, req, res) {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
   const loggedIn = viewerId !== null;
+  const viewerNsfwEnabled = loggedIn
+    ? (await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId])).rows[0]?.nsfw_enabled
+    : false;
+  // Three states: logged out -> must log in; logged in but opted into SFW
+  // Mode -> content stays NSFW-locked with a different message; logged in
+  // + NSFW mode -> full access.
+  const spicyLock = !loggedIn ? 'login' : (!viewerNsfwEnabled ? 'sfw_mode' : null);
 
   const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds] = await Promise.all([
     pool.query('SELECT id, title, teaser, links, image_url, file_url, file_name FROM moderator_chapters WHERE site_id = $1 ORDER BY sort_order, id', [site.id]),
     pool.query(`
-      SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.description, mc.stats, mc.facts, mc.lore, mc.relationships, mc.owner_user_id
+      SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.description, mc.stats, mc.facts, mc.lore, mc.relationships, mc.owner_user_id, mc.ref_is_nsfw
       FROM character_story_links csl JOIN moderator_characters mc ON mc.id = csl.character_id
       WHERE csl.site_id = $1 ORDER BY csl.sort_order, mc.id
     `, [site.id]),
@@ -3458,7 +3500,8 @@ async function sendSiteLookup(query, params, req, res) {
     characters,
     gallery_sfw:      gallery.filter(g => g.category === 'sfw'),
     gallery_sketches: gallery.filter(g => g.category === 'sketches'),
-    gallery_spicy:    loggedIn ? gallery.filter(g => g.category === 'spicy') : [],
+    gallery_spicy:    !spicyLock ? gallery.filter(g => g.category === 'spicy') : [],
+    spicy_lock: spicyLock,
   });
 }
 
@@ -3763,14 +3806,14 @@ app.get('/api/moderator/characters', requireAuth, requireModerator, async (req, 
 // link to this story is a separate row, so the same character can later be
 // linked into other stories too without being duplicated.
 app.post('/api/moderator/characters', requireAuth, requireModerator, async (req, res) => {
-  const { name, ref_image, description, stats, facts, lore, relationships } = req.body;
+  const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
   const { rows: [character] } = await pool.query(
-    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(stats || {}), JSON.stringify(facts || []), JSON.stringify(lore || []),
-     JSON.stringify(relationships || [])]
+     JSON.stringify(relationships || []), !!ref_is_nsfw]
   );
   const { rows: [{ maxOrder }] } = await pool.query(
     'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM character_story_links WHERE site_id = $1', [req.modSite.id]
@@ -3789,7 +3832,7 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
     'SELECT * FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
   );
   if (!existing) return res.status(404).json({ error: 'Not found.' });
-  const { name, ref_image, description, stats, facts, lore, relationships, sort_order } = req.body;
+  const { name, ref_image, description, stats, facts, lore, relationships, sort_order, ref_is_nsfw } = req.body;
   const { rows: [character] } = await pool.query(
     `UPDATE moderator_characters SET
        name          = COALESCE($1, name),
@@ -3799,14 +3842,15 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
        facts         = COALESCE($5, facts),
        lore          = COALESCE($6, lore),
        relationships = COALESCE($7, relationships),
-       sort_order    = COALESCE($8, sort_order)
-     WHERE id = $9 RETURNING *`,
+       sort_order    = COALESCE($8, sort_order),
+       ref_is_nsfw   = COALESCE($9, ref_is_nsfw)
+     WHERE id = $10 RETURNING *`,
     [name, ref_image, description,
      stats !== undefined ? JSON.stringify(stats) : null,
      facts !== undefined ? JSON.stringify(facts) : null,
      lore !== undefined ? JSON.stringify(lore) : null,
      relationships !== undefined ? JSON.stringify(relationships) : null,
-     sort_order, existing.id]
+     sort_order, ref_is_nsfw !== undefined ? !!ref_is_nsfw : null, existing.id]
   );
   res.json({ character });
 });
@@ -3981,14 +4025,14 @@ app.get('/api/characters/:id/stories', async (req, res) => {
 // requireModerator — RPers/artists with zero stories should still be able
 // to make characters).
 app.post('/api/characters', requireAuth, async (req, res) => {
-  const { name, ref_image, description, stats, facts, lore, relationships } = req.body;
+  const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
   const { rows: [character] } = await pool.query(
-    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(stats || {}), JSON.stringify(facts || []), JSON.stringify(lore || []),
-     JSON.stringify(relationships || [])]
+     JSON.stringify(relationships || []), !!ref_is_nsfw]
   );
   res.json({ character });
 });
@@ -4315,8 +4359,9 @@ app.post('/api/notifications/mark-read', requireAuth, async (req, res) => {
 // ── Fanpages hub spotlight boxes — random picks across every story ──────────
 app.get('/api/spotlight/characters', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 12, 30);
+  const { nsfwAllowed } = await getViewerNsfwAccess(req);
   const { rows } = await pool.query(
-    `SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y,
+    `SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.ref_is_nsfw,
             ms.story_path, ms.slug, ms.site_title, u.username AS owner_username, u.display_name AS owner_display_name
      FROM moderator_characters mc
      LEFT JOIN LATERAL (
@@ -4329,17 +4374,27 @@ app.get('/api/spotlight/characters', async (req, res) => {
     [limit]
   );
   res.json({
-    characters: rows.map(r => ({
-      id: r.id, name: r.name, image: r.ref_image,
-      position_x: r.ref_position_x, position_y: r.ref_position_y,
-      story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
-      owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
-    })),
+    // NSFW character refs stay IN the rotation for everyone — but a viewer
+    // who can't see NSFW never gets the real image bytes, only a locked
+    // flag; the frontend swaps in a blurred default silhouette instead.
+    characters: rows.map(r => {
+      const locked = r.ref_is_nsfw && !nsfwAllowed;
+      return {
+        id: r.id, name: r.name, image: locked ? null : r.ref_image, nsfw_locked: !!locked,
+        position_x: r.ref_position_x, position_y: r.ref_position_y,
+        story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
+        owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
+      };
+    }),
   });
 });
 
 app.get('/api/spotlight/gallery', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 12, 30);
+  const { nsfwAllowed } = await getViewerNsfwAccess(req);
+  // Spicy is IN the rotation now — but only ever queried for viewers allowed
+  // to see it; excluded entirely (not blurred) for everyone else.
+  const categories = nsfwAllowed ? ['sfw', 'sketches', 'spicy'] : ['sfw', 'sketches'];
   const { rows } = await pool.query(
     `SELECT mg.id, mg.image_url, mg.title, mg.position_x, mg.position_y,
             ms.story_path, ms.slug, ms.site_title, u.username AS owner_username, u.display_name AS owner_display_name
@@ -4349,9 +4404,9 @@ app.get('/api/spotlight/gallery', async (req, res) => {
      ) gsl ON true
      LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
      JOIN users u ON u.id = mg.owner_user_id
-     WHERE mg.category IN ('sfw', 'sketches')
+     WHERE mg.category = ANY($2::text[])
      ORDER BY RANDOM() LIMIT $1`,
-    [limit]
+    [limit, categories]
   );
   res.json({
     gallery: rows.map(r => ({
@@ -4384,13 +4439,18 @@ app.get('/api/spotlight/stories', async (req, res) => {
 // every fanpage, newest first. Gallery is filtered to sfw+sketches only. ────
 app.get('/api/activity-feed', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 24, 40);
+  const { nsfwAllowed } = await getViewerNsfwAccess(req);
+  // Over-fetch before filtering — spicy/NSFW rows get dropped (art) or
+  // image-blanked (character) in JS below, so asking the DB for exactly
+  // `limit` rows first could leave the feed short after filtering.
   const { rows } = await pool.query(
     `SELECT * FROM (
        SELECT 'story' AS type, ms.id AS item_id, ms.created_at AS created_at,
               ms.site_title AS title, ms.cover_url AS image,
               ms.cover_position_x AS position_x, ms.cover_position_y AS position_y,
               ms.story_path, ms.site_title AS site_title,
-              u.username, u.display_name, u.avatar
+              u.username, u.display_name, u.avatar,
+              NULL::text AS category, false AS ref_is_nsfw
        FROM moderator_sites ms
        JOIN users u ON u.id = ms.owner_user_id
 
@@ -4400,7 +4460,8 @@ app.get('/api/activity-feed', async (req, res) => {
               mc.title, ms.cover_url,
               ms.cover_position_x, ms.cover_position_y,
               ms.story_path, ms.site_title,
-              u.username, u.display_name, u.avatar
+              u.username, u.display_name, u.avatar,
+              NULL::text, false
        FROM moderator_chapters mc
        JOIN moderator_sites ms ON ms.id = mc.site_id
        JOIN users u ON u.id = ms.owner_user_id
@@ -4411,14 +4472,14 @@ app.get('/api/activity-feed', async (req, res) => {
               mg.title, mg.image_url,
               mg.position_x, mg.position_y,
               ms.story_path, ms.site_title,
-              u.username, u.display_name, u.avatar
+              u.username, u.display_name, u.avatar,
+              mg.category, false
        FROM moderator_gallery mg
        LEFT JOIN LATERAL (
          SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1
        ) gsl ON true
        LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
        JOIN users u ON u.id = mg.owner_user_id
-       WHERE mg.category IN ('sfw', 'sketches')
 
        UNION ALL
 
@@ -4426,7 +4487,8 @@ app.get('/api/activity-feed', async (req, res) => {
               mch.name, mch.ref_image,
               mch.ref_position_x, mch.ref_position_y,
               ms.story_path, ms.site_title,
-              u.username, u.display_name, u.avatar
+              u.username, u.display_name, u.avatar,
+              NULL::text, mch.ref_is_nsfw
        FROM moderator_characters mch
        LEFT JOIN LATERAL (
          SELECT site_id FROM character_story_links WHERE character_id = mch.id ORDER BY site_id LIMIT 1
@@ -4436,23 +4498,31 @@ app.get('/api/activity-feed', async (req, res) => {
      ) feed
      ORDER BY created_at DESC
      LIMIT $1`,
-    [limit]
+    [limit * 2]
   );
-  res.json({
-    items: rows.map(r => ({
-      type: r.type,
-      id: r.item_id,
-      created_at: r.created_at,
-      title: r.title,
-      image: r.image || null,
-      position_x: r.position_x, position_y: r.position_y,
-      story_path: r.story_path,
-      site_title: r.site_title,
-      author: r.display_name || r.username,
-      author_username: r.username,
-      author_avatar: r.avatar || null,
-    })),
-  });
+  const items = rows
+    // Spicy gallery posts are excluded entirely for viewers who can't see
+    // NSFW — never sent to the client at all, unlike NSFW character refs.
+    .filter(r => !(r.type === 'art' && r.category === 'spicy' && !nsfwAllowed))
+    .slice(0, limit)
+    .map(r => {
+      const charLocked = r.type === 'character' && r.ref_is_nsfw && !nsfwAllowed;
+      return {
+        type: r.type,
+        id: r.item_id,
+        created_at: r.created_at,
+        title: r.title,
+        image: charLocked ? null : (r.image || null),
+        nsfw_locked: !!charLocked,
+        position_x: r.position_x, position_y: r.position_y,
+        story_path: r.story_path,
+        site_title: r.site_title,
+        author: r.display_name || r.username,
+        author_username: r.username,
+        author_avatar: r.avatar || null,
+      };
+    });
+  res.json({ items });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────

@@ -1,48 +1,25 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Edit Profile ✦ Between Two Worlds</title>
+  <title>Account Settings ✦ Fanpages</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <style>
+    body { background: #0d0d0d; }
+    .profile-wrapper { padding-top: 6.5rem; }
+  </style>
 </head>
 <body>
 
-<div class="page-bg">
-  <img src="images/layout/chapters-bg.png" alt="" />
-  <div class="page-bg-overlay"></div>
-</div>
-
-<nav>
-  <div class="nav-left">
-  <a class="nav-brand" href="/">Between Two Worlds</a>
-  <div class="nav-admin-li" id="nav-admin-li" style="display:none;">
-    <div class="nav-admin">
-      <button class="nav-admin-btn" id="nav-admin-btn" type="button">Admin <span class="nav-user-caret">&#9662;</span></button>
-      <div class="nav-admin-dropdown" id="nav-admin-dropdown" hidden>
-        <a href="/fanpages/hub-builder">Hub Image Builder</a>
-        <a href="/stats">Stats</a>
-      </div>
-    </div>
-  </div>
-</div>
-  <ul class="nav-links">
-    <li><a href="/">Home</a></li>
-    <li><a href="/chapters">Chapters</a></li>
-    <li><a href="/characters">Characters</a></li>
-    <li><a href="/art">Gallery</a></li>
-    <li><a href="/spicy">Spicy</a></li>
-    <li><a href="/fanpages/join">Community</a></li>
-    <li><a href="/discord">Discord</a></li>
-    <li><a href="/inbox">Inbox</a></li>
-    <li><a href="/login" class="nav-login">Log In / Register</a></li>
-  </ul>
-</nav>
+<div id="fanpages-topbar-root"></div>
 
 <main class="profile-wrapper" id="profile-main" hidden>
 
-  <a href="/" id="profile-back-link" class="btn btn-green" style="align-self: flex-start;">&larr; Return</a>
+  <a href="/fanpages" id="profile-back-link" class="btn btn-green" style="align-self: flex-start;">&larr; Return</a>
 
   <!-- Avatar + basic info -->
   <div class="profile-card">
@@ -81,9 +58,6 @@
           <input type="checkbox" id="prof-newsletter" checked />
           <span>Receive monthly emails about my newsletters, book updates, and giveaways?</span>
         </label>
-        <p class="profile-avatar-note" style="margin-top: 0.5rem;">
-          Just a heads up — there's an actual person behind all of this! Feel free to stop by my <a href="/" class="inline-link">page</a> and say hi sometime. &lt;3
-        </p>
       </div>
       <div class="profile-field profile-field--checkbox">
         <div class="nsfw-toggle-row">
@@ -155,18 +129,18 @@
   <p>Between Two Worlds is a pokémon fanfiction! I am not affiliated with Nintendo or Game Freak. This website is simply a fandom page, nothing more</p>
 </footer>
 
+<script src="/fanpages/fanpages-nav.js"></script>
 <script>
   const API    = '/api';
   const token  = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const params = new URLSearchParams(location.search);
   if (params.get('email_verified') === '1') {
-    // Show banner after email change confirmed — loaded before profile so we queue it
     window._emailVerifiedSuccess = true;
   }
 
-  // Wherever the user came from (a fanpage, the main site, etc.) — send them
-  // back there instead of always landing on BTW's homepage.
-  const returnTo = params.get('from') || '/';
+  // Wherever the user came from on the Fanpages side — send them back there
+  // instead of always landing on the Fanpages hub.
+  const returnTo = params.get('from') || '/fanpages';
   document.getElementById('profile-back-link').href = returnTo;
   document.getElementById('profile-gate-login').href = `/login?from=${encodeURIComponent(returnTo)}`;
 
@@ -276,24 +250,6 @@
       document.getElementById('avatar-slider-y').value = 50;
       document.getElementById('profile-avatar-reposition').hidden = false;
 
-      // Also update nav avatar immediately
-      const navBtn = document.getElementById('nav-user-btn');
-      if (navBtn) {
-        const existing = navBtn.querySelector('.nav-user-avatar');
-        if (existing && existing.tagName === 'IMG') {
-          existing.src = url;
-        } else {
-          const navImg = document.createElement('img');
-          navImg.src = url;
-          navImg.alt = '';
-          navImg.className = 'nav-user-avatar';
-          navImg.onerror = function () { this.style.display = 'none'; };
-          if (existing) existing.replaceWith(navImg);
-          else navBtn.insertBefore(navImg, navBtn.firstChild);
-        }
-      }
-
-      // Update stored user data
       updateStoredUser({ avatar: data.avatar });
       showAlert('profile-alert', 'Profile picture updated!', 'success');
     } catch { showAlert('profile-alert', 'Upload failed. Please try again.', 'error'); }
@@ -417,7 +373,7 @@
       localStorage.removeItem('btw_user');
       sessionStorage.removeItem('btw_token');
       sessionStorage.removeItem('btw_user');
-      window.location.href = '/';
+      window.location.href = '/fanpages';
     } catch { showAlert('delete-alert', 'Network error.', 'error'); }
     finally { btn.disabled = false; }
   });
@@ -441,7 +397,5 @@
     });
   }
 </script>
-
-<script src="nav.js"></script>
 </body>
 </html>

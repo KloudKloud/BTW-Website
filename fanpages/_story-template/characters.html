@@ -130,6 +130,14 @@
     </div>
     <input type="file" id="char-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
 
+    <div class="mod-field char-editor-nsfw-field" id="char-editor-nsfw-field" style="display:none;">
+      <label class="profile-checkbox-label">
+        <input type="checkbox" id="char-editor-nsfw-toggle" />
+        <span>NSFW?</span>
+      </label>
+      <p class="mod-tip-box" style="margin-top:0.5rem;">Is your character reference image NSFW? If so, please label it above! :3</p>
+    </div>
+
     <div class="mod-field">
       <label for="char-editor-name">Name <span class="mod-required-star">*</span></label>
       <input class="mod-input" id="char-editor-name" maxlength="40" placeholder="e.g. Kloud" />
@@ -613,6 +621,7 @@ function normalizeChar(r) {
     lore: r.lore || [],
     relationships: r.relationships || [],
     isMine: !!r.is_mine,
+    refIsNsfw: !!r.ref_is_nsfw,
   };
 }
 
@@ -889,6 +898,8 @@ function openCharEditor(char) {
   const img = document.getElementById('char-editor-ref-img');
   const placeholder = document.getElementById('char-editor-ref-placeholder');
   const reposition = document.getElementById('char-editor-ref-reposition');
+  const nsfwField = document.getElementById('char-editor-nsfw-field');
+  const nsfwToggle = document.getElementById('char-editor-nsfw-toggle');
   if (uploadedRefUrl) {
     img.src = uploadedRefUrl;
     img.style.objectPosition = `${refPos.x}% ${refPos.y}%`;
@@ -900,6 +911,9 @@ function openCharEditor(char) {
     placeholder.style.display = 'block';
     reposition.style.display = 'none';
   }
+  const isCustomRef = uploadedRefUrl && uploadedRefUrl !== '/images/defaultchar.jpg';
+  nsfwField.style.display = isCustomRef ? 'block' : 'none';
+  nsfwToggle.checked = isCustomRef && char ? !!char.refIsNsfw : false;
   document.getElementById('char-editor-ref-slider-x').value = refPos.x;
   document.getElementById('char-editor-ref-slider-y').value = refPos.y;
 
@@ -1088,6 +1102,7 @@ document.getElementById('char-editor-file-input').addEventListener('change', asy
     uploadedRefUrl = data.url;
     img.src = data.url;
     document.getElementById('char-editor-ref-reposition').style.display = 'flex';
+    document.getElementById('char-editor-nsfw-field').style.display = 'block';
   } else {
     document.getElementById('char-editor-msg').className = 'mod-panel-msg mod-panel-msg--error';
     document.getElementById('char-editor-msg').textContent = 'Image upload failed. Please try again.';
@@ -1147,6 +1162,7 @@ document.getElementById('char-editor-save').addEventListener('click', async () =
   const body = {
     name,
     ref_image: uploadedRefUrl,
+    ref_is_nsfw: document.getElementById('char-editor-nsfw-toggle').checked,
     description: document.getElementById('char-editor-desc').value.trim(),
     stats,
     facts,

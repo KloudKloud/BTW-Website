@@ -183,7 +183,7 @@
       document.getElementById('fpnav-avatar-name').textContent = name;
 
       document.getElementById('fpnav-my-profile-link').href = `/fanpages/${u.username}`;
-      document.getElementById('fpnav-edit-profile-link').href = `/profile?from=${encodeURIComponent(here)}`;
+      document.getElementById('fpnav-edit-profile-link').href = `/fanpages/account-settings?from=${encodeURIComponent(here)}`;
 
       // Reveal the standalone Admin pill (Hub Image Builder / Stats) —
       // its own dropdown next to the profile menu rather than buried

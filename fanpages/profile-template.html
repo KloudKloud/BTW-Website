@@ -1583,6 +1583,7 @@
   let FP_GALLERY_ART = [];
   let FP_GALLERY_SKETCHES = [];
   let FP_GALLERY_SPICY = [];
+  let FP_SPICY_LOCK = null; // null = unlocked; 'login' or 'sfw_mode' otherwise
   let fpGalleryLoaded = false;
   let fpGalleryCurrentDetailItem = null;
   let fpGalleryNavPrev = null;
@@ -1627,7 +1628,7 @@
     if (cat === 'spicy') {
       document.getElementById('fp-gallery-title-text').textContent = 'Spicy';
       const grid = document.getElementById('fp-gallery-grid');
-      if (!token) {
+      if (FP_SPICY_LOCK === 'login') {
         grid.innerHTML = `
           <div class="mod-gallery-locked">
             <div class="mod-gallery-locked-icon">🔒</div>
@@ -1637,6 +1638,16 @@
               You must be <strong>18 or older</strong> and logged in to view it.
             </p>
             <a href="/login?from=${encodeURIComponent(window.location.pathname)}" class="mod-gallery-locked-btn">Log In / Register →</a>
+          </div>`;
+        return;
+      }
+      if (FP_SPICY_LOCK === 'sfw_mode') {
+        grid.innerHTML = `
+          <div class="mod-gallery-locked">
+            <div class="mod-gallery-locked-icon">🔒</div>
+            <p class="mod-gallery-locked-title">This content is NSFW</p>
+            <p class="mod-gallery-locked-text">To enable NSFW content, change your Account Settings.</p>
+            <a href="/fanpages/account-settings?from=${encodeURIComponent(window.location.pathname)}" class="mod-gallery-locked-btn">Account Settings →</a>
           </div>`;
         return;
       }
@@ -1735,6 +1746,7 @@
         FP_GALLERY_ART = items.filter(g => g.category === 'sfw');
         FP_GALLERY_SKETCHES = items.filter(g => g.category === 'sketches');
         FP_GALLERY_SPICY = items.filter(g => g.category === 'spicy');
+        FP_SPICY_LOCK = data.spicy_lock != null ? data.spicy_lock : null;
         fpGalleryLoaded = true;
         setFpGalleryCategory('sfw');
       } catch {

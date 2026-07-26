@@ -261,6 +261,7 @@ document.getElementById('nav-gallery').href = STORY_BASE + '/gallery';
 let GALLERY_ART      = [];
 let GALLERY_SKETCHES = [];
 let GALLERY_SPICY    = [];
+let SPICY_LOCK = null; // null = unlocked; 'login' or 'sfw_mode' otherwise
 let IS_SELF = false;
 let STORY_TITLE = 'this story';
 let STORY_COVER_URL = '';
@@ -347,7 +348,7 @@ function renderSpicy() {
   eyebrow.textContent = 'Mature Content — 18+';
   title.textContent = 'Spicy';
 
-  if (!token) {
+  if (SPICY_LOCK === 'login') {
     grid.innerHTML = `
       <div class="mod-gallery-locked">
         <div class="mod-gallery-locked-icon">🔒</div>
@@ -357,6 +358,16 @@ function renderSpicy() {
           You must be <strong>18 or older</strong> and logged in to view it.
         </p>
         <a href="/login" class="mod-gallery-locked-btn">Log In / Register →</a>
+      </div>`;
+    return;
+  }
+  if (SPICY_LOCK === 'sfw_mode') {
+    grid.innerHTML = `
+      <div class="mod-gallery-locked">
+        <div class="mod-gallery-locked-icon">🔒</div>
+        <p class="mod-gallery-locked-title">This content is NSFW</p>
+        <p class="mod-gallery-locked-text">To enable NSFW content, change your Account Settings.</p>
+        <a href="/fanpages/account-settings" class="mod-gallery-locked-btn">Account Settings →</a>
       </div>`;
     return;
   }
@@ -856,6 +867,7 @@ async function reloadGallery(preferCategory, preferId) {
   GALLERY_ART      = (data && data.gallery_sfw)      || [];
   GALLERY_SKETCHES = (data && data.gallery_sketches) || [];
   GALLERY_SPICY    = (data && data.gallery_spicy)    || [];
+  SPICY_LOCK       = (data && data.spicy_lock) != null ? data.spicy_lock : null;
 
   if (preferCategory === 'spicy') renderSpicy();
   else if (preferCategory === 'sketches') renderSketches();
@@ -1109,6 +1121,7 @@ function renderBookBox(site) {
   GALLERY_ART      = (data && data.gallery_sfw)      || [];
   GALLERY_SKETCHES = (data && data.gallery_sketches) || [];
   GALLERY_SPICY    = (data && data.gallery_spicy)    || [];
+  SPICY_LOCK       = (data && data.spicy_lock) != null ? data.spicy_lock : null;
 
   const deepLinkId = new URLSearchParams(window.location.search).get('post');
   const deepLinkItem = deepLinkId
