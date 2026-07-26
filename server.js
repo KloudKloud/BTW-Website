@@ -4358,7 +4358,7 @@ app.post('/api/notifications/mark-read', requireAuth, async (req, res) => {
 
 // ── Fanpages hub spotlight boxes — random picks across every story ──────────
 app.get('/api/spotlight/characters', async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit, 10) || 12, 30);
+  const limit = Math.min(parseInt(req.query.limit, 10) || 12, 100);
   const { nsfwAllowed } = await getViewerNsfwAccess(req);
   const { rows } = await pool.query(
     `SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.ref_is_nsfw,
@@ -4390,7 +4390,7 @@ app.get('/api/spotlight/characters', async (req, res) => {
 });
 
 app.get('/api/spotlight/gallery', async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit, 10) || 12, 30);
+  const limit = Math.min(parseInt(req.query.limit, 10) || 12, 100);
   const { nsfwAllowed } = await getViewerNsfwAccess(req);
   // Spicy is IN the rotation now — but only ever queried for viewers allowed
   // to see it; excluded entirely (not blurred) for everyone else.
@@ -4419,7 +4419,7 @@ app.get('/api/spotlight/gallery', async (req, res) => {
 });
 
 app.get('/api/spotlight/stories', async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit, 10) || 12, 30);
+  const limit = Math.min(parseInt(req.query.limit, 10) || 12, 100);
   const { rows } = await pool.query(
     `SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.username, u.display_name, u.avatar
      FROM moderator_sites ms

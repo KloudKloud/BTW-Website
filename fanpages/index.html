@@ -767,15 +767,21 @@
     }
   }
 
-  // ── Character / Gallery spotlight — random picks from every story,
-  // cycling one at a time. Gallery spotlight is server-filtered to sfw +
-  // sketches only, never spicy. ─────────────────────────────────────────
-  function startSpotlightCycle(items, displayEl, renderFn, intervalMs) {
-    if (!items.length) {
+  // ── Character / Gallery / Story spotlight — up to a 100-item random batch,
+  // cycling one at a time. Right before the batch runs out, a fresh random
+  // batch is quietly fetched in the background (via fetchBatch) and swapped
+  // in once the current one finishes — a true independent reshuffle each
+  // time, so previously-shown entries are free to come right back around,
+  // not a shuffle-without-repeat of one fixed set. ─────────────────────────
+  function startSpotlightCycle(initialItems, fetchBatch, displayEl, renderFn, intervalMs) {
+    if (!initialItems.length) {
       displayEl.innerHTML = '<p class="fp-spotlight-empty">Nothing to show off yet!</p>';
       return;
     }
+    let items = initialItems;
     let idx = 0;
+    let prefetch = null;
+
     function show(first) {
       if (!first) {
         displayEl.style.opacity = '0';
@@ -789,10 +795,27 @@
       }, first ? 0 : 700);
     }
     show(true);
-    if (items.length > 1) {
-      // A slow, gentle rotation rather than a quick flip.
-      setInterval(() => { idx = (idx + 1) % items.length; show(false); }, intervalMs);
-    }
+
+    // A slow, gentle rotation rather than a quick flip.
+    setInterval(() => {
+      // Quietly start the next batch one step before we'd need it, so the
+      // swap-in below is instant instead of waiting on a network round trip.
+      if (idx >= items.length - 2 && !prefetch) {
+        prefetch = fetchBatch().catch(() => null);
+      }
+      if (idx >= items.length - 1) {
+        const p = prefetch;
+        prefetch = null;
+        Promise.resolve(p).then(fresh => {
+          if (fresh && fresh.length) items = fresh;
+          idx = 0;
+          show(false);
+        });
+      } else {
+        idx++;
+        show(false);
+      }
+    }, intervalMs);
   }
 
   // creditPrefix/creditName/creditHref build a "from X" / "by X" line where
@@ -830,41 +853,53 @@
     return a;
   }
 
+  async function fetchCharacterSpotlightBatch() {
+    const res = await fetch('/api/spotlight/characters?limit=100', { headers: authHeaders() });
+    const data = await res.json();
+    // NSFW-flagged refs stay in the rotation even when locked (image is
+    // null in that case) — only genuinely imageless characters drop out.
+    return (data.characters || []).filter(c => c.image || c.nsfw_locked);
+  }
+  function renderCharacterSpotlightItem(c) {
+    // Always credits + links to the poster's account (deep-linked to this
+    // exact character on their Characters tab) — only Story Spotlight
+    // links to a story.
+    return spotlightItem(
+      c.image, c.position_x, c.position_y, c.name,
+      `/fanpages/${c.owner_username}?char=${c.id}#characters`,
+      'from', c.owner_display_name,
+      `/fanpages/${c.owner_username}`,
+      c.nsfw_locked
+    );
+  }
   async function loadCharacterSpotlight() {
     const el = document.getElementById('fp-char-spotlight');
     try {
-      const res = await fetch('/api/spotlight/characters?limit=12', { headers: authHeaders() });
-      const data = await res.json();
-      // NSFW-flagged refs stay in the rotation even when locked (image is
-      // null in that case) — only genuinely imageless characters drop out.
-      const chars = (data.characters || []).filter(c => c.image || c.nsfw_locked);
-      // Always credits + links to the poster's account (deep-linked to this
-      // exact character on their Characters tab) — only Story Spotlight
-      // links to a story.
-      startSpotlightCycle(chars, el, c => spotlightItem(
-        c.image, c.position_x, c.position_y, c.name,
-        `/fanpages/${c.owner_username}?char=${c.id}#characters`,
-        'from', c.owner_display_name,
-        `/fanpages/${c.owner_username}`,
-        c.nsfw_locked
-      ), 20000);
+      const chars = await fetchCharacterSpotlightBatch();
+      startSpotlightCycle(chars, fetchCharacterSpotlightBatch, el, renderCharacterSpotlightItem, 20000);
     } catch {
       el.innerHTML = '<p class="fp-spotlight-empty">Couldn\'t load characters right now.</p>';
     }
   }
 
+  async function fetchGallerySpotlightBatch() {
+    const res = await fetch('/api/spotlight/gallery?limit=100', { headers: authHeaders() });
+    const data = await res.json();
+    return data.gallery || [];
+  }
+  function renderGallerySpotlightItem(g) {
+    return spotlightItem(
+      g.image, g.position_x, g.position_y, g.title || 'Untitled',
+      `/fanpages/${g.owner_username}?gallery=${g.id}#gallery`,
+      'from', g.owner_display_name,
+      `/fanpages/${g.owner_username}`
+    );
+  }
   async function loadGallerySpotlight() {
     const el = document.getElementById('fp-gallery-spotlight');
     try {
-      const res = await fetch('/api/spotlight/gallery?limit=12', { headers: authHeaders() });
-      const data = await res.json();
-      const items = data.gallery || [];
-      startSpotlightCycle(items, el, g => spotlightItem(
-        g.image, g.position_x, g.position_y, g.title || 'Untitled',
-        `/fanpages/${g.owner_username}?gallery=${g.id}#gallery`,
-        'from', g.owner_display_name,
-        `/fanpages/${g.owner_username}`
-      ), 20000);
+      const items = await fetchGallerySpotlightBatch();
+      startSpotlightCycle(items, fetchGallerySpotlightBatch, el, renderGallerySpotlightItem, 20000);
     } catch {
       el.innerHTML = '<p class="fp-spotlight-empty">Couldn\'t load gallery art right now.</p>';
     }
@@ -910,13 +945,16 @@
     return a;
   }
 
+  async function fetchStorySpotlightBatch() {
+    const res = await fetch('/api/spotlight/stories?limit=100');
+    const data = await res.json();
+    return data.stories || [];
+  }
   async function loadStorySpotlight() {
     const el = document.getElementById('fp-story-spotlight');
     try {
-      const res = await fetch('/api/spotlight/stories?limit=12');
-      const data = await res.json();
-      const stories = data.stories || [];
-      startSpotlightCycle(stories, el, storySpotlightItem, 37000);
+      const stories = await fetchStorySpotlightBatch();
+      startSpotlightCycle(stories, fetchStorySpotlightBatch, el, storySpotlightItem, 37000);
     } catch {
       el.innerHTML = '<p class="fp-spotlight-empty">Couldn\'t load stories right now.</p>';
     }
