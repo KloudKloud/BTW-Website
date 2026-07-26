@@ -109,16 +109,6 @@ body.mod-theme {
   z-index: 2;
 }
 
-/* ── Inline "Wattpad-style" profile editing ─────────────────────────────────── */
-.mod-edit-toggle-btn {
-  position: absolute; right: 1.5rem; bottom: 1.25rem; z-index: 3;
-  display: flex; align-items: center; gap: 0.4rem;
-  background: rgba(0,0,0,0.55); color: #fff; border: none; border-radius: 20px;
-  padding: 0.5rem 1.1rem; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600;
-  cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s;
-}
-.mod-edit-toggle-btn:hover { background: rgba(0,0,0,0.75); }
-
 /* Owner-only shortcut into the banner's image editor — fades in on hover
    instead of sitting there all the time, hidden once already editing (the
    full mod-banner-edit-wrap camera controls take over then). Mirrors the
@@ -219,6 +209,19 @@ body.mod-theme {
 .mod-author-box-btn:hover { background: var(--mod-accent-bg-hover, rgba(127,168,217,0.22)); }
 .mod-author-box-btn.following { color: var(--mod-text-secondary, #999); border-color: var(--mod-card-border, rgba(255,255,255,0.15)); background: transparent; }
 
+/* Owner-only "Edit Story" trigger — sits in the side column, under Navigate
+   and the Author box, roughly level with the title. Replaces the old
+   on-banner pill: the banner's own hover pencil handles quick access, this
+   is the big, obvious entry point for opening the editor. */
+.mod-side-edit-btn {
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+  width: 100%; box-sizing: border-box; margin-top: 1.25rem;
+  background: transparent; border: 1px solid rgba(255,255,255,0.25); color: var(--mod-text-primary, #f0f0f0);
+  border-radius: 14px; padding: 1rem; font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 700;
+  cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.mod-side-edit-btn:hover { border-color: var(--violet); color: var(--violet); background: var(--mod-accent-bg, rgba(127,168,217,0.08)); }
+
 /* ── Book box — sits under Navigate on a story's Characters/Gallery pages:
    the book's own cover + a follow-the-author row, so browsing feels like
    you're looking at this content through the lens of that specific book
@@ -311,13 +314,9 @@ body.mod-theme {
 .mod-quick-nav-card.mod-editing img { filter: blur(4px) brightness(0.7); }
 .mod-quick-nav-card.mod-editing:hover img { transform: none; }
 
-.mod-quick-nav-card-reposition {
-  position: absolute; bottom: 6px; left: 6px; z-index: 3; width: 84px;
-  display: none; flex-direction: column; gap: 3px;
-  background: rgba(0,0,0,0.6); border-radius: 6px; padding: 4px 6px;
-}
-.mod-quick-nav-card-reposition label { display: flex; align-items: center; gap: 4px; color: #fff; font-size: 0.55rem; font-family: 'Inter', sans-serif; }
-.mod-quick-nav-card-reposition input[type="range"] { flex: 1; width: 100%; height: 10px; }
+/* Recrop shortcut — reopens the Cropper.js modal on the existing card
+   image, only shown once a custom (non-default) image is set. */
+.mod-quick-nav-card-recrop-btn { position: absolute; top: 0.5rem; left: 0.5rem; z-index: 2; }
 .mod-quick-nav-card-overlay {
   position: absolute; inset: 0;
   background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.3) 45%, transparent 100%);
@@ -401,10 +400,15 @@ body.mod-theme {
 }
 .mod-edit-bar-theme-btn:hover { border-color: #7fa8d9; color: #7fa8d9; }
 
-/* Floating theme-wheel — sits below the banner (top-right of the page-bg
-   wrapper), fades in on hover, hidden while editing. Mirrors the profile
-   editor's fp-theme-picker--floating exactly. */
-.mod-theme-picker--floating {
+/* Floating theme-wheel — sits directly under the banner pencil (same right
+   offset), fades in on hover, hidden while editing. Mirrors the profile
+   editor's fp-theme-picker--floating exactly.
+   NOTE: uses the doubled-up selector (not just .mod-theme-picker--floating)
+   so its `position: absolute` beats the plain .mod-theme-picker's
+   `position: relative` declared further down — same specificity (0,1,0)
+   otherwise, and that rule wins on source order, which silently drops this
+   out of absolute positioning and left it stuck at the top-left in flow. */
+.mod-theme-picker.mod-theme-picker--floating {
   position: absolute; top: 1.1rem; right: 1.1rem; z-index: 20;
   opacity: 0; pointer-events: none; transition: opacity 0.18s;
 }
@@ -452,6 +456,30 @@ body.mod-editing-active .mod-quick-nav { max-width: 420px; margin-bottom: 1.75re
 body.mod-editing-active .wiki-title { margin-bottom: 1.5rem; }
 body.mod-editing-active .wiki-section { margin-bottom: 1.75rem; }
 body.mod-editing-active .mod-cover-wrap { width: 170px; height: 255px; }
+
+/* Small uppercase labels above each editable field (Title/Description/Bio),
+   matching the profile editor's PRONOUNS/BIO/FUN FACT labels — only shown
+   while editing, since the section headings (About/Meet the Author) already
+   label things fine in display mode. */
+.mod-field-label {
+  display: none;
+  font-family: 'Inter', sans-serif; font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--rose, #d97a72);
+  margin-bottom: 0.4rem;
+}
+body.mod-editing-active .mod-field-label { display: block; }
+
+/* Boxes the Description/Bio/Links fields while editing, mirroring the
+   profile editor's bordered ABOUT/LINKS cards — display mode is untouched
+   since this only applies under body.mod-editing-active. */
+body.mod-editing-active .mod-field-box {
+  background: var(--mod-card-bg, #161616);
+  border: 1px solid var(--mod-card-border, rgba(255,255,255,0.08));
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+}
+body.mod-editing-active .wiki-section-title { font-size: 1.05rem; letter-spacing: 0.08em; }
+body.mod-editing-active .wiki-rule { margin: 0.5rem 0 1rem; }
 
 /* Custom uploaded background — sits beneath the wiki-layout content only,
    never overlapping the banner above it */
