@@ -52,10 +52,7 @@
 <div class="wiki-cover" id="wiki-cover">
   <img alt="Story banner" id="banner-img" class="mod-banner-loading" draggable="false" />
 
-  <div class="mod-banner-reposition" id="banner-reposition" style="display:none;">
-    <label for="banner-position-slider">Reposition</label>
-    <input type="range" id="banner-position-slider" min="0" max="100" value="50" />
-  </div>
+  <button class="fp-recrop-btn" id="banner-recrop-btn" type="button" style="display:none; position:absolute; right:1.5rem; top:1.25rem; z-index:5;">✏️ Recrop</button>
 
   <div class="mod-banner-edit-wrap" id="banner-edit-wrap" style="display:none;">
     <button class="mod-banner-edit-btn" id="banner-edit-btn" type="button">📷 Change Banner Image</button>
@@ -403,8 +400,7 @@ function populateDisplay() {
   document.title = `${title} ✦ Fanpages`;
 
   const bannerImg = document.getElementById('banner-img');
-  bannerImg.style.objectPosition = `center ${s.banner_position != null ? s.banner_position : 50}%`;
-  document.getElementById('banner-position-slider').value = s.banner_position != null ? s.banner_position : 50;
+  bannerImg.style.objectPosition = 'center';
 
   const targetBannerSrc = s.banner_url || '/images/gallery/pixernbath_13.png';
   if (bannerImg.src.endsWith(targetBannerSrc)) {
@@ -564,7 +560,7 @@ function enterEditMode() {
   document.getElementById('wiki-cover').style.marginTop = '56px';
   toggle(document.getElementById('edit-profile-btn'), false);
   document.getElementById('banner-edit-wrap').style.display = 'flex';
-  document.getElementById('banner-reposition').style.display = 'flex';
+  document.getElementById('banner-recrop-btn').style.display = s.banner_url ? 'block' : 'none';
   document.getElementById('wiki-cover').classList.add('mod-editing-banner');
 
   document.getElementById('cover-edit-btn').style.display = 'block';
@@ -613,7 +609,7 @@ function exitEditMode() {
   document.getElementById('theme-popover').hidden = true;
   document.getElementById('edit-profile-btn').style.display = 'flex';
   document.getElementById('banner-edit-wrap').style.display = 'none';
-  document.getElementById('banner-reposition').style.display = 'none';
+  document.getElementById('banner-recrop-btn').style.display = 'none';
   document.getElementById('wiki-cover').classList.remove('mod-editing-banner');
 
   document.getElementById('cover-edit-btn').style.display = 'none';
@@ -715,44 +711,46 @@ document.getElementById('save-edit-btn').addEventListener('click', async () => {
   }
 });
 
-// ── Banner image + reposition ───────────────────────────────────────────────
+// ── Banner image — crop-and-upload via the shared Cropper.js modal
+// (1600:560, matching the recommended size). The crop is baked into the
+// uploaded image itself, so no separate reposition step/metadata is
+// needed afterward. ───────────────────────────────────────────────────
 document.getElementById('banner-edit-btn').addEventListener('click', () => {
   document.getElementById('banner-file-input').click();
 });
-document.getElementById('banner-file-input').addEventListener('change', async (e) => {
+document.getElementById('banner-file-input').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
-
-  const localUrl = URL.createObjectURL(file);
-  document.getElementById('banner-img').src = localUrl;
-
+  openCropModal({
+    title: 'Crop Story Banner', imageSrc: URL.createObjectURL(file), aspectRatio: 1600 / 560, round: false,
+    onSave: uploadBanner,
+  });
+  e.target.value = '';
+});
+document.getElementById('banner-recrop-btn').addEventListener('click', () => {
+  if (!siteData.site || !siteData.site.banner_url) return;
+  openCropModal({
+    title: 'Crop Story Banner', imageSrc: siteData.site.banner_url, aspectRatio: 1600 / 560, round: false,
+    onSave: uploadBanner,
+  });
+});
+async function uploadBanner(blob) {
+  const bannerImg = document.getElementById('banner-img');
   const fd = new FormData();
-  fd.append('banner', file);
-  fd.append('position', document.getElementById('banner-position-slider').value);
+  fd.append('banner', blob, 'banner.jpg');
+  fd.append('position', 50);
   const res = await fetch('/api/moderator/site/banner', { method: 'PUT', headers: authHeaders(), body: fd });
   if (res.ok) {
     const { site } = await res.json();
     siteData.site = { ...siteData.site, ...site };
-    document.getElementById('banner-img').src = site.banner_url;
-    URL.revokeObjectURL(localUrl);
+    bannerImg.src = site.banner_url + '?t=' + Date.now();
+    bannerImg.style.objectPosition = 'center';
+    bannerImg.classList.remove('mod-banner-loading');
+    document.getElementById('banner-recrop-btn').style.display = 'block';
   } else {
     alert('Banner upload failed. Please try again.');
   }
-});
-
-let repositionTimer = null;
-document.getElementById('banner-position-slider').addEventListener('input', (e) => {
-  document.getElementById('banner-img').style.objectPosition = `center ${e.target.value}%`;
-  clearTimeout(repositionTimer);
-  repositionTimer = setTimeout(async () => {
-    const res = await fetch('/api/moderator/site/banner-position', {
-      method: 'PUT',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ position: parseInt(e.target.value, 10) }),
-    });
-    if (res.ok) siteData.site = { ...siteData.site, ...(await res.json()).site };
-  }, 400);
-});
+}
 
 // ── Book cover — crop-and-upload via the shared Cropper.js modal (2:3,
 // matching .mod-cover-wrap's ratio). The crop is baked into the uploaded
