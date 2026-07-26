@@ -2416,8 +2416,23 @@
         const img = document.getElementById('fp-avatar-img');
         img.style.display = 'block';
         document.getElementById('fp-avatar-fallback').style.display = 'none';
-        await applyBgCrop(img, data.avatar + '?t=' + Date.now(), 50, 50, 100);
+        const bustedUrl = data.avatar + '?t=' + Date.now();
+        await applyBgCrop(img, bustedUrl, 50, 50, 100);
         document.getElementById('fp-avatar-recrop-btn').hidden = false;
+
+        // The topbar's own avatar (fanpages-nav.js) is only ever populated
+        // once on page load, so without this it keeps showing the stale
+        // picture until a refresh.
+        const navWrap = document.getElementById('fpnav-avatar-img-wrap');
+        if (navWrap) navWrap.innerHTML = `<img src="${bustedUrl}" alt="" />`;
+        ['localStorage', 'sessionStorage'].forEach(store => {
+          const raw = window[store].getItem('btw_user');
+          if (!raw) return;
+          try {
+            const u = { ...JSON.parse(raw), avatar: data.avatar };
+            window[store].setItem('btw_user', JSON.stringify(u));
+          } catch {}
+        });
       }
     } catch {}
   }
