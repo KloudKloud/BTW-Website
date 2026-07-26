@@ -1172,36 +1172,49 @@
     });
   }
 
-  function selectFpCharacter(id) {
+  function selectFpCharacter(id, scroll) {
     id = String(id);
     const char = FP_CHARACTERS.find(c => c.id === id);
     if (!char) return;
     fpActiveCharId = id;
     renderFpCharProfile(char);
     buildFpCharsNav();
+    if (scroll) {
+      const target = document.querySelector('#fp-char-profile .char-ref-wrap') || document.getElementById('fp-characters-view');
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   }
 
-  async function loadCharactersTab() {
-    if (fpCharactersLoaded) return;
-    const nav = document.getElementById('fp-chars-nav');
-    const profile = document.getElementById('fp-char-profile');
-    nav.innerHTML = '';
-    profile.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
-    try {
-      const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-characters`);
-      const data = await res.json();
-      FP_CHARACTERS = (data.characters || []).map(normalizeFpChar);
-      if (!FP_CHARACTERS.length) {
-        profile.innerHTML = `<p class="fp-tab-view-empty">@${USERNAME} hasn't added any characters yet.</p>`;
-        return;
+  // Memoized as a shared in-flight PROMISE (not just a boolean) — switchTab
+  // and the deep-link handler below can both call this on the same page
+  // load, and without sharing the actual promise they'd race two separate
+  // fetches, with whichever resolved last silently overwriting whatever the
+  // other one (e.g. a deep-linked character selection) had already shown.
+  let fpCharactersPromise = null;
+  function loadCharactersTab() {
+    if (fpCharactersPromise) return fpCharactersPromise;
+    fpCharactersPromise = (async () => {
+      const nav = document.getElementById('fp-chars-nav');
+      const profile = document.getElementById('fp-char-profile');
+      nav.innerHTML = '';
+      profile.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
+      try {
+        const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-characters`);
+        const data = await res.json();
+        FP_CHARACTERS = (data.characters || []).map(normalizeFpChar);
+        if (!FP_CHARACTERS.length) {
+          profile.innerHTML = `<p class="fp-tab-view-empty">@${USERNAME} hasn't added any characters yet.</p>`;
+          return;
+        }
+        fpCharactersLoaded = true;
+        fpActiveCharId = FP_CHARACTERS[0].id;
+        buildFpCharsNav();
+        renderFpCharProfile(FP_CHARACTERS[0]);
+      } catch {
+        profile.innerHTML = '<p class="fp-tab-view-empty">Couldn\'t load characters right now.</p>';
       }
-      fpCharactersLoaded = true;
-      fpActiveCharId = FP_CHARACTERS[0].id;
-      buildFpCharsNav();
-      renderFpCharProfile(FP_CHARACTERS[0]);
-    } catch {
-      profile.innerHTML = '<p class="fp-tab-view-empty">Couldn\'t load characters right now.</p>';
-    }
+    })();
+    return fpCharactersPromise;
   }
 
   // ── Gallery tab — same layout as a story's Gallery page: a Browse sidebar
@@ -1307,7 +1320,7 @@
     document.getElementById('fp-gallery-detail-like').classList.toggle('liked', !!item.liked);
   }
 
-  function openFpGalleryDetail(item) {
+  function openFpGalleryDetail(item, scroll) {
     fpGalleryCurrentDetailItem = item;
     document.getElementById('fp-gallery-detail-img').src = item.image;
     document.getElementById('fp-gallery-detail-img').alt = item.title || '';
@@ -1317,6 +1330,10 @@
     updateFpGalleryLikeUI(item);
     document.getElementById('fp-gallery-grid-view').style.display = 'none';
     document.getElementById('fp-gallery-detail-view').style.display = 'block';
+    if (scroll) {
+      const target = document.querySelector('#fp-gallery-detail-view .art-view-image-wrap') || document.getElementById('fp-gallery-view');
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   }
   function closeFpGalleryDetail() {
     fpGalleryCurrentDetailItem = null;
@@ -1340,22 +1357,29 @@
     } catch {}
   });
 
-  async function loadGalleryTab() {
-    if (fpGalleryLoaded) return;
-    const grid = document.getElementById('fp-gallery-grid');
-    grid.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
-    try {
-      const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-gallery`, { headers: authHeaders() });
-      const data = await res.json();
-      const items = data.gallery || [];
-      FP_GALLERY_ART = items.filter(g => g.category === 'sfw');
-      FP_GALLERY_SKETCHES = items.filter(g => g.category === 'sketches');
-      FP_GALLERY_SPICY = items.filter(g => g.category === 'spicy');
-      fpGalleryLoaded = true;
-      setFpGalleryCategory('sfw');
-    } catch {
-      grid.innerHTML = '<p class="fp-tab-view-empty">Couldn\'t load gallery art right now.</p>';
-    }
+  // Same shared-promise memoization as loadCharactersTab, for the same
+  // reason — switchTab and the deep-link handler can both call this on one
+  // page load.
+  let fpGalleryPromise = null;
+  function loadGalleryTab() {
+    if (fpGalleryPromise) return fpGalleryPromise;
+    fpGalleryPromise = (async () => {
+      const grid = document.getElementById('fp-gallery-grid');
+      grid.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
+      try {
+        const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-gallery`, { headers: authHeaders() });
+        const data = await res.json();
+        const items = data.gallery || [];
+        FP_GALLERY_ART = items.filter(g => g.category === 'sfw');
+        FP_GALLERY_SKETCHES = items.filter(g => g.category === 'sketches');
+        FP_GALLERY_SPICY = items.filter(g => g.category === 'spicy');
+        fpGalleryLoaded = true;
+        setFpGalleryCategory('sfw');
+      } catch {
+        grid.innerHTML = '<p class="fp-tab-view-empty">Couldn\'t load gallery art right now.</p>';
+      }
+    })();
+    return fpGalleryPromise;
   }
 
   // ── Followers / Following modal ─────────────────────────────────────────
@@ -1988,12 +2012,12 @@
   const deepCharId = deepParams.get('char');
   const deepGalleryId = deepParams.get('gallery');
   if (initialTab === 'characters' && deepCharId) {
-    loadCharactersTab().then(() => selectFpCharacter(deepCharId));
+    loadCharactersTab().then(() => selectFpCharacter(deepCharId, true));
   } else if (initialTab === 'gallery' && deepGalleryId) {
     loadGalleryTab().then(() => {
       const all = [...FP_GALLERY_ART, ...FP_GALLERY_SKETCHES, ...FP_GALLERY_SPICY];
       const item = all.find(g => String(g.id) === String(deepGalleryId));
-      if (item) { setFpGalleryCategory(item.category); openFpGalleryDetail(item); }
+      if (item) { setFpGalleryCategory(item.category); openFpGalleryDetail(item, true); }
     });
   }
 </script>
