@@ -995,21 +995,31 @@
         const relLine = document.createElement('div');
         relLine.style.cssText = 'font-size:0.88rem; color:#ccc; padding:0.15rem 0;';
 
-        const avatar = document.createElement('img');
-        avatar.className = 'char-rel-avatar';
-        avatar.alt = '';
-        avatar.src = DEFAULT_REF;
-        relLine.appendChild(avatar);
-
+        // The avatar itself is a visual "this is clickable" indicator — only
+        // show one when the relationship is actually linked to a real
+        // character page. If linked but that character turns out not to
+        // exist, the avatar gets pulled once that's confirmed.
         if (rel.character_id) {
+          const avatar = document.createElement('img');
+          avatar.className = 'char-rel-avatar';
+          avatar.alt = '';
+          avatar.src = DEFAULT_REF;
+          relLine.appendChild(avatar);
+
           const known = FP_CHARACTERS.find(c => c.id === String(rel.character_id));
           if (known && known.ref) {
             avatar.src = known.ref;
-          } else {
+          } else if (!known) {
             fetch(`/api/characters/${rel.character_id}`)
               .then(r => r.ok ? r.json() : null)
-              .then(d => { if (d && d.character && d.character.ref_image) avatar.src = d.character.ref_image; })
-              .catch(() => {});
+              .then(d => {
+                if (d && d.character) {
+                  if (d.character.ref_image) avatar.src = d.character.ref_image;
+                } else {
+                  avatar.remove();
+                }
+              })
+              .catch(() => avatar.remove());
           }
           const nameLink = document.createElement('a');
           nameLink.href = `/fanpages/character?id=${rel.character_id}`;
@@ -1068,7 +1078,10 @@
     storiesFact.appendChild(storiesBullet);
     const storiesContent = document.createElement('div');
     storiesContent.style.cssText = 'flex:1; min-width:0;';
-    storiesContent.appendChild(document.createTextNode('Stories'));
+    const storiesHeading = document.createElement('span');
+    storiesHeading.style.cssText = 'color:#f0c060; font-weight:700; text-shadow:0 0 12px rgba(240,192,96,0.6);';
+    storiesHeading.textContent = 'Stories';
+    storiesContent.appendChild(storiesHeading);
     const storiesWrap = document.createElement('div');
     storiesWrap.style.cssText = 'margin-top:0.55rem;';
     storiesWrap.innerHTML = '<p style="color:#888; font-size:0.82rem;">Loading…</p>';

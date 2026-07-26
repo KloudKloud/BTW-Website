@@ -164,21 +164,31 @@
         const relLine = document.createElement('div');
         relLine.style.cssText = 'font-size:0.88rem; color:#ccc; padding:0.15rem 0;';
 
-        const avatar = document.createElement('img');
-        avatar.className = 'char-rel-avatar';
-        avatar.alt = '';
-        avatar.src = DEFAULT_REF;
-        relLine.appendChild(avatar);
-
+        // The avatar itself is a visual "this is clickable" indicator — only
+        // show one when the relationship is actually linked to a real
+        // character page. If linked but that character turns out not to
+        // exist, the avatar gets pulled once that's confirmed.
         if (rel.character_id) {
+          const avatar = document.createElement('img');
+          avatar.className = 'char-rel-avatar';
+          avatar.alt = '';
+          avatar.src = DEFAULT_REF;
+          relLine.appendChild(avatar);
+
           const known = CHARACTERS.find(c => c.id === String(rel.character_id));
           if (known && known.ref) {
             avatar.src = known.ref;
-          } else {
+          } else if (!known) {
             fetch(`/api/characters/${rel.character_id}`)
               .then(r => r.ok ? r.json() : null)
-              .then(d => { if (d && d.character && d.character.ref_image) avatar.src = d.character.ref_image; })
-              .catch(() => {});
+              .then(d => {
+                if (d && d.character) {
+                  if (d.character.ref_image) avatar.src = d.character.ref_image;
+                } else {
+                  avatar.remove();
+                }
+              })
+              .catch(() => avatar.remove());
           }
           const nameLink = document.createElement('a');
           nameLink.href = '#';
