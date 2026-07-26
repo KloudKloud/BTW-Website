@@ -151,7 +151,7 @@
     .fp-header-action { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
     .fp-action-btn {
       display: inline-block; text-decoration: none; border: none; cursor: pointer;
-      font-family: inherit; font-size: 1rem; font-weight: 700;
+      font-family: inherit; font-size: 1rem; font-weight: 700; box-sizing: border-box;
       padding: 0.75rem 1.7rem; border-radius: 24px; white-space: nowrap;
     }
     .fp-action-btn--edit {
@@ -160,6 +160,12 @@
       font-size: 1.02rem; padding: 0.8rem 1.8rem;
     }
     .fp-action-btn--edit:hover { border-color: #7fa8d9; color: #7fa8d9; }
+    .fp-action-btn--newpost {
+      border-color: rgba(127,168,217,0.6); color: #7fa8d9;
+      box-shadow: 0 0 16px rgba(127,168,217,0.4);
+    }
+    .fp-action-btn--newpost:hover { border-color: #7fa8d9; color: #a8c6e8; box-shadow: 0 0 22px rgba(127,168,217,0.6); }
+    .fp-action-btn--newpost .fp-action-btn--edit-gear { font-size: 1.2rem; font-weight: 700; }
     .fp-action-btn--edit-gear { font-size: 1.1rem; line-height: 1; }
     .fp-action-btn--follow { background: #f0f0f0; color: #0d0d0d; }
     .fp-action-btn--follow:hover { background: #cfcfcf; }
@@ -489,10 +495,12 @@
 
     .fp-newspaper-card {
       display: block; text-decoration: none; color: inherit;
-      background: #161616; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+      background: linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015));
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 14px;
       padding: 1.25rem 1.4rem; transition: border-color 0.15s, background 0.15s;
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     }
-    .fp-newspaper-card:hover { border-color: rgba(127,168,217,0.4); background: #1a1a1a; }
+    .fp-newspaper-card:hover { border-color: rgba(127,168,217,0.4); background: linear-gradient(160deg, rgba(255,255,255,0.1), rgba(255,255,255,0.03)); }
     .fp-newspaper-card-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.9rem; }
     .fp-newspaper-avatar, .fp-newspaper-avatar-fallback {
       width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
@@ -522,7 +530,6 @@
     }
 
     .fp-newspaper-list { display: flex; flex-direction: column; gap: 1.25rem; }
-    .fp-newspaper-list-header { display: flex; justify-content: flex-end; margin-bottom: 1rem; }
 
     .fp-newspaper-post {
       background: rgba(22,22,22,0.45); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
@@ -921,9 +928,6 @@
 
 <div class="fp-tab-view" id="fp-newspaper-view" hidden>
   <div id="fp-newspaper-list-wrap">
-    <div class="fp-newspaper-list-header">
-      <button class="fp-newspaper-new-btn" id="fp-newspaper-new-btn-tab" type="button" hidden>+ New Post</button>
-    </div>
     <div class="fp-newspaper-list" id="fp-newspaper-list"><p class="fp-tab-view-empty">Loading…</p></div>
   </div>
   <div id="fp-newspaper-detail-wrap" style="display:none;">
@@ -1875,8 +1879,8 @@
       if (activeTabName === 'newspaper') {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'fp-action-btn fp-action-btn--edit';
-        btn.innerHTML = '<span class="fp-action-btn--edit-gear">📰</span> New Post';
+        btn.className = 'fp-action-btn fp-action-btn--edit fp-action-btn--newpost';
+        btn.innerHTML = '<span class="fp-action-btn--edit-gear">+</span> New Post';
         btn.addEventListener('click', () => openNewspaperComposer(null));
         wrap.appendChild(btn);
         return;
@@ -2417,8 +2421,6 @@
     document.getElementById('fp-newspaper-detail-wrap').style.display = 'none';
     document.getElementById('fp-newspaper-list-wrap').style.display = 'block';
     const list = document.getElementById('fp-newspaper-list');
-    const newBtn = document.getElementById('fp-newspaper-new-btn-tab');
-    newBtn.hidden = !(currentAuthor && currentAuthor.is_self);
     list.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
     try {
       const posts = await fetchNewspaperPosts();
@@ -2652,7 +2654,6 @@
     document.getElementById('fp-newspaper-gif-picker').hidden = true;
   }
   document.getElementById('fp-newspaper-new-btn-home').addEventListener('click', () => openNewspaperComposer(null));
-  document.getElementById('fp-newspaper-new-btn-tab').addEventListener('click', () => openNewspaperComposer(null));
   document.getElementById('fp-newspaper-compose-close').addEventListener('click', closeNewspaperComposer);
   document.getElementById('fp-newspaper-cancel-btn').addEventListener('click', closeNewspaperComposer);
 
