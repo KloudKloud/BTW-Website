@@ -85,16 +85,26 @@
   </div>
 </div>
 
-<!-- Link Existing picker — search the owner's own characters (standalone or
-     already linked elsewhere) and add one to this story's roster. -->
-<div class="char-editor-overlay" id="char-link-overlay" hidden>
-  <div class="char-editor-modal" style="max-width:440px;">
-    <h2 class="char-editor-title">Link Existing Character</h2>
-    <input class="mod-input" id="char-link-search" placeholder="Search your characters…" style="margin-bottom:1rem;" />
-    <div id="char-link-results" style="display:flex; flex-direction:column; gap:0.5rem; max-height:320px; overflow-y:auto;"></div>
-    <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
-      <button type="button" class="mod-btn" id="char-link-cancel">Close</button>
+<!-- Link Existing picker — same shopping-style "Your X"/"Other X" tabs as
+     the relationships field. Your Characters = your own characters not yet
+     on this story's roster; Other Characters = search across everyone, so
+     you can tag a friend's character onto your story too. -->
+<div class="char-link-picker-overlay" id="chars-linkexist-overlay" hidden>
+  <div class="char-link-picker-modal" style="max-width:480px;">
+    <h3 class="char-link-picker-title">Link Existing Character</h3>
+    <div class="char-link-picker-tabs">
+      <button type="button" class="char-link-picker-tab active" id="chars-linkexist-tab-mine">Your Characters</button>
+      <button type="button" class="char-link-picker-tab" id="chars-linkexist-tab-other">Other Characters</button>
     </div>
+    <div id="chars-linkexist-mine">
+      <input class="mod-input" id="chars-linkexist-mine-search" placeholder="Search your characters…" style="margin-bottom:0.75rem;" />
+      <div class="char-link-picker-scroll" id="chars-linkexist-mine-list"></div>
+    </div>
+    <div id="chars-linkexist-other" hidden>
+      <input class="mod-input" id="chars-linkexist-other-search" placeholder="Search characters by name…" style="margin-bottom:0.75rem;" />
+      <div class="char-link-picker-scroll" id="chars-linkexist-other-list"></div>
+    </div>
+    <button class="mod-btn mod-btn--small" id="chars-linkexist-close" type="button" style="margin-top:0.75rem;">Close</button>
   </div>
 </div>
 
@@ -907,56 +917,81 @@ function closeCharEditor() {
 document.getElementById('chars-create-btn').addEventListener('click', () => openCharEditor(null));
 document.getElementById('char-editor-cancel').addEventListener('click', closeCharEditor);
 
-// ── Link Existing — search the owner's own characters not yet on this
-// story's roster, and add one without duplicating it. ──
-let charLinkDebounce;
-async function runCharLinkSearch(q) {
-  const resultsWrap = document.getElementById('char-link-results');
-  resultsWrap.innerHTML = '<p style="color:#888;font-size:0.85rem;">Loading…</p>';
+// ── Link Existing — same "Your X"/"Other X" tabbed picker as the
+// relationships field. Your Characters = your own not yet on this story's
+// roster (via /api/moderator/characters/linkable); Other Characters =
+// search across everyone (via /api/characters/search), so you can tag a
+// friend's character onto your story too. ──
+let linkExistingMineDebounce, linkExistingOtherDebounce;
+
+function linkExistingItemEl(c, showOwner) {
+  const item = document.createElement('button');
+  item.type = 'button';
+  item.className = 'char-link-picker-item--big';
+  item.innerHTML = `
+    <img src="${c.ref_image || '/images/defaultchar.jpg'}" alt="" />
+    <span>
+      <span class="char-link-picker-item-name">${c.name}</span>
+      ${showOwner ? `<span class="char-link-picker-item-owner">${c.owner_display_name || c.owner_username}</span>` : ''}
+    </span>
+  `;
+  item.addEventListener('click', async () => {
+    item.disabled = true;
+    await fetch(`/api/moderator/characters/${c.id}/link`, { method: 'POST', headers: authHeaders() });
+    document.getElementById('chars-linkexist-overlay').hidden = true;
+    const fresh = await ModeratorSite.load(SLUG);
+    renderCharList((fresh && fresh.characters) || []);
+  });
+  return item;
+}
+async function loadLinkExistingMine(q) {
+  const list = document.getElementById('chars-linkexist-mine-list');
+  list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
   try {
-    const res = await fetch(`/api/moderator/characters/linkable?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+    const res = await fetch(`/api/moderator/characters/linkable?q=${encodeURIComponent(q || '')}`, { headers: authHeaders() });
     const data = await res.json();
     const chars = data.characters || [];
-    if (!chars.length) {
-      resultsWrap.innerHTML = '<p style="color:#888;font-size:0.85rem;">No matching characters — try Create New instead.</p>';
-      return;
-    }
-    resultsWrap.innerHTML = '';
-    chars.forEach(c => {
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'mod-panel-list-item';
-      row.style.cssText = 'width:100%; text-align:left; background:#161616; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:0.5rem 0.75rem; cursor:pointer;';
-      row.innerHTML = `
-        <span style="display:flex; align-items:center; gap:0.6rem;">
-          <img src="${c.ref_image || '/images/defaultchar.jpg'}" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" />
-          ${c.name}
-        </span>
-      `;
-      row.addEventListener('click', async () => {
-        row.disabled = true;
-        await fetch(`/api/moderator/characters/${c.id}/link`, { method: 'POST', headers: authHeaders() });
-        document.getElementById('char-link-overlay').hidden = true;
-        const fresh = await ModeratorSite.load(SLUG);
-        renderCharList((fresh && fresh.characters) || []);
-      });
-      resultsWrap.appendChild(row);
-    });
-  } catch {
-    resultsWrap.innerHTML = '<p style="color:#888;font-size:0.85rem;">Couldn\'t load your characters right now.</p>';
-  }
+    if (!chars.length) { list.innerHTML = `<p class="char-link-picker-empty">${q ? 'No matching characters found.' : 'No matching characters — try Create New instead.'}</p>`; return; }
+    list.innerHTML = '';
+    chars.forEach(c => list.appendChild(linkExistingItemEl(c, false)));
+  } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t load your characters right now.</p>'; }
 }
+async function loadLinkExistingOther(q) {
+  const list = document.getElementById('chars-linkexist-other-list');
+  list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
+  try {
+    const res = await fetch(`/api/characters/search?q=${encodeURIComponent(q || '')}`, { headers: authHeaders() });
+    const data = await res.json();
+    const chars = data.characters || [];
+    if (!chars.length) { list.innerHTML = '<p class="char-link-picker-empty">No matching characters found.</p>'; return; }
+    list.innerHTML = '';
+    chars.forEach(c => list.appendChild(linkExistingItemEl(c, true)));
+  } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t search right now.</p>'; }
+}
+function switchLinkExistingTab(tab) {
+  document.getElementById('chars-linkexist-tab-mine').classList.toggle('active', tab === 'mine');
+  document.getElementById('chars-linkexist-tab-other').classList.toggle('active', tab === 'other');
+  document.getElementById('chars-linkexist-mine').hidden = tab !== 'mine';
+  document.getElementById('chars-linkexist-other').hidden = tab !== 'other';
+  if (tab === 'mine') { document.getElementById('chars-linkexist-mine-search').value = ''; loadLinkExistingMine(''); }
+  else { document.getElementById('chars-linkexist-other-search').value = ''; loadLinkExistingOther(''); }
+}
+document.getElementById('chars-linkexist-tab-mine').addEventListener('click', () => switchLinkExistingTab('mine'));
+document.getElementById('chars-linkexist-tab-other').addEventListener('click', () => switchLinkExistingTab('other'));
+document.getElementById('chars-linkexist-mine-search').addEventListener('input', (e) => {
+  clearTimeout(linkExistingMineDebounce);
+  linkExistingMineDebounce = setTimeout(() => loadLinkExistingMine(e.target.value.trim()), 300);
+});
+document.getElementById('chars-linkexist-other-search').addEventListener('input', (e) => {
+  clearTimeout(linkExistingOtherDebounce);
+  linkExistingOtherDebounce = setTimeout(() => loadLinkExistingOther(e.target.value.trim()), 300);
+});
 document.getElementById('chars-link-btn').addEventListener('click', () => {
-  document.getElementById('char-link-search').value = '';
-  document.getElementById('char-link-overlay').hidden = false;
-  runCharLinkSearch('');
+  document.getElementById('chars-linkexist-overlay').hidden = false;
+  switchLinkExistingTab('mine');
 });
-document.getElementById('char-link-cancel').addEventListener('click', () => {
-  document.getElementById('char-link-overlay').hidden = true;
-});
-document.getElementById('char-link-search').addEventListener('input', (e) => {
-  clearTimeout(charLinkDebounce);
-  charLinkDebounce = setTimeout(() => runCharLinkSearch(e.target.value.trim()), 300);
+document.getElementById('chars-linkexist-close').addEventListener('click', () => {
+  document.getElementById('chars-linkexist-overlay').hidden = true;
 });
 
 document.getElementById('char-editor-delete-forever').addEventListener('click', async () => {

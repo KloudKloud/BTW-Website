@@ -3911,8 +3911,11 @@ app.get('/api/moderator/characters/linkable', requireAuth, requireModerator, asy
 });
 
 app.post('/api/moderator/characters/:id/link', requireAuth, requireModerator, async (req, res) => {
+  // Not ownership-gated — a story owner can tag a friend's character onto
+  // their own roster too, same as relationships can point to any character
+  // regardless of who owns it.
   const { rows: [character] } = await pool.query(
-    'SELECT id FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
+    'SELECT id FROM moderator_characters WHERE id = $1', [req.params.id]
   );
   if (!character) return res.status(404).json({ error: 'Not found.' });
   const { rows: [{ maxOrder }] } = await pool.query(
