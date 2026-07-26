@@ -445,17 +445,46 @@ body.mod-theme {
 .mod-editable-block { position: relative; }
 .mod-edit-input { margin-top: 0.25rem; }
 
-/* ── Compact editing layout — while actively editing, drop the side column
-   (Navigate/Author box aren't editable) and tighten spacing so the whole
-   editable form fits without excess scrolling, mirroring how the profile
-   editor narrows down to just its editable fields in edit mode. Display
-   mode (this class absent) is untouched. ── */
+/* ── Compact editing layout — while actively editing, the page reflows
+   into a dedicated editor view: side column gone (Navigate/Author box
+   aren't editable), quick-nav cards stack vertically on the left with the
+   cover to their right, and Description/Bio/Links/Tags read as one
+   continuous form. None of this touches display mode — it's all scoped
+   under body.mod-editing-active, and the wrapping divs it targets
+   (#editor-top-row, #editor-form-box) carry no styling of their own
+   outside that class. ── */
 body.mod-editing-active .wiki-side-col { display: none; }
-body.mod-editing-active .wiki-layout { grid-template-columns: 1fr; max-width: 780px; }
-body.mod-editing-active .mod-quick-nav { max-width: 420px; margin-bottom: 1.75rem; }
+body.mod-editing-active .wiki-layout { grid-template-columns: 1fr; max-width: 820px; }
 body.mod-editing-active .wiki-title { margin-bottom: 1.5rem; }
-body.mod-editing-active .wiki-section { margin-bottom: 1.75rem; }
-body.mod-editing-active .mod-cover-wrap { width: 170px; height: 255px; }
+body.mod-editing-active .mod-cover-wrap { width: 170px; height: 255px; float: none; margin: 0; flex-shrink: 0; }
+
+/* Cards column (left) + cover (right) — #editor-cover-slot is empty in
+   display mode; JS reparents #cover-wrap into it only while editing. */
+body.mod-editing-active #editor-top-row {
+  display: flex; align-items: flex-start; gap: 1.75rem; margin-bottom: 2rem;
+}
+body.mod-editing-active #editor-top-row .mod-quick-nav {
+  width: 110px; flex-shrink: 0; margin-bottom: 0;
+}
+body.mod-editing-active #editor-top-row .mod-quick-nav-row {
+  grid-template-columns: 1fr; gap: 0.75rem;
+}
+body.mod-editing-active #editor-top-row .mod-quick-nav-row + .mod-quick-nav-row { margin-top: 0.75rem; }
+body.mod-editing-active #editor-top-row .mod-quick-nav-row--single { display: block; }
+body.mod-editing-active #editor-top-row .mod-quick-nav-row--single .mod-quick-nav-card { width: 100%; }
+
+/* One continuous bordered form — Description → Bio → Links → Tags — with
+   generous breathing room between each field so nothing feels cramped. */
+body.mod-editing-active .mod-editor-form-box {
+  background: var(--mod-card-bg, #161616);
+  border: 1px solid var(--mod-card-border, rgba(255,255,255,0.08));
+  border-radius: 16px;
+  padding: 1.85rem 2rem 2.1rem;
+}
+body.mod-editing-active .mod-editor-form-box .wiki-section { margin-bottom: 2.5rem; }
+body.mod-editing-active .mod-editor-form-box .wiki-section:last-child { margin-bottom: 0; }
+body.mod-editing-active .wiki-section-title { font-size: 1.05rem; letter-spacing: 0.08em; }
+body.mod-editing-active .wiki-rule { margin: 0.5rem 0 1.1rem; }
 
 /* Small uppercase labels above each editable field (Title/Description/Bio),
    matching the profile editor's PRONOUNS/BIO/FUN FACT labels — only shown
@@ -468,18 +497,6 @@ body.mod-editing-active .mod-cover-wrap { width: 170px; height: 255px; }
   margin-bottom: 0.4rem;
 }
 body.mod-editing-active .mod-field-label { display: block; }
-
-/* Boxes the Description/Bio/Links fields while editing, mirroring the
-   profile editor's bordered ABOUT/LINKS cards — display mode is untouched
-   since this only applies under body.mod-editing-active. */
-body.mod-editing-active .mod-field-box {
-  background: var(--mod-card-bg, #161616);
-  border: 1px solid var(--mod-card-border, rgba(255,255,255,0.08));
-  border-radius: 12px;
-  padding: 1rem 1.1rem;
-}
-body.mod-editing-active .wiki-section-title { font-size: 1.05rem; letter-spacing: 0.08em; }
-body.mod-editing-active .wiki-rule { margin: 0.5rem 0 1rem; }
 
 /* Custom uploaded background — sits beneath the wiki-layout content only,
    never overlapping the banner above it */
