@@ -12,6 +12,7 @@
        exact layout instead of the old simple thumbnail grid. -->
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; }
@@ -96,15 +97,17 @@
     .fp-banner-camera-btn:hover { background: rgba(0,0,0,0.8); }
     .fp-banner-camera-hint { color: rgba(255,255,255,0.85); font-size: 0.72rem; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
 
-    .fp-banner-reposition {
+    /* Recrop shortcut — reopens the Cropper.js modal on the existing image
+       without needing to pick a new file. Banner's sits top-right like the
+       old reposition pill did; avatar's is a small pill under the avatar
+       (see .fp-recrop-btn--avatar below). */
+    .fp-recrop-btn {
       position: absolute; right: 1.5rem; top: 1.25rem; z-index: 5;
-      display: flex; flex-direction: column; gap: 0.4rem;
-      background: rgba(0,0,0,0.55); border-radius: 12px; padding: 0.6rem 0.9rem;
+      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.3); border-radius: 20px;
+      color: #fff; font-family: inherit; font-size: 0.78rem; font-weight: 600;
+      padding: 0.45rem 0.9rem; cursor: pointer; transition: background 0.15s;
     }
-    .fp-banner-reposition label {
-      display: flex; align-items: center; gap: 0.5rem; color: #fff; font-size: 0.72rem; white-space: nowrap;
-    }
-    .fp-banner-reposition input[type="range"] { width: 110px; }
+    .fp-recrop-btn:hover { background: rgba(0,0,0,0.8); }
 
     /* Owner-only shortcut into the banner's image editor — fades in on
        hover instead of sitting there all the time, and disappears once
@@ -142,18 +145,36 @@
       padding: 0.4rem 0.55rem; cursor: pointer; white-space: nowrap; text-align: center;
     }
     .fp-avatar-camera-btn:hover { background: rgba(0,0,0,0.85); }
-    .fp-avatar-reposition {
-      position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); z-index: 5;
-      display: none; flex-direction: column; gap: 3px; width: 84px;
-      background: rgba(0,0,0,0.65); border-radius: 6px; padding: 4px 6px;
+    .fp-recrop-btn--avatar {
+      position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); z-index: 5;
+      font-size: 0.6rem; padding: 0.3rem 0.55rem; white-space: nowrap;
     }
-    .fp-avatar-reposition label { display: flex; align-items: center; gap: 4px; color: #fff; font-size: 0.55rem; }
-    .fp-avatar-reposition input[type="range"] { flex: 1; width: 100%; height: 10px; }
     /* Centered under the now-centered avatar, just below its bottom edge. */
     .fp-avatar-hint {
       position: absolute; left: 50%; transform: translateX(-50%); top: 70px; width: 200px;
       text-align: center; font-size: 0.7rem; line-height: 1.4; color: #999;
     }
+
+    /* ── Cropper.js crop modal — shared by banner (3:1) and avatar (1:1,
+       circular) uploads/recrops. ── */
+    .crop-modal-overlay {
+      position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center; padding: 2rem 1rem;
+    }
+    .crop-modal-box {
+      background: #171717; border: 1px solid rgba(255,255,255,0.12); border-radius: 16px;
+      padding: 1.5rem; width: 100%; max-width: 640px; box-shadow: 0 24px 70px rgba(0,0,0,0.6);
+    }
+    .crop-modal-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.15rem; font-weight: 700; color: #f0f0f0; margin: 0 0 1rem; }
+    .crop-modal-img-wrap { width: 100%; max-height: 60vh; background: #0a0a0a; border-radius: 10px; overflow: hidden; }
+    .crop-modal-img-wrap img { display: block; max-width: 100%; }
+    /* Cropper.js's standard trick for a circular crop preview — the square
+       crop box still saves a square image, matching how the avatar itself
+       is displayed (border-radius:50% on a normal square image). */
+    .crop-modal-img-wrap.crop-modal-img-wrap--round .cropper-view-box,
+    .crop-modal-img-wrap.crop-modal-img-wrap--round .cropper-face { border-radius: 50%; }
+    .crop-modal-hint { color: #999; font-size: 0.8rem; margin: 0.85rem 0 0; }
+    .crop-modal-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 1.25rem; }
 
     .fp-header-row { padding-top: 1rem; min-height: 72px; }
     .fp-header-action { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
@@ -757,11 +778,7 @@
   </div>
   <input type="file" id="fp-banner-file-input" accept="image/*" hidden />
 
-  <div class="fp-banner-reposition" id="fp-banner-reposition" hidden>
-    <label>H <input type="range" id="fp-banner-slider-x" min="0" max="100" value="50" /></label>
-    <label>V <input type="range" id="fp-banner-slider-y" min="0" max="100" value="50" /></label>
-    <label>Zoom <input type="range" id="fp-banner-slider-zoom" min="100" max="300" value="100" /></label>
-  </div>
+  <button type="button" class="fp-recrop-btn" id="fp-banner-recrop-btn" hidden>🔲 Recrop</button>
 </div>
 
 <!-- Everything below the banner — the theme-wheel shortcut is anchored to
@@ -783,11 +800,7 @@
     <div class="fp-avatar fp-avatar-fallback" id="fp-avatar-fallback">?</div>
     <button type="button" class="fp-avatar-camera-btn" id="fp-avatar-camera-btn" hidden>📷 Change Pfp</button>
     <input type="file" id="fp-avatar-file-input" accept="image/*" hidden />
-    <div class="fp-avatar-reposition" id="fp-avatar-reposition" hidden>
-      <label>H <input type="range" id="fp-avatar-slider-x" min="0" max="100" value="50" /></label>
-      <label>V <input type="range" id="fp-avatar-slider-y" min="0" max="100" value="50" /></label>
-      <label>Zoom <input type="range" id="fp-avatar-slider-zoom" min="100" max="300" value="100" /></label>
-    </div>
+    <button type="button" class="fp-recrop-btn fp-recrop-btn--avatar" id="fp-avatar-recrop-btn" hidden>🔲 Recrop</button>
   </div>
   <p class="fp-avatar-hint" id="fp-avatar-hint" hidden>Recommended: 400 × 400px</p>
 
@@ -971,6 +984,22 @@
 
 </div> <!-- /.fp-bg-wrap -->
 
+<!-- Shared Cropper.js crop modal — used for both the banner (3:1) and
+     avatar (1:1, circular) uploads/recrops. -->
+<div class="crop-modal-overlay" id="crop-modal-overlay" hidden>
+  <div class="crop-modal-box">
+    <p class="crop-modal-title" id="crop-modal-title">Crop Image</p>
+    <div class="crop-modal-img-wrap" id="crop-modal-img-wrap">
+      <img id="crop-modal-img" alt="" />
+    </div>
+    <p class="crop-modal-hint">Drag to move, scroll or pinch to zoom, drag the corners to resize the crop box.</p>
+    <div class="crop-modal-actions">
+      <button type="button" class="mod-btn" id="crop-modal-cancel">Cancel</button>
+      <button type="button" class="mod-btn" id="crop-modal-save">Save Crop</button>
+    </div>
+  </div>
+</div>
+
 <div class="fp-follow-modal-overlay" id="fp-follow-modal-overlay" hidden>
   <div class="fp-follow-modal">
     <div class="fp-follow-modal-header">
@@ -1031,6 +1060,7 @@
 </div>
 
 <script src="/fanpages/fanpages-nav.js"></script>
+<script src="/fanpages/vendor/cropper.min.js"></script>
 <script>
   const USERNAME = window.location.pathname.split('/').filter(Boolean).pop().toLowerCase();
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
@@ -2288,12 +2318,6 @@
   });
 
   // ── In-line editor ──────────────────────────────────────────────────────
-  // Single-axis reposition, matching the story editor's banner control
-  // exactly: image stays horizontally centered, one slider adjusts the
-  // vertical crop (object-position: center Y%).
-  let bannerPos = { x: 50, y: 50, zoom: 100 };
-  let avatarPos = { x: 50, y: 50, zoom: 100 };
-
   function isDefaultBanner() {
     return !currentAuthor || !currentAuthor.banner_url;
   }
@@ -2315,23 +2339,8 @@
     document.getElementById('fp-name-edit-box').hidden = false;
     document.getElementById('fp-name-edit-input').value = currentAuthor.display_name || '';
 
-    bannerPos = {
-      x: currentAuthor.banner_position_x != null ? currentAuthor.banner_position_x : 50,
-      y: currentAuthor.banner_position_y != null ? currentAuthor.banner_position_y : 50,
-      zoom: currentAuthor.banner_zoom || 100,
-    };
-    document.getElementById('fp-banner-slider-x').value = bannerPos.x;
-    document.getElementById('fp-banner-slider-y').value = bannerPos.y;
-    document.getElementById('fp-banner-slider-zoom').value = bannerPos.zoom;
-    document.getElementById('fp-banner-reposition').hidden = isDefaultBanner();
-
-    avatarPos.x = currentAuthor.avatar_position_x != null ? currentAuthor.avatar_position_x : 50;
-    avatarPos.y = currentAuthor.avatar_position_y != null ? currentAuthor.avatar_position_y : 50;
-    avatarPos.zoom = currentAuthor.avatar_zoom || 100;
-    document.getElementById('fp-avatar-slider-x').value = avatarPos.x;
-    document.getElementById('fp-avatar-slider-y').value = avatarPos.y;
-    document.getElementById('fp-avatar-slider-zoom').value = avatarPos.zoom;
-    document.getElementById('fp-avatar-reposition').hidden = !currentAuthor.avatar;
+    document.getElementById('fp-banner-recrop-btn').hidden = isDefaultBanner();
+    document.getElementById('fp-avatar-recrop-btn').hidden = !currentAuthor.avatar;
 
     renderAboutEditor();
     renderLinksEditor();
@@ -2347,8 +2356,8 @@
     document.getElementById('fp-banner-camera-wrap').hidden = true;
     document.getElementById('fp-avatar-camera-btn').hidden = true;
     document.getElementById('fp-avatar-hint').hidden = true;
-    document.getElementById('fp-banner-reposition').hidden = true;
-    document.getElementById('fp-avatar-reposition').hidden = true;
+    document.getElementById('fp-banner-recrop-btn').hidden = true;
+    document.getElementById('fp-avatar-recrop-btn').hidden = true;
     document.getElementById('fp-links-editor').hidden = true;
     document.getElementById('fp-links-list').hidden = false;
     document.getElementById('fp-featured-characters-editor').hidden = true;
@@ -2363,23 +2372,75 @@
   // Hover-revealed shortcut straight into edit mode from the banner itself.
   document.getElementById('fp-banner-edit-pencil').addEventListener('click', enterEditMode);
 
-  // Banner image upload — instant local preview, then real upload; the
-  // reposition slider follows the story-editor pattern (debounced auto-save).
+  // ── Shared Cropper.js crop modal — banner (3:1) and avatar (1:1,
+  // circular) both funnel through this. The exported crop is the exact
+  // final image (no more separate position_x/y/zoom reposition step) —
+  // uploads always save with position 50/50 and zoom 100 since the crop
+  // is already baked into the image itself. ──────────────────────────────
+  let cropModalCropper = null;
+  let cropModalOnSave = null;
+  function openCropModal({ title, imageSrc, aspectRatio, round, onSave }) {
+    document.getElementById('crop-modal-title').textContent = title;
+    document.getElementById('crop-modal-img-wrap').classList.toggle('crop-modal-img-wrap--round', !!round);
+    const img = document.getElementById('crop-modal-img');
+    cropModalOnSave = onSave;
+    document.getElementById('crop-modal-overlay').hidden = false;
+    if (cropModalCropper) { cropModalCropper.destroy(); cropModalCropper = null; }
+    const init = () => {
+      cropModalCropper = new Cropper(img, {
+        aspectRatio, viewMode: 1, dragMode: 'move', autoCropArea: 1, background: false, responsive: true,
+      });
+    };
+    img.onload = init;
+    img.src = imageSrc;
+    if (img.complete && img.naturalWidth) init();
+  }
+  function closeCropModal() {
+    document.getElementById('crop-modal-overlay').hidden = true;
+    if (cropModalCropper) { cropModalCropper.destroy(); cropModalCropper = null; }
+    cropModalOnSave = null;
+  }
+  document.getElementById('crop-modal-cancel').addEventListener('click', closeCropModal);
+  document.getElementById('crop-modal-save').addEventListener('click', async () => {
+    if (!cropModalCropper || !cropModalOnSave) return;
+    const btn = document.getElementById('crop-modal-save');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      const canvas = cropModalCropper.getCroppedCanvas();
+      await new Promise(resolve => {
+        canvas.toBlob(async (blob) => { await cropModalOnSave(blob); resolve(); }, 'image/jpeg', 0.92);
+      });
+      closeCropModal();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save Crop';
+    }
+  });
+
+  // Banner image upload/recrop — reuses the existing account-banner endpoint.
   document.getElementById('fp-banner-camera-btn').addEventListener('click', () => {
     document.getElementById('fp-banner-file-input').click();
   });
-  document.getElementById('fp-banner-file-input').addEventListener('change', async (e) => {
+  document.getElementById('fp-banner-file-input').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    bannerPos = { x: 50, y: 50, zoom: 100 };
-    document.getElementById('fp-banner-slider-x').value = 50;
-    document.getElementById('fp-banner-slider-y').value = 50;
-    document.getElementById('fp-banner-slider-zoom').value = 100;
-    document.getElementById('fp-banner-reposition').hidden = false;
-    await applyBgCrop(document.getElementById('fp-banner-img'), URL.createObjectURL(file), 50, 50, 100);
-
+    openCropModal({
+      title: 'Crop Banner Image', imageSrc: URL.createObjectURL(file), aspectRatio: 3, round: false,
+      onSave: uploadBanner,
+    });
+    e.target.value = '';
+  });
+  document.getElementById('fp-banner-recrop-btn').addEventListener('click', () => {
+    if (!currentAuthor || !currentAuthor.banner_url) return;
+    openCropModal({
+      title: 'Crop Banner Image', imageSrc: currentAuthor.banner_url, aspectRatio: 3, round: false,
+      onSave: uploadBanner,
+    });
+  });
+  async function uploadBanner(blob) {
     const fd = new FormData();
-    fd.append('banner', file);
+    fd.append('banner', blob, 'banner.jpg');
     fd.append('position_x', 50);
     fd.append('position_y', 50);
     try {
@@ -2387,54 +2448,38 @@
       const data = await res.json();
       if (data.banner_url) {
         currentAuthor.banner_url = data.banner_url;
-        currentAuthor.banner_position_x = data.position_x;
-        currentAuthor.banner_position_y = data.position_y;
-        currentAuthor.banner_zoom = data.zoom;
-        await applyBgCrop(document.getElementById('fp-banner-img'), data.banner_url, 50, 50, 100);
+        currentAuthor.banner_position_x = 50;
+        currentAuthor.banner_position_y = 50;
+        currentAuthor.banner_zoom = 100;
+        await applyBgCrop(document.getElementById('fp-banner-img'), data.banner_url + '?t=' + Date.now(), 50, 50, 100);
+        document.getElementById('fp-banner-recrop-btn').hidden = false;
       }
     } catch {}
-  });
-
-  let bannerRepoTimer = null;
-  function handleBannerReposition() {
-    bannerPos.x = +document.getElementById('fp-banner-slider-x').value;
-    bannerPos.y = +document.getElementById('fp-banner-slider-y').value;
-    bannerPos.zoom = +document.getElementById('fp-banner-slider-zoom').value;
-    applyBgCrop(document.getElementById('fp-banner-img'), currentAuthor.banner_url, bannerPos.x, bannerPos.y, bannerPos.zoom);
-    clearTimeout(bannerRepoTimer);
-    bannerRepoTimer = setTimeout(async () => {
-      try {
-        await fetch('/api/account/banner-position', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...authHeaders() },
-          body: JSON.stringify({ position_x: bannerPos.x, position_y: bannerPos.y, zoom: bannerPos.zoom }),
-        });
-      } catch {}
-    }, 400);
   }
-  document.getElementById('fp-banner-slider-x').addEventListener('input', handleBannerReposition);
-  document.getElementById('fp-banner-slider-y').addEventListener('input', handleBannerReposition);
-  document.getElementById('fp-banner-slider-zoom').addEventListener('input', handleBannerReposition);
 
-  // Avatar upload — reuses the existing account-avatar endpoint used elsewhere on the site.
+  // Avatar image upload/recrop — reuses the existing account-avatar endpoint.
   document.getElementById('fp-avatar-camera-btn').addEventListener('click', () => {
     document.getElementById('fp-avatar-file-input').click();
   });
-  document.getElementById('fp-avatar-file-input').addEventListener('change', async (e) => {
+  document.getElementById('fp-avatar-file-input').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const img = document.getElementById('fp-avatar-img');
-    img.style.display = 'block';
-    document.getElementById('fp-avatar-fallback').style.display = 'none';
-    avatarPos = { x: 50, y: 50, zoom: 100 };
-    document.getElementById('fp-avatar-slider-x').value = 50;
-    document.getElementById('fp-avatar-slider-y').value = 50;
-    document.getElementById('fp-avatar-slider-zoom').value = 100;
-    document.getElementById('fp-avatar-reposition').hidden = false;
-    await applyBgCrop(img, URL.createObjectURL(file), 50, 50, 100);
-
+    openCropModal({
+      title: 'Crop Profile Picture', imageSrc: URL.createObjectURL(file), aspectRatio: 1, round: true,
+      onSave: uploadAvatar,
+    });
+    e.target.value = '';
+  });
+  document.getElementById('fp-avatar-recrop-btn').addEventListener('click', () => {
+    if (!currentAuthor || !currentAuthor.avatar) return;
+    openCropModal({
+      title: 'Crop Profile Picture', imageSrc: currentAuthor.avatar, aspectRatio: 1, round: true,
+      onSave: uploadAvatar,
+    });
+  });
+  async function uploadAvatar(blob) {
     const fd = new FormData();
-    fd.append('avatar', file);
+    fd.append('avatar', blob, 'avatar.jpg');
     try {
       const res = await fetch('/api/auth/avatar', { method: 'POST', headers: authHeaders(), body: fd });
       const data = await res.json();
@@ -2443,34 +2488,17 @@
       // the change looks like it silently failed to save.
       if (data.avatar) {
         currentAuthor.avatar = data.avatar;
-        currentAuthor.avatar_position_x = data.position_x;
-        currentAuthor.avatar_position_y = data.position_y;
-        currentAuthor.avatar_zoom = data.zoom;
+        currentAuthor.avatar_position_x = 50;
+        currentAuthor.avatar_position_y = 50;
+        currentAuthor.avatar_zoom = 100;
+        const img = document.getElementById('fp-avatar-img');
+        img.style.display = 'block';
+        document.getElementById('fp-avatar-fallback').style.display = 'none';
         await applyBgCrop(img, data.avatar + '?t=' + Date.now(), 50, 50, 100);
+        document.getElementById('fp-avatar-recrop-btn').hidden = false;
       }
     } catch {}
-  });
-
-  let avatarRepoTimer = null;
-  function handleAvatarReposition() {
-    avatarPos.x = +document.getElementById('fp-avatar-slider-x').value;
-    avatarPos.y = +document.getElementById('fp-avatar-slider-y').value;
-    avatarPos.zoom = +document.getElementById('fp-avatar-slider-zoom').value;
-    applyBgCrop(document.getElementById('fp-avatar-img'), currentAuthor.avatar, avatarPos.x, avatarPos.y, avatarPos.zoom);
-    clearTimeout(avatarRepoTimer);
-    avatarRepoTimer = setTimeout(async () => {
-      try {
-        await fetch('/api/auth/avatar-position', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...authHeaders() },
-          body: JSON.stringify({ position_x: avatarPos.x, position_y: avatarPos.y, zoom: avatarPos.zoom }),
-        });
-      } catch {}
-    }, 400);
   }
-  document.getElementById('fp-avatar-slider-x').addEventListener('input', handleAvatarReposition);
-  document.getElementById('fp-avatar-slider-y').addEventListener('input', handleAvatarReposition);
-  document.getElementById('fp-avatar-slider-zoom').addEventListener('input', handleAvatarReposition);
 
   document.getElementById('fp-edit-cancel').addEventListener('click', exitEditMode);
 
