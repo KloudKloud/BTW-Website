@@ -32,7 +32,12 @@
   <p class="cc-sub">This character lives on your profile — no story required. You can link it into any of your stories later from that story's Characters screen.</p>
 
   <div class="char-editor-modal">
-    <h2 class="char-editor-title">New Character</h2>
+    <h2 class="char-editor-title editor-title-glow">New Character</h2>
+
+    <div class="mod-error-banner" id="char-editor-error-banner">
+      <span class="mod-error-banner-icon">⚠️</span>
+      <span id="char-editor-error-banner-text"></span>
+    </div>
 
     <div class="char-editor-ref-wrap" id="char-editor-ref-wrap">
       <img id="char-editor-ref-img" alt="" style="display:none;" draggable="false" />
@@ -72,13 +77,9 @@
 
     <div class="mod-field">
       <label>Relationships</label>
-      <div class="char-rel-row char-rel-row-headings">
-        <span class="char-rel-heading">Name</span>
-        <span class="char-rel-heading">Type of Relationship</span>
-      </div>
       <div id="char-editor-relationships-rows"></div>
       <button class="mod-btn mod-btn--small" type="button" id="char-editor-add-relationship">+ Add Relationship</button>
-      <p class="char-editor-facts-hint">Just fill in the name and how they relate! The page will automatically show it as "Name — Type" for you. Click the <strong>+</strong> next to a name to link it to one of your existing characters, so readers can click it to fast-travel straight to their page.</p>
+      <p class="mod-tip-box">💡 Just fill in the name and how they relate! The page will automatically show it as "Name — Type" for you. Click the <strong>+</strong> on the avatar to link it to one of your existing characters, so readers can click it to fast-travel straight to their page.</p>
     </div>
 
     <div class="mod-field">
@@ -95,6 +96,14 @@
     <div class="mod-field">
       <label for="char-editor-lore">Lore <span style="font-weight:400;color:#888;">(spoilered on the page! Click to reveal — *italic*/**bold** work here too)</span></label>
       <textarea class="mod-textarea" id="char-editor-lore" placeholder="One paragraph per line. Each becomes its own line on the character's page."></textarea>
+    </div>
+
+    <div class="mod-field gallery-linkto-box">
+      <label>Link To Story</label>
+      <div class="gallery-linkto-section">
+        <p class="gallery-linkto-section-label">Stories</p>
+        <div class="gallery-linkto-grid" id="char-linkto-stories-grid"></div>
+      </div>
     </div>
 
     <p class="mod-panel-msg" id="char-editor-msg"></p>
@@ -122,6 +131,26 @@
       <div class="char-link-picker-scroll" id="char-link-picker-other-list"></div>
     </div>
     <button class="mod-btn mod-btn--small" id="char-link-picker-close" type="button" style="margin-top:0.75rem;">Close</button>
+  </div>
+</div>
+
+<!-- "Link To: Story" picker — multi-select, stays open until Done. -->
+<div class="char-link-picker-overlay" id="char-story-picker-overlay" hidden>
+  <div class="char-link-picker-modal" style="max-width:480px;">
+    <h3 class="char-link-picker-title">Link Stories</h3>
+    <div class="char-link-picker-tabs">
+      <button type="button" class="char-link-picker-tab active" id="char-story-tab-mine">Stories You Own</button>
+      <button type="button" class="char-link-picker-tab" id="char-story-tab-other">Other Stories</button>
+    </div>
+    <div id="char-story-picker-mine">
+      <input class="mod-input" id="char-story-mine-search" placeholder="Search your stories…" style="margin-bottom:0.75rem;" />
+      <div class="char-link-picker-scroll" id="char-story-picker-mine-list"></div>
+    </div>
+    <div id="char-story-picker-other" hidden>
+      <input class="mod-input" id="char-story-other-search" placeholder="Search stories by title…" style="margin-bottom:0.75rem;" />
+      <div class="char-link-picker-scroll" id="char-story-picker-other-list"></div>
+    </div>
+    <button class="mod-btn mod-btn--small" id="char-story-picker-done" type="button" style="margin-top:0.75rem;">Done</button>
   </div>
 </div>
 
@@ -154,31 +183,35 @@
   // ── Relationship rows + link picker ─────────────────────────────────────
   let linkPickerTargetRow = null;
 
-  function addRelationshipRow(name, type, characterId, removable) {
+  function addRelationshipRow(name, type, characterId, removable, avatarUrl) {
     if (removable === undefined) removable = true;
     const wrap = document.createElement('div');
-    wrap.className = 'char-rel-row';
-    // Same grid-template-columns for every row regardless of removability —
-    // the permanent first row keeps an invisible (but space-reserving) ✕
-    // slot instead of dropping the column, so its inputs line up at the
-    // exact same width as every row added after it.
+    wrap.className = 'char-rel-card';
+    // Same markup for every card regardless of removability — the permanent
+    // first card keeps an invisible (but space-reserving) remove badge
+    // instead of dropping it, so every card lines up at the same width.
     wrap.dataset.charId = characterId || '';
     wrap.innerHTML = `
-      <div class="char-rel-name-wrap">
-        <input class="mod-input rel-name" placeholder="Name" value="${(name || '').replace(/"/g, '&quot;')}" />
-        <button class="char-rel-link-btn${characterId ? ' linked' : ''}" type="button" title="Link to an existing character">+</button>
+      <div class="char-rel-card-avatar-wrap">
+        <img class="char-rel-card-avatar" src="${avatarUrl || '/images/characters/noreference.png'}" alt="" />
+        <button class="char-rel-card-link-btn${characterId ? ' linked' : ''}" type="button" title="Link to an existing character">+</button>
       </div>
-      <input class="mod-input rel-type" placeholder="Mom, Dad, Friend, Sibling..." value="${(type || '').replace(/"/g, '&quot;')}" />
-      <button class="mod-btn mod-btn--small mod-btn--danger" type="button" style="${removable ? '' : 'visibility:hidden;'}">✕</button>`;
+      <div class="char-rel-card-fields">
+        <input class="mod-input rel-name" placeholder="Name" value="${(name || '').replace(/"/g, '&quot;')}" />
+        <input class="mod-input rel-type" placeholder="Mom, Dad, Friend, Sibling..." value="${(type || '').replace(/"/g, '&quot;')}" />
+      </div>
+      <button class="char-rel-card-remove" type="button" style="${removable ? '' : 'visibility:hidden;'}">✕</button>`;
 
     const nameInput = wrap.querySelector('.rel-name');
-    const linkBtn = wrap.querySelector('.char-rel-link-btn');
+    const linkBtn = wrap.querySelector('.char-rel-card-link-btn');
+    const avatarImg = wrap.querySelector('.char-rel-card-avatar');
     nameInput.addEventListener('input', () => {
       wrap.dataset.charId = '';
       linkBtn.classList.remove('linked');
+      avatarImg.src = '/images/characters/noreference.png';
     });
     linkBtn.addEventListener('click', () => openLinkPicker(wrap));
-    if (removable) wrap.querySelector('.mod-btn--danger').addEventListener('click', () => wrap.remove());
+    if (removable) wrap.querySelector('.char-rel-card-remove').addEventListener('click', () => wrap.remove());
 
     document.getElementById('char-editor-relationships-rows').appendChild(wrap);
   }
@@ -206,7 +239,8 @@
     item.addEventListener('click', () => {
       linkPickerTargetRow.querySelector('.rel-name').value = c.name;
       linkPickerTargetRow.dataset.charId = c.id;
-      linkPickerTargetRow.querySelector('.char-rel-link-btn').classList.add('linked');
+      linkPickerTargetRow.querySelector('.char-rel-card-link-btn').classList.add('linked');
+      linkPickerTargetRow.querySelector('.char-rel-card-avatar').src = c.ref_image || '/images/characters/noreference.png';
       closeLinkPicker();
     });
     return item;
@@ -273,6 +307,130 @@
   }
   document.getElementById('char-link-picker-close').addEventListener('click', closeLinkPicker);
 
+  // ── Link To Story — a multi-select picker that stays open until "Done",
+  // since a character can reasonably belong to several stories at once.
+  // Mirrors the gallery editor's "Link To: Story" picker exactly. ──────────
+  let selectedLinkStories = new Map();
+
+  function makeLinkCard(entry, img, name, onRemove) {
+    const wrap = document.createElement('div');
+    wrap.className = 'gallery-linkto-card';
+    wrap.dataset.id = entry.id;
+    const imgEl = document.createElement('img');
+    imgEl.className = 'gallery-linkto-card-img';
+    imgEl.src = img || '/images/characters/noreference.png';
+    imgEl.alt = '';
+    wrap.appendChild(imgEl);
+    const nameEl = document.createElement('p');
+    nameEl.className = 'gallery-linkto-card-name';
+    nameEl.textContent = name;
+    wrap.appendChild(nameEl);
+    if (onRemove) {
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'gallery-linkto-card-remove';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', onRemove);
+      wrap.appendChild(removeBtn);
+    }
+    return wrap;
+  }
+
+  function makeAddTile(label, onClick) {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'gallery-linkto-add-tile';
+    tile.innerHTML = `<span class="gallery-linkto-add-tile-icon">+</span> ${label}`;
+    tile.addEventListener('click', onClick);
+    return tile;
+  }
+
+  function renderLinkToCards() {
+    const storiesGrid = document.getElementById('char-linkto-stories-grid');
+    storiesGrid.innerHTML = '';
+    storiesGrid.appendChild(makeAddTile('Story', openStoryLinkPicker));
+    selectedLinkStories.forEach(s => storiesGrid.appendChild(makeLinkCard(s, s.cover_url, s.site_title, () => {
+      selectedLinkStories.delete(s.id);
+      renderLinkToCards();
+      document.querySelectorAll(`#char-story-picker-mine-list [data-id="${s.id}"], #char-story-picker-other-list [data-id="${s.id}"]`).forEach(el => el.classList.remove('selected'));
+    })));
+  }
+  renderLinkToCards();
+
+  function storyLinkPickerToggleItem(entry, imgSrc, name, ownerLabel) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.dataset.id = entry.id;
+    item.className = 'char-link-picker-item--big' + (selectedLinkStories.has(entry.id) ? ' selected' : '');
+    item.innerHTML = `
+      <img src="${imgSrc}" alt="" />
+      <span>
+        <span class="char-link-picker-item-name">${name}</span>
+        ${ownerLabel ? `<span class="char-link-picker-item-owner">${ownerLabel}</span>` : ''}
+      </span>
+      <span class="char-link-picker-item-check">✓</span>
+    `;
+    item.addEventListener('click', () => {
+      if (selectedLinkStories.has(entry.id)) selectedLinkStories.delete(entry.id);
+      else selectedLinkStories.set(entry.id, entry);
+      item.classList.toggle('selected');
+      renderLinkToCards();
+    });
+    return item;
+  }
+
+  function switchStoryPickerTab(tab) {
+    document.getElementById('char-story-tab-mine').classList.toggle('active', tab === 'mine');
+    document.getElementById('char-story-tab-other').classList.toggle('active', tab === 'other');
+    document.getElementById('char-story-picker-mine').hidden = tab !== 'mine';
+    document.getElementById('char-story-picker-other').hidden = tab !== 'other';
+    if (tab === 'mine') { document.getElementById('char-story-mine-search').value = ''; loadMyStoriesForLink(''); }
+    else { document.getElementById('char-story-other-search').value = ''; searchOtherStoriesForLink(''); }
+  }
+  let storyLinkMineDebounce;
+  async function loadMyStoriesForLink(q) {
+    const list = document.getElementById('char-story-picker-mine-list');
+    list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
+    try {
+      const res = await fetch(`/api/stories/mine?q=${encodeURIComponent(q || '')}`, { headers: authHeaders() });
+      const data = await res.json();
+      const stories = data.stories || [];
+      if (!stories.length) { list.innerHTML = `<p class="char-link-picker-empty">${q ? 'No matching stories found.' : 'You don\'t have any stories yet.'}</p>`; return; }
+      list.innerHTML = '';
+      stories.forEach(s => list.appendChild(storyLinkPickerToggleItem(s, s.cover_url || '/images/characters/noreference.png', s.site_title, null)));
+    } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t load your stories right now.</p>'; }
+  }
+  let storyLinkOtherDebounce;
+  async function searchOtherStoriesForLink(q) {
+    const list = document.getElementById('char-story-picker-other-list');
+    list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
+    try {
+      const res = await fetch(`/api/stories/search?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+      const data = await res.json();
+      const stories = data.stories || [];
+      if (!stories.length) { list.innerHTML = '<p class="char-link-picker-empty">No matching stories found.</p>'; return; }
+      list.innerHTML = '';
+      stories.forEach(s => list.appendChild(storyLinkPickerToggleItem(s, s.cover_url || '/images/characters/noreference.png', s.site_title, s.owner_display_name || s.owner_username)));
+    } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t search right now.</p>'; }
+  }
+  function openStoryLinkPicker() {
+    document.getElementById('char-story-picker-overlay').hidden = false;
+    switchStoryPickerTab('mine');
+  }
+  document.getElementById('char-story-tab-mine').addEventListener('click', () => switchStoryPickerTab('mine'));
+  document.getElementById('char-story-tab-other').addEventListener('click', () => switchStoryPickerTab('other'));
+  document.getElementById('char-story-mine-search').addEventListener('input', (e) => {
+    clearTimeout(storyLinkMineDebounce);
+    storyLinkMineDebounce = setTimeout(() => loadMyStoriesForLink(e.target.value.trim()), 300);
+  });
+  document.getElementById('char-story-other-search').addEventListener('input', (e) => {
+    clearTimeout(storyLinkOtherDebounce);
+    storyLinkOtherDebounce = setTimeout(() => searchOtherStoriesForLink(e.target.value.trim()), 300);
+  });
+  document.getElementById('char-story-picker-done').addEventListener('click', () => {
+    document.getElementById('char-story-picker-overlay').hidden = true;
+  });
+
   // ── Reference image upload + reposition ──────────────────────────────────
   document.getElementById('char-editor-ref-wrap').addEventListener('click', (e) => {
     if (e.target.closest('.char-editor-ref-reposition')) return;
@@ -313,19 +471,25 @@
   document.getElementById('char-editor-ref-slider-y').addEventListener('input', handleRefReposition);
 
   // ── Save ──────────────────────────────────────────────────────────────────
-  document.getElementById('char-editor-name').addEventListener('input', (e) => e.target.classList.remove('mod-input--flash-error'));
+  document.getElementById('char-editor-name').addEventListener('input', (e) => {
+    e.target.classList.remove('mod-input--flash-error');
+    document.getElementById('char-editor-error-banner').classList.remove('show');
+  });
 
   document.getElementById('char-editor-save').addEventListener('click', async () => {
     const nameInput = document.getElementById('char-editor-name');
     const name = nameInput.value.trim();
     const msgEl = document.getElementById('char-editor-msg');
+    const errorBanner = document.getElementById('char-editor-error-banner');
+    const errorBannerText = document.getElementById('char-editor-error-banner-text');
+    errorBanner.classList.remove('show');
     if (!name) {
-      msgEl.className = 'mod-panel-msg mod-panel-msg--error';
-      msgEl.textContent = 'Characters MUST include the name field.';
+      errorBannerText.textContent = 'Characters MUST include the name field.';
+      errorBanner.classList.add('show');
       nameInput.classList.remove('mod-input--flash-error');
       void nameInput.offsetWidth;
       nameInput.classList.add('mod-input--flash-error');
-      nameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      errorBanner.scrollIntoView({ behavior: 'smooth', block: 'start' });
       nameInput.focus();
       return;
     }
@@ -341,7 +505,7 @@
       .map(inp => inp.value.trim())
       .filter(Boolean);
 
-    const relationships = Array.from(document.querySelectorAll('#char-editor-relationships-rows .char-rel-row'))
+    const relationships = Array.from(document.querySelectorAll('#char-editor-relationships-rows .char-rel-card'))
       .map(row => ({
         name: row.querySelector('.rel-name').value.trim(),
         type: row.querySelector('.rel-type').value.trim(),
@@ -382,6 +546,14 @@
           headers: { ...authHeaders(), 'Content-Type': 'application/json' },
           body: JSON.stringify({ position_x: refPos.x, position_y: refPos.y }),
         });
+      }
+
+      if (selectedLinkStories.size) {
+        await fetch(`/api/characters/${character.id}/link-many`, {
+          method: 'POST',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ site_ids: [...selectedLinkStories.keys()] }),
+        }).catch(() => {});
       }
 
       const me = await fetch('/api/auth/me', { headers: authHeaders() }).then(r => r.json()).catch(() => null);

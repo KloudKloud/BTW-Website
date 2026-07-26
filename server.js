@@ -3775,6 +3775,23 @@ app.post('/api/characters', requireAuth, async (req, res) => {
   res.json({ character });
 });
 
+// Additive-only linking — used right after standalone character creation to
+// attach it to any number of stories picked in the "Link To: Stories"
+// section. Never removes existing links, only adds new ones (mirrors
+// /api/gallery/:id/link-many).
+app.post('/api/characters/:id/link-many', requireAuth, async (req, res) => {
+  const { rows: [item] } = await pool.query(
+    'SELECT id FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
+  );
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  const siteIds = Array.isArray(req.body.site_ids) ? req.body.site_ids.filter(Number.isFinite) : [];
+  await Promise.all(siteIds.map(siteId => pool.query(
+    'INSERT INTO character_story_links (character_id, site_id) VALUES ($1, $2) ON CONFLICT (character_id, site_id) DO NOTHING',
+    [item.id, siteId]
+  )));
+  res.json({ message: 'Linked.' });
+});
+
 // Permanent delete — the only way a character actually goes away. Cascades
 // character_story_links automatically via FK.
 app.delete('/api/characters/:id', requireAuth, async (req, res) => {

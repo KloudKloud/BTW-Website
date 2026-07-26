@@ -95,7 +95,12 @@
      everything behind it while creating/editing a character. -->
 <div class="char-editor-overlay" id="char-editor-overlay" hidden>
   <div class="char-editor-modal">
-    <h2 class="char-editor-title" id="char-editor-title">Create New Character</h2>
+    <h2 class="char-editor-title editor-title-glow" id="char-editor-title">Create New Character</h2>
+
+    <div class="mod-error-banner" id="char-editor-error-banner">
+      <span class="mod-error-banner-icon">⚠️</span>
+      <span id="char-editor-error-banner-text"></span>
+    </div>
 
     <div class="char-editor-ref-wrap" id="char-editor-ref-wrap">
       <img id="char-editor-ref-img" alt="" style="display:none;" draggable="false" />
@@ -135,13 +140,9 @@
 
     <div class="mod-field">
       <label>Relationships</label>
-      <div class="char-rel-row char-rel-row-headings">
-        <span class="char-rel-heading">Name</span>
-        <span class="char-rel-heading">Type of Relationship</span>
-      </div>
       <div id="char-editor-relationships-rows"></div>
       <button class="mod-btn mod-btn--small" type="button" id="char-editor-add-relationship">+ Add Relationship</button>
-      <p class="char-editor-facts-hint">Just fill in the name and how they relate! The page will automatically show it as "Name — Type" for you. Click the <strong>+</strong> next to a name to link it to one of your existing characters, so readers can click it to fast-travel straight to their page.</p>
+      <p class="mod-tip-box">💡 Just fill in the name and how they relate! The page will automatically show it as "Name — Type" for you. Click the <strong>+</strong> on the avatar to link it to one of your existing characters, so readers can click it to fast-travel straight to their page.</p>
     </div>
 
     <div class="mod-field">
@@ -158,6 +159,15 @@
     <div class="mod-field">
       <label for="char-editor-lore">Lore <span style="font-weight:400;color:#888;">(spoilered on the page! Click to reveal — *italic*/**bold** work here too)</span></label>
       <textarea class="mod-textarea" id="char-editor-lore" placeholder="One paragraph per line. Each becomes its own line on the character's page."></textarea>
+    </div>
+
+    <div class="mod-field gallery-linkto-box">
+      <label>Link To Story</label>
+      <p class="gallery-linkto-note" id="char-linkto-story-note"></p>
+      <div class="gallery-linkto-section">
+        <p class="gallery-linkto-section-label">Stories</p>
+        <div class="gallery-linkto-grid" id="char-linkto-stories-grid"></div>
+      </div>
     </div>
 
     <p class="mod-panel-msg" id="char-editor-msg"></p>
@@ -211,6 +221,7 @@ const authHeaders = () => ({ Authorization: `Bearer ${token}`, 'X-Story-Path': S
 
 let CHARACTERS = [];
 let STORY_TITLE = 'Fanpages';
+let STORY_COVER_URL = '';
 let IS_SELF = false;
 // The relationship-linked character currently being viewed, when they're NOT
 // part of this story's own cast (character_story_links) — a "ghost slot"
@@ -593,33 +604,37 @@ document.getElementById('char-editor-add-fact').addEventListener('click', () => 
 // ── Relationship rows + link picker ─────────────────────────────────────────
 let linkPickerTargetRow = null;
 
-function addRelationshipRow(name, type, characterId, removable) {
+function addRelationshipRow(name, type, characterId, removable, avatarUrl) {
   if (removable === undefined) removable = true;
   const wrap = document.createElement('div');
-  wrap.className = 'char-rel-row';
-  // Same grid-template-columns for every row regardless of removability —
-  // the permanent first row keeps an invisible (but space-reserving) ✕ slot
-  // instead of dropping the column, so its inputs line up at the exact same
-  // width as every row added after it.
+  wrap.className = 'char-rel-card';
+  // Same markup for every card regardless of removability — the permanent
+  // first card keeps an invisible (but space-reserving) remove badge
+  // instead of dropping it, so every card lines up at the same width.
   wrap.dataset.charId = characterId || '';
   wrap.innerHTML = `
-    <div class="char-rel-name-wrap">
-      <input class="mod-input rel-name" placeholder="Name" value="${(name || '').replace(/"/g, '&quot;')}" />
-      <button class="char-rel-link-btn${characterId ? ' linked' : ''}" type="button" title="Link to an existing character">+</button>
+    <div class="char-rel-card-avatar-wrap">
+      <img class="char-rel-card-avatar" src="${avatarUrl || '/images/characters/noreference.png'}" alt="" />
+      <button class="char-rel-card-link-btn${characterId ? ' linked' : ''}" type="button" title="Link to an existing character">+</button>
     </div>
-    <input class="mod-input rel-type" placeholder="Mom, Dad, Friend, Sibling..." value="${(type || '').replace(/"/g, '&quot;')}" />
-    <button class="mod-btn mod-btn--small mod-btn--danger" type="button" style="${removable ? '' : 'visibility:hidden;'}">✕</button>`;
+    <div class="char-rel-card-fields">
+      <input class="mod-input rel-name" placeholder="Name" value="${(name || '').replace(/"/g, '&quot;')}" />
+      <input class="mod-input rel-type" placeholder="Mom, Dad, Friend, Sibling..." value="${(type || '').replace(/"/g, '&quot;')}" />
+    </div>
+    <button class="char-rel-card-remove" type="button" style="${removable ? '' : 'visibility:hidden;'}">✕</button>`;
 
   const nameInput = wrap.querySelector('.rel-name');
-  const linkBtn = wrap.querySelector('.char-rel-link-btn');
+  const linkBtn = wrap.querySelector('.char-rel-card-link-btn');
+  const avatarImg = wrap.querySelector('.char-rel-card-avatar');
   // Typing the name manually breaks any existing link — it's no longer
   // guaranteed to refer to whichever character was picked before.
   nameInput.addEventListener('input', () => {
     wrap.dataset.charId = '';
     linkBtn.classList.remove('linked');
+    avatarImg.src = '/images/characters/noreference.png';
   });
   linkBtn.addEventListener('click', () => openLinkPicker(wrap));
-  if (removable) wrap.querySelector('.mod-btn--danger').addEventListener('click', () => wrap.remove());
+  if (removable) wrap.querySelector('.char-rel-card-remove').addEventListener('click', () => wrap.remove());
 
   document.getElementById('char-editor-relationships-rows').appendChild(wrap);
 }
@@ -647,7 +662,8 @@ function charLinkItemEl(c, showOwner) {
   item.addEventListener('click', () => {
     linkPickerTargetRow.querySelector('.rel-name').value = c.name;
     linkPickerTargetRow.dataset.charId = c.id;
-    linkPickerTargetRow.querySelector('.char-rel-link-btn').classList.add('linked');
+    linkPickerTargetRow.querySelector('.char-rel-card-link-btn').classList.add('linked');
+    linkPickerTargetRow.querySelector('.char-rel-card-avatar').src = c.ref_image || '/images/characters/noreference.png';
     closeLinkPicker();
   });
   return item;
@@ -713,6 +729,28 @@ function closeLinkPicker() {
   linkPickerTargetRow = null;
 }
 document.getElementById('char-link-picker-close').addEventListener('click', closeLinkPicker);
+
+// The default story link (this character always belongs to the current
+// story) shown as a single locked, non-removable card — unlinking a story
+// only happens from the account-level character editor, never from here.
+// Mirrors the gallery editor's story-context "Link To" note + locked card.
+function renderLockedStoryCard() {
+  const grid = document.getElementById('char-linkto-stories-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'gallery-linkto-card gallery-linkto-card--locked';
+  const imgEl = document.createElement('img');
+  imgEl.className = 'gallery-linkto-card-img';
+  imgEl.src = STORY_COVER_URL || '/images/characters/noreference.png';
+  imgEl.alt = '';
+  wrap.appendChild(imgEl);
+  const nameEl = document.createElement('p');
+  nameEl.className = 'gallery-linkto-card-name';
+  nameEl.textContent = STORY_TITLE;
+  wrap.appendChild(nameEl);
+  grid.appendChild(wrap);
+}
 
 function openCharEditor(char) {
   editingCharId = char ? char.id : null;
@@ -915,19 +953,25 @@ function handleRefReposition() {
 document.getElementById('char-editor-ref-slider-x').addEventListener('input', handleRefReposition);
 document.getElementById('char-editor-ref-slider-y').addEventListener('input', handleRefReposition);
 
-document.getElementById('char-editor-name').addEventListener('input', (e) => e.target.classList.remove('mod-input--flash-error'));
+document.getElementById('char-editor-name').addEventListener('input', (e) => {
+  e.target.classList.remove('mod-input--flash-error');
+  document.getElementById('char-editor-error-banner').classList.remove('show');
+});
 
 document.getElementById('char-editor-save').addEventListener('click', async () => {
   const nameInput = document.getElementById('char-editor-name');
   const name = nameInput.value.trim();
   const msgEl = document.getElementById('char-editor-msg');
+  const errorBanner = document.getElementById('char-editor-error-banner');
+  const errorBannerText = document.getElementById('char-editor-error-banner-text');
+  errorBanner.classList.remove('show');
   if (!name) {
-    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
-    msgEl.textContent = 'Characters MUST include the name field.';
+    errorBannerText.textContent = 'Characters MUST include the name field.';
+    errorBanner.classList.add('show');
     nameInput.classList.remove('mod-input--flash-error');
     void nameInput.offsetWidth; // restart the flash animation if it's already run once
     nameInput.classList.add('mod-input--flash-error');
-    nameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    errorBanner.scrollIntoView({ behavior: 'smooth', block: 'start' });
     nameInput.focus();
     return;
   }
@@ -943,7 +987,7 @@ document.getElementById('char-editor-save').addEventListener('click', async () =
     .map(inp => inp.value.trim())
     .filter(Boolean);
 
-  const relationships = Array.from(document.querySelectorAll('#char-editor-relationships-rows .char-rel-row'))
+  const relationships = Array.from(document.querySelectorAll('#char-editor-relationships-rows .char-rel-card'))
     .map(row => ({
       name: row.querySelector('.rel-name').value.trim(),
       type: row.querySelector('.rel-type').value.trim(),
@@ -1005,8 +1049,12 @@ document.getElementById('char-editor-save').addEventListener('click', async () =
   ModeratorSite.applyBanner(document.getElementById('page-banner-img'), data && data.site);
   if (data && data.site) renderVipBadge(data.site);
   STORY_TITLE = (data && data.site && data.site.site_title) || 'Fanpages';
+  STORY_COVER_URL = (data && data.site && data.site.cover_url) || '';
   IS_SELF = !!(data && data.site && data.site.is_self);
   applyStoryTheme(data && data.site && data.site.theme, data && data.site && data.site.theme_bg_url);
+  const linkNoteEl = document.getElementById('char-linkto-story-note');
+  if (linkNoteEl) linkNoteEl.innerHTML = `This character is linked to <strong>${escapeHtml(STORY_TITLE)}</strong>! To add more stories or unlink added novels, you can manage your characters through the character editor on your account :3`;
+  renderLockedStoryCard();
 
   if (IS_SELF) {
     document.getElementById('chars-create-box').style.display = 'block';
