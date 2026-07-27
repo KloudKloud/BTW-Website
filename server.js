@@ -2450,10 +2450,20 @@ async function requireModerator(req, res, next) {
 }
 
 // ── Fanpages hub billboard (admin-only management) ──────────────────────────
+// This same endpoint backs both the public hub billboard AND the admin-only
+// Hub Image Builder's management grid — an admin managing slides needs to
+// see every slide regardless of their own personal NSFW toggle, otherwise a
+// freshly-created NSFW slide would vanish from their own grid the moment
+// SFW Mode happens to be on, looking exactly like the save silently failed.
 app.get('/api/hub-billboard', async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM hub_billboard_slides ORDER BY sort_order, id');
-  const { nsfwAllowed } = await getViewerNsfwAccess(req);
-  res.json({ slides: nsfwAllowed ? rows : rows.filter(s => !s.is_nsfw) });
+  const { viewerId, nsfwAllowed } = await getViewerNsfwAccess(req);
+  let isAdmin = false;
+  if (viewerId) {
+    const { rows: [u] } = await pool.query('SELECT email_hash FROM users WHERE id = $1', [viewerId]);
+    isAdmin = !!(u && u.email_hash === process.env.ADMIN_EMAIL_HASH);
+  }
+  res.json({ slides: (nsfwAllowed || isAdmin) ? rows : rows.filter(s => !s.is_nsfw) });
 });
 
 const HUB_ANIMATION_TYPES = ['none', 'pan_v', 'pan_h', 'zoom'];
