@@ -99,37 +99,47 @@
     .soc-sidebar-empty, .soc-sidebar-note { font-size: 0.9rem; color: #888; padding: 0.4rem 0.5rem; line-height: 1.5; }
 
     /* ── Main content ──
-       Offset by the fixed sidebar's width instead of relying on a grid
-       track, since the sidebar's taken out of normal flow now. */
+       Offset by the fixed sidebar's width on the left and the fixed
+       Popular Posts panel's width on the right, since both are taken out
+       of normal flow now. */
     .soc-main {
-      margin-left: 250px; max-width: 1300px; padding: 6.5rem 2.5rem 5rem;
+      margin-left: 250px; margin-right: 300px; padding: 6.5rem 2.5rem 5rem;
       transition: margin-left 0.2s ease;
     }
-    .soc-main-row { display: flex; gap: 2rem; align-items: flex-start; }
-    .soc-center { flex: 1; min-width: 0; }
 
     /* Shared glass-card look — same recipe as the sidebar / .fp-shine-card. */
     .soc-placeholder-box, .soc-right-panel {
       background: linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015));
-      border: 1px solid rgba(255,255,255,0.12); border-radius: 20px;
       backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-      box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
     }
     .soc-placeholder-box {
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 20px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
       min-height: 420px; display: flex; align-items: center; justify-content: center;
       color: rgba(255,255,255,0.3); font-size: 1.4rem; font-weight: 700; font-family: 'Cinzel', Georgia, serif;
     }
-    .soc-right-panel { width: 300px; flex-shrink: 0; position: sticky; top: 84px; padding: 1.25rem; }
+    /* Fixed to the right screen edge, same treatment as the left sidebar —
+       glued in place no matter how far the main section scrolls. */
+    .soc-right-panel {
+      position: fixed; top: 64px; right: 0; bottom: 0; width: 300px; z-index: 5;
+      overflow-y: auto; padding: 1.25rem; box-sizing: border-box;
+      border-left: 1px solid rgba(255,255,255,0.12);
+      box-shadow: -4px 0 30px rgba(0,0,0,0.35);
+    }
     .soc-right-panel-title { font-family: 'Cinzel', Georgia, serif; font-weight: 700; font-size: 1.15rem; color: #f0f0f0; }
 
+    @media (max-width: 1100px) {
+      /* Not enough room for both fixed side panels plus real content —
+         drop the right panel back into normal flow, stacked below. */
+      .soc-right-panel { position: static; width: auto; height: auto; border-left: none; box-shadow: none; margin-top: 2rem; }
+      .soc-main { margin-right: 0; }
+    }
     @media (max-width: 860px) {
       /* Fixed sidebar doesn't make sense on a narrow screen — drop it back
          into normal flow, stacked above the main content. */
       .soc-sidebar { position: static; width: auto; height: auto; border-right: none; }
       .soc-main { margin-left: 0; padding: 6.5rem 1.25rem 4rem; }
       .soc-layout.soc-collapsed .soc-main { margin-left: 0; }
-      .soc-main-row { flex-direction: column; }
-      .soc-right-panel { width: auto; position: static; }
     }
   </style>
 </head>
@@ -166,16 +176,13 @@
   </aside>
 
   <main class="soc-main">
-    <div class="soc-main-row">
-      <div class="soc-center">
-        <!-- The real curated feed goes here next. -->
-        <div class="soc-placeholder-box">N/A</div>
-      </div>
-      <aside class="soc-right-panel">
-        <p class="soc-right-panel-title">Popular Posts</p>
-      </aside>
-    </div>
+    <!-- The real curated feed goes here next. -->
+    <div class="soc-placeholder-box">N/A</div>
   </main>
+
+  <aside class="soc-right-panel">
+    <p class="soc-right-panel-title">Popular Posts</p>
+  </aside>
 
 </div>
 
