@@ -871,6 +871,17 @@ function showGalleryPreview(src) {
       aspectRatio: 6 / 7, viewMode: 1, dragMode: 'move', autoCropArea: 1,
       cropBoxResizable: false, cropBoxMovable: false, background: false, responsive: true,
       ready() {
+        // The crop box is locked (non-resizable, non-movable) so it's
+        // always meant to exactly cover the whole preview — but Cropper
+        // only auto-sizes it once, from whatever the container measured
+        // as AT THAT INSTANT. If that measurement was ever off (this box
+        // lives inside a scroll container in a just-shown modal), the box
+        // is stuck wrong forever since nothing ever resizes it again.
+        // Forcing it to the container's actual bounds here guarantees it's
+        // always glued exactly over the visible preview, full stop.
+        const containerData = galleryPreviewCropper.getContainerData();
+        galleryPreviewCropper.setCropBoxData({ left: 0, top: 0, width: containerData.width, height: containerData.height });
+
         const data = galleryPreviewCropper.getData();
         const imgData = galleryPreviewCropper.getImageData();
         const maxX = imgData.naturalWidth - data.width;
