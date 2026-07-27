@@ -2743,14 +2743,27 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     viewerId
       ? pool.query('SELECT 1 FROM user_follows WHERE follower_id = $1 AND followed_id = $2', [viewerId, author.id])
       : Promise.resolve({ rows: [] }),
+    // Featured items store a title/image_url *snapshot* from when they were
+    // picked (see the user_featured_items migration comment above), but in
+    // practice every row currently comes from this site's own characters/
+    // gallery (source is always 'fanpage'), so we can — and should — join
+    // back to the live row and prefer its current name/art over the stale
+    // snapshot. The snapshot only survives as a fallback for the rare case
+    // the original character/gallery post was since deleted.
     pool.query(
-      `SELECT ref_id, title, image_url, link_url FROM user_featured_items
-       WHERE user_id = $1 AND kind = 'character' ORDER BY sort_order LIMIT 3`,
+      `SELECT ufi.ref_id, COALESCE(mc.name, ufi.title) AS title,
+              COALESCE(mc.ref_image, ufi.image_url) AS image_url, ufi.link_url
+       FROM user_featured_items ufi
+       LEFT JOIN moderator_characters mc ON ufi.ref_id ~ '^[0-9]+$' AND mc.id = ufi.ref_id::int
+       WHERE ufi.user_id = $1 AND ufi.kind = 'character' ORDER BY ufi.sort_order LIMIT 3`,
       [author.id]
     ),
     pool.query(
-      `SELECT ref_id, title, image_url, link_url FROM user_featured_items
-       WHERE user_id = $1 AND kind = 'gallery' ORDER BY sort_order LIMIT 3`,
+      `SELECT ufi.ref_id, COALESCE(mg.title, ufi.title) AS title,
+              COALESCE(mg.image_url, ufi.image_url) AS image_url, ufi.link_url
+       FROM user_featured_items ufi
+       LEFT JOIN moderator_gallery mg ON ufi.ref_id ~ '^[0-9]+$' AND mg.id = ufi.ref_id::int
+       WHERE ufi.user_id = $1 AND ufi.kind = 'gallery' ORDER BY ufi.sort_order LIMIT 3`,
       [author.id]
     ),
   ]);
