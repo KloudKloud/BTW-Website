@@ -871,13 +871,26 @@ document.getElementById('char-link-other-search').addEventListener('input', (e) 
   linkPickerOtherDebounce = setTimeout(() => runOtherCharacterSearch(e.target.value.trim()), 300);
 });
 
+// Characters already picked in another relationship row (excluding the row
+// currently being filled in) shouldn't show up again in either tab — same
+// character linked twice as two different relationships is just clutter.
+let linkPickerExcludedIds = new Set();
+function computeExcludedIds(excludeRow) {
+  return new Set(
+    Array.from(document.querySelectorAll('#char-editor-relationships-rows .char-rel-card'))
+      .filter(r => r !== excludeRow)
+      .map(r => r.dataset.charId)
+      .filter(Boolean)
+  );
+}
+
 async function runOtherCharacterSearch(q) {
   const list = document.getElementById('char-link-picker-other-list');
   list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
   try {
     const res = await fetch(`/api/characters/search?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
     const data = await res.json();
-    const results = data.characters || [];
+    const results = (data.characters || []).filter(c => !linkPickerExcludedIds.has(String(c.id)));
     if (!results.length) {
       list.innerHTML = '<p class="char-link-picker-empty">No matching characters found.</p>';
       return;
@@ -891,6 +904,7 @@ async function runOtherCharacterSearch(q) {
 
 async function openLinkPicker(row) {
   linkPickerTargetRow = row;
+  linkPickerExcludedIds = computeExcludedIds(row);
   document.getElementById('char-link-picker-overlay').hidden = false;
   switchLinkPickerTab('mine');
   const list = document.getElementById('char-link-picker-mine-list');
@@ -898,7 +912,7 @@ async function openLinkPicker(row) {
   try {
     const res = await fetch('/api/characters/mine', { headers: authHeaders() });
     const data = await res.json();
-    const others = (data.characters || []).filter(c => String(c.id) !== editingCharId);
+    const others = (data.characters || []).filter(c => String(c.id) !== editingCharId && !linkPickerExcludedIds.has(String(c.id)));
     if (!others.length) {
       list.innerHTML = '<p class="char-link-picker-empty">No other characters yet! Come back after you create some to link here!</p>';
       return;
