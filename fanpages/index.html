@@ -71,10 +71,17 @@
     .fp-billboard-arrow:hover { background: rgba(0,0,0,0.7); }
     .fp-billboard-arrow--prev { left: 1rem; }
     .fp-billboard-arrow--next { right: 1rem; }
-    .fp-billboard-dots { position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%); display: flex; gap: 0.4rem; z-index: 3; }
+    /* "Infinite scroll" dot strip — the active dot always sits centered; a
+       fixed-size window of dots is rendered around it (their slide index
+       wrapped via modulo, so a handful of real slides can still fill a wide
+       window), and the whole strip translates by one dot-step on every
+       prev/next so dots visibly scroll past instead of just swapping which
+       one is lit up. Width is set in JS once dot size is known. */
+    .fp-billboard-dots { position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%); overflow: hidden; z-index: 3; }
+    .fp-billboard-dots-track { display: flex; gap: 0.4rem; }
     .fp-billboard-dot {
       width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.35);
-      cursor: pointer; transition: background 0.2s, transform 0.2s; border: none; padding: 0;
+      transition: background 0.2s, transform 0.2s; flex-shrink: 0;
     }
     .fp-billboard-dot.active { background: #fff; transform: scale(1.3); }
     @media (max-width: 640px) {
@@ -497,7 +504,7 @@
     </div>
     <button class="fp-billboard-arrow fp-billboard-arrow--prev" id="fp-billboard-prev" type="button" aria-label="Previous slide" style="display:none;">‹</button>
     <button class="fp-billboard-arrow fp-billboard-arrow--next" id="fp-billboard-next" type="button" aria-label="Next slide" style="display:none;">›</button>
-    <div class="fp-billboard-dots" id="fp-billboard-dots"></div>
+    <div class="fp-billboard-dots" id="fp-billboard-dots"><div class="fp-billboard-dots-track" id="fp-billboard-dots-track"></div></div>
   </section>
 
   <section class="fp-spotlight-row">
@@ -621,6 +628,20 @@
   let billboardIndex = 0;
   let billboardTimer = null;
 
+  // Slide 0 (the earliest-created — sort_order is never reassigned once set,
+  // so this is always "Drawing is my passion~") always leads the rotation;
+  // everything after it shuffles into a fresh random order on every page
+  // load, same spirit as the character/gallery/story spotlight picks.
+  function shuffleBillboardAfterFirst(slides) {
+    if (slides.length < 3) return slides;
+    const [first, ...rest] = slides;
+    for (let i = rest.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [rest[i], rest[j]] = [rest[j], rest[i]];
+    }
+    return [first, ...rest];
+  }
+
   // Pan + zoom via background-image instead of object-fit + transform:scale.
   // object-position and a post-hoc CSS scale() don't compose — the scale
   // happens AFTER object-fit places the image, so the position sliders can
@@ -657,7 +678,8 @@
       track.innerHTML = '';
       prevBtn.style.display = 'none';
       nextBtn.style.display = 'none';
-      dotsWrap.innerHTML = '';
+      dotsWrap.style.width = '';
+      document.getElementById('fp-billboard-dots-track').innerHTML = '';
       return;
     }
     empty.style.display = 'none';
@@ -683,24 +705,77 @@
     if (slides.length > 1) {
       prevBtn.style.display = 'flex';
       nextBtn.style.display = 'flex';
-      dotsWrap.innerHTML = '';
-      slides.forEach((_, i) => {
-        const dot = document.createElement('button');
-        dot.className = 'fp-billboard-dot' + (i === 0 ? ' active' : '');
-        dot.type = 'button';
-        dot.setAttribute('aria-label', `Go to slide ${i + 1}`);
-        dot.addEventListener('click', () => goToSlide(i));
-        dotsWrap.appendChild(dot);
-      });
+      initBillboardDots();
     } else {
       prevBtn.style.display = 'none';
       nextBtn.style.display = 'none';
-      dotsWrap.innerHTML = '';
+      dotsWrap.style.width = '';
+      document.getElementById('fp-billboard-dots-track').innerHTML = '';
     }
 
     billboardIndex = 0;
     playSlideAnimation(0);
     restartBillboardTimer();
+  }
+
+  // ── "Infinite scroll" dot strip ──────────────────────────────────────────
+  // The lit-up dot always stays dead center. A fixed window of dots is
+  // rendered around a virtual step counter (dotStep) that just keeps
+  // counting up/down as you navigate — never wraps — while each dot's
+  // *slide* index is dotStep wrapped via modulo, so a handful of real
+  // slides can still fill (and endlessly repeat across) a wider strip.
+  const DOT_RADIUS = 3; // 7 dots visible at rest
+  let dotStep = 0;
+
+  function billboardDotEl(v) {
+    const real = ((v % billboardSlides.length) + billboardSlides.length) % billboardSlides.length;
+    const dot = document.createElement('span');
+    dot.className = 'fp-billboard-dot' + (v === dotStep ? ' active' : '');
+    dot.dataset.v = v;
+    dot.dataset.real = real;
+    return dot;
+  }
+
+  function initBillboardDots() {
+    dotStep = 0;
+    const wrap  = document.getElementById('fp-billboard-dots');
+    const track = document.getElementById('fp-billboard-dots-track');
+    track.style.transition = 'none';
+    track.style.transform = 'translateX(0px)';
+    track.innerHTML = '';
+    for (let v = -DOT_RADIUS; v <= DOT_RADIUS; v++) track.appendChild(billboardDotEl(v));
+    // Lock the viewport to exactly this resting width so overflow:hidden
+    // clips the extra dot added on each shift instead of just squeezing in.
+    wrap.style.width = track.scrollWidth + 'px';
+  }
+
+  function shiftBillboardDots(direction) {
+    const wrap  = document.getElementById('fp-billboard-dots');
+    if (!wrap.style.width) return; // only 0-1 slides, no dot strip to animate
+    const track = document.getElementById('fp-billboard-dots-track');
+    const stepPx = track.children[1].offsetLeft - track.children[0].offsetLeft;
+
+    const newV = dotStep + direction * (DOT_RADIUS + 1);
+    const newDot = billboardDotEl(newV);
+    if (direction === 1) track.appendChild(newDot);
+    else track.insertBefore(newDot, track.firstChild);
+
+    dotStep += direction;
+    Array.from(track.children).forEach(d => d.classList.toggle('active', Number(d.dataset.v) === dotStep));
+
+    track.style.transition = 'none';
+    track.style.transform = direction === 1 ? 'translateX(0px)' : `translateX(${-stepPx}px)`;
+    void track.offsetWidth; // force reflow so the jump above applies before animating
+    track.style.transition = 'transform 0.35s ease';
+    track.style.transform = direction === 1 ? `translateX(${-stepPx}px)` : 'translateX(0px)';
+
+    track.addEventListener('transitionend', function handler() {
+      track.removeEventListener('transitionend', handler);
+      if (direction === 1) track.removeChild(track.firstChild);
+      else track.removeChild(track.lastChild);
+      track.style.transition = 'none';
+      track.style.transform = 'translateX(0px)';
+    }, { once: true });
   }
 
   // Ken Burns-style pan/zoom — the CSS transition duration is set to exactly
@@ -742,11 +817,15 @@
 
   window.addEventListener('resize', () => { if (billboardSlides.length) playSlideAnimation(billboardIndex); });
 
-  function goToSlide(i) {
+  function goToSlide(i, direction) {
     if (!billboardSlides.length) return;
+    // direction defaults to whichever way i actually moved from the current
+    // index (handles the auto-advance timer, which always calls
+    // goToSlide(billboardIndex + 1) without passing one explicitly).
+    if (direction === undefined) direction = i >= billboardIndex ? 1 : -1;
     billboardIndex = (i + billboardSlides.length) % billboardSlides.length;
     document.querySelectorAll('.fp-billboard-slide').forEach((el, idx) => el.classList.toggle('active', idx === billboardIndex));
-    document.querySelectorAll('.fp-billboard-dot').forEach((el, idx) => el.classList.toggle('active', idx === billboardIndex));
+    if (billboardSlides.length > 1) shiftBillboardDots(direction);
     playSlideAnimation(billboardIndex);
     restartBillboardTimer();
   }
@@ -754,12 +833,12 @@
   function restartBillboardTimer() {
     if (billboardTimer) clearInterval(billboardTimer);
     if (billboardSlides.length > 1) {
-      billboardTimer = setInterval(() => goToSlide(billboardIndex + 1), BILLBOARD_INTERVAL_MS);
+      billboardTimer = setInterval(() => goToSlide(billboardIndex + 1, 1), BILLBOARD_INTERVAL_MS);
     }
   }
 
-  document.getElementById('fp-billboard-prev').addEventListener('click', () => goToSlide(billboardIndex - 1));
-  document.getElementById('fp-billboard-next').addEventListener('click', () => goToSlide(billboardIndex + 1));
+  document.getElementById('fp-billboard-prev').addEventListener('click', () => goToSlide(billboardIndex - 1, -1));
+  document.getElementById('fp-billboard-next').addEventListener('click', () => goToSlide(billboardIndex + 1, 1));
 
   // Sends the auth token (if any) so the server can decide whether NSFW
   // slides belong in the mix — this script block runs before the one that
@@ -769,7 +848,7 @@
     const billboardToken = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
     fetch('/api/hub-billboard', { headers: billboardToken ? { Authorization: `Bearer ${billboardToken}` } : {} })
       .then(r => r.ok ? r.json() : { slides: [] })
-      .then(data => renderBillboard(data.slides || []))
+      .then(data => renderBillboard(shuffleBillboardAfterFirst(data.slides || [])))
       .catch(() => renderBillboard([]));
   }
 </script>
