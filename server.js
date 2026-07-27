@@ -669,6 +669,44 @@ async function initDb() {
         [encryptEmail(u.email), hashEmail(u.email), u.id]);
     } catch (e) { console.error('Email migration failed for user', u.id, e.message); }
   }
+
+  // ── Clubs — the Social page's new foundation. A club is a small
+  // reddit-forum-style space: an owner, promotable admins, and a post feed.
+  // Membership is its own table (not just a users<->clubs join) so role can
+  // live right alongside it instead of a second lookup.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS clubs (
+      id                 SERIAL      PRIMARY KEY,
+      slug               TEXT        NOT NULL UNIQUE,
+      name               TEXT        NOT NULL,
+      description        TEXT        NOT NULL DEFAULT '',
+      banner_url         TEXT        NOT NULL DEFAULT '',
+      banner_position_x  INTEGER     NOT NULL DEFAULT 50,
+      banner_position_y  INTEGER     NOT NULL DEFAULT 50,
+      icon_url           TEXT        NOT NULL DEFAULT '',
+      owner_user_id      INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS club_members (
+      id         SERIAL      PRIMARY KEY,
+      club_id    INTEGER     NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role       TEXT        NOT NULL DEFAULT 'member' CHECK (role IN ('owner','admin','member')),
+      joined_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(club_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS club_posts (
+      id              SERIAL      PRIMARY KEY,
+      club_id         INTEGER     NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      author_user_id  INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title           TEXT        NOT NULL DEFAULT '',
+      body            TEXT        NOT NULL DEFAULT '',
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_club_posts_club ON club_posts(club_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_club_members_club ON club_members(club_id);
+    CREATE INDEX IF NOT EXISTS idx_club_members_user ON club_members(user_id);
+  `).catch(e => console.error('clubs migration:', e.message));
 }
 
 // ── Email encryption helpers ──────────────────────────────────────────────────
@@ -4863,6 +4901,285 @@ app.get('/api/activity-feed', async (req, res) => {
       };
     });
   res.json({ items });
+});
+
+// ── Clubs — the Social page's forum/club system ─────────────────────────────
+function slugifyClubName(name) {
+  const base = String(name || '').toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+  return base || 'club';
+}
+async function uniqueClubSlug(name) {
+  const base = slugifyClubName(name);
+  let slug = base, n = 2;
+  while (true) {
+    const { rows } = await pool.query('SELECT 1 FROM clubs WHERE slug = $1', [slug]);
+    if (!rows.length) return slug;
+    slug = `${base}-${n++}`;
+  }
+}
+async function getClubRole(clubId, userId) {
+  if (!userId) return null;
+  const { rows: [row] } = await pool.query('SELECT role FROM club_members WHERE club_id = $1 AND user_id = $2', [clubId, userId]);
+  return row ? row.role : null;
+}
+function clubPublicShape(c, viewerRole) {
+  return {
+    id: c.id, slug: c.slug, name: c.name, description: c.description,
+    banner_url: c.banner_url, banner_position_x: c.banner_position_x, banner_position_y: c.banner_position_y,
+    icon_url: c.icon_url, owner_user_id: c.owner_user_id,
+    member_count: Number(c.member_count) || 0,
+    created_at: c.created_at,
+    viewer_role: viewerRole || null,
+  };
+}
+
+// GET /api/clubs — browse/search. ?q= filters by name, ?mine=1 restricts to
+// clubs the viewer belongs to (requires auth). Optional auth otherwise, so
+// viewer_role can be included for logged-in browsers without requiring login.
+app.get('/api/clubs', async (req, res) => {
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+  const q = `%${String(req.query.q || '').slice(0, 60)}%`;
+  const mineOnly = req.query.mine === '1' && viewerId;
+  const limit = Math.min(parseInt(req.query.limit, 10) || 30, 100);
+
+  const { rows } = await pool.query(
+    `SELECT c.*, COUNT(cm.id)::int AS member_count,
+            MAX(CASE WHEN cm.user_id = $1 THEN cm.role END) AS viewer_role
+     FROM clubs c
+     LEFT JOIN club_members cm ON cm.club_id = c.id
+     WHERE c.name ILIKE $2
+       ${mineOnly ? 'AND EXISTS (SELECT 1 FROM club_members m2 WHERE m2.club_id = c.id AND m2.user_id = $1)' : ''}
+     GROUP BY c.id
+     ORDER BY member_count DESC, c.created_at DESC
+     LIMIT $3`,
+    [viewerId, q, limit]
+  );
+  res.json({ clubs: rows.map(r => clubPublicShape(r, r.viewer_role)) });
+});
+
+// POST /api/clubs — create a club; creator becomes owner.
+app.post('/api/clubs', requireAuth, async (req, res) => {
+  const name = String(req.body.name || '').trim().slice(0, 60);
+  const description = String(req.body.description || '').trim().slice(0, 1000);
+  if (!name) return res.status(400).json({ error: 'A club name is required.' });
+
+  const slug = await uniqueClubSlug(name);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: [club] } = await client.query(
+      `INSERT INTO clubs (slug, name, description, owner_user_id) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [slug, name, description, req.user.id]
+    );
+    await client.query(
+      `INSERT INTO club_members (club_id, user_id, role) VALUES ($1, $2, 'owner')`,
+      [club.id, req.user.id]
+    );
+    await client.query('COMMIT');
+    res.json({ club: clubPublicShape({ ...club, member_count: 1 }, 'owner') });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+});
+
+// GET /api/clubs/:slug — club detail + member roster.
+app.get('/api/clubs/:slug', async (req, res) => {
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+  const { rows: [club] } = await pool.query('SELECT * FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+
+  const [{ rows: members }, viewerRole] = await Promise.all([
+    pool.query(
+      `SELECT u.id, u.username, u.display_name, u.avatar, cm.role, cm.joined_at
+       FROM club_members cm JOIN users u ON u.id = cm.user_id
+       WHERE cm.club_id = $1 ORDER BY (cm.role = 'owner') DESC, (cm.role = 'admin') DESC, cm.joined_at ASC`,
+      [club.id]
+    ),
+    getClubRole(club.id, viewerId),
+  ]);
+
+  res.json({
+    club: clubPublicShape({ ...club, member_count: members.length }, viewerRole),
+    members: members.map(m => ({
+      id: m.id, username: m.username, display_name: m.display_name || m.username,
+      avatar: m.avatar || null, role: m.role, joined_at: m.joined_at,
+    })),
+  });
+});
+
+// PUT /api/clubs/:slug — owner/admin only. Optional banner image upload.
+app.put('/api/clubs/:slug', requireAuth, uploadModImage.single('banner'), async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT * FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const role = await getClubRole(club.id, req.user.id);
+  if (role !== 'owner' && role !== 'admin') return res.status(403).json({ error: 'Only club owners/admins can edit this club.' });
+
+  const name = req.body.name !== undefined ? String(req.body.name).trim().slice(0, 60) || club.name : club.name;
+  const description = req.body.description !== undefined ? String(req.body.description).trim().slice(0, 1000) : club.description;
+  const positionX = req.body.banner_position_x !== undefined ? clampPosition(req.body.banner_position_x) : club.banner_position_x;
+  const positionY = req.body.banner_position_y !== undefined ? clampPosition(req.body.banner_position_y) : club.banner_position_y;
+
+  let bannerUrl = club.banner_url;
+  if (req.file) {
+    bannerUrl = `/images/moderators/${req.file.filename}`;
+    if (club.banner_url.startsWith('/images/moderators/')) {
+      const oldPath = path.join('/var/www/btw', club.banner_url);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+  }
+
+  const { rows: [updated] } = await pool.query(
+    `UPDATE clubs SET name = $1, description = $2, banner_url = $3, banner_position_x = $4, banner_position_y = $5
+     WHERE id = $6 RETURNING *`,
+    [name, description, bannerUrl, positionX, positionY, club.id]
+  );
+  res.json({ club: clubPublicShape(updated, role) });
+});
+
+// DELETE /api/clubs/:slug — owner only.
+app.delete('/api/clubs/:slug', requireAuth, async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT * FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  if (club.owner_user_id !== req.user.id) return res.status(403).json({ error: 'Only the club owner can delete this club.' });
+  if (club.banner_url.startsWith('/images/moderators/')) {
+    const filePath = path.join('/var/www/btw', club.banner_url);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
+  await pool.query('DELETE FROM clubs WHERE id = $1', [club.id]);
+  res.json({ message: 'Club deleted.' });
+});
+
+// POST /api/clubs/:slug/join
+app.post('/api/clubs/:slug/join', requireAuth, async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  await pool.query(
+    `INSERT INTO club_members (club_id, user_id, role) VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING`,
+    [club.id, req.user.id]
+  );
+  res.json({ message: 'Joined!' });
+});
+
+// DELETE /api/clubs/:slug/leave — the owner can't leave their own club (must
+// delete it, or transfer ownership first — no transfer flow yet).
+app.delete('/api/clubs/:slug/leave', requireAuth, async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id, owner_user_id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  if (club.owner_user_id === req.user.id) return res.status(400).json({ error: "The owner can't leave their own club — delete it instead." });
+  await pool.query('DELETE FROM club_members WHERE club_id = $1 AND user_id = $2', [club.id, req.user.id]);
+  res.json({ message: 'Left the club.' });
+});
+
+// PUT /api/clubs/:slug/members/:userId — owner only; promote/demote admin<->member.
+app.put('/api/clubs/:slug/members/:userId', requireAuth, async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id, owner_user_id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  if (club.owner_user_id !== req.user.id) return res.status(403).json({ error: 'Only the club owner can change member roles.' });
+  const targetId = parseInt(req.params.userId, 10);
+  if (targetId === req.user.id) return res.status(400).json({ error: "The owner's own role can't be changed here." });
+  const role = req.body.role === 'admin' ? 'admin' : 'member';
+  const { rowCount } = await pool.query(
+    `UPDATE club_members SET role = $1 WHERE club_id = $2 AND user_id = $3 AND role != 'owner'`,
+    [role, club.id, targetId]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Member not found.' });
+  res.json({ message: 'Role updated.' });
+});
+
+// DELETE /api/clubs/:slug/members/:userId — remove a member. Owners can
+// remove anyone (except themselves); admins can only remove plain members.
+app.delete('/api/clubs/:slug/members/:userId', requireAuth, async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id, owner_user_id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const targetId = parseInt(req.params.userId, 10);
+  if (targetId === club.owner_user_id) return res.status(400).json({ error: "The owner can't be removed." });
+  const viewerRole = await getClubRole(club.id, req.user.id);
+  const targetRole = await getClubRole(club.id, targetId);
+  const allowed = viewerRole === 'owner' || (viewerRole === 'admin' && targetRole === 'member');
+  if (!allowed) return res.status(403).json({ error: "You don't have permission to remove this member." });
+  await pool.query('DELETE FROM club_members WHERE club_id = $1 AND user_id = $2', [club.id, targetId]);
+  res.json({ message: 'Member removed.' });
+});
+
+// GET /api/clubs/:slug/posts
+app.get('/api/clubs/:slug/posts', async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const { rows } = await pool.query(
+    `SELECT cp.*, u.username, u.display_name, u.avatar
+     FROM club_posts cp JOIN users u ON u.id = cp.author_user_id
+     WHERE cp.club_id = $1 ORDER BY cp.created_at DESC LIMIT 100`,
+    [club.id]
+  );
+  res.json({ posts: rows.map(p => ({
+    id: p.id, title: p.title, body: p.body, created_at: p.created_at,
+    author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
+  })) });
+});
+
+// POST /api/clubs/:slug/posts — members only.
+app.post('/api/clubs/:slug/posts', requireAuth, async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const role = await getClubRole(club.id, req.user.id);
+  if (!role) return res.status(403).json({ error: 'Join this club to post in it.' });
+
+  const title = String(req.body.title || '').trim().slice(0, 120);
+  const body = String(req.body.body || '').trim().slice(0, 5000);
+  if (!body) return res.status(400).json({ error: 'Post body is required.' });
+
+  const { rows: [post] } = await pool.query(
+    `INSERT INTO club_posts (club_id, author_user_id, title, body) VALUES ($1, $2, $3, $4) RETURNING *`,
+    [club.id, req.user.id, title, body]
+  );
+  const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
+  res.json({ post: {
+    id: post.id, title: post.title, body: post.body, created_at: post.created_at,
+    author: { id: req.user.id, username: author.username, display_name: author.display_name || author.username, avatar: author.avatar || null },
+  } });
+});
+
+// DELETE /api/clubs/:slug/posts/:postId — the post's own author, or a club owner/admin.
+app.delete('/api/clubs/:slug/posts/:postId', requireAuth, async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const { rows: [post] } = await pool.query('SELECT * FROM club_posts WHERE id = $1 AND club_id = $2', [req.params.postId, club.id]);
+  if (!post) return res.status(404).json({ error: 'Post not found.' });
+  const role = await getClubRole(club.id, req.user.id);
+  const allowed = post.author_user_id === req.user.id || role === 'owner' || role === 'admin';
+  if (!allowed) return res.status(403).json({ error: "You don't have permission to delete this post." });
+  await pool.query('DELETE FROM club_posts WHERE id = $1', [post.id]);
+  res.json({ message: 'Post deleted.' });
+});
+
+// GET /api/clubs-feed — recent posts across every club, for the Social hub.
+app.get('/api/clubs-feed', async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
+  const { rows } = await pool.query(
+    `SELECT cp.*, u.username, u.display_name, u.avatar, c.slug AS club_slug, c.name AS club_name, c.icon_url AS club_icon
+     FROM club_posts cp
+     JOIN users u ON u.id = cp.author_user_id
+     JOIN clubs c ON c.id = cp.club_id
+     ORDER BY cp.created_at DESC LIMIT $1`,
+    [limit]
+  );
+  res.json({ posts: rows.map(p => ({
+    id: p.id, title: p.title, body: p.body, created_at: p.created_at,
+    author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
+    club: { slug: p.club_slug, name: p.club_name, icon_url: p.club_icon || null },
+  })) });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
