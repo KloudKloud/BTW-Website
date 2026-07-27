@@ -200,6 +200,20 @@
           const containerData = galleryPreviewCropper.getContainerData();
           galleryPreviewCropper.setCropBoxData({ left: 0, top: 0, width: containerData.width, height: containerData.height });
 
+          // Cropper's own auto-fit zoom ran against whatever (possibly
+          // wrong) crop box size existed at that moment — recompute a
+          // proper "cover" fit against the corrected box so the art fills
+          // the preview by default before any manual drag/zoom adjustment.
+          const imgDataForFit = galleryPreviewCropper.getImageData();
+          const coverScale = Math.max(containerData.width / imgDataForFit.naturalWidth, containerData.height / imgDataForFit.naturalHeight);
+          const canvasWidth = imgDataForFit.naturalWidth * coverScale;
+          const canvasHeight = imgDataForFit.naturalHeight * coverScale;
+          galleryPreviewCropper.setCanvasData({
+            width: canvasWidth, height: canvasHeight,
+            left: (containerData.width - canvasWidth) / 2,
+            top: (containerData.height - canvasHeight) / 2,
+          });
+
           const data = galleryPreviewCropper.getData();
           const imgData = galleryPreviewCropper.getImageData();
           const maxX = imgData.naturalWidth - data.width;
