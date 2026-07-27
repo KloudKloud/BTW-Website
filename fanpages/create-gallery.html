@@ -193,17 +193,12 @@
         aspectRatio: 6 / 7, viewMode: 1, dragMode: 'move', autoCropArea: 1,
         cropBoxResizable: false, cropBoxMovable: false, background: false, responsive: true,
         ready() {
-          // The crop box is locked (non-resizable, non-movable) so it's
-          // always meant to exactly cover the whole preview — force it to
-          // the container's actual bounds so it can never end up stuck at
-          // whatever size Cropper happened to auto-compute on init.
+          // Order matters: viewMode:1 clamps the crop box to whatever the
+          // CANVAS size is at the moment it's set, so fixing the crop box
+          // before the canvas just gets it silently shrunk back down to
+          // match the old (wrong) canvas size. Fit the canvas ("cover")
+          // FIRST, then size the crop box to the container.
           const containerData = galleryPreviewCropper.getContainerData();
-          galleryPreviewCropper.setCropBoxData({ left: 0, top: 0, width: containerData.width, height: containerData.height });
-
-          // Cropper's own auto-fit zoom ran against whatever (possibly
-          // wrong) crop box size existed at that moment — recompute a
-          // proper "cover" fit against the corrected box so the art fills
-          // the preview by default before any manual drag/zoom adjustment.
           const imgDataForFit = galleryPreviewCropper.getImageData();
           const coverScale = Math.max(containerData.width / imgDataForFit.naturalWidth, containerData.height / imgDataForFit.naturalHeight);
           const canvasWidth = imgDataForFit.naturalWidth * coverScale;
@@ -213,6 +208,7 @@
             left: (containerData.width - canvasWidth) / 2,
             top: (containerData.height - canvasHeight) / 2,
           });
+          galleryPreviewCropper.setCropBoxData({ left: 0, top: 0, width: containerData.width, height: containerData.height });
 
           const data = galleryPreviewCropper.getData();
           const imgData = galleryPreviewCropper.getImageData();
