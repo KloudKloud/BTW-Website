@@ -1036,6 +1036,12 @@ function openGalleryEditor(item) {
   document.getElementById('gallery-editor-save').textContent = item ? 'Save and Close' : 'Post';
   document.getElementById('gallery-editor-splash').style.display = item ? 'none' : 'block';
 
+  // Unhide the modal BEFORE initializing Cropper.js below — Cropper measures
+  // its container's rendered size on init, and a still-hidden (display:none)
+  // modal measures as 0x0, which is exactly what made the crop box glitch
+  // and drag the image off-screen.
+  document.getElementById('gallery-editor-overlay').hidden = false;
+
   const img = document.getElementById('gallery-editor-img');
   const placeholder = document.getElementById('gallery-editor-img-placeholder');
   if (item) {
@@ -1060,8 +1066,6 @@ function openGalleryEditor(item) {
   document.getElementById('gallery-editor-consent').checked = !!item;
   document.getElementById('gallery-editor-msg').textContent = '';
   updateSaveButtonState();
-
-  document.getElementById('gallery-editor-overlay').hidden = false;
 }
 function closeGalleryEditor() {
   document.getElementById('gallery-editor-overlay').hidden = true;
