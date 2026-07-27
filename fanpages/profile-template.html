@@ -317,10 +317,11 @@
       font-size: 1.15rem; letter-spacing: 0.04em; margin-bottom: 1.1rem;
     }
     /* Detail view's own row — deliberately identical to the story-context
-       .mod-page-row (max-width, padding, grid-template-columns, gap), with
-       a static Navigate box standing in as the real second column instead
-       of a hand-copied width number. This guarantees the two pages render
-       pixel-identical regardless of future spacing tweaks to either one. */
+       .mod-page-row (max-width, padding, grid-template-columns, gap). The
+       second (220px) column is intentionally kept empty rather than
+       removed — that's what holds #fp-gallery-detail-view's column at the
+       exact same width as the story-context version; a visible Navigate
+       box isn't needed for that, just the reserved track. */
     .fp-gallery-detail-row {
       max-width: 1340px; margin: 3rem auto 0; padding: 0 3rem;
       display: grid; grid-template-columns: 1fr 220px; gap: 2rem; align-items: start;
@@ -330,14 +331,12 @@
        *inside* the 1fr column instead of filling it — same fix
        gallery.html applies inline on its own #gallery-detail-view. */
     #fp-gallery-detail-view { max-width: none; margin: 0; padding-left: 0; padding-right: 0; padding-bottom: 0; }
-    .fp-gallery-detail-row .mod-side-nav-link { cursor: default; }
-    .fp-gallery-detail-row .mod-side-nav-link:hover { background: none; color: inherit; }
     /* "Full Gallery" back button — bigger, green pill (matches the
        story-context gallery's back button), nudged down so it isn't
        touching the tab row's underline above it. */
     #fp-gallery-detail-view .art-view-back {
       color: #fff; border-color: #2fbf5f; background: #2fbf5f;
-      font-size: 0.95rem; font-weight: 700; padding: 0.7em 1.6em;
+      font-size: 1rem; font-weight: 700; padding: 0.78em 1.7em;
       margin-top: 1.75rem; margin-bottom: 2.5rem;
     }
     #fp-gallery-detail-view .art-view-back:hover {
@@ -1022,19 +1021,6 @@
         <div class="cc-list" id="fp-cc-list"><p class="cc-empty">Loading…</p></div>
       </div>
     </div>
-
-    <div class="wiki-side-col">
-      <aside class="mod-side-nav">
-        <p class="mod-side-nav-label">Navigate</p>
-        <div class="mod-side-nav-divider"></div>
-        <ul class="mod-side-nav-list">
-          <li><span class="mod-side-nav-link">Home</span></li>
-          <li><span class="mod-side-nav-link">Characters</span></li>
-          <li><span class="mod-side-nav-link">Stories</span></li>
-          <li><span class="mod-side-nav-link active">Gallery</span></li>
-        </ul>
-      </aside>
-    </div>
   </div>
 </div>
 
@@ -1371,7 +1357,7 @@
     // view — otherwise coming back to the Gallery tab later reopens whatever
     // picture was last viewed instead of showing the gallery itself.
     if (tab !== 'gallery' && document.getElementById('fp-gallery-detail-row').style.display === 'grid') {
-      closeFpGalleryDetail();
+      closeFpGalleryDetail(false); // switchTab's own replaceState below owns the URL here
     }
     activeTabName = tab;
     TAB_NAMES.forEach(t => {
@@ -1904,7 +1890,12 @@
     document.getElementById('fp-gallery-detail-like').classList.toggle('liked', !!item.liked);
   }
 
-  function openFpGalleryDetail(item, scroll) {
+  // pushHistory (default true) puts ?gallery=<id> in the URL so a refresh
+  // (or the browser back/forward buttons, via the popstate listener below)
+  // lands back on the same piece instead of resetting to the grid — same
+  // pattern the story-context gallery uses. Pass false when responding to
+  // popstate itself, so it doesn't push yet another entry on top.
+  function openFpGalleryDetail(item, scroll, pushHistory) {
     fpGalleryCurrentDetailItem = item;
     document.getElementById('fp-gallery-detail-img').src = item.image;
     document.getElementById('fp-gallery-detail-img').alt = item.title || '';
@@ -1917,17 +1908,31 @@
     ccInitSection('gallery', item.id);
     document.getElementById('fp-gallery-grid-row').style.display = 'none';
     document.getElementById('fp-gallery-detail-row').style.display = 'grid';
+    if (pushHistory !== false) {
+      history.pushState({ fpGallery: item.id }, '', `${location.pathname}?gallery=${item.id}#gallery`);
+    }
     if (scroll) {
       const target = document.querySelector('#fp-gallery-detail-view .art-view-image-wrap') || document.getElementById('fp-gallery-view');
       target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }
-  function closeFpGalleryDetail() {
+  function closeFpGalleryDetail(pushHistory) {
     fpGalleryCurrentDetailItem = null;
     document.getElementById('fp-gallery-detail-row').style.display = 'none';
     document.getElementById('fp-gallery-grid-row').style.display = '';
+    if (pushHistory !== false) {
+      history.pushState({}, '', `${location.pathname}#gallery`);
+    }
   }
   document.getElementById('fp-gallery-detail-back').addEventListener('click', (e) => { e.preventDefault(); closeFpGalleryDetail(); });
+  window.addEventListener('popstate', () => {
+    if (activeTabName !== 'gallery') return;
+    const id = new URLSearchParams(window.location.search).get('gallery');
+    if (!id) { closeFpGalleryDetail(false); return; }
+    const all = [...FP_GALLERY_ART, ...FP_GALLERY_SKETCHES, ...FP_GALLERY_SPICY];
+    const item = all.find(g => String(g.id) === String(id));
+    if (item) openFpGalleryDetail(item, false, false);
+  });
 
   document.getElementById('fp-gallery-detail-like').addEventListener('click', async (e) => {
     if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname)}`; return; }
@@ -3428,7 +3433,7 @@
     loadGalleryTab().then(() => {
       const all = [...FP_GALLERY_ART, ...FP_GALLERY_SKETCHES, ...FP_GALLERY_SPICY];
       const item = all.find(g => String(g.id) === String(deepGalleryId));
-      if (item) { setFpGalleryCategory(item.category); openFpGalleryDetail(item, true); }
+      if (item) { setFpGalleryCategory(item.category); openFpGalleryDetail(item, true, false); }
     });
   }
 </script>
