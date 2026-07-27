@@ -708,6 +708,14 @@ async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_club_members_user ON club_members(user_id);
   `).catch(e => console.error('clubs migration:', e.message));
 
+  // Every club (new ones via POST /api/clubs, which never specifies a
+  // banner_url, letting this column default kick in) starts with this
+  // image as its banner rather than the plain fallback card.
+  await pool.query(`
+    ALTER TABLE clubs ALTER COLUMN banner_url SET DEFAULT '/images/gallery/solusgarnet_17.png';
+    UPDATE clubs SET banner_url = '/images/gallery/solusgarnet_17.png' WHERE banner_url = '';
+  `).catch(e => console.error('clubs default banner migration:', e.message));
+
   // BTWClub — the site-wide default club every account belongs to (an
   // r/all equivalent). Owned by the admin account; seeded once, then every
   // existing user is backfilled into it on each restart (new signups join
