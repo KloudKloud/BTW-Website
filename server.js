@@ -4173,6 +4173,10 @@ app.delete('/api/characters/:id', requireAuth, async (req, res) => {
   );
   if (!existing) return res.status(404).json({ error: 'Not found.' });
   await pool.query('DELETE FROM moderator_characters WHERE id = $1', [existing.id]);
+  // Anyone who featured this character (favorites are cached by ref_id, not
+  // an FK — see user_featured_items migration comment) would otherwise be
+  // stuck showing a dead entry with no live row to fall back to.
+  await pool.query(`DELETE FROM user_featured_items WHERE kind = 'character' AND ref_id = $1`, [String(existing.id)]);
   res.json({ message: 'Deleted.' });
 });
 
@@ -4417,6 +4421,10 @@ app.delete('/api/gallery/:id', requireAuth, async (req, res) => {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
   await pool.query('DELETE FROM moderator_gallery WHERE id = $1', [item.id]);
+  // Anyone who featured this gallery piece would otherwise be stuck showing
+  // a dead entry with no live row to fall back to (see the character delete
+  // handler above — same fix, same reason).
+  await pool.query(`DELETE FROM user_featured_items WHERE kind = 'gallery' AND ref_id = $1`, [String(item.id)]);
   res.json({ message: 'Deleted.' });
 });
 
