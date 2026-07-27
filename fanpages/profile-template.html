@@ -307,15 +307,6 @@
        instead of sitting slightly further left. */
     .fp-gallery-page-row { max-width: 1240px; margin: 0 auto; padding: 0 2rem; }
     .fp-gallery-page-row .mod-gallery-main { grid-template-columns: 240px 1fr; gap: 2rem; }
-    /* Matches the exact width the story-context detail view renders at:
-       .mod-page-row is max-width:1340px, padding:0 3rem (96px), grid
-       "1fr 220px" with a 2rem (32px) gap — so its 1fr column, which
-       #gallery-detail-view fills completely, comes out to
-       1340 - 96 - 32 - 220 = 992px. There's no Navigate/side-nav column
-       here to replicate, so this is just a plain width match rather than
-       an actual second grid column. Starts flush left (not centered) to
-       land where the Browse box used to sit. */
-    #fp-gallery-detail-view { max-width: 992px; margin: 0; padding-left: 0; padding-right: 0; padding-bottom: 0; }
     /* Nudge the Browse box down a bit so it doesn't sit flush against the
        top of the column. */
     .fp-gallery-page-row .chars-create-box {
@@ -325,6 +316,22 @@
     .fp-gallery-page-row .mod-gallery-sidebar-label {
       font-size: 1.15rem; letter-spacing: 0.04em; margin-bottom: 1.1rem;
     }
+    /* Detail view's own row — deliberately identical to the story-context
+       .mod-page-row (max-width, padding, grid-template-columns, gap), with
+       a static Navigate box standing in as the real second column instead
+       of a hand-copied width number. This guarantees the two pages render
+       pixel-identical regardless of future spacing tweaks to either one. */
+    .fp-gallery-detail-row {
+      max-width: 1340px; margin: 3rem auto 0; padding: 0 3rem;
+      display: grid; grid-template-columns: 1fr 220px; gap: 2rem; align-items: start;
+    }
+    /* #fp-gallery-detail-view otherwise keeps the base .art-view-wrapper's
+       own max-width:920px;margin:0 auto sizing, which would center it
+       *inside* the 1fr column instead of filling it — same fix
+       gallery.html applies inline on its own #gallery-detail-view. */
+    #fp-gallery-detail-view { max-width: none; margin: 0; padding-left: 0; padding-right: 0; padding-bottom: 0; }
+    .fp-gallery-detail-row .mod-side-nav-link { cursor: default; }
+    .fp-gallery-detail-row .mod-side-nav-link:hover { background: none; color: inherit; }
     /* "Full Gallery" back button — bigger, green pill (matches the
        story-context gallery's back button), nudged down so it isn't
        touching the tab row's underline above it. */
@@ -956,7 +963,7 @@
      wall exactly like a story's own gallery — the API includes it, the
      page just won't render it for a logged-out visitor. -->
 <div class="fp-tab-view" id="fp-gallery-view" hidden>
-  <div class="fp-gallery-page-row">
+  <div class="fp-gallery-page-row" id="fp-gallery-grid-row">
   <div class="mod-gallery-main" id="fp-gallery-grid-view">
     <div class="chars-sidebar-col">
       <aside class="chars-create-box">
@@ -973,40 +980,61 @@
       <div class="gallery-grid" id="fp-gallery-grid"></div>
     </div>
   </div>
-
-  <div class="art-view-wrapper" id="fp-gallery-detail-view" style="display:none;">
-    <a class="art-view-back" href="#" id="fp-gallery-detail-back">← Full Gallery</a>
-    <div class="art-view-image-wrap">
-      <img id="fp-gallery-detail-img" src="" alt="" />
-    </div>
-    <div class="art-view-info">
-      <h1 class="art-view-title" id="fp-gallery-detail-title"></h1>
-      <div class="art-view-actions">
-        <button class="art-view-like art-view-like--big" id="fp-gallery-detail-like" type="button" aria-label="Like">
-          <span id="fp-gallery-detail-like-icon">♡</span> <span id="fp-gallery-detail-like-count">0</span>
-        </button>
-        <button class="art-view-bookmark-btn" id="fp-gallery-detail-bookmark" type="button" aria-label="Bookmark">
-          <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
-        </button>
-        <button class="fp-share-icon-btn" id="fp-gallery-detail-share" type="button" title="Share this post">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
-        </button>
-      </div>
-    </div>
-    <div class="art-view-desc" id="fp-gallery-detail-desc-box">
-      <div id="fp-gallery-detail-desc"></div>
-      <div class="art-view-tags-section" id="fp-gallery-detail-tags"></div>
-    </div>
-    <div id="fp-gallery-detail-nav" class="art-nav"></div>
-    <div class="cc-section" id="fp-gallery-detail-comments">
-      <p class="cc-title">💬 Comments</p>
-      <div class="cc-compose" id="fp-cc-compose" style="display:none;">
-        <textarea id="fp-cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
-        <button class="cc-compose-btn" id="fp-cc-compose-btn" type="button">Post</button>
-      </div>
-      <div class="cc-list" id="fp-cc-list"><p class="cc-empty">Loading…</p></div>
-    </div>
   </div>
+
+  <!-- Detail view sits in its own row, sized to match the story-context
+       .mod-page-row exactly (same max-width/padding/grid-template-columns/
+       gap), with a static (non-clickable) Navigate box standing in for the
+       real one so the two columns compute to the exact same widths —
+       instead of hand-copying a magic pixel number that'd drift out of
+       sync the moment either page's spacing changes. -->
+  <div class="fp-gallery-detail-row" id="fp-gallery-detail-row" style="display:none;">
+    <div class="art-view-wrapper" id="fp-gallery-detail-view">
+      <a class="art-view-back" href="#" id="fp-gallery-detail-back">← Full Gallery</a>
+      <div class="art-view-image-wrap">
+        <img id="fp-gallery-detail-img" src="" alt="" />
+      </div>
+      <div class="art-view-info">
+        <h1 class="art-view-title" id="fp-gallery-detail-title"></h1>
+        <div class="art-view-actions">
+          <button class="art-view-like art-view-like--big" id="fp-gallery-detail-like" type="button" aria-label="Like">
+            <span id="fp-gallery-detail-like-icon">♡</span> <span id="fp-gallery-detail-like-count">0</span>
+          </button>
+          <button class="art-view-bookmark-btn" id="fp-gallery-detail-bookmark" type="button" aria-label="Bookmark">
+            <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
+          </button>
+          <button class="fp-share-icon-btn" id="fp-gallery-detail-share" type="button" title="Share this post">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="art-view-desc" id="fp-gallery-detail-desc-box">
+        <div id="fp-gallery-detail-desc"></div>
+        <div class="art-view-tags-section" id="fp-gallery-detail-tags"></div>
+      </div>
+      <div id="fp-gallery-detail-nav" class="art-nav"></div>
+      <div class="cc-section" id="fp-gallery-detail-comments">
+        <p class="cc-title">💬 Comments</p>
+        <div class="cc-compose" id="fp-cc-compose" style="display:none;">
+          <textarea id="fp-cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
+          <button class="cc-compose-btn" id="fp-cc-compose-btn" type="button">Post</button>
+        </div>
+        <div class="cc-list" id="fp-cc-list"><p class="cc-empty">Loading…</p></div>
+      </div>
+    </div>
+
+    <div class="wiki-side-col">
+      <aside class="mod-side-nav">
+        <p class="mod-side-nav-label">Navigate</p>
+        <div class="mod-side-nav-divider"></div>
+        <ul class="mod-side-nav-list">
+          <li><span class="mod-side-nav-link">Home</span></li>
+          <li><span class="mod-side-nav-link">Characters</span></li>
+          <li><span class="mod-side-nav-link">Stories</span></li>
+          <li><span class="mod-side-nav-link active">Gallery</span></li>
+        </ul>
+      </aside>
+    </div>
   </div>
 </div>
 
@@ -1342,7 +1370,7 @@
     // in from Recent Submissions) should reset it back to the default grid
     // view — otherwise coming back to the Gallery tab later reopens whatever
     // picture was last viewed instead of showing the gallery itself.
-    if (tab !== 'gallery' && document.getElementById('fp-gallery-detail-view').style.display === 'block') {
+    if (tab !== 'gallery' && document.getElementById('fp-gallery-detail-row').style.display === 'grid') {
       closeFpGalleryDetail();
     }
     activeTabName = tab;
@@ -1887,8 +1915,8 @@
     updateFpGalleryBookmarkUI(item);
     loadFpGalleryTagsSection(item);
     ccInitSection('gallery', item.id);
-    document.getElementById('fp-gallery-grid-view').style.display = 'none';
-    document.getElementById('fp-gallery-detail-view').style.display = 'block';
+    document.getElementById('fp-gallery-grid-row').style.display = 'none';
+    document.getElementById('fp-gallery-detail-row').style.display = 'grid';
     if (scroll) {
       const target = document.querySelector('#fp-gallery-detail-view .art-view-image-wrap') || document.getElementById('fp-gallery-view');
       target.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1896,8 +1924,8 @@
   }
   function closeFpGalleryDetail() {
     fpGalleryCurrentDetailItem = null;
-    document.getElementById('fp-gallery-detail-view').style.display = 'none';
-    document.getElementById('fp-gallery-grid-view').style.display = '';
+    document.getElementById('fp-gallery-detail-row').style.display = 'none';
+    document.getElementById('fp-gallery-grid-row').style.display = '';
   }
   document.getElementById('fp-gallery-detail-back').addEventListener('click', (e) => { e.preventDefault(); closeFpGalleryDetail(); });
 
