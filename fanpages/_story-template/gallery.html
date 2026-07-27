@@ -144,7 +144,7 @@
 
 <!-- Gallery post editor modal — owner only -->
 <div class="char-editor-overlay" id="gallery-editor-overlay" hidden>
-  <div class="char-editor-modal">
+  <div class="char-editor-modal" id="gallery-editor-modal">
     <h2 class="char-editor-title editor-title-glow" id="gallery-editor-title">Create Gallery Post</h2>
     <p class="char-editor-facts-hint" id="gallery-editor-splash" style="margin-top:-1rem; margin-bottom:1.5rem;"></p>
 
@@ -843,6 +843,16 @@ function showGalleryPreview(src) {
   if (galleryPreviewCropper) { galleryPreviewCropper.destroy(); galleryPreviewCropper = null; }
   previewImg.removeAttribute('src');
   previewImg.onload = () => {
+    // This modal is a freshly-unhidden position:fixed overlay with an
+    // aspect-ratio-based (not fixed-px) crop box — reading its size on the
+    // very same tick the image loads can catch layout that hasn't been
+    // flushed/painted yet, which is exactly what made the crop box measure
+    // wrong and drift during drag. Deferring Cropper's init to the next
+    // animation frame guarantees a settled layout to measure against (the
+    // always-visible, non-overlay create-gallery.html page never hits this
+    // timing issue in the first place, which is why the identical Cropper
+    // code works fine there).
+    requestAnimationFrame(() => {
     galleryPreviewCropper = new Cropper(previewImg, {
       aspectRatio: 6 / 7, viewMode: 1, dragMode: 'move', autoCropArea: 1,
       cropBoxResizable: false, cropBoxMovable: false, background: false, responsive: true,
@@ -864,6 +874,7 @@ function showGalleryPreview(src) {
         galleryPos.x = maxX > 0 ? Math.round((data.x / maxX) * 100) : 50;
         galleryPos.y = maxY > 0 ? Math.round((data.y / maxY) * 100) : 50;
       },
+    });
     });
   };
   previewImg.src = src;
@@ -1066,6 +1077,12 @@ function openGalleryEditor(item) {
   document.getElementById('gallery-editor-consent').checked = !!item;
   document.getElementById('gallery-editor-msg').textContent = '';
   updateSaveButtonState();
+
+  // The modal was opening scrolled to the bottom instead of the top —
+  // some field populated above (e.g. focusing/rendering the Link To grids)
+  // was pulling scroll down. Force it back to the top after everything's
+  // been filled in, on the next frame so it wins against any late scroll.
+  requestAnimationFrame(() => { document.getElementById('gallery-editor-modal').scrollTop = 0; });
 }
 function closeGalleryEditor() {
   document.getElementById('gallery-editor-overlay').hidden = true;
