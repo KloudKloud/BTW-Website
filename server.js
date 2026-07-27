@@ -707,6 +707,26 @@ async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_club_members_club ON club_members(club_id);
     CREATE INDEX IF NOT EXISTS idx_club_members_user ON club_members(user_id);
   `).catch(e => console.error('clubs migration:', e.message));
+
+  // BTWClub — the site-wide default club every account belongs to (an
+  // r/all equivalent). Owned by the admin account; seeded once, then every
+  // existing user is backfilled into it on each restart (new signups join
+  // it directly at registration instead of waiting for a restart).
+  await pool.query(`
+    INSERT INTO clubs (slug, name, description, icon_url, owner_user_id)
+    SELECT 'btwclub', 'BTWClub', 'The default club everyone''s a part of — home base for the whole community.',
+           '/images/gallery/kloudselfie_7.png', u.id
+    FROM users u
+    WHERE u.email_hash = $1 AND NOT EXISTS (SELECT 1 FROM clubs WHERE slug = 'btwclub')
+  `, [process.env.ADMIN_EMAIL_HASH]).catch(e => console.error('BTWClub seed:', e.message));
+
+  await pool.query(`
+    INSERT INTO club_members (club_id, user_id, role)
+    SELECT c.id, u.id, CASE WHEN u.id = c.owner_user_id THEN 'owner' ELSE 'member' END
+    FROM clubs c CROSS JOIN users u
+    WHERE c.slug = 'btwclub'
+    ON CONFLICT DO NOTHING
+  `).catch(e => console.error('BTWClub membership backfill:', e.message));
 }
 
 // ── Email encryption helpers ──────────────────────────────────────────────────
@@ -898,6 +918,15 @@ app.post('/api/auth/register', async (req, res) => {
                'Welcome to Between Two Worlds! Where adventure awaits~')`,
       [newUser.id, process.env.ADMIN_EMAIL_HASH]
     ).catch(e => console.error('welcome notification insert:', e.message));
+
+    // Every account starts as a member of BTWClub, the site-wide default
+    // club (r/all-equivalent) — see the clubs migration for how it's seeded.
+    await pool.query(
+      `INSERT INTO club_members (club_id, user_id, role)
+       SELECT id, $1, 'member' FROM clubs WHERE slug = 'btwclub'
+       ON CONFLICT DO NOTHING`,
+      [newUser.id]
+    ).catch(e => console.error('BTWClub auto-join insert:', e.message));
 
     const verifyUrl = `https://${process.env.SITE_HOST}/api/auth/verify?token=${verify_token}`
       + (from ? `&from=${encodeURIComponent(from)}` : '');
