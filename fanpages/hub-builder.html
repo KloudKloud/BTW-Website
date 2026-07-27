@@ -14,7 +14,7 @@
     .hb-frame-toggle { display: flex; justify-content: center; gap: 0.6rem; margin: 0 0 0.6rem; }
     .hb-frame-tab { opacity: 0.55; }
     .hb-frame-tab.active { opacity: 1; background: #7fa8d9; color: #0a0a0a; }
-    .hb-wrap { max-width: 1560px; margin: 0 auto; padding: 3rem 2rem 5rem; }
+    .hb-wrap { max-width: 1000px; margin: 0 auto; padding: 3rem 2rem 5rem; }
     .hb-title { font-family: 'Cinzel', serif; font-size: 1.8rem; color: #f0f0f0; margin-bottom: 0.5rem; }
     .hb-sub { color: #999; font-size: 0.92rem; margin-bottom: 2rem; max-width: 640px; line-height: 1.7; }
     .hb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1.25rem; margin-top: 2rem; }
@@ -214,8 +214,15 @@ function hbPositionToCropBox(cropper, pos) {
     width, height,
   };
 }
+// Cropper.js's own setData() (used below to sync the box to a saved
+// position) fires its 'crop' event just like a real drag does — without
+// this guard, every programmatic sync would immediately round-trip back
+// through hbSaveCropperToFrame() and overwrite slidePos with a *rounded*
+// version of what was just set, silently drifting the stored crop position
+// a little on every single editor open even when nothing was touched.
+let hbSuppressCropSave = false;
 function hbSaveCropperToFrame() {
-  if (!hbCropper) return;
+  if (!hbCropper || hbSuppressCropSave) return;
   const pos = hbCropperToPosition(hbCropper);
   if (hbActiveFrame === 'start') { slidePos.x = pos.x; slidePos.y = pos.y; slidePos.zoom = pos.zoom; }
   else { slidePos.endX = pos.x; slidePos.endY = pos.y; slidePos.endZoom = pos.zoom; }
@@ -225,7 +232,9 @@ function hbApplyFrameToCropper() {
   const pos = hbActiveFrame === 'start'
     ? { x: slidePos.x, y: slidePos.y, zoom: slidePos.zoom }
     : { x: slidePos.endX, y: slidePos.endY, zoom: slidePos.endZoom };
+  hbSuppressCropSave = true;
   hbCropper.setData(hbPositionToCropBox(hbCropper, pos));
+  hbSuppressCropSave = false;
 }
 function hbUpdateLockState() {
   if (!hbCropper) return;
