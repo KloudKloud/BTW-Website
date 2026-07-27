@@ -60,6 +60,17 @@
 
     <main class="chars-main">
       <div id="char-profile" class="char-profile"></div>
+
+      <div id="char-detail-nav" class="art-nav"></div>
+
+      <div class="cc-section" id="char-detail-comments">
+        <p class="cc-title">💬 Comments</p>
+        <div class="cc-compose" id="cc-compose" style="display:none;">
+          <textarea id="cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
+          <button class="cc-compose-btn" id="cc-compose-btn" type="button">Post</button>
+        </div>
+        <div class="cc-list" id="cc-list"><p class="cc-empty">Loading…</p></div>
+      </div>
     </main>
 
     <div class="wiki-side-col">
@@ -335,10 +346,22 @@ function renderProfile(char) {
   const bio = document.createElement('div');
   bio.className = 'char-bio-box';
 
+  const nameRow = document.createElement('div');
+  nameRow.className = 'char-name-row';
   const nameEl = document.createElement('h1');
   nameEl.className = 'char-name';
   nameEl.textContent = char.name;
-  bio.appendChild(nameEl);
+  nameRow.appendChild(nameEl);
+  const shareBtn = document.createElement('button');
+  shareBtn.className = 'fp-share-icon-btn';
+  shareBtn.type = 'button';
+  shareBtn.title = 'Share this character';
+  shareBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 3v2.6c-4.32.65-7.02 3.6-8 8.4 2.02-2.36 4.62-3.5 8-3.5V13l6-5-6-5z"/><path d="M5 6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5h-2v5H5V8h5V6H5z"/></svg>';
+  shareBtn.addEventListener('click', (e) => {
+    fpShare(e.currentTarget, `${window.location.origin}${STORY_BASE}/characters?char=${char.id}`);
+  });
+  nameRow.appendChild(shareBtn);
+  bio.appendChild(nameRow);
 
   const descWrap = document.createElement('div');
   descWrap.className = 'char-desc';
@@ -590,6 +613,37 @@ function renderProfile(char) {
     editBtn.onclick = () => removeBorrowedCharacter(char);
   } else {
     editBox.style.display = 'none';
+  }
+
+  renderCharNav(char);
+  ccInitSection('character', char.id);
+}
+
+// ── Slideshow prev/next nav between this story's own cast (mirrors the
+// gallery's art-view slideshow) — only makes sense within CHARACTERS, so a
+// ghost character (viewed from outside this story) gets no nav at all. ──
+function renderCharNav(char) {
+  const navEl = document.getElementById('char-detail-nav');
+  navEl.innerHTML = '';
+  const idx = CHARACTERS.findIndex(c => c.id === char.id);
+  if (idx === -1) return;
+  const prev = idx > 0 ? CHARACTERS[idx - 1] : null;
+  const next = idx < CHARACTERS.length - 1 ? CHARACTERS[idx + 1] : null;
+  if (prev) {
+    const a = document.createElement('a');
+    a.className = 'art-nav-btn art-nav-prev';
+    a.href = `${STORY_BASE}/characters?char=${prev.id}`;
+    a.innerHTML = `← <span class="art-nav-label">${escapeHtml(prev.name)}</span>`;
+    a.addEventListener('click', (e) => { e.preventDefault(); viewCharacter(prev.id); });
+    navEl.appendChild(a);
+  }
+  if (next) {
+    const a = document.createElement('a');
+    a.className = 'art-nav-btn art-nav-next';
+    a.href = `${STORY_BASE}/characters?char=${next.id}`;
+    a.innerHTML = `<span class="art-nav-label">${escapeHtml(next.name)}</span> →`;
+    a.addEventListener('click', (e) => { e.preventDefault(); viewCharacter(next.id); });
+    navEl.appendChild(a);
   }
 }
 
@@ -1269,6 +1323,137 @@ function renderBookBox(site) {
   });
   authorRow.appendChild(btn);
 }
+
+// ── Universal comments (target_type/target_id) — same system used on
+// gallery posts, just pointed at this character instead. ──────────────────
+const CURRENT_USER = (() => {
+  try { return JSON.parse(localStorage.getItem('btw_user') || sessionStorage.getItem('btw_user') || 'null'); } catch { return null; }
+})();
+let ccTargetType = null, ccTargetId = null;
+
+function ccAvatarHtml(c) {
+  const name = c.display_name || c.username || '?';
+  const initial = escapeHtml(name.charAt(0).toUpperCase());
+  return c.avatar
+    ? `<img class="cc-avatar" src="${c.avatar}" alt="" />`
+    : `<span class="cc-avatar-fallback">${initial}</span>`;
+}
+function ccTimeAgo(iso) {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 2592000) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+function ccIsMine(c) { return CURRENT_USER && CURRENT_USER.id === c.user_id; }
+
+function ccCommentEl(c, isReply) {
+  const wrap = document.createElement('div');
+  wrap.className = 'cc-item';
+  const avatarHolder = document.createElement('div');
+  avatarHolder.innerHTML = ccAvatarHtml(c);
+  wrap.appendChild(avatarHolder.firstElementChild);
+
+  const body = document.createElement('div');
+  body.className = 'cc-body-wrap';
+  body.innerHTML = `
+    <div class="cc-bubble">
+      <span class="cc-name"><a href="/fanpages/${encodeURIComponent(c.username)}">${escapeHtml(c.display_name || c.username)}</a></span>
+      <span class="cc-time">${ccTimeAgo(c.created_at)}</span>
+      <p class="cc-text">${c.reply_to_username ? `<span class="cc-mention">@${escapeHtml(c.reply_to_username)}</span> ` : ''}${escapeHtml(c.body)}</p>
+    </div>
+    <div class="cc-actions">
+      ${token && !isReply ? '<button class="cc-action-btn" data-action="reply">Reply</button>' : ''}
+      ${ccIsMine(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : ''}
+    </div>
+  `;
+  wrap.appendChild(body);
+
+  const replyBtn = body.querySelector('[data-action="reply"]');
+  if (replyBtn) replyBtn.addEventListener('click', () => ccOpenReplyBox(body, c));
+  const deleteBtn = body.querySelector('[data-action="delete"]');
+  if (deleteBtn) deleteBtn.addEventListener('click', () => ccDeleteComment(c.id));
+
+  if (!isReply && (c.replies || []).length) {
+    const repliesWrap = document.createElement('div');
+    repliesWrap.className = 'cc-replies';
+    c.replies.forEach(r => repliesWrap.appendChild(ccCommentEl(r, true)));
+    body.appendChild(repliesWrap);
+  }
+  return wrap;
+}
+
+function ccOpenReplyBox(bodyEl, parentComment) {
+  const existing = bodyEl.querySelector('.cc-reply-box');
+  if (existing) { existing.querySelector('textarea').focus(); return; }
+  const box = document.createElement('div');
+  box.className = 'cc-reply-box';
+  box.innerHTML = `
+    <textarea placeholder="Reply to ${escapeHtml(parentComment.display_name || parentComment.username)}…" maxlength="2000"></textarea>
+    <button class="cc-compose-btn" type="button">Reply</button>
+  `;
+  const textarea = box.querySelector('textarea');
+  box.querySelector('button').addEventListener('click', async () => {
+    const text = textarea.value.trim();
+    if (!text) return;
+    const btn = box.querySelector('button');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/content-comments', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ target_type: ccTargetType, target_id: ccTargetId, body: text, parent_id: parentComment.id }),
+      });
+      if (res.ok) await ccLoadComments();
+    } finally { btn.disabled = false; }
+  });
+  const repliesWrap = bodyEl.querySelector('.cc-replies');
+  bodyEl.insertBefore(box, repliesWrap || null);
+  textarea.focus();
+}
+
+async function ccDeleteComment(id) {
+  if (!confirm('Delete this comment?')) return;
+  try {
+    await fetch(`/api/content-comments/${id}`, { method: 'DELETE', headers: authHeaders() });
+    ccLoadComments();
+  } catch {}
+}
+
+async function ccLoadComments() {
+  const list = document.getElementById('cc-list');
+  if (!list) return;
+  try {
+    const res = await fetch(`/api/content-comments?target_type=${ccTargetType}&target_id=${ccTargetId}`);
+    const data = await res.json();
+    const comments = data.comments || [];
+    list.innerHTML = '';
+    if (!comments.length) { list.innerHTML = '<p class="cc-empty">No comments yet — be the first!</p>'; return; }
+    comments.forEach(c => list.appendChild(ccCommentEl(c, false)));
+  } catch { list.innerHTML = '<p class="cc-empty">Couldn\'t load comments right now.</p>'; }
+}
+
+function ccInitSection(targetType, targetId) {
+  ccTargetType = targetType;
+  ccTargetId = targetId;
+  document.getElementById('cc-compose').style.display = token ? 'flex' : 'none';
+  ccLoadComments();
+}
+
+document.getElementById('cc-compose-btn').addEventListener('click', async () => {
+  const input = document.getElementById('cc-compose-input');
+  const text = input.value.trim();
+  if (!text || !ccTargetType) return;
+  const btn = document.getElementById('cc-compose-btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/content-comments', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ target_type: ccTargetType, target_id: ccTargetId, body: text }),
+    });
+    if (res.ok) { input.value = ''; await ccLoadComments(); }
+  } finally { btn.disabled = false; }
+});
 
 (async () => {
   const data = await ModeratorSite.load(SLUG);

@@ -195,3 +195,75 @@
     })
     .catch(() => {});
 })();
+
+// ── Shared "Share" button behavior — used by the small share icon buttons
+// on story pages, profiles, gallery posts, and character pages. Opens a
+// tiny "Copy Link?" popover anchored to the button instead of copying
+// immediately, so there's a deliberate confirm step. Global (not inside
+// the topbar IIFE above) so any page that loads this script can call it
+// directly. ─────────────────────────────────────────────────────────────
+function fpShowShareToast(message) {
+  let toast = document.getElementById('fp-share-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'fp-share-toast';
+    toast.className = 'fp-share-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.classList.remove('fp-share-toast--visible');
+  void toast.offsetWidth; // restart the transition even if already visible
+  toast.classList.add('fp-share-toast--visible');
+  clearTimeout(toast._fpHideTimer);
+  toast._fpHideTimer = setTimeout(() => toast.classList.remove('fp-share-toast--visible'), 2200);
+}
+
+function fpCopyToClipboard(text, done) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fpShowShareToast("Couldn't copy the link."));
+    return;
+  }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); done(); } catch { fpShowShareToast("Couldn't copy the link."); }
+  document.body.removeChild(ta);
+}
+
+function fpCloseSharePopover() {
+  const pop = document.getElementById('fp-share-popover');
+  if (pop) pop.remove();
+  document.removeEventListener('click', fpShareOutsideHandler, true);
+}
+function fpShareOutsideHandler(e) {
+  const pop = document.getElementById('fp-share-popover');
+  if (pop && !pop.contains(e.target)) fpCloseSharePopover();
+}
+
+// btn: the clicked share button (used to anchor the popover). url: link to
+// copy, defaults to the current page.
+window.fpShare = function (btn, url) {
+  fpCloseSharePopover();
+  const shareUrl = url || window.location.href;
+
+  const pop = document.createElement('div');
+  pop.className = 'fp-share-popover';
+  pop.id = 'fp-share-popover';
+  pop.innerHTML = `<button type="button" class="fp-share-popover-item" id="fp-share-copy-item">Copy Link?</button>`;
+  document.body.appendChild(pop);
+
+  const rect = btn.getBoundingClientRect();
+  const popRect = pop.getBoundingClientRect();
+  let left = rect.right - popRect.width;
+  left = Math.max(8, Math.min(left, window.innerWidth - popRect.width - 8));
+  pop.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+  pop.style.left = (left + window.scrollX) + 'px';
+
+  document.getElementById('fp-share-copy-item').addEventListener('click', () => {
+    fpCopyToClipboard(shareUrl, () => { fpShowShareToast('Link copied!'); fpCloseSharePopover(); });
+  });
+  setTimeout(() => document.addEventListener('click', fpShareOutsideHandler, true), 0);
+};

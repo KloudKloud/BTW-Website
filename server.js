@@ -4458,6 +4458,16 @@ async function commentTargetInfo(targetType, targetId) {
     if (!g) return null;
     return { title: g.title || 'Untitled', link: `/fanpages/${g.owner_username}?gallery=${targetId}#gallery` };
   }
+  if (targetType === 'character') {
+    const { rows: [c] } = await pool.query(
+      `SELECT mc.name, u.username AS owner_username
+       FROM moderator_characters mc JOIN users u ON u.id = mc.owner_user_id
+       WHERE mc.id = $1`,
+      [targetId]
+    );
+    if (!c) return null;
+    return { title: c.name || 'Unnamed', link: `/fanpages/${c.owner_username}?char=${targetId}#characters` };
+  }
   return null;
 }
 

@@ -926,6 +926,17 @@
     </div>
     <main class="chars-main">
       <div id="fp-char-profile" class="char-profile"></div>
+
+      <div id="fp-char-detail-nav" class="art-nav"></div>
+
+      <div class="cc-section" id="fp-char-detail-comments">
+        <p class="cc-title">💬 Comments</p>
+        <div class="cc-compose" id="fp-char-cc-compose" style="display:none;">
+          <textarea id="fp-char-cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
+          <button class="cc-compose-btn" id="fp-char-cc-compose-btn" type="button">Post</button>
+        </div>
+        <div class="cc-list" id="fp-char-cc-list"><p class="cc-empty">Loading…</p></div>
+      </div>
     </main>
   </div>
 </div>
@@ -954,7 +965,7 @@
     </div>
   </div>
 
-  <div class="art-view-wrapper" id="fp-gallery-detail-view" style="display:none; max-width:none; margin:0; padding:0;">
+  <div class="art-view-wrapper" id="fp-gallery-detail-view" style="display:none;">
     <a class="art-view-back" href="#" id="fp-gallery-detail-back">← Full Gallery</a>
     <div class="art-view-image-wrap">
       <img id="fp-gallery-detail-img" src="" alt="" />
@@ -967,6 +978,9 @@
         </button>
         <button class="art-view-bookmark-btn" id="fp-gallery-detail-bookmark" type="button" aria-label="Bookmark">
           <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
+        </button>
+        <button class="fp-share-icon-btn" id="fp-gallery-detail-share" type="button" title="Share this post">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 3v2.6c-4.32.65-7.02 3.6-8 8.4 2.02-2.36 4.62-3.5 8-3.5V13l6-5-6-5z"/><path d="M5 6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5h-2v5H5V8h5V6H5z"/></svg>
         </button>
       </div>
     </div>
@@ -1415,10 +1429,22 @@
 
     const bio = document.createElement('div');
     bio.className = 'char-bio-box';
+    const nameRow = document.createElement('div');
+    nameRow.className = 'char-name-row';
     const nameEl = document.createElement('h1');
     nameEl.className = 'char-name';
     nameEl.textContent = char.name;
-    bio.appendChild(nameEl);
+    nameRow.appendChild(nameEl);
+    const shareBtn = document.createElement('button');
+    shareBtn.className = 'fp-share-icon-btn';
+    shareBtn.type = 'button';
+    shareBtn.title = 'Share this character';
+    shareBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 3v2.6c-4.32.65-7.02 3.6-8 8.4 2.02-2.36 4.62-3.5 8-3.5V13l6-5-6-5z"/><path d="M5 6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5h-2v5H5V8h5V6H5z"/></svg>';
+    shareBtn.addEventListener('click', (e) => {
+      fpShare(e.currentTarget, `${window.location.origin}/fanpages/${USERNAME}?char=${char.id}#characters`);
+    });
+    nameRow.appendChild(shareBtn);
+    bio.appendChild(nameRow);
     const descWrap = document.createElement('div');
     descWrap.className = 'char-desc';
     char.desc.forEach(text => {
@@ -1636,6 +1662,34 @@
     spoiler.appendChild(revealBtn);
     loreBox.appendChild(spoiler);
     profile.appendChild(loreBox);
+
+    renderFpCharNav(char);
+    ccInitSection('character', char.id);
+  }
+
+  function renderFpCharNav(char) {
+    const navEl = document.getElementById('fp-char-detail-nav');
+    navEl.innerHTML = '';
+    const idx = FP_CHARACTERS.findIndex(c => c.id === char.id);
+    if (idx === -1) return;
+    const prev = idx > 0 ? FP_CHARACTERS[idx - 1] : null;
+    const next = idx < FP_CHARACTERS.length - 1 ? FP_CHARACTERS[idx + 1] : null;
+    if (prev) {
+      const a = document.createElement('a');
+      a.className = 'art-nav-btn art-nav-prev';
+      a.href = `/fanpages/${USERNAME}?char=${prev.id}#characters`;
+      a.innerHTML = `← <span class="art-nav-label">${escapeHtml(prev.name)}</span>`;
+      a.addEventListener('click', (e) => { e.preventDefault(); selectFpCharacter(prev.id); });
+      navEl.appendChild(a);
+    }
+    if (next) {
+      const a = document.createElement('a');
+      a.className = 'art-nav-btn art-nav-next';
+      a.href = `/fanpages/${USERNAME}?char=${next.id}#characters`;
+      a.innerHTML = `<span class="art-nav-label">${escapeHtml(next.name)}</span> →`;
+      a.addEventListener('click', (e) => { e.preventDefault(); selectFpCharacter(next.id); });
+      navEl.appendChild(a);
+    }
   }
 
   function buildFpCharsNav() {
@@ -1883,6 +1937,12 @@
     } catch {} finally { btn.disabled = false; }
   });
 
+  document.getElementById('fp-gallery-detail-share').addEventListener('click', (e) => {
+    const item = fpGalleryCurrentDetailItem;
+    if (!item) return;
+    fpShare(e.currentTarget, `${window.location.origin}/fanpages/${USERNAME}?gallery=${item.id}#gallery`);
+  });
+
   // ── Characters Featured / Relevant Stories — tagged content under the
   // description. Same rules as the story-context gallery page. ────────────
   async function loadFpGalleryTagsSection(item) {
@@ -2056,8 +2116,18 @@
     } catch {}
   }
 
+  // Gallery and Characters each have their own physical comment box (they
+  // can both be present in the DOM at once, just on hidden tabs), so the
+  // shared cc- functions look up which element ids to use by target type
+  // instead of assuming one fixed set.
+  const CC_IDS = {
+    gallery:   { list: 'fp-cc-list',      compose: 'fp-cc-compose',      input: 'fp-cc-compose-input',      btn: 'fp-cc-compose-btn' },
+    character: { list: 'fp-char-cc-list', compose: 'fp-char-cc-compose', input: 'fp-char-cc-compose-input', btn: 'fp-char-cc-compose-btn' },
+  };
+  function ccIds() { return CC_IDS[ccTargetType] || CC_IDS.gallery; }
+
   async function ccLoadComments() {
-    const list = document.getElementById('fp-cc-list');
+    const list = document.getElementById(ccIds().list);
     if (!list) return;
     try {
       const res = await fetch(`/api/content-comments?target_type=${ccTargetType}&target_id=${ccTargetId}`);
@@ -2072,15 +2142,16 @@
   function ccInitSection(targetType, targetId) {
     ccTargetType = targetType;
     ccTargetId = targetId;
-    document.getElementById('fp-cc-compose').style.display = token ? 'flex' : 'none';
+    document.getElementById(ccIds().compose).style.display = token ? 'flex' : 'none';
     ccLoadComments();
   }
 
-  document.getElementById('fp-cc-compose-btn').addEventListener('click', async () => {
-    const input = document.getElementById('fp-cc-compose-input');
+  async function ccHandleCompose() {
+    const ids = ccIds();
+    const input = document.getElementById(ids.input);
     const text = input.value.trim();
     if (!text || !ccTargetType) return;
-    const btn = document.getElementById('fp-cc-compose-btn');
+    const btn = document.getElementById(ids.btn);
     btn.disabled = true;
     try {
       const res = await fetch('/api/content-comments', {
@@ -2089,7 +2160,9 @@
       });
       if (res.ok) { input.value = ''; await ccLoadComments(); }
     } finally { btn.disabled = false; }
-  });
+  }
+  document.getElementById('fp-cc-compose-btn').addEventListener('click', ccHandleCompose);
+  document.getElementById('fp-char-cc-compose-btn').addEventListener('click', ccHandleCompose);
 
   // Same shared-promise memoization as loadCharactersTab, for the same
   // reason — switchTab and the deep-link handler can both call this on one
@@ -2243,6 +2316,16 @@
   function renderActions(author, isFollowing) {
     const wrap = document.getElementById('fp-header-actions');
     wrap.innerHTML = '';
+
+    const shareBtn = document.createElement('button');
+    shareBtn.className = 'fp-share-icon-btn';
+    shareBtn.type = 'button';
+    shareBtn.title = 'Share this profile';
+    shareBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 3v2.6c-4.32.65-7.02 3.6-8 8.4 2.02-2.36 4.62-3.5 8-3.5V13l6-5-6-5z"/><path d="M5 6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5h-2v5H5V8h5V6H5z"/></svg>';
+    shareBtn.addEventListener('click', (e) => {
+      fpShare(e.currentTarget, window.location.origin + `/fanpages/${USERNAME}`);
+    });
+    wrap.appendChild(shareBtn);
 
     if (author.is_self) {
       // Home shows the usual "Edit Profile" — every other tab links straight
