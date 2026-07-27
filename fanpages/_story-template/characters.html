@@ -967,7 +967,11 @@ function openCharEditor(char) {
   nsfwToggle.checked = isCustomRef && char ? !!char.refIsNsfw : false;
 
   document.getElementById('char-editor-name').value = char ? char.name : '';
-  document.getElementById('char-editor-desc').value = char ? char.desc.join('\n') : '';
+  // Joined with a blank line between paragraphs, not a single \n — matches
+  // how the display actually renders each desc/lore entry as its own <p>
+  // with spacing below it. Joining with just '\n' here made every re-open
+  // of the editor collapse that spacing, even though nothing was edited.
+  document.getElementById('char-editor-desc').value = char ? char.desc.join('\n\n') : '';
 
   const stats = char ? (char.stats || {}) : {};
   document.getElementById('char-editor-age').value = !isBlank(stats['Age']) ? stats['Age'] : '';
@@ -990,7 +994,7 @@ function openCharEditor(char) {
   const existingRels = char ? (char.relationships || []).filter(r => r && r.name) : [];
   existingRels.forEach(r => addRelationshipRow(r.name, r.type, r.character_id));
 
-  document.getElementById('char-editor-lore').value = char ? (char.lore || []).join('\n') : '';
+  document.getElementById('char-editor-lore').value = char ? (char.lore || []).join('\n\n') : '';
 
   document.getElementById('char-editor-msg').textContent = '';
   document.getElementById('char-editor-overlay').hidden = false;
