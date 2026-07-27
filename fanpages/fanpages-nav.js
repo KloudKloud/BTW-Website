@@ -252,15 +252,25 @@ window.fpShare = function (btn, url) {
   const pop = document.createElement('div');
   pop.className = 'fp-share-popover';
   pop.id = 'fp-share-popover';
-  pop.innerHTML = `<button type="button" class="fp-share-popover-item" id="fp-share-copy-item">Copy Link?</button>`;
+  pop.innerHTML = `<button type="button" class="fp-share-popover-item" id="fp-share-copy-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l1.86-1.86a5 5 0 0 0-7.07-7.07l-1.07 1.07"/><path d="M14 11a5 5 0 0 0-7.07 0l-1.86 1.86a5 5 0 0 0 7.07 7.07l1.07-1.07"/></svg>
+    Copy link
+  </button>`;
   document.body.appendChild(pop);
 
+  // Anchored over the button — centered above it, falling back to below
+  // if there isn't room. This is a position:fixed element, so its
+  // coordinates are viewport-relative already; don't add window.scrollX/Y
+  // (that double-counts scroll and is what sent it flying off down the
+  // page on a scrolled page before).
   const rect = btn.getBoundingClientRect();
   const popRect = pop.getBoundingClientRect();
-  let left = rect.right - popRect.width;
+  let left = rect.left + rect.width / 2 - popRect.width / 2;
   left = Math.max(8, Math.min(left, window.innerWidth - popRect.width - 8));
-  pop.style.top = (rect.bottom + window.scrollY + 8) + 'px';
-  pop.style.left = (left + window.scrollX) + 'px';
+  let top = rect.top - popRect.height - 8;
+  if (top < 8) top = rect.bottom + 8; // not enough room above — drop below instead
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
 
   document.getElementById('fp-share-copy-item').addEventListener('click', () => {
     fpCopyToClipboard(shareUrl, () => { fpShowShareToast('Link copied!'); fpCloseSharePopover(); });
