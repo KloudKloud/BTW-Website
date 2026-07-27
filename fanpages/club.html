@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Club ✦ Fanpages</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
+  <style>
+    body { background: #0d0d0d; }
+
+    .cl-banner-wrap { position: relative; width: 100%; height: 280px; background: #161616; overflow: hidden; }
+    .cl-banner-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cl-banner-fallback {
+      width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #2a1a3a, #3a1f2a); color: rgba(255,255,255,0.2); font-size: 3rem;
+    }
+    .cl-banner-scrim { position: absolute; inset: 0; background: linear-gradient(to top, rgba(13,13,13,0.95), transparent 55%); }
+    .cl-banner-edit-btn {
+      position: absolute; top: 1.1rem; right: 1.1rem; z-index: 3;
+      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.25); color: #fff;
+      border-radius: 20px; padding: 0.45em 1.1em; font-size: 0.82rem; cursor: pointer; font-family: inherit;
+    }
+    .cl-banner-edit-btn:hover { background: rgba(0,0,0,0.8); }
+
+    .cl-header { max-width: 1200px; margin: -70px auto 0; padding: 0 2rem; position: relative; z-index: 2; }
+    .cl-header-row { display: flex; align-items: flex-end; gap: 1.25rem; flex-wrap: wrap; }
+    .cl-icon-wrap { width: 108px; height: 108px; border-radius: 50%; flex-shrink: 0; border: 4px solid #0d0d0d; overflow: hidden; background: #222; }
+    .cl-icon-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cl-icon-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 2.4rem; font-weight: 700; color: #fff; background: linear-gradient(135deg, #6b3fa0, #c2547a); }
+    .cl-title-block { flex: 1; min-width: 200px; padding-bottom: 0.5rem; }
+    .cl-name { font-family: 'Cinzel', Georgia, serif; font-size: 1.8rem; font-weight: 700; color: #f0f0f0; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
+    .cl-meta { font-size: 0.86rem; color: #bbb; margin-top: 0.25rem; text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
+    .cl-actions-row { display: flex; gap: 0.6rem; padding-bottom: 0.5rem; flex-wrap: wrap; }
+
+    .cl-body { max-width: 1200px; margin: 2.5rem auto 5rem; padding: 0 2rem; display: grid; grid-template-columns: 1fr 300px; gap: 2rem; align-items: start; }
+    @media (max-width: 860px) { .cl-body { grid-template-columns: 1fr; } .cl-header { margin-top: -50px; } .cl-banner-wrap { height: 180px; } .cl-icon-wrap { width: 84px; height: 84px; } }
+
+    .cl-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 1.4rem; margin-bottom: 1.5rem; }
+    .cl-card-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.1rem; font-weight: 700; color: #f0c060; margin-bottom: 0.9rem; }
+    .cl-desc { color: #ccc; font-size: 0.9rem; line-height: 1.75; white-space: pre-line; }
+
+    .cl-compose textarea { width: 100%; min-height: 70px; resize: vertical; }
+    .cl-compose-actions { display: flex; justify-content: flex-end; margin-top: 0.75rem; }
+
+    .cl-post { border-bottom: 1px solid rgba(255,255,255,0.08); padding: 1.25rem 0; }
+    .cl-post:last-child { border-bottom: none; padding-bottom: 0; }
+    .cl-post-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
+    .cl-post-avatar, .cl-post-avatar-fallback { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
+    .cl-post-avatar-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.85rem; }
+    .cl-post-author { font-weight: 700; font-size: 0.88rem; color: #f0f0f0; }
+    .cl-post-time { font-size: 0.74rem; color: #888; margin-left: 0.35rem; }
+    .cl-post-title { font-weight: 700; color: #f0f0f0; margin-bottom: 0.35rem; }
+    .cl-post-body { color: #ccc; font-size: 0.9rem; line-height: 1.7; white-space: pre-line; }
+    .cl-post-delete { margin-left: auto; background: none; border: none; color: rgba(255,255,255,0.25); cursor: pointer; font-size: 0.85rem; padding: 0.2rem 0.4rem; }
+    .cl-post-delete:hover { color: #d97a72; }
+
+    .cl-member-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0; }
+    .cl-member-avatar, .cl-member-avatar-fallback { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+    .cl-member-avatar-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.85rem; }
+    .cl-member-name { font-size: 0.86rem; color: #f0f0f0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cl-member-role { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 0.15em 0.5em; border-radius: 10px; }
+    .cl-member-role--owner { color: #f0c060; background: rgba(240,192,96,0.12); }
+    .cl-member-role--admin { color: #7fa8d9; background: rgba(127,168,217,0.12); }
+    .cl-member-role--member { color: #999; background: rgba(255,255,255,0.06); }
+    .cl-member-menu-btn { background: none; border: none; color: rgba(255,255,255,0.35); cursor: pointer; font-size: 1rem; padding: 0.1rem 0.4rem; }
+    .cl-member-menu-btn:hover { color: #fff; }
+
+    .cl-empty { color: #888; font-size: 0.88rem; text-align: center; padding: 1.5rem 0.5rem; }
+    .cl-gate { max-width: 500px; margin: 8rem auto; text-align: center; color: #999; padding: 0 1.5rem; }
+  </style>
+</head>
+<body>
+
+<div id="fanpages-topbar-root"></div>
+<script src="/fanpages/fanpages-nav.js"></script>
+
+<div class="page-bg">
+  <img src="/images/discordblurred.png" alt="" />
+  <div class="page-bg-overlay"></div>
+</div>
+
+<div id="cl-notfound" class="cl-gate" style="display:none;">
+  <p>This club doesn't exist (or was deleted).</p>
+  <a class="btn btn-green" href="/fanpages/social" style="margin-top:1rem; display:inline-block;">&larr; Back to Social</a>
+</div>
+
+<div id="cl-page" style="display:none;">
+
+  <div class="cl-banner-wrap" id="cl-banner-wrap">
+    <div class="cl-banner-scrim"></div>
+    <button class="cl-banner-edit-btn" id="cl-banner-edit-btn" type="button" style="display:none;">📷 Edit Club</button>
+  </div>
+
+  <div class="cl-header">
+    <div class="cl-header-row">
+      <div class="cl-icon-wrap" id="cl-icon-wrap"></div>
+      <div class="cl-title-block">
+        <p class="cl-name" id="cl-name"></p>
+        <p class="cl-meta" id="cl-meta"></p>
+      </div>
+      <div class="cl-actions-row" id="cl-actions-row"></div>
+    </div>
+  </div>
+
+  <div class="cl-body">
+    <div class="cl-main">
+      <div class="cl-card">
+        <p class="cl-card-title">About</p>
+        <p class="cl-desc" id="cl-desc"></p>
+      </div>
+
+      <div class="cl-card" id="cl-compose-card" style="display:none;">
+        <p class="cl-card-title">New Post</p>
+        <div class="cl-compose">
+          <input class="mod-input" id="cl-post-title" maxlength="120" placeholder="Title (optional)" style="margin-bottom:0.6rem;" />
+          <textarea class="mod-textarea" id="cl-post-body" maxlength="5000" placeholder="Share something with the club..."></textarea>
+        </div>
+        <p class="mod-panel-msg" id="cl-post-msg"></p>
+        <div class="cl-compose-actions">
+          <button class="mod-btn" id="cl-post-submit" type="button">Post</button>
+        </div>
+      </div>
+
+      <div class="cl-card">
+        <p class="cl-card-title">Posts</p>
+        <div id="cl-posts"><p class="cl-empty">Loading…</p></div>
+      </div>
+    </div>
+
+    <div class="cl-side">
+      <div class="cl-card">
+        <p class="cl-card-title" id="cl-members-title">Members</p>
+        <div id="cl-members"><p class="cl-empty">Loading…</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Club modal -->
+<div class="char-editor-overlay" id="cl-edit-overlay" hidden>
+  <div class="char-editor-modal">
+    <h2 class="char-editor-title">Edit Club</h2>
+
+    <div class="char-editor-ref-wrap" id="cl-edit-banner-wrap" style="max-width: 520px; aspect-ratio: 3 / 1; cursor: default;">
+      <img id="cl-edit-banner-img" alt="" style="display:none;" draggable="false" />
+      <div class="char-editor-ref-placeholder" id="cl-edit-banner-placeholder">Click to upload a banner</div>
+    </div>
+    <input type="file" id="cl-edit-banner-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+    <button type="button" class="mod-btn mod-btn--small" id="cl-edit-banner-change-btn" style="display:none; margin: 0.6rem auto 1rem;">📷 Change Banner</button>
+
+    <div class="mod-field">
+      <label for="cl-edit-name">Club Name</label>
+      <input class="mod-input" id="cl-edit-name" maxlength="60" />
+    </div>
+    <div class="mod-field">
+      <label for="cl-edit-desc">Description</label>
+      <textarea class="mod-textarea" id="cl-edit-desc" rows="4" maxlength="1000"></textarea>
+    </div>
+    <p class="mod-panel-msg" id="cl-edit-msg"></p>
+    <div class="char-editor-actions">
+      <button class="mod-btn mod-btn--danger" id="cl-edit-delete" type="button">Delete Club</button>
+      <button class="mod-btn" id="cl-edit-cancel" type="button">Cancel</button>
+      <button class="mod-btn" id="cl-edit-save" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="mod-confirm-overlay" id="cl-confirm-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title" id="cl-confirm-title">Are you sure?</p>
+    <p class="mod-confirm-text" id="cl-confirm-text"></p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="cl-confirm-cancel" type="button">Cancel</button>
+      <button class="mod-btn mod-btn--danger" id="cl-confirm-yes" type="button">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script src="/fanpages/vendor/cropper.min.js"></script>
+<script src="/fanpages/crop-modal.js"></script>
+<script>
+const API = '/api';
+const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
+const slug = new URLSearchParams(location.search).get('slug');
+
+let currentUserId = null;
+try {
+  const raw = localStorage.getItem('btw_user') || sessionStorage.getItem('btw_user');
+  if (raw) currentUserId = JSON.parse(raw).id;
+} catch {}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function timeAgo(iso) {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24); if (d < 30) return `${d}d ago`;
+  const mo = Math.floor(d / 30); if (mo < 12) return `${mo}mo ago`;
+  return `${Math.floor(mo / 12)}y ago`;
+}
+function avatarHtml(user, cls, fallbackCls) {
+  if (user.avatar) return `<img class="${cls}" src="${user.avatar}" alt="" />`;
+  return `<span class="${cls} ${fallbackCls}">${escapeHtml((user.display_name || user.username || '?').charAt(0).toUpperCase())}</span>`;
+}
+
+let club = null;
+let members = [];
+let viewerRole = null;
+
+function confirmDialog(title, text) {
+  return new Promise(resolve => {
+    document.getElementById('cl-confirm-title').textContent = title;
+    document.getElementById('cl-confirm-text').textContent = text;
+    const overlay = document.getElementById('cl-confirm-overlay');
+    overlay.hidden = false;
+    const yesBtn = document.getElementById('cl-confirm-yes');
+    const cancelBtn = document.getElementById('cl-confirm-cancel');
+    const cleanup = (result) => {
+      overlay.hidden = true;
+      yesBtn.removeEventListener('click', onYes);
+      cancelBtn.removeEventListener('click', onCancel);
+      resolve(result);
+    };
+    const onYes = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    yesBtn.addEventListener('click', onYes);
+    cancelBtn.addEventListener('click', onCancel);
+  });
+}
+
+async function loadClub() {
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}`, { headers: authHeaders() });
+    if (!res.ok) { document.getElementById('cl-notfound').style.display = 'block'; return; }
+    const data = await res.json();
+    club = data.club;
+    members = data.members;
+    viewerRole = club.viewer_role;
+    renderClub();
+    document.getElementById('cl-page').style.display = 'block';
+    loadPosts();
+  } catch {
+    document.getElementById('cl-notfound').style.display = 'block';
+  }
+}
+
+function renderClub() {
+  document.title = `${club.name} ✦ Social ✦ Fanpages`;
+
+  const bannerWrap = document.getElementById('cl-banner-wrap');
+  const oldBg = bannerWrap.querySelector('.cl-banner-fallback, img.cl-banner-img');
+  if (oldBg) oldBg.remove();
+  const bannerContent = club.banner_url
+    ? `<img class="cl-banner-img" src="${club.banner_url}" alt="" style="object-position:${club.banner_position_x}% ${club.banner_position_y}%;" />`
+    : `<div class="cl-banner-fallback">✦</div>`;
+  bannerWrap.insertAdjacentHTML('afterbegin', bannerContent);
+
+  document.getElementById('cl-icon-wrap').innerHTML = club.icon_url
+    ? `<img src="${club.icon_url}" alt="" />`
+    : `<span class="cl-icon-fallback">${escapeHtml(club.name.charAt(0).toUpperCase())}</span>`;
+
+  document.getElementById('cl-name').textContent = club.name;
+  document.getElementById('cl-meta').textContent = `${club.member_count} member${club.member_count === 1 ? '' : 's'}`;
+  document.getElementById('cl-desc').textContent = club.description || 'This club hasn\'t written a description yet.';
+
+  const isAdminOrOwner = viewerRole === 'owner' || viewerRole === 'admin';
+  document.getElementById('cl-banner-edit-btn').style.display = isAdminOrOwner ? 'block' : 'none';
+  document.getElementById('cl-compose-card').style.display = viewerRole ? 'block' : 'none';
+
+  const actions = document.getElementById('cl-actions-row');
+  actions.innerHTML = '';
+  if (!token) {
+    actions.innerHTML = `<a class="mod-btn" href="/fanpages/login?from=${encodeURIComponent(location.pathname + location.search)}">Log In to Join</a>`;
+  } else if (viewerRole === 'owner') {
+    actions.innerHTML = `<button class="mod-btn" id="cl-edit-btn" type="button">Edit Club</button>`;
+  } else if (viewerRole) {
+    actions.innerHTML = `
+      ${isAdminOrOwner ? '<button class="mod-btn" id="cl-edit-btn" type="button">Edit Club</button>' : ''}
+      <button class="mod-btn mod-btn--danger" id="cl-leave-btn" type="button">Leave Club</button>
+    `;
+  } else {
+    actions.innerHTML = `<button class="mod-btn" id="cl-join-btn" type="button">+ Join Club</button>`;
+  }
+  wireActionButtons();
+
+  document.getElementById('cl-members-title').textContent = `Members (${members.length})`;
+  const membersWrap = document.getElementById('cl-members');
+  membersWrap.innerHTML = '';
+  members.forEach(m => membersWrap.appendChild(memberRowEl(m)));
+}
+
+function memberRowEl(m) {
+  const row = document.createElement('div');
+  row.className = 'cl-member-row';
+  const canManage = viewerRole === 'owner' && m.role !== 'owner'
+    ? true
+    : (viewerRole === 'admin' && m.role === 'member');
+  row.innerHTML = `
+    <a href="/fanpages/${m.username}" style="display:flex;align-items:center;gap:0.6rem;flex:1;min-width:0;text-decoration:none;color:inherit;">
+      ${avatarHtml(m, 'cl-member-avatar', 'cl-member-avatar-fallback')}
+      <span class="cl-member-name">${escapeHtml(m.display_name)}</span>
+    </a>
+    <span class="cl-member-role cl-member-role--${m.role}">${m.role}</span>
+    ${canManage ? '<button class="cl-member-menu-btn" type="button" title="Manage member">⋯</button>' : ''}
+  `;
+  if (canManage) {
+    row.querySelector('.cl-member-menu-btn').addEventListener('click', () => openMemberMenu(m));
+  }
+  return row;
+}
+
+async function openMemberMenu(m) {
+  if (viewerRole === 'owner' && m.role !== 'admin') {
+    if (await confirmDialog(`Make ${m.display_name} an admin?`, 'Admins can edit the club and manage regular members.')) {
+      await fetch(`${API}/clubs/${slug}/members/${m.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ role: 'admin' }) });
+      loadClub();
+      return;
+    }
+    return;
+  }
+  if (viewerRole === 'owner' && m.role === 'admin') {
+    if (await confirmDialog(`Remove ${m.display_name} as admin?`, 'They\'ll go back to being a regular member.')) {
+      await fetch(`${API}/clubs/${slug}/members/${m.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ role: 'member' }) });
+      loadClub();
+      return;
+    }
+    return;
+  }
+  if (await confirmDialog(`Remove ${m.display_name}?`, 'They\'ll be removed from this club.')) {
+    await fetch(`${API}/clubs/${slug}/members/${m.id}`, { method: 'DELETE', headers: authHeaders() });
+    loadClub();
+  }
+}
+
+function wireActionButtons() {
+  const joinBtn = document.getElementById('cl-join-btn');
+  if (joinBtn) joinBtn.addEventListener('click', async () => {
+    joinBtn.disabled = true;
+    await fetch(`${API}/clubs/${slug}/join`, { method: 'POST', headers: authHeaders() });
+    loadClub();
+  });
+  const leaveBtn = document.getElementById('cl-leave-btn');
+  if (leaveBtn) leaveBtn.addEventListener('click', async () => {
+    if (!(await confirmDialog('Leave this club?', 'You can rejoin any time.'))) return;
+    await fetch(`${API}/clubs/${slug}/leave`, { method: 'DELETE', headers: authHeaders() });
+    loadClub();
+  });
+  const editBtn = document.getElementById('cl-edit-btn');
+  if (editBtn) editBtn.addEventListener('click', openEditModal);
+}
+document.getElementById('cl-banner-edit-btn').addEventListener('click', openEditModal);
+
+function openEditModal() {
+  document.getElementById('cl-edit-name').value = club.name;
+  document.getElementById('cl-edit-desc').value = club.description || '';
+  document.getElementById('cl-edit-msg').textContent = '';
+  document.getElementById('cl-edit-delete').style.display = viewerRole === 'owner' ? '' : 'none';
+  editBannerUrl = club.banner_url || null;
+  const img = document.getElementById('cl-edit-banner-img');
+  const placeholder = document.getElementById('cl-edit-banner-placeholder');
+  if (club.banner_url) {
+    img.src = club.banner_url; img.style.display = 'block'; placeholder.style.display = 'none';
+    document.getElementById('cl-edit-banner-change-btn').style.display = 'block';
+  } else {
+    img.style.display = 'none'; placeholder.style.display = 'block';
+    document.getElementById('cl-edit-banner-change-btn').style.display = 'none';
+  }
+  editBannerBlob = null;
+  document.getElementById('cl-edit-overlay').hidden = false;
+}
+document.getElementById('cl-edit-cancel').addEventListener('click', () => { document.getElementById('cl-edit-overlay').hidden = true; });
+
+let editBannerUrl = null;
+let editBannerBlob = null;
+document.getElementById('cl-edit-banner-placeholder').addEventListener('click', () => document.getElementById('cl-edit-banner-input').click());
+document.getElementById('cl-edit-banner-change-btn').addEventListener('click', () => document.getElementById('cl-edit-banner-input').click());
+document.getElementById('cl-edit-banner-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  openCropModal({
+    title: 'Crop Club Banner', imageSrc: URL.createObjectURL(file), aspectRatio: 3, round: false,
+    onSave: (blob) => {
+      editBannerBlob = blob;
+      const url = URL.createObjectURL(blob);
+      const img = document.getElementById('cl-edit-banner-img');
+      img.src = url; img.style.display = 'block';
+      document.getElementById('cl-edit-banner-placeholder').style.display = 'none';
+      document.getElementById('cl-edit-banner-change-btn').style.display = 'block';
+    },
+  });
+  e.target.value = '';
+});
+
+document.getElementById('cl-edit-save').addEventListener('click', async () => {
+  const msgEl = document.getElementById('cl-edit-msg');
+  const name = document.getElementById('cl-edit-name').value.trim();
+  if (!name) { msgEl.className = 'mod-panel-msg mod-panel-msg--error'; msgEl.textContent = 'A club name is required.'; return; }
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('description', document.getElementById('cl-edit-desc').value.trim());
+  fd.append('banner_position_x', 50);
+  fd.append('banner_position_y', 50);
+  if (editBannerBlob) fd.append('banner', editBannerBlob, 'banner.jpg');
+
+  const btn = document.getElementById('cl-edit-save');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const res = await fetch(`${API}/clubs/${slug}`, { method: 'PUT', headers: authHeaders(), body: fd });
+    const data = await res.json();
+    if (!res.ok) { msgEl.className = 'mod-panel-msg mod-panel-msg--error'; msgEl.textContent = data.error || 'Something went wrong.'; return; }
+    document.getElementById('cl-edit-overlay').hidden = true;
+    loadClub();
+  } catch {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error'; msgEl.textContent = 'Network error. Please try again.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save';
+  }
+});
+
+document.getElementById('cl-edit-delete').addEventListener('click', async () => {
+  if (!(await confirmDialog('Delete this club?', 'This permanently deletes the club, its posts, and its membership. This can\'t be undone.'))) return;
+  await fetch(`${API}/clubs/${slug}`, { method: 'DELETE', headers: authHeaders() });
+  window.location.href = '/fanpages/social';
+});
+
+// ── Posts ─────────────────────────────────────────────────────────────────
+function postEl(post) {
+  const wrap = document.createElement('div');
+  wrap.className = 'cl-post';
+  const canDelete = post.author.id === currentUserId || viewerRole === 'owner' || viewerRole === 'admin';
+  wrap.innerHTML = `
+    <div class="cl-post-header">
+      ${avatarHtml(post.author, 'cl-post-avatar', 'cl-post-avatar-fallback')}
+      <span class="cl-post-author">${escapeHtml(post.author.display_name)}</span>
+      <span class="cl-post-time">${timeAgo(post.created_at)}</span>
+      ${canDelete ? '<button class="cl-post-delete" type="button">✕</button>' : ''}
+    </div>
+    ${post.title ? `<p class="cl-post-title">${escapeHtml(post.title)}</p>` : ''}
+    <div class="cl-post-body">${escapeHtml(post.body)}</div>
+  `;
+  if (canDelete) {
+    wrap.querySelector('.cl-post-delete').addEventListener('click', async () => {
+      if (!(await confirmDialog('Delete this post?', 'This can\'t be undone.'))) return;
+      await fetch(`${API}/clubs/${slug}/posts/${post.id}`, { method: 'DELETE', headers: authHeaders() });
+      loadPosts();
+    });
+  }
+  return wrap;
+}
+async function loadPosts() {
+  const wrap = document.getElementById('cl-posts');
+  try {
+    const res = await fetch(`${API}/clubs/${slug}/posts`);
+    const data = await res.json();
+    const posts = data.posts || [];
+    wrap.innerHTML = '';
+    if (!posts.length) { wrap.innerHTML = '<p class="cl-empty">No posts yet — be the first to post!</p>'; return; }
+    posts.forEach(p => wrap.appendChild(postEl(p)));
+  } catch {
+    wrap.innerHTML = '<p class="cl-empty">Couldn\'t load posts right now.</p>';
+  }
+}
+document.getElementById('cl-post-submit').addEventListener('click', async () => {
+  const msgEl = document.getElementById('cl-post-msg');
+  const title = document.getElementById('cl-post-title').value.trim();
+  const body = document.getElementById('cl-post-body').value.trim();
+  if (!body) { msgEl.className = 'mod-panel-msg mod-panel-msg--error'; msgEl.textContent = 'Write something first!'; return; }
+  const btn = document.getElementById('cl-post-submit');
+  btn.disabled = true; btn.textContent = 'Posting…';
+  try {
+    const res = await fetch(`${API}/clubs/${slug}/posts`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ title, body }),
+    });
+    const data = await res.json();
+    if (!res.ok) { msgEl.className = 'mod-panel-msg mod-panel-msg--error'; msgEl.textContent = data.error || 'Something went wrong.'; return; }
+    document.getElementById('cl-post-title').value = '';
+    document.getElementById('cl-post-body').value = '';
+    msgEl.textContent = '';
+    loadPosts();
+  } catch {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error'; msgEl.textContent = 'Network error. Please try again.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Post';
+  }
+});
+
+if (!slug) {
+  document.getElementById('cl-notfound').style.display = 'block';
+} else {
+  loadClub();
+}
+</script>
+
+</body>
+</html>
