@@ -2649,7 +2649,7 @@ app.get('/api/recommended-followers', async (req, res) => {
   const { rows } = await pool.query(`
     SELECT u.id, u.username, u.display_name, u.avatar
     FROM users u
-    WHERE u.username != 'btwteam'
+    WHERE u.username NOT IN ('btwteam', 'holly_allen', 'holly_chan')
       AND ($1::int IS NULL OR u.id != $1)
       AND NOT EXISTS (
         SELECT 1 FROM user_follows f WHERE f.follower_id = $1 AND f.followed_id = u.id
