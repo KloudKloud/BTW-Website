@@ -23,6 +23,14 @@
       overflow: hidden;
     }
     .hb-card-img-wrap { position: relative; width: 100%; aspect-ratio: 21 / 9; overflow: hidden; background: #1a1a1a; }
+    .hb-card-badge {
+      position: absolute; top: 8px; right: 8px; z-index: 2;
+      font-size: 0.66rem; font-weight: 700; letter-spacing: 0.06em;
+      padding: 0.22em 0.6em; border-radius: 20px; color: #fff;
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    }
+    .hb-card-badge--nsfw { background: rgba(217,74,74,0.85); border: 1px solid rgba(255,255,255,0.25); }
+    .hb-card-badge--sfw { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); }
     .hb-card-img-wrap .hb-preview-bg { background-repeat: no-repeat; }
     .hb-card-body { padding: 0.9rem 1rem; }
     .hb-card-caption { font-size: 0.9rem; font-weight: 700; color: #f0f0f0; margin-bottom: 0.2rem; }
@@ -104,6 +112,12 @@
     <div class="mod-field">
       <label for="hb-link">Link <span style="font-weight:400;color:#888;">(optional — makes the slide clickable)</span></label>
       <input class="mod-input" id="hb-link" maxlength="300" placeholder="https:// or /fanpages/..." />
+    </div>
+    <div class="mod-field">
+      <label class="profile-checkbox-label">
+        <input type="checkbox" id="hb-nsfw" />
+        <span>Mark this slide as NSFW <span style="font-weight:400;color:#888;">— only shown to logged-in users who have NSFW content enabled</span></span>
+      </label>
     </div>
 
     <p class="mod-panel-msg" id="hb-editor-msg"></p>
@@ -304,7 +318,10 @@ async function renderGrid() {
     const card = document.createElement('div');
     card.className = 'hb-card';
     card.innerHTML = `
-      <div class="hb-card-img-wrap"><div class="hb-preview-bg"></div></div>
+      <div class="hb-card-img-wrap">
+        <div class="hb-preview-bg"></div>
+        <span class="hb-card-badge ${slide.is_nsfw ? 'hb-card-badge--nsfw' : 'hb-card-badge--sfw'}">${slide.is_nsfw ? 'NSFW' : 'SFW'}</span>
+      </div>
       <div class="hb-card-body">
         ${slide.caption ? `<p class="hb-card-caption">${escapeHtml(slide.caption)}</p>` : ''}
         ${slide.credit ? `<p class="hb-card-credit">${escapeHtml(slide.credit)}</p>` : ''}
@@ -372,6 +389,7 @@ async function openEditor(slide) {
   document.getElementById('hb-caption').value = slide ? (slide.caption || '') : '';
   document.getElementById('hb-credit').value = slide ? (slide.credit || '') : '';
   document.getElementById('hb-link').value = slide ? (slide.link || '') : '';
+  document.getElementById('hb-nsfw').checked = slide ? !!slide.is_nsfw : false;
   document.getElementById('hb-editor-msg').textContent = '';
   updateSaveButtonState();
 
@@ -439,6 +457,7 @@ document.getElementById('hb-editor-save').addEventListener('click', async () => 
   fd.append('caption', document.getElementById('hb-caption').value.trim());
   fd.append('credit', document.getElementById('hb-credit').value.trim());
   fd.append('link', document.getElementById('hb-link').value.trim());
+  fd.append('is_nsfw', document.getElementById('hb-nsfw').checked ? 'true' : 'false');
 
   const saveBtn = document.getElementById('hb-editor-save');
   saveBtn.disabled = true;

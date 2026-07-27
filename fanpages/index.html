@@ -761,10 +761,17 @@
   document.getElementById('fp-billboard-prev').addEventListener('click', () => goToSlide(billboardIndex - 1));
   document.getElementById('fp-billboard-next').addEventListener('click', () => goToSlide(billboardIndex + 1));
 
-  fetch('/api/hub-billboard')
-    .then(r => r.ok ? r.json() : { slides: [] })
-    .then(data => renderBillboard(data.slides || []))
-    .catch(() => renderBillboard([]));
+  // Sends the auth token (if any) so the server can decide whether NSFW
+  // slides belong in the mix — this script block runs before the one that
+  // defines the shared `token`/`authHeaders` below, so it reads localStorage
+  // directly instead.
+  {
+    const billboardToken = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+    fetch('/api/hub-billboard', { headers: billboardToken ? { Authorization: `Bearer ${billboardToken}` } : {} })
+      .then(r => r.ok ? r.json() : { slides: [] })
+      .then(data => renderBillboard(data.slides || []))
+      .catch(() => renderBillboard([]));
+  }
 </script>
 <script>
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
