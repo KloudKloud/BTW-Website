@@ -6,6 +6,17 @@
   <title>Edit Profile ✦ Between Two Worlds</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
+  <style>
+    /* Minimal .mod-btn fallback so the shared crop modal (fanpages/crop-modal.js)
+       looks at home here without pulling in all of fanpages.css. */
+    .mod-btn {
+      display: inline-block; font-family: 'Lato', sans-serif; font-weight: 600; font-size: 0.85rem;
+      padding: 0.5rem 1.1rem; border-radius: 20px; border: 1px solid var(--gold); color: var(--gold);
+      background: none; cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    .mod-btn:hover { background: var(--gold); color: #0a0a0a; }
+  </style>
 </head>
 <body>
 
@@ -53,13 +64,12 @@
       <div id="profile-avatar-placeholder" class="profile-avatar-placeholder">&#128100;</div>
       <div class="profile-avatar-info">
         <span class="profile-avatar-label">Profile Picture</span>
-        <button class="profile-avatar-btn" id="avatar-btn" type="button">Upload Photo</button>
-        <input type="file" id="avatar-file" accept="image/*" style="display:none" />
-        <span class="profile-avatar-note">JPG, PNG or WebP &mdash; max 10 MB &mdash; 200&times;200 px recommended</span>
-        <div class="profile-avatar-reposition" id="profile-avatar-reposition" hidden>
-          <label>H <input type="range" id="avatar-slider-x" min="0" max="100" value="50" /></label>
-          <label>V <input type="range" id="avatar-slider-y" min="0" max="100" value="50" /></label>
+        <div class="profile-avatar-btn-row">
+          <button class="profile-avatar-btn" id="avatar-btn" type="button">Upload Photo</button>
+          <button class="profile-avatar-btn profile-avatar-btn--ghost" id="avatar-recrop-btn" type="button" hidden>Recrop</button>
         </div>
+        <input type="file" id="avatar-file" accept="image/*" style="display:none" />
+        <span class="profile-avatar-note">JPG, PNG or WebP &mdash; max 10 MB</span>
       </div>
     </div>
 
@@ -155,6 +165,8 @@
   <p>Between Two Worlds is a pokémon fanfiction! I am not affiliated with Nintendo or Game Freak. This website is simply a fandom page, nothing more</p>
 </footer>
 
+<script src="/fanpages/vendor/cropper.min.js"></script>
+<script src="/fanpages/crop-modal.js"></script>
 <script>
   const API    = '/api';
   const token  = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
@@ -194,6 +206,7 @@
       setNsfwToggleState(u.nsfw_enabled !== false);
 
       if (u.avatar) {
+        currentAvatarUrl = u.avatar;
         const img = document.getElementById('profile-avatar-img');
         const ph  = document.getElementById('profile-avatar-placeholder');
         const posX = u.avatar_position_x != null ? u.avatar_position_x : 50;
@@ -203,9 +216,7 @@
         img.style.display = 'block';
         img.removeAttribute('hidden');
         ph.style.display = 'none';
-        document.getElementById('avatar-slider-x').value = posX;
-        document.getElementById('avatar-slider-y').value = posY;
-        document.getElementById('profile-avatar-reposition').hidden = false;
+        document.getElementById('avatar-recrop-btn').hidden = false;
       }
       if (window._emailVerifiedSuccess) {
         showAlert('profile-alert', 'Email address updated successfully!', 'success');
@@ -243,18 +254,35 @@
     document.getElementById('email-pw-field').hidden = this.value.trim() === currentEmail;
   });
 
-  // Avatar upload
+  // Avatar upload — routed through the shared Cropper.js modal (see
+  // fanpages/crop-modal.js) instead of the old raw-upload + H/V-slider
+  // reposition flow. The exported crop is the final image, so uploads
+  // always land centered (position 50/50) — the crop is baked in already.
+  let currentAvatarUrl = null;
+
   document.getElementById('avatar-btn').addEventListener('click', () =>
     document.getElementById('avatar-file').click()
   );
-
-  document.getElementById('avatar-file').addEventListener('change', async function () {
+  document.getElementById('avatar-file').addEventListener('change', function () {
     const file = this.files[0];
     if (!file) return;
+    openCropModal({
+      title: 'Crop Profile Picture', imageSrc: URL.createObjectURL(file), aspectRatio: 1, round: true,
+      onSave: uploadAvatar,
+    });
+    this.value = '';
+  });
+  document.getElementById('avatar-recrop-btn').addEventListener('click', () => {
+    if (!currentAvatarUrl) return;
+    openCropModal({
+      title: 'Crop Profile Picture', imageSrc: currentAvatarUrl, aspectRatio: 1, round: true,
+      onSave: uploadAvatar,
+    });
+  });
 
+  async function uploadAvatar(blob) {
     const form = new FormData();
-    form.append('avatar', file);
-
+    form.append('avatar', blob, 'avatar.jpg');
     try {
       const res  = await fetch(`${API}/auth/avatar`, {
         method:  'POST',
@@ -264,6 +292,7 @@
       const data = await res.json();
       if (!res.ok) { showAlert('profile-alert', data.error, 'error'); return; }
 
+      currentAvatarUrl = data.avatar;
       const img = document.getElementById('profile-avatar-img');
       const ph  = document.getElementById('profile-avatar-placeholder');
       const url = data.avatar + '?t=' + Date.now();
@@ -272,9 +301,7 @@
       img.style.display = 'block';
       img.removeAttribute('hidden');
       ph.style.display = 'none';
-      document.getElementById('avatar-slider-x').value = 50;
-      document.getElementById('avatar-slider-y').value = 50;
-      document.getElementById('profile-avatar-reposition').hidden = false;
+      document.getElementById('avatar-recrop-btn').hidden = false;
 
       // Also update nav avatar immediately
       const navBtn = document.getElementById('nav-user-btn');
@@ -297,27 +324,7 @@
       updateStoredUser({ avatar: data.avatar });
       showAlert('profile-alert', 'Profile picture updated!', 'success');
     } catch { showAlert('profile-alert', 'Upload failed. Please try again.', 'error'); }
-  });
-
-  // Avatar reposition — same debounced-slider pattern used everywhere else on the site
-  let avatarRepoTimer = null;
-  function handleAvatarReposition() {
-    const x = document.getElementById('avatar-slider-x').value;
-    const y = document.getElementById('avatar-slider-y').value;
-    document.getElementById('profile-avatar-img').style.objectPosition = `${x}% ${y}%`;
-    clearTimeout(avatarRepoTimer);
-    avatarRepoTimer = setTimeout(async () => {
-      try {
-        await fetch(`${API}/auth/avatar-position`, {
-          method:  'PUT',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body:    JSON.stringify({ position_x: parseInt(x, 10), position_y: parseInt(y, 10) }),
-        });
-      } catch {}
-    }, 400);
   }
-  document.getElementById('avatar-slider-x').addEventListener('input', handleAvatarReposition);
-  document.getElementById('avatar-slider-y').addEventListener('input', handleAvatarReposition);
 
   // Save profile
   document.getElementById('profile-save-btn').addEventListener('click', async () => {
