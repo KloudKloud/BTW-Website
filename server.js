@@ -724,9 +724,16 @@ async function initDb() {
     INSERT INTO club_members (club_id, user_id, role)
     SELECT c.id, u.id, CASE WHEN u.id = c.owner_user_id THEN 'owner' ELSE 'member' END
     FROM clubs c CROSS JOIN users u
-    WHERE c.slug = 'btwclub'
+    WHERE c.slug = 'btwclub' AND u.username NOT IN ('holly_allen', 'holly_chan')
     ON CONFLICT DO NOTHING
   `).catch(e => console.error('BTWClub membership backfill:', e.message));
+
+  // Hard-excluded from discoverability sitewide (see /api/recommended-followers) —
+  // keep them out of club membership too, in case they were ever added before
+  // this exclusion existed.
+  await pool.query(`
+    DELETE FROM club_members WHERE user_id IN (SELECT id FROM users WHERE username IN ('holly_allen', 'holly_chan'))
+  `).catch(e => console.error('holly_allen/holly_chan club membership cleanup:', e.message));
 }
 
 // ── Email encryption helpers ──────────────────────────────────────────────────
@@ -921,12 +928,15 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Every account starts as a member of BTWClub, the site-wide default
     // club (r/all-equivalent) — see the clubs migration for how it's seeded.
-    await pool.query(
-      `INSERT INTO club_members (club_id, user_id, role)
-       SELECT id, $1, 'member' FROM clubs WHERE slug = 'btwclub'
-       ON CONFLICT DO NOTHING`,
-      [newUser.id]
-    ).catch(e => console.error('BTWClub auto-join insert:', e.message));
+    // holly_allen/holly_chan are hard-excluded from discoverability sitewide.
+    if (!['holly_allen', 'holly_chan'].includes(username.toLowerCase())) {
+      await pool.query(
+        `INSERT INTO club_members (club_id, user_id, role)
+         SELECT id, $1, 'member' FROM clubs WHERE slug = 'btwclub'
+         ON CONFLICT DO NOTHING`,
+        [newUser.id]
+      ).catch(e => console.error('BTWClub auto-join insert:', e.message));
+    }
 
     const verifyUrl = `https://${process.env.SITE_HOST}/api/auth/verify?token=${verify_token}`
       + (from ? `&from=${encodeURIComponent(from)}` : '');
@@ -4981,6 +4991,7 @@ app.get('/api/clubs', async (req, res) => {
             MAX(CASE WHEN cm.user_id = $1 THEN cm.role END) AS viewer_role
      FROM clubs c
      LEFT JOIN club_members cm ON cm.club_id = c.id
+       AND cm.user_id NOT IN (SELECT id FROM users WHERE username IN ('holly_allen', 'holly_chan'))
      WHERE c.name ILIKE $2
        ${mineOnly ? 'AND EXISTS (SELECT 1 FROM club_members m2 WHERE m2.club_id = c.id AND m2.user_id = $1)' : ''}
      GROUP BY c.id
@@ -5033,7 +5044,8 @@ app.get('/api/clubs/:slug', async (req, res) => {
     pool.query(
       `SELECT u.id, u.username, u.display_name, u.avatar, cm.role, cm.joined_at
        FROM club_members cm JOIN users u ON u.id = cm.user_id
-       WHERE cm.club_id = $1 ORDER BY (cm.role = 'owner') DESC, (cm.role = 'admin') DESC, cm.joined_at ASC`,
+       WHERE cm.club_id = $1 AND u.username NOT IN ('holly_allen', 'holly_chan')
+       ORDER BY (cm.role = 'owner') DESC, (cm.role = 'admin') DESC, cm.joined_at ASC`,
       [club.id]
     ),
     getClubRole(club.id, viewerId),
