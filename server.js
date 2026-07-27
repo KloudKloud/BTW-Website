@@ -722,11 +722,15 @@ async function initDb() {
   // it directly at registration instead of waiting for a restart).
   await pool.query(`
     INSERT INTO clubs (slug, name, description, icon_url, owner_user_id)
-    SELECT 'btwclub', 'BTWClub', 'The default club everyone''s a part of — home base for the whole community.',
+    SELECT 'btwclub', 'BTW Clubhouse', 'The default club everyone''s a part of — home base for the whole community.',
            '/images/gallery/kloudselfie_7.png', u.id
     FROM users u
     WHERE u.email_hash = $1 AND NOT EXISTS (SELECT 1 FROM clubs WHERE slug = 'btwclub')
   `, [process.env.ADMIN_EMAIL_HASH]).catch(e => console.error('BTWClub seed:', e.message));
+
+  await pool.query(`
+    UPDATE clubs SET name = 'BTW Clubhouse' WHERE slug = 'btwclub' AND name != 'BTW Clubhouse';
+  `).catch(e => console.error('BTWClub rename migration:', e.message));
 
   await pool.query(`
     INSERT INTO club_members (club_id, user_id, role)
