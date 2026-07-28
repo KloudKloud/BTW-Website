@@ -12,7 +12,10 @@
   <style>
     /* No body background override here on purpose — style.css sets
        body { background: transparent } specifically so the fixed
-       .page-bg image shows through underneath. */
+       .page-bg image shows through underneath. .page-bg itself gets a
+       plain dark fallback color so "default" theme (image hidden) still
+       reads as a normal dark page instead of falling through to white. */
+    .page-bg { background: #0d0d0d; }
 
     /* ── Sidebar (same as fanpages/social.html — kept present on every
        club page too, with a shared collapse-state localStorage key so it
@@ -113,15 +116,16 @@
     }
     .cl-banner-edit-btn:hover { background: rgba(0,0,0,0.85); transform: translateY(-1px); }
 
-    /* Reserves room for the fixed right sidebar as PADDING on this wrapper,
-       not as margin on the centered content itself — that's what lets
-       .cl-header/.cl-row use plain "margin: 0 auto" and get real, symmetric
-       centering within whatever space the (collapsible) left sidebar
-       leaves behind. Content keeps its own fixed size either way; it just
-       shifts left/right as the available middle shifts, instead of
-       stretching or drifting off-center. */
-    .cl-content-wrap { padding-right: 336px; }
-    @media (max-width: 1100px) { .cl-content-wrap { padding-right: 0; } }
+    /* .cl-body-row lays out the main column and the right sidebar as actual
+       flex siblings — the sidebar's horizontal position (far right) comes
+       from being LAST in a flex row, not from position:fixed, which is
+       what lets it also be position:sticky vertically (fixed and sticky
+       can't be combined on the same element). .cl-content-wrap is the
+       flexible column; .cl-header/.cl-row center themselves within IT via
+       their own "margin: 0 auto", same as before — they keep a fixed size
+       and just shift as the sidebar's column width changes. */
+    .cl-body-row { display: flex; align-items: flex-start; }
+    .cl-content-wrap { flex: 1; min-width: 0; }
 
     .cl-header { max-width: 1200px; margin: -70px auto 0; padding: 0 2rem; position: relative; z-index: 2; }
     /* Pfp no longer has the dark ring around it, per request. */
@@ -133,18 +137,44 @@
 
     .cl-row { max-width: 1200px; margin: 0 auto; padding: 3rem 2rem 5rem; position: relative; }
 
-    /* Hover reveal, top-left of the main area below the banner (never over
+    /* Hover reveal, top-right of the main area below the banner (never over
        the banner itself — that's .cl-header's territory, a separate
-       element entirely). Owners/admins only, same gate as Edit Club. */
-    .cl-theme-btn {
-      position: absolute; top: 0.5rem; left: 2rem; z-index: 4;
-      width: 40px; height: 40px; border-radius: 50%; box-sizing: border-box;
-      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.25); color: #fff;
-      font-size: 1.15rem; cursor: pointer; display: none; align-items: center; justify-content: center;
-      opacity: 0; transition: opacity 0.2s, background 0.15s, transform 0.15s;
+       element entirely). Right instead of left so it tracks .cl-row's own
+       right edge — same shifting-with-collapse behavior as the rest of
+       this column, since it's positioned relative to .cl-row itself, not
+       the viewport. Owners/admins only, same gate as Edit Club. Same
+       default(plain dark)/custom(blurred picture) pattern as the profile
+       page's own theme picker. */
+    .cl-theme-picker {
+      position: absolute; top: 0.5rem; right: 2rem; z-index: 20;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s; display: none;
     }
-    .cl-row:hover .cl-theme-btn { opacity: 1; }
-    .cl-theme-btn:hover { background: rgba(0,0,0,0.8); transform: translateY(-1px); }
+    .cl-row:hover .cl-theme-picker { opacity: 1; pointer-events: auto; }
+    .cl-theme-btn {
+      width: 40px; height: 40px; border-radius: 50%; box-sizing: border-box;
+      background: linear-gradient(160deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04));
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.25); color: #fff;
+      font-size: 1.15rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s, transform 0.15s;
+    }
+    .cl-theme-btn:hover { background: linear-gradient(160deg, rgba(255,255,255,0.22), rgba(255,255,255,0.07)); transform: translateY(-1px); }
+    .cl-theme-popover {
+      position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+      background: #161616; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.5); padding: 1rem; width: 220px;
+    }
+    .cl-theme-popover-label { font-size: 0.75rem; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; }
+    .cl-theme-grid { display: flex; gap: 0.75rem; }
+    .cl-theme-swatch {
+      width: 48px; height: 48px; border-radius: 50%; cursor: pointer;
+      border: 2px solid transparent; padding: 0; overflow: hidden;
+      display: flex; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+    .cl-theme-swatch span { display: block; width: 100%; height: 100%; background: #0a0a0a; }
+    .cl-theme-swatch.active { border-color: #7fa8d9; }
+    .cl-theme-swatch--upload { align-items: center; justify-content: center; background: #1e1e1e; color: #999; font-size: 1.1rem; }
+    .cl-theme-swatch--upload:hover { background: #292929; }
 
     /* Big banner-like slot, above everything else — will eventually cycle
        through several images as a slideshow, so it's sized generously up
@@ -192,14 +222,14 @@
     }
     .cl-about-body { color: #bbb; font-size: 0.96rem; line-height: 1.8; margin: 0; }
 
-    /* Fixed like the Popular Posts panel, but top is offset past the banner
-       (64px topbar + 280px banner + a few px gap) instead of sitting right
-       under the topbar — the banner has no fixed-position equivalent to
-       dodge it otherwise, so a plain top:84px here just runs the panel
-       straight over the art. Gap kept tight so it almost touches the
-       banner's bottom edge. */
+    /* Starts just below the banner (a small gap, not touching it) since
+       it's a normal flex sibling now, not fixed to the viewport. As you
+       scroll past that starting point, position:sticky takes over and it
+       glues to top:64px — right under the fixed topbar — instead of
+       drifting further down the page like plain static content would. */
     .cl-side {
-      position: fixed; top: 348px; right: 20px; bottom: 20px; width: 300px; z-index: 5;
+      flex-shrink: 0; width: 300px; margin: 12px 20px 0 16px;
+      position: sticky; top: 64px; max-height: calc(100vh - 84px); z-index: 5;
       overflow-y: auto; padding: 1.25rem; box-sizing: border-box;
       background: linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015));
       border: 1px solid rgba(255,255,255,0.12); border-radius: 20px;
@@ -214,7 +244,8 @@
     .cl-info-body { color: #999; font-size: 0.88rem; }
 
     @media (max-width: 1100px) {
-      .cl-side { position: static; width: auto; height: auto; margin: 2rem 1.25rem 0; }
+      .cl-body-row { flex-direction: column; }
+      .cl-side { position: static; width: auto; max-height: none; margin: 2rem 1.25rem 0; }
     }
     @media (max-width: 860px) {
       .cl-row { padding: 2rem 1.25rem 3rem; }
@@ -289,8 +320,8 @@
 <script src="/fanpages/crop-modal.js"></script>
 
 <div class="page-bg">
-  <img src="/images/gallery/solusgarnet_17.png" alt="" />
-  <div class="page-bg-overlay"></div>
+  <img id="cl-page-bg-img" alt="" style="display:none;" />
+  <div class="page-bg-overlay" id="cl-page-bg-overlay" style="display:none;"></div>
 </div>
 
 <div class="soc-layout" id="soc-layout">
@@ -327,39 +358,47 @@
     <button class="cl-banner-edit-btn" id="cl-edit-club-btn" type="button" style="display:none;">✎ Edit Club</button>
   </div>
 
-  <div class="cl-content-wrap">
-    <div class="cl-header">
-      <div class="cl-icon-wrap" id="cl-icon-wrap"></div>
-    </div>
-
-    <div class="cl-row">
-      <button class="cl-theme-btn" id="cl-theme-btn" type="button" title="Customize Theme">🎨</button>
-
-      <!-- Slideshow slot — not editable/cycling yet, just the layout (a
-           single "Image Not Available" placeholder for now). -->
-      <div class="cl-slideshow-wrap">
-        <img id="cl-slideshow-img" src="/images/nopicture2.png" alt="" />
+  <div class="cl-body-row">
+    <div class="cl-content-wrap">
+      <div class="cl-header">
+        <div class="cl-icon-wrap" id="cl-icon-wrap"></div>
       </div>
 
-      <h1 class="cl-name" id="cl-name"></h1>
-
-      <div class="cl-about-wrap">
-        <!-- Templated picture slot — not editable yet, just the layout. -->
-        <div class="cl-pic-wrap">
-          <img id="cl-pic-img" src="/images/nopicture.png" alt="" />
+      <div class="cl-row">
+        <div class="cl-theme-picker" id="cl-theme-picker">
+          <button class="cl-theme-btn" id="cl-theme-btn" type="button" title="Customize Theme">🎨</button>
+          <div class="cl-theme-popover" id="cl-theme-popover" hidden>
+            <p class="cl-theme-popover-label">Club Background</p>
+            <div class="cl-theme-grid" id="cl-theme-grid"></div>
+          </div>
         </div>
 
-        <p class="cl-about-label">About</p>
-        <p class="cl-about-body" id="cl-about-body"></p>
+        <!-- Slideshow slot — not editable/cycling yet, just the layout (a
+             single "Image Not Available" placeholder for now). -->
+        <div class="cl-slideshow-wrap">
+          <img id="cl-slideshow-img" src="/images/nopicture2.png" alt="" />
+        </div>
+
+        <h1 class="cl-name" id="cl-name"></h1>
+
+        <div class="cl-about-wrap">
+          <!-- Templated picture slot — not editable yet, just the layout. -->
+          <div class="cl-pic-wrap">
+            <img id="cl-pic-img" src="/images/nopicture.png" alt="" />
+          </div>
+
+          <p class="cl-about-label">About</p>
+          <p class="cl-about-body" id="cl-about-body"></p>
+        </div>
       </div>
     </div>
-  </div>
 
-  <aside class="cl-side">
-    <p class="cl-info-title" id="cl-info-title"></p>
-    <hr class="cl-info-rule" />
-    <div class="cl-info-body" id="cl-info-body"></div>
-  </aside>
+    <aside class="cl-side">
+      <p class="cl-info-title" id="cl-info-title"></p>
+      <hr class="cl-info-rule" />
+      <div class="cl-info-body" id="cl-info-body"></div>
+    </aside>
+  </div>
 </div>
 
 </div> <!-- /.soc-layout -->
@@ -520,8 +559,91 @@ function renderClub(club) {
 
   const isAdminOrOwner = club.viewer_role === 'owner' || club.viewer_role === 'admin';
   document.getElementById('cl-edit-club-btn').style.display = isAdminOrOwner ? 'block' : 'none';
-  document.getElementById('cl-theme-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
+  document.getElementById('cl-theme-picker').style.display = isAdminOrOwner ? 'block' : 'none';
+
+  applyClubTheme(club.theme, club.theme_bg_url);
 }
+
+// ── Theme — default (plain dark) or a custom blurred background, same
+// pattern as the profile page's own theme picker ──────────────────────────
+function applyClubTheme(themeId, bgUrl) {
+  const bgImg = document.getElementById('cl-page-bg-img');
+  const bgOverlay = document.getElementById('cl-page-bg-overlay');
+  if (themeId === 'custom' && bgUrl) {
+    bgImg.src = bgUrl;
+    bgImg.style.display = 'block';
+    bgOverlay.style.display = 'block';
+  } else {
+    bgImg.style.display = 'none';
+    bgOverlay.style.display = 'none';
+  }
+  document.querySelectorAll('.cl-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
+}
+
+function buildClubThemeGrid() {
+  const grid = document.getElementById('cl-theme-grid');
+  grid.innerHTML = '';
+
+  const defaultBtn = document.createElement('button');
+  defaultBtn.className = 'cl-theme-swatch';
+  defaultBtn.type = 'button';
+  defaultBtn.title = 'Default (plain dark)';
+  defaultBtn.dataset.theme = 'default';
+  defaultBtn.innerHTML = '<span></span>';
+  defaultBtn.addEventListener('click', () => selectClubTheme('default'));
+  grid.appendChild(defaultBtn);
+
+  const uploadBtn = document.createElement('button');
+  uploadBtn.className = 'cl-theme-swatch cl-theme-swatch--upload';
+  uploadBtn.type = 'button';
+  uploadBtn.title = 'Upload a custom blurred background image';
+  uploadBtn.textContent = '+';
+  uploadBtn.addEventListener('click', () => document.getElementById('cl-theme-bg-file-input').click());
+  grid.appendChild(uploadBtn);
+}
+buildClubThemeGrid();
+
+async function selectClubTheme(themeId) {
+  applyClubTheme(themeId, currentClub && currentClub.theme_bg_url);
+  const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/theme`, {
+    method: 'PUT',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ theme: themeId }),
+  });
+  if (res.ok) currentClub = (await res.json()).club;
+}
+
+const clThemeBgFileInput = document.createElement('input');
+clThemeBgFileInput.type = 'file';
+clThemeBgFileInput.accept = 'image/png,image/jpeg,image/webp,image/gif';
+clThemeBgFileInput.id = 'cl-theme-bg-file-input';
+clThemeBgFileInput.hidden = true;
+document.body.appendChild(clThemeBgFileInput);
+clThemeBgFileInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  applyClubTheme('custom', URL.createObjectURL(file)); // instant preview
+  const fd = new FormData();
+  fd.append('image', file);
+  const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/theme-bg`, { method: 'PUT', headers: authHeaders(), body: fd });
+  if (res.ok) {
+    const data = await res.json();
+    currentClub = data.club;
+    applyClubTheme(data.club.theme, data.club.theme_bg_url);
+  } else {
+    alert('Background upload failed. Please try again.');
+  }
+  clThemeBgFileInput.value = '';
+});
+
+document.getElementById('cl-theme-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('cl-theme-popover').hidden = !document.getElementById('cl-theme-popover').hidden;
+});
+document.addEventListener('click', (e) => {
+  const picker = document.getElementById('cl-theme-picker');
+  if (picker && !picker.contains(e.target)) document.getElementById('cl-theme-popover').hidden = true;
+});
 
 // ── Edit Club modal — banner image only for now ──────────────────────────
 let pendingBannerBlob = null;
@@ -543,11 +665,6 @@ function closeEditClubModal() {
 
 document.getElementById('cl-edit-club-btn').addEventListener('click', openEditClubModal);
 document.getElementById('cl-edit-cancel').addEventListener('click', closeEditClubModal);
-
-// Not wired to anything yet — just the entry point, staged like everything else.
-document.getElementById('cl-theme-btn').addEventListener('click', () => {
-  alert('Theme customization is coming soon!');
-});
 
 document.getElementById('cl-edit-banner-wrap').addEventListener('click', (e) => {
   if (e.target.closest('#cl-edit-banner-recrop-btn')) return;

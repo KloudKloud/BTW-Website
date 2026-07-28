@@ -716,6 +716,13 @@ async function initDb() {
     UPDATE clubs SET banner_url = '/images/gallery/solusgarnet_17.png' WHERE banner_url = '';
   `).catch(e => console.error('clubs default banner migration:', e.message));
 
+  // Club page theme — same default (plain dark) / custom-blurred-background
+  // pattern as a profile or story page, just scoped to the club.
+  await pool.query(`
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS theme_bg_url TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('clubs theme migration:', e.message));
+
   // BTWClub — the site-wide default club every account belongs to (an
   // r/all equivalent). Owned by the admin account; seeded once, then every
   // existing user is backfilled into it on each restart (new signups join
@@ -5007,6 +5014,7 @@ function clubPublicShape(c, viewerRole) {
     id: c.id, slug: c.slug, name: c.name, description: c.description,
     banner_url: c.banner_url, banner_position_x: c.banner_position_x, banner_position_y: c.banner_position_y,
     icon_url: c.icon_url, owner_user_id: c.owner_user_id,
+    theme: c.theme || 'default', theme_bg_url: c.theme_bg_url || '',
     member_count: Number(c.member_count) || 0,
     created_at: c.created_at,
     viewer_role: viewerRole || null,
@@ -5125,6 +5133,33 @@ app.put('/api/clubs/:slug', requireAuth, uploadModImage.single('banner'), async 
     `UPDATE clubs SET name = $1, description = $2, banner_url = $3, banner_position_x = $4, banner_position_y = $5
      WHERE id = $6 RETURNING *`,
     [name, description, bannerUrl, positionX, positionY, club.id]
+  );
+  res.json({ club: clubPublicShape(updated, role) });
+});
+
+// Club page theme — same default (plain dark) / custom-blurred-background
+// pattern as a profile or story page. Owner/admin only.
+app.put('/api/clubs/:slug/theme', requireAuth, async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT * FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const role = await getClubRole(club.id, req.user.id);
+  if (role !== 'owner' && role !== 'admin') return res.status(403).json({ error: 'Only club owners/admins can edit this club.' });
+
+  const theme = req.body.theme === 'custom' ? 'custom' : 'default';
+  const { rows: [updated] } = await pool.query('UPDATE clubs SET theme = $1 WHERE id = $2 RETURNING *', [theme, club.id]);
+  res.json({ club: clubPublicShape(updated, role) });
+});
+
+app.put('/api/clubs/:slug/theme-bg', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT * FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const role = await getClubRole(club.id, req.user.id);
+  if (role !== 'owner' && role !== 'admin') return res.status(403).json({ error: 'Only club owners/admins can edit this club.' });
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+
+  const bgUrl = `/images/moderators/${req.file.filename}`;
+  const { rows: [updated] } = await pool.query(
+    `UPDATE clubs SET theme_bg_url = $1, theme = 'custom' WHERE id = $2 RETURNING *`, [bgUrl, club.id]
   );
   res.json({ club: clubPublicShape(updated, role) });
 });
