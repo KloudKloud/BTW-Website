@@ -74,10 +74,11 @@
 
   // opts: { title, imageSrc, aspectRatio, round, hint, cropBoxResizable,
   //         viewMode, onSave(blob, cropperInstance) }
-  // viewMode defaults to 1 (canvas always fully covers the crop box, so you
-  // can zoom in but never past "fits the box" zoomed out) — pass 0 for no
-  // restriction at all, letting the canvas shrink smaller than the crop box
-  // so zooming out actually reflects the source image's real proportions.
+  // viewMode defaults to 0 — no restriction on the canvas, so zooming out
+  // actually reflects the source image's real proportions instead of being
+  // clamped to "always fills the crop box" (viewMode:1). Pass viewMode:1
+  // explicitly for a crop box that must always stay fully covered (e.g. a
+  // locked, non-resizable preview tile).
   window.openCropModal = function (opts) {
     overlay.querySelector('#crop-modal-title').textContent = opts.title || 'Crop Image';
     overlay.querySelector('#crop-modal-hint').textContent = opts.hint ||
@@ -95,7 +96,7 @@
     img.removeAttribute('src');
     img.onload = () => {
       cropper = new Cropper(img, {
-        aspectRatio: opts.aspectRatio, viewMode: opts.viewMode !== undefined ? opts.viewMode : 1, dragMode: 'move', autoCropArea: 1,
+        aspectRatio: opts.aspectRatio, viewMode: opts.viewMode !== undefined ? opts.viewMode : 0, dragMode: 'move', autoCropArea: 1,
         background: false, responsive: true,
         cropBoxResizable: opts.cropBoxResizable !== false,
         cropBoxMovable: true,
