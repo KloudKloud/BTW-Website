@@ -4088,6 +4088,30 @@ app.delete('/api/moderator/characters/:id', requireAuth, requireModerator, async
   res.json({ message: 'Unlinked from this story.' });
 });
 
+// "Reorder Characters" (Characters page, story-context) — takes the full
+// ordered list of character IDs currently linked to this story and rewrites
+// their link's sort_order to match, 0-based. Only touches links that are
+// both scoped to this story AND present in the submitted list, so a stale
+// client can't accidentally wipe another character's ordering.
+app.put('/api/moderator/characters/reorder', requireAuth, requireModerator, async (req, res) => {
+  const order = req.body.order;
+  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of character IDs.' });
+  await pool.query('BEGIN');
+  try {
+    for (let i = 0; i < order.length; i++) {
+      await pool.query(
+        'UPDATE character_story_links SET sort_order = $1 WHERE character_id = $2 AND site_id = $3',
+        [i, order[i], req.modSite.id]
+      );
+    }
+    await pool.query('COMMIT');
+  } catch (e) {
+    await pool.query('ROLLBACK');
+    return res.status(500).json({ error: 'Could not save the new order.' });
+  }
+  res.json({ message: 'Order saved.' });
+});
+
 // Search the current user's OWN characters not yet linked to this story —
 // feeds the "+ Link Existing" picker.
 // Every character the requesting user owns, regardless of story links —

@@ -9,6 +9,76 @@
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
+  <style>
+    .chars-reorder-divider { border: none; border-top: 1px solid rgba(255,255,255,0.12); margin: 0.75rem 0.4rem; }
+
+    /* ── Reorder mode: everything except the sidebar column blurs and goes
+       inert, the sidebar itself pops forward with a gold-lit border so it
+       reads as the one thing you can still interact with. ── */
+    body.chars-reorder-active .site-banner,
+    body.chars-reorder-active .chars-main,
+    body.chars-reorder-active #fanpages-topbar-root,
+    body.chars-reorder-active .mod-page-bg-overlay {
+      filter: blur(7px);
+      pointer-events: none;
+      user-select: none;
+      transition: filter 0.25s ease;
+    }
+    body.chars-reorder-active .chars-sidebar {
+      position: relative;
+      z-index: 40;
+      border-color: rgba(240,192,96,0.5);
+      box-shadow: 0 0 0 3px rgba(240,192,96,0.15), 0 20px 60px rgba(0,0,0,0.6);
+      transition: box-shadow 0.25s ease, border-color 0.25s ease;
+    }
+    body.chars-reorder-active .chars-create-box { display: none !important; }
+    /* Dark scrim behind the popped-forward sidebar, above the blurred rest
+       of the page — click-blocking too, so nothing blurred is reachable. */
+    .chars-reorder-scrim {
+      position: fixed; inset: 0; z-index: 30;
+      background: rgba(0,0,0,0.55);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    body.chars-reorder-active .chars-reorder-scrim { opacity: 1; pointer-events: auto; }
+
+    .chars-reorder-label {
+      display: block; font-family: 'Cinzel', serif; font-size: 0.66rem; letter-spacing: 0.16em;
+      text-transform: uppercase; color: #f0c060; margin: 0 0 0.7rem 0.6rem;
+    }
+    .chars-reorder-list { display: flex; flex-direction: column; gap: 0.35rem; }
+    .chars-reorder-row {
+      display: flex; align-items: center; gap: 0.6rem;
+      padding: 0.5em 0.6em; border-radius: 8px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      color: #eee; font-size: 0.9rem; cursor: grab;
+      transition: background 0.15s, border-color 0.15s, transform 0.15s, opacity 0.15s;
+    }
+    .chars-reorder-row:hover { background: rgba(240,192,96,0.08); border-color: rgba(240,192,96,0.3); }
+    .chars-reorder-row.dragging { opacity: 0.35; cursor: grabbing; }
+    .chars-reorder-row.drop-target { border-color: rgba(240,192,96,0.7); background: rgba(240,192,96,0.14); }
+    .chars-reorder-handle { flex-shrink: 0; color: #888; font-size: 1.05rem; line-height: 1; cursor: grab; }
+    .chars-reorder-row:hover .chars-reorder-handle { color: #f0c060; }
+    .chars-reorder-thumb {
+      width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+      background: #222; border: 1px solid rgba(255,255,255,0.1);
+    }
+    .chars-reorder-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chars-reorder-actions { display: flex; gap: 0.6rem; margin-top: 1rem; }
+    .chars-reorder-btn2 {
+      flex: 1; padding: 0.6em 0.8em; border-radius: 10px; border: none; cursor: pointer;
+      font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.85rem;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .chars-reorder-btn2:hover { transform: translateY(-1px); }
+    .chars-reorder-btn2--save {
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff;
+      box-shadow: 0 0 16px rgba(107,63,160,0.5);
+    }
+    .chars-reorder-btn2--cancel {
+      background: transparent; color: #ccc; border: 1px solid rgba(255,255,255,0.25);
+    }
+  </style>
 </head>
 <body class="mod-theme">
 
@@ -44,6 +114,10 @@
         <button class="chars-create-btn" id="chars-link-btn" type="button" style="margin-top:0.6rem; background:transparent; border:1px solid rgba(255,255,255,0.25); box-shadow:none;">
           <span class="chars-create-btn-icon">🔗</span> Link Existing
         </button>
+        <hr class="chars-reorder-divider" />
+        <button class="chars-create-btn" id="chars-reorder-btn" type="button" style="background:transparent; border:1px solid rgba(255,255,255,0.25); box-shadow:none;">
+          <span class="chars-create-btn-icon">↕️</span> Reorder Characters
+        </button>
       </aside>
 
       <aside class="chars-create-box" id="char-edit-box" style="display:none;">
@@ -51,12 +125,25 @@
       </aside>
 
       <aside class="chars-sidebar">
-        <span class="chars-sidebar-label">Explore the cast!</span>
-        <div class="chars-nav-scroller">
+        <span class="chars-sidebar-label" id="chars-sidebar-label">Explore the cast!</span>
+        <div class="chars-nav-scroller" id="chars-nav-scroller">
           <div class="chars-nav" id="chars-nav"></div>
+        </div>
+
+        <!-- Reorder mode's own list — swapped in over the normal nav, never
+             shown alongside it. -->
+        <div id="chars-reorder-panel" hidden>
+          <span class="chars-reorder-label">Drag to reorder</span>
+          <div class="chars-reorder-list" id="chars-reorder-list"></div>
+          <div class="chars-reorder-actions">
+            <button class="chars-reorder-btn2 chars-reorder-btn2--cancel" id="chars-reorder-cancel" type="button">Cancel</button>
+            <button class="chars-reorder-btn2 chars-reorder-btn2--save" id="chars-reorder-save" type="button">Save Order</button>
+          </div>
         </div>
       </aside>
     </div>
+
+    <div class="chars-reorder-scrim" id="chars-reorder-scrim"></div>
 
     <main class="chars-main">
       <div id="char-profile" class="char-profile"></div>
@@ -1095,6 +1182,95 @@ document.getElementById('chars-link-btn').addEventListener('click', () => {
 });
 document.getElementById('chars-linkexist-close').addEventListener('click', () => {
   document.getElementById('chars-linkexist-overlay').hidden = true;
+});
+
+// ── Reorder Characters ────────────────────────────────────────────────────
+// A drag-and-drop pass over the sidebar's own cast list, scoped to just this
+// story's link table (character_story_links.sort_order) — dragging never
+// touches the characters themselves, just where they fall in THIS story's
+// roster.
+let reorderDragId = null;
+
+function buildReorderRow(char) {
+  const row = document.createElement('div');
+  row.className = 'chars-reorder-row';
+  row.draggable = true;
+  row.dataset.id = char.id;
+  row.innerHTML = `
+    <span class="chars-reorder-handle">⠿</span>
+    <img class="chars-reorder-thumb" src="${char.ref || '/images/defaultchar.jpg'}" alt="" />
+    <span class="chars-reorder-name">${escapeHtml(char.name)}</span>
+  `;
+
+  row.addEventListener('dragstart', (e) => {
+    reorderDragId = char.id;
+    row.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  row.addEventListener('dragend', () => {
+    row.classList.remove('dragging');
+    document.querySelectorAll('.chars-reorder-row.drop-target').forEach(r => r.classList.remove('drop-target'));
+  });
+  row.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (String(char.id) === String(reorderDragId)) return;
+    row.classList.add('drop-target');
+  });
+  row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
+  row.addEventListener('drop', (e) => {
+    e.preventDefault();
+    row.classList.remove('drop-target');
+    if (reorderDragId == null || String(char.id) === String(reorderDragId)) return;
+    const list = document.getElementById('chars-reorder-list');
+    const dragEl = list.querySelector(`.chars-reorder-row[data-id="${CSS.escape(String(reorderDragId))}"]`);
+    if (!dragEl) return;
+    const rect = row.getBoundingClientRect();
+    const before = (e.clientY - rect.top) < rect.height / 2;
+    list.insertBefore(dragEl, before ? row : row.nextSibling);
+  });
+
+  return row;
+}
+
+function enterReorderMode() {
+  const list = document.getElementById('chars-reorder-list');
+  list.innerHTML = '';
+  CHARACTERS.forEach(char => list.appendChild(buildReorderRow(char)));
+  document.getElementById('chars-nav-scroller').hidden = true;
+  document.getElementById('chars-sidebar-label').hidden = true;
+  document.getElementById('chars-reorder-panel').hidden = false;
+  document.body.classList.add('chars-reorder-active');
+}
+
+function exitReorderMode() {
+  document.body.classList.remove('chars-reorder-active');
+  document.getElementById('chars-reorder-panel').hidden = true;
+  document.getElementById('chars-nav-scroller').hidden = false;
+  document.getElementById('chars-sidebar-label').hidden = false;
+}
+
+document.getElementById('chars-reorder-btn').addEventListener('click', enterReorderMode);
+document.getElementById('chars-reorder-cancel').addEventListener('click', exitReorderMode);
+document.getElementById('chars-reorder-save').addEventListener('click', async () => {
+  const saveBtn = document.getElementById('chars-reorder-save');
+  const order = [...document.querySelectorAll('#chars-reorder-list .chars-reorder-row')].map(r => r.dataset.id);
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+  try {
+    await fetch('/api/moderator/characters/reorder', {
+      method: 'PUT',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order }),
+    });
+    const fresh = await ModeratorSite.load(SLUG);
+    renderCharList((fresh && fresh.characters) || []);
+  } catch {
+    alert('Could not save the new order — please try again.');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save Order';
+    exitReorderMode();
+  }
 });
 
 document.getElementById('char-editor-delete-forever').addEventListener('click', async () => {
