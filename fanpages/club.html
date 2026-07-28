@@ -168,6 +168,45 @@
     .cl-gate { max-width: 500px; margin: 8rem auto; text-align: center; color: #999; padding: 0 1.5rem; }
 
     /* ── Edit Club modal ── */
+    /* Wider than the base .char-editor-modal — this one has a Pages nav
+       column sitting alongside the actual editing area, not just a single
+       stacked form. */
+    .cl-edit-modal { max-width: 980px; }
+    .cl-edit-layout { display: flex; align-items: stretch; }
+    .cl-edit-main { flex: 1; min-width: 0; }
+    .cl-edit-section-title {
+      font-family: 'Cinzel', Georgia, serif; font-size: 1.05rem; font-weight: 700; color: #f0f0f0;
+      margin: 0 0 1.1rem; padding-bottom: 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .cl-edit-divider { width: 1px; background: rgba(255,255,255,0.12); flex-shrink: 0; margin: 0 1.75rem; }
+    .cl-edit-pages-col { width: 180px; flex-shrink: 0; display: flex; flex-direction: column; }
+    .cl-edit-pages-title {
+      font-family: 'Cinzel', serif; font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase;
+      color: #888; margin: 0 0 0.85rem;
+    }
+    .cl-edit-pages-create-btn {
+      width: 100%; box-sizing: border-box; padding: 0.55em 0.7em; border-radius: 8px; cursor: pointer;
+      background: transparent; border: 1px dashed rgba(255,255,255,0.25); color: #aaa;
+      font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .cl-edit-pages-create-btn:hover:not(:disabled) { border-color: rgba(240,192,96,0.5); color: #f0c060; }
+    .cl-edit-pages-create-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .cl-edit-pages-rule { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1rem 0; }
+    .cl-edit-pages-list { display: flex; flex-direction: column; gap: 0.2rem; }
+    .cl-edit-pages-item {
+      text-align: left; padding: 0.55em 0.7em; border-radius: 8px; border: none;
+      background: transparent; color: #ccc; font-size: 0.92rem; font-family: inherit; cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .cl-edit-pages-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
+    .cl-edit-pages-item.active { background: rgba(240,192,96,0.12); color: #f0c060; font-weight: 700; }
+    @media (max-width: 700px) {
+      .cl-edit-layout { flex-direction: column; }
+      .cl-edit-divider { display: none; }
+      .cl-edit-pages-col { width: auto; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); }
+    }
+
     /* Same box/hover/overlay recipe as .char-editor-ref-wrap, just wide
        (matching the banner's own on-page proportions) instead of square. */
     .cl-edit-banner-wrap {
@@ -254,23 +293,41 @@
 <!-- Edit Club modal — owners/admins only. Starts with just the banner
      image; more fields land here as the club template grows. -->
 <div class="char-editor-overlay" id="cl-edit-overlay" hidden>
-  <div class="char-editor-modal">
+  <div class="char-editor-modal cl-edit-modal">
     <h2 class="char-editor-title">Edit Club</h2>
 
-    <div class="mod-field">
-      <label>Banner Image</label>
-      <div class="cl-edit-banner-wrap" id="cl-edit-banner-wrap">
-        <img id="cl-edit-banner-preview" alt="" />
-        <div class="cl-edit-banner-overlay">📷 Change Banner Image</div>
-        <button type="button" class="fp-recrop-btn" id="cl-edit-banner-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
-      </div>
-      <input type="file" id="cl-edit-banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-    </div>
+    <div class="cl-edit-layout">
+      <div class="cl-edit-main">
+        <h3 class="cl-edit-section-title">Banner Image</h3>
 
-    <p class="mod-panel-msg" id="cl-edit-msg"></p>
-    <div class="char-editor-actions">
-      <button class="mod-btn mod-btn--cancel" id="cl-edit-cancel" type="button">Cancel</button>
-      <button class="mod-btn" id="cl-edit-save" type="button">Save</button>
+        <div class="mod-field">
+          <div class="cl-edit-banner-wrap" id="cl-edit-banner-wrap">
+            <img id="cl-edit-banner-preview" alt="" />
+            <div class="cl-edit-banner-overlay">📷 Change Banner Image</div>
+            <button type="button" class="fp-recrop-btn" id="cl-edit-banner-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
+          </div>
+          <input type="file" id="cl-edit-banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+        </div>
+
+        <p class="mod-panel-msg" id="cl-edit-msg"></p>
+        <div class="char-editor-actions">
+          <button class="mod-btn mod-btn--cancel" id="cl-edit-cancel" type="button">Cancel</button>
+          <button class="mod-btn" id="cl-edit-save" type="button">Save</button>
+        </div>
+      </div>
+
+      <div class="cl-edit-divider"></div>
+
+      <!-- Every club gets a "Home" page (this one) for free — more pages are
+           a later stage, so Create Page is just a placeholder for now. -->
+      <div class="cl-edit-pages-col">
+        <p class="cl-edit-pages-title">Pages</p>
+        <button class="cl-edit-pages-create-btn" type="button" disabled title="Coming soon!">+ Create Page</button>
+        <hr class="cl-edit-pages-rule" />
+        <div class="cl-edit-pages-list">
+          <button class="cl-edit-pages-item active" type="button">Home</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -421,7 +478,7 @@ document.getElementById('cl-edit-banner-file-input').addEventListener('change', 
   if (!file) return;
   openCropModal({
     title: 'Crop Banner Image', imageSrc: URL.createObjectURL(file), aspectRatio: 1600 / 280, round: false,
-    onSave: saveBannerCrop,
+    viewMode: 0, onSave: saveBannerCrop,
   });
   e.target.value = '';
 });
@@ -435,7 +492,7 @@ document.getElementById('cl-edit-banner-recrop-btn').addEventListener('click', (
   if (!src) return;
   openCropModal({
     title: 'Crop Banner Image', imageSrc: src, aspectRatio: 1600 / 280, round: false,
-    onSave: saveBannerCrop,
+    viewMode: 0, onSave: saveBannerCrop,
   });
 });
 function saveBannerCrop(blob) {
