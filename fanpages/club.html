@@ -121,14 +121,21 @@
 
     @media (max-width: 860px) { .cl-header { margin-top: -50px; } .cl-banner-wrap { height: 180px; } .cl-icon-wrap { width: 84px; height: 84px; } }
 
-    /* ── Row: club name + About on the left, a templated picture slot on
-       the right — the actual "home page" content, replacing the old
-       generic name/Club Info splash that just repeated the club's name
-       twice. ── */
-    .cl-row {
-      max-width: 1200px; margin: 0 auto; padding: 3rem 2rem 5rem;
-      display: grid; grid-template-columns: 1fr 340px; gap: 2.75rem; align-items: start;
-    }
+    /* ── Row: main content (left), offset by the info panel's fixed width
+       on the right, same recipe as .soc-main/.soc-right-panel on the
+       Social hub — the panel is taken out of normal flow entirely and
+       pinned to the far right edge of the browser window (not just the
+       edge of the 1200px content column), inset 20px like the Popular
+       Posts panel there. Left untouched — the new picture field below
+       lives entirely inside this main column, not as a sibling of the
+       sidebar. ── */
+    .cl-row { max-width: 1200px; margin: 0 auto; padding: 3rem 2rem 5rem; margin-right: 336px; }
+
+    /* Name + About (left) alongside the templated picture slot (right),
+       both confined to the main column so neither ever reaches under the
+       fixed sidebar. */
+    .cl-home-row { display: flex; gap: 2.25rem; align-items: flex-start; }
+    .cl-home-text { flex: 1; min-width: 0; }
 
     .cl-name {
       font-family: 'Cinzel', Georgia, serif; font-size: 2.6rem; font-weight: 700; color: #f0c060;
@@ -138,14 +145,39 @@
     .cl-about-body { color: #bbb; font-size: 0.96rem; line-height: 1.75; margin: 0; }
 
     .cl-pic-wrap {
-      width: 100%; aspect-ratio: 4 / 3; border-radius: 16px; overflow: hidden;
+      width: 220px; flex-shrink: 0; aspect-ratio: 4 / 3; border-radius: 16px; overflow: hidden;
       background: #161616; border: 1px solid rgba(255,255,255,0.1);
     }
     .cl-pic-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
+    /* Fixed like the Popular Posts panel, but top is offset past the banner
+       (64px topbar + 280px banner + 20px gap) instead of sitting right under
+       the topbar — the banner has no fixed-position equivalent to dodge it
+       otherwise, so a plain top:84px here just runs the panel straight over
+       the art. */
+    .cl-side {
+      position: fixed; top: 364px; right: 20px; bottom: 20px; width: 300px; z-index: 5;
+      overflow-y: auto; padding: 1.25rem; box-sizing: border-box;
+      background: linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015));
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 20px;
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+    .cl-info-title {
+      font-family: 'Cinzel', Georgia, serif; font-weight: 700; font-size: 1.2rem; color: #f0c060;
+      text-shadow: 0 0 16px rgba(240,192,96,0.55); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .cl-info-rule { border: none; border-top: 1px solid rgba(255,255,255,0.12); margin: 0.9rem 0; }
+    .cl-info-body { color: #999; font-size: 0.88rem; }
+
+    @media (max-width: 1100px) {
+      .cl-side { position: static; width: auto; height: auto; margin: 2rem 1.25rem 0; }
+      .cl-row { margin-right: 0; }
+    }
     @media (max-width: 860px) {
-      .cl-row { grid-template-columns: 1fr; padding: 2rem 1.25rem 3rem; }
-      .cl-pic-wrap { max-width: 340px; margin: 0 auto; }
+      .cl-row { padding: 2rem 1.25rem 3rem; }
+      .cl-home-row { flex-direction: column-reverse; }
+      .cl-pic-wrap { width: 100%; max-width: 340px; margin: 0 auto 1.5rem; }
     }
 
     .cl-gate { max-width: 500px; margin: 8rem auto; text-align: center; color: #999; padding: 0 1.5rem; }
@@ -257,17 +289,25 @@
   </div>
 
   <div class="cl-row">
-    <div class="cl-main-col">
-      <h1 class="cl-name" id="cl-name"></h1>
-      <p class="cl-about-label">About</p>
-      <p class="cl-about-body" id="cl-about-body"></p>
-    </div>
+    <div class="cl-home-row">
+      <div class="cl-home-text">
+        <h1 class="cl-name" id="cl-name"></h1>
+        <p class="cl-about-label">About</p>
+        <p class="cl-about-body" id="cl-about-body"></p>
+      </div>
 
-    <!-- Templated picture slot — not editable yet, just the layout. -->
-    <div class="cl-pic-wrap">
-      <img id="cl-pic-img" src="/images/nopicture.png" alt="" />
+      <!-- Templated picture slot — not editable yet, just the layout. -->
+      <div class="cl-pic-wrap">
+        <img id="cl-pic-img" src="/images/nopicture.png" alt="" />
+      </div>
     </div>
   </div>
+
+  <aside class="cl-side">
+    <p class="cl-info-title" id="cl-info-title"></p>
+    <hr class="cl-info-rule" />
+    <div class="cl-info-body" id="cl-info-body"></div>
+  </aside>
 </div>
 
 </div> <!-- /.soc-layout -->
@@ -420,6 +460,8 @@ function renderClub(club) {
   document.getElementById('cl-icon-wrap').innerHTML = club.icon_url
     ? `<img src="${club.icon_url}" alt="" />`
     : `<span class="cl-icon-fallback">${escapeHtml(club.name.charAt(0).toUpperCase())}</span>`;
+
+  document.getElementById('cl-info-title').textContent = club.name;
 
   document.getElementById('cl-name').textContent = club.name;
   document.getElementById('cl-about-body').textContent = club.description || 'This club hasn\'t written anything here yet.';
