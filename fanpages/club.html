@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
   <style>
     /* No body background override here on purpose — style.css sets
        body { background: transparent } specifically so the fixed
@@ -94,15 +95,7 @@
     .cl-banner-img-slot { position: absolute; inset: 0; }
     .cl-banner-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
     /* Softens the banner's bottom edge into the page instead of cutting off
-       sharply — a plain fade would work but reads a little flat, so a touch
-       of blur is layered on underneath it for a softer blend. */
-    .cl-banner-wrap::before {
-      content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 90px; z-index: 1;
-      pointer-events: none;
-      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-      mask-image: linear-gradient(to bottom, transparent, #000 70%);
-      -webkit-mask-image: linear-gradient(to bottom, transparent, #000 70%);
-    }
+       sharply. */
     .cl-banner-wrap::after {
       content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 140px; z-index: 1;
       background: linear-gradient(to bottom, rgba(13,13,13,0), rgba(13,13,13,0.92));
@@ -173,12 +166,30 @@
     }
 
     .cl-gate { max-width: 500px; margin: 8rem auto; text-align: center; color: #999; padding: 0 1.5rem; }
+
+    /* ── Edit Club modal ── */
+    /* Same box/hover/overlay recipe as .char-editor-ref-wrap, just wide
+       (matching the banner's own on-page proportions) instead of square. */
+    .cl-edit-banner-wrap {
+      position: relative; width: 100%; max-width: none; aspect-ratio: 1600 / 280; margin: 0 auto 1.75rem;
+      border-radius: 14px; overflow: hidden; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12);
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+    .cl-edit-banner-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
+    .cl-edit-banner-overlay {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.45); color: #fff; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600;
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .cl-edit-banner-wrap:hover .cl-edit-banner-overlay { opacity: 1; }
   </style>
 </head>
 <body>
 
 <div id="fanpages-topbar-root"></div>
 <script src="/fanpages/fanpages-nav.js"></script>
+<script src="/fanpages/vendor/cropper.min.js"></script>
+<script src="/fanpages/crop-modal.js"></script>
 
 <div class="page-bg">
   <img src="/images/gallery/solusgarnet_17.png" alt="" />
@@ -239,6 +250,29 @@
 </div>
 
 </div> <!-- /.soc-layout -->
+
+<!-- Edit Club modal — owners/admins only. Starts with just the banner
+     image; more fields land here as the club template grows. -->
+<div class="char-editor-overlay" id="cl-edit-overlay" hidden>
+  <div class="char-editor-modal">
+    <h2 class="char-editor-title">Edit Club</h2>
+
+    <div class="mod-field">
+      <label>Banner Image</label>
+      <div class="cl-edit-banner-wrap" id="cl-edit-banner-wrap">
+        <img id="cl-edit-banner-preview" alt="" />
+        <div class="cl-edit-banner-overlay">📷 Change Banner Image</div>
+      </div>
+      <input type="file" id="cl-edit-banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+    </div>
+
+    <p class="mod-panel-msg" id="cl-edit-msg"></p>
+    <div class="char-editor-actions">
+      <button class="mod-btn mod-btn--cancel" id="cl-edit-cancel" type="button">Cancel</button>
+      <button class="mod-btn" id="cl-edit-save" type="button">Save</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const API = '/api';
@@ -333,7 +367,10 @@ async function loadClub() {
   }
 }
 
+let currentClub = null;
+
 function renderClub(club) {
+  currentClub = club;
   document.title = `${club.name} ✦ Social ✦ Fanpages`;
 
   document.getElementById('cl-banner-img-slot').innerHTML = club.banner_url
@@ -352,6 +389,69 @@ function renderClub(club) {
   const isAdminOrOwner = club.viewer_role === 'owner' || club.viewer_role === 'admin';
   document.getElementById('cl-edit-club-btn').style.display = isAdminOrOwner ? 'block' : 'none';
 }
+
+// ── Edit Club modal — banner image only for now ──────────────────────────
+let pendingBannerBlob = null;
+let pendingBannerPreviewUrl = null;
+
+function openEditClubModal() {
+  if (!currentClub) return;
+  pendingBannerBlob = null;
+  if (pendingBannerPreviewUrl) { URL.revokeObjectURL(pendingBannerPreviewUrl); pendingBannerPreviewUrl = null; }
+  document.getElementById('cl-edit-banner-preview').src = currentClub.banner_url || '/images/gallery/solusgarnet_17.png';
+  document.getElementById('cl-edit-msg').textContent = '';
+  document.getElementById('cl-edit-overlay').hidden = false;
+}
+function closeEditClubModal() {
+  document.getElementById('cl-edit-overlay').hidden = true;
+  pendingBannerBlob = null;
+  if (pendingBannerPreviewUrl) { URL.revokeObjectURL(pendingBannerPreviewUrl); pendingBannerPreviewUrl = null; }
+}
+
+document.getElementById('cl-edit-club-btn').addEventListener('click', openEditClubModal);
+document.getElementById('cl-edit-cancel').addEventListener('click', closeEditClubModal);
+
+document.getElementById('cl-edit-banner-wrap').addEventListener('click', () => {
+  document.getElementById('cl-edit-banner-file-input').click();
+});
+document.getElementById('cl-edit-banner-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  openCropModal({
+    title: 'Crop Banner Image', imageSrc: URL.createObjectURL(file), aspectRatio: 1600 / 280, round: false,
+    onSave: (blob) => {
+      pendingBannerBlob = blob;
+      if (pendingBannerPreviewUrl) URL.revokeObjectURL(pendingBannerPreviewUrl);
+      pendingBannerPreviewUrl = URL.createObjectURL(blob);
+      document.getElementById('cl-edit-banner-preview').src = pendingBannerPreviewUrl;
+    },
+  });
+  e.target.value = '';
+});
+
+document.getElementById('cl-edit-save').addEventListener('click', async () => {
+  const saveBtn = document.getElementById('cl-edit-save');
+  const msg = document.getElementById('cl-edit-msg');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+  msg.className = 'mod-panel-msg';
+  msg.textContent = '';
+  try {
+    const fd = new FormData();
+    if (pendingBannerBlob) fd.append('banner', pendingBannerBlob, 'banner.jpg');
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}`, { method: 'PUT', headers: authHeaders(), body: fd });
+    if (!res.ok) throw new Error('save failed');
+    const data = await res.json();
+    renderClub(data.club);
+    closeEditClubModal();
+  } catch {
+    msg.className = 'mod-panel-msg mod-panel-msg--error';
+    msg.textContent = 'Could not save — please try again.';
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save';
+  }
+});
 
 if (!slug) {
   document.getElementById('cl-notfound').style.display = 'block';
