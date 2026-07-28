@@ -131,7 +131,20 @@
 
     @media (max-width: 860px) { .cl-header { margin-top: -50px; } .cl-banner-wrap { height: 180px; } .cl-icon-wrap { width: 84px; height: 84px; } }
 
-    .cl-row { max-width: 1200px; margin: 0 auto; padding: 3rem 2rem 5rem; }
+    .cl-row { max-width: 1200px; margin: 0 auto; padding: 3rem 2rem 5rem; position: relative; }
+
+    /* Hover reveal, top-left of the main area below the banner (never over
+       the banner itself — that's .cl-header's territory, a separate
+       element entirely). Owners/admins only, same gate as Edit Club. */
+    .cl-theme-btn {
+      position: absolute; top: 0.5rem; left: 2rem; z-index: 4;
+      width: 40px; height: 40px; border-radius: 50%; box-sizing: border-box;
+      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.25); color: #fff;
+      font-size: 1.15rem; cursor: pointer; display: none; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.2s, background 0.15s, transform 0.15s;
+    }
+    .cl-row:hover .cl-theme-btn { opacity: 1; }
+    .cl-theme-btn:hover { background: rgba(0,0,0,0.8); transform: translateY(-1px); }
 
     /* Big banner-like slot, above everything else — will eventually cycle
        through several images as a slideshow, so it's sized generously up
@@ -152,30 +165,32 @@
       margin: 0 0 1.5rem;
     }
 
-    .cl-home-row { display: flex; gap: 2.25rem; align-items: stretch; }
+    /* No more flex row / boxed About — the picture floats left and the
+       About text wraps around it like a magazine column, running under it
+       naturally once it clears the float's height. .cl-about-wrap just
+       needs a clearfix so the row's own height still accounts for the
+       float. */
+    .cl-about-wrap::after { content: ''; display: table; clear: both; }
 
     .cl-pic-wrap {
-      width: 380px; flex-shrink: 0; aspect-ratio: 1 / 1; border-radius: 16px; overflow: hidden;
-      background: #161616; border: 1px solid rgba(255,255,255,0.1);
+      float: left; width: 380px; aspect-ratio: 1 / 1; border-radius: 16px; overflow: hidden;
+      background: #161616; border: 1px solid rgba(255,255,255,0.1); margin: 0 2rem 1rem 0;
     }
     .cl-pic-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-    /* Same glass-card recipe as .cl-side, just in normal flow instead of
-       fixed. */
-    .cl-about-box {
-      flex: 1; min-width: 0; padding: 1.5rem 1.75rem; box-sizing: border-box;
-      background: linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015));
-      border: 1px solid rgba(255,255,255,0.12); border-radius: 20px;
-      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-      box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
-    }
+    /* Fancy title instead of a boxed label — Cinzel serif, a touch bigger,
+       with a short gradient underline flourish instead of a full-width
+       rule. */
     .cl-about-label {
-      font-family: 'Cinzel', Georgia, serif; font-size: 1.05rem; font-weight: 700; letter-spacing: 0.08em;
-      text-transform: uppercase; color: #7fa8d9; text-shadow: 0 0 14px rgba(127,168,217,0.65);
-      margin: 0 0 0.6rem;
+      font-family: 'Cinzel', Georgia, serif; font-size: 1.4rem; font-weight: 700; letter-spacing: 0.03em;
+      color: #7fa8d9; text-shadow: 0 0 16px rgba(127,168,217,0.6);
+      margin: 0 0 0.85rem; display: inline-block; position: relative; padding-bottom: 0.5rem;
     }
-    .cl-about-rule { border: none; border-top: 1px solid rgba(255,255,255,0.14); margin: 0 0 1rem; }
-    .cl-about-body { color: #bbb; font-size: 0.96rem; line-height: 1.75; margin: 0; }
+    .cl-about-label::after {
+      content: ''; position: absolute; left: 0; bottom: 0; width: 64px; height: 2px;
+      background: linear-gradient(90deg, #7fa8d9, transparent);
+    }
+    .cl-about-body { color: #bbb; font-size: 0.96rem; line-height: 1.8; margin: 0; }
 
     /* Fixed like the Popular Posts panel, but top is offset past the banner
        (64px topbar + 280px banner + a few px gap) instead of sitting right
@@ -203,8 +218,9 @@
     }
     @media (max-width: 860px) {
       .cl-row { padding: 2rem 1.25rem 3rem; }
-      .cl-home-row { flex-direction: column; }
-      .cl-pic-wrap { width: 100%; max-width: 380px; margin: 0 auto; }
+      /* Not enough width for text to wrap alongside a 380px float without
+         squeezing to nothing — drop it back into normal flow, stacked. */
+      .cl-pic-wrap { float: none; width: 100%; max-width: 380px; margin: 0 auto 1.5rem; }
     }
 
     .cl-gate { max-width: 500px; margin: 8rem auto; text-align: center; color: #999; padding: 0 1.5rem; }
@@ -317,6 +333,8 @@
     </div>
 
     <div class="cl-row">
+      <button class="cl-theme-btn" id="cl-theme-btn" type="button" title="Customize Theme">🎨</button>
+
       <!-- Slideshow slot — not editable/cycling yet, just the layout (a
            single "Image Not Available" placeholder for now). -->
       <div class="cl-slideshow-wrap">
@@ -325,17 +343,14 @@
 
       <h1 class="cl-name" id="cl-name"></h1>
 
-      <div class="cl-home-row">
+      <div class="cl-about-wrap">
         <!-- Templated picture slot — not editable yet, just the layout. -->
         <div class="cl-pic-wrap">
           <img id="cl-pic-img" src="/images/nopicture.png" alt="" />
         </div>
 
-        <div class="cl-about-box">
-          <p class="cl-about-label">About</p>
-          <hr class="cl-about-rule" />
-          <p class="cl-about-body" id="cl-about-body"></p>
-        </div>
+        <p class="cl-about-label">About</p>
+        <p class="cl-about-body" id="cl-about-body"></p>
       </div>
     </div>
   </div>
@@ -505,6 +520,7 @@ function renderClub(club) {
 
   const isAdminOrOwner = club.viewer_role === 'owner' || club.viewer_role === 'admin';
   document.getElementById('cl-edit-club-btn').style.display = isAdminOrOwner ? 'block' : 'none';
+  document.getElementById('cl-theme-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
 }
 
 // ── Edit Club modal — banner image only for now ──────────────────────────
@@ -527,6 +543,11 @@ function closeEditClubModal() {
 
 document.getElementById('cl-edit-club-btn').addEventListener('click', openEditClubModal);
 document.getElementById('cl-edit-cancel').addEventListener('click', closeEditClubModal);
+
+// Not wired to anything yet — just the entry point, staged like everything else.
+document.getElementById('cl-theme-btn').addEventListener('click', () => {
+  alert('Theme customization is coming soon!');
+});
 
 document.getElementById('cl-edit-banner-wrap').addEventListener('click', (e) => {
   if (e.target.closest('#cl-edit-banner-recrop-btn')) return;
