@@ -12,10 +12,7 @@
   <style>
     /* No body background override here on purpose — style.css sets
        body { background: transparent } specifically so the fixed
-       .page-bg image shows through underneath. .page-bg itself gets a
-       plain dark fallback color so "default" theme (image hidden) still
-       reads as a normal dark page instead of falling through to white. */
-    .page-bg { background: #0d0d0d; }
+       .page-bg image shows through underneath. */
 
     /* ── Sidebar (same as fanpages/social.html — kept present on every
        club page too, with a shared collapse-state localStorage key so it
@@ -137,16 +134,16 @@
 
     .cl-row { max-width: 1200px; margin: 0 auto; padding: 3rem 2rem 5rem; position: relative; }
 
-    /* Hover reveal, top-right of the main area below the banner (never over
+    /* Hover reveal, top-left of the main area below the banner (never over
        the banner itself — that's .cl-header's territory, a separate
-       element entirely). Right instead of left so it tracks .cl-row's own
-       right edge — same shifting-with-collapse behavior as the rest of
-       this column, since it's positioned relative to .cl-row itself, not
-       the viewport. Owners/admins only, same gate as Edit Club. Same
-       default(plain dark)/custom(blurred picture) pattern as the profile
-       page's own theme picker. */
+       element entirely). Left so it tracks .cl-row's own left edge — same
+       shifting-with-collapse behavior as the rest of this column, since
+       it's positioned relative to .cl-row itself, not the viewport.
+       Owners/admins only, same gate as Edit Club. Same default(social-hub
+       background)/custom(blurred picture) pattern as the profile page's
+       own theme picker. */
     .cl-theme-picker {
-      position: absolute; top: 0.5rem; right: 2rem; z-index: 20;
+      position: absolute; top: 0.5rem; left: 2rem; z-index: 20;
       opacity: 0; pointer-events: none; transition: opacity 0.2s; display: none;
     }
     .cl-row:hover .cl-theme-picker { opacity: 1; pointer-events: auto; }
@@ -160,7 +157,7 @@
     }
     .cl-theme-btn:hover { background: linear-gradient(160deg, rgba(255,255,255,0.22), rgba(255,255,255,0.07)); transform: translateY(-1px); }
     .cl-theme-popover {
-      position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+      position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
       background: #161616; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
       box-shadow: 0 12px 32px rgba(0,0,0,0.5); padding: 1rem; width: 220px;
     }
@@ -566,18 +563,17 @@ function renderClub(club) {
 }
 
 // ── Theme — default (plain dark) or a custom blurred background, same
-// pattern as the profile page's own theme picker ──────────────────────────
+// pattern as the profile page's own theme picker — EXCEPT "default" here
+// isn't plain dark, it's the same background as the Social hub's Home page,
+// so a club that's never touched its theme still looks like the rest of
+// the site instead of dropping into dark mode. ──────────────────────────
+const CL_DEFAULT_BG = '/images/gallery/solusgarnet_17.png';
 function applyClubTheme(themeId, bgUrl) {
   const bgImg = document.getElementById('cl-page-bg-img');
   const bgOverlay = document.getElementById('cl-page-bg-overlay');
-  if (themeId === 'custom' && bgUrl) {
-    bgImg.src = bgUrl;
-    bgImg.style.display = 'block';
-    bgOverlay.style.display = 'block';
-  } else {
-    bgImg.style.display = 'none';
-    bgOverlay.style.display = 'none';
-  }
+  bgImg.src = (themeId === 'custom' && bgUrl) ? bgUrl : CL_DEFAULT_BG;
+  bgImg.style.display = 'block';
+  bgOverlay.style.display = 'block';
   document.querySelectorAll('.cl-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
 }
 
@@ -588,9 +584,9 @@ function buildClubThemeGrid() {
   const defaultBtn = document.createElement('button');
   defaultBtn.className = 'cl-theme-swatch';
   defaultBtn.type = 'button';
-  defaultBtn.title = 'Default (plain dark)';
+  defaultBtn.title = 'Default (same as the Social hub background)';
   defaultBtn.dataset.theme = 'default';
-  defaultBtn.innerHTML = '<span></span>';
+  defaultBtn.innerHTML = `<span style="background-image:url('${CL_DEFAULT_BG}'); background-size:cover; background-position:center;"></span>`;
   defaultBtn.addEventListener('click', () => selectClubTheme('default'));
   grid.appendChild(defaultBtn);
 
