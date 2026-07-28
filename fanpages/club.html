@@ -262,6 +262,7 @@
       <div class="cl-edit-banner-wrap" id="cl-edit-banner-wrap">
         <img id="cl-edit-banner-preview" alt="" />
         <div class="cl-edit-banner-overlay">📷 Change Banner Image</div>
+        <button type="button" class="fp-recrop-btn" id="cl-edit-banner-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
       </div>
       <input type="file" id="cl-edit-banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
     </div>
@@ -411,7 +412,8 @@ function closeEditClubModal() {
 document.getElementById('cl-edit-club-btn').addEventListener('click', openEditClubModal);
 document.getElementById('cl-edit-cancel').addEventListener('click', closeEditClubModal);
 
-document.getElementById('cl-edit-banner-wrap').addEventListener('click', () => {
+document.getElementById('cl-edit-banner-wrap').addEventListener('click', (e) => {
+  if (e.target.closest('#cl-edit-banner-recrop-btn')) return;
   document.getElementById('cl-edit-banner-file-input').click();
 });
 document.getElementById('cl-edit-banner-file-input').addEventListener('change', (e) => {
@@ -419,15 +421,29 @@ document.getElementById('cl-edit-banner-file-input').addEventListener('change', 
   if (!file) return;
   openCropModal({
     title: 'Crop Banner Image', imageSrc: URL.createObjectURL(file), aspectRatio: 1600 / 280, round: false,
-    onSave: (blob) => {
-      pendingBannerBlob = blob;
-      if (pendingBannerPreviewUrl) URL.revokeObjectURL(pendingBannerPreviewUrl);
-      pendingBannerPreviewUrl = URL.createObjectURL(blob);
-      document.getElementById('cl-edit-banner-preview').src = pendingBannerPreviewUrl;
-    },
+    onSave: saveBannerCrop,
   });
   e.target.value = '';
 });
+// Recrop reopens the Cropper on whatever's currently showing in the preview
+// box — the pending crop if you've already picked/cropped one this session,
+// otherwise the club's actual saved banner — instead of forcing a fresh
+// file pick just to adjust framing.
+document.getElementById('cl-edit-banner-recrop-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const src = pendingBannerPreviewUrl || (currentClub && currentClub.banner_url);
+  if (!src) return;
+  openCropModal({
+    title: 'Crop Banner Image', imageSrc: src, aspectRatio: 1600 / 280, round: false,
+    onSave: saveBannerCrop,
+  });
+});
+function saveBannerCrop(blob) {
+  pendingBannerBlob = blob;
+  if (pendingBannerPreviewUrl) URL.revokeObjectURL(pendingBannerPreviewUrl);
+  pendingBannerPreviewUrl = URL.createObjectURL(blob);
+  document.getElementById('cl-edit-banner-preview').src = pendingBannerPreviewUrl;
+}
 
 document.getElementById('cl-edit-save').addEventListener('click', async () => {
   const saveBtn = document.getElementById('cl-edit-save');
