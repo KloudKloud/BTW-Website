@@ -1224,9 +1224,11 @@ function buildReorderRow(char) {
     const list = document.getElementById('chars-reorder-list');
     const dragEl = list.querySelector(`.chars-reorder-row[data-id="${CSS.escape(String(reorderDragId))}"]`);
     if (!dragEl) return;
-    const rect = row.getBoundingClientRect();
-    const before = (e.clientY - rect.top) < rect.height / 2;
-    list.insertBefore(dragEl, before ? row : row.nextSibling);
+    // Always land the dragged row directly in the target's slot the moment
+    // it glows and you let go — no dependency on which half of the target
+    // row the cursor happens to be over, which used to make drops silently
+    // no-op when released just below a target's top half.
+    list.insertBefore(dragEl, row);
   });
 
   return row;
@@ -1257,19 +1259,21 @@ document.getElementById('chars-reorder-save').addEventListener('click', async ()
   saveBtn.disabled = true;
   saveBtn.textContent = 'Saving…';
   try {
-    await fetch('/api/moderator/characters/reorder', {
+    const res = await fetch('/api/moderator/characters/reorder', {
       method: 'PUT',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ order }),
     });
+    if (!res.ok) throw new Error('save failed');
     const fresh = await ModeratorSite.load(SLUG);
-    renderCharList((fresh && fresh.characters) || []);
+    if (!fresh) throw new Error('reload failed');
+    renderCharList(fresh.characters || []);
+    exitReorderMode();
   } catch {
     alert('Could not save the new order — please try again.');
   } finally {
     saveBtn.disabled = false;
     saveBtn.textContent = 'Save Order';
-    exitReorderMode();
   }
 });
 
