@@ -113,14 +113,17 @@
     }
     .cl-banner-edit-btn:hover { background: rgba(0,0,0,0.85); transform: translateY(-1px); }
 
-    /* No auto-centering here on purpose — with the sidebar's width changing
-       on collapse, "margin: auto" recenters within whatever room is left,
-       which visually pushes this content RIGHT as the sidebar collapses
-       (more free space in total → the auto margin grows to absorb it)
-       instead of letting it actually stretch into the freed-up space.
-       Anchoring flush-left makes it grow/shrink with the sidebar the way
-       it should. */
-    .cl-header { margin: -70px 0 0; padding: 0 2rem; position: relative; z-index: 2; }
+    /* Reserves room for the fixed right sidebar as PADDING on this wrapper,
+       not as margin on the centered content itself — that's what lets
+       .cl-header/.cl-row use plain "margin: 0 auto" and get real, symmetric
+       centering within whatever space the (collapsible) left sidebar
+       leaves behind. Content keeps its own fixed size either way; it just
+       shifts left/right as the available middle shifts, instead of
+       stretching or drifting off-center. */
+    .cl-content-wrap { padding-right: 336px; }
+    @media (max-width: 1100px) { .cl-content-wrap { padding-right: 0; } }
+
+    .cl-header { max-width: 1200px; margin: -70px auto 0; padding: 0 2rem; position: relative; z-index: 2; }
     /* Pfp no longer has the dark ring around it, per request. */
     .cl-icon-wrap { width: 108px; height: 108px; border-radius: 50%; flex-shrink: 0; overflow: hidden; background: #222; }
     .cl-icon-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -128,19 +131,7 @@
 
     @media (max-width: 860px) { .cl-header { margin-top: -50px; } .cl-banner-wrap { height: 180px; } .cl-icon-wrap { width: 84px; height: 84px; } }
 
-    /* ── Row: main content (left), offset by the info panel's fixed width
-       on the right, same recipe as .soc-main/.soc-right-panel on the
-       Social hub — the panel is taken out of normal flow entirely and
-       pinned to the far right edge of the browser window (not just the
-       edge of the 1200px content column), inset 20px like the Popular
-       Posts panel there. Left untouched — the new picture field below
-       lives entirely inside this main column, not as a sibling of the
-       sidebar. ── */
-    /* Flush-left (see .cl-header above) AND no max-width — this column now
-       genuinely fills whatever room sits between the sidebar and the fixed
-       right panel, growing when the sidebar collapses and shrinking back
-       when it expands, instead of stopping at a fixed 1200px regardless. */
-    .cl-row { margin: 0; padding: 3rem 2rem 5rem; margin-right: 336px; }
+    .cl-row { max-width: 1200px; margin: 0 auto; padding: 3rem 2rem 5rem; }
 
     /* Big banner-like slot, above everything else — will eventually cycle
        through several images as a slideshow, so it's sized generously up
@@ -148,7 +139,7 @@
        "Image Not Available" placeholder, just center-cropped into this
        wider shape instead of shown at its native size. */
     .cl-slideshow-wrap {
-      width: 100%; aspect-ratio: 21 / 9; border-radius: 16px; overflow: hidden;
+      width: 100%; aspect-ratio: 5 / 2; border-radius: 16px; overflow: hidden;
       background: #161616; border: 1px solid rgba(255,255,255,0.1); margin-bottom: 2.5rem;
     }
     .cl-slideshow-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -187,12 +178,13 @@
     .cl-about-body { color: #bbb; font-size: 0.96rem; line-height: 1.75; margin: 0; }
 
     /* Fixed like the Popular Posts panel, but top is offset past the banner
-       (64px topbar + 280px banner + 20px gap) instead of sitting right under
-       the topbar — the banner has no fixed-position equivalent to dodge it
-       otherwise, so a plain top:84px here just runs the panel straight over
-       the art. */
+       (64px topbar + 280px banner + a few px gap) instead of sitting right
+       under the topbar — the banner has no fixed-position equivalent to
+       dodge it otherwise, so a plain top:84px here just runs the panel
+       straight over the art. Gap kept tight so it almost touches the
+       banner's bottom edge. */
     .cl-side {
-      position: fixed; top: 364px; right: 20px; bottom: 20px; width: 300px; z-index: 5;
+      position: fixed; top: 348px; right: 20px; bottom: 20px; width: 300px; z-index: 5;
       overflow-y: auto; padding: 1.25rem; box-sizing: border-box;
       background: linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015));
       border: 1px solid rgba(255,255,255,0.12); border-radius: 20px;
@@ -208,7 +200,6 @@
 
     @media (max-width: 1100px) {
       .cl-side { position: static; width: auto; height: auto; margin: 2rem 1.25rem 0; }
-      .cl-row { margin-right: 0; }
     }
     @media (max-width: 860px) {
       .cl-row { padding: 2rem 1.25rem 3rem; }
@@ -320,29 +311,31 @@
     <button class="cl-banner-edit-btn" id="cl-edit-club-btn" type="button" style="display:none;">✎ Edit Club</button>
   </div>
 
-  <div class="cl-header">
-    <div class="cl-icon-wrap" id="cl-icon-wrap"></div>
-  </div>
-
-  <div class="cl-row">
-    <!-- Slideshow slot — not editable/cycling yet, just the layout (a
-         single "Image Not Available" placeholder for now). -->
-    <div class="cl-slideshow-wrap">
-      <img id="cl-slideshow-img" src="/images/nopicture2.png" alt="" />
+  <div class="cl-content-wrap">
+    <div class="cl-header">
+      <div class="cl-icon-wrap" id="cl-icon-wrap"></div>
     </div>
 
-    <h1 class="cl-name" id="cl-name"></h1>
-
-    <div class="cl-home-row">
-      <!-- Templated picture slot — not editable yet, just the layout. -->
-      <div class="cl-pic-wrap">
-        <img id="cl-pic-img" src="/images/nopicture.png" alt="" />
+    <div class="cl-row">
+      <!-- Slideshow slot — not editable/cycling yet, just the layout (a
+           single "Image Not Available" placeholder for now). -->
+      <div class="cl-slideshow-wrap">
+        <img id="cl-slideshow-img" src="/images/nopicture2.png" alt="" />
       </div>
 
-      <div class="cl-about-box">
-        <p class="cl-about-label">About</p>
-        <hr class="cl-about-rule" />
-        <p class="cl-about-body" id="cl-about-body"></p>
+      <h1 class="cl-name" id="cl-name"></h1>
+
+      <div class="cl-home-row">
+        <!-- Templated picture slot — not editable yet, just the layout. -->
+        <div class="cl-pic-wrap">
+          <img id="cl-pic-img" src="/images/nopicture.png" alt="" />
+        </div>
+
+        <div class="cl-about-box">
+          <p class="cl-about-label">About</p>
+          <hr class="cl-about-rule" />
+          <p class="cl-about-body" id="cl-about-body"></p>
+        </div>
       </div>
     </div>
   </div>
