@@ -716,6 +716,23 @@ async function initDb() {
     ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS is_admin_post BOOLEAN NOT NULL DEFAULT FALSE;
   `).catch(e => console.error('club_posts is_admin_post migration:', e.message));
 
+  // "Meet the Admins" — each owner/admin can fill out their own little card
+  // (description + square picture) once they get the role. One row per
+  // club+user; nothing auto-created, an admin only shows up here once they
+  // actually make a card.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS club_admin_cards (
+      id           SERIAL      PRIMARY KEY,
+      club_id      INTEGER     NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      user_id      INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      description  TEXT        NOT NULL DEFAULT '',
+      image_url    TEXT        NOT NULL DEFAULT '/images/defaultchar.jpg',
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(club_id, user_id)
+    );
+  `).catch(e => console.error('club_admin_cards migration:', e.message));
+
   // Every club (new ones via POST /api/clubs, which never specifies a
   // banner_url, letting this column default kick in) starts with this
   // image as its banner rather than the plain fallback card.
@@ -5293,6 +5310,27 @@ app.delete('/api/clubs/:slug/posts/:postId', requireAuth, async (req, res) => {
   if (!allowed) return res.status(403).json({ error: "You don't have permission to delete this post." });
   await pool.query('DELETE FROM club_posts WHERE id = $1', [post.id]);
   res.json({ message: 'Post deleted.' });
+});
+
+// GET /api/clubs/:slug/admin-cards — "Meet the Admins". Joined against
+// club_members so a card vanishes on its own if that person is ever
+// demoted, instead of needing separate cleanup.
+app.get('/api/clubs/:slug/admin-cards', async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const { rows } = await pool.query(
+    `SELECT cac.*, u.username, u.display_name, cm.role
+     FROM club_admin_cards cac
+     JOIN club_members cm ON cm.club_id = cac.club_id AND cm.user_id = cac.user_id
+     JOIN users u ON u.id = cac.user_id
+     WHERE cac.club_id = $1 AND cm.role IN ('owner','admin')
+     ORDER BY (cm.role = 'owner') DESC, cm.joined_at ASC`,
+    [club.id]
+  );
+  res.json({ cards: rows.map(r => ({
+    user_id: r.user_id, username: r.username, display_name: r.display_name || r.username,
+    role: r.role, description: r.description, image_url: r.image_url,
+  })) });
 });
 
 // GET /api/clubs-feed — recent posts across every club, for the Social hub.

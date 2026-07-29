@@ -155,7 +155,8 @@
     .cl-name::after {
       content: ''; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
       width: 100px; height: 3px; border-radius: 2px;
-      background: linear-gradient(90deg, transparent, #f0c060, transparent);
+      background: linear-gradient(90deg, transparent, #7fa8d9, transparent);
+      box-shadow: 0 0 12px rgba(127,168,217,0.75);
     }
 
     /* Fancy title instead of a boxed label — Cinzel serif, a touch bigger,
@@ -171,6 +172,42 @@
       background: linear-gradient(90deg, #7fa8d9, transparent);
     }
     .cl-about-body { color: #bbb; font-size: 0.96rem; line-height: 1.8; margin: 0; }
+
+    /* ── Meet the Admins — each owner/admin's own little card, once they've
+       made one. Cards wrap into a grid, sized "somewhat big but not too
+       big" — a tidy square picture on the left, name/description on the
+       right. ── */
+    .cl-admins-section { margin-top: 3rem; }
+    .cl-admins-title {
+      font-family: 'Cinzel', Georgia, serif; font-size: 1.4rem; font-weight: 700; letter-spacing: 0.03em;
+      color: #7fa8d9; text-shadow: 0 0 16px rgba(127,168,217,0.6);
+      margin: 0 0 1.1rem; display: inline-block; position: relative; padding-bottom: 0.5rem;
+    }
+    .cl-admins-title::after {
+      content: ''; position: absolute; left: 0; bottom: 0; width: 64px; height: 2px;
+      background: linear-gradient(90deg, #7fa8d9, transparent);
+    }
+    .cl-admins-empty { color: #888; font-size: 0.9rem; padding: 0.5rem 0; margin: 0; }
+    .cl-admins-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.1rem; }
+    .cl-admin-card {
+      display: flex; gap: 1rem; padding: 1rem; box-sizing: border-box;
+      background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+    }
+    .cl-admin-card-pic {
+      width: 84px; height: 84px; flex-shrink: 0; border-radius: 12px; overflow: hidden;
+      background: #161616; border: 1px solid rgba(255,255,255,0.1);
+    }
+    .cl-admin-card-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cl-admin-card-body { flex: 1; min-width: 0; }
+    .cl-admin-card-name-row { display: flex; align-items: center; gap: 0.45rem; margin-bottom: 0.35rem; }
+    .cl-admin-card-name { font-weight: 700; color: #f0f0f0; font-size: 1rem; }
+    .cl-admin-card-role {
+      font-size: 0.62rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+      color: #f0c060; background: rgba(240,192,96,0.12); border: 1px solid rgba(240,192,96,0.3);
+      border-radius: 4px; padding: 0.1rem 0.4rem;
+    }
+    .cl-admin-card-desc { font-size: 0.86rem; color: #bbb; line-height: 1.55; margin: 0; }
 
     /* ── Posts By Admin Team — full-width Reddit-style rows ── */
     .cl-admin-posts { margin-top: 3rem; }
@@ -365,6 +402,13 @@
           <p class="cl-about-body" id="cl-about-body"></p>
         </div>
 
+        <div class="cl-admins-section">
+          <p class="cl-admins-title">Meet the Admins</p>
+          <div class="cl-admins-grid" id="cl-admins-grid">
+            <p class="cl-admins-empty">Loading…</p>
+          </div>
+        </div>
+
         <div class="cl-admin-posts">
           <p class="cl-admin-posts-title">Posts By Admin Team</p>
           <div class="cl-admin-posts-list" id="cl-admin-posts-list">
@@ -514,6 +558,7 @@ async function loadClub() {
     const data = await res.json();
     renderClub(data.club);
     document.getElementById('cl-page').style.display = 'block';
+    loadAdminCards();
     loadAdminPosts();
   } catch {
     document.getElementById('cl-notfound').style.display = 'block';
@@ -544,6 +589,42 @@ function renderClub(club) {
   document.getElementById('cl-edit-club-btn').style.display = isAdminOrOwner ? 'block' : 'none';
 
   applyClubTheme(club.theme, club.theme_bg_url);
+}
+
+// ── Meet the Admins — one card per owner/admin who's actually made one
+// (nothing auto-created). No editor UI yet — sizing/layout first, matching
+// how the rest of this template has been staged. ──────────────────────────
+async function loadAdminCards() {
+  const grid = document.getElementById('cl-admins-grid');
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/admin-cards`);
+    const data = await res.json();
+    const cards = data.cards || [];
+    if (!cards.length) {
+      grid.innerHTML = '<p class="cl-admins-empty">No admin cards yet.</p>';
+      return;
+    }
+    grid.innerHTML = '';
+    cards.forEach(c => grid.appendChild(adminCard(c)));
+  } catch {
+    grid.innerHTML = '<p class="cl-admins-empty">Couldn\'t load admin cards right now.</p>';
+  }
+}
+
+function adminCard(c) {
+  const card = document.createElement('div');
+  card.className = 'cl-admin-card';
+  card.innerHTML = `
+    <div class="cl-admin-card-pic"><img src="${c.image_url || '/images/defaultchar.jpg'}" alt="" /></div>
+    <div class="cl-admin-card-body">
+      <div class="cl-admin-card-name-row">
+        <span class="cl-admin-card-name">${escapeHtml(c.display_name)}</span>
+        <span class="cl-admin-card-role">${c.role === 'owner' ? 'Owner' : 'Admin'}</span>
+      </div>
+      <p class="cl-admin-card-desc">${escapeHtml(c.description || 'No description yet.')}</p>
+    </div>
+  `;
+  return card;
 }
 
 // ── Posts By Admin Team — full-width Reddit-style rows. This is a per-post
