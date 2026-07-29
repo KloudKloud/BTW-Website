@@ -878,6 +878,23 @@ async function initDb() {
     );
   `).catch(e => console.error('club_page_gallery_images migration:', e.message));
 
+  // Promotion Page template — a vertical list of link-out cards (image,
+  // title, description, a single link title+URL). Everything but the image
+  // is required at creation.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS club_page_promotion_cards (
+      id           SERIAL      PRIMARY KEY,
+      page_id      INTEGER     NOT NULL REFERENCES club_pages(id) ON DELETE CASCADE,
+      image_url    TEXT        NOT NULL DEFAULT '',
+      title        TEXT        NOT NULL DEFAULT '',
+      description  TEXT        NOT NULL DEFAULT '',
+      link_title   TEXT        NOT NULL DEFAULT '',
+      link_url     TEXT        NOT NULL DEFAULT '',
+      sort_order   INTEGER     NOT NULL DEFAULT 0,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `).catch(e => console.error('club_page_promotion_cards migration:', e.message));
+
   // Every club (new ones via POST /api/clubs, which never specifies a
   // banner_url, letting this column default kick in) starts with this
   // image as its banner rather than the plain fallback card.
@@ -6110,6 +6127,122 @@ app.delete('/api/clubs/:slug/pages/:pageSlug/gallery/:imageId', requireAuth, asy
   }
   await pool.query('DELETE FROM club_page_gallery_images WHERE id = $1', [existing.id]);
   res.json({ message: 'Image removed.' });
+});
+
+// ── Promotion Page template — a vertical list of link-out cards. Image is
+// optional (falls back to /images/noimage.png client-side); everything
+// else is required. ─────────────────────────────────────────────────────
+app.get('/api/clubs/:slug/pages/:pageSlug/promotion-cards', async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const { rows: [page] } = await pool.query(
+    'SELECT id FROM club_pages WHERE club_id = $1 AND slug = $2', [club.id, req.params.pageSlug]
+  );
+  if (!page) return res.status(404).json({ error: 'Page not found.' });
+  const { rows } = await pool.query(
+    `SELECT id, image_url, title, description, link_title, link_url
+     FROM club_page_promotion_cards WHERE page_id = $1 ORDER BY sort_order, created_at`,
+    [page.id]
+  );
+  res.json({ cards: rows });
+});
+
+function normalizeLinkUrl(url) {
+  const trimmed = String(url || '').trim();
+  if (!trimmed) return '';
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+app.post('/api/clubs/:slug/pages/:pageSlug/promotion-cards', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  const title = String(req.body.title || '').trim().slice(0, 80);
+  const description = String(req.body.description || '').trim().slice(0, 1000);
+  const linkTitle = String(req.body.link_title || '').trim().slice(0, 60);
+  const linkUrl = normalizeLinkUrl(req.body.link_url);
+  if (!title || !description || !linkTitle || !linkUrl) {
+    return res.status(400).json({ error: 'Title, description, link title, and link URL are all required.' });
+  }
+  const imageUrl = req.file ? `/images/moderators/${req.file.filename}` : '';
+  const { rows: [{ maxOrder }] } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM club_page_promotion_cards WHERE page_id = $1', [ctx.page.id]
+  );
+  const { rows: [card] } = await pool.query(
+    `INSERT INTO club_page_promotion_cards (page_id, image_url, title, description, link_title, link_url, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, image_url, title, description, link_title, link_url`,
+    [ctx.page.id, imageUrl, title, description, linkTitle, linkUrl, maxOrder + 1]
+  );
+  res.json({ card });
+});
+
+// Registered BEFORE /:cardId below — same route-ordering gotcha as the
+// gallery reorder route (Express would otherwise match "reorder" as
+// :cardId on this same PUT method).
+app.put('/api/clubs/:slug/pages/:pageSlug/promotion-cards/reorder', requireAuth, async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  const order = req.body.order;
+  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of card IDs.' });
+  await pool.query('BEGIN');
+  try {
+    for (let i = 0; i < order.length; i++) {
+      await pool.query(
+        'UPDATE club_page_promotion_cards SET sort_order = $1 WHERE id = $2 AND page_id = $3',
+        [i, order[i], ctx.page.id]
+      );
+    }
+    await pool.query('COMMIT');
+  } catch (err) {
+    await pool.query('ROLLBACK');
+    return res.status(500).json({ error: 'Failed to reorder cards.' });
+  }
+  res.json({ message: 'Reordered.' });
+});
+
+app.put('/api/clubs/:slug/pages/:pageSlug/promotion-cards/:cardId', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  const { rows: [existing] } = await pool.query(
+    'SELECT * FROM club_page_promotion_cards WHERE id = $1 AND page_id = $2', [req.params.cardId, ctx.page.id]
+  );
+  if (!existing) return res.status(404).json({ error: 'Card not found.' });
+
+  const title = req.body.title !== undefined ? String(req.body.title).trim().slice(0, 80) : existing.title;
+  const description = req.body.description !== undefined ? String(req.body.description).trim().slice(0, 1000) : existing.description;
+  const linkTitle = req.body.link_title !== undefined ? String(req.body.link_title).trim().slice(0, 60) : existing.link_title;
+  const linkUrl = req.body.link_url !== undefined ? normalizeLinkUrl(req.body.link_url) : existing.link_url;
+  if (!title || !description || !linkTitle || !linkUrl) {
+    return res.status(400).json({ error: 'Title, description, link title, and link URL are all required.' });
+  }
+  let imageUrl = existing.image_url;
+  if (req.file) {
+    imageUrl = `/images/moderators/${req.file.filename}`;
+    if (existing.image_url.startsWith('/images/moderators/')) {
+      const oldPath = path.join('/var/www/btw', existing.image_url);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+  }
+  const { rows: [card] } = await pool.query(
+    `UPDATE club_page_promotion_cards SET image_url = $1, title = $2, description = $3, link_title = $4, link_url = $5
+     WHERE id = $6 RETURNING id, image_url, title, description, link_title, link_url`,
+    [imageUrl, title, description, linkTitle, linkUrl, existing.id]
+  );
+  res.json({ card });
+});
+
+app.delete('/api/clubs/:slug/pages/:pageSlug/promotion-cards/:cardId', requireAuth, async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  const { rows: [existing] } = await pool.query(
+    'SELECT * FROM club_page_promotion_cards WHERE id = $1 AND page_id = $2', [req.params.cardId, ctx.page.id]
+  );
+  if (!existing) return res.status(404).json({ error: 'Card not found.' });
+  if (existing.image_url.startsWith('/images/moderators/')) {
+    const oldPath = path.join('/var/www/btw', existing.image_url);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+  await pool.query('DELETE FROM club_page_promotion_cards WHERE id = $1', [existing.id]);
+  res.json({ message: 'Card removed.' });
 });
 
 app.delete('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => {

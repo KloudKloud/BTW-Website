@@ -456,6 +456,33 @@
     .cl-page-gallery-detail-desc:empty { display: none; }
     .cl-page-gallery-detail-desc a { color: #7fa8d9; }
 
+    /* Promotion Page template — vertical card list ("much like posts") and
+       the chapter-reading-style detail view. */
+    .cl-promo-card-list { display: flex; flex-direction: column; }
+    .cl-promo-card-row {
+      display: flex; gap: 1.25rem; padding: 1.25rem 0.5rem; margin: 0 -0.5rem;
+      border-bottom: 1px solid rgba(255,255,255,0.08); text-decoration: none; color: inherit;
+      border-radius: 8px; transition: background 0.15s;
+    }
+    .cl-promo-card-row:hover { background: rgba(255,255,255,0.04); }
+    .cl-promo-card-row-img {
+      width: 110px; height: 110px; border-radius: 10px; object-fit: cover; flex-shrink: 0;
+      background: #161616; border: 1px solid rgba(255,255,255,0.1);
+    }
+    .cl-promo-card-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+    .cl-promo-card-row-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.2rem; font-weight: 700; color: #f0f0f0; margin: 0 0 0.5rem; }
+    .cl-promo-card-row-desc {
+      color: #bbb; font-size: 0.95rem; line-height: 1.6; margin: 0;
+      overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    }
+    .cl-promo-detail-link-btn {
+      display: inline-flex; align-items: center; gap: 0.55rem;
+      background: #7fa8d9; color: #0a0a0a; font-weight: 700; font-size: 0.95rem;
+      padding: 0.85rem 1.6rem; border-radius: 24px; text-decoration: none; margin-top: 0.5rem;
+      transition: background 0.15s, transform 0.15s;
+    }
+    .cl-promo-detail-link-btn:hover { background: #a8c6e8; transform: translateY(-1px); }
+
     /* ── Create Post modal: two-column layout with a Rules recap on the
        right (same expandable rule rows as the sidebar) so people can
        double-check the rules without leaving the compose flow. ── */
@@ -716,6 +743,11 @@
       position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; border-radius: 50%;
       background: rgba(0,0,0,0.65); color: #fff; font-size: 0.85rem; display: flex; align-items: center; justify-content: center;
     }
+    /* Promotion Page template — Link section sits visually apart from the
+       image/title/description group above it. */
+    .cl-promo-card-link-section {
+      margin-top: 1.25rem; padding-top: 1.1rem; border-top: 1px solid rgba(255,255,255,0.1);
+    }
     @media (max-width: 700px) {
       .cl-edit-layout { flex-direction: column; }
       .cl-edit-divider { display: none; }
@@ -965,7 +997,24 @@
         <p class="cl-page-gallery-empty" id="cl-page-view-gallery-empty" hidden>No gallery to explore yet</p>
         <div class="cl-page-gallery-grid" id="cl-page-view-gallery-grid" hidden></div>
 
+        <p class="cl-page-gallery-empty" id="cl-page-view-promo-empty" hidden>No promotions to explore yet.</p>
+        <div class="cl-promo-card-list" id="cl-page-view-promo-list" hidden></div>
+
         <p class="cl-post-detail-body" id="cl-custom-page-body" hidden></p>
+      </div>
+
+      <!-- Promotion Page card detail — swapped in over the whole custom
+           page view (list included), reading-focused like opening a story
+           chapter: image up top, title, full description, then a link
+           button out to wherever the card points. -->
+      <div class="cl-row cl-post-detail" id="cl-promo-detail-view" hidden>
+        <button class="cl-post-back-btn" id="cl-promo-detail-back-btn" type="button">&larr; Back</button>
+        <div class="cl-post-detail-image-wrap" id="cl-promo-detail-image-wrap">
+          <img id="cl-promo-detail-img" alt="" />
+        </div>
+        <h1 class="cl-post-detail-title" id="cl-promo-detail-title"></h1>
+        <p class="cl-post-detail-body" id="cl-promo-detail-desc"></p>
+        <a class="cl-promo-detail-link-btn" id="cl-promo-detail-link-btn" href="#" target="_blank" rel="noopener noreferrer"></a>
       </div>
 
       <!-- Gallery Page image detail — a lightweight overlay (not a routed
@@ -1249,6 +1298,53 @@
                 <button class="mod-btn mod-btn--danger" id="cl-gallery-item-delete-btn" type="button" style="margin-right:auto; display:none;">Delete</button>
                 <button class="mod-btn mod-btn--cancel" id="cl-gallery-item-cancel-btn" type="button">Cancel</button>
                 <button class="mod-btn" id="cl-gallery-item-save-btn" type="button">Save</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Promotion Page template ── -->
+          <div id="cl-edit-page-promotion-fields" hidden>
+            <div class="cl-edit-cards-list" id="cl-promo-cards-list"></div>
+            <button class="gallery-linkto-add-tile" id="cl-promo-card-create-btn" type="button">
+              <span class="gallery-linkto-add-tile-icon">➕</span> Card
+            </button>
+
+            <div class="cl-edit-card-form" id="cl-promo-card-form" hidden>
+              <div class="cl-edit-card-form-row">
+                <div class="cl-edit-card-form-pic">
+                  <div class="cl-edit-imgbox" id="cl-promo-card-pic-wrap" style="aspect-ratio: 1 / 1;">
+                    <img id="cl-promo-card-pic-preview" alt="" />
+                    <div class="cl-edit-imgbox-overlay">📷 Change Image</div>
+                  </div>
+                  <input type="file" id="cl-promo-card-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+                </div>
+                <div style="flex:1; min-width:0;">
+                  <div class="mod-field">
+                    <label for="cl-promo-card-title">Title</label>
+                    <input class="mod-input" id="cl-promo-card-title" maxlength="80" />
+                  </div>
+                  <div class="mod-field" style="margin-bottom:0;">
+                    <label for="cl-promo-card-desc">Description</label>
+                    <textarea class="mod-textarea" id="cl-promo-card-desc" rows="3" maxlength="1000"></textarea>
+                  </div>
+                </div>
+              </div>
+              <div class="cl-promo-card-link-section">
+                <p class="cl-edit-section-title" style="font-size:1rem; margin-bottom:0.85rem;">Link</p>
+                <div class="mod-field">
+                  <label for="cl-promo-card-link-title">Link Title</label>
+                  <input class="mod-input" id="cl-promo-card-link-title" maxlength="60" placeholder="e.g. Furaffinity" />
+                </div>
+                <div class="mod-field" style="margin-bottom:0;">
+                  <label for="cl-promo-card-link-url">URL</label>
+                  <input class="mod-input" id="cl-promo-card-link-url" maxlength="500" placeholder="e.g. www.furaffinity.net/user/..." />
+                </div>
+              </div>
+              <p class="mod-panel-msg" id="cl-promo-card-msg"></p>
+              <div class="char-editor-actions" style="margin-top:1rem;">
+                <button class="mod-btn mod-btn--danger" id="cl-promo-card-delete-btn" type="button" style="margin-right:auto; display:none;">Delete</button>
+                <button class="mod-btn mod-btn--cancel" id="cl-promo-card-cancel-btn" type="button">Cancel</button>
+                <button class="mod-btn" id="cl-promo-card-save-btn" type="button">Save Card</button>
               </div>
             </div>
           </div>
@@ -2364,6 +2460,8 @@ async function loadCustomPage(pageSlug) {
   const fieldsWrap = document.getElementById('cl-page-view-text-fields');
   const galleryEmptyEl = document.getElementById('cl-page-view-gallery-empty');
   const galleryGridEl = document.getElementById('cl-page-view-gallery-grid');
+  const promoEmptyEl = document.getElementById('cl-page-view-promo-empty');
+  const promoListEl = document.getElementById('cl-page-view-promo-list');
   if (cpvSlideshowTimer) { clearInterval(cpvSlideshowTimer); cpvSlideshowTimer = null; }
   cpvSlideshowImages = [];
   slideshowWrap.hidden = true;
@@ -2371,6 +2469,10 @@ async function loadCustomPage(pageSlug) {
   galleryEmptyEl.hidden = true;
   galleryGridEl.hidden = true;
   galleryGridEl.innerHTML = '';
+  promoEmptyEl.hidden = true;
+  promoListEl.hidden = true;
+  promoListEl.innerHTML = '';
+  document.getElementById('cl-promo-detail-view').hidden = true;
   bodyEl.hidden = true;
   bodyEl.textContent = '';
   titleEl.textContent = 'Loading…';
@@ -2381,9 +2483,9 @@ async function loadCustomPage(pageSlug) {
     const page = data.page;
     document.title = `${page.title} ✦ ${currentClub ? currentClub.name : 'Club'} ✦ Fanpages`;
     titleEl.textContent = page.title;
-    // General/Gallery pages stretch the full content column (like Home);
-    // other templates keep the narrower, post-detail-style reading width.
-    document.getElementById('cl-custom-page-view').classList.toggle('cl-post-detail', page.type !== 'general' && page.type !== 'gallery');
+    // General/Gallery/Promotion pages stretch the full content column (like
+    // Home); other templates keep the narrower, post-detail-style width.
+    document.getElementById('cl-custom-page-view').classList.toggle('cl-post-detail', !['general', 'gallery', 'promotion'].includes(page.type));
 
     if (page.type === 'gallery') {
       let images = [];
@@ -2397,6 +2499,22 @@ async function loadCustomPage(pageSlug) {
       } else {
         galleryGridEl.hidden = false;
         images.forEach(img => galleryGridEl.appendChild(pageGalleryTileEl(img)));
+      }
+      return;
+    }
+
+    if (page.type === 'promotion') {
+      let cards = [];
+      try {
+        const promoRes = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(pageSlug)}/promotion-cards`);
+        const promoData = await promoRes.json();
+        cards = promoData.cards || [];
+      } catch {}
+      if (!cards.length) {
+        promoEmptyEl.hidden = false;
+      } else {
+        promoListEl.hidden = false;
+        cards.forEach(card => promoListEl.appendChild(pagePromoRowEl(card)));
       }
       return;
     }
@@ -2479,6 +2597,39 @@ document.getElementById('cl-gallery-view-detail-close').addEventListener('click'
 });
 document.getElementById('cl-gallery-view-detail-overlay').addEventListener('click', (e) => {
   if (e.target.id === 'cl-gallery-view-detail-overlay') e.currentTarget.hidden = true;
+});
+
+function pagePromoRowEl(card) {
+  const a = document.createElement('a');
+  a.className = 'cl-promo-card-row';
+  a.href = '#';
+  a.innerHTML = `
+    <img class="cl-promo-card-row-img" src="${card.image_url || '/images/noimage.png'}" alt="" />
+    <div class="cl-promo-card-row-body">
+      <p class="cl-promo-card-row-title">${escapeHtml(card.title)}</p>
+      <p class="cl-promo-card-row-desc">${escapeHtml(card.description)}</p>
+    </div>
+  `;
+  a.addEventListener('click', (e) => { e.preventDefault(); openPromoDetail(card); });
+  return a;
+}
+// Chapter-view-style: hides the whole custom-page-view (list included) and
+// swaps in a single reading-focused card — image, title, full description,
+// then a link button out to wherever the card points.
+function openPromoDetail(card) {
+  document.getElementById('cl-promo-detail-img').src = card.image_url || '/images/noimage.png';
+  document.getElementById('cl-promo-detail-title').textContent = card.title;
+  document.getElementById('cl-promo-detail-desc').textContent = card.description;
+  const linkBtn = document.getElementById('cl-promo-detail-link-btn');
+  linkBtn.href = card.link_url;
+  linkBtn.textContent = `🔗 ${card.link_title}`;
+  document.getElementById('cl-custom-page-view').hidden = true;
+  document.getElementById('cl-promo-detail-view').hidden = false;
+  window.scrollTo(0, 0);
+}
+document.getElementById('cl-promo-detail-back-btn').addEventListener('click', () => {
+  document.getElementById('cl-promo-detail-view').hidden = true;
+  document.getElementById('cl-custom-page-view').hidden = false;
 });
 
 // ── Comments (shared content-comments system — same pattern used on
@@ -3180,8 +3331,10 @@ async function populatePageEditor(pageSlug) {
 
   const isGeneral = page.type === 'general';
   const isGallery = page.type === 'gallery';
+  const isPromotion = page.type === 'promotion';
   document.getElementById('cl-edit-page-general-fields').hidden = !isGeneral;
   document.getElementById('cl-edit-page-gallery-fields').hidden = !isGallery;
+  document.getElementById('cl-edit-page-promotion-fields').hidden = !isPromotion;
 
   if (isGallery) {
     document.getElementById('cl-edit-page-type-note').textContent = '';
@@ -3190,9 +3343,14 @@ async function populatePageEditor(pageSlug) {
     loadEditPageGallery(pageSlug);
     return;
   }
+  if (isPromotion) {
+    document.getElementById('cl-edit-page-type-note').textContent = '';
+    closePromoCardForm();
+    loadEditPromoCards(pageSlug);
+    return;
+  }
   if (!isGeneral) {
-    document.getElementById('cl-edit-page-type-note').textContent =
-      `This is a Promotion page. Its dedicated editor is coming soon — for now you can rename or delete it here.`;
+    document.getElementById('cl-edit-page-type-note').textContent = '';
     return;
   }
   document.getElementById('cl-edit-page-type-note').textContent = '';
@@ -3605,6 +3763,143 @@ document.getElementById('cl-gallery-item-delete-btn').addEventListener('click', 
   await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/gallery/${editingGalleryItemId}`, { method: 'DELETE', headers: authHeaders() });
   closeGalleryItemForm();
   await loadEditPageGallery(editActivePageSlug);
+  if (currentPageSlug === editActivePageSlug) loadCustomPage(editActivePageSlug);
+});
+
+// ── Promotion Page template — "+ Card" create flow, same crop-on-upload
+// pattern as Featured Cards (image is a real square crop, not a locked
+// focal-point preview). Title/Description/Link Title/Link URL are all
+// required; image is optional (falls back to noimage.png on render). ─────
+let editPromoCardsCache = [];
+let editingPromoCardId = null;
+let pendingPromoCardBlob = null;
+let promoCardDragId = null;
+
+async function loadEditPromoCards(pageSlug) {
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(pageSlug)}/promotion-cards`);
+    const data = await res.json();
+    editPromoCardsCache = data.cards || [];
+  } catch { editPromoCardsCache = []; }
+  renderEditPromoCards();
+}
+function renderEditPromoCards() {
+  const list = document.getElementById('cl-promo-cards-list');
+  list.innerHTML = '';
+  editPromoCardsCache.forEach(c => list.appendChild(editPromoCardRowEl(c)));
+}
+function editPromoCardRowEl(card) {
+  const row = document.createElement('div');
+  row.className = 'cl-edit-card-row';
+  row.draggable = true;
+  row.dataset.id = card.id;
+  row.innerHTML = `
+    <span class="cl-edit-card-row-handle">⠿</span>
+    <img class="cl-edit-card-row-pic" src="${card.image_url || '/images/noimage.png'}" alt="" />
+    <span class="cl-edit-card-row-name">${escapeHtml(card.title)}</span>
+    <button type="button" class="cl-edit-card-row-btn" data-action="edit">Edit</button>
+    <button type="button" class="cl-edit-card-row-btn cl-edit-card-row-btn--danger" data-action="delete">Delete</button>
+  `;
+  row.querySelector('[data-action="edit"]').addEventListener('click', () => openPromoCardForm(card));
+  row.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+    if (!confirm(`Delete the "${card.title}" card?`)) return;
+    await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/promotion-cards/${card.id}`, { method: 'DELETE', headers: authHeaders() });
+    editPromoCardsCache = editPromoCardsCache.filter(c2 => c2.id !== card.id);
+    renderEditPromoCards();
+    if (currentPageSlug === editActivePageSlug) loadCustomPage(editActivePageSlug);
+  });
+  row.addEventListener('dragstart', () => { promoCardDragId = card.id; row.classList.add('dragging'); });
+  row.addEventListener('dragend', () => row.classList.remove('dragging'));
+  row.addEventListener('dragover', (e) => e.preventDefault());
+  row.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    if (promoCardDragId == null || promoCardDragId === card.id) return;
+    const list = document.getElementById('cl-promo-cards-list');
+    const dragEl = list.querySelector(`.cl-edit-card-row[data-id="${CSS.escape(String(promoCardDragId))}"]`);
+    if (!dragEl) return;
+    list.insertBefore(dragEl, row);
+    const ids = [...list.querySelectorAll('.cl-edit-card-row')].map(el => el.dataset.id);
+    await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/promotion-cards/reorder`, {
+      method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ order: ids }),
+    });
+    editPromoCardsCache = ids.map(id => editPromoCardsCache.find(i => String(i.id) === id)).filter(Boolean);
+    if (currentPageSlug === editActivePageSlug) loadCustomPage(editActivePageSlug);
+  });
+  return row;
+}
+function openPromoCardForm(card) {
+  editingPromoCardId = card ? card.id : null;
+  pendingPromoCardBlob = null;
+  document.getElementById('cl-promo-card-title').value = card ? card.title : '';
+  document.getElementById('cl-promo-card-desc').value = card ? card.description : '';
+  document.getElementById('cl-promo-card-link-title').value = card ? card.link_title : '';
+  document.getElementById('cl-promo-card-link-url').value = card ? card.link_url : '';
+  document.getElementById('cl-promo-card-pic-preview').src = card ? (card.image_url || '/images/noimage.png') : '/images/noimage.png';
+  document.getElementById('cl-promo-card-msg').textContent = '';
+  document.getElementById('cl-promo-card-delete-btn').style.display = card ? '' : 'none';
+  document.getElementById('cl-promo-card-form').hidden = false;
+  document.getElementById('cl-promo-card-create-btn').style.display = 'none';
+}
+function closePromoCardForm() {
+  document.getElementById('cl-promo-card-form').hidden = true;
+  document.getElementById('cl-promo-card-create-btn').style.display = '';
+  editingPromoCardId = null;
+  pendingPromoCardBlob = null;
+}
+document.getElementById('cl-promo-card-create-btn').addEventListener('click', () => openPromoCardForm(null));
+document.getElementById('cl-promo-card-cancel-btn').addEventListener('click', closePromoCardForm);
+document.getElementById('cl-promo-card-pic-wrap').addEventListener('click', () => document.getElementById('cl-promo-card-file-input').click());
+document.getElementById('cl-promo-card-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  openCropModal({
+    title: 'Crop Card Image', imageSrc: URL.createObjectURL(file), aspectRatio: 1, round: false,
+    onSave: (blob) => {
+      pendingPromoCardBlob = blob;
+      document.getElementById('cl-promo-card-pic-preview').src = URL.createObjectURL(blob);
+    },
+  });
+  e.target.value = '';
+});
+document.getElementById('cl-promo-card-save-btn').addEventListener('click', async () => {
+  const title = document.getElementById('cl-promo-card-title').value.trim();
+  const description = document.getElementById('cl-promo-card-desc').value.trim();
+  const linkTitle = document.getElementById('cl-promo-card-link-title').value.trim();
+  const linkUrl = document.getElementById('cl-promo-card-link-url').value.trim();
+  const msg = document.getElementById('cl-promo-card-msg');
+  if (!title || !description || !linkTitle || !linkUrl) {
+    msg.className = 'mod-panel-msg mod-panel-msg--error';
+    msg.textContent = 'Title, description, link title, and URL are all required.';
+    return;
+  }
+  const btn = document.getElementById('cl-promo-card-save-btn');
+  btn.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('title', title);
+    fd.append('description', description);
+    fd.append('link_title', linkTitle);
+    fd.append('link_url', linkUrl);
+    if (pendingPromoCardBlob) fd.append('image', pendingPromoCardBlob, 'card.jpg');
+    const url = editingPromoCardId
+      ? `${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/promotion-cards/${editingPromoCardId}`
+      : `${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/promotion-cards`;
+    const res = await fetch(url, { method: editingPromoCardId ? 'PUT' : 'POST', headers: authHeaders(), body: fd });
+    if (!res.ok) throw new Error();
+    closePromoCardForm();
+    await loadEditPromoCards(editActivePageSlug);
+    if (currentPageSlug === editActivePageSlug) loadCustomPage(editActivePageSlug);
+  } catch {
+    msg.className = 'mod-panel-msg mod-panel-msg--error';
+    msg.textContent = 'Could not save this card — please try again.';
+  } finally { btn.disabled = false; }
+});
+document.getElementById('cl-promo-card-delete-btn').addEventListener('click', async () => {
+  if (!editingPromoCardId || !editActivePageSlug) return;
+  if (!confirm('Delete this card?')) return;
+  await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/promotion-cards/${editingPromoCardId}`, { method: 'DELETE', headers: authHeaders() });
+  closePromoCardForm();
+  await loadEditPromoCards(editActivePageSlug);
   if (currentPageSlug === editActivePageSlug) loadCustomPage(editActivePageSlug);
 });
 
