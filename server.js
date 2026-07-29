@@ -758,6 +758,27 @@ async function initDb() {
     ALTER TABLE clubs ADD COLUMN IF NOT EXISTS featured_cards_title TEXT NOT NULL DEFAULT 'Featured Cards';
   `).catch(e => console.error('clubs featured_cards_title migration:', e.message));
 
+  // Right sidebar: a smaller user-written title + splash message (separate
+  // from the main "About"/description), an NSFW flag driving the
+  // Public/Mature tag, and a rules list. Moderators list reuses
+  // club_members (owner/admin rows) — no new table needed for that part.
+  await pool.query(`
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS sidebar_title TEXT NOT NULL DEFAULT '';
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS sidebar_message TEXT NOT NULL DEFAULT '';
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS is_nsfw BOOLEAN NOT NULL DEFAULT FALSE;
+  `).catch(e => console.error('clubs sidebar fields migration:', e.message));
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS club_rules (
+      id           SERIAL      PRIMARY KEY,
+      club_id      INTEGER     NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      title        TEXT        NOT NULL DEFAULT '',
+      description  TEXT        NOT NULL DEFAULT '',
+      sort_order   INTEGER     NOT NULL DEFAULT 0,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `).catch(e => console.error('club_rules migration:', e.message));
+
   // Every club (new ones via POST /api/clubs, which never specifies a
   // banner_url, letting this column default kick in) starts with this
   // image as its banner rather than the plain fallback card.
@@ -5065,7 +5086,9 @@ function clubPublicShape(c, viewerRole) {
     banner_url: c.banner_url, banner_position_x: c.banner_position_x, banner_position_y: c.banner_position_y,
     icon_url: c.icon_url, owner_user_id: c.owner_user_id,
     theme: c.theme || 'default', theme_bg_url: c.theme_bg_url || '',
+    sidebar_title: c.sidebar_title || '', sidebar_message: c.sidebar_message || '', is_nsfw: !!c.is_nsfw,
     member_count: Number(c.member_count) || 0,
+    post_count: c.post_count !== undefined ? Number(c.post_count) || 0 : undefined,
     created_at: c.created_at,
     viewer_role: viewerRole || null,
   };
@@ -5138,7 +5161,7 @@ app.get('/api/clubs/:slug', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT * FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
 
-  const [{ rows: members }, viewerRole] = await Promise.all([
+  const [{ rows: members }, viewerRole, { rows: [{ postCount }] }] = await Promise.all([
     pool.query(
       `SELECT u.id, u.username, u.display_name, u.avatar, cm.role, cm.joined_at
        FROM club_members cm JOIN users u ON u.id = cm.user_id
@@ -5147,10 +5170,11 @@ app.get('/api/clubs/:slug', async (req, res) => {
       [club.id]
     ),
     getClubRole(club.id, viewerId),
+    pool.query('SELECT COUNT(*)::int AS "postCount" FROM club_posts WHERE club_id = $1', [club.id]),
   ]);
 
   res.json({
-    club: clubPublicShape({ ...club, member_count: members.length }, viewerRole),
+    club: clubPublicShape({ ...club, member_count: members.length, post_count: postCount }, viewerRole),
     members: members.map(m => ({
       id: m.id, username: m.username, display_name: m.display_name || m.username,
       avatar: m.avatar || null, role: m.role, joined_at: m.joined_at,
@@ -5369,6 +5393,18 @@ app.get('/api/clubs/:slug/featured-cards', async (req, res) => {
     [club.id]
   );
   res.json({ title: club.featured_cards_title || 'Featured Cards', cards: rows });
+});
+
+// GET /api/clubs/:slug/rules — the sidebar rules list (preview + full
+// description, expanded on click client-side). No editor UI yet.
+app.get('/api/clubs/:slug/rules', async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const { rows } = await pool.query(
+    'SELECT id, title, description FROM club_rules WHERE club_id = $1 ORDER BY sort_order, created_at',
+    [club.id]
+  );
+  res.json({ rules: rows });
 });
 
 // GET /api/clubs-feed — recent posts across every club, for the Social hub.
