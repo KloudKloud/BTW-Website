@@ -5908,6 +5908,19 @@ app.put('/api/clubs/:slug/pages/:pageSlug/cover-image', requireAuth, uploadModIm
   res.json({ cover_image_url: imageUrl });
 });
 
+// DELETE /api/clubs/:slug/pages/:pageSlug/cover-image — "No Image": clears
+// the static cover back to the default (no-cover) view.
+app.delete('/api/clubs/:slug/pages/:pageSlug/cover-image', requireAuth, async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  if (ctx.page.cover_image_url.startsWith('/images/moderators/')) {
+    const oldPath = path.join('/var/www/btw', ctx.page.cover_image_url);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+  await pool.query("UPDATE club_pages SET cover_image_url = '' WHERE id = $1", [ctx.page.id]);
+  res.json({ cover_image_url: '' });
+});
+
 app.get('/api/clubs/:slug/pages/:pageSlug/slideshow', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });

@@ -409,7 +409,7 @@
        titles. */
     .cl-page-text-section { margin-bottom: 2.25rem; }
     .cl-page-text-section-title {
-      font-family: 'Cinzel', Georgia, serif; font-size: 1.5rem; font-weight: 700; letter-spacing: 0.03em;
+      font-family: 'Cinzel', Georgia, serif; font-size: 1.65rem; font-weight: 700; letter-spacing: 0.03em;
       color: #7fa8d9; text-shadow: 0 0 16px rgba(127,168,217,0.6);
       margin: 0 0 0.85rem; display: inline-block; position: relative; padding-bottom: 0.5rem;
     }
@@ -631,12 +631,17 @@
     .cl-edit-pages-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
     .cl-edit-pages-item.active { background: rgba(240,192,96,0.12); color: #f0c060; font-weight: 700; }
     .cl-edit-pages-item-icon { margin-right: 0.4rem; }
-    .cl-edit-page-delete-row { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid rgba(255,255,255,0.1); }
-    /* General Page template's up-to-three text sections */
+    /* General Page template's up-to-three text sections — draggable to
+       reorder, same "grip handle + drop target" recipe as the slideshow/
+       featured-card rows elsewhere in this editor. */
     .cl-page-text-field-row {
       background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
-      padding: 1rem; margin-bottom: 0.85rem;
+      padding: 1rem; margin-bottom: 0.85rem; cursor: grab; transition: opacity 0.15s;
     }
+    .cl-page-text-field-row.dragging { opacity: 0.35; }
+    .cl-page-text-field-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.85rem; }
+    .cl-page-text-field-handle { color: #777; font-size: 1rem; }
+    .cl-page-text-field-num { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #888; }
     .cl-page-text-field-remove {
       background: none; border: 1px solid rgba(217,122,114,0.4); color: #f5b3ac;
       font-family: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
@@ -1082,6 +1087,9 @@
 
           <div id="cl-edit-page-general-fields" hidden>
             <h3 class="cl-edit-section-title">Cover Image</h3>
+            <p class="cl-edit-hint-block">
+              Add an optional cover image for this page? (Note: This is helpful if your page is about a specific character, story, or something distinct that has a visual aspect to it. No pressure to add an image, though: adding no image will not effect the view of the page whatsoever).
+            </p>
             <div class="cl-edit-mode-toggle">
               <button class="cl-edit-mode-btn active" id="cl-page-mode-static" type="button">Static Image</button>
               <button class="cl-edit-mode-btn" id="cl-page-mode-slideshow" type="button">Slideshow</button>
@@ -1094,6 +1102,7 @@
                 <button type="button" class="fp-recrop-btn" id="cl-page-cover-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
               </div>
               <input type="file" id="cl-page-cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+              <button type="button" class="cl-splash-rules-link" id="cl-page-cover-remove-btn" style="margin-top:0.75rem;" hidden>✕ No Image</button>
             </div>
 
             <div id="cl-page-cover-slideshow" hidden>
@@ -1108,10 +1117,6 @@
             </p>
             <div id="cl-page-text-fields-list"></div>
             <button class="cl-edit-pages-create-btn" id="cl-page-text-field-add-btn" type="button" style="margin-bottom:1.25rem;">+ Add Text Field</button>
-          </div>
-
-          <div class="cl-edit-page-delete-row">
-            <button class="mod-btn mod-btn--danger" id="cl-edit-page-delete-btn" type="button">Delete Page</button>
           </div>
         </div>
 
@@ -1153,6 +1158,7 @@
 
         <p class="mod-panel-msg" id="cl-edit-msg"></p>
         <div class="char-editor-actions" id="cl-edit-main-actions">
+          <button class="mod-btn mod-btn--danger" id="cl-edit-page-delete-btn" type="button" style="margin-right:auto;" hidden>Delete Page</button>
           <button class="mod-btn mod-btn--cancel" id="cl-edit-cancel" type="button">Cancel</button>
           <button class="mod-btn" id="cl-edit-save" type="button">Save</button>
         </div>
@@ -2223,6 +2229,9 @@ async function loadCustomPage(pageSlug) {
     const page = data.page;
     document.title = `${page.title} ✦ ${currentClub ? currentClub.name : 'Club'} ✦ Fanpages`;
     titleEl.textContent = page.title;
+    // General pages stretch the full content column (like Home); other
+    // templates keep the narrower, post-detail-style reading width.
+    document.getElementById('cl-custom-page-view').classList.toggle('cl-post-detail', page.type !== 'general');
 
     if (page.type !== 'general') {
       bodyEl.hidden = false;
@@ -2254,14 +2263,24 @@ async function loadCustomPage(pageSlug) {
       slideshowWrap.hidden = false;
     }
 
-    // Text sections
-    (page.text_fields || []).forEach(field => {
-      if (!field.title && !field.body) return;
+    // Text sections — a brand-new page (no fields saved yet) shows a single
+    // default "Text Field 1" section with an auto-generated splash line as
+    // its body, exactly like it appears in the editor before anyone's
+    // written anything. Once real fields exist, the very first one also
+    // falls back to that splash line specifically when its body is blank
+    // (title still shows as saved, e.g. renamed to something else).
+    const fields = (page.text_fields && page.text_fields.length) ? page.text_fields : [{ title: 'Text Field 1', body: '' }];
+    fields.forEach((field, i) => {
+      const title = field.title || (i === 0 ? 'Text Field 1' : '');
+      const body = (i === 0 && !field.body)
+        ? `${page.title} is a page inside of ${currentClub ? currentClub.name : 'this club'}.`
+        : field.body;
+      if (!title && !body) return;
       const section = document.createElement('div');
       section.className = 'cl-page-text-section';
       section.innerHTML = `
-        ${field.title ? `<p class="cl-page-text-section-title">${escapeHtml(field.title)}</p>` : ''}
-        <p class="cl-page-text-section-body">${escapeHtml(field.body || '')}</p>
+        ${title ? `<p class="cl-page-text-section-title">${escapeHtml(title)}</p>` : ''}
+        <p class="cl-page-text-section-body">${escapeHtml(body || '')}</p>
       `;
       fieldsWrap.appendChild(section);
     });
@@ -2660,6 +2679,7 @@ function switchEditView(view, pageSlug, skipGuard) {
   document.getElementById('cl-edit-page-view').hidden = view !== 'page';
   document.getElementById('cl-edit-template-view').hidden = true;
   document.getElementById('cl-edit-main-actions').style.display = 'flex';
+  document.getElementById('cl-edit-page-delete-btn').hidden = view !== 'page';
   document.getElementById('cl-edit-msg').textContent = '';
 
   if (view === 'home') populateHomeEditor(currentClub);
@@ -2975,7 +2995,9 @@ async function populatePageEditor(pageSlug) {
     const full = data.page;
     setEditPageCoverMode(full.cover_mode || 'static', true);
     document.getElementById('cl-page-cover-preview').src = full.cover_image_url || '/images/nopicture2.png';
+    document.getElementById('cl-page-cover-remove-btn').hidden = !full.cover_image_url;
     editPageTextFields = (full.text_fields || []).slice(0, 3);
+    if (!editPageTextFields.length) editPageTextFields = [{ title: 'Text Field 1', body: '' }];
     renderPageTextFields();
   } catch {}
   loadEditPageSlideshow(pageSlug);
@@ -3024,8 +3046,18 @@ async function savePageCoverImage(blob) {
   if (res.ok) {
     const data = await res.json();
     document.getElementById('cl-page-cover-preview').src = data.cover_image_url;
+    document.getElementById('cl-page-cover-remove-btn').hidden = !data.cover_image_url;
   }
 }
+document.getElementById('cl-page-cover-remove-btn').addEventListener('click', async (e) => {
+  e.stopPropagation();
+  if (!editActivePageSlug) return;
+  await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/cover-image`, {
+    method: 'DELETE', headers: authHeaders(),
+  });
+  document.getElementById('cl-page-cover-preview').src = '/images/nopicture2.png';
+  document.getElementById('cl-page-cover-remove-btn').hidden = true;
+});
 
 // Page slideshow — same add/remove/reorder recipe as Home's, scoped by slug.
 async function loadEditPageSlideshow(pageSlug) {
@@ -3110,10 +3142,17 @@ function renderPageTextFields() {
   editPageTextFields.forEach((field, i) => list.appendChild(pageTextFieldRowEl(field, i)));
   document.getElementById('cl-page-text-field-add-btn').style.display = editPageTextFields.length >= 3 ? 'none' : '';
 }
+let textFieldDragIdx = null;
 function pageTextFieldRowEl(field, i) {
   const row = document.createElement('div');
   row.className = 'cl-page-text-field-row';
+  row.draggable = true;
+  row.dataset.idx = i;
   row.innerHTML = `
+    <div class="cl-page-text-field-head">
+      <span class="cl-page-text-field-handle">⠿</span>
+      <span class="cl-page-text-field-num">Field ${i + 1}</span>
+    </div>
     <div class="mod-field">
       <label>Section Title</label>
       <input class="mod-input" data-field="title" maxlength="80" value="${escapeHtml(field.title || '')}" />
@@ -3128,6 +3167,17 @@ function pageTextFieldRowEl(field, i) {
   row.querySelector('[data-field="body"]').addEventListener('input', (e) => { editPageTextFields[i].body = e.target.value; editDirty = true; });
   row.querySelector('.cl-page-text-field-remove').addEventListener('click', () => {
     editPageTextFields.splice(i, 1);
+    editDirty = true;
+    renderPageTextFields();
+  });
+  row.addEventListener('dragstart', () => { textFieldDragIdx = i; row.classList.add('dragging'); });
+  row.addEventListener('dragend', () => row.classList.remove('dragging'));
+  row.addEventListener('dragover', (e) => e.preventDefault());
+  row.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (textFieldDragIdx == null || textFieldDragIdx === i) return;
+    const [moved] = editPageTextFields.splice(textFieldDragIdx, 1);
+    editPageTextFields.splice(i, 0, moved);
     editDirty = true;
     renderPageTextFields();
   });
