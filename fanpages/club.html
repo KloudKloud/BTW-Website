@@ -173,17 +173,18 @@
     }
     .cl-about-body { color: #bbb; font-size: 0.96rem; line-height: 1.8; margin: 0; }
 
-    /* ── Split row: Welcome To + Meet the Admins stacked on the left,
+    /* ── Split row: Welcome To + Featured Cards stacked on the left,
        Posts By Admin Team as its own glass-card box on the right — sized
        to match the left column's combined height via align-items:stretch,
        same idea as .cl-side. ── */
     .cl-split-row { display: flex; gap: 2rem; align-items: stretch; margin-top: 2rem; }
     .cl-split-left { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
-    /* ── Meet the Admins — each owner/admin's own little card, once they've
-       made one. Cards wrap into a grid, sized "bigger" than the original
-       pass — a tidy square picture on the left, name/description on the
-       right. ── */
+    /* ── Featured Cards (was "Meet the Admins") — freeform spotlight cards,
+       not tied to any user account or role, editable title. Stacked one
+       per row (not a multi-column grid) and given a stronger visual
+       treatment — a left accent bar + glow, bigger picture — so each one
+       reads as its own standalone thing instead of blending into a list. */
     .cl-admins-section { margin-top: 2.5rem; }
     .cl-admins-title {
       font-family: 'Cinzel', Georgia, serif; font-size: 1.4rem; font-weight: 700; letter-spacing: 0.03em;
@@ -195,30 +196,21 @@
       background: linear-gradient(90deg, #7fa8d9, transparent);
     }
     .cl-admins-empty { color: #888; font-size: 0.9rem; padding: 0.5rem 0; margin: 0; }
-    /* auto-fit (not auto-fill) — collapses empty tracks instead of leaving
-       them reserved-but-blank, so a single card actually stretches to
-       fill the whole row instead of sitting in a half-width column with
-       dead space next to it. */
-    .cl-admins-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.25rem; }
+    .cl-admins-grid { display: flex; flex-direction: column; gap: 1.1rem; }
     .cl-admin-card {
-      display: flex; gap: 1.25rem; padding: 1.35rem; box-sizing: border-box;
-      background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
-      border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+      display: flex; gap: 1.5rem; padding: 1.5rem 1.75rem; box-sizing: border-box;
+      background: linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.12); border-left: 3px solid #7fa8d9; border-radius: 16px;
+      box-shadow: 0 8px 26px rgba(0,0,0,0.35);
     }
     .cl-admin-card-pic {
-      width: 120px; height: 120px; flex-shrink: 0; border-radius: 14px; overflow: hidden;
+      width: 130px; height: 130px; flex-shrink: 0; border-radius: 14px; overflow: hidden;
       background: #161616; border: 1px solid rgba(255,255,255,0.1);
     }
     .cl-admin-card-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .cl-admin-card-body { flex: 1; min-width: 0; }
-    .cl-admin-card-name-row { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 0.5rem; }
-    .cl-admin-card-name { font-weight: 700; color: #f0f0f0; font-size: 1.2rem; }
-    .cl-admin-card-role {
-      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
-      color: #f0c060; background: rgba(240,192,96,0.12); border: 1px solid rgba(240,192,96,0.3);
-      border-radius: 4px; padding: 0.15rem 0.5rem;
-    }
-    .cl-admin-card-desc { font-size: 1rem; color: #bbb; line-height: 1.6; margin: 0; }
+    .cl-admin-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+    .cl-admin-card-name { font-weight: 700; color: #f0f0f0; font-size: 1.3rem; margin: 0 0 0.5rem; }
+    .cl-admin-card-desc { font-size: 1rem; color: #bbb; line-height: 1.65; margin: 0; }
 
     /* ── Posts By Admin Team — glass-card box (same recipe as .cl-side),
        Reddit-style rows inside instead of one long full-width column. ── */
@@ -252,11 +244,6 @@
     .cl-admin-post-body { flex: 1; min-width: 0; }
     .cl-admin-post-meta { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: #999; margin: 0 0 0.35rem; flex-wrap: wrap; }
     .cl-admin-post-author { font-weight: 700; color: #ddd; }
-    .cl-admin-post-role {
-      font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
-      color: #f0c060; background: rgba(240,192,96,0.12); border: 1px solid rgba(240,192,96,0.3);
-      border-radius: 4px; padding: 0.1rem 0.4rem;
-    }
     .cl-admin-post-title { font-size: 1rem; font-weight: 700; color: #f0f0f0; margin: 0 0 0.3rem; }
     .cl-admin-post-preview {
       font-size: 0.88rem; color: #bbb; line-height: 1.6; margin: 0;
@@ -430,7 +417,7 @@
             </div>
 
             <div class="cl-admins-section">
-              <p class="cl-admins-title">Meet the Admins</p>
+              <p class="cl-admins-title" id="cl-admins-title">Featured Cards</p>
               <div class="cl-admins-grid" id="cl-admins-grid">
                 <p class="cl-admins-empty">Loading…</p>
               </div>
@@ -622,23 +609,26 @@ function renderClub(club) {
   applyClubTheme(club.theme, club.theme_bg_url);
 }
 
-// ── Meet the Admins — one card per owner/admin who's actually made one
-// (nothing auto-created). No editor UI yet — sizing/layout first, matching
-// how the rest of this template has been staged. ──────────────────────────
+// ── Featured Cards (was "Meet the Admins") — freeform spotlight cards, not
+// tied to any user account or role. A club can feature its admins, its
+// cast of characters, whatever matters to it — the title is editable per
+// club (defaults to "Featured Cards"). No editor UI yet — sizing/layout
+// first, matching how the rest of this template has been staged. ─────────
 async function loadAdminCards() {
   const grid = document.getElementById('cl-admins-grid');
   try {
-    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/admin-cards`);
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/featured-cards`);
     const data = await res.json();
+    document.getElementById('cl-admins-title').textContent = data.title || 'Featured Cards';
     const cards = data.cards || [];
     if (!cards.length) {
-      grid.innerHTML = '<p class="cl-admins-empty">No admin cards yet.</p>';
+      grid.innerHTML = '<p class="cl-admins-empty">No featured cards yet.</p>';
       return;
     }
     grid.innerHTML = '';
     cards.forEach(c => grid.appendChild(adminCard(c)));
   } catch {
-    grid.innerHTML = '<p class="cl-admins-empty">Couldn\'t load admin cards right now.</p>';
+    grid.innerHTML = '<p class="cl-admins-empty">Couldn\'t load featured cards right now.</p>';
   }
 }
 
@@ -648,10 +638,7 @@ function adminCard(c) {
   card.innerHTML = `
     <div class="cl-admin-card-pic"><img src="${c.image_url || '/images/defaultchar.jpg'}" alt="" /></div>
     <div class="cl-admin-card-body">
-      <div class="cl-admin-card-name-row">
-        <span class="cl-admin-card-name">${escapeHtml(c.display_name)}</span>
-        <span class="cl-admin-card-role">${c.role === 'owner' ? 'Owner' : 'Admin'}</span>
-      </div>
+      <p class="cl-admin-card-name">${escapeHtml(c.name)}</p>
       <p class="cl-admin-card-desc">${escapeHtml(c.description || 'No description yet.')}</p>
     </div>
   `;
@@ -704,7 +691,6 @@ function adminPostRow(post) {
     <div class="cl-admin-post-body">
       <div class="cl-admin-post-meta">
         <span class="cl-admin-post-author">${escapeHtml(a.display_name)}</span>
-        <span class="cl-admin-post-role">Admin Team</span>
         <span>·</span>
         <span>${timeAgo(post.created_at)}</span>
       </div>

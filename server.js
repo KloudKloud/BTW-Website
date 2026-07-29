@@ -716,22 +716,40 @@ async function initDb() {
     ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS is_admin_post BOOLEAN NOT NULL DEFAULT FALSE;
   `).catch(e => console.error('club_posts is_admin_post migration:', e.message));
 
-  // "Meet the Admins" — each owner/admin can fill out their own little card
-  // (description + square picture) once they get the role. One row per
-  // club+user; nothing auto-created, an admin only shows up here once they
-  // actually make a card.
+  // "Featured Cards" (was "Meet the Admins") — turned out clubs want to
+  // spotlight whatever matters to them, not necessarily their admin roster
+  // (e.g. a club's own cast of important characters). Each card is just a
+  // name/description/picture an owner/admin fills out by hand — not tied to
+  // any user account. Renamed from club_admin_cards (which was keyed to
+  // user_id) rather than dropped, so the handful of test rows survive with
+  // their old display name backfilled into the new free-text `name` field.
+  await pool.query(`ALTER TABLE IF EXISTS club_admin_cards RENAME TO club_featured_cards;`)
+    .catch(e => console.error('club_featured_cards rename migration:', e.message));
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS club_admin_cards (
+    CREATE TABLE IF NOT EXISTS club_featured_cards (
       id           SERIAL      PRIMARY KEY,
       club_id      INTEGER     NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
-      user_id      INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name         TEXT        NOT NULL DEFAULT '',
       description  TEXT        NOT NULL DEFAULT '',
       image_url    TEXT        NOT NULL DEFAULT '/images/defaultchar.jpg',
+      sort_order   INTEGER     NOT NULL DEFAULT 0,
       created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE(club_id, user_id)
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-  `).catch(e => console.error('club_admin_cards migration:', e.message));
+    ALTER TABLE club_featured_cards ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '';
+    ALTER TABLE club_featured_cards ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
+  `).catch(e => console.error('club_featured_cards migration:', e.message));
+  await pool.query(`
+    UPDATE club_featured_cards cfc SET name = COALESCE(u.display_name, u.username, 'Featured')
+      FROM users u WHERE u.id = cfc.user_id AND cfc.name = '';
+  `).catch(() => {}); // no-op once user_id is gone (or never existed)
+  await pool.query(`ALTER TABLE club_featured_cards DROP COLUMN IF EXISTS user_id;`)
+    .catch(e => console.error('club_featured_cards drop user_id migration:', e.message));
+
+  // Section title is editable per club (defaults to "Featured Cards").
+  await pool.query(`
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS featured_cards_title TEXT NOT NULL DEFAULT 'Featured Cards';
+  `).catch(e => console.error('clubs featured_cards_title migration:', e.message));
 
   // Every club (new ones via POST /api/clubs, which never specifies a
   // banner_url, letting this column default kick in) starts with this
@@ -5312,25 +5330,19 @@ app.delete('/api/clubs/:slug/posts/:postId', requireAuth, async (req, res) => {
   res.json({ message: 'Post deleted.' });
 });
 
-// GET /api/clubs/:slug/admin-cards — "Meet the Admins". Joined against
-// club_members so a card vanishes on its own if that person is ever
-// demoted, instead of needing separate cleanup.
-app.get('/api/clubs/:slug/admin-cards', async (req, res) => {
-  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+// GET /api/clubs/:slug/featured-cards — freeform spotlight cards (was
+// "Meet the Admins"). Not tied to any user account — a club can feature
+// whatever it wants (its admin roster, its cast of characters, anything),
+// so this is just plain rows off the club, no membership join. Title is
+// editable per club.
+app.get('/api/clubs/:slug/featured-cards', async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id, featured_cards_title FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const { rows } = await pool.query(
-    `SELECT cac.*, u.username, u.display_name, cm.role
-     FROM club_admin_cards cac
-     JOIN club_members cm ON cm.club_id = cac.club_id AND cm.user_id = cac.user_id
-     JOIN users u ON u.id = cac.user_id
-     WHERE cac.club_id = $1 AND cm.role IN ('owner','admin')
-     ORDER BY (cm.role = 'owner') DESC, cm.joined_at ASC`,
+    'SELECT id, name, description, image_url FROM club_featured_cards WHERE club_id = $1 ORDER BY sort_order, created_at',
     [club.id]
   );
-  res.json({ cards: rows.map(r => ({
-    user_id: r.user_id, username: r.username, display_name: r.display_name || r.username,
-    role: r.role, description: r.description, image_url: r.image_url,
-  })) });
+  res.json({ title: club.featured_cards_title || 'Featured Cards', cards: rows });
 });
 
 // GET /api/clubs-feed — recent posts across every club, for the Social hub.
