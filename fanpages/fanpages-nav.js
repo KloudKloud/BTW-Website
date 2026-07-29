@@ -16,7 +16,7 @@
 
   root.innerHTML = `
     <div class="fpnav-bar">
-      <a class="fpnav-brand" href="/fanpages">Fanpages</a>
+      <a class="fpnav-brand" href="/fanpages"><img class="fpnav-brand-logo" src="/images/fanpagelogo.png" alt="Fanpages" /></a>
       <a class="fpnav-link${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Social</a>
 
       <a class="fpnav-home-btn" href="${homeHref}">BTW Homepage</a>
