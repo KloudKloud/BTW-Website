@@ -312,6 +312,22 @@
       backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
       box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
     }
+    /* Custom scrollbar — thin, translucent blue thumb instead of the
+       default OS scrollbar — shared by both scrollable boxes. */
+    .cl-side, .cl-admin-posts { scrollbar-width: thin; scrollbar-color: rgba(127,168,217,0.4) transparent; }
+    .cl-side::-webkit-scrollbar, .cl-admin-posts::-webkit-scrollbar { width: 6px; }
+    .cl-side::-webkit-scrollbar-track, .cl-admin-posts::-webkit-scrollbar-track { background: transparent; }
+    .cl-side::-webkit-scrollbar-thumb, .cl-admin-posts::-webkit-scrollbar-thumb {
+      background: rgba(127,168,217,0.4); border-radius: 4px;
+    }
+    .cl-side::-webkit-scrollbar-thumb:hover, .cl-admin-posts::-webkit-scrollbar-thumb:hover {
+      background: rgba(127,168,217,0.65);
+    }
+    .cl-side-name {
+      font-family: 'Cinzel', Georgia, serif; font-weight: 700; font-size: 1.2rem; color: #fff;
+      margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
     /* ── Admin badge — ribbon + username + a universal Edit Club button,
        replacing the one that used to sit on the banner. ── */
     .cl-side-admin-badge {
@@ -573,6 +589,9 @@
     </div>
 
     <aside class="cl-side">
+      <p class="cl-side-name" id="cl-side-name"></p>
+      <hr class="cl-side-rule2" />
+
       <!-- Admin/owner only. -->
       <div class="cl-side-admin-badge" id="cl-side-admin-badge" style="display:none;">
         <div class="cl-side-admin-name-row">
@@ -764,6 +783,7 @@ function renderClub(club, members) {
     : `<span class="cl-icon-fallback">${escapeHtml(club.name.charAt(0).toUpperCase())}</span>`;
 
   document.getElementById('cl-name').textContent = club.name;
+  document.getElementById('cl-side-name').textContent = club.name;
   document.getElementById('cl-about-label').textContent = `Welcome To: ${club.name}`;
   document.getElementById('cl-about-body').textContent = club.description || 'This club hasn\'t written anything here yet.';
 
@@ -812,25 +832,43 @@ document.getElementById('cl-side-showmore-btn').addEventListener('click', () => 
 
 // ── Moderators — vertical stack of owners/admins, off the same member
 // roster already fetched alongside the club. ───────────────────────────────
+const CL_MODS_CAP = 4;
+function modRow(m) {
+  const row = document.createElement('a');
+  row.className = 'cl-side-mod-row';
+  row.href = `/fanpages/${encodeURIComponent(m.username)}`;
+  const avatarHtml = m.avatar
+    ? `<img class="cl-side-mod-avatar" src="${m.avatar}" alt="" />`
+    : `<span class="cl-side-mod-avatar-fallback">${escapeHtml(m.display_name.charAt(0).toUpperCase())}</span>`;
+  row.innerHTML = `
+    ${avatarHtml}
+    <span class="cl-side-mod-name">${escapeHtml(m.display_name)}</span>
+    <span class="cl-side-mod-role">${m.role === 'owner' ? 'Owner' : 'Admin'}</span>
+  `;
+  return row;
+}
+
 function renderClubMods(members) {
   const list = document.getElementById('cl-side-mods-list');
+  // Owner always sorts first already (see GET /api/clubs/:slug's ORDER BY),
+  // so capping at N naturally keeps the owner in the visible set.
   const mods = (members || []).filter(m => m.role === 'owner' || m.role === 'admin');
   if (!mods.length) { list.innerHTML = '<p class="cl-side-empty">No moderators yet.</p>'; return; }
   list.innerHTML = '';
-  mods.forEach(m => {
-    const row = document.createElement('a');
-    row.className = 'cl-side-mod-row';
-    row.href = `/fanpages/${encodeURIComponent(m.username)}`;
-    const avatarHtml = m.avatar
-      ? `<img class="cl-side-mod-avatar" src="${m.avatar}" alt="" />`
-      : `<span class="cl-side-mod-avatar-fallback">${escapeHtml(m.display_name.charAt(0).toUpperCase())}</span>`;
-    row.innerHTML = `
-      ${avatarHtml}
-      <span class="cl-side-mod-name">${escapeHtml(m.display_name)}</span>
-      <span class="cl-side-mod-role">${m.role === 'owner' ? 'Owner' : 'Admin'}</span>
-    `;
-    list.appendChild(row);
-  });
+  mods.slice(0, CL_MODS_CAP).forEach(m => list.appendChild(modRow(m)));
+
+  const rest = mods.slice(CL_MODS_CAP);
+  if (rest.length) {
+    const showAllBtn = document.createElement('button');
+    showAllBtn.className = 'cl-side-showmore-btn';
+    showAllBtn.type = 'button';
+    showAllBtn.textContent = `Show All Moderators (${mods.length})`;
+    showAllBtn.addEventListener('click', () => {
+      rest.forEach(m => list.insertBefore(modRow(m), showAllBtn));
+      showAllBtn.remove();
+    });
+    list.appendChild(showAllBtn);
+  }
 }
 
 // ── Rules — preview title always visible, full description opens on
