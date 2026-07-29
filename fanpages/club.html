@@ -179,7 +179,7 @@
     }
     .cl-home-tab {
       background: none; border: none; cursor: pointer; color: #999;
-      font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 700;
+      font-family: 'Inter', sans-serif; font-size: 1.3rem; font-weight: 700;
       padding: 0.85rem 0.2rem; position: relative;
     }
     .cl-home-tab:hover { color: #ccc; }
@@ -493,12 +493,13 @@
        club has made, capped with a Show More like Moderators below. ── */
     .cl-side-pages-list { display: flex; flex-direction: column; }
     .cl-side-page-row {
-      display: block; padding: 0.5em 0.6em; margin: 0 -0.6em; border-radius: 8px;
-      color: #ccc; text-decoration: none; font-size: 0.87rem; font-weight: 600;
+      display: block; padding: 0.65em 0.7em; margin: 0 -0.7em; border-radius: 8px;
+      color: #ccc; text-decoration: none; font-size: 0.96rem; font-weight: 600;
       transition: background 0.15s, color 0.15s;
     }
     .cl-side-page-row:hover { background: rgba(255,255,255,0.06); color: #fff; }
     .cl-side-page-row.cl-active { background: rgba(127,168,217,0.12); color: #7fa8d9; }
+    .cl-side-page-home-star { color: #f0c060; margin-right: 0.4em; font-size: 0.85em; }
 
     /* ── Moderators — vertical stack of owners/admins. ── */
     .cl-side-mods-list { display: flex; flex-direction: column; gap: 0.65rem; }
@@ -564,6 +565,7 @@
     .cl-edit-pages-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
     .cl-edit-pages-item.active { background: rgba(240,192,96,0.12); color: #f0c060; font-weight: 700; }
     .cl-edit-pages-item-icon { margin-right: 0.4rem; }
+    .cl-edit-page-delete-row { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid rgba(255,255,255,0.1); }
     @media (max-width: 700px) {
       .cl-edit-layout { flex-direction: column; }
       .cl-edit-divider { display: none; }
@@ -968,7 +970,9 @@
             <input class="mod-input" id="cl-edit-page-title-input" maxlength="60" />
           </div>
           <p class="cl-edit-hint-block" id="cl-edit-page-type-note"></p>
-          <button class="mod-btn mod-btn--danger" id="cl-edit-page-delete-btn" type="button">Delete Page</button>
+          <div class="cl-edit-page-delete-row">
+            <button class="mod-btn mod-btn--danger" id="cl-edit-page-delete-btn" type="button">Delete Page</button>
+          </div>
         </div>
 
         <!-- ── Create Page: template picker ── -->
@@ -1021,9 +1025,20 @@
         <button class="cl-edit-pages-create-btn" id="cl-edit-pages-create-btn" type="button">+ Create Page</button>
         <hr class="cl-edit-pages-rule" />
         <div class="cl-edit-pages-list" id="cl-edit-pages-list">
-          <button class="cl-edit-pages-item active" id="cl-edit-pages-home-item" type="button">Home</button>
+          <button class="cl-edit-pages-item active" id="cl-edit-pages-home-item" type="button"><span class="cl-side-page-home-star" title="The Home page can't be deleted">★</span>Home</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="mod-confirm-overlay" id="cl-page-delete-confirm-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title" id="cl-page-delete-confirm-title">Delete this page?</p>
+    <p class="mod-confirm-text">This can't be undone.</p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="cl-page-delete-confirm-cancel" type="button">Cancel</button>
+      <button class="mod-btn mod-btn--danger" id="cl-page-delete-confirm-yes" type="button">Delete</button>
     </div>
   </div>
 </div>
@@ -1350,12 +1365,16 @@ document.getElementById('cl-side-showmore-btn').addEventListener('click', () => 
 // (it's the built-in Hub/Social view); clicking it just clears page/tab/
 // post entirely. Capped at 7 total (including Home) with a Show More. ────
 const CL_PAGES_CAP = 7;
-function pageLinkRow(label, pageSlug) {
+function pageLinkRow(label, pageSlug, isHome) {
   const a = document.createElement('a');
   a.className = 'cl-side-page-row';
   a.dataset.pageSlug = pageSlug || '';
   a.href = pageSlug ? buildClubUrl({ page: pageSlug, tab: null, post: null }) : buildClubUrl({ page: null, tab: null, post: null });
-  a.textContent = label;
+  if (isHome) {
+    a.innerHTML = `<span class="cl-side-page-home-star" title="The Home page can't be deleted">★</span>${escapeHtml(label)}`;
+  } else {
+    a.textContent = label;
+  }
   a.addEventListener('click', (e) => {
     e.preventDefault();
     navigateTo(pageSlug ? { page: pageSlug, tab: null, post: null } : { page: null, tab: null, post: null });
@@ -1377,7 +1396,7 @@ async function loadClubPages() {
 function renderClubPagesList(pages) {
   const list = document.getElementById('cl-side-pages-list');
   list.innerHTML = '';
-  list.appendChild(pageLinkRow('Home', null));
+  list.appendChild(pageLinkRow('Home', null, true));
 
   const shown = pages.slice(0, CL_PAGES_CAP - 1);
   const rest = pages.slice(CL_PAGES_CAP - 1);
@@ -2507,10 +2526,18 @@ function populatePageEditor(pageSlug) {
     `This is a ${typeLabel} page. Its dedicated editor is coming soon — for now you can rename or delete it here.`;
 }
 document.getElementById('cl-edit-page-title-input').addEventListener('input', () => editDirty = true);
-document.getElementById('cl-edit-page-delete-btn').addEventListener('click', async () => {
+document.getElementById('cl-edit-page-delete-btn').addEventListener('click', () => {
   if (!editActivePageSlug) return;
   const page = editPagesCache.find(p => p.slug === editActivePageSlug);
-  if (!confirm(`Delete the "${page ? page.title : 'this'}" page? This can't be undone.`)) return;
+  document.getElementById('cl-page-delete-confirm-title').textContent = `Delete "${page ? page.title : 'this page'}"?`;
+  document.getElementById('cl-page-delete-confirm-overlay').hidden = false;
+});
+document.getElementById('cl-page-delete-confirm-cancel').addEventListener('click', () => {
+  document.getElementById('cl-page-delete-confirm-overlay').hidden = true;
+});
+document.getElementById('cl-page-delete-confirm-yes').addEventListener('click', async () => {
+  document.getElementById('cl-page-delete-confirm-overlay').hidden = true;
+  if (!editActivePageSlug) return;
   await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}`, { method: 'DELETE', headers: authHeaders() });
   editDirty = false;
   await loadEditPages();
