@@ -723,6 +723,23 @@ async function initDb() {
     ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('club_posts image_url migration:', e.message));
 
+  // Posts can now carry several images (click-through in the post view, not
+  // an auto-slideshow) plus a focal-point reposition for just the feed
+  // thumbnail — same "never actually crop the source image" idea as the
+  // gallery preview crop. image_url stays in sync as image_urls[0] so
+  // existing thumbnail-rendering code doesn't need to change. A post can
+  // also carry a simple poll (question/type/options) — voting/rendering on
+  // the post itself comes later, this just makes sure the data isn't lost.
+  await pool.query(`
+    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS image_urls JSONB NOT NULL DEFAULT '[]';
+    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS preview_position_x INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS preview_position_y INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS poll JSONB;
+  `).catch(e => console.error('club_posts images/poll migration:', e.message));
+  await pool.query(`
+    UPDATE club_posts SET image_urls = jsonb_build_array(image_url) WHERE image_url != '' AND image_urls = '[]'::jsonb;
+  `).catch(e => console.error('club_posts image_urls backfill:', e.message));
+
   // "Featured Cards" (was "Meet the Admins") — turned out clubs want to
   // spotlight whatever matters to them, not necessarily their admin roster
   // (e.g. a club's own cast of important characters). Each card is just a
@@ -5270,6 +5287,20 @@ app.put('/api/clubs/:slug', requireAuth, uploadModImage.single('banner'), async 
   res.json({ club: clubPublicShape(updated, role) });
 });
 
+// PUT /api/clubs/:slug/sidebar-splash — the right sidebar's own title +
+// message (separate from the Hub's Welcome Title/Description).
+app.put('/api/clubs/:slug/sidebar-splash', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const sidebarTitle = String(req.body.sidebar_title || '').trim().slice(0, 80);
+  const sidebarMessage = String(req.body.sidebar_message || '').trim().slice(0, 1000);
+  const { rows: [updated] } = await pool.query(
+    'UPDATE clubs SET sidebar_title = $1, sidebar_message = $2 WHERE id = $3 RETURNING *',
+    [sidebarTitle, sidebarMessage, ctx.club.id]
+  );
+  res.json({ club: clubPublicShape(updated, ctx.role) });
+});
+
 // Club page theme — same default (plain dark) / custom-blurred-background
 // pattern as a profile or story page. Owner/admin only.
 app.put('/api/clubs/:slug/theme', requireAuth, async (req, res) => {
@@ -5362,6 +5393,17 @@ app.delete('/api/clubs/:slug/members/:userId', requireAuth, async (req, res) => 
   res.json({ message: 'Member removed.' });
 });
 
+function clubPostPublicShape(p) {
+  return {
+    id: p.id, title: p.title, body: p.body,
+    image_url: p.image_url, image_urls: p.image_urls || [],
+    preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
+    poll: p.poll || null,
+    created_at: p.created_at, is_admin_post: p.is_admin_post,
+    author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
+  };
+}
+
 // GET /api/clubs/:slug/posts — ?section=admin restricts to posts explicitly
 // flagged is_admin_post at creation time (not just "written by an admin" —
 // an owner/admin can still post to the general feed).
@@ -5376,10 +5418,7 @@ app.get('/api/clubs/:slug/posts', async (req, res) => {
      ORDER BY cp.created_at DESC LIMIT 100`,
     [club.id]
   );
-  res.json({ posts: rows.map(p => ({
-    id: p.id, title: p.title, body: p.body, image_url: p.image_url, created_at: p.created_at, is_admin_post: p.is_admin_post,
-    author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
-  })) });
+  res.json({ posts: rows.map(clubPostPublicShape) });
 });
 
 // GET /api/clubs/:slug/posts/:postId — a single post, for the post detail
@@ -5394,16 +5433,18 @@ app.get('/api/clubs/:slug/posts/:postId', async (req, res) => {
     [req.params.postId, club.id]
   );
   if (!p) return res.status(404).json({ error: 'Post not found.' });
-  res.json({ post: {
-    id: p.id, title: p.title, body: p.body, image_url: p.image_url, created_at: p.created_at, is_admin_post: p.is_admin_post,
-    author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
-  } });
+  res.json({ post: clubPostPublicShape(p) });
 });
 
 // POST /api/clubs/:slug/posts — members only. is_admin_post is a deliberate
 // choice made at posting time (only owners/admins can set it — silently
-// ignored otherwise, never trusted from a regular member's request).
-app.post('/api/clubs/:slug/posts', requireAuth, async (req, res) => {
+// ignored otherwise, never trusted from a regular member's request). Every
+// post needs a title; body/images/poll are all optional. Images are never
+// individually cropped (they're shown click-through, full-size, on the
+// post's own page) — only the FEED THUMBNAIL gets a focal-point
+// reposition (preview_position_x/y), same idea as the gallery preview crop:
+// the source image itself is untouched.
+app.post('/api/clubs/:slug/posts', requireAuth, uploadModImage.array('images', 10), async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const role = await getClubRole(club.id, req.user.id);
@@ -5411,19 +5452,32 @@ app.post('/api/clubs/:slug/posts', requireAuth, async (req, res) => {
 
   const title = String(req.body.title || '').trim().slice(0, 120);
   const body = String(req.body.body || '').trim().slice(0, 5000);
-  const imageUrl = String(req.body.image_url || '').trim().slice(0, 500);
-  if (!body) return res.status(400).json({ error: 'Post body is required.' });
+  if (!title) return res.status(400).json({ error: 'A title is required.' });
   const isAdminPost = !!req.body.is_admin_post && (role === 'owner' || role === 'admin');
+  const previewX = req.body.preview_position_x !== undefined ? clampPosition(req.body.preview_position_x) : 50;
+  const previewY = req.body.preview_position_y !== undefined ? clampPosition(req.body.preview_position_y) : 50;
+
+  let poll = null;
+  if (req.body.poll) {
+    try {
+      const parsed = JSON.parse(req.body.poll);
+      const question = String(parsed.question || '').trim().slice(0, 200);
+      const options = (Array.isArray(parsed.options) ? parsed.options : [])
+        .map(o => String(o || '').trim().slice(0, 100)).filter(Boolean).slice(0, 4);
+      const type = parsed.type === 'multiple' ? 'multiple' : 'single';
+      if (question && options.length >= 2) poll = { question, type, options };
+    } catch {}
+  }
+
+  const imageUrls = (req.files || []).map(f => `/images/moderators/${f.filename}`);
 
   const { rows: [post] } = await pool.query(
-    `INSERT INTO club_posts (club_id, author_user_id, title, body, image_url, is_admin_post) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [club.id, req.user.id, title, body, imageUrl, isAdminPost]
+    `INSERT INTO club_posts (club_id, author_user_id, title, body, image_url, image_urls, preview_position_x, preview_position_y, poll, is_admin_post)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+    [club.id, req.user.id, title, body, imageUrls[0] || '', JSON.stringify(imageUrls), previewX, previewY, poll ? JSON.stringify(poll) : null, isAdminPost]
   );
   const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
-  res.json({ post: {
-    id: post.id, title: post.title, body: post.body, image_url: post.image_url, created_at: post.created_at, is_admin_post: post.is_admin_post,
-    author: { id: req.user.id, username: author.username, display_name: author.display_name || author.username, avatar: author.avatar || null },
-  } });
+  res.json({ post: clubPostPublicShape({ ...post, username: author.username, display_name: author.display_name, avatar: author.avatar }) });
 });
 
 // DELETE /api/clubs/:slug/posts/:postId — the post's own author, or a club owner/admin.

@@ -177,7 +177,15 @@
     }
 
     /* ── Social tab ── */
-    .cl-social-filter-bar { margin-bottom: 1.25rem; }
+    .cl-social-filter-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+    .cl-create-post-btn {
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); border: none; color: #fff;
+      border-radius: 20px; padding: 0.6em 1.3em; font-size: 0.92rem; font-weight: 700;
+      cursor: pointer; font-family: 'Inter', sans-serif; box-shadow: 0 0 16px rgba(107,63,160,0.5);
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .cl-create-post-btn:hover { box-shadow: 0 0 26px rgba(107,63,160,0.75); transform: translateY(-1px); }
+    .cl-create-post-btn--news { width: 100%; box-sizing: border-box; margin-bottom: 1rem; }
     .cl-social-filter-btn {
       background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #ccc;
       border-radius: 20px; padding: 0.45em 1em; font-size: 0.85rem; font-weight: 700;
@@ -315,11 +323,43 @@
       margin: 0 0 1.5rem;
     }
     .cl-post-detail-image-wrap {
-      width: 100%; border-radius: 14px; overflow: hidden; background: #161616;
+      position: relative; width: 100%; border-radius: 14px; overflow: hidden; background: #161616;
       border: 1px solid rgba(255,255,255,0.1); margin-bottom: 1.75rem;
     }
     .cl-post-detail-image-wrap img { width: 100%; max-height: 640px; object-fit: cover; display: block; }
+    /* Click-through gallery — prev/next arrows + a counter, not an
+       auto-slideshow (that's the Hub cover's thing). */
+    .cl-post-detail-image-nav {
+      position: absolute; top: 50%; transform: translateY(-50%); z-index: 2;
+      width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.55); border: none; color: #fff;
+      font-size: 1.4rem; cursor: pointer; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .cl-post-detail-image-nav:hover { background: rgba(0,0,0,0.8); }
+    .cl-post-detail-image-prev { left: 0.75rem; }
+    .cl-post-detail-image-next { right: 0.75rem; }
+    .cl-post-detail-image-counter {
+      position: absolute; bottom: 0.75rem; right: 0.75rem; z-index: 2;
+      background: rgba(0,0,0,0.6); color: #fff; font-size: 0.78rem; font-weight: 700;
+      padding: 0.25em 0.65em; border-radius: 12px;
+    }
     .cl-post-detail-body { color: #ccc; font-size: 1rem; line-height: 1.85; white-space: pre-wrap; margin: 0 0 2.5rem; }
+
+    /* ── Create Post modal: poll builder ── */
+    .cl-post-poll-box { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 1.1rem; }
+    .cl-post-poll-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .cl-post-poll-title { font-family: 'Cinzel', Georgia, serif; font-weight: 700; color: #f0f0f0; font-size: 1rem; }
+    .cl-post-poll-remove-btn { background: none; border: none; color: #d97a72; font-size: 0.8rem; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .cl-post-poll-remove-btn:hover { color: #f5b3ac; }
+    .cl-post-poll-option-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center; }
+    .cl-post-poll-option-row .mod-input { flex: 1; }
+    .cl-post-poll-option-remove {
+      flex-shrink: 0; background: none; border: 1px solid rgba(255,255,255,0.2); color: #999;
+      border-radius: 6px; width: 30px; height: 30px; cursor: pointer; font-family: inherit;
+    }
+    .cl-post-poll-option-remove:hover { border-color: rgba(217,122,114,0.6); color: #f5b3ac; }
+    .cl-post-poll-type-row { display: flex; gap: 1.25rem; }
+    .cl-post-poll-type-option { display: flex; align-items: center; gap: 0.4rem; font-size: 0.88rem; color: #ccc; cursor: pointer; }
 
     /* Nudges the persistent right box a bit further left while a post is
        open — same box, just not pinned quite as far out as on the home
@@ -384,7 +424,13 @@
 
     /* ── User-written title + splash message — every club's own "front
        page" pitch, clamped to ~3 lines with a Show More toggle. ── */
-    .cl-side-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.05rem; font-weight: 700; color: #f0f0f0; margin: 0 0 0.6rem; }
+    .cl-side-title-row { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.6rem; }
+    .cl-side-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.05rem; font-weight: 700; color: #f0f0f0; margin: 0; flex: 1; min-width: 0; }
+    .cl-side-splash-edit-btn {
+      flex-shrink: 0; background: none; border: none; color: #888; font-size: 0.85rem;
+      cursor: pointer; padding: 0.15rem; line-height: 1; transition: color 0.15s;
+    }
+    .cl-side-splash-edit-btn:hover { color: #f0c060; }
     .cl-side-message {
       font-size: 0.87rem; color: #bbb; line-height: 1.6; margin: 0;
       overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
@@ -651,12 +697,6 @@
       </div>
 
       <div class="cl-row" id="cl-home-view">
-        <!-- Slideshow slot — not editable/cycling yet, just the layout (a
-             single "Image Not Available" placeholder for now). -->
-        <div class="cl-slideshow-wrap">
-          <img id="cl-slideshow-img" src="/images/nopicture2.png" alt="" />
-        </div>
-
         <h1 class="cl-name" id="cl-name"></h1>
 
         <div class="cl-home-tabs">
@@ -665,6 +705,11 @@
         </div>
 
         <div id="cl-hub-tab-content">
+          <!-- Slideshow slot — Hub tab only. -->
+          <div class="cl-slideshow-wrap">
+            <img id="cl-slideshow-img" src="/images/nopicture2.png" alt="" />
+          </div>
+
           <div class="cl-split-row">
             <div class="cl-split-left">
               <div class="cl-about-wrap">
@@ -684,6 +729,7 @@
                  column's combined height via align-items:stretch on the row. -->
             <aside class="cl-admin-posts">
               <p class="cl-admin-posts-title" id="cl-admin-posts-title">Club News</p>
+              <button class="cl-create-post-btn cl-create-post-btn--news" id="cl-create-news-post-btn" type="button" style="display:none;">+ Create News Post</button>
               <div class="cl-admin-posts-list" id="cl-admin-posts-list">
                 <p class="cl-admin-posts-empty">Loading…</p>
               </div>
@@ -696,6 +742,7 @@
         <div id="cl-social-tab-content" hidden>
           <div class="cl-social-filter-bar">
             <button class="cl-social-filter-btn" type="button" title="Coming soon">Best <span class="cl-social-filter-caret">▾</span></button>
+            <button class="cl-create-post-btn" id="cl-create-social-post-btn" type="button">+ Create Post</button>
           </div>
           <div class="cl-social-posts-list" id="cl-social-posts-list">
             <p class="cl-admin-posts-empty">Loading…</p>
@@ -728,6 +775,9 @@
 
         <div class="cl-post-detail-image-wrap" id="cl-post-detail-image-wrap">
           <img id="cl-post-detail-image" alt="" />
+          <button type="button" class="cl-post-detail-image-nav cl-post-detail-image-prev" id="cl-post-detail-image-prev">‹</button>
+          <button type="button" class="cl-post-detail-image-nav cl-post-detail-image-next" id="cl-post-detail-image-next">›</button>
+          <span class="cl-post-detail-image-counter" id="cl-post-detail-image-counter"></span>
         </div>
 
         <p class="cl-post-detail-body" id="cl-post-detail-body"></p>
@@ -756,7 +806,10 @@
         <button class="cl-side-edit-btn" id="cl-side-edit-btn" type="button">✎ Edit Club</button>
       </div>
 
-      <p class="cl-side-title" id="cl-side-title"></p>
+      <div class="cl-side-title-row">
+        <p class="cl-side-title" id="cl-side-title"></p>
+        <button class="cl-side-splash-edit-btn" id="cl-side-splash-edit-btn" type="button" style="display:none;" title="Edit splash title/message">✏️</button>
+      </div>
       <p class="cl-side-message" id="cl-side-message"></p>
       <button class="cl-side-showmore-btn" id="cl-side-showmore-btn" type="button" style="display:none;">Show more</button>
 
@@ -947,6 +1000,96 @@
   </div>
 </div>
 
+<!-- Sidebar splash title/message — small, focused editor. -->
+<div class="char-editor-overlay" id="cl-splash-edit-overlay" hidden>
+  <div class="char-editor-modal" style="max-width: 460px;">
+    <h2 class="char-editor-title">Edit Splash</h2>
+    <div class="mod-field">
+      <label for="cl-splash-title-input">Splash Title</label>
+      <input class="mod-input" id="cl-splash-title-input" maxlength="80" />
+    </div>
+    <div class="mod-field" style="margin-bottom:0;">
+      <label for="cl-splash-message-input">Description</label>
+      <textarea class="mod-textarea" id="cl-splash-message-input" rows="7" maxlength="1000"></textarea>
+    </div>
+    <p class="mod-panel-msg" id="cl-splash-msg"></p>
+    <div class="char-editor-actions">
+      <button class="mod-btn mod-btn--cancel" id="cl-splash-cancel-btn" type="button">Cancel</button>
+      <button class="mod-btn" id="cl-splash-save-btn" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Post modal — shared by "Create News Post" and "+ Create Post". -->
+<div class="char-editor-overlay" id="cl-post-create-overlay" hidden>
+  <div class="char-editor-modal" style="max-width: 700px;">
+    <h2 class="char-editor-title" id="cl-post-create-title">Creating Post</h2>
+
+    <div class="mod-field">
+      <label for="cl-post-title-input">Title</label>
+      <input class="mod-input" id="cl-post-title-input" maxlength="120" placeholder="Give your post a title" />
+    </div>
+
+    <div class="mod-field">
+      <label>Images</label>
+      <p class="char-editor-facts-hint" style="margin-top:0;">
+        Wanna attach an image to your post? Or multiple images? Add them here! It is good practice to credit sources you use, if the art/images aren't yours.<br><br>
+        (Note: Images are optional! If your post is a discussion, you can skip adding an image, and no image slot will generate on your post whatsoever~)
+      </p>
+      <div class="cl-edit-slideshow-stack" id="cl-post-images-stack"></div>
+      <input type="file" id="cl-post-images-file-input" accept="image/png,image/jpeg,image/webp,image/gif" multiple style="display:none;" />
+    </div>
+
+    <div class="mod-field" id="cl-post-preview-field" hidden>
+      <label>Post Preview</label>
+      <p class="char-editor-facts-hint" style="margin-top:0; margin-bottom:0.6rem;">This is how your first image shows up in the feed. Drag to pick the best part to show off! Your full-size image is never cropped, only this preview.</p>
+      <div class="gallery-preview-crop-wrap" id="cl-post-preview-wrap" style="aspect-ratio: 1 / 1;">
+        <img id="cl-post-preview-img" alt="" draggable="false" />
+      </div>
+    </div>
+
+    <div class="mod-field">
+      <label for="cl-post-body-input">Body Text</label>
+      <p class="char-editor-facts-hint" style="margin-top:0;">
+        Add a description/details to your post~ (Note: Bold text with: **text**. Italicize text with: *text*. Embed a link into a phrase/or word with: [text]&lt;URL Link&gt; — All polls will appear under whatever body text you write.
+      </p>
+      <textarea class="mod-textarea" id="cl-post-body-input" rows="6" maxlength="5000"></textarea>
+    </div>
+
+    <div class="mod-field" id="cl-post-poll-field" hidden>
+      <div class="cl-post-poll-box">
+        <div class="cl-post-poll-header">
+          <span class="cl-post-poll-title">Poll</span>
+          <button type="button" class="cl-post-poll-remove-btn" id="cl-post-poll-remove-btn">✕ Remove Poll</button>
+        </div>
+        <div class="mod-field">
+          <label for="cl-post-poll-question">Question</label>
+          <input class="mod-input" id="cl-post-poll-question" maxlength="200" placeholder="Ask a question…" />
+        </div>
+        <div class="mod-field">
+          <label>Choices (up to 4)</label>
+          <div id="cl-post-poll-options"></div>
+          <button type="button" class="cl-edit-pages-create-btn" id="cl-post-poll-add-option-btn" style="margin-top:0.5rem;">+ Add Choice</button>
+        </div>
+        <div class="mod-field" style="margin-bottom:0;">
+          <label>Voting</label>
+          <div class="cl-post-poll-type-row">
+            <label class="cl-post-poll-type-option"><input type="radio" name="cl-post-poll-type" value="single" checked /> Single choice</label>
+            <label class="cl-post-poll-type-option"><input type="radio" name="cl-post-poll-type" value="multiple" /> Multiple choice</label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <button class="cl-edit-pages-create-btn" id="cl-post-add-poll-btn" type="button" style="margin-bottom:1.25rem;">+ Add a Poll</button>
+
+    <p class="mod-panel-msg" id="cl-post-create-msg"></p>
+    <div class="char-editor-actions">
+      <button class="mod-btn mod-btn--cancel" id="cl-post-create-cancel-btn" type="button">Cancel</button>
+      <button class="mod-btn" id="cl-post-create-submit-btn" type="button">Post</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const API = '/api';
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
@@ -1075,6 +1218,8 @@ function renderClub(club, members) {
   const isAdminOrOwner = club.viewer_role === 'owner' || club.viewer_role === 'admin';
   document.getElementById('cl-side-admin-badge').style.display = isAdminOrOwner ? 'block' : 'none';
   document.getElementById('cl-banner-recrop-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
+  document.getElementById('cl-side-splash-edit-btn').style.display = isAdminOrOwner ? 'inline-block' : 'none';
+  document.getElementById('cl-create-news-post-btn').style.display = isAdminOrOwner ? 'block' : 'none';
   if (isAdminOrOwner && currentUser) {
     document.getElementById('cl-side-admin-name').textContent = currentUser.display_name || currentUser.username;
   }
@@ -1378,8 +1523,10 @@ function adminPostRow(post) {
   // as Reddit collapsing straight to the title with no separate preview.
   const titleText = post.title || post.body;
 
+  const previewX = post.preview_position_x != null ? post.preview_position_x : 50;
+  const previewY = post.preview_position_y != null ? post.preview_position_y : 50;
   row.innerHTML = `
-    <img class="cl-admin-post-thumb" src="${post.image_url || '/images/noimage.png'}" alt="" />
+    <img class="cl-admin-post-thumb" src="${post.image_url || '/images/noimage.png'}" alt="" style="object-position:${previewX}% ${previewY}%;" />
     <div class="cl-admin-post-body">
       <div class="cl-admin-post-meta">
         <span class="cl-admin-post-author">${escapeHtml(a.username)}</span>
@@ -1391,6 +1538,230 @@ function adminPostRow(post) {
   `;
   return row;
 }
+
+// ── Create Post modal — shared by "Create News Post" (Club News) and
+// "+ Create Post" (Social). Images/preview-crop/poll are all built up
+// client-side and only sent once "Post" is clicked. ──────────────────────
+let postCreateMode = 'general'; // 'general' | 'news'
+let postCreateImages = []; // [{file, objectUrl}]
+let postCreateCropper = null;
+let postPreviewPos = { x: 50, y: 50 };
+let postPollActive = false;
+
+function openCreatePostModal(mode) {
+  postCreateMode = mode;
+  postCreateImages = [];
+  postPreviewPos = { x: 50, y: 50 };
+  postPollActive = false;
+  document.getElementById('cl-post-create-title').textContent = mode === 'news' ? '🎗️ Creating News Post' : 'Creating Post';
+  document.getElementById('cl-post-title-input').value = '';
+  document.getElementById('cl-post-body-input').value = '';
+  document.getElementById('cl-post-create-msg').textContent = '';
+  document.getElementById('cl-post-poll-field').hidden = true;
+  document.getElementById('cl-post-add-poll-btn').style.display = '';
+  document.getElementById('cl-post-poll-question').value = '';
+  document.getElementById('cl-post-poll-options').innerHTML = '';
+  renderPostImagesStack();
+  document.getElementById('cl-post-create-overlay').hidden = false;
+}
+document.getElementById('cl-post-create-cancel-btn').addEventListener('click', () => {
+  document.getElementById('cl-post-create-overlay').hidden = true;
+});
+
+// Image stack — add/remove/reorder (drag), same visual language as the
+// Cover Image slideshow stack in the club editor.
+function renderPostImagesStack() {
+  const stack = document.getElementById('cl-post-images-stack');
+  stack.innerHTML = '';
+  postCreateImages.forEach((img, i) => stack.appendChild(postImageItemEl(img, i)));
+  const addBtn = document.createElement('button');
+  addBtn.className = 'cl-edit-slideshow-add';
+  addBtn.type = 'button';
+  addBtn.title = 'Add Image';
+  addBtn.textContent = '+';
+  addBtn.addEventListener('click', () => document.getElementById('cl-post-images-file-input').click());
+  stack.appendChild(addBtn);
+  updatePostPreviewField();
+}
+let postImageDragIdx = null;
+function postImageItemEl(img, idx) {
+  const item = document.createElement('div');
+  item.className = 'cl-edit-slideshow-item';
+  item.draggable = true;
+  item.dataset.idx = idx;
+  item.innerHTML = `<img src="${img.objectUrl}" alt="" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
+  item.querySelector('.cl-edit-slideshow-remove').addEventListener('click', (e) => {
+    e.stopPropagation();
+    postCreateImages.splice(idx, 1);
+    renderPostImagesStack();
+  });
+  item.addEventListener('dragstart', () => { postImageDragIdx = idx; item.classList.add('dragging'); });
+  item.addEventListener('dragend', () => item.classList.remove('dragging'));
+  item.addEventListener('dragover', (e) => e.preventDefault());
+  item.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (postImageDragIdx === null || postImageDragIdx === idx) return;
+    const [moved] = postCreateImages.splice(postImageDragIdx, 1);
+    postCreateImages.splice(idx, 0, moved);
+    renderPostImagesStack();
+  });
+  return item;
+}
+document.getElementById('cl-post-images-file-input').addEventListener('change', (e) => {
+  [...e.target.files].forEach(file => postCreateImages.push({ file, objectUrl: URL.createObjectURL(file) }));
+  renderPostImagesStack();
+  e.target.value = '';
+});
+
+// Post Preview — the exact same locked-crop-box technique as the gallery
+// tile preview: nothing is ever actually cropped/re-uploaded, this just
+// tracks a focal-point (x/y %) applied via object-position when the first
+// image is shown small in the feed.
+function updatePostPreviewField() {
+  const field = document.getElementById('cl-post-preview-field');
+  if (!postCreateImages.length) {
+    field.hidden = true;
+    if (postCreateCropper) { postCreateCropper.destroy(); postCreateCropper = null; }
+    return;
+  }
+  field.hidden = false;
+  postPreviewPos = { x: 50, y: 50 };
+  showPostPreviewCrop(postCreateImages[0].objectUrl);
+}
+function showPostPreviewCrop(src) {
+  const previewImg = document.getElementById('cl-post-preview-img');
+  if (postCreateCropper) { postCreateCropper.destroy(); postCreateCropper = null; }
+  previewImg.removeAttribute('src');
+  previewImg.onload = () => {
+    postCreateCropper = new Cropper(previewImg, {
+      aspectRatio: 1, viewMode: 1, dragMode: 'move', autoCropArea: 1,
+      cropBoxResizable: false, cropBoxMovable: false, background: false, responsive: true,
+      ready() {
+        // Order matters: viewMode:1 clamps the crop box to whatever the
+        // CANVAS size is at the moment it's set, so fit the canvas
+        // ("cover") FIRST, then size the crop box to the container.
+        const containerData = postCreateCropper.getContainerData();
+        const imgDataForFit = postCreateCropper.getImageData();
+        const coverScale = Math.max(containerData.width / imgDataForFit.naturalWidth, containerData.height / imgDataForFit.naturalHeight);
+        const canvasWidth = imgDataForFit.naturalWidth * coverScale;
+        const canvasHeight = imgDataForFit.naturalHeight * coverScale;
+        postCreateCropper.setCanvasData({
+          width: canvasWidth, height: canvasHeight,
+          left: (containerData.width - canvasWidth) / 2,
+          top: (containerData.height - canvasHeight) / 2,
+        });
+        postCreateCropper.setCropBoxData({ left: 0, top: 0, width: containerData.width, height: containerData.height });
+
+        const data = postCreateCropper.getData();
+        const imgData = postCreateCropper.getImageData();
+        const maxX = imgData.naturalWidth - data.width;
+        const maxY = imgData.naturalHeight - data.height;
+        postCreateCropper.setData({
+          x: maxX > 0 ? (postPreviewPos.x / 100) * maxX : data.x,
+          y: maxY > 0 ? (postPreviewPos.y / 100) * maxY : data.y,
+        });
+      },
+      crop(event) {
+        const data = event.detail;
+        const imgData = postCreateCropper.getImageData();
+        const maxX = imgData.naturalWidth - data.width;
+        const maxY = imgData.naturalHeight - data.height;
+        postPreviewPos.x = maxX > 0 ? Math.round((data.x / maxX) * 100) : 50;
+        postPreviewPos.y = maxY > 0 ? Math.round((data.y / maxY) * 100) : 50;
+      },
+    });
+  };
+  previewImg.src = src;
+}
+
+// Poll builder
+document.getElementById('cl-post-add-poll-btn').addEventListener('click', () => {
+  postPollActive = true;
+  document.getElementById('cl-post-poll-field').hidden = false;
+  document.getElementById('cl-post-add-poll-btn').style.display = 'none';
+  const optionsWrap = document.getElementById('cl-post-poll-options');
+  optionsWrap.innerHTML = '';
+  optionsWrap.appendChild(pollOptionRowEl(''));
+  optionsWrap.appendChild(pollOptionRowEl(''));
+  updatePollAddOptionBtn();
+});
+document.getElementById('cl-post-poll-remove-btn').addEventListener('click', () => {
+  postPollActive = false;
+  document.getElementById('cl-post-poll-field').hidden = true;
+  document.getElementById('cl-post-add-poll-btn').style.display = '';
+});
+function pollOptionRowEl(value) {
+  const row = document.createElement('div');
+  row.className = 'cl-post-poll-option-row';
+  const input = document.createElement('input');
+  input.className = 'mod-input';
+  input.type = 'text';
+  input.maxLength = 100;
+  input.placeholder = 'Choice';
+  input.value = value || '';
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'cl-post-poll-option-remove';
+  removeBtn.textContent = '✕';
+  removeBtn.addEventListener('click', () => { row.remove(); updatePollAddOptionBtn(); });
+  row.appendChild(input);
+  row.appendChild(removeBtn);
+  return row;
+}
+function updatePollAddOptionBtn() {
+  const count = document.querySelectorAll('#cl-post-poll-options .cl-post-poll-option-row').length;
+  document.getElementById('cl-post-poll-add-option-btn').style.display = count >= 4 ? 'none' : '';
+}
+document.getElementById('cl-post-poll-add-option-btn').addEventListener('click', () => {
+  document.getElementById('cl-post-poll-options').appendChild(pollOptionRowEl(''));
+  updatePollAddOptionBtn();
+});
+
+// Submit
+document.getElementById('cl-post-create-submit-btn').addEventListener('click', async () => {
+  const title = document.getElementById('cl-post-title-input').value.trim();
+  const msg = document.getElementById('cl-post-create-msg');
+  if (!title) { msg.className = 'mod-panel-msg mod-panel-msg--error'; msg.textContent = 'A title is required.'; return; }
+  const btn = document.getElementById('cl-post-create-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Posting…';
+  msg.className = 'mod-panel-msg';
+  msg.textContent = '';
+  try {
+    const fd = new FormData();
+    fd.append('title', title);
+    fd.append('body', document.getElementById('cl-post-body-input').value.trim());
+    if (postCreateMode === 'news') fd.append('is_admin_post', '1');
+    fd.append('preview_position_x', postPreviewPos.x);
+    fd.append('preview_position_y', postPreviewPos.y);
+    postCreateImages.forEach(img => fd.append('images', img.file, img.file.name));
+    if (postPollActive) {
+      const question = document.getElementById('cl-post-poll-question').value.trim();
+      const options = [...document.querySelectorAll('#cl-post-poll-options .cl-post-poll-option-row input')]
+        .map(i => i.value.trim()).filter(Boolean);
+      const type = document.querySelector('input[name="cl-post-poll-type"]:checked').value;
+      if (question && options.length >= 2) fd.append('poll', JSON.stringify({ question, options, type }));
+    }
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts`, { method: 'POST', headers: authHeaders(), body: fd });
+    if (!res.ok) throw new Error();
+    document.getElementById('cl-post-create-overlay').hidden = true;
+    if (postCreateMode === 'news') loadAdminPosts();
+    else { socialPostsCache = null; loadSocialPosts(); }
+    if (currentClub) {
+      currentClub.post_count = (currentClub.post_count || 0) + 1;
+      document.getElementById('cl-side-post-count').textContent = currentClub.post_count;
+    }
+  } catch {
+    msg.className = 'mod-panel-msg mod-panel-msg--error';
+    msg.textContent = 'Could not create the post — please try again.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Post';
+  }
+});
+
+document.getElementById('cl-create-news-post-btn').addEventListener('click', () => openCreatePostModal('news'));
+document.getElementById('cl-create-social-post-btn').addEventListener('click', () => openCreatePostModal('general'));
 
 // ── Routing — one shared function (navigateTo) drives every navigation
 // action (posts, Hub/Social tabs, custom "More Pages" pages, Home). It
@@ -1471,18 +1842,39 @@ function renderPostDetail(post) {
   document.getElementById('cl-post-detail-author').textContent = a.username;
   document.getElementById('cl-post-detail-time').textContent = timeAgo(post.created_at);
   document.getElementById('cl-post-detail-title').textContent = post.title || post.body;
+  document.getElementById('cl-post-detail-body').textContent = post.body;
+
   // Unlike the feed preview (which always shows a thumbnail, falling back
   // to noimage.png), the full post simply has no image block at all when
-  // none was provided — straight from title to the body/discussion.
-  const imageWrap = document.getElementById('cl-post-detail-image-wrap');
-  if (post.image_url) {
-    document.getElementById('cl-post-detail-image').src = post.image_url;
-    imageWrap.style.display = '';
-  } else {
-    imageWrap.style.display = 'none';
-  }
-  document.getElementById('cl-post-detail-body').textContent = post.body;
+  // none was provided — straight from title to the body/discussion. When
+  // there's more than one, it's a click-through gallery, not an
+  // auto-slideshow (that's the Hub cover's thing).
+  postDetailImages = post.image_urls || [];
+  postDetailImageIdx = 0;
+  updatePostDetailImage();
 }
+let postDetailImages = [];
+let postDetailImageIdx = 0;
+function updatePostDetailImage() {
+  const imageWrap = document.getElementById('cl-post-detail-image-wrap');
+  if (!postDetailImages.length) { imageWrap.style.display = 'none'; return; }
+  imageWrap.style.display = '';
+  document.getElementById('cl-post-detail-image').src = postDetailImages[postDetailImageIdx];
+  const hasMultiple = postDetailImages.length > 1;
+  document.getElementById('cl-post-detail-image-prev').style.display = hasMultiple ? 'flex' : 'none';
+  document.getElementById('cl-post-detail-image-next').style.display = hasMultiple ? 'flex' : 'none';
+  const counter = document.getElementById('cl-post-detail-image-counter');
+  counter.style.display = hasMultiple ? 'block' : 'none';
+  counter.textContent = hasMultiple ? `${postDetailImageIdx + 1} / ${postDetailImages.length}` : '';
+}
+document.getElementById('cl-post-detail-image-prev').addEventListener('click', () => {
+  postDetailImageIdx = (postDetailImageIdx - 1 + postDetailImages.length) % postDetailImages.length;
+  updatePostDetailImage();
+});
+document.getElementById('cl-post-detail-image-next').addEventListener('click', () => {
+  postDetailImageIdx = (postDetailImageIdx + 1) % postDetailImages.length;
+  updatePostDetailImage();
+});
 document.getElementById('cl-post-back-btn').addEventListener('click', () => navigateTo({ post: null }));
 
 // ── Custom "More Pages" pages ──────────────────────────────────────────
@@ -1637,6 +2029,46 @@ function applyClubTheme(themeId, bgUrl) {
   bgImg.style.display = 'block';
   bgOverlay.style.display = 'block';
 }
+
+// ── Sidebar splash title/message — small standalone editor, separate from
+// the Hub's Welcome Title/Description. ───────────────────────────────────
+document.getElementById('cl-side-splash-edit-btn').addEventListener('click', () => {
+  if (!currentClub) return;
+  document.getElementById('cl-splash-title-input').value = currentClub.sidebar_title || '';
+  document.getElementById('cl-splash-message-input').value = currentClub.sidebar_message || '';
+  document.getElementById('cl-splash-msg').textContent = '';
+  document.getElementById('cl-splash-edit-overlay').hidden = false;
+});
+document.getElementById('cl-splash-cancel-btn').addEventListener('click', () => {
+  document.getElementById('cl-splash-edit-overlay').hidden = true;
+});
+document.getElementById('cl-splash-save-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('cl-splash-save-btn');
+  const msg = document.getElementById('cl-splash-msg');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  msg.className = 'mod-panel-msg';
+  msg.textContent = '';
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/sidebar-splash`, {
+      method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sidebar_title: document.getElementById('cl-splash-title-input').value.trim(),
+        sidebar_message: document.getElementById('cl-splash-message-input').value.trim(),
+      }),
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    renderClub(data.club);
+    document.getElementById('cl-splash-edit-overlay').hidden = true;
+  } catch {
+    msg.className = 'mod-panel-msg mod-panel-msg--error';
+    msg.textContent = 'Could not save — please try again.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save';
+  }
+});
 
 // ── Banner — hover-pencil, immediate save on crop (no modal step). ───────
 document.getElementById('cl-banner-recrop-btn').addEventListener('click', (e) => {
