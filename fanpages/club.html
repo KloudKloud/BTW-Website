@@ -101,6 +101,18 @@
       background: linear-gradient(to bottom, rgba(13,13,13,0), rgba(13,13,13,0.92));
       pointer-events: none;
     }
+    /* Hover-reveal pencil, bottom-right of the banner — replaces the old
+       always-visible "Edit Club" button that used to sit here. Owner/admin
+       only (gated in JS alongside every other admin-only control). */
+    .cl-banner-recrop-btn {
+      position: absolute; bottom: 1.1rem; right: 1.1rem; z-index: 3;
+      width: 42px; height: 42px; border-radius: 50%; box-sizing: border-box;
+      background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.3); color: #fff;
+      font-size: 1.15rem; cursor: pointer; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.2s, background 0.15s, transform 0.15s;
+    }
+    .cl-banner-wrap:hover .cl-banner-recrop-btn { opacity: 1; }
+    .cl-banner-recrop-btn:hover { background: rgba(0,0,0,0.85); transform: translateY(-1px); }
     .cl-banner-fallback {
       width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
       background: linear-gradient(135deg, #2a1a3a, #3a1f2a); color: rgba(255,255,255,0.2); font-size: 3rem;
@@ -482,26 +494,107 @@
     }
     .cl-edit-pages-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
     .cl-edit-pages-item.active { background: rgba(240,192,96,0.12); color: #f0c060; font-weight: 700; }
+    .cl-edit-pages-item-icon { margin-right: 0.4rem; }
     @media (max-width: 700px) {
       .cl-edit-layout { flex-direction: column; }
       .cl-edit-divider { display: none; }
       .cl-edit-pages-col { width: auto; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); }
     }
 
-    /* Same box/hover/overlay recipe as .char-editor-ref-wrap, just wide
-       (matching the banner's own on-page proportions) instead of square. */
-    .cl-edit-banner-wrap {
-      position: relative; width: 100%; max-width: none; aspect-ratio: 1600 / 280; margin: 0 auto 1.75rem;
+    /* Generic reusable image-upload box — same recipe as
+       .char-editor-ref-wrap, just with a configurable aspect-ratio (set
+       inline per usage: banner-wide for Cover, square for card pics). */
+    .cl-edit-imgbox {
+      position: relative; width: 100%; margin: 0 auto 1rem;
       border-radius: 14px; overflow: hidden; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12);
       display: flex; align-items: center; justify-content: center; cursor: pointer;
     }
-    .cl-edit-banner-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
-    .cl-edit-banner-overlay {
+    .cl-edit-imgbox img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
+    .cl-edit-imgbox-overlay {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       background: rgba(0,0,0,0.45); color: #fff; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600;
-      opacity: 0; transition: opacity 0.2s;
+      opacity: 0; transition: opacity 0.2s; text-align: center; padding: 0.5rem;
     }
-    .cl-edit-banner-wrap:hover .cl-edit-banner-overlay { opacity: 1; }
+    .cl-edit-imgbox:hover .cl-edit-imgbox-overlay { opacity: 1; }
+
+    .cl-edit-hint-block {
+      background: rgba(127,168,217,0.08); border: 1px solid rgba(127,168,217,0.25);
+      border-radius: 10px; padding: 0.85rem 1rem; margin: 0 0 1.25rem;
+      color: #aecbe8; font-size: 0.85rem; line-height: 1.65;
+    }
+
+    /* Cover Image mode toggle */
+    .cl-edit-mode-toggle { display: flex; gap: 0.6rem; margin-bottom: 1rem; }
+    .cl-edit-mode-btn {
+      flex: 1; padding: 0.55em 0.8em; border-radius: 10px; cursor: pointer;
+      background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #ccc;
+      font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 700;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .cl-edit-mode-btn:hover { border-color: rgba(255,255,255,0.4); color: #fff; }
+    .cl-edit-mode-btn.active { background: rgba(127,168,217,0.15); border-color: #7fa8d9; color: #7fa8d9; }
+
+    /* Slideshow image stack */
+    .cl-edit-slideshow-stack { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.85rem; }
+    .cl-edit-slideshow-item {
+      position: relative; width: 110px; aspect-ratio: 5 / 2; border-radius: 8px; overflow: hidden;
+      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); cursor: grab;
+    }
+    .cl-edit-slideshow-item.dragging { opacity: 0.35; }
+    .cl-edit-slideshow-item img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+    .cl-edit-slideshow-remove {
+      position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%;
+      background: rgba(0,0,0,0.7); border: none; color: #fff; font-size: 0.7rem; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cl-edit-slideshow-remove:hover { background: rgba(217,122,114,0.85); }
+    .cl-edit-slideshow-add {
+      width: 110px; aspect-ratio: 5 / 2; border-radius: 8px; cursor: pointer;
+      background: transparent; border: 1px dashed rgba(255,255,255,0.3); color: #999;
+      display: flex; align-items: center; justify-content: center; font-size: 1.4rem;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .cl-edit-slideshow-add:hover { border-color: rgba(127,168,217,0.6); color: #7fa8d9; }
+    .cl-edit-hint { color: #888; font-size: 0.78rem; margin: 0; }
+
+    /* Featured Cards list (in the editor) */
+    .cl-edit-cards-list { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1rem; }
+    .cl-edit-card-row {
+      display: flex; align-items: center; gap: 0.85rem; padding: 0.7rem 0.85rem;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+      cursor: grab;
+    }
+    .cl-edit-card-row.dragging { opacity: 0.35; }
+    .cl-edit-card-row-handle { color: #777; font-size: 1rem; flex-shrink: 0; }
+    .cl-edit-card-row-pic { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: #161616; }
+    .cl-edit-card-row-name { flex: 1; min-width: 0; font-size: 0.9rem; font-weight: 700; color: #eee; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cl-edit-card-row-btn {
+      background: none; border: 1px solid rgba(255,255,255,0.2); color: #ccc; border-radius: 6px;
+      padding: 0.3em 0.6em; font-size: 0.76rem; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .cl-edit-card-row-btn:hover { border-color: rgba(255,255,255,0.4); color: #fff; }
+    .cl-edit-card-row-btn--danger:hover { border-color: rgba(217,122,114,0.6); color: #f5b3ac; }
+
+    /* Inline create/edit card form */
+    .cl-edit-card-form {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+      padding: 1.25rem; margin-bottom: 1.25rem;
+    }
+    .cl-edit-card-form-row { display: flex; gap: 1.25rem; }
+    .cl-edit-card-form-pic { width: 110px; flex-shrink: 0; }
+
+    /* Template picker */
+    .cl-edit-template-grid { display: flex; flex-direction: column; gap: 0.85rem; margin-bottom: 1.5rem; }
+    .cl-edit-template-card {
+      display: flex; align-items: flex-start; gap: 0.85rem; text-align: left; cursor: pointer;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+      padding: 1rem 1.1rem; font-family: inherit; transition: border-color 0.15s, background 0.15s;
+    }
+    .cl-edit-template-card:hover { border-color: rgba(127,168,217,0.5); background: rgba(127,168,217,0.06); }
+    .cl-edit-template-card.active { border-color: #7fa8d9; background: rgba(127,168,217,0.1); }
+    .cl-edit-template-icon { font-size: 1.6rem; flex-shrink: 0; }
+    .cl-edit-template-name { display: block; font-weight: 700; color: #f0f0f0; font-size: 0.95rem; margin-bottom: 0.3rem; }
+    .cl-edit-template-desc { display: block; color: #999; font-size: 0.82rem; line-height: 1.55; }
   </style>
 </head>
 <body>
@@ -547,6 +640,8 @@
 
   <div class="cl-banner-wrap" id="cl-banner-wrap">
     <div class="cl-banner-img-slot" id="cl-banner-img-slot"></div>
+    <button class="cl-banner-recrop-btn" id="cl-banner-recrop-btn" type="button" style="display:none;" title="Change banner image">✏️</button>
+    <input type="file" id="cl-banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
   </div>
 
   <div class="cl-body-row" id="cl-body-row">
@@ -695,27 +790,140 @@
 
 </div> <!-- /.soc-layout -->
 
-<!-- Edit Club modal — owners/admins only. Starts with just the banner
-     image; more fields land here as the club template grows. -->
+<!-- Edit Club modal — owners/admins only. -->
 <div class="char-editor-overlay" id="cl-edit-overlay" hidden>
   <div class="char-editor-modal cl-edit-modal">
     <h2 class="char-editor-title">Edit Club</h2>
 
     <div class="cl-edit-layout">
       <div class="cl-edit-main">
-        <h3 class="cl-edit-section-title">Banner Image</h3>
 
-        <div class="mod-field">
-          <div class="cl-edit-banner-wrap" id="cl-edit-banner-wrap">
-            <img id="cl-edit-banner-preview" alt="" />
-            <div class="cl-edit-banner-overlay">📷 Change Banner Image</div>
-            <button type="button" class="fp-recrop-btn" id="cl-edit-banner-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
+        <!-- ── HOME (built-in page) ── -->
+        <div id="cl-edit-home-view">
+          <h3 class="cl-edit-section-title">Cover Image</h3>
+          <div class="cl-edit-mode-toggle">
+            <button class="cl-edit-mode-btn active" id="cl-edit-mode-static" type="button">Static Image</button>
+            <button class="cl-edit-mode-btn" id="cl-edit-mode-slideshow" type="button">Slideshow</button>
           </div>
-          <input type="file" id="cl-edit-banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+
+          <div id="cl-edit-cover-static">
+            <div class="cl-edit-imgbox" id="cl-edit-cover-wrap" style="aspect-ratio: 5 / 2;">
+              <img id="cl-edit-cover-preview" alt="" />
+              <div class="cl-edit-imgbox-overlay">📷 Change Cover Image</div>
+              <button type="button" class="fp-recrop-btn" id="cl-edit-cover-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
+            </div>
+            <input type="file" id="cl-edit-cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+          </div>
+
+          <div id="cl-edit-cover-slideshow" hidden>
+            <div class="cl-edit-slideshow-stack" id="cl-edit-slideshow-stack"></div>
+            <input type="file" id="cl-edit-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+            <p class="cl-edit-hint">Cycles randomly on your Hub. Drag thumbnails to reorder.</p>
+          </div>
+
+          <h3 class="cl-edit-section-title" style="margin-top: 2.25rem;">Welcome Message</h3>
+          <p class="cl-edit-hint-block">
+            Write a welcome message for your club! Describe what your club is about, what to expect, the inspiration behind it, or whatever you want! This can be brief, or longer if you'd prefer!<br><br>
+            To make bold text, wrap words around: **words**. To make italics text, wrap words around: *italics*. To embed links, such as to other websites, profiles on the page, etc., use: [words to embed]&lt;URL link&gt;
+          </p>
+          <div class="mod-field">
+            <label for="cl-edit-welcome-title">Welcome Title</label>
+            <input class="mod-input" id="cl-edit-welcome-title" maxlength="100" />
+          </div>
+          <div class="mod-field">
+            <label for="cl-edit-description">Club Description</label>
+            <textarea class="mod-textarea" id="cl-edit-description" rows="6" maxlength="1000"></textarea>
+          </div>
+
+          <h3 class="cl-edit-section-title" style="margin-top: 2.25rem;">Featured Cards</h3>
+          <p class="cl-edit-hint-block">
+            Make special cards to feature fun/important/useful resources, characters, moderators, themes, or anything you find helpful to members!<br><br>
+            Maybe your club is for PMD, and you'd like to make cards going over the specific games most chatted about? Or, a social club where the hand-picked admins wanna make a personal card for themselves? Or, a writing group with key characters that shine in the universe and you'd like to make a card for?<br><br>
+            (Same text options, with bold, italics, and embedding as found in the club description for the card descriptions!)
+          </p>
+
+          <div class="cl-edit-cards-list" id="cl-edit-cards-list"></div>
+
+          <div class="cl-edit-card-form" id="cl-edit-card-form" hidden>
+            <div class="cl-edit-card-form-row">
+              <div class="cl-edit-card-form-pic">
+                <div class="cl-edit-imgbox" id="cl-edit-card-pic-wrap" style="aspect-ratio: 1 / 1;">
+                  <img id="cl-edit-card-pic-preview" alt="" />
+                  <div class="cl-edit-imgbox-overlay">📷 Change Image</div>
+                </div>
+                <input type="file" id="cl-edit-card-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+              </div>
+              <div style="flex:1; min-width:0;">
+                <div class="mod-field">
+                  <label for="cl-edit-card-title">Title</label>
+                  <input class="mod-input" id="cl-edit-card-title" maxlength="80" />
+                </div>
+                <div class="mod-field" style="margin-bottom:0;">
+                  <label for="cl-edit-card-desc">Description</label>
+                  <textarea class="mod-textarea" id="cl-edit-card-desc" rows="3" maxlength="1000"></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="char-editor-actions" style="margin-top:1rem;">
+              <button class="mod-btn mod-btn--cancel" id="cl-edit-card-cancel-btn" type="button">Cancel</button>
+              <button class="mod-btn" id="cl-edit-card-save-btn" type="button">Save Card</button>
+            </div>
+          </div>
+
+          <button class="chars-create-btn" id="cl-edit-card-create-btn" type="button">
+            <span class="chars-create-btn-icon">➕</span> Create New Card
+          </button>
+        </div>
+
+        <!-- ── Custom "More Pages" page (placeholder editor) ── -->
+        <div id="cl-edit-page-view" hidden>
+          <h3 class="cl-edit-section-title" id="cl-edit-page-view-heading">Page</h3>
+          <div class="mod-field">
+            <label for="cl-edit-page-title-input">Page Title</label>
+            <input class="mod-input" id="cl-edit-page-title-input" maxlength="60" />
+          </div>
+          <p class="cl-edit-hint-block" id="cl-edit-page-type-note"></p>
+          <button class="mod-btn mod-btn--danger" id="cl-edit-page-delete-btn" type="button">Delete Page</button>
+        </div>
+
+        <!-- ── Create Page: template picker ── -->
+        <div id="cl-edit-template-view" hidden>
+          <h3 class="cl-edit-section-title">Choose a Page Template</h3>
+          <div class="cl-edit-template-grid">
+            <button class="cl-edit-template-card" id="cl-edit-template-general" type="button" data-type="general">
+              <span class="cl-edit-template-icon">🎗️</span>
+              <span>
+                <span class="cl-edit-template-name">General Page</span>
+                <span class="cl-edit-template-desc">Includes a nice cover image/slideshow, up to three fields of text, and is mainly used if you wish to share a lot of text, go in-depth on a particular character/theme/concept relevant to your club, or for more text-heavy information.</span>
+              </span>
+            </button>
+            <button class="cl-edit-template-card" id="cl-edit-template-promotion" type="button" data-type="promotion">
+              <span class="cl-edit-template-icon">⭐</span>
+              <span>
+                <span class="cl-edit-template-name">Promotion Page</span>
+                <span class="cl-edit-template-desc">Includes neat rows of clickable posts, useful for if you want to store an archive of stories, items, or something relevant to your club — e.g. a writing group with several in-canon fics and one-shots wanting a repository for their universe's stories.</span>
+              </span>
+            </button>
+            <button class="cl-edit-template-card" id="cl-edit-template-gallery" type="button" data-type="gallery">
+              <span class="cl-edit-template-icon">🖌️</span>
+              <span>
+                <span class="cl-edit-template-name">Gallery Page</span>
+                <span class="cl-edit-template-desc">Includes no text, but allows you to store a collection of artwork made by/for a niche in your club — maybe a page dedicated to storing all of your small artists' sketches and work.</span>
+              </span>
+            </button>
+          </div>
+          <div class="mod-field" id="cl-edit-template-title-field" hidden>
+            <label for="cl-edit-template-title-input">Page Title</label>
+            <input class="mod-input" id="cl-edit-template-title-input" maxlength="60" placeholder="e.g. Solus" />
+          </div>
+          <div class="char-editor-actions">
+            <button class="mod-btn mod-btn--cancel" id="cl-edit-template-cancel-btn" type="button">Cancel</button>
+            <button class="mod-btn" id="cl-edit-template-create-btn" type="button" style="display:none;">Create Page</button>
+          </div>
         </div>
 
         <p class="mod-panel-msg" id="cl-edit-msg"></p>
-        <div class="char-editor-actions">
+        <div class="char-editor-actions" id="cl-edit-main-actions">
           <button class="mod-btn mod-btn--cancel" id="cl-edit-cancel" type="button">Cancel</button>
           <button class="mod-btn" id="cl-edit-save" type="button">Save</button>
         </div>
@@ -723,14 +931,12 @@
 
       <div class="cl-edit-divider"></div>
 
-      <!-- Every club gets a "Home" page (this one) for free — more pages are
-           a later stage, so Create Page is just a placeholder for now. -->
       <div class="cl-edit-pages-col">
         <p class="cl-edit-pages-title">Pages</p>
-        <button class="cl-edit-pages-create-btn" type="button" disabled title="Coming soon!">+ Create Page</button>
+        <button class="cl-edit-pages-create-btn" id="cl-edit-pages-create-btn" type="button">+ Create Page</button>
         <hr class="cl-edit-pages-rule" />
-        <div class="cl-edit-pages-list">
-          <button class="cl-edit-pages-item active" type="button">Home</button>
+        <div class="cl-edit-pages-list" id="cl-edit-pages-list">
+          <button class="cl-edit-pages-item active" id="cl-edit-pages-home-item" type="button">Home</button>
         </div>
       </div>
     </div>
@@ -856,12 +1062,15 @@ function renderClub(club, members) {
 
   document.getElementById('cl-name').textContent = club.name;
   document.getElementById('cl-side-name').textContent = club.name;
-  document.getElementById('cl-about-label').textContent = `Welcome To: ${club.name}`;
+  document.getElementById('cl-about-label').textContent = club.welcome_title || `Welcome To: ${club.name}`;
   document.getElementById('cl-about-body').textContent = club.description || 'This club hasn\'t written anything here yet.';
   document.getElementById('cl-admin-posts-title').textContent = `${club.name} News`;
 
+  renderClubCover(club);
+
   const isAdminOrOwner = club.viewer_role === 'owner' || club.viewer_role === 'admin';
   document.getElementById('cl-side-admin-badge').style.display = isAdminOrOwner ? 'block' : 'none';
+  document.getElementById('cl-banner-recrop-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
   if (isAdminOrOwner && currentUser) {
     document.getElementById('cl-side-admin-name').textContent = currentUser.display_name || currentUser.username;
   }
@@ -870,6 +1079,36 @@ function renderClub(club, members) {
   renderClubMods(currentMembers);
 
   applyClubTheme(club.theme, club.theme_bg_url);
+}
+
+// ── Cover Image (Hub) — static image, or a slideshow that cycles randomly
+// among however many images the club has added. ───────────────────────────
+let clSlideshowTimer = null;
+async function renderClubCover(club) {
+  const img = document.getElementById('cl-slideshow-img');
+  if (clSlideshowTimer) { clearInterval(clSlideshowTimer); clSlideshowTimer = null; }
+
+  if (club.cover_mode === 'slideshow') {
+    try {
+      const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/slideshow`);
+      const data = await res.json();
+      const images = data.images || [];
+      if (images.length) {
+        let idx = Math.floor(Math.random() * images.length);
+        img.src = images[idx].image_url;
+        if (images.length > 1) {
+          clSlideshowTimer = setInterval(() => {
+            let next;
+            do { next = Math.floor(Math.random() * images.length); } while (next === idx);
+            idx = next;
+            img.src = images[idx].image_url;
+          }, 8000);
+        }
+        return;
+      }
+    } catch {}
+  }
+  img.src = club.cover_image_url || '/images/nopicture2.png';
 }
 
 // ── Right sidebar: user-written title/message (clamped, Show More),
@@ -1395,61 +1634,444 @@ function applyClubTheme(themeId, bgUrl) {
   bgOverlay.style.display = 'block';
 }
 
-// ── Edit Club modal — banner image only for now ──────────────────────────
-let pendingBannerBlob = null;
-let pendingBannerPreviewUrl = null;
-
-function openEditClubModal() {
-  if (!currentClub) return;
-  pendingBannerBlob = null;
-  if (pendingBannerPreviewUrl) { URL.revokeObjectURL(pendingBannerPreviewUrl); pendingBannerPreviewUrl = null; }
-  document.getElementById('cl-edit-banner-preview').src = currentClub.banner_url || '/images/gallery/solusgarnet_17.png';
-  document.getElementById('cl-edit-msg').textContent = '';
-  document.getElementById('cl-edit-overlay').hidden = false;
-}
-function closeEditClubModal() {
-  document.getElementById('cl-edit-overlay').hidden = true;
-  pendingBannerBlob = null;
-  if (pendingBannerPreviewUrl) { URL.revokeObjectURL(pendingBannerPreviewUrl); pendingBannerPreviewUrl = null; }
-}
-
-document.getElementById('cl-side-edit-btn').addEventListener('click', openEditClubModal);
-document.getElementById('cl-edit-cancel').addEventListener('click', closeEditClubModal);
-
-document.getElementById('cl-edit-banner-wrap').addEventListener('click', (e) => {
-  if (e.target.closest('#cl-edit-banner-recrop-btn')) return;
-  document.getElementById('cl-edit-banner-file-input').click();
+// ── Banner — hover-pencil, immediate save on crop (no modal step). ───────
+document.getElementById('cl-banner-recrop-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('cl-banner-file-input').click();
 });
-document.getElementById('cl-edit-banner-file-input').addEventListener('change', (e) => {
+document.getElementById('cl-banner-file-input').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
   openCropModal({
     title: 'Crop Banner Image', imageSrc: URL.createObjectURL(file), aspectRatio: 1600 / 280, round: false,
-    onSave: saveBannerCrop,
+    onSave: async (blob) => {
+      const fd = new FormData();
+      fd.append('banner', blob, 'banner.jpg');
+      const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}`, { method: 'PUT', headers: authHeaders(), body: fd });
+      if (res.ok) renderClub((await res.json()).club);
+    },
   });
   e.target.value = '';
 });
-// Recrop reopens the Cropper on whatever's currently showing in the preview
-// box — the pending crop if you've already picked/cropped one this session,
-// otherwise the club's actual saved banner — instead of forcing a fresh
-// file pick just to adjust framing.
-document.getElementById('cl-edit-banner-recrop-btn').addEventListener('click', (e) => {
-  e.stopPropagation();
-  const src = pendingBannerPreviewUrl || (currentClub && currentClub.banner_url);
-  if (!src) return;
-  openCropModal({
-    title: 'Crop Banner Image', imageSrc: src, aspectRatio: 1600 / 280, round: false,
-    onSave: saveBannerCrop,
-  });
-});
-function saveBannerCrop(blob) {
-  pendingBannerBlob = blob;
-  if (pendingBannerPreviewUrl) URL.revokeObjectURL(pendingBannerPreviewUrl);
-  pendingBannerPreviewUrl = URL.createObjectURL(blob);
-  document.getElementById('cl-edit-banner-preview').src = pendingBannerPreviewUrl;
+
+// ── Club editor modal state ───────────────────────────────────────────────
+let editActiveView = 'home'; // 'home' | 'page' | 'template'
+let editActivePageSlug = null;
+let editDirty = false;
+let editPagesCache = [];
+let editCardsCache = [];
+let editSlideshowCache = [];
+let editingCardId = null;
+let editPendingCardBlob = null;
+let editTemplateChosenType = null;
+let editReturnView = { view: 'home', pageSlug: null };
+
+function confirmDiscardIfDirty() {
+  if (!editDirty) return true;
+  if (confirm('You have unsaved changes. Discard them?')) { editDirty = false; return true; }
+  return false;
 }
 
+function openEditClubModal() {
+  if (!currentClub) return;
+  editDirty = false;
+  document.getElementById('cl-edit-msg').textContent = '';
+  document.getElementById('cl-edit-overlay').hidden = false;
+  document.getElementById('cl-edit-main-actions').style.display = 'flex';
+  switchEditView('home', null, true);
+  loadEditPages();
+}
+function closeEditClubModal() {
+  document.getElementById('cl-edit-overlay').hidden = true;
+  closeCardForm();
+}
+document.getElementById('cl-side-edit-btn').addEventListener('click', openEditClubModal);
+document.getElementById('cl-edit-cancel').addEventListener('click', () => {
+  if (!confirmDiscardIfDirty()) return;
+  closeEditClubModal();
+});
+
+function switchEditView(view, pageSlug, skipGuard) {
+  if (!skipGuard && !confirmDiscardIfDirty()) return false;
+  editDirty = false;
+  editActiveView = view;
+  editActivePageSlug = pageSlug || null;
+
+  document.getElementById('cl-edit-home-view').hidden = view !== 'home';
+  document.getElementById('cl-edit-page-view').hidden = view !== 'page';
+  document.getElementById('cl-edit-template-view').hidden = true;
+  document.getElementById('cl-edit-main-actions').style.display = 'flex';
+  document.getElementById('cl-edit-msg').textContent = '';
+
+  if (view === 'home') populateHomeEditor(currentClub);
+  else if (view === 'page') populatePageEditor(pageSlug);
+
+  highlightEditPagesList();
+  return true;
+}
+
+// ── Pages list (right column) ─────────────────────────────────────────────
+const EDIT_PAGE_ICONS = { general: '🎗️', promotion: '⭐', gallery: '🖌️' };
+async function loadEditPages() {
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages`);
+    const data = await res.json();
+    editPagesCache = data.pages || [];
+    renderEditPagesList();
+  } catch {}
+}
+function renderEditPagesList() {
+  const list = document.getElementById('cl-edit-pages-list');
+  list.innerHTML = '';
+  const homeBtn = document.createElement('button');
+  homeBtn.className = 'cl-edit-pages-item';
+  homeBtn.type = 'button';
+  homeBtn.textContent = 'Home';
+  homeBtn.addEventListener('click', () => switchEditView('home', null));
+  list.appendChild(homeBtn);
+
+  editPagesCache.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'cl-edit-pages-item';
+    btn.type = 'button';
+    btn.dataset.pageSlug = p.slug;
+    btn.innerHTML = `<span class="cl-edit-pages-item-icon">${EDIT_PAGE_ICONS[p.type] || '🎗️'}</span>${escapeHtml(p.title)}`;
+    btn.addEventListener('click', () => switchEditView('page', p.slug));
+    list.appendChild(btn);
+  });
+  highlightEditPagesList();
+}
+function highlightEditPagesList() {
+  document.querySelectorAll('.cl-edit-pages-item').forEach(btn => {
+    const isHome = !btn.dataset.pageSlug;
+    const active = editActiveView === 'home' ? isHome : (editActiveView === 'page' && btn.dataset.pageSlug === editActivePageSlug);
+    btn.classList.toggle('active', active);
+  });
+}
+
+// ── Home editor: Cover Image, Welcome Message, Featured Cards ────────────
+function populateHomeEditor(club) {
+  document.getElementById('cl-edit-welcome-title').value = club.welcome_title || `Welcome To: ${club.name}`;
+  document.getElementById('cl-edit-description').value = club.description || '';
+  setEditCoverMode(club.cover_mode || 'static', true);
+  document.getElementById('cl-edit-cover-preview').src = club.cover_image_url || '/images/nopicture2.png';
+  loadEditSlideshow();
+  loadEditCards();
+}
+document.getElementById('cl-edit-welcome-title').addEventListener('input', () => editDirty = true);
+document.getElementById('cl-edit-description').addEventListener('input', () => editDirty = true);
+
+function setEditCoverMode(mode, skipSave) {
+  const isSlideshow = mode === 'slideshow';
+  document.getElementById('cl-edit-mode-static').classList.toggle('active', !isSlideshow);
+  document.getElementById('cl-edit-mode-slideshow').classList.toggle('active', isSlideshow);
+  document.getElementById('cl-edit-cover-static').hidden = isSlideshow;
+  document.getElementById('cl-edit-cover-slideshow').hidden = !isSlideshow;
+  if (!skipSave) {
+    fetch(`${API}/clubs/${encodeURIComponent(slug)}/cover-mode`, {
+      method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cover_mode: mode }),
+    }).then(async (res) => {
+      if (res.ok && currentClub) { currentClub.cover_mode = mode; renderClubCover(currentClub); }
+    });
+  }
+}
+document.getElementById('cl-edit-mode-static').addEventListener('click', () => setEditCoverMode('static'));
+document.getElementById('cl-edit-mode-slideshow').addEventListener('click', () => setEditCoverMode('slideshow'));
+
+document.getElementById('cl-edit-cover-wrap').addEventListener('click', (e) => {
+  if (e.target.closest('#cl-edit-cover-recrop-btn')) return;
+  document.getElementById('cl-edit-cover-file-input').click();
+});
+document.getElementById('cl-edit-cover-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  openCropModal({ title: 'Crop Cover Image', imageSrc: URL.createObjectURL(file), aspectRatio: 5 / 2, round: false, onSave: saveCoverImage });
+  e.target.value = '';
+});
+document.getElementById('cl-edit-cover-recrop-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const src = document.getElementById('cl-edit-cover-preview').src;
+  if (!src) return;
+  openCropModal({ title: 'Crop Cover Image', imageSrc: src, aspectRatio: 5 / 2, round: false, onSave: saveCoverImage });
+});
+async function saveCoverImage(blob) {
+  const fd = new FormData();
+  fd.append('image', blob, 'cover.jpg');
+  const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/cover-image`, { method: 'PUT', headers: authHeaders(), body: fd });
+  if (res.ok) {
+    const data = await res.json();
+    document.getElementById('cl-edit-cover-preview').src = data.cover_image_url;
+    if (currentClub) { currentClub.cover_image_url = data.cover_image_url; renderClubCover(currentClub); }
+  }
+}
+
+// Slideshow images — add/remove/reorder, each cropped on the way in.
+async function loadEditSlideshow() {
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/slideshow`);
+    const data = await res.json();
+    editSlideshowCache = data.images || [];
+    renderEditSlideshow();
+  } catch {}
+}
+function renderEditSlideshow() {
+  const stack = document.getElementById('cl-edit-slideshow-stack');
+  stack.innerHTML = '';
+  editSlideshowCache.forEach(img => stack.appendChild(slideshowItemEl(img)));
+  const addBtn = document.createElement('button');
+  addBtn.className = 'cl-edit-slideshow-add';
+  addBtn.type = 'button';
+  addBtn.title = 'Add Image';
+  addBtn.textContent = '+';
+  addBtn.addEventListener('click', () => document.getElementById('cl-edit-slideshow-file-input').click());
+  stack.appendChild(addBtn);
+}
+let slideshowDragId = null;
+function slideshowItemEl(img) {
+  const item = document.createElement('div');
+  item.className = 'cl-edit-slideshow-item';
+  item.draggable = true;
+  item.dataset.id = img.id;
+  item.innerHTML = `<img src="${img.image_url}" alt="" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
+  item.querySelector('.cl-edit-slideshow-remove').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await fetch(`${API}/clubs/${encodeURIComponent(slug)}/slideshow/${img.id}`, { method: 'DELETE', headers: authHeaders() });
+    editSlideshowCache = editSlideshowCache.filter(i => i.id !== img.id);
+    renderEditSlideshow();
+    if (currentClub && currentClub.cover_mode === 'slideshow') renderClubCover(currentClub);
+  });
+  item.addEventListener('dragstart', () => { slideshowDragId = img.id; item.classList.add('dragging'); });
+  item.addEventListener('dragend', () => item.classList.remove('dragging'));
+  item.addEventListener('dragover', (e) => e.preventDefault());
+  item.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (slideshowDragId == null || slideshowDragId === img.id) return;
+    const stack = document.getElementById('cl-edit-slideshow-stack');
+    const dragEl = stack.querySelector(`.cl-edit-slideshow-item[data-id="${CSS.escape(String(slideshowDragId))}"]`);
+    if (!dragEl) return;
+    stack.insertBefore(dragEl, item);
+    saveSlideshowOrder();
+  });
+  return item;
+}
+async function saveSlideshowOrder() {
+  const ids = [...document.querySelectorAll('#cl-edit-slideshow-stack .cl-edit-slideshow-item')].map(el => el.dataset.id);
+  await fetch(`${API}/clubs/${encodeURIComponent(slug)}/slideshow/reorder`, {
+    method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ order: ids }),
+  });
+  editSlideshowCache = ids.map(id => editSlideshowCache.find(i => String(i.id) === id)).filter(Boolean);
+}
+document.getElementById('cl-edit-slideshow-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  openCropModal({
+    title: 'Crop Slideshow Image', imageSrc: URL.createObjectURL(file), aspectRatio: 5 / 2, round: false,
+    onSave: async (blob) => {
+      const fd = new FormData();
+      fd.append('image', blob, 'slide.jpg');
+      const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/slideshow`, { method: 'POST', headers: authHeaders(), body: fd });
+      if (res.ok) {
+        const data = await res.json();
+        editSlideshowCache.push(data.image);
+        renderEditSlideshow();
+        if (currentClub && currentClub.cover_mode === 'slideshow') renderClubCover(currentClub);
+      }
+    },
+  });
+  e.target.value = '';
+});
+
+// Featured Cards — create/edit/delete/reorder, matching the "Link To" style
+// create-button pattern used elsewhere in the editor hub.
+async function loadEditCards() {
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/featured-cards`);
+    const data = await res.json();
+    editCardsCache = data.cards || [];
+    renderEditCards();
+  } catch {}
+}
+function renderEditCards() {
+  const list = document.getElementById('cl-edit-cards-list');
+  list.innerHTML = '';
+  editCardsCache.forEach(c => list.appendChild(editCardRowEl(c)));
+}
+let cardDragId = null;
+function editCardRowEl(card) {
+  const row = document.createElement('div');
+  row.className = 'cl-edit-card-row';
+  row.draggable = true;
+  row.dataset.id = card.id;
+  row.innerHTML = `
+    <span class="cl-edit-card-row-handle">⠿</span>
+    <img class="cl-edit-card-row-pic" src="${card.image_url}" alt="" />
+    <span class="cl-edit-card-row-name">${escapeHtml(card.name)}</span>
+    <button type="button" class="cl-edit-card-row-btn" data-action="edit">Edit</button>
+    <button type="button" class="cl-edit-card-row-btn cl-edit-card-row-btn--danger" data-action="delete">Delete</button>
+  `;
+  row.querySelector('[data-action="edit"]').addEventListener('click', () => openCardForm(card));
+  row.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+    if (!confirm(`Delete the "${card.name}" card?`)) return;
+    await fetch(`${API}/clubs/${encodeURIComponent(slug)}/featured-cards/${card.id}`, { method: 'DELETE', headers: authHeaders() });
+    editCardsCache = editCardsCache.filter(c2 => c2.id !== card.id);
+    renderEditCards();
+    loadAdminCards();
+  });
+  row.addEventListener('dragstart', () => { cardDragId = card.id; row.classList.add('dragging'); });
+  row.addEventListener('dragend', () => row.classList.remove('dragging'));
+  row.addEventListener('dragover', (e) => e.preventDefault());
+  row.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    if (cardDragId == null || cardDragId === card.id) return;
+    const list = document.getElementById('cl-edit-cards-list');
+    const dragEl = list.querySelector(`.cl-edit-card-row[data-id="${CSS.escape(String(cardDragId))}"]`);
+    if (!dragEl) return;
+    list.insertBefore(dragEl, row);
+    const ids = [...list.querySelectorAll('.cl-edit-card-row')].map(el => el.dataset.id);
+    await fetch(`${API}/clubs/${encodeURIComponent(slug)}/featured-cards/reorder`, {
+      method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ order: ids }),
+    });
+    loadAdminCards();
+  });
+  return row;
+}
+
+function openCardForm(card) {
+  editingCardId = card ? card.id : null;
+  editPendingCardBlob = null;
+  document.getElementById('cl-edit-card-title').value = card ? card.name : '';
+  document.getElementById('cl-edit-card-desc').value = card ? card.description : '';
+  document.getElementById('cl-edit-card-pic-preview').src = card ? card.image_url : '/images/defaultchar.jpg';
+  document.getElementById('cl-edit-card-form').hidden = false;
+  document.getElementById('cl-edit-card-create-btn').style.display = 'none';
+}
+function closeCardForm() {
+  document.getElementById('cl-edit-card-form').hidden = true;
+  document.getElementById('cl-edit-card-create-btn').style.display = '';
+  editingCardId = null;
+  editPendingCardBlob = null;
+}
+document.getElementById('cl-edit-card-create-btn').addEventListener('click', () => openCardForm(null));
+document.getElementById('cl-edit-card-cancel-btn').addEventListener('click', closeCardForm);
+document.getElementById('cl-edit-card-pic-wrap').addEventListener('click', () => document.getElementById('cl-edit-card-file-input').click());
+document.getElementById('cl-edit-card-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  openCropModal({
+    title: 'Crop Card Image', imageSrc: URL.createObjectURL(file), aspectRatio: 1, round: false,
+    onSave: (blob) => {
+      editPendingCardBlob = blob;
+      document.getElementById('cl-edit-card-pic-preview').src = URL.createObjectURL(blob);
+    },
+  });
+  e.target.value = '';
+});
+document.getElementById('cl-edit-card-save-btn').addEventListener('click', async () => {
+  const name = document.getElementById('cl-edit-card-title').value.trim();
+  const description = document.getElementById('cl-edit-card-desc').value.trim();
+  if (!name) { alert('A title is required.'); return; }
+  const btn = document.getElementById('cl-edit-card-save-btn');
+  btn.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('description', description);
+    if (editPendingCardBlob) fd.append('image', editPendingCardBlob, 'card.jpg');
+    const url = editingCardId
+      ? `${API}/clubs/${encodeURIComponent(slug)}/featured-cards/${editingCardId}`
+      : `${API}/clubs/${encodeURIComponent(slug)}/featured-cards`;
+    const res = await fetch(url, { method: editingCardId ? 'PUT' : 'POST', headers: authHeaders(), body: fd });
+    if (!res.ok) throw new Error();
+    closeCardForm();
+    await loadEditCards();
+    loadAdminCards();
+  } catch { alert('Could not save the card — please try again.'); }
+  finally { btn.disabled = false; }
+});
+
+// ── Custom page placeholder editor (title + delete; the real template-
+// specific editors land later) ───────────────────────────────────────────
+function populatePageEditor(pageSlug) {
+  const page = editPagesCache.find(p => p.slug === pageSlug);
+  if (!page) return;
+  document.getElementById('cl-edit-page-view-heading').textContent = `${EDIT_PAGE_ICONS[page.type] || ''} ${page.title}`;
+  document.getElementById('cl-edit-page-title-input').value = page.title;
+  const typeLabel = page.type === 'promotion' ? 'Promotion' : page.type === 'gallery' ? 'Gallery' : 'General';
+  document.getElementById('cl-edit-page-type-note').textContent =
+    `This is a ${typeLabel} page. Its dedicated editor is coming soon — for now you can rename or delete it here.`;
+}
+document.getElementById('cl-edit-page-title-input').addEventListener('input', () => editDirty = true);
+document.getElementById('cl-edit-page-delete-btn').addEventListener('click', async () => {
+  if (!editActivePageSlug) return;
+  const page = editPagesCache.find(p => p.slug === editActivePageSlug);
+  if (!confirm(`Delete the "${page ? page.title : 'this'}" page? This can't be undone.`)) return;
+  await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}`, { method: 'DELETE', headers: authHeaders() });
+  editDirty = false;
+  await loadEditPages();
+  loadClubPages();
+  switchEditView('home', null, true);
+});
+
+// ── Create Page — template picker ─────────────────────────────────────────
+document.getElementById('cl-edit-pages-create-btn').addEventListener('click', () => {
+  if (!confirmDiscardIfDirty()) return;
+  editReturnView = { view: editActiveView, pageSlug: editActivePageSlug };
+  editTemplateChosenType = null;
+  document.querySelectorAll('.cl-edit-template-card').forEach(c => c.classList.remove('active'));
+  document.getElementById('cl-edit-template-title-field').hidden = true;
+  document.getElementById('cl-edit-template-title-input').value = '';
+  document.getElementById('cl-edit-template-create-btn').style.display = 'none';
+  document.getElementById('cl-edit-home-view').hidden = true;
+  document.getElementById('cl-edit-page-view').hidden = true;
+  document.getElementById('cl-edit-template-view').hidden = false;
+  document.getElementById('cl-edit-main-actions').style.display = 'none';
+  editActiveView = 'template';
+  highlightEditPagesList();
+});
+['general', 'promotion', 'gallery'].forEach(type => {
+  document.getElementById(`cl-edit-template-${type}`).addEventListener('click', () => {
+    editTemplateChosenType = type;
+    document.querySelectorAll('.cl-edit-template-card').forEach(c => c.classList.toggle('active', c.dataset.type === type));
+    document.getElementById('cl-edit-template-title-field').hidden = false;
+    document.getElementById('cl-edit-template-create-btn').style.display = 'inline-block';
+  });
+});
+document.getElementById('cl-edit-template-cancel-btn').addEventListener('click', () => {
+  document.getElementById('cl-edit-template-view').hidden = true;
+  document.getElementById('cl-edit-main-actions').style.display = 'flex';
+  editActiveView = editReturnView.view;
+  switchEditView(editReturnView.view, editReturnView.pageSlug, true);
+});
+document.getElementById('cl-edit-template-create-btn').addEventListener('click', async () => {
+  const title = document.getElementById('cl-edit-template-title-input').value.trim();
+  if (!title) { alert('A page title is required.'); return; }
+  if (!editTemplateChosenType) return;
+  const btn = document.getElementById('cl-edit-template-create-btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages`, {
+      method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, type: editTemplateChosenType }),
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    document.getElementById('cl-edit-main-actions').style.display = 'flex';
+    await loadEditPages();
+    loadClubPages();
+    switchEditView('page', data.page.slug, true);
+  } catch { alert('Could not create the page — please try again.'); }
+  finally { btn.disabled = false; }
+});
+
+// ── Save (context-aware: Home's welcome title/description, or a custom
+// page's title, depending on which view is active) ────────────────────────
 document.getElementById('cl-edit-save').addEventListener('click', async () => {
+  if (editActiveView === 'page') { await saveEditPageTitle(); return; }
+  await saveEditHome();
+});
+
+async function saveEditHome() {
   const saveBtn = document.getElementById('cl-edit-save');
   const msg = document.getElementById('cl-edit-msg');
   saveBtn.disabled = true;
@@ -1458,11 +2080,13 @@ document.getElementById('cl-edit-save').addEventListener('click', async () => {
   msg.textContent = '';
   try {
     const fd = new FormData();
-    if (pendingBannerBlob) fd.append('banner', pendingBannerBlob, 'banner.jpg');
+    fd.append('welcome_title', document.getElementById('cl-edit-welcome-title').value.trim());
+    fd.append('description', document.getElementById('cl-edit-description').value.trim());
     const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}`, { method: 'PUT', headers: authHeaders(), body: fd });
-    if (!res.ok) throw new Error('save failed');
+    if (!res.ok) throw new Error();
     const data = await res.json();
     renderClub(data.club);
+    editDirty = false;
     closeEditClubModal();
   } catch {
     msg.className = 'mod-panel-msg mod-panel-msg--error';
@@ -1471,7 +2095,32 @@ document.getElementById('cl-edit-save').addEventListener('click', async () => {
     saveBtn.disabled = false;
     saveBtn.textContent = 'Save';
   }
-});
+}
+
+async function saveEditPageTitle() {
+  const saveBtn = document.getElementById('cl-edit-save');
+  const msg = document.getElementById('cl-edit-msg');
+  const title = document.getElementById('cl-edit-page-title-input').value.trim();
+  if (!title) { msg.className = 'mod-panel-msg mod-panel-msg--error'; msg.textContent = 'A title is required.'; return; }
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}`, {
+      method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ title }),
+    });
+    if (!res.ok) throw new Error();
+    editDirty = false;
+    await loadEditPages();
+    loadClubPages();
+    closeEditClubModal();
+  } catch {
+    msg.className = 'mod-panel-msg mod-panel-msg--error';
+    msg.textContent = 'Could not save — please try again.';
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save';
+  }
+}
 
 if (!slug) {
   document.getElementById('cl-notfound').style.display = 'block';

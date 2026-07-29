@@ -797,6 +797,32 @@ async function initDb() {
     );
   `).catch(e => console.error('club_pages migration:', e.message));
 
+  // Club editor: the built-in "Home" page's Cover Image (static or
+  // slideshow) and Welcome Title (separate from the club's name — defaults
+  // to "Welcome To: <name>" client-side when empty, but is overridable).
+  await pool.query(`
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS welcome_title TEXT NOT NULL DEFAULT '';
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cover_mode TEXT NOT NULL DEFAULT 'static';
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cover_image_url TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('clubs cover/welcome-title migration:', e.message));
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS club_slideshow_images (
+      id           SERIAL      PRIMARY KEY,
+      club_id      INTEGER     NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      image_url    TEXT        NOT NULL,
+      sort_order   INTEGER     NOT NULL DEFAULT 0,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `).catch(e => console.error('club_slideshow_images migration:', e.message));
+
+  // Page template — drives the little icon in the editor's Pages list
+  // (ribbon/star/paintbrush) and, later, which specific editor/renderer a
+  // page gets. Existing test pages (Solus/Inferno) default to 'general'.
+  await pool.query(`
+    ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'general';
+  `).catch(e => console.error('club_pages type migration:', e.message));
+
   // Every club (new ones via POST /api/clubs, which never specifies a
   // banner_url, letting this column default kick in) starts with this
   // image as its banner rather than the plain fallback card.
@@ -5098,6 +5124,18 @@ async function getClubRole(clubId, userId) {
   const { rows: [row] } = await pool.query('SELECT role FROM club_members WHERE club_id = $1 AND user_id = $2', [clubId, userId]);
   return row ? row.role : null;
 }
+
+// Shared "does this club exist, and is the requester an owner/admin of it"
+// check for the whole club-editor surface (cover/welcome/cards/pages).
+// Sends the 404/403 response itself and returns null so callers can just
+// `if (!ctx) return;`.
+async function requireClubAdmin(req, res) {
+  const { rows: [club] } = await pool.query('SELECT * FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) { res.status(404).json({ error: 'Club not found.' }); return null; }
+  const role = await getClubRole(club.id, req.user.id);
+  if (role !== 'owner' && role !== 'admin') { res.status(403).json({ error: 'Only club owners/admins can edit this club.' }); return null; }
+  return { club, role };
+}
 function clubPublicShape(c, viewerRole) {
   return {
     id: c.id, slug: c.slug, name: c.name, description: c.description,
@@ -5105,6 +5143,8 @@ function clubPublicShape(c, viewerRole) {
     icon_url: c.icon_url, owner_user_id: c.owner_user_id,
     theme: c.theme || 'default', theme_bg_url: c.theme_bg_url || '',
     sidebar_title: c.sidebar_title || '', sidebar_message: c.sidebar_message || '', is_nsfw: !!c.is_nsfw,
+    welcome_title: c.welcome_title || '', cover_mode: c.cover_mode || 'static', cover_image_url: c.cover_image_url || '',
+    featured_cards_title: c.featured_cards_title || 'Featured Cards',
     member_count: Number(c.member_count) || 0,
     post_count: c.post_count !== undefined ? Number(c.post_count) || 0 : undefined,
     created_at: c.created_at,
@@ -5209,6 +5249,7 @@ app.put('/api/clubs/:slug', requireAuth, uploadModImage.single('banner'), async 
 
   const name = req.body.name !== undefined ? String(req.body.name).trim().slice(0, 60) || club.name : club.name;
   const description = req.body.description !== undefined ? String(req.body.description).trim().slice(0, 1000) : club.description;
+  const welcomeTitle = req.body.welcome_title !== undefined ? String(req.body.welcome_title).trim().slice(0, 100) : club.welcome_title;
   const positionX = req.body.banner_position_x !== undefined ? clampPosition(req.body.banner_position_x) : club.banner_position_x;
   const positionY = req.body.banner_position_y !== undefined ? clampPosition(req.body.banner_position_y) : club.banner_position_y;
 
@@ -5222,9 +5263,9 @@ app.put('/api/clubs/:slug', requireAuth, uploadModImage.single('banner'), async 
   }
 
   const { rows: [updated] } = await pool.query(
-    `UPDATE clubs SET name = $1, description = $2, banner_url = $3, banner_position_x = $4, banner_position_y = $5
-     WHERE id = $6 RETURNING *`,
-    [name, description, bannerUrl, positionX, positionY, club.id]
+    `UPDATE clubs SET name = $1, description = $2, banner_url = $3, banner_position_x = $4, banner_position_y = $5, welcome_title = $6
+     WHERE id = $7 RETURNING *`,
+    [name, description, bannerUrl, positionX, positionY, welcomeTitle, club.id]
   );
   res.json({ club: clubPublicShape(updated, role) });
 });
@@ -5413,6 +5454,178 @@ app.get('/api/clubs/:slug/featured-cards', async (req, res) => {
   res.json({ title: club.featured_cards_title || 'Featured Cards', cards: rows });
 });
 
+// PUT /api/clubs/:slug/featured-cards-title — rename the section itself.
+app.put('/api/clubs/:slug/featured-cards-title', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const title = String(req.body.title || '').trim().slice(0, 60) || 'Featured Cards';
+  await pool.query('UPDATE clubs SET featured_cards_title = $1 WHERE id = $2', [title, ctx.club.id]);
+  res.json({ title });
+});
+
+// POST /api/clubs/:slug/featured-cards — create a card. Multipart (image
+// optional — falls back to the shared default on the client when empty).
+app.post('/api/clubs/:slug/featured-cards', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const name = String(req.body.name || '').trim().slice(0, 80);
+  const description = String(req.body.description || '').trim().slice(0, 1000);
+  if (!name) return res.status(400).json({ error: 'A name/title is required.' });
+  const imageUrl = req.file ? `/images/moderators/${req.file.filename}` : '/images/defaultchar.jpg';
+  const { rows: [{ maxOrder }] } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM club_featured_cards WHERE club_id = $1', [ctx.club.id]
+  );
+  const { rows: [card] } = await pool.query(
+    `INSERT INTO club_featured_cards (club_id, name, description, image_url, sort_order)
+     VALUES ($1, $2, $3, $4, $5) RETURNING id, name, description, image_url`,
+    [ctx.club.id, name, description, imageUrl, maxOrder + 1]
+  );
+  res.json({ card });
+});
+
+// PUT /api/clubs/:slug/featured-cards/:cardId — edit a card (image optional).
+app.put('/api/clubs/:slug/featured-cards/:cardId', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const { rows: [existing] } = await pool.query(
+    'SELECT * FROM club_featured_cards WHERE id = $1 AND club_id = $2', [req.params.cardId, ctx.club.id]
+  );
+  if (!existing) return res.status(404).json({ error: 'Card not found.' });
+
+  const name = req.body.name !== undefined ? String(req.body.name).trim().slice(0, 80) || existing.name : existing.name;
+  const description = req.body.description !== undefined ? String(req.body.description).trim().slice(0, 1000) : existing.description;
+  let imageUrl = existing.image_url;
+  if (req.file) {
+    imageUrl = `/images/moderators/${req.file.filename}`;
+    if (existing.image_url.startsWith('/images/moderators/')) {
+      const oldPath = path.join('/var/www/btw', existing.image_url);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+  }
+  const { rows: [card] } = await pool.query(
+    `UPDATE club_featured_cards SET name = $1, description = $2, image_url = $3, updated_at = NOW()
+     WHERE id = $4 RETURNING id, name, description, image_url`,
+    [name, description, imageUrl, existing.id]
+  );
+  res.json({ card });
+});
+
+app.delete('/api/clubs/:slug/featured-cards/:cardId', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const { rowCount } = await pool.query(
+    'DELETE FROM club_featured_cards WHERE id = $1 AND club_id = $2', [req.params.cardId, ctx.club.id]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Card not found.' });
+  res.json({ message: 'Card deleted.' });
+});
+
+// PUT /api/clubs/:slug/featured-cards/reorder — { order: [cardId, ...] }.
+app.put('/api/clubs/:slug/featured-cards/reorder', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const order = req.body.order;
+  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of card IDs.' });
+  await pool.query('BEGIN');
+  try {
+    for (let i = 0; i < order.length; i++) {
+      await pool.query(
+        'UPDATE club_featured_cards SET sort_order = $1 WHERE id = $2 AND club_id = $3',
+        [i, order[i], ctx.club.id]
+      );
+    }
+    await pool.query('COMMIT');
+  } catch (e) {
+    await pool.query('ROLLBACK');
+    return res.status(500).json({ error: 'Could not save the new order.' });
+  }
+  res.json({ message: 'Order saved.' });
+});
+
+// ── Home page Cover Image — static single image or a slideshow of several,
+// cycling randomly on the club's Hub. ─────────────────────────────────────
+app.put('/api/clubs/:slug/cover-mode', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const mode = req.body.cover_mode === 'slideshow' ? 'slideshow' : 'static';
+  await pool.query('UPDATE clubs SET cover_mode = $1 WHERE id = $2', [mode, ctx.club.id]);
+  res.json({ cover_mode: mode });
+});
+
+app.put('/api/clubs/:slug/cover-image', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const imageUrl = `/images/moderators/${req.file.filename}`;
+  if (ctx.club.cover_image_url.startsWith('/images/moderators/')) {
+    const oldPath = path.join('/var/www/btw', ctx.club.cover_image_url);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+  await pool.query('UPDATE clubs SET cover_image_url = $1 WHERE id = $2', [imageUrl, ctx.club.id]);
+  res.json({ cover_image_url: imageUrl });
+});
+
+app.get('/api/clubs/:slug/slideshow', async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const { rows } = await pool.query(
+    'SELECT id, image_url FROM club_slideshow_images WHERE club_id = $1 ORDER BY sort_order, created_at',
+    [club.id]
+  );
+  res.json({ images: rows });
+});
+
+app.post('/api/clubs/:slug/slideshow', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const imageUrl = `/images/moderators/${req.file.filename}`;
+  const { rows: [{ maxOrder }] } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM club_slideshow_images WHERE club_id = $1', [ctx.club.id]
+  );
+  const { rows: [image] } = await pool.query(
+    'INSERT INTO club_slideshow_images (club_id, image_url, sort_order) VALUES ($1, $2, $3) RETURNING id, image_url',
+    [ctx.club.id, imageUrl, maxOrder + 1]
+  );
+  res.json({ image });
+});
+
+app.delete('/api/clubs/:slug/slideshow/:imageId', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const { rows: [existing] } = await pool.query(
+    'SELECT * FROM club_slideshow_images WHERE id = $1 AND club_id = $2', [req.params.imageId, ctx.club.id]
+  );
+  if (!existing) return res.status(404).json({ error: 'Image not found.' });
+  if (existing.image_url.startsWith('/images/moderators/')) {
+    const oldPath = path.join('/var/www/btw', existing.image_url);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+  await pool.query('DELETE FROM club_slideshow_images WHERE id = $1', [existing.id]);
+  res.json({ message: 'Image removed.' });
+});
+
+app.put('/api/clubs/:slug/slideshow/reorder', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const order = req.body.order;
+  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of image IDs.' });
+  await pool.query('BEGIN');
+  try {
+    for (let i = 0; i < order.length; i++) {
+      await pool.query(
+        'UPDATE club_slideshow_images SET sort_order = $1 WHERE id = $2 AND club_id = $3',
+        [i, order[i], ctx.club.id]
+      );
+    }
+    await pool.query('COMMIT');
+  } catch (e) {
+    await pool.query('ROLLBACK');
+    return res.status(500).json({ error: 'Could not save the new order.' });
+  }
+  res.json({ message: 'Order saved.' });
+});
+
 // GET /api/clubs/:slug/rules — the sidebar rules list (preview + full
 // description, expanded on click client-side). No editor UI yet.
 app.get('/api/clubs/:slug/rules', async (req, res) => {
@@ -5431,7 +5644,7 @@ app.get('/api/clubs/:slug/pages', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const { rows } = await pool.query(
-    'SELECT slug, title FROM club_pages WHERE club_id = $1 ORDER BY sort_order, created_at',
+    'SELECT slug, title, type FROM club_pages WHERE club_id = $1 ORDER BY sort_order, created_at',
     [club.id]
   );
   res.json({ pages: rows });
@@ -5442,11 +5655,73 @@ app.get('/api/clubs/:slug/pages/:pageSlug', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const { rows: [page] } = await pool.query(
-    'SELECT slug, title, content FROM club_pages WHERE club_id = $1 AND slug = $2',
+    'SELECT slug, title, type, content FROM club_pages WHERE club_id = $1 AND slug = $2',
     [club.id, req.params.pageSlug]
   );
   if (!page) return res.status(404).json({ error: 'Page not found.' });
   res.json({ page });
+});
+
+// POST /api/clubs/:slug/pages — create a page from one of the three
+// templates. No dedicated editor for the template content yet (that's
+// next); this just reserves the title/type/slug so it shows up in the
+// Pages list immediately.
+app.post('/api/clubs/:slug/pages', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const title = String(req.body.title || '').trim().slice(0, 60);
+  const type = ['general', 'promotion', 'gallery'].includes(req.body.type) ? req.body.type : 'general';
+  if (!title) return res.status(400).json({ error: 'A page title is required.' });
+
+  const baseSlug = title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'page';
+  let pageSlug = baseSlug;
+  let n = 1;
+  while (true) {
+    const { rows: [existing] } = await pool.query(
+      'SELECT id FROM club_pages WHERE club_id = $1 AND slug = $2', [ctx.club.id, pageSlug]
+    );
+    if (!existing) break;
+    n += 1;
+    pageSlug = `${baseSlug}-${n}`;
+  }
+
+  const { rows: [{ maxOrder }] } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM club_pages WHERE club_id = $1', [ctx.club.id]
+  );
+  const { rows: [page] } = await pool.query(
+    `INSERT INTO club_pages (club_id, slug, title, type, sort_order) VALUES ($1, $2, $3, $4, $5)
+     RETURNING slug, title, type`,
+    [ctx.club.id, pageSlug, title, type, maxOrder + 1]
+  );
+  res.json({ page });
+});
+
+// PUT /api/clubs/:slug/pages/:pageSlug — rename/re-content a page (title
+// for now; the type-specific content editors land later).
+app.put('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const { rows: [existing] } = await pool.query(
+    'SELECT * FROM club_pages WHERE club_id = $1 AND slug = $2', [ctx.club.id, req.params.pageSlug]
+  );
+  if (!existing) return res.status(404).json({ error: 'Page not found.' });
+  const title = req.body.title !== undefined ? String(req.body.title).trim().slice(0, 60) || existing.title : existing.title;
+  const content = req.body.content !== undefined ? String(req.body.content).slice(0, 20000) : existing.content;
+  const { rows: [page] } = await pool.query(
+    'UPDATE club_pages SET title = $1, content = $2 WHERE id = $3 RETURNING slug, title, type, content',
+    [title, content, existing.id]
+  );
+  res.json({ page });
+});
+
+app.delete('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const { rowCount } = await pool.query(
+    'DELETE FROM club_pages WHERE club_id = $1 AND slug = $2', [ctx.club.id, req.params.pageSlug]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Page not found.' });
+  res.json({ message: 'Page deleted.' });
 });
 
 // GET /api/clubs-feed — recent posts across every club, for the Social hub.
