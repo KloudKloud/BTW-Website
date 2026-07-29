@@ -840,6 +840,25 @@ async function initDb() {
     ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'general';
   `).catch(e => console.error('club_pages type migration:', e.message));
 
+  // General Page template — cover image/slideshow (same static/slideshow
+  // toggle as the club Home page) plus up to three named text sections
+  // (text_fields: [{title, body}, ...]).
+  await pool.query(`
+    ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS cover_mode TEXT NOT NULL DEFAULT 'static';
+    ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS cover_image_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS text_fields JSONB NOT NULL DEFAULT '[]';
+  `).catch(e => console.error('club_pages general-template migration:', e.message));
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS club_page_slideshow_images (
+      id           SERIAL      PRIMARY KEY,
+      page_id      INTEGER     NOT NULL REFERENCES club_pages(id) ON DELETE CASCADE,
+      image_url    TEXT        NOT NULL,
+      sort_order   INTEGER     NOT NULL DEFAULT 0,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `).catch(e => console.error('club_page_slideshow_images migration:', e.message));
+
   // Every club (new ones via POST /api/clubs, which never specifies a
   // banner_url, letting this column default kick in) starts with this
   // image as its banner rather than the plain fallback card.
@@ -5163,6 +5182,17 @@ async function requireClubAdmin(req, res) {
   if (role !== 'owner' && role !== 'admin') { res.status(403).json({ error: 'Only club owners/admins can edit this club.' }); return null; }
   return { club, role };
 }
+// Same as requireClubAdmin, plus resolves :pageSlug to a club_pages row —
+// used by the General Page template's cover/slideshow/text-field endpoints.
+async function requireClubPageAdmin(req, res) {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return null;
+  const { rows: [page] } = await pool.query(
+    'SELECT * FROM club_pages WHERE club_id = $1 AND slug = $2', [ctx.club.id, req.params.pageSlug]
+  );
+  if (!page) { res.status(404).json({ error: 'Page not found.' }); return null; }
+  return { ...ctx, page };
+}
 function clubPublicShape(c, viewerRole) {
   return {
     id: c.id, slug: c.slug, name: c.name, description: c.description,
@@ -5691,7 +5721,7 @@ app.put('/api/clubs/:slug/slideshow/reorder', requireAuth, async (req, res) => {
 });
 
 // GET /api/clubs/:slug/rules — the sidebar rules list (preview + full
-// description, expanded on click client-side). No editor UI yet.
+// description, expanded on click client-side).
 app.get('/api/clubs/:slug/rules', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
@@ -5700,6 +5730,71 @@ app.get('/api/clubs/:slug/rules', async (req, res) => {
     [club.id]
   );
   res.json({ rules: rows });
+});
+
+// POST /api/clubs/:slug/rules — { title, description }. title is the short
+// "preview text" shown collapsed; description is the elaborate explanation
+// shown on expand.
+app.post('/api/clubs/:slug/rules', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const title = String(req.body.title || '').trim().slice(0, 100);
+  const description = String(req.body.description || '').trim().slice(0, 1000);
+  if (!title) return res.status(400).json({ error: 'A preview text/title is required.' });
+  const { rows: [{ maxOrder }] } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM club_rules WHERE club_id = $1', [ctx.club.id]
+  );
+  const { rows: [rule] } = await pool.query(
+    `INSERT INTO club_rules (club_id, title, description, sort_order)
+     VALUES ($1, $2, $3, $4) RETURNING id, title, description`,
+    [ctx.club.id, title, description, maxOrder + 1]
+  );
+  res.json({ rule });
+});
+
+app.put('/api/clubs/:slug/rules/:ruleId', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const { rows: [existing] } = await pool.query(
+    'SELECT * FROM club_rules WHERE id = $1 AND club_id = $2', [req.params.ruleId, ctx.club.id]
+  );
+  if (!existing) return res.status(404).json({ error: 'Rule not found.' });
+  const title = req.body.title !== undefined ? String(req.body.title).trim().slice(0, 100) || existing.title : existing.title;
+  const description = req.body.description !== undefined ? String(req.body.description).trim().slice(0, 1000) : existing.description;
+  const { rows: [rule] } = await pool.query(
+    'UPDATE club_rules SET title = $1, description = $2 WHERE id = $3 RETURNING id, title, description',
+    [title, description, existing.id]
+  );
+  res.json({ rule });
+});
+
+app.delete('/api/clubs/:slug/rules/:ruleId', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const { rowCount } = await pool.query(
+    'DELETE FROM club_rules WHERE id = $1 AND club_id = $2', [req.params.ruleId, ctx.club.id]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Rule not found.' });
+  res.json({ message: 'Rule deleted.' });
+});
+
+// PUT /api/clubs/:slug/rules/reorder — { order: [ruleId, ...] }.
+app.put('/api/clubs/:slug/rules/reorder', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const order = req.body.order;
+  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of rule IDs.' });
+  await pool.query('BEGIN');
+  try {
+    for (let i = 0; i < order.length; i++) {
+      await pool.query('UPDATE club_rules SET sort_order = $1 WHERE id = $2 AND club_id = $3', [i, order[i], ctx.club.id]);
+    }
+    await pool.query('COMMIT');
+  } catch (err) {
+    await pool.query('ROLLBACK');
+    return res.status(500).json({ error: 'Failed to reorder rules.' });
+  }
+  res.json({ message: 'Reordered.' });
 });
 
 // GET /api/clubs/:slug/pages — sidebar "More Pages" list (slug + title
@@ -5719,7 +5814,7 @@ app.get('/api/clubs/:slug/pages/:pageSlug', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const { rows: [page] } = await pool.query(
-    'SELECT slug, title, type, content FROM club_pages WHERE club_id = $1 AND slug = $2',
+    'SELECT slug, title, type, content, cover_mode, cover_image_url, text_fields FROM club_pages WHERE club_id = $1 AND slug = $2',
     [club.id, req.params.pageSlug]
   );
   if (!page) return res.status(404).json({ error: 'Page not found.' });
@@ -5772,10 +5867,110 @@ app.put('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => {
   const title = req.body.title !== undefined ? String(req.body.title).trim().slice(0, 60) || existing.title : existing.title;
   const content = req.body.content !== undefined ? String(req.body.content).slice(0, 20000) : existing.content;
   const { rows: [page] } = await pool.query(
-    'UPDATE club_pages SET title = $1, content = $2 WHERE id = $3 RETURNING slug, title, type, content',
+    'UPDATE club_pages SET title = $1, content = $2 WHERE id = $3 RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields',
     [title, content, existing.id]
   );
   res.json({ page });
+});
+
+// PUT /api/clubs/:slug/pages/:pageSlug/text-fields — General Page template's
+// up-to-three named text sections: { fields: [{title, body}, ...] }.
+app.put('/api/clubs/:slug/pages/:pageSlug/text-fields', requireAuth, async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  const fieldsIn = Array.isArray(req.body.fields) ? req.body.fields.slice(0, 3) : [];
+  const fields = fieldsIn.map(f => ({
+    title: String((f && f.title) || '').trim().slice(0, 80),
+    body: String((f && f.body) || '').trim().slice(0, 5000),
+  })).filter(f => f.title || f.body);
+  await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(fields), ctx.page.id]);
+  res.json({ text_fields: fields });
+});
+
+app.put('/api/clubs/:slug/pages/:pageSlug/cover-mode', requireAuth, async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  const mode = req.body.cover_mode === 'slideshow' ? 'slideshow' : 'static';
+  await pool.query('UPDATE club_pages SET cover_mode = $1 WHERE id = $2', [mode, ctx.page.id]);
+  res.json({ cover_mode: mode });
+});
+
+app.put('/api/clubs/:slug/pages/:pageSlug/cover-image', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const imageUrl = `/images/moderators/${req.file.filename}`;
+  if (ctx.page.cover_image_url.startsWith('/images/moderators/')) {
+    const oldPath = path.join('/var/www/btw', ctx.page.cover_image_url);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+  await pool.query('UPDATE club_pages SET cover_image_url = $1 WHERE id = $2', [imageUrl, ctx.page.id]);
+  res.json({ cover_image_url: imageUrl });
+});
+
+app.get('/api/clubs/:slug/pages/:pageSlug/slideshow', async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const { rows: [page] } = await pool.query(
+    'SELECT id FROM club_pages WHERE club_id = $1 AND slug = $2', [club.id, req.params.pageSlug]
+  );
+  if (!page) return res.status(404).json({ error: 'Page not found.' });
+  const { rows } = await pool.query(
+    'SELECT id, image_url FROM club_page_slideshow_images WHERE page_id = $1 ORDER BY sort_order, created_at',
+    [page.id]
+  );
+  res.json({ images: rows });
+});
+
+app.post('/api/clubs/:slug/pages/:pageSlug/slideshow', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const imageUrl = `/images/moderators/${req.file.filename}`;
+  const { rows: [{ maxOrder }] } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM club_page_slideshow_images WHERE page_id = $1', [ctx.page.id]
+  );
+  const { rows: [image] } = await pool.query(
+    'INSERT INTO club_page_slideshow_images (page_id, image_url, sort_order) VALUES ($1, $2, $3) RETURNING id, image_url',
+    [ctx.page.id, imageUrl, maxOrder + 1]
+  );
+  res.json({ image });
+});
+
+app.delete('/api/clubs/:slug/pages/:pageSlug/slideshow/:imageId', requireAuth, async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  const { rows: [existing] } = await pool.query(
+    'SELECT * FROM club_page_slideshow_images WHERE id = $1 AND page_id = $2', [req.params.imageId, ctx.page.id]
+  );
+  if (!existing) return res.status(404).json({ error: 'Image not found.' });
+  if (existing.image_url.startsWith('/images/moderators/')) {
+    const oldPath = path.join('/var/www/btw', existing.image_url);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+  await pool.query('DELETE FROM club_page_slideshow_images WHERE id = $1', [existing.id]);
+  res.json({ message: 'Image removed.' });
+});
+
+app.put('/api/clubs/:slug/pages/:pageSlug/slideshow/reorder', requireAuth, async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  const order = req.body.order;
+  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of image IDs.' });
+  await pool.query('BEGIN');
+  try {
+    for (let i = 0; i < order.length; i++) {
+      await pool.query(
+        'UPDATE club_page_slideshow_images SET sort_order = $1 WHERE id = $2 AND page_id = $3',
+        [i, order[i], ctx.page.id]
+      );
+    }
+    await pool.query('COMMIT');
+  } catch (err) {
+    await pool.query('ROLLBACK');
+    return res.status(500).json({ error: 'Failed to reorder images.' });
+  }
+  res.json({ message: 'Reordered.' });
 });
 
 app.delete('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => {
