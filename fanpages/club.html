@@ -336,13 +336,20 @@
       transition: background 0.15s;
     }
     .cl-post-detail-image-nav:hover { background: rgba(0,0,0,0.8); }
+    .cl-post-detail-image-nav:disabled { opacity: 0.3; cursor: default; }
+    .cl-post-detail-image-nav:disabled:hover { background: rgba(0,0,0,0.55); }
     .cl-post-detail-image-prev { left: 0.75rem; }
     .cl-post-detail-image-next { right: 0.75rem; }
-    .cl-post-detail-image-counter {
-      position: absolute; bottom: 0.75rem; right: 0.75rem; z-index: 2;
-      background: rgba(0,0,0,0.6); color: #fff; font-size: 0.78rem; font-weight: 700;
-      padding: 0.25em 0.65em; border-radius: 12px;
+    .cl-post-detail-image-dots {
+      position: absolute; bottom: 0.75rem; left: 50%; transform: translateX(-50%); z-index: 2;
+      display: flex; gap: 0.4rem;
     }
+    .cl-post-detail-image-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.45);
+      border: none; padding: 0; cursor: pointer; transition: background 0.15s, transform 0.15s;
+    }
+    .cl-post-detail-image-dot:hover { background: rgba(255,255,255,0.75); }
+    .cl-post-detail-image-dot.cl-active { background: #fff; transform: scale(1.2); }
     .cl-post-detail-body { color: #ccc; font-size: 1rem; line-height: 1.85; white-space: pre-wrap; margin: 0 0 2.5rem; }
 
     /* ── Create Post modal: poll builder ── */
@@ -361,12 +368,17 @@
     .cl-post-poll-type-row { display: flex; gap: 1.25rem; }
     .cl-post-poll-type-option { display: flex; align-items: center; gap: 0.4rem; font-size: 0.88rem; color: #ccc; cursor: pointer; }
 
-    /* Nudges the persistent right box a bit further left while a post is
-       open — same box, just not pinned quite as far out as on the home
-       view. */
-    .cl-body-row.cl-detail-mode .cl-side { margin-left: -24px; }
+    /* Brings the persistent right box in closer to the post content while
+       a post is open, instead of pinning it out at the far edge of the
+       (much wider) flex row — the post body itself caps at 800px
+       (.cl-post-detail), so letting .cl-content-wrap keep stretching to
+       fill the whole remaining width just leaves a big gap before the
+       sidebar. Capping the content column's flex-basis and centering the
+       row as a group pulls the sidebar snug against the content instead. */
+    .cl-body-row.cl-detail-mode { justify-content: center; }
+    .cl-body-row.cl-detail-mode .cl-content-wrap { flex: 0 1 900px; }
     @media (max-width: 1100px) {
-      .cl-body-row.cl-detail-mode .cl-side { margin-left: 1.25rem; }
+      .cl-body-row.cl-detail-mode .cl-content-wrap { flex: 1; }
     }
 
     /* Starts just below the banner (a small gap, not touching it) since
@@ -777,7 +789,7 @@
           <img id="cl-post-detail-image" alt="" />
           <button type="button" class="cl-post-detail-image-nav cl-post-detail-image-prev" id="cl-post-detail-image-prev">‹</button>
           <button type="button" class="cl-post-detail-image-nav cl-post-detail-image-next" id="cl-post-detail-image-next">›</button>
-          <span class="cl-post-detail-image-counter" id="cl-post-detail-image-counter"></span>
+          <div class="cl-post-detail-image-dots" id="cl-post-detail-image-dots"></div>
         </div>
 
         <p class="cl-post-detail-body" id="cl-post-detail-body"></p>
@@ -1861,18 +1873,32 @@ function updatePostDetailImage() {
   imageWrap.style.display = '';
   document.getElementById('cl-post-detail-image').src = postDetailImages[postDetailImageIdx];
   const hasMultiple = postDetailImages.length > 1;
-  document.getElementById('cl-post-detail-image-prev').style.display = hasMultiple ? 'flex' : 'none';
-  document.getElementById('cl-post-detail-image-next').style.display = hasMultiple ? 'flex' : 'none';
-  const counter = document.getElementById('cl-post-detail-image-counter');
-  counter.style.display = hasMultiple ? 'block' : 'none';
-  counter.textContent = hasMultiple ? `${postDetailImageIdx + 1} / ${postDetailImages.length}` : '';
+  const prevBtn = document.getElementById('cl-post-detail-image-prev');
+  const nextBtn = document.getElementById('cl-post-detail-image-next');
+  prevBtn.style.display = hasMultiple ? 'flex' : 'none';
+  nextBtn.style.display = hasMultiple ? 'flex' : 'none';
+  prevBtn.disabled = postDetailImageIdx === 0;
+  nextBtn.disabled = postDetailImageIdx === postDetailImages.length - 1;
+  const dotsWrap = document.getElementById('cl-post-detail-image-dots');
+  if (!hasMultiple) { dotsWrap.innerHTML = ''; return; }
+  dotsWrap.innerHTML = postDetailImages.map((_, i) =>
+    `<button type="button" class="cl-post-detail-image-dot${i === postDetailImageIdx ? ' cl-active' : ''}" data-idx="${i}" aria-label="Image ${i + 1}"></button>`
+  ).join('');
+  dotsWrap.querySelectorAll('.cl-post-detail-image-dot').forEach(dot => {
+    dot.addEventListener('click', () => {
+      postDetailImageIdx = Number(dot.dataset.idx);
+      updatePostDetailImage();
+    });
+  });
 }
 document.getElementById('cl-post-detail-image-prev').addEventListener('click', () => {
-  postDetailImageIdx = (postDetailImageIdx - 1 + postDetailImages.length) % postDetailImages.length;
+  if (postDetailImageIdx === 0) return;
+  postDetailImageIdx -= 1;
   updatePostDetailImage();
 });
 document.getElementById('cl-post-detail-image-next').addEventListener('click', () => {
-  postDetailImageIdx = (postDetailImageIdx + 1) % postDetailImages.length;
+  if (postDetailImageIdx === postDetailImages.length - 1) return;
+  postDetailImageIdx += 1;
   updatePostDetailImage();
 });
 document.getElementById('cl-post-back-btn').addEventListener('click', () => navigateTo({ post: null }));
