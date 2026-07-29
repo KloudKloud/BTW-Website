@@ -339,9 +339,15 @@
     }
     .cl-post-detail-image-wrap {
       position: relative; width: 100%; border-radius: 14px; overflow: hidden; background: #161616;
-      border: 1px solid rgba(255,255,255,0.1); margin-bottom: 1.75rem;
+      border: 1px solid rgba(255,255,255,0.1); margin-bottom: 1.75rem; perspective: 1400px;
     }
-    .cl-post-detail-image-wrap img { width: 100%; max-height: 640px; object-fit: cover; display: block; }
+    /* Page-turn effect between gallery images — see setPostDetailImageSrc().
+       transform-origin stays centered so it reads as a page tilting away
+       from/back toward the viewer rather than pivoting off one edge. */
+    .cl-post-detail-image-wrap img {
+      width: 100%; max-height: 640px; object-fit: cover; display: block;
+      backface-visibility: hidden; transform-style: preserve-3d;
+    }
     /* Click-through gallery — prev/next arrows + a counter, not an
        auto-slideshow (that's the Hub cover's thing). */
     .cl-post-detail-image-nav {
@@ -1929,11 +1935,33 @@ function renderPostDetail(post) {
 }
 let postDetailImages = [];
 let postDetailImageIdx = 0;
-function updatePostDetailImage() {
+const CL_FLIP_MS = 220;
+function setPostDetailImageSrc(imgEl, src, direction) {
+  const newSrc = src;
+  if (!direction || !imgEl.src) { imgEl.src = newSrc; return; }
+  // Two-phase page-turn: rotate the current image away (edge-on, like a
+  // page lifting off the book), swap the src once it's turned past view,
+  // then rotate the new image in from the opposite edge back to flat.
+  const outAngle = direction === 'prev' ? 95 : -95;
+  imgEl.style.transition = `transform ${CL_FLIP_MS}ms ease, opacity ${CL_FLIP_MS}ms ease`;
+  imgEl.style.transform = `rotateY(${outAngle}deg)`;
+  imgEl.style.opacity = '0';
+  setTimeout(() => {
+    imgEl.src = newSrc;
+    imgEl.style.transition = 'none';
+    imgEl.style.transform = `rotateY(${-outAngle}deg)`;
+    imgEl.style.opacity = '0';
+    void imgEl.offsetWidth; // force reflow so the "no transition" jump applies before animating back in
+    imgEl.style.transition = `transform ${CL_FLIP_MS}ms ease, opacity ${CL_FLIP_MS}ms ease`;
+    imgEl.style.transform = 'rotateY(0deg)';
+    imgEl.style.opacity = '1';
+  }, CL_FLIP_MS);
+}
+function updatePostDetailImage(direction) {
   const imageWrap = document.getElementById('cl-post-detail-image-wrap');
   if (!postDetailImages.length) { imageWrap.style.display = 'none'; return; }
   imageWrap.style.display = '';
-  document.getElementById('cl-post-detail-image').src = postDetailImages[postDetailImageIdx];
+  setPostDetailImageSrc(document.getElementById('cl-post-detail-image'), postDetailImages[postDetailImageIdx], direction);
   const hasMultiple = postDetailImages.length > 1;
   const prevBtn = document.getElementById('cl-post-detail-image-prev');
   const nextBtn = document.getElementById('cl-post-detail-image-next');
@@ -1948,20 +1976,23 @@ function updatePostDetailImage() {
   ).join('');
   dotsWrap.querySelectorAll('.cl-post-detail-image-dot').forEach(dot => {
     dot.addEventListener('click', () => {
-      postDetailImageIdx = Number(dot.dataset.idx);
-      updatePostDetailImage();
+      const newIdx = Number(dot.dataset.idx);
+      if (newIdx === postDetailImageIdx) return;
+      const direction = newIdx > postDetailImageIdx ? 'next' : 'prev';
+      postDetailImageIdx = newIdx;
+      updatePostDetailImage(direction);
     });
   });
 }
 document.getElementById('cl-post-detail-image-prev').addEventListener('click', () => {
   if (postDetailImageIdx === 0) return;
   postDetailImageIdx -= 1;
-  updatePostDetailImage();
+  updatePostDetailImage('prev');
 });
 document.getElementById('cl-post-detail-image-next').addEventListener('click', () => {
   if (postDetailImageIdx === postDetailImages.length - 1) return;
   postDetailImageIdx += 1;
-  updatePostDetailImage();
+  updatePostDetailImage('next');
 });
 document.getElementById('cl-post-back-btn').addEventListener('click', () => navigateTo({ post: null }));
 

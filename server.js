@@ -4765,6 +4765,16 @@ async function commentTargetInfo(targetType, targetId) {
     if (!c) return null;
     return { title: c.name || 'Unnamed', link: `/fanpages/${c.owner_username}?char=${targetId}#characters` };
   }
+  if (targetType === 'club_post') {
+    const { rows: [p] } = await pool.query(
+      `SELECT cp.title, c.slug
+       FROM club_posts cp JOIN clubs c ON c.id = cp.club_id
+       WHERE cp.id = $1`,
+      [targetId]
+    );
+    if (!p) return null;
+    return { title: p.title || 'Untitled', link: `/fanpages/club?slug=${encodeURIComponent(p.slug)}&post=${targetId}` };
+  }
   return null;
 }
 
