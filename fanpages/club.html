@@ -144,10 +144,24 @@
        "Image Not Available" placeholder, just center-cropped into this
        wider shape instead of shown at its native size. */
     .cl-slideshow-wrap {
-      width: 100%; aspect-ratio: 5 / 2; border-radius: 16px; overflow: hidden;
+      position: relative; width: 100%; aspect-ratio: 5 / 2; border-radius: 16px; overflow: hidden;
       background: #161616; border: 1px solid rgba(255,255,255,0.1); margin-bottom: 2.5rem;
     }
-    .cl-slideshow-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cl-slideshow-img {
+      position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block;
+      opacity: 0; transition: opacity 0.6s ease;
+    }
+    .cl-slideshow-img.cl-active { opacity: 1; }
+    .cl-slideshow-nav {
+      position: absolute; top: 50%; transform: translateY(-50%); z-index: 2;
+      width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.5); border: none; color: #fff;
+      font-size: 1.4rem; cursor: pointer; align-items: center; justify-content: center;
+      opacity: 0; transition: background 0.15s, opacity 0.15s;
+    }
+    .cl-slideshow-wrap:hover .cl-slideshow-nav { opacity: 1; }
+    .cl-slideshow-nav:hover { background: rgba(0,0,0,0.8); }
+    .cl-slideshow-prev { left: 0.75rem; }
+    .cl-slideshow-next { right: 0.75rem; }
 
     /* Name sits above the row entirely; the picture (left, square) and the
        glass-card About box (right) are confined to the main column so
@@ -523,6 +537,14 @@
        column sitting alongside the actual editing area, not just a single
        stacked form. */
     .cl-edit-modal { max-width: 980px; }
+    /* Same thin, translucent-blue scrollbar as .cl-side/.cl-admin-posts,
+       instead of the default OS scrollbar the base .char-editor-modal
+       (shared across every editor site-wide) otherwise leaves in place. */
+    .cl-edit-modal { scrollbar-width: thin; scrollbar-color: rgba(127,168,217,0.4) transparent; }
+    .cl-edit-modal::-webkit-scrollbar { width: 6px; }
+    .cl-edit-modal::-webkit-scrollbar-track { background: transparent; }
+    .cl-edit-modal::-webkit-scrollbar-thumb { background: rgba(127,168,217,0.4); border-radius: 3px; }
+    .cl-edit-modal::-webkit-scrollbar-thumb:hover { background: rgba(127,168,217,0.65); }
     .cl-edit-layout { display: flex; align-items: stretch; }
     .cl-edit-main { flex: 1; min-width: 0; }
     .cl-edit-section-title {
@@ -717,9 +739,14 @@
         </div>
 
         <div id="cl-hub-tab-content">
-          <!-- Slideshow slot — Hub tab only. -->
-          <div class="cl-slideshow-wrap">
-            <img id="cl-slideshow-img" src="/images/nopicture2.png" alt="" />
+          <!-- Slideshow slot — Hub tab only. Two stacked <img> layers
+               cross-fade between slides; arrows only shown (via JS) when
+               there's more than one image to move between. -->
+          <div class="cl-slideshow-wrap" id="cl-slideshow-wrap">
+            <img class="cl-slideshow-img cl-active" id="cl-slideshow-img-a" src="/images/nopicture2.png" alt="" />
+            <img class="cl-slideshow-img" id="cl-slideshow-img-b" src="" alt="" />
+            <button type="button" class="cl-slideshow-nav cl-slideshow-prev" id="cl-slideshow-prev" style="display:none;">‹</button>
+            <button type="button" class="cl-slideshow-nav cl-slideshow-next" id="cl-slideshow-next" style="display:none;">›</button>
           </div>
 
           <div class="cl-split-row">
@@ -1245,9 +1272,37 @@ function renderClub(club, members) {
 // ── Cover Image (Hub) — static image, or a slideshow that cycles randomly
 // among however many images the club has added. ───────────────────────────
 let clSlideshowTimer = null;
+let clSlideshowImages = [];
+let clSlideshowIdx = 0;
+let clSlideshowActiveLayer = 'a';
+function showSlideshowImage(url) {
+  const showingLayer = clSlideshowActiveLayer === 'a' ? 'b' : 'a';
+  const showingImg = document.getElementById(`cl-slideshow-img-${showingLayer}`);
+  const hidingImg = document.getElementById(`cl-slideshow-img-${clSlideshowActiveLayer}`);
+  showingImg.src = url;
+  showingImg.classList.add('cl-active');
+  hidingImg.classList.remove('cl-active');
+  clSlideshowActiveLayer = showingLayer;
+}
+function goToSlide(idx) {
+  if (!clSlideshowImages.length) return;
+  clSlideshowIdx = (idx + clSlideshowImages.length) % clSlideshowImages.length;
+  showSlideshowImage(clSlideshowImages[clSlideshowIdx]);
+}
+function startSlideshowAutoplay() {
+  if (clSlideshowTimer) clearInterval(clSlideshowTimer);
+  if (clSlideshowImages.length <= 1) return;
+  clSlideshowTimer = setInterval(() => goToSlide(clSlideshowIdx + 1), 8000);
+}
+document.getElementById('cl-slideshow-prev').addEventListener('click', () => { goToSlide(clSlideshowIdx - 1); startSlideshowAutoplay(); });
+document.getElementById('cl-slideshow-next').addEventListener('click', () => { goToSlide(clSlideshowIdx + 1); startSlideshowAutoplay(); });
+
 async function renderClubCover(club) {
-  const img = document.getElementById('cl-slideshow-img');
   if (clSlideshowTimer) { clearInterval(clSlideshowTimer); clSlideshowTimer = null; }
+  const prevBtn = document.getElementById('cl-slideshow-prev');
+  const nextBtn = document.getElementById('cl-slideshow-next');
+  clSlideshowImages = [];
+  clSlideshowIdx = 0;
 
   if (club.cover_mode === 'slideshow') {
     try {
@@ -1255,21 +1310,20 @@ async function renderClubCover(club) {
       const data = await res.json();
       const images = data.images || [];
       if (images.length) {
-        let idx = Math.floor(Math.random() * images.length);
-        img.src = images[idx].image_url;
-        if (images.length > 1) {
-          clSlideshowTimer = setInterval(() => {
-            let next;
-            do { next = Math.floor(Math.random() * images.length); } while (next === idx);
-            idx = next;
-            img.src = images[idx].image_url;
-          }, 8000);
-        }
+        clSlideshowImages = images.map(i => i.image_url);
+        clSlideshowIdx = Math.floor(Math.random() * clSlideshowImages.length);
+        showSlideshowImage(clSlideshowImages[clSlideshowIdx]);
+        const hasMultiple = clSlideshowImages.length > 1;
+        prevBtn.style.display = hasMultiple ? 'flex' : 'none';
+        nextBtn.style.display = hasMultiple ? 'flex' : 'none';
+        startSlideshowAutoplay();
         return;
       }
     } catch {}
   }
-  img.src = club.cover_image_url || '/images/nopicture2.png';
+  prevBtn.style.display = 'none';
+  nextBtn.style.display = 'none';
+  showSlideshowImage(club.cover_image_url || '/images/nopicture2.png');
 }
 
 // ── Right sidebar: user-written title/message (clamped, Show More),
