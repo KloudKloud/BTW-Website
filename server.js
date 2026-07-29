@@ -779,6 +779,24 @@ async function initDb() {
     );
   `).catch(e => console.error('club_rules migration:', e.message));
 
+  // "More Pages" — one-off lore/info pages a club can build at its own
+  // pace (a page for updates, a page per character, whatever). "Home" is
+  // NOT a row here — it's the built-in default page (the Hub/Social view)
+  // every club already has; this table is only the extra pages layered on
+  // top of it.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS club_pages (
+      id           SERIAL      PRIMARY KEY,
+      club_id      INTEGER     NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      slug         TEXT        NOT NULL,
+      title        TEXT        NOT NULL DEFAULT '',
+      content      TEXT        NOT NULL DEFAULT '',
+      sort_order   INTEGER     NOT NULL DEFAULT 0,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(club_id, slug)
+    );
+  `).catch(e => console.error('club_pages migration:', e.message));
+
   // Every club (new ones via POST /api/clubs, which never specifies a
   // banner_url, letting this column default kick in) starts with this
   // image as its banner rather than the plain fallback card.
@@ -5405,6 +5423,30 @@ app.get('/api/clubs/:slug/rules', async (req, res) => {
     [club.id]
   );
   res.json({ rules: rows });
+});
+
+// GET /api/clubs/:slug/pages — sidebar "More Pages" list (slug + title
+// only; Home isn't in here, it's the built-in default page).
+app.get('/api/clubs/:slug/pages', async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const { rows } = await pool.query(
+    'SELECT slug, title FROM club_pages WHERE club_id = $1 ORDER BY sort_order, created_at',
+    [club.id]
+  );
+  res.json({ pages: rows });
+});
+
+// GET /api/clubs/:slug/pages/:pageSlug — a single custom page's content.
+app.get('/api/clubs/:slug/pages/:pageSlug', async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const { rows: [page] } = await pool.query(
+    'SELECT slug, title, content FROM club_pages WHERE club_id = $1 AND slug = $2',
+    [club.id, req.params.pageSlug]
+  );
+  if (!page) return res.status(404).json({ error: 'Page not found.' });
+  res.json({ page });
 });
 
 // GET /api/clubs-feed — recent posts across every club, for the Social hub.

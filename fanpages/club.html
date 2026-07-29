@@ -142,14 +142,38 @@
        neither ever reaches under the fixed sidebar. */
     .cl-name {
       font-family: 'Cinzel', Georgia, serif; font-size: 2.6rem; font-weight: 700; color: #fff;
-      margin: 0 0 1.5rem; text-align: center; position: relative; padding-bottom: 1.1rem;
+      margin: 0 0 1.25rem; text-align: center;
     }
-    .cl-name::after {
-      content: ''; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
-      width: 100px; height: 3px; border-radius: 2px;
-      background: linear-gradient(90deg, transparent, #7fa8d9, transparent);
-      box-shadow: 0 0 12px rgba(127,168,217,0.75);
+
+    /* ── Hub / Social tabs — replaces the old underline flourish under the
+       title. ── */
+    .cl-home-tabs {
+      display: flex; justify-content: center; gap: 2rem;
+      border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 2rem;
     }
+    .cl-home-tab {
+      background: none; border: none; cursor: pointer; color: #999;
+      font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 700;
+      padding: 0.85rem 0.2rem; position: relative;
+    }
+    .cl-home-tab:hover { color: #ccc; }
+    .cl-home-tab.active { color: #f0f0f0; }
+    .cl-home-tab.active::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: -1px;
+      height: 3px; background: #7fa8d9; border-radius: 2px;
+      box-shadow: 0 0 10px rgba(127,168,217,0.7);
+    }
+
+    /* ── Social tab ── */
+    .cl-social-filter-bar { margin-bottom: 1.25rem; }
+    .cl-social-filter-btn {
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #ccc;
+      border-radius: 20px; padding: 0.45em 1em; font-size: 0.85rem; font-weight: 700;
+      cursor: pointer; font-family: inherit;
+    }
+    .cl-social-filter-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .cl-social-filter-caret { font-size: 0.7rem; }
+    .cl-social-posts-list { display: flex; flex-direction: column; }
 
     /* Fancy title instead of a boxed label — Cinzel serif, a touch bigger,
        with a short gradient underline flourish instead of a full-width
@@ -392,6 +416,17 @@
     .cl-side-rule-desc { display: none; font-size: 0.82rem; color: #999; line-height: 1.65; padding: 0 0 0.85rem 1.65em; }
     .cl-side-rule-item.cl-open .cl-side-rule-desc { display: block; }
 
+    /* ── More Pages — Home first (always), then whatever custom pages the
+       club has made, capped with a Show More like Moderators below. ── */
+    .cl-side-pages-list { display: flex; flex-direction: column; }
+    .cl-side-page-row {
+      display: block; padding: 0.5em 0.6em; margin: 0 -0.6em; border-radius: 8px;
+      color: #ccc; text-decoration: none; font-size: 0.87rem; font-weight: 600;
+      transition: background 0.15s, color 0.15s;
+    }
+    .cl-side-page-row:hover { background: rgba(255,255,255,0.06); color: #fff; }
+    .cl-side-page-row.cl-active { background: rgba(127,168,217,0.12); color: #7fa8d9; }
+
     /* ── Moderators — vertical stack of owners/admins. ── */
     .cl-side-mods-list { display: flex; flex-direction: column; gap: 0.65rem; }
     .cl-side-mod-row { display: flex; align-items: center; gap: 0.6rem; text-decoration: none; color: inherit; }
@@ -529,30 +564,55 @@
 
         <h1 class="cl-name" id="cl-name"></h1>
 
-        <div class="cl-split-row">
-          <div class="cl-split-left">
-            <div class="cl-about-wrap">
-              <p class="cl-about-label" id="cl-about-label"></p>
-              <p class="cl-about-body" id="cl-about-body"></p>
-            </div>
+        <div class="cl-home-tabs">
+          <button class="cl-home-tab active" id="cl-home-tab-hub" type="button" data-tab="hub">Hub</button>
+          <button class="cl-home-tab" id="cl-home-tab-social" type="button" data-tab="social">Social</button>
+        </div>
 
-            <div class="cl-admins-section">
-              <p class="cl-admins-title" id="cl-admins-title">Featured Cards</p>
-              <div class="cl-admins-grid" id="cl-admins-grid">
-                <p class="cl-admins-empty">Loading…</p>
+        <div id="cl-hub-tab-content">
+          <div class="cl-split-row">
+            <div class="cl-split-left">
+              <div class="cl-about-wrap">
+                <p class="cl-about-label" id="cl-about-label"></p>
+                <p class="cl-about-body" id="cl-about-body"></p>
+              </div>
+
+              <div class="cl-admins-section">
+                <p class="cl-admins-title" id="cl-admins-title">Featured Cards</p>
+                <div class="cl-admins-grid" id="cl-admins-grid">
+                  <p class="cl-admins-empty">Loading…</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- Same glass-card recipe as .cl-side, sized to match the left
-               column's combined height via align-items:stretch on the row. -->
-          <aside class="cl-admin-posts">
-            <p class="cl-admin-posts-title">Posts By Admin Team</p>
-            <div class="cl-admin-posts-list" id="cl-admin-posts-list">
-              <p class="cl-admin-posts-empty">Loading…</p>
-            </div>
-          </aside>
+            <!-- Same glass-card recipe as .cl-side, sized to match the left
+                 column's combined height via align-items:stretch on the row. -->
+            <aside class="cl-admin-posts">
+              <p class="cl-admin-posts-title" id="cl-admin-posts-title">Club News</p>
+              <div class="cl-admin-posts-list" id="cl-admin-posts-list">
+                <p class="cl-admin-posts-empty">Loading…</p>
+              </div>
+            </aside>
+          </div>
         </div>
+
+        <!-- Social — every post from every member, not just the admin
+             team, styled the same as the Club News rows. -->
+        <div id="cl-social-tab-content" hidden>
+          <div class="cl-social-filter-bar">
+            <button class="cl-social-filter-btn" type="button" title="Coming soon">Best <span class="cl-social-filter-caret">▾</span></button>
+          </div>
+          <div class="cl-social-posts-list" id="cl-social-posts-list">
+            <p class="cl-admin-posts-empty">Loading…</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- A custom "More Pages" page — swapped in over the home view, same
+           as post detail. Just a title + plain content for now, no editor. -->
+      <div class="cl-row cl-post-detail" id="cl-custom-page-view" hidden>
+        <h1 class="cl-post-detail-title" id="cl-custom-page-title"></h1>
+        <p class="cl-post-detail-body" id="cl-custom-page-body"></p>
       </div>
 
       <!-- Post detail view — swapped in over the home view (never shown
@@ -619,6 +679,11 @@
 
       <p class="cl-side-section-title">Rules</p>
       <div class="cl-side-rules-list" id="cl-side-rules-list"><p class="cl-side-empty">Loading…</p></div>
+
+      <hr class="cl-side-rule2" />
+
+      <p class="cl-side-section-title">More Pages</p>
+      <div class="cl-side-pages-list" id="cl-side-pages-list"><p class="cl-side-empty">Loading…</p></div>
 
       <hr class="cl-side-rule2" />
 
@@ -763,15 +828,22 @@ async function loadClub() {
     loadAdminCards();
     loadAdminPosts();
     loadClubRules();
+    loadClubPages();
+    renderFromUrl();
   } catch {
     document.getElementById('cl-notfound').style.display = 'block';
   }
 }
 
 let currentClub = null;
+let currentMembers = [];
 
 function renderClub(club, members) {
   currentClub = club;
+  // Preserve the last-known roster when called without one (e.g. the Edit
+  // Club save handler only has the updated club, not a fresh member list)
+  // instead of wiping the Moderators section back to empty.
+  if (members) currentMembers = members;
   document.title = `${club.name} ✦ Social ✦ Fanpages`;
 
   document.getElementById('cl-banner-img-slot').innerHTML = club.banner_url
@@ -786,6 +858,7 @@ function renderClub(club, members) {
   document.getElementById('cl-side-name').textContent = club.name;
   document.getElementById('cl-about-label').textContent = `Welcome To: ${club.name}`;
   document.getElementById('cl-about-body').textContent = club.description || 'This club hasn\'t written anything here yet.';
+  document.getElementById('cl-admin-posts-title').textContent = `${club.name} News`;
 
   const isAdminOrOwner = club.viewer_role === 'owner' || club.viewer_role === 'admin';
   document.getElementById('cl-side-admin-badge').style.display = isAdminOrOwner ? 'block' : 'none';
@@ -794,7 +867,7 @@ function renderClub(club, members) {
   }
 
   renderClubSidebarInfo(club);
-  renderClubMods(members);
+  renderClubMods(currentMembers);
 
   applyClubTheme(club.theme, club.theme_bg_url);
 }
@@ -829,6 +902,64 @@ document.getElementById('cl-side-showmore-btn').addEventListener('click', () => 
   const expanded = messageEl.classList.toggle('cl-expanded');
   btn.textContent = expanded ? 'Show less' : 'Show more';
 });
+
+// ── More Pages — Home is always first and isn't a real club_pages row
+// (it's the built-in Hub/Social view); clicking it just clears page/tab/
+// post entirely. Capped at 7 total (including Home) with a Show More. ────
+const CL_PAGES_CAP = 7;
+function pageLinkRow(label, pageSlug) {
+  const a = document.createElement('a');
+  a.className = 'cl-side-page-row';
+  a.dataset.pageSlug = pageSlug || '';
+  a.href = pageSlug ? buildClubUrl({ page: pageSlug, tab: null, post: null }) : buildClubUrl({ page: null, tab: null, post: null });
+  a.textContent = label;
+  a.addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo(pageSlug ? { page: pageSlug, tab: null, post: null } : { page: null, tab: null, post: null });
+  });
+  return a;
+}
+
+async function loadClubPages() {
+  const list = document.getElementById('cl-side-pages-list');
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages`);
+    const data = await res.json();
+    renderClubPagesList(data.pages || []);
+  } catch {
+    list.innerHTML = '<p class="cl-side-empty">Couldn\'t load pages right now.</p>';
+  }
+}
+
+function renderClubPagesList(pages) {
+  const list = document.getElementById('cl-side-pages-list');
+  list.innerHTML = '';
+  list.appendChild(pageLinkRow('Home', null));
+
+  const shown = pages.slice(0, CL_PAGES_CAP - 1);
+  const rest = pages.slice(CL_PAGES_CAP - 1);
+  shown.forEach(p => list.appendChild(pageLinkRow(p.title, p.slug)));
+
+  if (rest.length) {
+    const showAllBtn = document.createElement('button');
+    showAllBtn.className = 'cl-side-showmore-btn';
+    showAllBtn.type = 'button';
+    showAllBtn.textContent = `Show More Pages (${rest.length})`;
+    showAllBtn.addEventListener('click', () => {
+      rest.forEach(p => list.insertBefore(pageLinkRow(p.title, p.slug), showAllBtn));
+      showAllBtn.remove();
+      highlightSidebarPages(new URLSearchParams(location.search).get('page'));
+    });
+    list.appendChild(showAllBtn);
+  }
+  highlightSidebarPages(new URLSearchParams(location.search).get('page'));
+}
+
+function highlightSidebarPages(activePageSlug) {
+  document.querySelectorAll('.cl-side-page-row').forEach(row => {
+    row.classList.toggle('cl-active', row.dataset.pageSlug === (activePageSlug || ''));
+  });
+}
 
 // ── Moderators — vertical stack of owners/admins, off the same member
 // roster already fetched alongside the club. ───────────────────────────────
@@ -960,7 +1091,7 @@ async function loadAdminPosts() {
     const data = await res.json();
     const posts = data.posts || [];
     if (!posts.length) {
-      list.innerHTML = '<p class="cl-admin-posts-empty">No posts from the admin team yet — updates, polls, and club news will show up here.</p>';
+      list.innerHTML = '<p class="cl-admin-posts-empty">No news from the team yet — updates, polls, and club news will show up here.</p>';
       return;
     }
     list.innerHTML = '';
@@ -970,12 +1101,34 @@ async function loadAdminPosts() {
   }
 }
 
+let socialPostsCache = null;
+async function loadSocialPosts() {
+  const list = document.getElementById('cl-social-posts-list');
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts`);
+    const data = await res.json();
+    socialPostsCache = data.posts || [];
+    renderSocialPosts();
+  } catch {
+    list.innerHTML = '<p class="cl-admin-posts-empty">Couldn\'t load posts right now.</p>';
+  }
+}
+function renderSocialPosts() {
+  const list = document.getElementById('cl-social-posts-list');
+  if (!socialPostsCache || !socialPostsCache.length) {
+    list.innerHTML = '<p class="cl-admin-posts-empty">No posts yet — be the first to share something with the club!</p>';
+    return;
+  }
+  list.innerHTML = '';
+  socialPostsCache.forEach(p => list.appendChild(adminPostRow(p)));
+}
+
 function adminPostRow(post) {
   const a = post.author;
   const row = document.createElement('a');
   row.className = 'cl-admin-post';
-  row.href = `/fanpages/club?slug=${encodeURIComponent(slug)}&post=${post.id}`;
-  row.addEventListener('click', (e) => { e.preventDefault(); openPostDetail(post.id); });
+  row.href = buildClubUrl({ post: post.id });
+  row.addEventListener('click', (e) => { e.preventDefault(); navigateTo({ post: post.id }); });
 
   // No dedicated title field is required at posting time — fall back to
   // the post body itself (as the title line) when one wasn't given, same
@@ -996,31 +1149,73 @@ function adminPostRow(post) {
   return row;
 }
 
-// ── Post detail view — clicking a post swaps #cl-home-view for
-// #cl-post-detail-view (never both shown at once) instead of navigating to
-// a whole new page, with real back/forward support via pushState. This is
-// the framework every post on the site will eventually use, not just the
-// admin feed. ───────────────────────────────────────────────────────────
-async function openPostDetail(postId, skipPushState) {
+// ── Routing — one shared function (navigateTo) drives every navigation
+// action (posts, Hub/Social tabs, custom "More Pages" pages, Home). It
+// merges the requested params into the current URL, pushes state, and
+// re-renders from the resulting URL — so popstate and the initial page
+// load can both just call renderFromUrl() and land in the right place. ───
+function buildClubUrl(overrides) {
+  const params = new URLSearchParams(location.search);
+  Object.entries(overrides).forEach(([k, v]) => {
+    if (v === null || v === undefined) params.delete(k);
+    else params.set(k, v);
+  });
+  return `/fanpages/club?${params.toString()}`;
+}
+function navigateTo(overrides) {
+  history.pushState({}, '', buildClubUrl(overrides));
+  renderFromUrl();
+}
+
+function renderFromUrl() {
+  const params = new URLSearchParams(location.search);
+  const postId = params.get('post');
+  const pageSlug = params.get('page');
+  const tab = params.get('tab') || 'hub';
+
+  document.getElementById('cl-home-view').hidden = true;
+  document.getElementById('cl-custom-page-view').hidden = true;
+  document.getElementById('cl-post-detail-view').hidden = true;
+  document.getElementById('cl-body-row').classList.remove('cl-detail-mode');
+
+  if (postId) {
+    loadAndShowPost(postId);
+  } else if (pageSlug) {
+    document.getElementById('cl-custom-page-view').hidden = false;
+    loadCustomPage(pageSlug);
+  } else {
+    document.getElementById('cl-home-view').hidden = false;
+    setHomeTab(tab);
+  }
+  highlightSidebarPages(pageSlug);
+}
+window.addEventListener('popstate', renderFromUrl);
+
+function setHomeTab(tab) {
+  const isSocial = tab === 'social';
+  document.getElementById('cl-home-tab-hub').classList.toggle('active', !isSocial);
+  document.getElementById('cl-home-tab-social').classList.toggle('active', isSocial);
+  document.getElementById('cl-hub-tab-content').hidden = isSocial;
+  document.getElementById('cl-social-tab-content').hidden = !isSocial;
+  if (isSocial && !socialPostsCache) loadSocialPosts();
+}
+document.getElementById('cl-home-tab-hub').addEventListener('click', () => navigateTo({ tab: null, page: null, post: null }));
+document.getElementById('cl-home-tab-social').addEventListener('click', () => navigateTo({ tab: 'social', page: null, post: null }));
+
+// ── Post detail — swapped in over the home/custom-page view, narrower/
+// centered like a normal single-item page. This is the framework every
+// post on the site will eventually use, not just this club's feeds. ─────
+async function loadAndShowPost(postId) {
   try {
     const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${postId}`);
     if (!res.ok) return;
     const data = await res.json();
     renderPostDetail(data.post);
-    document.getElementById('cl-home-view').hidden = true;
     document.getElementById('cl-post-detail-view').hidden = false;
     document.getElementById('cl-body-row').classList.add('cl-detail-mode');
-    if (!skipPushState) history.pushState({ post: postId }, '', `/fanpages/club?slug=${encodeURIComponent(slug)}&post=${postId}`);
     window.scrollTo(0, 0);
     ccInitSection('club_post', postId);
   } catch {}
-}
-
-function closePostDetail(skipPushState) {
-  document.getElementById('cl-post-detail-view').hidden = true;
-  document.getElementById('cl-home-view').hidden = false;
-  document.getElementById('cl-body-row').classList.remove('cl-detail-mode');
-  if (!skipPushState) history.pushState({}, '', `/fanpages/club?slug=${encodeURIComponent(slug)}`);
 }
 
 function renderPostDetail(post) {
@@ -1045,13 +1240,25 @@ function renderPostDetail(post) {
   }
   document.getElementById('cl-post-detail-body').textContent = post.body;
 }
+document.getElementById('cl-post-back-btn').addEventListener('click', () => navigateTo({ post: null }));
 
-document.getElementById('cl-post-back-btn').addEventListener('click', () => closePostDetail());
-window.addEventListener('popstate', () => {
-  const postId = new URLSearchParams(location.search).get('post');
-  if (postId) openPostDetail(postId, true);
-  else closePostDetail(true);
-});
+// ── Custom "More Pages" pages ──────────────────────────────────────────
+async function loadCustomPage(pageSlug) {
+  const titleEl = document.getElementById('cl-custom-page-title');
+  const bodyEl = document.getElementById('cl-custom-page-body');
+  titleEl.textContent = 'Loading…';
+  bodyEl.textContent = '';
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(pageSlug)}`);
+    if (!res.ok) { titleEl.textContent = 'Page not found'; return; }
+    const data = await res.json();
+    document.title = `${data.page.title} ✦ ${currentClub ? currentClub.name : 'Club'} ✦ Fanpages`;
+    titleEl.textContent = data.page.title;
+    bodyEl.textContent = data.page.content;
+  } catch {
+    titleEl.textContent = 'Couldn\'t load this page right now.';
+  }
+}
 
 // ── Comments (shared content-comments system — same pattern used on
 // character/gallery pages) ────────────────────────────────────────────────
@@ -1269,10 +1476,7 @@ document.getElementById('cl-edit-save').addEventListener('click', async () => {
 if (!slug) {
   document.getElementById('cl-notfound').style.display = 'block';
 } else {
-  loadClub().then(() => {
-    const postId = new URLSearchParams(location.search).get('post');
-    if (postId) openPostDetail(postId, true);
-  });
+  loadClub();
 }
 </script>
 
