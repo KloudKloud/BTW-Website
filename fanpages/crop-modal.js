@@ -100,7 +100,40 @@
         background: false, responsive: true,
         cropBoxResizable: opts.cropBoxResizable !== false,
         cropBoxMovable: true,
-        ready() { if (opts.onReady) opts.onReady(cropper); },
+        ready() {
+          // Default Cropper init "contains" the whole image inside the
+          // viewport first, then fits the crop box inside THAT — so when the
+          // crop box's aspect ratio is far from the source image's own
+          // ratio (e.g. a wide 5:2 cover box against a squarer photo), the
+          // box starts out tiny relative to the visible image, which reads
+          // as "hyper zoomed in / stuck picking a small rectangle". Instead,
+          // zoom the image to a "cover" fit (fills the viewport, no empty
+          // bars, no stretching — scale only) and size the crop box to fill
+          // as much of that viewport as the target aspect ratio allows, so
+          // it starts maximally using the image. The user can still zoom or
+          // reposition freely afterward.
+          const container = cropper.getContainerData();
+          const imgData = cropper.getImageData();
+          if (container.width && container.height && imgData.naturalWidth && imgData.naturalHeight) {
+            const coverScale = Math.max(container.width / imgData.naturalWidth, container.height / imgData.naturalHeight);
+            const canvasW = imgData.naturalWidth * coverScale;
+            const canvasH = imgData.naturalHeight * coverScale;
+            cropper.setCanvasData({
+              width: canvasW, height: canvasH,
+              left: (container.width - canvasW) / 2,
+              top: (container.height - canvasH) / 2,
+            });
+            const ratio = opts.aspectRatio || (container.width / container.height);
+            let boxW = container.width, boxH = boxW / ratio;
+            if (boxH > container.height) { boxH = container.height; boxW = boxH * ratio; }
+            cropper.setCropBoxData({
+              width: boxW, height: boxH,
+              left: (container.width - boxW) / 2,
+              top: (container.height - boxH) / 2,
+            });
+          }
+          if (opts.onReady) opts.onReady(cropper);
+        },
       });
     };
     img.src = opts.imageSrc;
