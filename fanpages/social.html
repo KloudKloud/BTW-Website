@@ -95,7 +95,8 @@
     .soc-sidebar-club-link:hover { background: rgba(255,255,255,0.06); }
     .soc-sidebar-club-icon, .soc-sidebar-club-icon-fallback { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
     .soc-sidebar-club-icon-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.82rem; }
-    .soc-sidebar-club-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .soc-sidebar-club-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .soc-sidebar-club-owner-rose { flex-shrink: 0; font-size: 0.85rem; }
     .soc-sidebar-empty, .soc-sidebar-note { font-size: 0.9rem; color: #888; padding: 0.4rem 0.5rem; line-height: 1.5; }
 
     /* ── Main content ──
@@ -167,8 +168,15 @@
         <button class="soc-nav-create-btn" id="soc-create-club-btn" type="button"><span>+</span> Start a Club</button>
       </nav>
 
+      <div id="soc-sidebar-created-clubs-section" style="display:none;">
+        <hr class="soc-sidebar-rule" />
+        <p class="soc-sidebar-label">Created Clubs</p>
+        <hr class="soc-sidebar-rule" />
+        <div class="soc-sidebar-clubs" id="soc-sidebar-created-clubs"></div>
+      </div>
+
       <hr class="soc-sidebar-rule" />
-      <p class="soc-sidebar-label">Clubs</p>
+      <p class="soc-sidebar-label">Your Clubs</p>
       <hr class="soc-sidebar-rule" />
       <div class="soc-sidebar-clubs" id="soc-sidebar-clubs"><p class="soc-sidebar-empty">Loading…</p></div>
     </div>
@@ -193,9 +201,16 @@
       <label for="soc-create-name">Club Name</label>
       <input class="mod-input" id="soc-create-name" maxlength="60" placeholder="e.g. Cafe Plaisir" />
     </div>
-    <div class="mod-field">
-      <label for="soc-create-desc">Description <span style="font-weight:400;color:#888;">(optional)</span></label>
-      <textarea class="mod-textarea" id="soc-create-desc" rows="4" maxlength="1000" placeholder="What's this club about?"></textarea>
+    <div class="mod-field" style="margin-bottom:0;">
+      <label>NSFW?</label>
+      <div class="nsfw-toggle-row">
+        <label class="nsfw-toggle-switch">
+          <input type="checkbox" id="soc-create-nsfw-toggle" />
+          <span class="nsfw-toggle-slider"></span>
+        </label>
+        <span class="nsfw-toggle-label nsfw-toggle-label--sfw" id="soc-create-nsfw-label">SFW</span>
+      </div>
+      <p class="nsfw-toggle-note">If this club features adult discussions, posts, or media, please label it as NSFW :3</p>
     </div>
     <p class="mod-panel-msg" id="soc-create-msg"></p>
     <div class="char-editor-actions">
@@ -241,50 +256,72 @@ function clubIconHtml(club, sizeClass) {
   return `<span class="${sizeClass}-fallback">${letter}</span>`;
 }
 
-// ── Sidebar: My Clubs list ───────────────────────────────────────────────
+// ── Sidebar: Created Clubs (owned) + Your Clubs (every membership) ───────
 async function loadSidebarClubs() {
   const wrap = document.getElementById('soc-sidebar-clubs');
+  const createdSection = document.getElementById('soc-sidebar-created-clubs-section');
+  const createdWrap = document.getElementById('soc-sidebar-created-clubs');
   if (!token) {
     wrap.innerHTML = '<p class="soc-sidebar-note">Log in to see your clubs~</p>';
+    createdSection.style.display = 'none';
     return;
   }
   try {
     const res = await fetch(`${API}/clubs?mine=1&limit=50`, { headers: authHeaders() });
     const data = await res.json();
     const clubs = data.clubs || [];
+
+    const owned = clubs.filter(c => c.viewer_role === 'owner');
+    if (owned.length) {
+      createdSection.style.display = '';
+      createdWrap.innerHTML = '';
+      owned.forEach(c => createdWrap.appendChild(sidebarClubLink(c, true)));
+    } else {
+      createdSection.style.display = 'none';
+    }
+
     if (!clubs.length) {
       wrap.innerHTML = '<p class="soc-sidebar-note">You haven\'t joined any clubs yet.</p>';
       return;
     }
     wrap.innerHTML = '';
-    clubs.forEach(c => {
-      const a = document.createElement('a');
-      a.className = 'soc-sidebar-club-link';
-      a.href = `/fanpages/club?slug=${encodeURIComponent(c.slug)}`;
-      a.innerHTML = `${clubIconHtml(c, 'soc-sidebar-club-icon')}<span class="soc-sidebar-club-name">${escapeHtml(c.name)}</span>`;
-      wrap.appendChild(a);
-    });
+    clubs.forEach(c => wrap.appendChild(sidebarClubLink(c, false)));
   } catch {
     wrap.innerHTML = '<p class="soc-sidebar-note">Couldn\'t load your clubs.</p>';
+    createdSection.style.display = 'none';
   }
+}
+function sidebarClubLink(c, showOwnerRose) {
+  const a = document.createElement('a');
+  a.className = 'soc-sidebar-club-link';
+  a.href = `/fanpages/club?slug=${encodeURIComponent(c.slug)}`;
+  a.innerHTML = `${clubIconHtml(c, 'soc-sidebar-club-icon')}<span class="soc-sidebar-club-name">${escapeHtml(c.name)}</span>${showOwnerRose ? '<span class="soc-sidebar-club-owner-rose" title="You own this club">🌹</span>' : ''}`;
+  return a;
 }
 
 // ── Create Club modal ────────────────────────────────────────────────────
 document.getElementById('soc-create-club-btn').addEventListener('click', () => {
   if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent('/fanpages/social')}`; return; }
   document.getElementById('soc-create-name').value = '';
-  document.getElementById('soc-create-desc').value = '';
+  document.getElementById('soc-create-nsfw-toggle').checked = false;
+  document.getElementById('soc-create-nsfw-label').textContent = 'SFW';
+  document.getElementById('soc-create-nsfw-label').classList.add('nsfw-toggle-label--sfw');
   document.getElementById('soc-create-msg').textContent = '';
   document.getElementById('soc-create-overlay').hidden = false;
 });
 document.getElementById('soc-create-cancel').addEventListener('click', () => {
   document.getElementById('soc-create-overlay').hidden = true;
 });
+document.getElementById('soc-create-nsfw-toggle').addEventListener('change', function () {
+  const label = document.getElementById('soc-create-nsfw-label');
+  label.textContent = this.checked ? 'NSFW' : 'SFW';
+  label.classList.toggle('nsfw-toggle-label--sfw', !this.checked);
+});
 document.getElementById('soc-create-save').addEventListener('click', async () => {
   const msgEl = document.getElementById('soc-create-msg');
   const name = document.getElementById('soc-create-name').value.trim();
   if (!name) { msgEl.className = 'mod-panel-msg mod-panel-msg--error'; msgEl.textContent = 'A club name is required.'; return; }
-  const description = document.getElementById('soc-create-desc').value.trim();
+  const isNsfw = document.getElementById('soc-create-nsfw-toggle').checked;
 
   const btn = document.getElementById('soc-create-save');
   btn.disabled = true;
@@ -293,7 +330,7 @@ document.getElementById('soc-create-save').addEventListener('click', async () =>
     const res = await fetch(`${API}/clubs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ name, description }),
+      body: JSON.stringify({ name, is_nsfw: isNsfw }),
     });
     const data = await res.json();
     if (!res.ok) {

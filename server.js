@@ -5297,10 +5297,11 @@ app.get('/api/clubs', async (req, res) => {
   res.json({ clubs: rows.map(r => clubPublicShape(r, r.viewer_role)) });
 });
 
-// POST /api/clubs — create a club; creator becomes owner.
+// POST /api/clubs — create a club; creator becomes owner. Description is no
+// longer collected at creation (added afterward via the club editor).
 app.post('/api/clubs', requireAuth, async (req, res) => {
   const name = String(req.body.name || '').trim().slice(0, 60);
-  const description = String(req.body.description || '').trim().slice(0, 1000);
+  const isNsfw = req.body.is_nsfw === true || req.body.is_nsfw === 'true';
   if (!name) return res.status(400).json({ error: 'A club name is required.' });
 
   const slug = await uniqueClubSlug(name);
@@ -5308,8 +5309,8 @@ app.post('/api/clubs', requireAuth, async (req, res) => {
   try {
     await client.query('BEGIN');
     const { rows: [club] } = await client.query(
-      `INSERT INTO clubs (slug, name, description, owner_user_id) VALUES ($1, $2, $3, $4) RETURNING *`,
-      [slug, name, description, req.user.id]
+      `INSERT INTO clubs (slug, name, owner_user_id, is_nsfw) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [slug, name, req.user.id, isNsfw]
     );
     await client.query(
       `INSERT INTO club_members (club_id, user_id, role) VALUES ($1, $2, 'owner')`,
@@ -5402,6 +5403,31 @@ app.put('/api/clubs/:slug/sidebar-splash', requireAuth, async (req, res) => {
 
 // Club page theme — same default (plain dark) / custom-blurred-background
 // pattern as a profile or story page. Owner/admin only.
+// PUT /api/clubs/:slug/icon — the club's pfp, cropped 1:1 client-side same
+// as everywhere else that uses openCropModal.
+app.put('/api/clubs/:slug/icon', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const iconUrl = `/images/moderators/${req.file.filename}`;
+  if (ctx.club.icon_url.startsWith('/images/moderators/')) {
+    const oldPath = path.join('/var/www/btw', ctx.club.icon_url);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+  await pool.query('UPDATE clubs SET icon_url = $1 WHERE id = $2', [iconUrl, ctx.club.id]);
+  res.json({ icon_url: iconUrl });
+});
+
+// PUT /api/clubs/:slug/nsfw — { is_nsfw: true|false }, settable either way
+// after creation (the "Start a Club" modal only sets the initial value).
+app.put('/api/clubs/:slug/nsfw', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const isNsfw = req.body.is_nsfw === true || req.body.is_nsfw === 'true';
+  await pool.query('UPDATE clubs SET is_nsfw = $1 WHERE id = $2', [isNsfw, ctx.club.id]);
+  res.json({ is_nsfw: isNsfw });
+});
+
 app.put('/api/clubs/:slug/theme', requireAuth, async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT * FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
