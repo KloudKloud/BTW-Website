@@ -433,28 +433,29 @@
     }
     .cl-page-gallery-tile:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.25); }
     .cl-page-gallery-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .cl-page-gallery-tile-title {
-      position: absolute; left: 0; right: 0; bottom: 0; padding: 0.55rem 0.6rem 0.4rem;
-      background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
-      font-size: 0.8rem; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    .cl-page-gallery-tile-like {
+      position: absolute; left: 0.5rem; bottom: 0.5rem; z-index: 2;
+      display: flex; align-items: center; gap: 0.3rem;
+      background: rgba(0,0,0,0.6); border: none; border-radius: 12px; padding: 0.25em 0.6em;
+      color: #fff; font-size: 0.78rem; font-weight: 700; cursor: pointer; transition: background 0.15s;
     }
-    .cl-page-gallery-detail-modal {
-      width: 100%; max-width: 780px; max-height: 88vh; overflow-y: auto; position: relative;
-      background: #141018; border: 1px solid rgba(127,168,217,0.25); border-radius: 18px;
-      box-shadow: 0 30px 90px rgba(0,0,0,0.6);
+    .cl-page-gallery-tile-like:hover { background: rgba(0,0,0,0.85); }
+
+    /* Gallery Page detail view — the heart sits next to the title; prev/
+       next arrows are a static row under the description (not overlaid on
+       the image), per explicit request for "arrows at the bottom". */
+    .cl-gallery-detail-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+    .cl-gallery-like-btn {
+      display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0; margin-top: 0.3rem;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 20px;
+      padding: 0.5rem 1rem; color: #f0f0f0; font-size: 0.95rem; font-weight: 700; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
     }
-    .cl-page-gallery-detail-close {
-      position: absolute; top: 0.85rem; right: 0.85rem; z-index: 2;
-      width: 34px; height: 34px; border-radius: 50%; background: rgba(0,0,0,0.6); border: none;
-      color: #fff; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
-    }
-    .cl-page-gallery-detail-close:hover { background: rgba(0,0,0,0.85); }
-    .cl-page-gallery-detail-img { width: 100%; max-height: 60vh; object-fit: contain; background: #0a0a0a; display: block; }
-    .cl-page-gallery-detail-body { padding: 1.5rem 1.75rem 1.75rem; }
-    .cl-page-gallery-detail-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.3rem; color: #f0f0f0; margin: 0 0 0.75rem; }
-    .cl-page-gallery-detail-desc { color: #ccc; font-size: 0.95rem; line-height: 1.75; white-space: pre-wrap; margin: 0; }
-    .cl-page-gallery-detail-desc:empty { display: none; }
-    .cl-page-gallery-detail-desc a { color: #7fa8d9; }
+    .cl-gallery-like-btn:hover { border-color: rgba(217,122,114,0.5); }
+    .cl-gallery-like-btn.liked { border-color: #d97a72; color: #f5b3ac; background: rgba(217,122,114,0.12); }
+    .cl-gallery-detail-nav { display: flex; justify-content: center; gap: 1rem; margin: 0.5rem 0 2.5rem; }
+    .cl-gallery-detail-prev, .cl-gallery-detail-next { position: static; transform: none; display: flex; }
+    .cl-gallery-detail-prev:disabled, .cl-gallery-detail-next:disabled { opacity: 0.3; cursor: default; }
 
     /* Promotion Page template — vertical card list ("much like posts") and
        the chapter-reading-style detail view. */
@@ -694,6 +695,8 @@
     }
     .cl-edit-pages-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
     .cl-edit-pages-item.active { background: rgba(240,192,96,0.12); color: #f0c060; font-weight: 700; }
+    .cl-edit-pages-item[draggable="true"] { cursor: grab; }
+    .cl-edit-pages-item.dragging { opacity: 0.35; }
     .cl-edit-pages-item-icon { margin-right: 0.4rem; }
     /* General Page template's up-to-three text sections — draggable to
        reorder, same "grip handle + drop target" recipe as the slideshow/
@@ -712,6 +715,19 @@
       padding: 0.35rem 0.7rem; border-radius: 14px; margin-top: 0.5rem;
     }
     .cl-page-text-field-remove:hover { background: rgba(217,122,114,0.14); }
+
+    /* Gallery Page template — the un-cropped source image, shown above the
+       square focal-point preview so you can see exactly what you're
+       picking from. */
+    .cl-gallery-item-full-preview {
+      display: block; width: 100%; max-height: 320px; object-fit: contain;
+      background: #0a0a0a; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
+    }
+    /* Dims + disables the overall editor's Cancel/Save row while an
+       inline sub-form (gallery item, etc.) sits on top of it — otherwise
+       those buttons stay clickable "through" the form since there's no
+       real modal-in-modal layering. */
+    .cl-edit-main-actions-locked { filter: blur(2px); opacity: 0.4; pointer-events: none; }
 
     /* Gallery Page template — Upload/Reorder tab grids */
     .cl-gallery-editor-grid {
@@ -822,6 +838,7 @@
 
     /* Featured Cards list (in the editor) */
     .cl-edit-cards-list:not(:empty) { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1rem; }
+    #cl-promo-cards-list:not(:empty) { margin-bottom: 1.1rem; }
     .cl-edit-card-row {
       display: flex; align-items: center; gap: 0.85rem; padding: 0.7rem 0.85rem;
       background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
@@ -1017,17 +1034,31 @@
         <a class="cl-promo-detail-link-btn" id="cl-promo-detail-link-btn" href="#" target="_blank" rel="noopener noreferrer"></a>
       </div>
 
-      <!-- Gallery Page image detail — a lightweight overlay (not a routed
-           view) since these aren't independently linkable posts. -->
-      <div class="char-editor-overlay" id="cl-gallery-view-detail-overlay" hidden>
-        <div class="cl-page-gallery-detail-modal">
-          <button type="button" class="cl-page-gallery-detail-close" id="cl-gallery-view-detail-close">✕</button>
-          <img class="cl-page-gallery-detail-img" id="cl-gallery-view-detail-img" alt="" />
-          <div class="cl-page-gallery-detail-body">
-            <h2 class="cl-page-gallery-detail-title" id="cl-gallery-view-detail-title"></h2>
-            <p class="cl-page-gallery-detail-desc" id="cl-gallery-view-detail-desc"></p>
-          </div>
+      <!-- Gallery Page image detail — a full view swap (not a routed URL,
+           same idea as the Promotion card detail), matching the Fanpage
+           gallery's own image-detail page: full image, title, description,
+           a heart/like, prev/next arrows to the neighboring images, and a
+           comment section (the same shared comments block used by post
+           detail, relocated in here while open). -->
+      <div class="cl-row cl-post-detail" id="cl-gallery-detail-view" hidden>
+        <button class="cl-post-back-btn" id="cl-gallery-detail-back-btn" type="button">&larr; Back</button>
+        <div class="cl-post-detail-image-wrap" id="cl-gallery-detail-image-wrap">
+          <img id="cl-gallery-detail-img" alt="" />
         </div>
+        <div class="cl-gallery-detail-header-row">
+          <h1 class="cl-post-detail-title" id="cl-gallery-detail-title"></h1>
+          <button type="button" class="cl-gallery-like-btn" id="cl-gallery-detail-like-btn">
+            <span id="cl-gallery-detail-like-icon">🤍</span> <span id="cl-gallery-detail-like-count">0</span>
+          </button>
+        </div>
+        <p class="cl-post-detail-body" id="cl-gallery-detail-desc"></p>
+
+        <div class="cl-gallery-detail-nav">
+          <button type="button" class="cl-post-detail-image-nav cl-gallery-detail-prev" id="cl-gallery-detail-prev" title="Previous image">‹</button>
+          <button type="button" class="cl-post-detail-image-nav cl-gallery-detail-next" id="cl-gallery-detail-next" title="Next image">›</button>
+        </div>
+
+        <div id="cl-gallery-detail-comments-slot"></div>
       </div>
 
       <!-- Post detail view — swapped in over the home view (never shown
@@ -1055,13 +1086,15 @@
 
         <p class="cl-post-detail-body" id="cl-post-detail-body"></p>
 
-        <div class="cc-section" id="cl-post-detail-comments">
-          <p class="cc-title">💬 Comments</p>
-          <div class="cc-compose" id="cc-compose" style="display:none;">
-            <textarea id="cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
-            <button class="cc-compose-btn" id="cc-compose-btn" type="button">Post</button>
+        <div id="cl-post-detail-comments-slot">
+          <div class="cc-section" id="cl-post-detail-comments">
+            <p class="cc-title">💬 Comments</p>
+            <div class="cc-compose" id="cc-compose" style="display:none;">
+              <textarea id="cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
+              <button class="cc-compose-btn" id="cc-compose-btn" type="button">Post</button>
+            </div>
+            <div class="cc-list" id="cc-list"><p class="cc-empty">Loading…</p></div>
           </div>
-          <div class="cc-list" id="cc-list"><p class="cc-empty">Loading…</p></div>
         </div>
       </div>
     </div>
@@ -1216,7 +1249,6 @@
             <label for="cl-edit-page-title-input">Page Title</label>
             <input class="mod-input" id="cl-edit-page-title-input" maxlength="60" />
           </div>
-          <p class="cl-edit-hint-block" id="cl-edit-page-type-note"></p>
 
           <div id="cl-edit-page-general-fields" hidden>
             <h3 class="cl-edit-section-title">Cover Image</h3>
@@ -1277,6 +1309,10 @@
 
             <div class="cl-edit-card-form" id="cl-gallery-item-form" hidden>
               <div class="mod-field">
+                <label>Full Image</label>
+                <img class="cl-gallery-item-full-preview" id="cl-gallery-item-full-preview" alt="" />
+              </div>
+              <div class="mod-field">
                 <label>Preview</label>
                 <p class="char-editor-facts-hint" style="margin-top:0;">Gallery previews are square and display as a "cover". Drag to pick the best part of your art to show off! Your full-size art is never cropped, only the tile preview.</p>
                 <div class="gallery-preview-crop-wrap" id="cl-gallery-item-preview-wrap" style="aspect-ratio: 1 / 1; width: 220px;">
@@ -1304,10 +1340,22 @@
 
           <!-- ── Promotion Page template ── -->
           <div id="cl-edit-page-promotion-fields" hidden>
-            <div class="cl-edit-cards-list" id="cl-promo-cards-list"></div>
-            <button class="gallery-linkto-add-tile" id="cl-promo-card-create-btn" type="button">
-              <span class="gallery-linkto-add-tile-icon">➕</span> Card
-            </button>
+            <div class="cl-edit-mode-toggle">
+              <button class="cl-edit-mode-btn active" id="cl-promo-tab-upload" type="button">Upload</button>
+              <button class="cl-edit-mode-btn" id="cl-promo-tab-reorder" type="button">Reorder</button>
+            </div>
+
+            <div id="cl-promo-upload-tab">
+              <div class="cl-edit-cards-list" id="cl-promo-cards-list"></div>
+              <button class="gallery-linkto-add-tile" id="cl-promo-card-create-btn" type="button">
+                <span class="gallery-linkto-add-tile-icon">➕</span> Card
+              </button>
+            </div>
+
+            <div id="cl-promo-reorder-tab" hidden>
+              <p class="cl-edit-hint">Drag cards around to choose the order they appear in.</p>
+              <div class="cl-edit-cards-list" id="cl-promo-reorder-list"></div>
+            </div>
 
             <div class="cl-edit-card-form" id="cl-promo-card-form" hidden>
               <div class="cl-edit-card-form-row">
@@ -1321,10 +1369,12 @@
                 <div style="flex:1; min-width:0;">
                   <div class="mod-field">
                     <label for="cl-promo-card-title">Title</label>
+                    <p class="char-editor-facts-hint" style="margin-top:0;">Give your card a title! e.g. "The Great Conquest: October's Journey, Chapter 1"</p>
                     <input class="mod-input" id="cl-promo-card-title" maxlength="80" />
                   </div>
                   <div class="mod-field" style="margin-bottom:0;">
                     <label for="cl-promo-card-desc">Description</label>
+                    <p class="char-editor-facts-hint" style="margin-top:0;">(Optional): Describe a bit about this card. Is it a book chapter, link to a social account, etc.</p>
                     <textarea class="mod-textarea" id="cl-promo-card-desc" rows="3" maxlength="1000"></textarea>
                   </div>
                 </div>
@@ -1333,10 +1383,12 @@
                 <p class="cl-edit-section-title" style="font-size:1rem; margin-bottom:0.85rem;">Link</p>
                 <div class="mod-field">
                   <label for="cl-promo-card-link-title">Link Title</label>
+                  <p class="char-editor-facts-hint" style="margin-top:0;">Where is the link going? e.g. Twitter, Wattpad, Furaffinity, AO3, Your Website...</p>
                   <input class="mod-input" id="cl-promo-card-link-title" maxlength="60" placeholder="e.g. Furaffinity" />
                 </div>
                 <div class="mod-field" style="margin-bottom:0;">
                   <label for="cl-promo-card-link-url">URL</label>
+                  <p class="char-editor-facts-hint" style="margin-top:0;">Provide a URL for the above Link Title</p>
                   <input class="mod-input" id="cl-promo-card-link-url" maxlength="500" placeholder="e.g. www.furaffinity.net/user/..." />
                 </div>
               </div>
@@ -2300,6 +2352,8 @@ function renderFromUrl() {
   document.getElementById('cl-home-view').hidden = true;
   document.getElementById('cl-custom-page-view').hidden = true;
   document.getElementById('cl-post-detail-view').hidden = true;
+  document.getElementById('cl-gallery-detail-view').hidden = true;
+  document.getElementById('cl-promo-detail-view').hidden = true;
   document.getElementById('cl-body-row').classList.remove('cl-detail-mode');
 
   if (postId) {
@@ -2338,8 +2392,16 @@ async function loadAndShowPost(postId) {
     document.getElementById('cl-post-detail-view').hidden = false;
     document.getElementById('cl-body-row').classList.add('cl-detail-mode');
     window.scrollTo(0, 0);
+    ccMoveTo('cl-post-detail-comments-slot');
     ccInitSection('club_post', postId);
   } catch {}
+}
+// The comments block (#cl-post-detail-comments) is shared between every
+// detail view that has one (post, gallery image) — only one is ever
+// visible at a time, so it's simpler to relocate the one real element
+// than duplicate cc-* ids per view.
+function ccMoveTo(slotId) {
+  document.getElementById(slotId).appendChild(document.getElementById('cl-post-detail-comments'));
 }
 
 function renderPostDetail(post) {
@@ -2490,15 +2552,16 @@ async function loadCustomPage(pageSlug) {
     if (page.type === 'gallery') {
       let images = [];
       try {
-        const galRes = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(pageSlug)}/gallery`);
+        const galRes = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(pageSlug)}/gallery`, { headers: authHeaders() });
         const galData = await galRes.json();
         images = galData.images || [];
       } catch {}
+      pageGalleryImages = images;
       if (!images.length) {
         galleryEmptyEl.hidden = false;
       } else {
         galleryGridEl.hidden = false;
-        images.forEach(img => galleryGridEl.appendChild(pageGalleryTileEl(img)));
+        images.forEach((img, idx) => galleryGridEl.appendChild(pageGalleryTileEl(img, idx)));
       }
       return;
     }
@@ -2575,28 +2638,90 @@ async function loadCustomPage(pageSlug) {
   }
 }
 
-function pageGalleryTileEl(img) {
+let pageGalleryImages = [];
+let pageGalleryDetailIdx = 0;
+
+function galleryLikeBtnHtml(img) {
+  return `${img.user_liked ? '❤️' : '🤍'} <span>${img.like_count || 0}</span>`;
+}
+function pageGalleryTileEl(img, idx) {
   const a = document.createElement('a');
   a.className = 'cl-page-gallery-tile';
   a.href = '#';
   a.innerHTML = `
     <img src="${img.image_url}" alt="${escapeHtml(img.title || '')}" loading="lazy" style="object-position:${img.position_x}% ${img.position_y}%;" />
-    ${img.title ? `<span class="cl-page-gallery-tile-title">${escapeHtml(img.title)}</span>` : ''}
+    <button type="button" class="cl-page-gallery-tile-like">${galleryLikeBtnHtml(img)}</button>
   `;
-  a.addEventListener('click', (e) => { e.preventDefault(); openPageGalleryDetail(img); });
+  a.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (e.target.closest('.cl-page-gallery-tile-like')) return;
+    openPageGalleryDetail(idx);
+  });
+  a.querySelector('.cl-page-gallery-tile-like').addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    await toggleGalleryLike(img);
+    e.currentTarget.innerHTML = galleryLikeBtnHtml(img);
+  });
   return a;
 }
-function openPageGalleryDetail(img) {
-  document.getElementById('cl-gallery-view-detail-img').src = img.image_url;
-  document.getElementById('cl-gallery-view-detail-title').textContent = img.title || '';
-  document.getElementById('cl-gallery-view-detail-desc').innerHTML = img.description ? renderRichText(img.description) : '';
-  document.getElementById('cl-gallery-view-detail-overlay').hidden = false;
+async function toggleGalleryLike(img) {
+  if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(location.pathname + location.search)}`; return; }
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(currentPageSlug)}/gallery/${img.id}/like`, {
+      method: img.user_liked ? 'DELETE' : 'POST', headers: authHeaders(),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    img.user_liked = data.liked;
+    img.like_count = data.like_count;
+  } catch {}
 }
-document.getElementById('cl-gallery-view-detail-close').addEventListener('click', () => {
-  document.getElementById('cl-gallery-view-detail-overlay').hidden = true;
+
+// Full view swap over the whole custom-page-view (list included) — same
+// idea as the Fanpage gallery's own image detail page: big image, title,
+// description, a heart, prev/next to the neighboring images, and the
+// shared comments block relocated in here while open.
+function openPageGalleryDetail(idx) {
+  pageGalleryDetailIdx = idx;
+  renderGalleryDetail();
+  document.getElementById('cl-custom-page-view').hidden = true;
+  document.getElementById('cl-gallery-detail-view').hidden = false;
+  window.scrollTo(0, 0);
+  ccMoveTo('cl-gallery-detail-comments-slot');
+  ccInitSection('club_gallery_image', pageGalleryImages[idx].id);
+}
+function renderGalleryDetail() {
+  const img = pageGalleryImages[pageGalleryDetailIdx];
+  document.getElementById('cl-gallery-detail-img').src = img.image_url;
+  document.getElementById('cl-gallery-detail-title').textContent = img.title || '';
+  document.getElementById('cl-gallery-detail-desc').innerHTML = img.description ? renderRichText(img.description) : '';
+  updateGalleryDetailLikeUI(img);
+  document.getElementById('cl-gallery-detail-prev').disabled = pageGalleryDetailIdx === 0;
+  document.getElementById('cl-gallery-detail-next').disabled = pageGalleryDetailIdx === pageGalleryImages.length - 1;
+}
+function updateGalleryDetailLikeUI(img) {
+  document.getElementById('cl-gallery-detail-like-btn').classList.toggle('liked', !!img.user_liked);
+  document.getElementById('cl-gallery-detail-like-icon').textContent = img.user_liked ? '❤️' : '🤍';
+  document.getElementById('cl-gallery-detail-like-count').textContent = img.like_count || 0;
+}
+document.getElementById('cl-gallery-detail-like-btn').addEventListener('click', async () => {
+  const img = pageGalleryImages[pageGalleryDetailIdx];
+  await toggleGalleryLike(img);
+  updateGalleryDetailLikeUI(img);
 });
-document.getElementById('cl-gallery-view-detail-overlay').addEventListener('click', (e) => {
-  if (e.target.id === 'cl-gallery-view-detail-overlay') e.currentTarget.hidden = true;
+document.getElementById('cl-gallery-detail-prev').addEventListener('click', () => {
+  if (pageGalleryDetailIdx === 0) return;
+  openPageGalleryDetail(pageGalleryDetailIdx - 1);
+});
+document.getElementById('cl-gallery-detail-next').addEventListener('click', () => {
+  if (pageGalleryDetailIdx === pageGalleryImages.length - 1) return;
+  openPageGalleryDetail(pageGalleryDetailIdx + 1);
+});
+document.getElementById('cl-gallery-detail-back-btn').addEventListener('click', () => {
+  document.getElementById('cl-gallery-detail-view').hidden = true;
+  document.getElementById('cl-custom-page-view').hidden = false;
+  ccMoveTo('cl-post-detail-comments-slot');
 });
 
 function pagePromoRowEl(card) {
@@ -3049,14 +3174,26 @@ async function loadEditPages() {
     renderEditPagesList();
   } catch {}
 }
+let pageDragSlug = null;
 function renderEditPagesList() {
   const list = document.getElementById('cl-edit-pages-list');
   list.innerHTML = '';
   const homeBtn = document.createElement('button');
   homeBtn.className = 'cl-edit-pages-item';
   homeBtn.type = 'button';
-  homeBtn.textContent = 'Home';
+  homeBtn.innerHTML = `<span class="cl-side-page-home-star" title="The Home page can't be deleted">★</span>Home`;
   homeBtn.addEventListener('click', () => switchEditView('home', null));
+  // Home is never draggable itself, but is a valid drop target — dropping
+  // a page onto it always inserts right AFTER Home, never before.
+  homeBtn.addEventListener('dragover', (e) => e.preventDefault());
+  homeBtn.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    if (pageDragSlug == null) return;
+    const dragEl = list.querySelector(`.cl-edit-pages-item[data-page-slug="${CSS.escape(pageDragSlug)}"]`);
+    if (!dragEl) return;
+    homeBtn.insertAdjacentElement('afterend', dragEl);
+    await saveEditPagesOrder();
+  });
   list.appendChild(homeBtn);
 
   editPagesCache.forEach(p => {
@@ -3064,11 +3201,32 @@ function renderEditPagesList() {
     btn.className = 'cl-edit-pages-item';
     btn.type = 'button';
     btn.dataset.pageSlug = p.slug;
+    btn.draggable = true;
     btn.innerHTML = `<span class="cl-edit-pages-item-icon">${EDIT_PAGE_ICONS[p.type] || '🎗️'}</span>${escapeHtml(p.title)}`;
     btn.addEventListener('click', () => switchEditView('page', p.slug));
+    btn.addEventListener('dragstart', () => { pageDragSlug = p.slug; btn.classList.add('dragging'); });
+    btn.addEventListener('dragend', () => btn.classList.remove('dragging'));
+    btn.addEventListener('dragover', (e) => e.preventDefault());
+    btn.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      if (pageDragSlug == null || pageDragSlug === p.slug) return;
+      const dragEl = list.querySelector(`.cl-edit-pages-item[data-page-slug="${CSS.escape(pageDragSlug)}"]`);
+      if (!dragEl) return;
+      list.insertBefore(dragEl, btn);
+      await saveEditPagesOrder();
+    });
     list.appendChild(btn);
   });
   highlightEditPagesList();
+}
+async function saveEditPagesOrder() {
+  const list = document.getElementById('cl-edit-pages-list');
+  const slugs = [...list.querySelectorAll('.cl-edit-pages-item[data-page-slug]')].map(el => el.dataset.pageSlug);
+  editPagesCache = slugs.map(s => editPagesCache.find(p => p.slug === s)).filter(Boolean);
+  await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/reorder`, {
+    method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ order: slugs }),
+  });
+  loadClubPages();
 }
 function highlightEditPagesList() {
   document.querySelectorAll('.cl-edit-pages-item').forEach(btn => {
@@ -3337,23 +3495,18 @@ async function populatePageEditor(pageSlug) {
   document.getElementById('cl-edit-page-promotion-fields').hidden = !isPromotion;
 
   if (isGallery) {
-    document.getElementById('cl-edit-page-type-note').textContent = '';
     closeGalleryItemForm();
     switchGalleryEditorTab('upload');
     loadEditPageGallery(pageSlug);
     return;
   }
   if (isPromotion) {
-    document.getElementById('cl-edit-page-type-note').textContent = '';
     closePromoCardForm();
+    switchPromoEditorTab('upload');
     loadEditPromoCards(pageSlug);
     return;
   }
-  if (!isGeneral) {
-    document.getElementById('cl-edit-page-type-note').textContent = '';
-    return;
-  }
-  document.getElementById('cl-edit-page-type-note').textContent = '';
+  if (!isGeneral) return;
 
   try {
     const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(pageSlug)}`);
@@ -3655,6 +3808,7 @@ function renderGalleryReorderGrid() {
 // reposition the focal point, saved as x/y percentages. The source image
 // itself is never re-cropped.
 function showPageGalleryPreview(src) {
+  document.getElementById('cl-gallery-item-full-preview').src = src;
   const previewImg = document.getElementById('cl-gallery-item-preview-img');
   if (galleryPreviewCropper) { galleryPreviewCropper.destroy(); galleryPreviewCropper = null; }
   previewImg.removeAttribute('src');
@@ -3698,6 +3852,12 @@ function showPageGalleryPreview(src) {
 // Only used to edit an EXISTING tile (clicked from the grid) — a brand-new
 // upload is handled directly in the file-input change handler below, since
 // there's no saved image_url yet to preview from.
+// The overall editor's Cancel/Save row sits directly behind this form (no
+// modal-within-modal separation), so it stays clickable unless explicitly
+// locked out while a gallery item is being worked on.
+function setEditMainActionsLocked(locked) {
+  document.getElementById('cl-edit-main-actions').classList.toggle('cl-edit-main-actions-locked', locked);
+}
 function openGalleryItemForm(item) {
   editingGalleryItemId = item.id;
   pendingGalleryItemFile = null;
@@ -3707,6 +3867,7 @@ function openGalleryItemForm(item) {
   document.getElementById('cl-gallery-item-delete-btn').style.display = '';
   document.getElementById('cl-gallery-item-form').hidden = false;
   document.getElementById('cl-gallery-upload-tab').hidden = true;
+  setEditMainActionsLocked(true);
   // Overlay must be visible before Cropper measures the container, and the
   // form was just unhidden this same tick — defer a frame so layout settles.
   requestAnimationFrame(() => showPageGalleryPreview(item.image_url));
@@ -3714,6 +3875,7 @@ function openGalleryItemForm(item) {
 function closeGalleryItemForm() {
   document.getElementById('cl-gallery-item-form').hidden = true;
   document.getElementById('cl-gallery-upload-tab').hidden = false;
+  setEditMainActionsLocked(false);
   if (galleryPreviewCropper) { galleryPreviewCropper.destroy(); galleryPreviewCropper = null; }
   editingGalleryItemId = null;
   pendingGalleryItemFile = null;
@@ -3731,6 +3893,7 @@ document.getElementById('cl-gallery-item-file-input').addEventListener('change',
   document.getElementById('cl-gallery-item-delete-btn').style.display = 'none';
   document.getElementById('cl-gallery-item-form').hidden = false;
   document.getElementById('cl-gallery-upload-tab').hidden = true;
+  setEditMainActionsLocked(true);
   requestAnimationFrame(() => showPageGalleryPreview(URL.createObjectURL(file)));
 });
 document.getElementById('cl-gallery-item-cancel-btn').addEventListener('click', closeGalleryItemForm);
@@ -3783,6 +3946,17 @@ async function loadEditPromoCards(pageSlug) {
   } catch { editPromoCardsCache = []; }
   renderEditPromoCards();
 }
+function switchPromoEditorTab(tab) {
+  const isReorder = tab === 'reorder';
+  document.getElementById('cl-promo-tab-upload').classList.toggle('active', !isReorder);
+  document.getElementById('cl-promo-tab-reorder').classList.toggle('active', isReorder);
+  document.getElementById('cl-promo-upload-tab').hidden = isReorder;
+  document.getElementById('cl-promo-reorder-tab').hidden = !isReorder;
+  if (isReorder) renderPromoReorderList(); else renderEditPromoCards();
+}
+document.getElementById('cl-promo-tab-upload').addEventListener('click', () => switchPromoEditorTab('upload'));
+document.getElementById('cl-promo-tab-reorder').addEventListener('click', () => switchPromoEditorTab('reorder'));
+
 function renderEditPromoCards() {
   const list = document.getElementById('cl-promo-cards-list');
   list.innerHTML = '';
@@ -3791,10 +3965,8 @@ function renderEditPromoCards() {
 function editPromoCardRowEl(card) {
   const row = document.createElement('div');
   row.className = 'cl-edit-card-row';
-  row.draggable = true;
   row.dataset.id = card.id;
   row.innerHTML = `
-    <span class="cl-edit-card-row-handle">⠿</span>
     <img class="cl-edit-card-row-pic" src="${card.image_url || '/images/noimage.png'}" alt="" />
     <span class="cl-edit-card-row-name">${escapeHtml(card.title)}</span>
     <button type="button" class="cl-edit-card-row-btn" data-action="edit">Edit</button>
@@ -3808,13 +3980,33 @@ function editPromoCardRowEl(card) {
     renderEditPromoCards();
     if (currentPageSlug === editActivePageSlug) loadCustomPage(editActivePageSlug);
   });
+  return row;
+}
+
+// Reorder tab — a dedicated drag-and-drop list, separate from the Upload
+// tab's edit/delete rows, matching the Gallery Page editor's pattern.
+function renderPromoReorderList() {
+  const list = document.getElementById('cl-promo-reorder-list');
+  list.innerHTML = '';
+  editPromoCardsCache.forEach(c => list.appendChild(promoReorderRowEl(c)));
+}
+function promoReorderRowEl(card) {
+  const row = document.createElement('div');
+  row.className = 'cl-edit-card-row';
+  row.draggable = true;
+  row.dataset.id = card.id;
+  row.innerHTML = `
+    <span class="cl-edit-card-row-handle">⠿</span>
+    <img class="cl-edit-card-row-pic" src="${card.image_url || '/images/noimage.png'}" alt="" />
+    <span class="cl-edit-card-row-name">${escapeHtml(card.title)}</span>
+  `;
   row.addEventListener('dragstart', () => { promoCardDragId = card.id; row.classList.add('dragging'); });
   row.addEventListener('dragend', () => row.classList.remove('dragging'));
   row.addEventListener('dragover', (e) => e.preventDefault());
   row.addEventListener('drop', async (e) => {
     e.preventDefault();
     if (promoCardDragId == null || promoCardDragId === card.id) return;
-    const list = document.getElementById('cl-promo-cards-list');
+    const list = document.getElementById('cl-promo-reorder-list');
     const dragEl = list.querySelector(`.cl-edit-card-row[data-id="${CSS.escape(String(promoCardDragId))}"]`);
     if (!dragEl) return;
     list.insertBefore(dragEl, row);
@@ -3839,10 +4031,12 @@ function openPromoCardForm(card) {
   document.getElementById('cl-promo-card-delete-btn').style.display = card ? '' : 'none';
   document.getElementById('cl-promo-card-form').hidden = false;
   document.getElementById('cl-promo-card-create-btn').style.display = 'none';
+  setEditMainActionsLocked(true);
 }
 function closePromoCardForm() {
   document.getElementById('cl-promo-card-form').hidden = true;
   document.getElementById('cl-promo-card-create-btn').style.display = '';
+  setEditMainActionsLocked(false);
   editingPromoCardId = null;
   pendingPromoCardBlob = null;
 }

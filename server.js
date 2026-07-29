@@ -878,6 +878,16 @@ async function initDb() {
     );
   `).catch(e => console.error('club_page_gallery_images migration:', e.message));
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS club_page_gallery_likes (
+      id         SERIAL      PRIMARY KEY,
+      image_id   INTEGER     NOT NULL REFERENCES club_page_gallery_images(id) ON DELETE CASCADE,
+      user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(image_id, user_id)
+    );
+  `).catch(e => console.error('club_page_gallery_likes migration:', e.message));
+
   // Promotion Page template — a vertical list of link-out cards (image,
   // title, description, a single link title+URL). Everything but the image
   // is required at creation.
@@ -4830,6 +4840,19 @@ async function commentTargetInfo(targetType, targetId) {
     if (!p) return null;
     return { title: p.title || 'Untitled', link: `/fanpages/club?slug=${encodeURIComponent(p.slug)}&post=${targetId}` };
   }
+  if (targetType === 'club_gallery_image') {
+    const { rows: [g] } = await pool.query(
+      `SELECT g.title, p.slug AS page_slug, c.slug AS club_slug
+       FROM club_page_gallery_images g
+       JOIN club_pages p ON p.id = g.page_id JOIN clubs c ON c.id = p.club_id
+       WHERE g.id = $1`,
+      [targetId]
+    );
+    if (!g) return null;
+    // Not independently deep-linkable (the detail view is an in-page swap,
+    // not a routed URL) — link back to the gallery page itself instead.
+    return { title: g.title || 'Untitled', link: `/fanpages/club?slug=${encodeURIComponent(g.club_slug)}&page=${encodeURIComponent(g.page_slug)}` };
+  }
   return null;
 }
 
@@ -5891,6 +5914,29 @@ app.post('/api/clubs/:slug/pages', requireAuth, async (req, res) => {
   res.json({ page });
 });
 
+// PUT /api/clubs/:slug/pages/reorder — { order: [slug, ...] }. Registered
+// before /:pageSlug below (same route-ordering gotcha as the other
+// reorder endpoints in this file). Home isn't a club_pages row at all, so
+// there's nothing to enforce here — the client just never lets Home be
+// dragged out of first place.
+app.put('/api/clubs/:slug/pages/reorder', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const order = req.body.order;
+  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of page slugs.' });
+  await pool.query('BEGIN');
+  try {
+    for (let i = 0; i < order.length; i++) {
+      await pool.query('UPDATE club_pages SET sort_order = $1 WHERE club_id = $2 AND slug = $3', [i, ctx.club.id, order[i]]);
+    }
+    await pool.query('COMMIT');
+  } catch (err) {
+    await pool.query('ROLLBACK');
+    return res.status(500).json({ error: 'Failed to reorder pages.' });
+  }
+  res.json({ message: 'Reordered.' });
+});
+
 // PUT /api/clubs/:slug/pages/:pageSlug — rename/re-content a page (title
 // for now; the type-specific content editors land later).
 app.put('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => {
@@ -6033,12 +6079,48 @@ app.get('/api/clubs/:slug/pages/:pageSlug/gallery', async (req, res) => {
     'SELECT id FROM club_pages WHERE club_id = $1 AND slug = $2', [club.id, req.params.pageSlug]
   );
   if (!page) return res.status(404).json({ error: 'Page not found.' });
+  let userId = null;
+  try {
+    const h = req.headers.authorization;
+    if (h && h.startsWith('Bearer ')) userId = jwt.verify(h.slice(7), process.env.JWT_SECRET).id;
+  } catch {}
   const { rows } = await pool.query(
-    `SELECT id, image_url, title, description, position_x, position_y
-     FROM club_page_gallery_images WHERE page_id = $1 ORDER BY sort_order, created_at`,
-    [page.id]
+    `SELECT g.id, g.image_url, g.title, g.description, g.position_x, g.position_y,
+       (SELECT COUNT(*)::int FROM club_page_gallery_likes WHERE image_id = g.id) AS like_count,
+       (SELECT COUNT(*) > 0 FROM club_page_gallery_likes WHERE image_id = g.id AND user_id = $2) AS user_liked
+     FROM club_page_gallery_images g WHERE g.page_id = $1 ORDER BY g.sort_order, g.created_at`,
+    [page.id, userId || 0]
   );
   res.json({ images: rows });
+});
+
+app.post('/api/clubs/:slug/pages/:pageSlug/gallery/:imageId/like', requireAuth, async (req, res) => {
+  const { rows: [image] } = await pool.query(
+    `SELECT g.id FROM club_page_gallery_images g
+     JOIN club_pages p ON p.id = g.page_id JOIN clubs c ON c.id = p.club_id
+     WHERE c.slug = $1 AND p.slug = $2 AND g.id = $3`,
+    [req.params.slug, req.params.pageSlug, req.params.imageId]
+  );
+  if (!image) return res.status(404).json({ error: 'Image not found.' });
+  await pool.query(
+    'INSERT INTO club_page_gallery_likes (image_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [image.id, req.user.id]
+  );
+  const { rows: [{ count }] } = await pool.query('SELECT COUNT(*)::int AS count FROM club_page_gallery_likes WHERE image_id = $1', [image.id]);
+  res.json({ liked: true, like_count: count });
+});
+
+app.delete('/api/clubs/:slug/pages/:pageSlug/gallery/:imageId/like', requireAuth, async (req, res) => {
+  const { rows: [image] } = await pool.query(
+    `SELECT g.id FROM club_page_gallery_images g
+     JOIN club_pages p ON p.id = g.page_id JOIN clubs c ON c.id = p.club_id
+     WHERE c.slug = $1 AND p.slug = $2 AND g.id = $3`,
+    [req.params.slug, req.params.pageSlug, req.params.imageId]
+  );
+  if (!image) return res.status(404).json({ error: 'Image not found.' });
+  await pool.query('DELETE FROM club_page_gallery_likes WHERE image_id = $1 AND user_id = $2', [image.id, req.user.id]);
+  const { rows: [{ count }] } = await pool.query('SELECT COUNT(*)::int AS count FROM club_page_gallery_likes WHERE image_id = $1', [image.id]);
+  res.json({ liked: false, like_count: count });
 });
 
 app.post('/api/clubs/:slug/pages/:pageSlug/gallery', requireAuth, uploadModImage.single('image'), async (req, res) => {
