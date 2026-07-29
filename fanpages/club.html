@@ -153,19 +153,6 @@
       margin: 0 0 1.5rem;
     }
 
-    /* No more flex row / boxed About — the picture floats left and the
-       About text wraps around it like a magazine column, running under it
-       naturally once it clears the float's height. .cl-about-wrap just
-       needs a clearfix so the row's own height still accounts for the
-       float. */
-    .cl-about-wrap::after { content: ''; display: table; clear: both; }
-
-    .cl-pic-wrap {
-      float: left; width: 380px; aspect-ratio: 1 / 1; border-radius: 16px; overflow: hidden;
-      background: #161616; border: 1px solid rgba(255,255,255,0.1); margin: 0 2rem 1rem 0;
-    }
-    .cl-pic-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
     /* Fancy title instead of a boxed label — Cinzel serif, a touch bigger,
        with a short gradient underline flourish instead of a full-width
        rule. */
@@ -179,6 +166,41 @@
       background: linear-gradient(90deg, #7fa8d9, transparent);
     }
     .cl-about-body { color: #bbb; font-size: 0.96rem; line-height: 1.8; margin: 0; }
+
+    /* ── Posts By Admin Team — full-width Reddit-style rows ── */
+    .cl-admin-posts { margin-top: 3rem; }
+    .cl-admin-posts-title {
+      font-family: 'Cinzel', Georgia, serif; font-size: 1.4rem; font-weight: 700; letter-spacing: 0.03em;
+      color: #7fa8d9; text-shadow: 0 0 16px rgba(127,168,217,0.6);
+      margin: 0 0 1.1rem; display: inline-block; position: relative; padding-bottom: 0.5rem;
+    }
+    .cl-admin-posts-title::after {
+      content: ''; position: absolute; left: 0; bottom: 0; width: 64px; height: 2px;
+      background: linear-gradient(90deg, #7fa8d9, transparent);
+    }
+    .cl-admin-posts-empty { color: #888; font-size: 0.9rem; padding: 1.5rem 0; margin: 0; }
+    .cl-admin-posts-list { display: flex; flex-direction: column; }
+    .cl-admin-post { display: flex; gap: 0.9rem; padding: 1.1rem 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .cl-admin-post:last-child { border-bottom: none; }
+    .cl-admin-post-avatar, .cl-admin-post-avatar-fallback { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .cl-admin-post-avatar-fallback {
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700;
+    }
+    .cl-admin-post-body { flex: 1; min-width: 0; }
+    .cl-admin-post-meta { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: #999; margin: 0 0 0.35rem; }
+    .cl-admin-post-author { font-weight: 700; color: #ddd; }
+    .cl-admin-post-role {
+      font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+      color: #f0c060; background: rgba(240,192,96,0.12); border: 1px solid rgba(240,192,96,0.3);
+      border-radius: 4px; padding: 0.1rem 0.4rem;
+    }
+    .cl-admin-post-title { font-size: 1.05rem; font-weight: 700; color: #f0f0f0; margin: 0 0 0.3rem; }
+    .cl-admin-post-preview {
+      font-size: 0.9rem; color: #bbb; line-height: 1.6; margin: 0;
+      overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+      -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    }
 
     /* Starts just below the banner (a small gap, not touching it) since
        it's a normal flex sibling now, not fixed to the viewport. As you
@@ -212,9 +234,6 @@
     }
     @media (max-width: 860px) {
       .cl-row { padding: 2rem 1.25rem 3rem; }
-      /* Not enough width for text to wrap alongside a 380px float without
-         squeezing to nothing — drop it back into normal flow, stacked. */
-      .cl-pic-wrap { float: none; width: 100%; max-width: 380px; margin: 0 auto 1.5rem; }
     }
 
     .cl-gate { max-width: 500px; margin: 8rem auto; text-align: center; color: #999; padding: 0 1.5rem; }
@@ -337,13 +356,15 @@
         <h1 class="cl-name" id="cl-name"></h1>
 
         <div class="cl-about-wrap">
-          <!-- Templated picture slot — not editable yet, just the layout. -->
-          <div class="cl-pic-wrap">
-            <img id="cl-pic-img" src="/images/nopicture.png" alt="" />
-          </div>
-
           <p class="cl-about-label" id="cl-about-label"></p>
           <p class="cl-about-body" id="cl-about-body"></p>
+        </div>
+
+        <div class="cl-admin-posts">
+          <p class="cl-admin-posts-title">Posts By Admin Team</p>
+          <div class="cl-admin-posts-list" id="cl-admin-posts-list">
+            <p class="cl-admin-posts-empty">Loading…</p>
+          </div>
         </div>
       </div>
     </div>
@@ -488,6 +509,7 @@ async function loadClub() {
     const data = await res.json();
     renderClub(data.club);
     document.getElementById('cl-page').style.display = 'block';
+    loadAdminPosts(data.members || []);
   } catch {
     document.getElementById('cl-notfound').style.display = 'block';
   }
@@ -517,6 +539,64 @@ function renderClub(club) {
   document.getElementById('cl-edit-club-btn').style.display = isAdminOrOwner ? 'block' : 'none';
 
   applyClubTheme(club.theme, club.theme_bg_url);
+}
+
+// ── Posts By Admin Team — every club_posts row authored by an owner/admin,
+// full-width Reddit-style rows. Filtered client-side against the member
+// roster (already fetched alongside the club) rather than a dedicated
+// endpoint, since "is this author currently an owner/admin" is exactly
+// what that roster already answers. ───────────────────────────────────────
+function timeAgo(dateStr) {
+  const sec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  const units = [['year', 31536000], ['month', 2592000], ['week', 604800], ['day', 86400], ['hour', 3600], ['minute', 60]];
+  for (const [name, secs] of units) {
+    const val = Math.floor(sec / secs);
+    if (val >= 1) return `${val} ${name}${val > 1 ? 's' : ''} ago`;
+  }
+  return 'just now';
+}
+
+async function loadAdminPosts(members) {
+  const list = document.getElementById('cl-admin-posts-list');
+  const adminIds = new Set(members.filter(m => m.role === 'owner' || m.role === 'admin').map(m => m.id));
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts`);
+    const data = await res.json();
+    const posts = (data.posts || []).filter(p => adminIds.has(p.author.id));
+    if (!posts.length) {
+      list.innerHTML = '<p class="cl-admin-posts-empty">No posts from the admin team yet — updates, polls, and club news will show up here.</p>';
+      return;
+    }
+    list.innerHTML = '';
+    posts.forEach(p => list.appendChild(adminPostRow(p)));
+  } catch {
+    list.innerHTML = '<p class="cl-admin-posts-empty">Couldn\'t load posts right now.</p>';
+  }
+}
+
+function adminPostRow(post) {
+  const a = post.author;
+  const row = document.createElement('div');
+  row.className = 'cl-admin-post';
+
+  const avatarHtml = a.avatar
+    ? `<img class="cl-admin-post-avatar" src="${a.avatar}" alt="" />`
+    : `<span class="cl-admin-post-avatar-fallback">${escapeHtml(a.display_name.charAt(0).toUpperCase())}</span>`;
+
+  row.innerHTML = `
+    ${avatarHtml}
+    <div class="cl-admin-post-body">
+      <div class="cl-admin-post-meta">
+        <span class="cl-admin-post-author">${escapeHtml(a.display_name)}</span>
+        <span class="cl-admin-post-role">Admin Team</span>
+        <span>·</span>
+        <span>${timeAgo(post.created_at)}</span>
+      </div>
+      ${post.title ? `<p class="cl-admin-post-title">${escapeHtml(post.title)}</p>` : ''}
+      <p class="cl-admin-post-preview">${escapeHtml(post.body)}</p>
+    </div>
+  `;
+  return row;
 }
 
 // ── Theme — default (same background as the Social hub's Home page) or a
