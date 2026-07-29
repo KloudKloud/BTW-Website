@@ -134,49 +134,6 @@
 
     .cl-row { max-width: 1200px; margin: 0 auto; padding: 3rem 2rem 5rem; position: relative; }
 
-    /* Hover reveal, top-left of the main area below the banner (never over
-       the banner itself — that's .cl-header's territory, a separate
-       element entirely). Left so it tracks .cl-row's own left edge — same
-       shifting-with-collapse behavior as the rest of this column, since
-       it's positioned relative to .cl-row itself, not the viewport.
-       Owners/admins only, same gate as Edit Club. Same default(social-hub
-       background)/custom(blurred picture) pattern as the profile page's
-       own theme picker. */
-    /* left: 0.4rem instead of matching the row's own 2rem padding — the
-       pfp icon starts right at that 2rem mark (it shares .cl-header's
-       padding), so lining the button up with it just sat the two on top
-       of each other. This clears the icon entirely instead. */
-    .cl-theme-picker {
-      position: absolute; top: 0.5rem; left: 0.4rem; z-index: 20;
-      opacity: 0; pointer-events: none; transition: opacity 0.2s; display: none;
-    }
-    .cl-row:hover .cl-theme-picker { opacity: 1; pointer-events: auto; }
-    .cl-theme-btn {
-      width: 40px; height: 40px; border-radius: 50%; box-sizing: border-box;
-      background: linear-gradient(160deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04));
-      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,0.25); color: #fff;
-      font-size: 1.15rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
-      transition: background 0.15s, transform 0.15s;
-    }
-    .cl-theme-btn:hover { background: linear-gradient(160deg, rgba(255,255,255,0.22), rgba(255,255,255,0.07)); transform: translateY(-1px); }
-    .cl-theme-popover {
-      position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
-      background: #161616; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
-      box-shadow: 0 12px 32px rgba(0,0,0,0.5); padding: 1rem; width: 220px;
-    }
-    .cl-theme-popover-label { font-size: 0.75rem; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; }
-    .cl-theme-grid { display: flex; gap: 0.75rem; }
-    .cl-theme-swatch {
-      width: 48px; height: 48px; border-radius: 50%; cursor: pointer;
-      border: 2px solid transparent; padding: 0; overflow: hidden;
-      display: flex; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-    }
-    .cl-theme-swatch span { display: block; width: 100%; height: 100%; background: #0a0a0a; }
-    .cl-theme-swatch.active { border-color: #7fa8d9; }
-    .cl-theme-swatch--upload { align-items: center; justify-content: center; background: #1e1e1e; color: #999; font-size: 1.1rem; }
-    .cl-theme-swatch--upload:hover { background: #292929; }
-
     /* Big banner-like slot, above everything else — will eventually cycle
        through several images as a slideshow, so it's sized generously up
        front rather than as an afterthought. Defaults to the shared
@@ -371,14 +328,6 @@
       </div>
 
       <div class="cl-row">
-        <div class="cl-theme-picker" id="cl-theme-picker">
-          <button class="cl-theme-btn" id="cl-theme-btn" type="button" title="Customize Theme">🎨</button>
-          <div class="cl-theme-popover" id="cl-theme-popover" hidden>
-            <p class="cl-theme-popover-label">Club Background</p>
-            <div class="cl-theme-grid" id="cl-theme-grid"></div>
-          </div>
-        </div>
-
         <!-- Slideshow slot — not editable/cycling yet, just the layout (a
              single "Image Not Available" placeholder for now). -->
         <div class="cl-slideshow-wrap">
@@ -566,16 +515,16 @@ function renderClub(club) {
 
   const isAdminOrOwner = club.viewer_role === 'owner' || club.viewer_role === 'admin';
   document.getElementById('cl-edit-club-btn').style.display = isAdminOrOwner ? 'block' : 'none';
-  document.getElementById('cl-theme-picker').style.display = isAdminOrOwner ? 'block' : 'none';
 
   applyClubTheme(club.theme, club.theme_bg_url);
 }
 
-// ── Theme — default (plain dark) or a custom blurred background, same
-// pattern as the profile page's own theme picker — EXCEPT "default" here
-// isn't plain dark, it's the same background as the Social hub's Home page,
-// so a club that's never touched its theme still looks like the rest of
-// the site instead of dropping into dark mode. ──────────────────────────
+// ── Theme — default (same background as the Social hub's Home page) or a
+// custom blurred background. No UI control for this right now (the old
+// hover-reveal paint button was pulled — placement wasn't working and needs
+// rethinking) but whatever's already stored on the club still renders. The
+// PUT /api/clubs/:slug/theme(-bg) endpoints are unchanged and ready for
+// whatever picker UI replaces it. ────────────────────────────────────────
 const CL_DEFAULT_BG = '/images/gallery/solusgarnet_17.png';
 function applyClubTheme(themeId, bgUrl) {
   const bgImg = document.getElementById('cl-page-bg-img');
@@ -583,73 +532,7 @@ function applyClubTheme(themeId, bgUrl) {
   bgImg.src = (themeId === 'custom' && bgUrl) ? bgUrl : CL_DEFAULT_BG;
   bgImg.style.display = 'block';
   bgOverlay.style.display = 'block';
-  document.querySelectorAll('.cl-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
 }
-
-function buildClubThemeGrid() {
-  const grid = document.getElementById('cl-theme-grid');
-  grid.innerHTML = '';
-
-  const defaultBtn = document.createElement('button');
-  defaultBtn.className = 'cl-theme-swatch';
-  defaultBtn.type = 'button';
-  defaultBtn.title = 'Default (same as the Social hub background)';
-  defaultBtn.dataset.theme = 'default';
-  defaultBtn.innerHTML = `<span style="background-image:url('${CL_DEFAULT_BG}'); background-size:cover; background-position:center;"></span>`;
-  defaultBtn.addEventListener('click', () => selectClubTheme('default'));
-  grid.appendChild(defaultBtn);
-
-  const uploadBtn = document.createElement('button');
-  uploadBtn.className = 'cl-theme-swatch cl-theme-swatch--upload';
-  uploadBtn.type = 'button';
-  uploadBtn.title = 'Upload a custom blurred background image';
-  uploadBtn.textContent = '+';
-  uploadBtn.addEventListener('click', () => document.getElementById('cl-theme-bg-file-input').click());
-  grid.appendChild(uploadBtn);
-}
-buildClubThemeGrid();
-
-async function selectClubTheme(themeId) {
-  applyClubTheme(themeId, currentClub && currentClub.theme_bg_url);
-  const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/theme`, {
-    method: 'PUT',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ theme: themeId }),
-  });
-  if (res.ok) currentClub = (await res.json()).club;
-}
-
-const clThemeBgFileInput = document.createElement('input');
-clThemeBgFileInput.type = 'file';
-clThemeBgFileInput.accept = 'image/png,image/jpeg,image/webp,image/gif';
-clThemeBgFileInput.id = 'cl-theme-bg-file-input';
-clThemeBgFileInput.hidden = true;
-document.body.appendChild(clThemeBgFileInput);
-clThemeBgFileInput.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  applyClubTheme('custom', URL.createObjectURL(file)); // instant preview
-  const fd = new FormData();
-  fd.append('image', file);
-  const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/theme-bg`, { method: 'PUT', headers: authHeaders(), body: fd });
-  if (res.ok) {
-    const data = await res.json();
-    currentClub = data.club;
-    applyClubTheme(data.club.theme, data.club.theme_bg_url);
-  } else {
-    alert('Background upload failed. Please try again.');
-  }
-  clThemeBgFileInput.value = '';
-});
-
-document.getElementById('cl-theme-btn').addEventListener('click', (e) => {
-  e.stopPropagation();
-  document.getElementById('cl-theme-popover').hidden = !document.getElementById('cl-theme-popover').hidden;
-});
-document.addEventListener('click', (e) => {
-  const picker = document.getElementById('cl-theme-picker');
-  if (picker && !picker.contains(e.target)) document.getElementById('cl-theme-popover').hidden = true;
-});
 
 // ── Edit Club modal — banner image only for now ──────────────────────────
 let pendingBannerBlob = null;
