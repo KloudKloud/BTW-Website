@@ -716,6 +716,13 @@ async function initDb() {
     ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS is_admin_post BOOLEAN NOT NULL DEFAULT FALSE;
   `).catch(e => console.error('club_posts is_admin_post migration:', e.message));
 
+  // Each post can carry its own image (not the author's pfp) — shown in
+  // the feed thumbnail and big on the post's own page. Empty means the
+  // client falls back to a shared "no image" placeholder.
+  await pool.query(`
+    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('club_posts image_url migration:', e.message));
+
   // "Featured Cards" (was "Meet the Admins") — turned out clubs want to
   // spotlight whatever matters to them, not necessarily their admin roster
   // (e.g. a club's own cast of important characters). Each card is just a
@@ -5287,9 +5294,27 @@ app.get('/api/clubs/:slug/posts', async (req, res) => {
     [club.id]
   );
   res.json({ posts: rows.map(p => ({
-    id: p.id, title: p.title, body: p.body, created_at: p.created_at, is_admin_post: p.is_admin_post,
+    id: p.id, title: p.title, body: p.body, image_url: p.image_url, created_at: p.created_at, is_admin_post: p.is_admin_post,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
   })) });
+});
+
+// GET /api/clubs/:slug/posts/:postId — a single post, for the post detail
+// page (direct load/refresh, not just navigating there client-side).
+app.get('/api/clubs/:slug/posts/:postId', async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const { rows: [p] } = await pool.query(
+    `SELECT cp.*, u.username, u.display_name, u.avatar
+     FROM club_posts cp JOIN users u ON u.id = cp.author_user_id
+     WHERE cp.id = $1 AND cp.club_id = $2`,
+    [req.params.postId, club.id]
+  );
+  if (!p) return res.status(404).json({ error: 'Post not found.' });
+  res.json({ post: {
+    id: p.id, title: p.title, body: p.body, image_url: p.image_url, created_at: p.created_at, is_admin_post: p.is_admin_post,
+    author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
+  } });
 });
 
 // POST /api/clubs/:slug/posts — members only. is_admin_post is a deliberate
@@ -5303,16 +5328,17 @@ app.post('/api/clubs/:slug/posts', requireAuth, async (req, res) => {
 
   const title = String(req.body.title || '').trim().slice(0, 120);
   const body = String(req.body.body || '').trim().slice(0, 5000);
+  const imageUrl = String(req.body.image_url || '').trim().slice(0, 500);
   if (!body) return res.status(400).json({ error: 'Post body is required.' });
   const isAdminPost = !!req.body.is_admin_post && (role === 'owner' || role === 'admin');
 
   const { rows: [post] } = await pool.query(
-    `INSERT INTO club_posts (club_id, author_user_id, title, body, is_admin_post) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [club.id, req.user.id, title, body, isAdminPost]
+    `INSERT INTO club_posts (club_id, author_user_id, title, body, image_url, is_admin_post) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [club.id, req.user.id, title, body, imageUrl, isAdminPost]
   );
   const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
   res.json({ post: {
-    id: post.id, title: post.title, body: post.body, created_at: post.created_at, is_admin_post: post.is_admin_post,
+    id: post.id, title: post.title, body: post.body, image_url: post.image_url, created_at: post.created_at, is_admin_post: post.is_admin_post,
     author: { id: req.user.id, username: author.username, display_name: author.display_name || author.username, avatar: author.avatar || null },
   } });
 });
