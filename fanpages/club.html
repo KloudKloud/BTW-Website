@@ -509,7 +509,7 @@ async function loadClub() {
     const data = await res.json();
     renderClub(data.club);
     document.getElementById('cl-page').style.display = 'block';
-    loadAdminPosts(data.members || []);
+    loadAdminPosts();
   } catch {
     document.getElementById('cl-notfound').style.display = 'block';
   }
@@ -541,11 +541,11 @@ function renderClub(club) {
   applyClubTheme(club.theme, club.theme_bg_url);
 }
 
-// ── Posts By Admin Team — every club_posts row authored by an owner/admin,
-// full-width Reddit-style rows. Filtered client-side against the member
-// roster (already fetched alongside the club) rather than a dedicated
-// endpoint, since "is this author currently an owner/admin" is exactly
-// what that roster already answers. ───────────────────────────────────────
+// ── Posts By Admin Team — full-width Reddit-style rows. This is a per-post
+// choice made at creation time (is_admin_post), NOT every post an admin
+// happens to write — admins can still post to the general feed, so this
+// pulls ?section=admin from the server rather than filtering by author
+// role client-side. ────────────────────────────────────────────────────
 function timeAgo(dateStr) {
   const sec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
   const units = [['year', 31536000], ['month', 2592000], ['week', 604800], ['day', 86400], ['hour', 3600], ['minute', 60]];
@@ -556,13 +556,12 @@ function timeAgo(dateStr) {
   return 'just now';
 }
 
-async function loadAdminPosts(members) {
+async function loadAdminPosts() {
   const list = document.getElementById('cl-admin-posts-list');
-  const adminIds = new Set(members.filter(m => m.role === 'owner' || m.role === 'admin').map(m => m.id));
   try {
-    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts`);
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts?section=admin`);
     const data = await res.json();
-    const posts = (data.posts || []).filter(p => adminIds.has(p.author.id));
+    const posts = data.posts || [];
     if (!posts.length) {
       list.innerHTML = '<p class="cl-admin-posts-empty">No posts from the admin team yet — updates, polls, and club news will show up here.</p>';
       return;

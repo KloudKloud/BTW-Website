@@ -708,6 +708,14 @@ async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_club_members_user ON club_members(user_id);
   `).catch(e => console.error('clubs migration:', e.message));
 
+  // "Posts By Admin Team" is a per-post choice made at creation time, not
+  // implied by the author being an admin — an owner/admin can still post to
+  // the club's general feed and only some of their posts land here. Needs
+  // its own flag rather than filtering by author role.
+  await pool.query(`
+    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS is_admin_post BOOLEAN NOT NULL DEFAULT FALSE;
+  `).catch(e => console.error('club_posts is_admin_post migration:', e.message));
+
   // Every club (new ones via POST /api/clubs, which never specifies a
   // banner_url, letting this column default kick in) starts with this
   // image as its banner rather than the plain fallback card.
@@ -5229,23 +5237,29 @@ app.delete('/api/clubs/:slug/members/:userId', requireAuth, async (req, res) => 
   res.json({ message: 'Member removed.' });
 });
 
-// GET /api/clubs/:slug/posts
+// GET /api/clubs/:slug/posts — ?section=admin restricts to posts explicitly
+// flagged is_admin_post at creation time (not just "written by an admin" —
+// an owner/admin can still post to the general feed).
 app.get('/api/clubs/:slug/posts', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const adminOnly = req.query.section === 'admin';
   const { rows } = await pool.query(
     `SELECT cp.*, u.username, u.display_name, u.avatar
      FROM club_posts cp JOIN users u ON u.id = cp.author_user_id
-     WHERE cp.club_id = $1 ORDER BY cp.created_at DESC LIMIT 100`,
+     WHERE cp.club_id = $1 ${adminOnly ? 'AND cp.is_admin_post = TRUE' : ''}
+     ORDER BY cp.created_at DESC LIMIT 100`,
     [club.id]
   );
   res.json({ posts: rows.map(p => ({
-    id: p.id, title: p.title, body: p.body, created_at: p.created_at,
+    id: p.id, title: p.title, body: p.body, created_at: p.created_at, is_admin_post: p.is_admin_post,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
   })) });
 });
 
-// POST /api/clubs/:slug/posts — members only.
+// POST /api/clubs/:slug/posts — members only. is_admin_post is a deliberate
+// choice made at posting time (only owners/admins can set it — silently
+// ignored otherwise, never trusted from a regular member's request).
 app.post('/api/clubs/:slug/posts', requireAuth, async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
@@ -5255,14 +5269,15 @@ app.post('/api/clubs/:slug/posts', requireAuth, async (req, res) => {
   const title = String(req.body.title || '').trim().slice(0, 120);
   const body = String(req.body.body || '').trim().slice(0, 5000);
   if (!body) return res.status(400).json({ error: 'Post body is required.' });
+  const isAdminPost = !!req.body.is_admin_post && (role === 'owner' || role === 'admin');
 
   const { rows: [post] } = await pool.query(
-    `INSERT INTO club_posts (club_id, author_user_id, title, body) VALUES ($1, $2, $3, $4) RETURNING *`,
-    [club.id, req.user.id, title, body]
+    `INSERT INTO club_posts (club_id, author_user_id, title, body, is_admin_post) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [club.id, req.user.id, title, body, isAdminPost]
   );
   const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
   res.json({ post: {
-    id: post.id, title: post.title, body: post.body, created_at: post.created_at,
+    id: post.id, title: post.title, body: post.body, created_at: post.created_at, is_admin_post: post.is_admin_post,
     author: { id: req.user.id, username: author.username, display_name: author.display_name || author.username, avatar: author.avatar || null },
   } });
 });
