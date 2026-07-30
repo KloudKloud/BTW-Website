@@ -708,6 +708,16 @@ async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_club_members_user ON club_members(user_id);
   `).catch(e => console.error('clubs migration:', e.message));
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS club_post_likes (
+      id         SERIAL      PRIMARY KEY,
+      post_id    INTEGER     NOT NULL REFERENCES club_posts(id) ON DELETE CASCADE,
+      user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(post_id, user_id)
+    );
+  `).catch(e => console.error('club_post_likes migration:', e.message));
+
   // "Posts By Admin Team" is a per-post choice made at creation time, not
   // implied by the author being an admin — an owner/admin can still post to
   // the club's general feed and only some of their posts land here. Needs
@@ -5283,6 +5293,17 @@ app.get('/api/clubs', async (req, res) => {
   const mineOnly = req.query.mine === '1' && viewerId;
   const limit = Math.min(parseInt(req.query.limit, 10) || 30, 100);
 
+  // Same "logged out or SFW Mode" gate used for spicy gallery/character
+  // content — NSFW clubs drop out of public browse for those viewers.
+  // mineOnly is exempt: your own clubs (owned or joined) always stay
+  // visible in your own list regardless of SFW Mode.
+  let nsfwAllowed = false;
+  if (viewerId) {
+    const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
+    nsfwAllowed = !!(row && row.nsfw_enabled);
+  }
+  const hideNsfw = !mineOnly && !nsfwAllowed;
+
   const { rows } = await pool.query(
     `SELECT c.*, COUNT(cm.id)::int AS member_count,
             MAX(CASE WHEN cm.user_id = $1 THEN cm.role END) AS viewer_role
@@ -5291,6 +5312,7 @@ app.get('/api/clubs', async (req, res) => {
        AND cm.user_id NOT IN (SELECT id FROM users WHERE username IN ('holly_allen', 'holly_chan'))
      WHERE c.name ILIKE $2
        ${mineOnly ? 'AND EXISTS (SELECT 1 FROM club_members m2 WHERE m2.club_id = c.id AND m2.user_id = $1)' : ''}
+       ${hideNsfw ? 'AND c.is_nsfw = FALSE' : ''}
      GROUP BY c.id
      ORDER BY member_count DESC, c.created_at DESC
      LIMIT $3`,
@@ -5337,6 +5359,22 @@ app.get('/api/clubs/:slug', async (req, res) => {
   }
   const { rows: [club] } = await pool.query('SELECT * FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
+
+  const viewerRoleEarly = await getClubRole(club.id, viewerId);
+  if (club.is_nsfw && !viewerRoleEarly) {
+    // Members always keep access to their own club regardless of SFW Mode —
+    // this gate is about hiding NSFW clubs from browsing/direct links for
+    // everyone else, same "logged out or SFW Mode" rule used for spicy
+    // gallery/character content.
+    let nsfwAllowed = false;
+    if (viewerId) {
+      const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
+      nsfwAllowed = !!(row && row.nsfw_enabled);
+    }
+    if (!nsfwAllowed) {
+      return res.status(403).json({ error: 'This club is marked NSFW.', nsfw_locked: true, reason: viewerId ? 'sfw_mode' : 'login' });
+    }
+  }
 
   const [{ rows: members }, viewerRole, { rows: [{ postCount }] }] = await Promise.all([
     pool.query(
@@ -5528,7 +5566,17 @@ function clubPostPublicShape(p) {
     poll: p.poll || null,
     created_at: p.created_at, is_admin_post: p.is_admin_post,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
+    like_count: Number(p.like_count) || 0,
+    comment_count: Number(p.comment_count) || 0,
+    user_liked: !!p.user_liked,
   };
+}
+function optionalViewerId(req) {
+  const h = req.headers.authorization;
+  if (h && h.startsWith('Bearer ')) {
+    try { return jwt.verify(h.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+  return null;
 }
 
 // GET /api/clubs/:slug/posts — ?section=admin restricts to posts explicitly
@@ -5538,12 +5586,16 @@ app.get('/api/clubs/:slug/posts', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const adminOnly = req.query.section === 'admin';
+  const viewerId = optionalViewerId(req);
   const { rows } = await pool.query(
-    `SELECT cp.*, u.username, u.display_name, u.avatar
+    `SELECT cp.*, u.username, u.display_name, u.avatar,
+       (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
+       (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
+       (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked
      FROM club_posts cp JOIN users u ON u.id = cp.author_user_id
      WHERE cp.club_id = $1 ${adminOnly ? 'AND cp.is_admin_post = TRUE' : ''}
      ORDER BY cp.created_at DESC LIMIT 100`,
-    [club.id]
+    [club.id, viewerId || 0]
   );
   res.json({ posts: rows.map(clubPostPublicShape) });
 });
@@ -5553,14 +5605,39 @@ app.get('/api/clubs/:slug/posts', async (req, res) => {
 app.get('/api/clubs/:slug/posts/:postId', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const viewerId = optionalViewerId(req);
   const { rows: [p] } = await pool.query(
-    `SELECT cp.*, u.username, u.display_name, u.avatar
+    `SELECT cp.*, u.username, u.display_name, u.avatar,
+       (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
+       (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
+       (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $3) AS user_liked
      FROM club_posts cp JOIN users u ON u.id = cp.author_user_id
      WHERE cp.id = $1 AND cp.club_id = $2`,
-    [req.params.postId, club.id]
+    [req.params.postId, club.id, viewerId || 0]
   );
   if (!p) return res.status(404).json({ error: 'Post not found.' });
   res.json({ post: clubPostPublicShape(p) });
+});
+
+app.post('/api/clubs/:slug/posts/:postId/like', requireAuth, async (req, res) => {
+  const { rows: [post] } = await pool.query(
+    `SELECT cp.id FROM club_posts cp JOIN clubs c ON c.id = cp.club_id WHERE c.slug = $1 AND cp.id = $2`,
+    [req.params.slug, req.params.postId]
+  );
+  if (!post) return res.status(404).json({ error: 'Post not found.' });
+  await pool.query('INSERT INTO club_post_likes (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [post.id, req.user.id]);
+  const { rows: [{ count }] } = await pool.query('SELECT COUNT(*)::int AS count FROM club_post_likes WHERE post_id = $1', [post.id]);
+  res.json({ liked: true, like_count: count });
+});
+app.delete('/api/clubs/:slug/posts/:postId/like', requireAuth, async (req, res) => {
+  const { rows: [post] } = await pool.query(
+    `SELECT cp.id FROM club_posts cp JOIN clubs c ON c.id = cp.club_id WHERE c.slug = $1 AND cp.id = $2`,
+    [req.params.slug, req.params.postId]
+  );
+  if (!post) return res.status(404).json({ error: 'Post not found.' });
+  await pool.query('DELETE FROM club_post_likes WHERE post_id = $1 AND user_id = $2', [post.id, req.user.id]);
+  const { rows: [{ count }] } = await pool.query('SELECT COUNT(*)::int AS count FROM club_post_likes WHERE post_id = $1', [post.id]);
+  res.json({ liked: false, like_count: count });
 });
 
 // POST /api/clubs/:slug/posts — members only. is_admin_post is a deliberate
@@ -6368,11 +6445,22 @@ app.delete('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => 
 // GET /api/clubs-feed — recent posts across every club, for the Social hub.
 app.get('/api/clubs-feed', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+  let nsfwAllowed = false;
+  if (viewerId) {
+    const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
+    nsfwAllowed = !!(row && row.nsfw_enabled);
+  }
   const { rows } = await pool.query(
     `SELECT cp.*, u.username, u.display_name, u.avatar, c.slug AS club_slug, c.name AS club_name, c.icon_url AS club_icon
      FROM club_posts cp
      JOIN users u ON u.id = cp.author_user_id
      JOIN clubs c ON c.id = cp.club_id
+     ${nsfwAllowed ? '' : 'WHERE c.is_nsfw = FALSE'}
      ORDER BY cp.created_at DESC LIMIT $1`,
     [limit]
   );

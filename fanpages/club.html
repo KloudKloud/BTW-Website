@@ -405,6 +405,24 @@
     .cl-post-detail-image-dot.cl-active { background: #fff; transform: scale(1.2); }
     .cl-post-detail-body { color: #ccc; font-size: 1rem; line-height: 1.85; white-space: pre-wrap; margin: 0 0 2.5rem; }
 
+    /* Post metadata row (heart/comments/share) — a transparent pill row,
+       not a solid card, so it reads as an action bar rather than more
+       content. */
+    .cl-post-meta-row { display: flex; gap: 0.75rem; margin: -1.5rem 0 2.5rem; }
+    .cl-post-meta-btn {
+      display: flex; align-items: center; gap: 0.4rem;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); border-radius: 20px;
+      padding: 0.5rem 1rem; color: #ccc; font-family: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .cl-post-meta-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.22); color: #fff; }
+    .cl-post-meta-btn.liked { border-color: #d97a72; color: #f5b3ac; background: rgba(217,122,114,0.1); }
+
+    /* Post list teaser row — like/comment counts, "almost like a teaser for
+       clicking on the post" per feedback, shown under the title in both the
+       Club News box and the Social feed rows. */
+    .cl-admin-post-teaser { display: flex; gap: 0.9rem; margin-top: 0.4rem; font-size: 0.76rem; color: #888; }
+
     /* General Page template's up-to-three text sections — same "underlined
        Cinzel label" treatment as the Home tab's Welcome/Featured Cards
        titles. */
@@ -477,13 +495,7 @@
       color: #bbb; font-size: 0.95rem; line-height: 1.6; margin: 0;
       overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     }
-    .cl-promo-detail-link-btn {
-      display: inline-flex; align-items: center; gap: 0.55rem;
-      background: #7fa8d9; color: #0a0a0a; font-weight: 700; font-size: 0.95rem;
-      padding: 0.85rem 1.6rem; border-radius: 24px; text-decoration: none; margin-top: 0.5rem;
-      transition: background 0.15s, transform 0.15s;
-    }
-    .cl-promo-detail-link-btn:hover { background: #a8c6e8; transform: translateY(-1px); }
+    .cl-promo-detail-desc { color: #ccc; font-size: 1rem; line-height: 1.85; white-space: pre-wrap; margin: 1.5rem 0 0; }
 
     /* ── Create Post modal: two-column layout with a Rules recap on the
        right (same expandable rule rows as the sidebar) so people can
@@ -921,7 +933,7 @@
   </aside>
 
 <div id="cl-notfound" class="cl-gate" style="display:none;">
-  <p>This club doesn't exist (or was deleted).</p>
+  <p id="cl-notfound-msg">This club doesn't exist (or was deleted).</p>
   <a class="btn btn-green" href="/fanpages/social" style="margin-top:1rem; display:inline-block;">&larr; Back to Social</a>
 </div>
 
@@ -1030,17 +1042,26 @@
       </div>
 
       <!-- Promotion Page card detail — swapped in over the whole custom
-           page view (list included), reading-focused like opening a story
-           chapter: image up top, title, full description, then a link
-           button out to wherever the card points. -->
-      <div class="cl-row cl-post-detail" id="cl-promo-detail-view" hidden>
+           page view (list included). Deliberately styled after the story
+           chapter reader (fanpages.css .chapter-detail-*) instead of the
+           post-detail layout, so it reads as its own distinct thing: a
+           "Where to Find" links sidebar on the left, image + title +
+           description on the right. -->
+      <div class="cl-row" id="cl-promo-detail-view" hidden>
         <button class="cl-post-back-btn" id="cl-promo-detail-back-btn" type="button">&larr; Back</button>
-        <div class="cl-post-detail-image-wrap" id="cl-promo-detail-image-wrap">
-          <img id="cl-promo-detail-img" alt="" />
+        <div class="chapter-detail-card">
+          <div class="chapter-detail-side">
+            <p class="chapter-detail-side-label">Where to Find</p>
+            <div class="chapter-view-links" id="cl-promo-detail-links"></div>
+          </div>
+          <div class="chapter-detail-main">
+            <h1 class="chapter-detail-title" id="cl-promo-detail-title"></h1>
+            <div class="chapter-detail-image-wrap" id="cl-promo-detail-image-wrap">
+              <img id="cl-promo-detail-img" alt="" />
+            </div>
+            <p class="cl-promo-detail-desc" id="cl-promo-detail-desc"></p>
+          </div>
         </div>
-        <h1 class="cl-post-detail-title" id="cl-promo-detail-title"></h1>
-        <p class="cl-post-detail-body" id="cl-promo-detail-desc"></p>
-        <a class="cl-promo-detail-link-btn" id="cl-promo-detail-link-btn" href="#" target="_blank" rel="noopener noreferrer"></a>
       </div>
 
       <!-- Gallery Page image detail — a full view swap (not a routed URL,
@@ -1094,6 +1115,16 @@
         </div>
 
         <p class="cl-post-detail-body" id="cl-post-detail-body"></p>
+
+        <div class="cl-post-meta-row" id="cl-post-meta-row">
+          <button type="button" class="cl-post-meta-btn" id="cl-post-like-btn">
+            <span id="cl-post-like-icon">🤍</span> <span id="cl-post-like-count">0</span>
+          </button>
+          <button type="button" class="cl-post-meta-btn" id="cl-post-comment-jump-btn">
+            💬 <span id="cl-post-comment-count">0</span>
+          </button>
+          <button type="button" class="cl-post-meta-btn" id="cl-post-share-btn">↗ Share</button>
+        </div>
 
         <div id="cl-post-detail-comments-slot">
           <div class="cc-section" id="cl-post-detail-comments">
@@ -1469,6 +1500,7 @@
           <button class="mod-btn mod-btn--danger" id="cl-edit-page-delete-btn" type="button" style="margin-right:auto;" hidden>Delete Page</button>
           <button class="mod-btn mod-btn--cancel" id="cl-edit-cancel" type="button">Cancel</button>
           <button class="mod-btn" id="cl-edit-save" type="button">Save</button>
+          <button class="mod-btn mod-btn--danger" id="cl-edit-club-delete-btn" type="button" hidden>Delete Club</button>
         </div>
       </div>
 
@@ -1493,6 +1525,17 @@
     <div class="mod-confirm-actions">
       <button class="mod-btn" id="cl-page-delete-confirm-cancel" type="button">Cancel</button>
       <button class="mod-btn mod-btn--danger" id="cl-page-delete-confirm-yes" type="button">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="mod-confirm-overlay" id="cl-club-delete-confirm-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title">Delete this club?</p>
+    <p class="mod-confirm-text">This permanently deletes the club, every page, post, and comment in it. This can't be undone.</p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="cl-club-delete-confirm-cancel" type="button">Cancel</button>
+      <button class="mod-btn mod-btn--danger" id="cl-club-delete-confirm-yes" type="button">Delete Club</button>
     </div>
   </div>
 </div>
@@ -1742,7 +1785,20 @@ if (localStorage.getItem('soc_sidebar_collapsed') === '1') setSidebarCollapsed(t
 async function loadClub() {
   try {
     const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}`, { headers: authHeaders() });
-    if (!res.ok) { document.getElementById('cl-notfound').style.display = 'block'; return; }
+    if (!res.ok) {
+      let msg = "This club doesn't exist (or was deleted).";
+      try {
+        const errData = await res.json();
+        if (errData.nsfw_locked) {
+          msg = errData.reason === 'login'
+            ? 'This club is marked NSFW — log in to view it.'
+            : 'This club is marked NSFW — turn off SFW Mode in your account settings to view it.';
+        }
+      } catch {}
+      document.getElementById('cl-notfound-msg').textContent = msg;
+      document.getElementById('cl-notfound').style.display = 'block';
+      return;
+    }
     const data = await res.json();
     renderClub(data.club, data.members || []);
     document.getElementById('cl-page').style.display = 'block';
@@ -2134,6 +2190,10 @@ function adminPostRow(post) {
         <span>${timeAgo(post.created_at)}</span>
       </div>
       <p class="cl-admin-post-title">${escapeHtml(titleText)}</p>
+      <div class="cl-admin-post-teaser">
+        <span>🤍 ${post.like_count || 0}</span>
+        <span>💬 ${post.comment_count || 0}</span>
+      </div>
     </div>
   `;
   return row;
@@ -2426,7 +2486,7 @@ document.getElementById('cl-home-tab-social').addEventListener('click', () => na
 // post on the site will eventually use, not just this club's feeds. ─────
 async function loadAndShowPost(postId) {
   try {
-    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${postId}`);
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${postId}`, { headers: authHeaders() });
     if (!res.ok) return;
     const data = await res.json();
     renderPostDetail(data.post);
@@ -2445,7 +2505,9 @@ function ccMoveTo(slotId) {
   document.getElementById(slotId).appendChild(document.getElementById('cl-post-detail-comments'));
 }
 
+let currentPostDetail = null;
 function renderPostDetail(post) {
+  currentPostDetail = post;
   const a = post.author;
   document.title = `${post.title || 'Post'} ✦ ${currentClub ? currentClub.name : 'Club'} ✦ Fanpages`;
 
@@ -2456,6 +2518,7 @@ function renderPostDetail(post) {
   document.getElementById('cl-post-detail-time').textContent = timeAgo(post.created_at);
   document.getElementById('cl-post-detail-title').textContent = post.title || post.body;
   document.getElementById('cl-post-detail-body').textContent = post.body;
+  updatePostMetaUI(post);
 
   // Unlike the feed preview (which always shows a thumbnail, falling back
   // to noimage.png), the full post simply has no image block at all when
@@ -2466,6 +2529,33 @@ function renderPostDetail(post) {
   postDetailImageIdx = 0;
   updatePostDetailImage();
 }
+function updatePostMetaUI(post) {
+  document.getElementById('cl-post-like-btn').classList.toggle('liked', !!post.user_liked);
+  document.getElementById('cl-post-like-icon').textContent = post.user_liked ? '❤️' : '🤍';
+  document.getElementById('cl-post-like-count').textContent = post.like_count || 0;
+  document.getElementById('cl-post-comment-count').textContent = post.comment_count || 0;
+}
+document.getElementById('cl-post-like-btn').addEventListener('click', async () => {
+  if (!currentPostDetail) return;
+  if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(location.pathname + location.search)}`; return; }
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${currentPostDetail.id}/like`, {
+      method: currentPostDetail.user_liked ? 'DELETE' : 'POST', headers: authHeaders(),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    currentPostDetail.user_liked = data.liked;
+    currentPostDetail.like_count = data.like_count;
+    updatePostMetaUI(currentPostDetail);
+  } catch {}
+});
+document.getElementById('cl-post-comment-jump-btn').addEventListener('click', () => {
+  document.getElementById('cl-post-detail-comments').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+document.getElementById('cl-post-share-btn').addEventListener('click', (e) => {
+  if (!currentPostDetail) return;
+  window.fpShare(e.currentTarget, `${window.location.origin}${buildClubUrl({ post: currentPostDetail.id })}`);
+});
 let postDetailImages = [];
 let postDetailImageIdx = 0;
 const CL_FLIP_MS = 220;
@@ -2780,15 +2870,14 @@ function pagePromoRowEl(card) {
   return a;
 }
 // Chapter-view-style: hides the whole custom-page-view (list included) and
-// swaps in a single reading-focused card — image, title, full description,
-// then a link button out to wherever the card points.
+// swaps in a "Where to Find" links sidebar + image/title/description, same
+// layout recipe as the story chapter reader (.chapter-detail-*).
 function openPromoDetail(card) {
   document.getElementById('cl-promo-detail-img').src = card.image_url || '/images/noimage.png';
   document.getElementById('cl-promo-detail-title').textContent = card.title;
   document.getElementById('cl-promo-detail-desc').textContent = card.description;
-  const linkBtn = document.getElementById('cl-promo-detail-link-btn');
-  linkBtn.href = card.link_url;
-  linkBtn.textContent = `🔗 ${card.link_title}`;
+  const linksWrap = document.getElementById('cl-promo-detail-links');
+  linksWrap.innerHTML = `<a class="btn btn-primary chapter-read-btn" href="${card.link_url}" target="_blank" rel="noopener noreferrer">${escapeHtml(card.link_title)}</a>`;
   document.getElementById('cl-custom-page-view').hidden = true;
   document.getElementById('cl-promo-detail-view').hidden = false;
   window.scrollTo(0, 0);
@@ -3196,6 +3285,7 @@ function switchEditView(view, pageSlug, skipGuard) {
   document.getElementById('cl-edit-template-view').hidden = true;
   document.getElementById('cl-edit-main-actions').style.display = 'flex';
   document.getElementById('cl-edit-page-delete-btn').hidden = view !== 'page';
+  document.getElementById('cl-edit-club-delete-btn').hidden = !(view === 'home' && currentClub && currentClub.viewer_role === 'owner');
   document.getElementById('cl-edit-msg').textContent = '';
 
   if (view === 'home') populateHomeEditor(currentClub);
@@ -4195,6 +4285,31 @@ document.getElementById('cl-page-delete-confirm-yes').addEventListener('click', 
   await loadEditPages();
   loadClubPages();
   switchEditView('home', null, true);
+});
+
+// ── Delete Club — owner-only (button itself is hidden for everyone else,
+// but the DELETE endpoint enforces owner-only server-side too). ───────────
+document.getElementById('cl-edit-club-delete-btn').addEventListener('click', () => {
+  document.getElementById('cl-club-delete-confirm-overlay').hidden = false;
+});
+document.getElementById('cl-club-delete-confirm-cancel').addEventListener('click', () => {
+  document.getElementById('cl-club-delete-confirm-overlay').hidden = true;
+});
+document.getElementById('cl-club-delete-confirm-yes').addEventListener('click', async () => {
+  const btn = document.getElementById('cl-club-delete-confirm-yes');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}`, { method: 'DELETE', headers: authHeaders() });
+    if (!res.ok) throw new Error();
+    window.location.href = '/fanpages/social';
+  } catch {
+    document.getElementById('cl-club-delete-confirm-overlay').hidden = true;
+    alert('Could not delete this club — please try again.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Delete Club';
+  }
 });
 
 // ── Create Page — template picker ─────────────────────────────────────────
