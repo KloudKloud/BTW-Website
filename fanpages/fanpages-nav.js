@@ -19,8 +19,6 @@
       <a class="fpnav-brand" href="/fanpages"><img class="fpnav-brand-logo" src="/images/fanpagelogo.png" alt="Fanpages" width="52" height="44" /></a>
       <a class="fpnav-link${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Clubs</a>
 
-      <a class="fpnav-home-btn" href="${homeHref}">BTW Homepage</a>
-
       <div class="fpnav-dropdown-wrap" id="fpnav-admin-wrap" style="display:none;">
         <button class="fpnav-trigger-btn fpnav-admin-btn" id="fpnav-admin-btn" type="button">Admin <span class="fpnav-caret">▾</span></button>
         <div class="fpnav-dropdown" id="fpnav-admin-dropdown" hidden>
@@ -62,6 +60,7 @@
             <a href="/fanpages/library" id="fpnav-library-link">Bookmarks</a>
             <a href="/fanpages/notifications#inbox" id="fpnav-updates-link">Inbox</a>
             <div class="fpnav-dropdown-divider"></div>
+            <a href="${homeHref}">BTW Homepage</a>
             <a href="#" id="fpnav-edit-profile-link">Account Settings</a>
             <a href="#" id="fpnav-logout-link">Logout</a>
           </div>

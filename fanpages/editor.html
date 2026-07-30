@@ -13,7 +13,7 @@
     a { color: inherit; }
     [hidden] { display: none !important; }
 
-    .ed-page { max-width: 1560px; margin: 0 auto; padding: 6rem 1.5rem 5rem; }
+    .ed-page { max-width: 1100px; margin: 0 auto; padding: 6rem 1.5rem 5rem; }
     .ed-title {
       font-family: 'Cinzel', serif; font-size: 2.1rem; font-weight: 700; color: #f0f0f0;
       margin: 0 0 1.5rem;
@@ -33,11 +33,27 @@
       height: 3px; background: #f0c060; border-radius: 2px;
     }
 
-    .ed-layout { display: grid; grid-template-columns: 220px 1fr; gap: 2rem; align-items: start; }
+    .ed-layout { display: grid; grid-template-columns: 240px 1fr; gap: 2rem; align-items: start; }
+
+    /* Left column card — search on top, create button underneath, same
+       glass-card recipe used for side boxes elsewhere in fanpages. */
+    .ed-side-box {
+      background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 1.1rem;
+      display: flex; flex-direction: column; gap: 1rem;
+    }
+    .ed-search-wrap { position: relative; }
+    .ed-search-icon { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: #888; font-size: 0.9rem; pointer-events: none; }
+    .ed-search-input {
+      width: 100%; box-sizing: border-box; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px; padding: 0.6rem 0.9rem 0.6rem 2.1rem; color: #f0f0f0; font-family: inherit; font-size: 0.85rem;
+    }
+    .ed-search-input:focus { outline: none; border-color: #7fa8d9; }
+    .ed-search-count { font-size: 0.74rem; color: #888; padding: 0 0.2rem; }
 
     .ed-create-btn {
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem;
-      width: 100%; min-height: 160px; box-sizing: border-box;
+      width: 100%; min-height: 140px; box-sizing: border-box;
       background: linear-gradient(135deg, #6b3fa0, #c2547a); border: none; border-radius: 16px;
       padding: 1.5rem 1rem; cursor: pointer; text-decoration: none;
       font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 700; color: #fff; text-align: center;
@@ -96,10 +112,17 @@
 
   <div class="ed-layout">
     <div class="ed-create-col">
-      <a class="ed-create-btn" id="ed-create-btn" href="/fanpages/create">
-        <span class="ed-create-btn-icon">➕</span>
-        <span id="ed-create-btn-label">Create New Story</span>
-      </a>
+      <div class="ed-side-box">
+        <div class="ed-search-wrap">
+          <span class="ed-search-icon">🔍</span>
+          <input type="text" class="ed-search-input" id="ed-search-input" placeholder="Find a story, character, art..." />
+        </div>
+        <p class="ed-search-count" id="ed-search-count" hidden></p>
+        <a class="ed-create-btn" id="ed-create-btn" href="/fanpages/create">
+          <span class="ed-create-btn-icon">➕</span>
+          <span id="ed-create-btn-label">Create Story</span>
+        </a>
+      </div>
     </div>
     <div class="ed-list-col" id="ed-list"><p class="ed-empty">Loading…</p></div>
   </div>
@@ -117,22 +140,46 @@
 
   const TABS = ['stories', 'characters', 'gallery'];
   const CREATE_CONFIG = {
-    stories:    { href: '/fanpages/create',          label: 'Create New Story' },
-    characters: { href: '/fanpages/create-character', label: 'Create New Character' },
-    gallery:    { href: '/fanpages/create-gallery',   label: 'Create New Gallery' },
+    stories:    { href: '/fanpages/create',          label: 'Create Story' },
+    characters: { href: '/fanpages/create-character', label: 'Create Character' },
+    gallery:    { href: '/fanpages/create-gallery',   label: 'Create Gallery' },
+  };
+  const SEARCH_FIELD = { stories: 'site_title', characters: 'name', gallery: 'title' };
+  const SEARCH_PLACEHOLDER = {
+    stories: 'Find a story...', characters: 'Find a character...', gallery: 'Find gallery art...',
   };
 
   let USERNAME = null;
+  let currentTab = 'stories';
   const cache = { stories: null, characters: null, gallery: null };
 
   function switchEdTab(tab) {
+    currentTab = tab;
     TABS.forEach(t => document.getElementById(`ed-tab-${t}`).classList.toggle('active', t === tab));
     document.getElementById('ed-create-btn').href = CREATE_CONFIG[tab].href;
     document.getElementById('ed-create-btn-label').textContent = CREATE_CONFIG[tab].label;
+    const searchInput = document.getElementById('ed-search-input');
+    searchInput.value = '';
+    searchInput.placeholder = SEARCH_PLACEHOLDER[tab];
+    document.getElementById('ed-search-count').hidden = true;
     history.replaceState(null, '', tab === 'stories' ? location.pathname : `#${tab}`);
     renderTab(tab);
   }
   TABS.forEach(t => document.getElementById(`ed-tab-${t}`).addEventListener('click', () => switchEdTab(t)));
+
+  // Live client-side search — everything for a tab is already loaded/cached,
+  // so filtering as-you-type is instant with no extra requests.
+  document.getElementById('ed-search-input').addEventListener('input', function () {
+    const q = this.value.trim().toLowerCase();
+    const items = cache[currentTab] || [];
+    const countEl = document.getElementById('ed-search-count');
+    if (!q) { countEl.hidden = true; renderItems(currentTab, items); return; }
+    const field = SEARCH_FIELD[currentTab];
+    const filtered = items.filter(item => String(item[field] || '').toLowerCase().includes(q));
+    countEl.hidden = false;
+    countEl.textContent = `${filtered.length} match${filtered.length === 1 ? '' : 'es'}`;
+    renderItems(currentTab, filtered, true);
+  });
 
   function edCard(href, imgSrc, imgClass, title, sub) {
     const a = document.createElement('a');
@@ -176,38 +223,45 @@
     return cache.gallery;
   }
 
+  // Builds the cards for a given tab from an already-loaded items array —
+  // shared by the initial render and the live search filter, so filtering
+  // never has to re-fetch anything.
+  function renderItems(tab, items, isFiltered) {
+    const list = document.getElementById('ed-list');
+    if (!items.length) {
+      list.innerHTML = isFiltered
+        ? '<p class="ed-empty">No matches.</p>'
+        : `<p class="ed-empty">No ${tab === 'stories' ? 'stories' : tab} yet — create your first one!</p>`;
+      return;
+    }
+    list.innerHTML = '';
+    if (tab === 'stories') {
+      items.forEach(s => list.appendChild(edCard(
+        `/fanpages/${s.story_path || s.slug}`,
+        s.cover_url || '/images/gallery/kloudsaphbedroom_1.png', 'ed-card-img--story',
+        s.site_title, 'View & manage this story →'
+      )));
+    } else if (tab === 'characters') {
+      items.forEach(c => list.appendChild(edCard(
+        `/fanpages/create-character?id=${c.id}`,
+        c.ref_image || '/images/defaultchar.jpg', '',
+        c.name, 'Click to edit or delete'
+      )));
+    } else {
+      items.forEach(g => list.appendChild(edCard(
+        `/fanpages/create-gallery?id=${g.id}`,
+        g.image, '',
+        g.title || 'Untitled', `${(g.category || 'sfw').toUpperCase()} — Click to edit or delete`
+      )));
+    }
+  }
+
   async function renderTab(tab) {
     const list = document.getElementById('ed-list');
     list.innerHTML = '<p class="ed-empty">Loading…</p>';
     try {
-      if (tab === 'stories') {
-        const sites = await loadStories();
-        if (!sites.length) { list.innerHTML = '<p class="ed-empty">No stories yet — create your first one!</p>'; return; }
-        list.innerHTML = '';
-        sites.forEach(s => list.appendChild(edCard(
-          `/fanpages/${s.story_path || s.slug}`,
-          s.cover_url || '/images/gallery/kloudsaphbedroom_1.png', 'ed-card-img--story',
-          s.site_title, 'View & manage this story →'
-        )));
-      } else if (tab === 'characters') {
-        const chars = await loadCharacters();
-        if (!chars.length) { list.innerHTML = '<p class="ed-empty">No characters yet — create your first one!</p>'; return; }
-        list.innerHTML = '';
-        chars.forEach(c => list.appendChild(edCard(
-          `/fanpages/create-character?id=${c.id}`,
-          c.ref_image || '/images/defaultchar.jpg', '',
-          c.name, 'Click to edit or delete'
-        )));
-      } else {
-        const items = await loadGallery();
-        if (!items.length) { list.innerHTML = '<p class="ed-empty">No gallery posts yet — create your first one!</p>'; return; }
-        list.innerHTML = '';
-        items.forEach(g => list.appendChild(edCard(
-          `/fanpages/create-gallery?id=${g.id}`,
-          g.image, '',
-          g.title || 'Untitled', `${(g.category || 'sfw').toUpperCase()} — Click to edit or delete`
-        )));
-      }
+      const items = tab === 'stories' ? await loadStories() : tab === 'characters' ? await loadCharacters() : await loadGallery();
+      renderItems(tab, items, false);
     } catch {
       list.innerHTML = '<p class="ed-empty">Couldn\'t load this right now.</p>';
     }

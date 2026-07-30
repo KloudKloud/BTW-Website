@@ -4971,7 +4971,8 @@ app.get('/api/library', requireAuth, async (req, res) => {
       ORDER BY mb.created_at DESC
     `, [req.user.id]),
     pool.query(`
-      SELECT mg.id, mg.image_url, mg.title, mg.category, ms.slug, ms.story_path, ms.site_title, u.username AS owner_username
+      SELECT mg.id, mg.image_url, mg.title, mg.category, ms.slug, ms.story_path, ms.site_title,
+        u.username AS owner_username, u.display_name AS owner_display_name
       FROM moderator_gallery_likes mgl
       JOIN moderator_gallery mg ON mg.id = mgl.gallery_id
       LEFT JOIN LATERAL (
@@ -4983,7 +4984,8 @@ app.get('/api/library', requireAuth, async (req, res) => {
       ORDER BY mgl.created_at DESC
     `, [req.user.id]),
     pool.query(`
-      SELECT mg.id, mg.image_url, mg.title, mg.category, ms.slug, ms.story_path, ms.site_title, u.username AS owner_username
+      SELECT mg.id, mg.image_url, mg.title, mg.category, ms.slug, ms.story_path, ms.site_title,
+        u.username AS owner_username, u.display_name AS owner_display_name
       FROM moderator_gallery_bookmarks mgb
       JOIN moderator_gallery mg ON mg.id = mgb.gallery_id
       LEFT JOIN LATERAL (
@@ -5003,12 +5005,12 @@ app.get('/api/library', requireAuth, async (req, res) => {
     gallery: gallery.map(r => ({
       id: r.id, image_url: r.image_url, title: r.title, category: r.category,
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
-      owner_username: r.owner_username,
+      owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
     })),
     bookmarked_gallery: bookmarkedGallery.map(r => ({
       id: r.id, image_url: r.image_url, title: r.title, category: r.category,
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
-      owner_username: r.owner_username,
+      owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
     })),
   });
 });
