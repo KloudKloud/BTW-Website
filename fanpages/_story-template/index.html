@@ -169,12 +169,12 @@
       </section>
 
       <section class="wiki-section">
-        <h2 class="wiki-section-title" id="meet-heading">Meet the Author</h2>
+        <h2 class="wiki-section-title" id="meet-heading">Notes From the Author</h2>
         <div class="wiki-rule"></div>
         <div class="wiki-meet-split">
           <div class="wiki-meet-text mod-editable-block">
             <div class="mod-field-label-row">
-              <span class="mod-field-label" id="bio-field-label">Meet the Author</span>
+              <span class="mod-field-label" id="bio-field-label">Notes From the Author</span>
               <span class="mod-field-hint">Use *text* for italics, **text** for bold.</span>
             </div>
             <p id="site-bio-display">N/A</p>
@@ -190,6 +190,18 @@
             <button class="mod-btn mod-btn--small" id="add-link-edit-row" type="button" style="display:none;">+ Add Link</button>
           </div>
         </div>
+
+        <a class="wiki-author-teaser-card" id="wiki-author-teaser-card" href="#" style="display:none;">
+          <div class="wiki-author-teaser-avatar-wrap">
+            <img class="wiki-author-teaser-avatar" id="wiki-author-teaser-avatar" alt="" style="display:none;" />
+            <span class="wiki-author-teaser-avatar-fallback" id="wiki-author-teaser-avatar-fallback" style="display:none;">?</span>
+          </div>
+          <div class="wiki-author-teaser-text">
+            <p class="wiki-author-teaser-name" id="wiki-author-teaser-name"></p>
+            <p class="wiki-author-teaser-bio" id="wiki-author-teaser-bio"></p>
+          </div>
+          <span class="wiki-author-teaser-arrow">&#8594;</span>
+        </a>
       </section>
 
       <section class="wiki-section wiki-tags-section">
@@ -429,7 +441,7 @@ function populateDisplay() {
   document.getElementById('site-title-display').textContent    = title;
   document.getElementById('site-synopsis-display').innerHTML = renderMarkdownLite(s.synopsis || 'N/A');
   document.getElementById('site-bio-display').innerHTML      = renderMarkdownLite(s.bio       || 'N/A');
-  const meetText = 'Meet ' + (s.author_display_name || s.author_username || 'the Author');
+  const meetText = 'Notes From ' + (s.author_display_name || s.author_username || 'the Author');
   document.getElementById('meet-heading').textContent = meetText;
   document.getElementById('bio-field-label').textContent = meetText;
   document.getElementById('footer-text').textContent = `${title} is a fan-made page hosted on Between Two Worlds.`;
@@ -1024,6 +1036,27 @@ function renderBookmarkBtn(s) {
   };
 }
 
+// ── Teaser card for the author's actual account profile (separate from the
+// story-scoped "Notes From the Author" text above it) — a truncated peek at
+// their account bio that links out to /fanpages/<username>. ──────────────
+function renderAuthorTeaserCard(s) {
+  const card = document.getElementById('wiki-author-teaser-card');
+  if (!s.author_username) { card.style.display = 'none'; return; }
+  card.style.display = 'flex';
+  card.href = `/fanpages/${s.author_username}`;
+  document.getElementById('wiki-author-teaser-name').textContent = s.author_display_name || s.author_username;
+  avatarInto(
+    document.getElementById('wiki-author-teaser-avatar'),
+    document.getElementById('wiki-author-teaser-avatar-fallback'),
+    s.author_avatar, s.author_display_name || s.author_username
+  );
+  const bio = (s.author_bio || '').trim();
+  const TEASER_LIMIT = 140;
+  document.getElementById('wiki-author-teaser-bio').textContent = bio
+    ? (bio.length > TEASER_LIMIT ? bio.slice(0, TEASER_LIMIT).trim() + '…' : bio)
+    : 'No bio yet — click to view their full profile.';
+}
+
 // ── Line the "Edit Story" button up with the "Story Description" heading —
 // it's absolutely positioned in the side column so its top can match the
 // heading's position in the main column exactly, regardless of how tall
@@ -1056,6 +1089,7 @@ window.addEventListener('resize', () => {
   renderVipBadge(s);
   renderWrittenBy(s);
   renderAuthorBox(s);
+  renderAuthorTeaserCard(s);
   renderBookmarkBtn(s);
 
   if (s.is_self) {

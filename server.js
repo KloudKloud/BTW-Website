@@ -3819,7 +3819,7 @@ app.put('/api/account/featured', requireAuth, async (req, res) => {
 // route below instead, since slug (their identity) is no longer unique.
 app.get('/api/moderator-sites/:slug', async (req, res) => {
   await sendSiteLookup(
-    `SELECT ms.*, u.display_name AS author_display_name, u.username AS author_username, u.avatar AS author_avatar
+    `SELECT ms.*, u.display_name AS author_display_name, u.username AS author_username, u.avatar AS author_avatar, u.account_bio AS author_bio
      FROM moderator_sites ms JOIN users u ON u.id = ms.owner_user_id
      WHERE ms.slug = $1 ORDER BY ms.created_at ASC LIMIT 1`,
     [req.params.slug], req, res
@@ -3831,7 +3831,7 @@ app.get('/api/moderator-sites/:slug', async (req, res) => {
 // several stories sharing the same slug/identity.
 app.get('/api/moderator-sites/by-path/:owner/:story', async (req, res) => {
   await sendSiteLookup(
-    `SELECT ms.*, u.display_name AS author_display_name, u.username AS author_username, u.avatar AS author_avatar
+    `SELECT ms.*, u.display_name AS author_display_name, u.username AS author_username, u.avatar AS author_avatar, u.account_bio AS author_bio
      FROM moderator_sites ms JOIN users u ON u.id = ms.owner_user_id
      WHERE ms.story_path = $1`,
     [`${req.params.owner}/${req.params.story}`], req, res
@@ -3910,7 +3910,7 @@ async function sendSiteLookup(query, params, req, res) {
       chapters_card_position_x: site.chapters_card_position_x, chapters_card_position_y: site.chapters_card_position_y,
       gallery_card_position_x: site.gallery_card_position_x, gallery_card_position_y: site.gallery_card_position_y,
       author_display_name: site.author_display_name, author_username: site.author_username,
-      author_avatar: site.author_avatar || null,
+      author_avatar: site.author_avatar || null, author_bio: site.author_bio || '',
       tags: site.tags || [],
       is_self: viewerId === site.owner_user_id,
       is_following: isFollowing.rows.length > 0,
