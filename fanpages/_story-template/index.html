@@ -166,6 +166,68 @@
             <textarea class="mod-textarea mod-edit-input" id="site-synopsis-input" style="display:none;"></textarea>
           </div>
         </div>
+
+        <!-- Story Metadata — Rating / Category / Relationships, AO3-style.
+             Display mode shows badges; edit mode swaps to a select, checkbox
+             row, and the same bubble-tag input pattern used for Tags below. -->
+        <div class="wiki-meta-display" id="wiki-meta-display">
+          <div class="wiki-meta-badge-group">
+            <span class="wiki-meta-badge-label">Rating</span>
+            <span class="wiki-rating-badge wiki-rating-badge--not-rated" id="wiki-meta-rating-badge">Not Rated</span>
+          </div>
+          <div class="wiki-meta-badge-group">
+            <span class="wiki-meta-badge-label">Category</span>
+            <span class="wiki-meta-badge-list" id="wiki-meta-category-badges"><span class="wiki-tags-empty">N/A</span></span>
+          </div>
+          <div class="wiki-meta-badge-group wiki-meta-badge-group--full">
+            <span class="wiki-meta-badge-label">Relationships</span>
+            <span class="wiki-meta-badge-list" id="wiki-meta-relationship-badges"><span class="wiki-tags-empty">N/A</span></span>
+          </div>
+        </div>
+
+        <div class="wiki-meta-editor mod-editable-block" id="wiki-meta-editor" style="display:none;">
+          <div class="mod-field-label-row">
+            <span class="mod-field-label">Rating</span>
+            <button class="wiki-tags-tip-icon" id="rating-tip-icon" type="button" aria-label="Rating help">ⓘ</button>
+            <div class="wiki-tags-tip-popover" id="rating-tip-popover" hidden>
+              <p><strong>Not Rated (Adult!)</strong> — For searching, screening, and other site functions, this may get treated the same way as Explicit content. Choose this if you'd rather not rate your content.</p>
+              <p><strong>General Audiences</strong> — Suitable for anyone.</p>
+              <p><strong>Teen And Up Audiences</strong> — May be inappropriate for audiences under 13.</p>
+              <p><strong>Mature (Adult!)</strong> — Adult themes (sex, violence, etc.) that aren't as graphic as Explicit.</p>
+              <p><strong>Explicit (Adult!)</strong> — Porn, graphic violence, etc.</p>
+            </div>
+          </div>
+          <select class="mod-input" id="rating-select">
+            <option value="Not Rated">Not Rated (Adult!)</option>
+            <option value="General Audiences">General Audiences</option>
+            <option value="Teen And Up Audiences">Teen And Up Audiences</option>
+            <option value="Mature">Mature (Adult!)</option>
+            <option value="Explicit">Explicit (Adult!)</option>
+          </select>
+
+          <div class="mod-field-label-row" style="margin-top:1.25rem;">
+            <span class="mod-field-label">Category</span>
+            <button class="wiki-tags-tip-icon" id="category-tip-icon" type="button" aria-label="Category help">ⓘ</button>
+            <div class="wiki-tags-tip-popover" id="category-tip-popover" hidden>
+              <p>There are 6 categories. Definitions vary fic to fic — use whichever feel applicable, or none:</p>
+              <p><strong>F/F</strong> — Female/Female relationships</p>
+              <p><strong>F/M</strong> — Female/Male relationships</p>
+              <p><strong>Gen</strong> — General: no romantic/sexual relationships, or not the main focus</p>
+              <p><strong>M/M</strong> — Male/Male relationships</p>
+              <p><strong>Multi</strong> — More than one kind of relationship, or a relationship with multiple partners</p>
+              <p><strong>Other</strong> — Other relationships</p>
+            </div>
+          </div>
+          <div class="wiki-meta-check-row" id="category-checks"></div>
+
+          <div class="mod-field-label-row" style="margin-top:1.25rem;">
+            <span class="mod-field-label">Relationships</span>
+            <span class="mod-field-hint">Full names preferred (e.g. "Blacky/Umbreon"). Press Enter to add.</span>
+          </div>
+          <div class="wiki-tags-input-box" id="relationships-input-box">
+            <input type="text" class="wiki-tags-input" id="relationships-text-input" placeholder="Type a relationship and press Enter…" />
+          </div>
+        </div>
       </section>
 
       <section class="wiki-section">
@@ -432,6 +494,98 @@ function linkIcon(label, url) {
   return match ? match[1] : '🔗';
 }
 
+// ── Story Metadata — Rating / Category / Relationships ──────────────────────
+const RATING_META = {
+  'Not Rated':               { label: 'Not Rated',              cls: 'not-rated' },
+  'General Audiences':       { label: 'General Audiences',      cls: 'general' },
+  'Teen And Up Audiences':   { label: 'Teen And Up Audiences',  cls: 'teen' },
+  'Mature':                  { label: 'Mature',                  cls: 'mature' },
+  'Explicit':                { label: 'Explicit',                cls: 'explicit' },
+};
+const CATEGORY_OPTIONS = ['F/F', 'F/M', 'Gen', 'M/M', 'Multi', 'Other'];
+
+function renderMetaDisplay(s) {
+  const rating = RATING_META[s.rating] || RATING_META['Not Rated'];
+  const badge = document.getElementById('wiki-meta-rating-badge');
+  badge.textContent = rating.label;
+  badge.className = `wiki-rating-badge wiki-rating-badge--${rating.cls}`;
+
+  const catWrap = document.getElementById('wiki-meta-category-badges');
+  const cats = s.categories || [];
+  catWrap.innerHTML = cats.length
+    ? cats.map(c => `<span class="wiki-meta-badge-list-item">${escapeHtml(c)}</span>`).join('')
+    : '<span class="wiki-tags-empty">N/A</span>';
+
+  const relWrap = document.getElementById('wiki-meta-relationship-badges');
+  const rels = s.relationships || [];
+  relWrap.innerHTML = rels.length
+    ? rels.map(r => `<span class="wiki-meta-badge-list-item wiki-meta-badge-list-item--relationship">${escapeHtml(r)}</span>`).join('')
+    : '<span class="wiki-tags-empty">N/A</span>';
+}
+
+function buildCategoryChecks(selected) {
+  const wrap = document.getElementById('category-checks');
+  wrap.innerHTML = '';
+  CATEGORY_OPTIONS.forEach(opt => {
+    const label = document.createElement('label');
+    label.className = 'wiki-meta-check-item';
+    label.innerHTML = `<input type="checkbox" value="${opt}" ${selected.includes(opt) ? 'checked' : ''} /> <span>${opt}</span>`;
+    wrap.appendChild(label);
+  });
+}
+
+[['rating-tip-icon', 'rating-tip-popover'], ['category-tip-icon', 'category-tip-popover']].forEach(([iconId, popId]) => {
+  const icon = document.getElementById(iconId);
+  const pop = document.getElementById(popId);
+  icon.addEventListener('click', (e) => {
+    e.stopPropagation();
+    pop.hidden = !pop.hidden;
+  });
+  document.addEventListener('click', (e) => {
+    if (!pop.hidden && !pop.contains(e.target) && e.target !== icon) pop.hidden = true;
+  });
+});
+
+// ── Relationships — same bubble-tag input pattern as Tags, separate array ──
+let workingRelationships = [];
+
+function renderRelationshipsEditor() {
+  const box = document.getElementById('relationships-input-box');
+  const input = document.getElementById('relationships-text-input');
+  box.querySelectorAll('.wiki-tag-bubble--editable').forEach(b => b.remove());
+  workingRelationships.forEach(r => {
+    const bubble = document.createElement('span');
+    bubble.className = 'wiki-tag-bubble wiki-tag-bubble--editable';
+    bubble.innerHTML = `${escapeHtml(r)} <button class="wiki-tag-bubble-remove" type="button" aria-label="Remove relationship">✕</button>`;
+    bubble.querySelector('.wiki-tag-bubble-remove').addEventListener('click', () => {
+      workingRelationships = workingRelationships.filter(x => x !== r);
+      renderRelationshipsEditor();
+    });
+    box.insertBefore(bubble, input);
+  });
+}
+
+function addWorkingRelationship(raw) {
+  const clean = raw.trim().slice(0, 150);
+  if (!clean) return;
+  if (workingRelationships.includes(clean)) return;
+  if (workingRelationships.length >= 20) return;
+  workingRelationships.push(clean);
+  renderRelationshipsEditor();
+}
+
+const relationshipsTextInput = document.getElementById('relationships-text-input');
+relationshipsTextInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    addWorkingRelationship(relationshipsTextInput.value);
+    relationshipsTextInput.value = '';
+  } else if (e.key === 'Backspace' && !relationshipsTextInput.value && workingRelationships.length) {
+    workingRelationships.pop();
+    renderRelationshipsEditor();
+  }
+});
+
 function populateDisplay() {
   const s = siteData.site || {};
   const title = s.site_title || 'Untitled Story';
@@ -441,6 +595,7 @@ function populateDisplay() {
   document.getElementById('site-title-display').textContent    = title;
   document.getElementById('site-synopsis-display').innerHTML = renderMarkdownLite(s.synopsis || 'N/A');
   document.getElementById('site-bio-display').innerHTML      = renderMarkdownLite(s.bio       || 'N/A');
+  renderMetaDisplay(s);
   const meetText = 'Notes From ' + (s.author_display_name || s.author_username || 'the Author');
   document.getElementById('meet-heading').textContent = meetText;
   document.getElementById('bio-field-label').textContent = meetText;
@@ -645,6 +800,13 @@ function enterEditMode() {
   synInput.style.display = 'block';
   synInput.value = s.synopsis || '';
 
+  toggle(document.getElementById('wiki-meta-display'), false);
+  document.getElementById('wiki-meta-editor').style.display = 'block';
+  document.getElementById('rating-select').value = s.rating || 'Not Rated';
+  buildCategoryChecks(s.categories || []);
+  workingRelationships = (s.relationships || []).slice();
+  renderRelationshipsEditor();
+
   toggle(document.getElementById('site-bio-display'), false);
   const bioInput = document.getElementById('site-bio-input');
   bioInput.style.display = 'block';
@@ -696,6 +858,10 @@ function exitEditMode() {
   document.getElementById('site-title-input').style.display = 'none';
   toggle(document.getElementById('site-synopsis-display'), true);
   document.getElementById('site-synopsis-input').style.display = 'none';
+  toggle(document.getElementById('wiki-meta-display'), true);
+  document.getElementById('wiki-meta-editor').style.display = 'none';
+  document.getElementById('rating-tip-popover').hidden = true;
+  document.getElementById('category-tip-popover').hidden = true;
   toggle(document.getElementById('site-bio-display'), true);
   document.getElementById('site-bio-input').style.display = 'none';
   toggle(document.getElementById('site-links-display'), true);
@@ -767,12 +933,21 @@ document.getElementById('save-edit-btn').addEventListener('click', async () => {
     tagsTextInput.value = '';
   }
 
+  if (relationshipsTextInput.value.trim()) {
+    addWorkingRelationship(relationshipsTextInput.value);
+    relationshipsTextInput.value = '';
+  }
+  const categories = Array.from(document.querySelectorAll('#category-checks input:checked')).map(c => c.value);
+
   const body = {
     site_title: document.getElementById('site-title-input').value.trim(),
     synopsis:   document.getElementById('site-synopsis-input').value.trim(),
     bio:        document.getElementById('site-bio-input').value.trim(),
     links,
     tags: workingTags,
+    rating: document.getElementById('rating-select').value,
+    categories,
+    relationships: workingRelationships,
   };
 
   const res = await fetch('/api/moderator/site', {

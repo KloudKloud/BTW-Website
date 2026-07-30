@@ -296,6 +296,15 @@ async function initDb() {
     ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]';
   `).catch(e => console.error('moderator_sites tags migration:', e.message));
 
+  // AO3-style structured metadata — Rating (single value), Category (up to
+  // 6 fixed options), Relationships (freeform, up to 20 per story). Feeds
+  // the discoverability work — filtering/faceting comes in a later phase.
+  await pool.query(`
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS rating TEXT NOT NULL DEFAULT 'Not Rated';
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS categories JSONB NOT NULL DEFAULT '[]';
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS relationships JSONB NOT NULL DEFAULT '[]';
+  `).catch(e => console.error('moderator_sites metadata migration:', e.message));
+
   // Structured relationships — replaces the old free-text stats.Relationships
   // string. Each entry is { name, type, character_id }, where character_id
   // (nullable) lets one character's relationship list link straight to
@@ -3912,6 +3921,7 @@ async function sendSiteLookup(query, params, req, res) {
       author_display_name: site.author_display_name, author_username: site.author_username,
       author_avatar: site.author_avatar || null, author_bio: site.author_bio || '',
       tags: site.tags || [],
+      rating: site.rating || 'Not Rated', categories: site.categories || [], relationships: site.relationships || [],
       is_self: viewerId === site.owner_user_id,
       is_following: isFollowing.rows.length > 0,
       is_bookmarked: isBookmarked.rows.length > 0,
@@ -4059,21 +4069,60 @@ function sanitizeTags(raw) {
   return out;
 }
 
+const RATING_OPTIONS = ['Not Rated', 'General Audiences', 'Teen And Up Audiences', 'Mature', 'Explicit'];
+const CATEGORY_OPTIONS = ['F/F', 'F/M', 'Gen', 'M/M', 'Multi', 'Other'];
+
+function sanitizeCategories(raw) {
+  if (!Array.isArray(raw)) return null;
+  const seen = new Set();
+  const out = [];
+  for (const c of raw) {
+    if (typeof c !== 'string' || !CATEGORY_OPTIONS.includes(c) || seen.has(c)) continue;
+    seen.add(c);
+    out.push(c);
+  }
+  return out;
+}
+
+function sanitizeRelationships(raw) {
+  if (!Array.isArray(raw)) return null;
+  const seen = new Set();
+  const out = [];
+  for (const r of raw) {
+    if (typeof r !== 'string') continue;
+    const clean = r.trim().slice(0, 150);
+    if (!clean || seen.has(clean)) continue;
+    seen.add(clean);
+    out.push(clean);
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
 app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) => {
   const { site_title, synopsis, bio, links, theme } = req.body;
   const tags = req.body.tags !== undefined ? sanitizeTags(req.body.tags) : undefined;
+  const rating = req.body.rating !== undefined && RATING_OPTIONS.includes(req.body.rating) ? req.body.rating : undefined;
+  const categories = req.body.categories !== undefined ? sanitizeCategories(req.body.categories) : undefined;
+  const relationships = req.body.relationships !== undefined ? sanitizeRelationships(req.body.relationships) : undefined;
   const { rows: [site] } = await pool.query(
     `UPDATE moderator_sites SET
-       site_title = COALESCE($1, site_title),
-       synopsis   = COALESCE($2, synopsis),
-       bio        = COALESCE($3, bio),
-       links      = COALESCE($4, links),
-       theme      = COALESCE($5, theme),
-       tags       = COALESCE($6, tags),
-       updated_at = NOW()
-     WHERE id = $7 RETURNING *`,
+       site_title    = COALESCE($1, site_title),
+       synopsis      = COALESCE($2, synopsis),
+       bio           = COALESCE($3, bio),
+       links         = COALESCE($4, links),
+       theme         = COALESCE($5, theme),
+       tags          = COALESCE($6, tags),
+       rating        = COALESCE($7, rating),
+       categories    = COALESCE($8, categories),
+       relationships = COALESCE($9, relationships),
+       updated_at    = NOW()
+     WHERE id = $10 RETURNING *`,
     [site_title, synopsis, bio, links !== undefined ? JSON.stringify(links) : null, theme,
-     tags !== undefined ? JSON.stringify(tags) : null, req.modSite.id]
+     tags !== undefined ? JSON.stringify(tags) : null, rating,
+     categories !== undefined ? JSON.stringify(categories) : null,
+     relationships !== undefined ? JSON.stringify(relationships) : null,
+     req.modSite.id]
   );
   res.json({ site });
 });
