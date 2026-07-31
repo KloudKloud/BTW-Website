@@ -327,15 +327,15 @@ async function initDb() {
     );
   `).catch(e => console.error('moderator_sites fandoms migration:', e.message));
   await pool.query(`
-    INSERT INTO fandom_catalog (name) VALUES ('Pokemon'), ('Original Furry Characters'), ('Original Works')
+    INSERT INTO fandom_catalog (name) VALUES ('Pokemon'), ('Original Furry Characters'), ('Original Characters')
     ON CONFLICT (name) DO NOTHING;
   `).catch(e => console.error('fandom_catalog seed:', e.message));
-  // Renamed after the initial seed shipped — "Furry Fandom" read like it was
-  // naming an actual fandom rather than a bucket for original furry OCs.
-  // The seed insert above already adds the new name, so this just drops the
-  // stray old row rather than UPDATE-ing (which would collide with it).
+  // Renamed after the initial seed shipped ("Furry Fandom" -> "Original
+  // Furry Characters", then "Original Works" -> "Original Characters") —
+  // the seed insert above already adds the new names, so this just drops
+  // the stray old rows rather than UPDATE-ing (which would collide).
   await pool.query(`
-    DELETE FROM fandom_catalog WHERE name = 'Furry Fandom';
+    DELETE FROM fandom_catalog WHERE name IN ('Furry Fandom', 'Original Works');
   `).catch(e => console.error('fandom_catalog rename:', e.message));
 
   // Additional Tags / Relationships catalogs — same shared-vocabulary idea as
