@@ -789,6 +789,19 @@ async function initDb() {
     );
   `).catch(e => console.error('club_post_likes migration:', e.message));
 
+  // Tracks the last time a viewer opened a given club — powers the "Best"
+  // feed's small personalization boost for clubs you've recently browsed
+  // (in addition to the bigger boost for clubs you're actually a member
+  // of). Upserted on every club page load, not just membership actions.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS club_visits (
+      user_id        INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      club_id        INTEGER     NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      last_visited_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id, club_id)
+    );
+  `).catch(e => console.error('club_visits migration:', e.message));
+
   // "Posts By Admin Team" is a per-post choice made at creation time, not
   // implied by the author being an admin — an owner/admin can still post to
   // the club's general feed and only some of their posts land here. Needs
@@ -1027,6 +1040,22 @@ async function initDb() {
     UPDATE clubs SET club_types = '["Community", "Writing", "Gaming"]'::jsonb
     WHERE slug = 'btwclub' AND club_types = '[]'::jsonb;
   `).catch(e => console.error('BTWClub types seed:', e.message));
+
+  // Blue's own club, matching his story's name — same pattern as the
+  // BTWClub seed above, just owned by Blue instead of the admin account.
+  await pool.query(`
+    INSERT INTO clubs (slug, name, description, owner_user_id, club_types)
+    SELECT 'above-all-else', 'Above All Else', 'Community hub for Above All Else — come chat!', u.id,
+           '["Reading & Writing", "Community"]'::jsonb
+    FROM users u
+    WHERE u.username = 'blue' AND NOT EXISTS (SELECT 1 FROM clubs WHERE slug = 'above-all-else')
+  `).catch(e => console.error('Blue club seed:', e.message));
+  await pool.query(`
+    INSERT INTO club_members (club_id, user_id, role)
+    SELECT c.id, c.owner_user_id, 'owner' FROM clubs c
+    WHERE c.slug = 'above-all-else'
+    ON CONFLICT (club_id, user_id) DO NOTHING
+  `).catch(e => console.error('Blue club owner membership seed:', e.message));
 
   await pool.query(`
     INSERT INTO club_members (club_id, user_id, role)
@@ -5449,18 +5478,23 @@ async function requireClubPageAdmin(req, res) {
   if (!page) { res.status(404).json({ error: 'Page not found.' }); return null; }
   return { ...ctx, page };
 }
-// Club Types — fixed list (not user-grown like Fandom/Tags), same idea as
-// Reddit's community topics. Kept in a random, non-alphabetical order on
-// purpose — this is a flat set of options, not a ranked list.
-const CLUB_TYPES = [
-  'Music', 'Gaming', 'Places & Travel', 'Sciences', 'Community', 'Anime & Cosplay',
-  'Adult Content', 'Home & Garden', 'Food & Drinks', 'Movies & TV', 'Sports',
-  'Humanities & Law', 'Q&As & Stories', 'Internet Culture', 'Writing', 'Vehicles',
-  'Fashion & Beauty', 'Pop Culture', 'Wellness', 'Technology', 'Health', 'Spooky',
-  'Business & Finance', 'Identity & Relationships', 'News & Politics', 'Art',
-  'Collectibles & Other Hobbies', 'Reading & Writing', 'Mature Topics',
-  'Nature & Outdoors', 'Education & Career', 'Games',
-];
+// Club Topics/Types — fixed list (not user-grown like Fandom/Tags), same
+// idea as Reddit's community topics. Kept in a random, non-alphabetical
+// order on purpose — this is a flat set of options, not a ranked list.
+// Every club must pick at least 1 (up to 3) before it can be created.
+const CLUB_TYPES_EMOJI = {
+  'Music': '🎵', 'Gaming': '🎮', 'Places & Travel': '✈️', 'Sciences': '🔬',
+  'Community': '🫂', 'Anime & Cosplay': '🎏', 'Adult Content': '🔞',
+  'Home & Garden': '🏡', 'Food & Drinks': '🍔', 'Movies & TV': '🎬', 'Sports': '🏆',
+  'Humanities & Law': '⚖️', 'Q&As & Stories': '💬', 'Internet Culture': '🌐',
+  'Writing': '✍️', 'Vehicles': '🚗', 'Fashion & Beauty': '💄', 'Pop Culture': '🌟',
+  'Wellness': '🧘', 'Technology': '💻', 'Health': '❤️‍🩹', 'Spooky': '👻',
+  'Business & Finance': '💼', 'Identity & Relationships': '💞', 'News & Politics': '📰',
+  'Art': '🎨', 'Collectibles & Other Hobbies': '🧸', 'Reading & Writing': '📚',
+  'Mature Topics': '🔥', 'Nature & Outdoors': '🌲', 'Education & Career': '🎓',
+  'Games': '🎲',
+};
+const CLUB_TYPES = Object.keys(CLUB_TYPES_EMOJI);
 function sanitizeClubTypes(raw) {
   if (!Array.isArray(raw)) return null;
   const seen = new Set();
@@ -5492,9 +5526,10 @@ function clubPublicShape(c, viewerRole) {
 }
 
 // GET /api/club-types — public, powers the Create/Edit Club type picker
-// and (later) the Explore page's topic filters.
+// and (later) the Explore page's topic filters. Order matches CLUB_TYPES
+// (intentionally shuffled, not alphabetical).
 app.get('/api/club-types', (req, res) => {
-  res.json({ types: CLUB_TYPES });
+  res.json({ types: CLUB_TYPES.map(name => ({ name, emoji: CLUB_TYPES_EMOJI[name] })) });
 });
 
 // GET /api/clubs — browse/search. ?q= filters by name, ?mine=1 restricts to
@@ -5545,6 +5580,7 @@ app.post('/api/clubs', requireAuth, async (req, res) => {
   const isNsfw = req.body.is_nsfw === true || req.body.is_nsfw === 'true';
   const clubTypes = sanitizeClubTypes(req.body.club_types) || [];
   if (!name) return res.status(400).json({ error: 'A club name is required.' });
+  if (!clubTypes.length) return res.status(400).json({ error: 'Pick at least one Topic for your club.' });
 
   const slug = await uniqueClubSlug(name);
   const client = await pool.connect();
@@ -5741,6 +5777,21 @@ app.post('/api/clubs/:slug/join', requireAuth, async (req, res) => {
   res.json({ message: 'Joined!' });
 });
 
+// POST /api/clubs/:slug/visit — stamps "last opened this club" for the
+// signed-in viewer. Fire-and-forget from the client on every club page
+// load; feeds the Best feed's small recently-visited personalization
+// boost (separate from, and smaller than, the membership boost).
+app.post('/api/clubs/:slug/visit', requireAuth, async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  await pool.query(
+    `INSERT INTO club_visits (user_id, club_id, last_visited_at) VALUES ($1, $2, NOW())
+     ON CONFLICT (user_id, club_id) DO UPDATE SET last_visited_at = NOW()`,
+    [req.user.id, club.id]
+  );
+  res.json({ message: 'ok' });
+});
+
 // DELETE /api/clubs/:slug/leave — the owner can't leave their own club (must
 // delete it, or transfer ownership first — no transfer flow yet).
 app.delete('/api/clubs/:slug/leave', requireAuth, async (req, res) => {
@@ -5806,22 +5857,37 @@ function optionalViewerId(req) {
 // GET /api/clubs/:slug/posts — ?section=admin restricts to posts explicitly
 // flagged is_admin_post at creation time (not just "written by an admin" —
 // an owner/admin can still post to the general feed).
+// ?sort=best|top|new — same Hot-score idea as /api/clubs-feed, just scoped
+// to this one club (no membership/visit personalization needed — every
+// post here already belongs to the club the viewer's looking at).
 app.get('/api/clubs/:slug/posts', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const adminOnly = req.query.section === 'admin';
+  const sort = ['best', 'top', 'new'].includes(req.query.sort) ? req.query.sort : 'best';
   const viewerId = optionalViewerId(req);
+  // Postgres won't resolve SELECT-list aliases inside a compound ORDER BY
+  // expression (only bare "ORDER BY like_count" works, not "like_count +
+  // comment_count") — repeat the underlying subqueries instead of the alias.
+  const orderBy = sort === 'new' ? 'cp.created_at DESC'
+    : sort === 'top' ? `(SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
+        + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) DESC, cp.created_at DESC`
+    : 'hot_score DESC';
   const { rows } = await pool.query(
     `SELECT cp.*, u.username, u.display_name, u.avatar,
        (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
        (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
-       (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked
+       (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked,
+       LOG(10, GREATEST(
+         (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
+         + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) * 2,
+       1)::numeric) + EXTRACT(EPOCH FROM cp.created_at) / 45000 AS hot_score
      FROM club_posts cp JOIN users u ON u.id = cp.author_user_id
      WHERE cp.club_id = $1 ${adminOnly ? 'AND cp.is_admin_post = TRUE' : ''}
-     ORDER BY cp.created_at DESC LIMIT 100`,
+     ORDER BY ${orderBy} LIMIT 100`,
     [club.id, viewerId || 0]
   );
-  res.json({ posts: rows.map(clubPostPublicShape) });
+  res.json({ posts: rows.map(clubPostPublicShape), sort });
 });
 
 // GET /api/clubs/:slug/posts/:postId — a single post, for the post detail
@@ -6667,8 +6733,20 @@ app.delete('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => 
 });
 
 // GET /api/clubs-feed — recent posts across every club, for the Social hub.
+// GET /api/clubs-feed — the site-wide "Best/Recent/Top" home feed across
+// every club. Ranking, in plain terms:
+//   Best  — a Reddit-"Hot"-style score: log10(likes + comments*2 + 1), so
+//           engagement has diminishing returns (10x the engagement only
+//           buys +1), PLUS a clock term that adds ~1 every 12.5h so newer
+//           posts don't need as much engagement to compete — then a flat
+//           bonus if the viewer is a MEMBER of that post's club (+2, worth
+//           roughly 100 extra likes on the log scale) or has VISITED it
+//           recently (+0.5, a much gentler nudge).
+//   Top   — pure (likes + comments), no time decay, no personalization.
+//   New   — plain chronological.
 app.get('/api/clubs-feed', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
+  const sort = ['best', 'top', 'new'].includes(req.query.sort) ? req.query.sort : 'best';
   let viewerId = null;
   const auth = req.headers.authorization;
   if (auth && auth.startsWith('Bearer ')) {
@@ -6679,20 +6757,42 @@ app.get('/api/clubs-feed', async (req, res) => {
     const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
     nsfwAllowed = !!(row && row.nsfw_enabled);
   }
+
+  // Same alias-in-ORDER-BY limitation as the per-club posts endpoint above.
+  const orderBy = sort === 'new' ? 'cp.created_at DESC'
+    : sort === 'top' ? `(SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
+        + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) DESC, cp.created_at DESC`
+    : 'hot_score DESC';
+
   const { rows } = await pool.query(
-    `SELECT cp.*, u.username, u.display_name, u.avatar, c.slug AS club_slug, c.name AS club_name, c.icon_url AS club_icon
+    `SELECT cp.*, u.username, u.display_name, u.avatar, c.slug AS club_slug, c.name AS club_name, c.icon_url AS club_icon,
+       (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
+       (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
+       (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked,
+       LOG(10, GREATEST(
+         (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
+         + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) * 2,
+       1)::numeric)
+         + EXTRACT(EPOCH FROM cp.created_at) / 45000
+         + CASE WHEN cm.user_id IS NOT NULL THEN 2 ELSE 0 END
+         + CASE WHEN cv.user_id IS NOT NULL AND cv.last_visited_at > NOW() - INTERVAL '30 days' THEN 0.5 ELSE 0 END
+       AS hot_score
      FROM club_posts cp
      JOIN users u ON u.id = cp.author_user_id
      JOIN clubs c ON c.id = cp.club_id
+     LEFT JOIN club_members cm ON cm.club_id = cp.club_id AND cm.user_id = $2
+     LEFT JOIN club_visits cv ON cv.club_id = cp.club_id AND cv.user_id = $2
      ${nsfwAllowed ? '' : 'WHERE c.is_nsfw = FALSE'}
-     ORDER BY cp.created_at DESC LIMIT $1`,
-    [limit]
+     ORDER BY ${orderBy}
+     LIMIT $1`,
+    [limit, viewerId || 0]
   );
   res.json({ posts: rows.map(p => ({
     id: p.id, title: p.title, body: p.body, created_at: p.created_at,
+    like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_liked: !!p.user_liked,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
     club: { slug: p.club_slug, name: p.club_name, icon_url: p.club_icon || null },
-  })) });
+  })), sort });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────

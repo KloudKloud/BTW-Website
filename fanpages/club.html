@@ -240,6 +240,19 @@
     .cl-social-filter-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
     .cl-social-filter-caret { font-size: 0.7rem; }
     .cl-social-posts-list { display: flex; flex-direction: column; }
+    .cl-social-sort-wrap { position: relative; }
+    .cl-social-sort-menu {
+      position: absolute; top: calc(100% + 0.4rem); left: 0; z-index: 20; min-width: 140px;
+      background: #141018; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.55); overflow: hidden;
+    }
+    .cl-social-sort-item {
+      display: block; width: 100%; text-align: left; background: none; border: none;
+      color: #ccc; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600;
+      padding: 0.6rem 0.9rem; cursor: pointer;
+    }
+    .cl-social-sort-item:hover { background: rgba(127,168,217,0.12); color: #fff; }
+    .cl-social-sort-item.active { color: #f0c060; }
 
     /* Fancy title instead of a boxed label — Cinzel serif, a touch bigger,
        with a short gradient underline flourish instead of a full-width
@@ -1007,7 +1020,14 @@
              team, styled the same as the Club News rows. -->
         <div id="cl-social-tab-content" hidden>
           <div class="cl-social-filter-bar">
-            <button class="cl-social-filter-btn" type="button" title="Coming soon">Best <span class="cl-social-filter-caret">▾</span></button>
+            <div class="cl-social-sort-wrap" id="cl-social-sort-wrap">
+              <button class="cl-social-filter-btn" id="cl-social-sort-btn" type="button">Best <span class="cl-social-filter-caret">▾</span></button>
+              <div class="cl-social-sort-menu" id="cl-social-sort-menu" hidden>
+                <button type="button" class="cl-social-sort-item active" data-sort="best">Best</button>
+                <button type="button" class="cl-social-sort-item" data-sort="new">Recent</button>
+                <button type="button" class="cl-social-sort-item" data-sort="top">Top</button>
+              </div>
+            </div>
             <button class="cl-create-post-btn" id="cl-create-social-post-btn" type="button">+ Create Post</button>
           </div>
           <div class="cl-social-posts-list" id="cl-social-posts-list">
@@ -1542,6 +1562,21 @@
   </div>
 </div>
 
+<!-- Shown when a non-member tries to Create Post — posting requires
+     membership server-side, so this heads that off with a friendly
+     prompt instead of letting them fill out a whole post and hit a 403. -->
+<div class="mod-confirm-overlay" id="cl-join-prompt-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title">Must join the club to make posts!</p>
+    <p class="mod-confirm-text" id="cl-join-prompt-text">Would you like to join?</p>
+    <p class="mod-panel-msg" id="cl-join-prompt-msg"></p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="cl-join-prompt-cancel" type="button">Cancel</button>
+      <button class="mod-btn" id="cl-join-prompt-yes" type="button">Join</button>
+    </div>
+  </div>
+</div>
+
 <!-- Sidebar splash title/message — small, focused editor. Also the home
      for "Make Rules" (club_rules CRUD), a second view switched to via the
      link at the top rather than a separate modal. -->
@@ -1809,6 +1844,9 @@ async function loadClub() {
     loadClubRules();
     loadClubPages();
     renderFromUrl();
+    // Fire-and-forget — stamps "last visited" for the Best feed's small
+    // recently-browsed personalization boost. Not worth blocking on.
+    if (token) fetch(`${API}/clubs/${encodeURIComponent(slug)}/visit`, { method: 'POST', headers: authHeaders() }).catch(() => {});
   } catch {
     document.getElementById('cl-notfound').style.display = 'block';
   }
@@ -2148,10 +2186,11 @@ async function loadAdminPosts() {
 }
 
 let socialPostsCache = null;
+let socialSort = 'best';
 async function loadSocialPosts() {
   const list = document.getElementById('cl-social-posts-list');
   try {
-    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts`);
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts?sort=${socialSort}`);
     const data = await res.json();
     socialPostsCache = data.posts || [];
     renderSocialPosts();
@@ -2159,6 +2198,26 @@ async function loadSocialPosts() {
     list.innerHTML = '<p class="cl-admin-posts-empty">Couldn\'t load posts right now.</p>';
   }
 }
+
+// ── Best/Recent/Top sort dropdown ────────────────────────────────────────
+const SOCIAL_SORT_LABEL = { best: 'Best', new: 'Recent', top: 'Top' };
+document.getElementById('cl-social-sort-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('cl-social-sort-menu').hidden = !document.getElementById('cl-social-sort-menu').hidden;
+});
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('cl-social-sort-wrap');
+  if (!wrap.contains(e.target)) document.getElementById('cl-social-sort-menu').hidden = true;
+});
+document.querySelectorAll('.cl-social-sort-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    socialSort = btn.dataset.sort;
+    document.querySelectorAll('.cl-social-sort-item').forEach(b => b.classList.toggle('active', b === btn));
+    document.getElementById('cl-social-sort-btn').innerHTML = `${SOCIAL_SORT_LABEL[socialSort]} <span class="cl-social-filter-caret">▾</span>`;
+    document.getElementById('cl-social-sort-menu').hidden = true;
+    loadSocialPosts();
+  });
+});
 function renderSocialPosts() {
   const list = document.getElementById('cl-social-posts-list');
   if (!socialPostsCache || !socialPostsCache.length) {
@@ -2424,7 +2483,51 @@ document.getElementById('cl-post-create-submit-btn').addEventListener('click', a
 });
 
 document.getElementById('cl-create-news-post-btn').addEventListener('click', () => openCreatePostModal('news'));
-document.getElementById('cl-create-social-post-btn').addEventListener('click', () => openCreatePostModal('general'));
+document.getElementById('cl-create-social-post-btn').addEventListener('click', () => {
+  // News posts are admin/owner-only (button's hidden otherwise, so
+  // membership's a given there) — only the general Social post button
+  // needs the "you have to join first" check.
+  if (!currentClub || !currentClub.viewer_role) {
+    if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(location.pathname + location.search)}`; return; }
+    openJoinPrompt();
+    return;
+  }
+  openCreatePostModal('general');
+});
+
+// ── "Join this club to post" prompt ──────────────────────────────────────
+function openJoinPrompt() {
+  document.getElementById('cl-join-prompt-text').textContent = `Would you like to join ${currentClub ? currentClub.name : 'this club'}?`;
+  document.getElementById('cl-join-prompt-msg').textContent = '';
+  document.getElementById('cl-join-prompt-overlay').hidden = false;
+}
+document.getElementById('cl-join-prompt-cancel').addEventListener('click', () => {
+  document.getElementById('cl-join-prompt-overlay').hidden = true;
+});
+document.getElementById('cl-join-prompt-yes').addEventListener('click', async () => {
+  const btn = document.getElementById('cl-join-prompt-yes');
+  const msgEl = document.getElementById('cl-join-prompt-msg');
+  btn.disabled = true;
+  btn.textContent = 'Joining…';
+  try {
+    const res = await fetch(`/api/clubs/${slug}/join`, { method: 'POST', headers: authHeaders() });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+      msgEl.textContent = data.error || 'Something went wrong. Please try again.';
+      return;
+    }
+    if (currentClub) currentClub.viewer_role = 'member';
+    document.getElementById('cl-join-prompt-overlay').hidden = true;
+    openCreatePostModal('general');
+  } catch {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Network error. Please try again.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Join';
+  }
+});
 
 // ── Routing — one shared function (navigateTo) drives every navigation
 // action (posts, Hub/Social tabs, custom "More Pages" pages, Home). It
