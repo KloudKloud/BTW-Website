@@ -723,6 +723,28 @@ async function initDb() {
     ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS file_name TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('moderator_chapters authoring migration:', e.message));
 
+  // The new in-browser chapter editor: actual chapter text (`body`), a
+  // draft/published state (drafts never show to readers), and a view
+  // counter for the reader page that comes later. Existing chapters (all
+  // created via the old link-based flow) default to 'published' so they
+  // don't vanish from the story on upgrade.
+  await pool.query(`
+    ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS body TEXT NOT NULL DEFAULT '';
+    ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'published';
+    ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0;
+  `).catch(e => console.error('moderator_chapters editor migration:', e.message));
+
+  // Chapter likes — same shape as moderator_gallery_likes.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS chapter_likes (
+      id         SERIAL      PRIMARY KEY,
+      chapter_id INTEGER     NOT NULL REFERENCES moderator_chapters(id) ON DELETE CASCADE,
+      user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(chapter_id, user_id)
+    );
+  `).catch(e => console.error('chapter_likes migration:', e.message));
+
   // Seed Blue's site row if it doesn't exist yet, once his account is registered.
   // slug is no longer unique (authors can have multiple stories), so this is
   // guarded with an explicit existence check instead of ON CONFLICT.
@@ -3992,7 +4014,15 @@ async function sendSiteLookup(query, params, req, res) {
   const spicyLock = !loggedIn ? 'login' : (!viewerNsfwEnabled ? 'sfw_mode' : null);
 
   const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds, bookmarkedGalleryIds] = await Promise.all([
-    pool.query('SELECT id, title, teaser, links, image_url, file_url, file_name FROM moderator_chapters WHERE site_id = $1 ORDER BY sort_order, id', [site.id]),
+    // Drafts only ever show to the story's own owner (previewing via "View
+    // as Reader") — everyone else only ever sees published chapters.
+    pool.query(
+      `SELECT id, title, teaser, links, image_url, file_url, file_name, status, body
+       FROM moderator_chapters
+       WHERE site_id = $1 ${viewerId === site.owner_user_id ? '' : "AND status = 'published'"}
+       ORDER BY sort_order, id`,
+      [site.id]
+    ),
     pool.query(`
       SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.description, mc.stats, mc.facts, mc.lore, mc.relationships, mc.owner_user_id, mc.ref_is_nsfw,
              ou.display_name AS owner_display_name, ou.username AS owner_username
@@ -4348,8 +4378,23 @@ app.delete('/api/moderator/site', requireAuth, requireModerator, async (req, res
 
 // ── Chapters ───────────────────────────────────────────────────────────────────
 app.get('/api/moderator/chapters', requireAuth, requireModerator, async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM moderator_chapters WHERE site_id = $1 ORDER BY sort_order, id', [req.modSite.id]);
+  const { rows } = await pool.query(
+    `SELECT mc.*,
+       (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'chapter' AND target_id = mc.id) AS comment_count,
+       (SELECT COUNT(*)::int FROM chapter_likes WHERE chapter_id = mc.id) AS like_count
+     FROM moderator_chapters mc WHERE site_id = $1 ORDER BY sort_order, id`,
+    [req.modSite.id]
+  );
   res.json({ chapters: rows });
+});
+
+// Single chapter, with its full body text — feeds the chapter editor page.
+app.get('/api/moderator/chapters/:id', requireAuth, requireModerator, async (req, res) => {
+  const { rows: [chapter] } = await pool.query(
+    'SELECT * FROM moderator_chapters WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+  );
+  if (!chapter) return res.status(404).json({ error: 'Not found.' });
+  res.json({ chapter });
 });
 
 function parseChapterLinks(raw) {
@@ -4361,9 +4406,11 @@ function parseChapterLinks(raw) {
     .map(l => ({ label: String(l.label).trim(), url: String(l.url).trim() }));
 }
 
+// "+ New Chapter" is now instant — no form, no title required. It always
+// lands as a draft with an auto-numbered placeholder title; the actual
+// writing happens in the chapter editor page afterward.
 app.post('/api/moderator/chapters', requireAuth, requireModerator, uploadChapter.fields([{ name: 'image', maxCount: 1 }, { name: 'file', maxCount: 1 }]), async (req, res) => {
-  const { title, teaser } = req.body;
-  if (!title || !title.trim()) return res.status(400).json({ error: 'Title is required.' });
+  const { teaser } = req.body;
   const links = parseChapterLinks(req.body.links);
 
   const imageFile = req.files && req.files.image && req.files.image[0];
@@ -4372,14 +4419,44 @@ app.post('/api/moderator/chapters', requireAuth, requireModerator, uploadChapter
   const fileUrl   = docFile   ? `/moderators/files/${docFile.filename}`    : '';
   const fileName  = docFile   ? docFile.originalname : '';
 
-  const { rows: [{ maxOrder }] } = await pool.query(
-    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM moderator_chapters WHERE site_id = $1', [req.modSite.id]
+  const { rows: [{ maxOrder, chapterCount }] } = await pool.query(
+    `SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder", COUNT(*)::int AS "chapterCount"
+     FROM moderator_chapters WHERE site_id = $1`, [req.modSite.id]
   );
+  let title = req.body.title && req.body.title.trim();
+  if (!title) title = `Untitled Part: ${chapterCount + 1}`;
+
   const { rows: [chapter] } = await pool.query(
-    `INSERT INTO moderator_chapters (site_id, title, teaser, links, image_url, file_url, file_name, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-    [req.modSite.id, title.trim(), (teaser || '').trim(), JSON.stringify(links), imageUrl, fileUrl, fileName, maxOrder + 1]
+    `INSERT INTO moderator_chapters (site_id, title, teaser, links, image_url, file_url, file_name, sort_order, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'draft') RETURNING *`,
+    [req.modSite.id, title, (teaser || '').trim(), JSON.stringify(links), imageUrl, fileUrl, fileName, maxOrder + 1]
   );
+  res.json({ chapter });
+});
+
+// Publish/unpublish — drafts never show to readers once a real reader page exists.
+app.put('/api/moderator/chapters/:id/status', requireAuth, requireModerator, async (req, res) => {
+  const status = req.body.status;
+  if (!['draft', 'published'].includes(status)) return res.status(400).json({ error: 'status must be draft or published.' });
+  const { rows: [chapter] } = await pool.query(
+    'UPDATE moderator_chapters SET status = $1 WHERE id = $2 AND site_id = $3 RETURNING *',
+    [status, req.params.id, req.modSite.id]
+  );
+  if (!chapter) return res.status(404).json({ error: 'Not found.' });
+  res.json({ chapter });
+});
+
+// Saves title + body text from the chapter editor page — plain JSON, no
+// multipart, since there's no file/image involved in this save.
+app.put('/api/moderator/chapters/:id/body', requireAuth, requireModerator, async (req, res) => {
+  const title = String(req.body.title || '').trim();
+  const body = String(req.body.body || '');
+  if (!title) return res.status(400).json({ error: 'Title is required.' });
+  const { rows: [chapter] } = await pool.query(
+    'UPDATE moderator_chapters SET title = $1, body = $2 WHERE id = $3 AND site_id = $4 RETURNING *',
+    [title, body, req.params.id, req.modSite.id]
+  );
+  if (!chapter) return res.status(404).json({ error: 'Not found.' });
   res.json({ chapter });
 });
 
