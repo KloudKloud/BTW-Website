@@ -91,14 +91,33 @@
     .se-edit-nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
     .se-edit-nav-item.active { background: rgba(240,192,96,0.1); border-color: rgba(240,192,96,0.35); color: #f0c060; }
     .se-edit-nav-star { color: #f0c060; font-size: 0.9em; }
+    /* Cover + title under the nav items — just a "you're editing THIS book"
+       reminder, sticky right along with the tabs above it. */
+    .se-edit-nav-cover-wrap { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); }
+    .se-edit-nav-cover-title {
+      font-family: 'Cinzel', serif; font-weight: 700; color: #f0f0f0; font-size: 0.92rem;
+      margin: 0 0 0.6rem; text-align: center; line-height: 1.3;
+    }
+    .se-edit-nav-cover-img {
+      width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.12); display: block; background: #161616;
+    }
     @media (max-width: 820px) {
       .se-edit-row { flex-direction: column; }
       .se-edit-divider { display: none; }
       .se-edit-nav-col { width: 100%; flex-direction: row; flex-wrap: wrap; position: static; order: -1; margin-bottom: 1.25rem; }
+      .se-edit-nav-cover-wrap { display: none; }
     }
 
     /* ── Characters tab — card stack, ported from the story's own Characters
        page so editing a character never has to leave this hub. ── */
+    .se-char-view-row { display: flex; align-items: flex-start; gap: 1.5rem; }
+    .se-char-sidebar { width: 180px; flex-shrink: 0; position: sticky; top: 84px; }
+    .se-char-stack-col { flex: 1; min-width: 0; }
+    @media (max-width: 700px) {
+      .se-char-view-row { flex-direction: column; }
+      .se-char-sidebar { width: 100%; position: static; }
+    }
     .se-char-stack { display: flex; flex-direction: column; gap: 0.75rem; }
     .se-char-card {
       display: flex; align-items: center; gap: 1rem; padding: 0.9rem 1rem; border-radius: 14px;
@@ -165,6 +184,10 @@
 <div class="char-editor-overlay" id="char-editor-overlay" hidden>
   <div class="char-editor-modal">
     <h2 class="char-editor-title editor-title-glow" id="char-editor-title">Create New Character</h2>
+
+    <div class="mod-tip-box" id="char-editor-create-note" style="margin-bottom:1.25rem; display:none;">
+      Note: Creating a character through this menu will link it to your story and add it to your general profile. If you wish to delete this character later on, or unlink it from the story, please access the character editors.
+    </div>
 
     <div class="mod-error-banner" id="char-editor-error-banner">
       <span class="mod-error-banner-icon">⚠️</span>
@@ -477,7 +500,53 @@
 
     <!-- Characters tab — hidden until picked from the nav column -->
     <div id="se-characters-view" style="display:none;">
-      <div class="se-char-stack" id="se-char-stack"></div>
+      <div class="se-char-view-row">
+        <div class="se-char-sidebar">
+          <aside class="chars-create-box">
+            <button class="chars-create-btn" id="se-chars-create-btn" type="button">
+              <span class="chars-create-btn-icon">➕</span> Create New Character
+            </button>
+            <button class="chars-create-btn" id="se-chars-link-btn" type="button" style="margin-top:0.6rem; background:transparent; border:1px solid rgba(255,255,255,0.25); box-shadow:none;">
+              <span class="chars-create-btn-icon">🔗</span> Link Existing
+            </button>
+            <hr class="chars-reorder-divider" />
+            <button class="chars-create-btn" id="se-chars-reorder-btn" type="button" style="background:transparent; border:1px solid rgba(255,255,255,0.25); box-shadow:none;">
+              <span class="chars-create-btn-icon">↕️</span> Reorder
+            </button>
+          </aside>
+        </div>
+        <div class="se-char-stack-col">
+          <div class="se-char-stack" id="se-char-stack"></div>
+          <div id="se-char-reorder-panel" hidden>
+            <span class="chars-reorder-label">Drag to reorder</span>
+            <div class="chars-reorder-list" id="se-char-reorder-list"></div>
+            <div class="chars-reorder-actions">
+              <button class="chars-reorder-btn2 chars-reorder-btn2--cancel" id="se-char-reorder-cancel" type="button">Cancel</button>
+              <button class="chars-reorder-btn2 chars-reorder-btn2--save" id="se-char-reorder-save" type="button">Save Order</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Link Existing picker — same tabbed picker as the Relationships field. -->
+    <div class="char-link-picker-overlay" id="se-chars-linkexist-overlay" hidden>
+      <div class="char-link-picker-modal" style="max-width:480px;">
+        <h3 class="char-link-picker-title">Link Existing Character</h3>
+        <div class="char-link-picker-tabs">
+          <button type="button" class="char-link-picker-tab active" id="se-chars-linkexist-tab-mine">Your Characters</button>
+          <button type="button" class="char-link-picker-tab" id="se-chars-linkexist-tab-other">Other Characters</button>
+        </div>
+        <div id="se-chars-linkexist-mine">
+          <input class="mod-input" id="se-chars-linkexist-mine-search" placeholder="Search your characters…" style="margin-bottom:0.75rem;" />
+          <div class="char-link-picker-scroll" id="se-chars-linkexist-mine-list"></div>
+        </div>
+        <div id="se-chars-linkexist-other" hidden>
+          <input class="mod-input" id="se-chars-linkexist-other-search" placeholder="Search characters by name…" style="margin-bottom:0.75rem;" />
+          <div class="char-link-picker-scroll" id="se-chars-linkexist-other-list"></div>
+        </div>
+        <button class="mod-btn mod-btn--small" id="se-chars-linkexist-close" type="button" style="margin-top:0.75rem;">Close</button>
+      </div>
     </div>
 
     </div>
@@ -489,6 +558,11 @@
       <button class="se-edit-nav-item" id="se-nav-characters" type="button">Characters</button>
       <a class="se-edit-nav-item" id="se-nav-chapters" href="#">Chapters</a>
       <a class="se-edit-nav-item" id="se-nav-gallery" href="#">Gallery</a>
+
+      <div class="se-edit-nav-cover-wrap">
+        <p class="se-edit-nav-cover-title" id="se-edit-nav-cover-title">Loading…</p>
+        <img class="se-edit-nav-cover-img" id="se-edit-nav-cover-img" alt="" />
+      </div>
     </div>
     </div>
 
@@ -866,6 +940,7 @@ document.getElementById('add-link-edit-row').addEventListener('click', () => add
 // Keep the big "Now Editing" indicator in sync as the author renames the story.
 document.getElementById('site-title-input').addEventListener('input', (e) => {
   document.getElementById('wiki-editing-indicator-title').textContent = e.target.value.trim() || 'Untitled Story';
+  document.getElementById('se-edit-nav-cover-title').textContent = e.target.value.trim() || 'Untitled Story';
 });
 
 // ── Fill the form from the loaded story ─────────────────────────────────────
@@ -913,6 +988,11 @@ function populateForm(s) {
     coverImg.style.display = 'none';
     coverPlaceholder.style.display = 'flex';
   }
+
+  document.getElementById('se-edit-nav-cover-title').textContent = s.site_title || 'Untitled Story';
+  const navCoverImg = document.getElementById('se-edit-nav-cover-img');
+  navCoverImg.src = s.cover_url || '/images/characters/noreference.png';
+  navCoverImg.style.objectPosition = 'center';
 
   document.getElementById('qn-characters-img').src = s.characters_card_url || NAV_CARD_DEFAULT.characters;
   document.getElementById('qn-chapters-img').src   = s.chapters_card_url   || NAV_CARD_DEFAULT.chapters;
@@ -1086,6 +1166,7 @@ async function uploadCover(blob) {
     coverImg.style.display = 'block';
     document.getElementById('cover-placeholder').style.display = 'none';
     document.getElementById('cover-recrop-btn').style.display = 'block';
+    document.getElementById('se-edit-nav-cover-img').src = site.cover_url + '?t=' + Date.now();
   } else {
     alert('Cover upload failed. Please try again.');
   }
@@ -1248,6 +1329,155 @@ async function unlinkSeCharacter(char) {
   } catch {}
 }
 
+document.getElementById('se-chars-create-btn').addEventListener('click', () => openCharEditor(null));
+
+// ── Link Existing — same "Your X"/"Other X" tabbed picker as the
+// relationships field, exact same logic as the story's own Characters page.
+let seLinkExistingMineDebounce, seLinkExistingOtherDebounce;
+
+function seLinkExistingItemEl(c, showOwner) {
+  const item = document.createElement('button');
+  item.type = 'button';
+  item.className = 'char-link-picker-item--big';
+  item.innerHTML = `
+    <img src="${c.ref_image || DEFAULT_REF}" alt="" />
+    <span>
+      <span class="char-link-picker-item-name">${c.name}</span>
+      ${showOwner ? `<span class="char-link-picker-item-owner">${c.owner_display_name || c.owner_username}</span>` : ''}
+    </span>
+  `;
+  item.addEventListener('click', async () => {
+    item.disabled = true;
+    await fetch(`/api/moderator/characters/${c.id}/link`, { method: 'POST', headers: authHeaders() });
+    document.getElementById('se-chars-linkexist-overlay').hidden = true;
+    loadSeCharacters();
+  });
+  return item;
+}
+async function seLoadLinkExistingMine(q) {
+  const list = document.getElementById('se-chars-linkexist-mine-list');
+  list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
+  try {
+    const res = await fetch(`/api/moderator/characters/linkable?q=${encodeURIComponent(q || '')}`, { headers: authHeaders() });
+    const data = await res.json();
+    const chars = data.characters || [];
+    if (!chars.length) { list.innerHTML = `<p class="char-link-picker-empty">${q ? 'No matching characters found.' : 'No matching characters — try Create New instead.'}</p>`; return; }
+    list.innerHTML = '';
+    chars.forEach(c => list.appendChild(seLinkExistingItemEl(c, false)));
+  } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t load your characters right now.</p>'; }
+}
+async function seLoadLinkExistingOther(q) {
+  const list = document.getElementById('se-chars-linkexist-other-list');
+  list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
+  try {
+    const res = await fetch(`/api/characters/search?q=${encodeURIComponent(q || '')}`, { headers: authHeaders() });
+    const data = await res.json();
+    const chars = data.characters || [];
+    if (!chars.length) { list.innerHTML = '<p class="char-link-picker-empty">No matching characters found.</p>'; return; }
+    list.innerHTML = '';
+    chars.forEach(c => list.appendChild(seLinkExistingItemEl(c, true)));
+  } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t search right now.</p>'; }
+}
+function seSwitchLinkExistingTab(tab) {
+  document.getElementById('se-chars-linkexist-tab-mine').classList.toggle('active', tab === 'mine');
+  document.getElementById('se-chars-linkexist-tab-other').classList.toggle('active', tab === 'other');
+  document.getElementById('se-chars-linkexist-mine').hidden = tab !== 'mine';
+  document.getElementById('se-chars-linkexist-other').hidden = tab !== 'other';
+  if (tab === 'mine') { document.getElementById('se-chars-linkexist-mine-search').value = ''; seLoadLinkExistingMine(''); }
+  else { document.getElementById('se-chars-linkexist-other-search').value = ''; seLoadLinkExistingOther(''); }
+}
+document.getElementById('se-chars-linkexist-tab-mine').addEventListener('click', () => seSwitchLinkExistingTab('mine'));
+document.getElementById('se-chars-linkexist-tab-other').addEventListener('click', () => seSwitchLinkExistingTab('other'));
+document.getElementById('se-chars-linkexist-mine-search').addEventListener('input', (e) => {
+  clearTimeout(seLinkExistingMineDebounce);
+  seLinkExistingMineDebounce = setTimeout(() => seLoadLinkExistingMine(e.target.value.trim()), 300);
+});
+document.getElementById('se-chars-linkexist-other-search').addEventListener('input', (e) => {
+  clearTimeout(seLinkExistingOtherDebounce);
+  seLinkExistingOtherDebounce = setTimeout(() => seLoadLinkExistingOther(e.target.value.trim()), 300);
+});
+document.getElementById('se-chars-link-btn').addEventListener('click', () => {
+  document.getElementById('se-chars-linkexist-overlay').hidden = false;
+  seSwitchLinkExistingTab('mine');
+});
+document.getElementById('se-chars-linkexist-close').addEventListener('click', () => {
+  document.getElementById('se-chars-linkexist-overlay').hidden = true;
+});
+
+// ── Reorder — same drag-and-drop mechanics as the story's own Characters
+// page, scoped to just this story's character_story_links.sort_order.
+let seReorderDragId = null;
+function seBuildReorderRow(char) {
+  const row = document.createElement('div');
+  row.className = 'chars-reorder-row';
+  row.draggable = true;
+  row.dataset.id = char.id;
+  row.innerHTML = `
+    <span class="chars-reorder-handle">⠿</span>
+    <img class="chars-reorder-thumb" src="${char.ref || DEFAULT_REF}" alt="" />
+    <span class="chars-reorder-name">${escapeHtml(char.name)}</span>
+  `;
+  row.addEventListener('dragstart', (e) => {
+    seReorderDragId = char.id;
+    row.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  row.addEventListener('dragend', () => {
+    row.classList.remove('dragging');
+    document.querySelectorAll('.chars-reorder-row.drop-target').forEach(r => r.classList.remove('drop-target'));
+  });
+  row.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (String(char.id) === String(seReorderDragId)) return;
+    row.classList.add('drop-target');
+  });
+  row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
+  row.addEventListener('drop', (e) => {
+    e.preventDefault();
+    row.classList.remove('drop-target');
+    if (seReorderDragId == null || String(char.id) === String(seReorderDragId)) return;
+    const list = document.getElementById('se-char-reorder-list');
+    const dragEl = list.querySelector(`.chars-reorder-row[data-id="${CSS.escape(String(seReorderDragId))}"]`);
+    if (!dragEl) return;
+    list.insertBefore(dragEl, row);
+  });
+  return row;
+}
+function seEnterReorderMode() {
+  const list = document.getElementById('se-char-reorder-list');
+  list.innerHTML = '';
+  SE_CHARACTERS.forEach(char => list.appendChild(seBuildReorderRow(char)));
+  document.getElementById('se-char-stack').hidden = true;
+  document.getElementById('se-char-reorder-panel').hidden = false;
+}
+function seExitReorderMode() {
+  document.getElementById('se-char-reorder-panel').hidden = true;
+  document.getElementById('se-char-stack').hidden = false;
+}
+document.getElementById('se-chars-reorder-btn').addEventListener('click', seEnterReorderMode);
+document.getElementById('se-char-reorder-cancel').addEventListener('click', seExitReorderMode);
+document.getElementById('se-char-reorder-save').addEventListener('click', async () => {
+  const saveBtn = document.getElementById('se-char-reorder-save');
+  const order = [...document.querySelectorAll('#se-char-reorder-list .chars-reorder-row')].map(r => r.dataset.id);
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+  try {
+    const res = await fetch('/api/moderator/characters/reorder', {
+      method: 'PUT',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order }),
+    });
+    if (!res.ok) throw new Error('save failed');
+    await loadSeCharacters();
+    seExitReorderMode();
+  } catch {
+    alert('Could not save the new order — please try again.');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save Order';
+  }
+});
+
 // ── Character editor modal — recreated from the story's Characters page.
 // Opens in place over this hub so editing a character never navigates away.
 let uploadedRefUrl = '';
@@ -1286,18 +1516,32 @@ function addRelationshipRow(name, type, characterId, avatarUrl) {
       <label class="char-rel-card-field-label">Relation:</label>
       <input class="mod-input rel-type" placeholder="Mom, Dad, Friend..." value="${(type || '').replace(/"/g, '&quot;')}" />
     </div>
-    <button class="char-rel-card-remove" type="button">✕</button>`;
+    <button class="char-rel-card-remove" type="button">✕</button>
+    <p class="char-rel-card-linked-note"${characterId ? '' : ' hidden'}>✓ Successfully Linked</p>`;
 
   const nameInput = wrap.querySelector('.rel-name');
   const linkBtn = wrap.querySelector('.char-rel-card-link-btn');
   const avatarImg = wrap.querySelector('.char-rel-card-avatar');
+  const linkedNote = wrap.querySelector('.char-rel-card-linked-note');
   nameInput.addEventListener('input', () => {
     wrap.dataset.charId = '';
     linkBtn.classList.remove('linked');
     avatarImg.src = DEFAULT_REF;
+    linkedNote.hidden = true;
   });
   linkBtn.addEventListener('click', () => openLinkPicker(wrap));
   wrap.querySelector('.char-rel-card-remove').addEventListener('click', () => wrap.remove());
+
+  // Reopening the editor on a character with an already-linked relationship
+  // only carries the character_id forward, not the linked character's
+  // picture — resolve it here so the avatar doesn't silently fall back to
+  // the placeholder every time the editor is reopened.
+  if (characterId && !avatarUrl) {
+    fetch(`/api/characters/${characterId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && d.character && d.character.ref_image) avatarImg.src = d.character.ref_image; })
+      .catch(() => {});
+  }
 
   document.getElementById('char-editor-relationships-rows').appendChild(wrap);
 }
@@ -1327,6 +1571,7 @@ function charLinkItemEl(c, showOwner) {
     linkPickerTargetRow.dataset.charId = c.id;
     linkPickerTargetRow.querySelector('.char-rel-card-link-btn').classList.add('linked');
     linkPickerTargetRow.querySelector('.char-rel-card-avatar').src = c.ref_image || DEFAULT_REF;
+    linkPickerTargetRow.querySelector('.char-rel-card-linked-note').hidden = false;
     closeLinkPicker();
   });
   return item;
@@ -1433,6 +1678,7 @@ function openCharEditor(char) {
   uploadedRefUrl = char ? (char.ref || '') : '';
 
   document.getElementById('char-editor-title').textContent = char ? `Edit ${char.name}` : 'Create New Character';
+  document.getElementById('char-editor-create-note').style.display = char ? 'none' : 'block';
   document.getElementById('char-editor-delete').style.display = char ? '' : 'none';
   document.getElementById('char-editor-delete-forever').style.display = char ? '' : 'none';
   document.getElementById('char-editor-save').textContent = char ? 'Save and Close' : 'Create';
