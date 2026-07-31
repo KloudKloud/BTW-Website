@@ -83,6 +83,42 @@
     .soc-sidebar-club-owner-rose { flex-shrink: 0; font-size: 0.85rem; }
     .soc-sidebar-empty, .soc-sidebar-note { font-size: 0.9rem; color: #888; padding: 0.4rem 0.5rem; line-height: 1.5; }
 
+    /* Moderation section — label row with a collapse arrow, a Manage
+       button that opens the full-list modal, and an inline preview of up
+       to 5 clubs. Same markup/behavior as social.html's sidebar, on
+       purpose — this sidebar is meant to be identical and persistent
+       across every Fanpages/Clubs page, not something that resets. */
+    .soc-sidebar-label-row { display: flex; align-items: center; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.5rem; }
+    .soc-sidebar-label-row .soc-sidebar-label { padding: 0; margin-bottom: 0; }
+    .soc-sidebar-collapse-btn {
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
+      color: #ccc; cursor: pointer; width: 22px; height: 22px; padding: 0;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      transition: transform 0.2s, color 0.15s, background 0.15s;
+    }
+    .soc-sidebar-collapse-btn svg { width: 15px; height: 15px; }
+    .soc-sidebar-collapse-btn:hover { color: #fff; background: rgba(255,255,255,0.12); }
+    .soc-sidebar-collapse-btn.soc-collapsed { transform: rotate(180deg); }
+    #soc-mod-content.soc-collapsed { display: none; }
+    .soc-sidebar-manage-btn {
+      display: flex; align-items: center; gap: 0.6rem; width: 100%; box-sizing: border-box;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+      color: #ddd; font-family: inherit; font-size: 0.95rem; font-weight: 600; text-align: left;
+      padding: 0.55rem 0.6rem; cursor: pointer; transition: background 0.15s; margin-bottom: 0.35rem;
+    }
+    .soc-sidebar-manage-btn:hover { background: rgba(255,255,255,0.08); }
+    .soc-sidebar-showall-btn {
+      background: none; border: none; color: #7fa8d9; font-family: inherit; font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; padding: 0.4rem 0.5rem; text-align: left;
+    }
+    .soc-sidebar-showall-btn:hover { text-decoration: underline; }
+    .soc-sidebar-club-role-badge {
+      flex-shrink: 0; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+      color: #f0c060; background: rgba(240,192,96,0.12); border: 1px solid rgba(240,192,96,0.3);
+      border-radius: 10px; padding: 0.1em 0.5em;
+    }
+    .soc-manage-list { display: flex; flex-direction: column; gap: 0.3rem; max-height: 50vh; overflow-y: auto; margin-bottom: 1rem; }
+
     #cl-page, #cl-notfound { margin-left: 250px; transition: margin-left 0.2s ease; }
 
     @media (max-width: 860px) {
@@ -948,19 +984,39 @@
         <a class="soc-nav-create-btn" href="/fanpages/social?create=1"><span>+</span> Start a Club</a>
       </nav>
 
-      <div id="soc-sidebar-created-clubs-section" style="display:none;">
-        <hr class="soc-sidebar-rule" />
-        <p class="soc-sidebar-label">Created Clubs</p>
-        <hr class="soc-sidebar-rule" />
-        <div class="soc-sidebar-clubs" id="soc-sidebar-created-clubs"></div>
-      </div>
-
       <hr class="soc-sidebar-rule" />
       <p class="soc-sidebar-label">Your Clubs</p>
       <hr class="soc-sidebar-rule" />
       <div class="soc-sidebar-clubs" id="soc-sidebar-clubs"><p class="soc-sidebar-empty">Loading…</p></div>
+
+      <div id="soc-sidebar-moderation-section" style="display:none;">
+        <hr class="soc-sidebar-rule" />
+        <div class="soc-sidebar-label-row">
+          <p class="soc-sidebar-label">Moderation</p>
+          <button class="soc-sidebar-collapse-btn" id="soc-mod-collapse-btn" type="button" title="Collapse" aria-label="Collapse Moderation section">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"></polyline></svg>
+          </button>
+        </div>
+        <hr class="soc-sidebar-rule" />
+        <div id="soc-mod-content">
+          <button class="soc-sidebar-manage-btn" id="soc-mod-manage-btn" type="button"><span>⚙️</span> Manage</button>
+          <div class="soc-sidebar-clubs" id="soc-sidebar-mod-clubs"></div>
+          <button class="soc-sidebar-showall-btn" id="soc-mod-showall-btn" type="button" style="display:none;">Show All</button>
+        </div>
+      </div>
     </div>
   </aside>
+
+  <!-- Manage Communities modal — every club the viewer owns or moderates -->
+  <div class="char-editor-overlay" id="soc-manage-overlay" hidden>
+    <div class="char-editor-modal">
+      <h2 class="char-editor-title">Manage Communities</h2>
+      <div class="soc-manage-list" id="soc-manage-list"></div>
+      <div class="char-editor-actions">
+        <button class="mod-btn" id="soc-manage-close" type="button">Close</button>
+      </div>
+    </div>
+  </div>
 
 <div id="cl-notfound" class="cl-gate" style="display:none;">
   <p id="cl-notfound-msg">This club doesn't exist (or was deleted).</p>
@@ -1779,13 +1835,13 @@ function clubIconHtml(c, sizeClass) {
   return `<span class="${sizeClass}-fallback">${letter}</span>`;
 }
 
+let modClubsCache = [];
 async function loadSidebarClubs() {
   const wrap = document.getElementById('soc-sidebar-clubs');
-  const createdSection = document.getElementById('soc-sidebar-created-clubs-section');
-  const createdWrap = document.getElementById('soc-sidebar-created-clubs');
+  const modSection = document.getElementById('soc-sidebar-moderation-section');
   if (!token) {
     wrap.innerHTML = '<p class="soc-sidebar-note">Log in to see your clubs~</p>';
-    createdSection.style.display = 'none';
+    modSection.style.display = 'none';
     return;
   }
   try {
@@ -1793,24 +1849,19 @@ async function loadSidebarClubs() {
     const data = await res.json();
     const clubs = data.clubs || [];
 
-    const owned = clubs.filter(c => c.viewer_role === 'owner');
-    if (owned.length) {
-      createdSection.style.display = '';
-      createdWrap.innerHTML = '';
-      owned.forEach(c => createdWrap.appendChild(sidebarClubLink(c, true)));
-    } else {
-      createdSection.style.display = 'none';
-    }
+    modClubsCache = clubs.filter(c => c.viewer_role === 'owner' || c.viewer_role === 'admin');
+    modSection.style.display = modClubsCache.length ? '' : 'none';
+    renderModClubsPreview();
 
     if (!clubs.length) {
       wrap.innerHTML = '<p class="soc-sidebar-note">You haven\'t joined any clubs yet.</p>';
       return;
     }
     wrap.innerHTML = '';
-    clubs.forEach(c => wrap.appendChild(sidebarClubLink(c, false)));
+    clubs.forEach(c => wrap.appendChild(sidebarClubLink(c, c.viewer_role === 'owner')));
   } catch {
     wrap.innerHTML = '<p class="soc-sidebar-note">Couldn\'t load your clubs.</p>';
-    createdSection.style.display = 'none';
+    modSection.style.display = 'none';
   }
 }
 function sidebarClubLink(c, showOwnerRose) {
@@ -1820,6 +1871,49 @@ function sidebarClubLink(c, showOwnerRose) {
   a.innerHTML = `${clubIconHtml(c, 'soc-sidebar-club-icon')}<span class="soc-sidebar-club-name">${escapeHtml(c.name)}</span>${showOwnerRose ? '<span class="soc-sidebar-club-owner-rose" title="You own this club">🌹</span>' : ''}`;
   return a;
 }
+function sidebarModClubLink(c) {
+  const a = document.createElement('a');
+  a.className = 'soc-sidebar-club-link';
+  a.href = `/fanpages/club?slug=${encodeURIComponent(c.slug)}`;
+  a.innerHTML = `${clubIconHtml(c, 'soc-sidebar-club-icon')}<span class="soc-sidebar-club-name">${escapeHtml(c.name)}</span><span class="soc-sidebar-club-role-badge">${c.viewer_role}</span>`;
+  return a;
+}
+
+let modPreviewExpanded = false;
+function renderModClubsPreview() {
+  const wrap = document.getElementById('soc-sidebar-mod-clubs');
+  const showAllBtn = document.getElementById('soc-mod-showall-btn');
+  wrap.innerHTML = '';
+  const shown = modPreviewExpanded ? modClubsCache : modClubsCache.slice(0, 5);
+  shown.forEach(c => wrap.appendChild(sidebarModClubLink(c)));
+  showAllBtn.style.display = (!modPreviewExpanded && modClubsCache.length > 5) ? 'block' : 'none';
+}
+document.getElementById('soc-mod-showall-btn').addEventListener('click', () => {
+  modPreviewExpanded = true;
+  renderModClubsPreview();
+});
+
+const modCollapseBtn = document.getElementById('soc-mod-collapse-btn');
+function setModCollapsed(collapsed) {
+  modCollapseBtn.classList.toggle('soc-collapsed', collapsed);
+  document.getElementById('soc-mod-content').classList.toggle('soc-collapsed', collapsed);
+  localStorage.setItem('soc_mod_collapsed', collapsed ? '1' : '0');
+}
+modCollapseBtn.addEventListener('click', () => setModCollapsed(!modCollapseBtn.classList.contains('soc-collapsed')));
+if (localStorage.getItem('soc_mod_collapsed') === '1') setModCollapsed(true);
+
+document.getElementById('soc-mod-manage-btn').addEventListener('click', () => {
+  const list = document.getElementById('soc-manage-list');
+  list.innerHTML = modClubsCache.length
+    ? ''
+    : '<p class="soc-sidebar-note">Nothing to manage yet.</p>';
+  modClubsCache.forEach(c => list.appendChild(sidebarModClubLink(c)));
+  document.getElementById('soc-manage-overlay').hidden = false;
+});
+document.getElementById('soc-manage-close').addEventListener('click', () => {
+  document.getElementById('soc-manage-overlay').hidden = true;
+});
+
 loadSidebarClubs();
 
 // Same localStorage key as social.html, so collapse state stays in sync

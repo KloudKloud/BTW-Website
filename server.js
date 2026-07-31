@@ -5879,19 +5879,24 @@ app.get('/api/clubs/:slug/posts', async (req, res) => {
   // Postgres won't resolve SELECT-list aliases inside a compound ORDER BY
   // expression (only bare "ORDER BY like_count" works, not "like_count +
   // comment_count") — repeat the underlying subqueries instead of the alias.
+  // 'best' gets a small random nudge (±0.15 on a score where a same-day
+  // post is worth ~1.5-2 and each extra comment/like is a fraction of
+  // that) — enough for near-tied posts to swap on refresh, not enough to
+  // bump a clearly-better post down.
+  const hotScoreExpr = `LOG(10, GREATEST(
+         (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
+         + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) * 2,
+       1)::numeric) + EXTRACT(EPOCH FROM cp.created_at) / 45000`;
   const orderBy = sort === 'new' ? 'cp.created_at DESC'
     : sort === 'top' ? `(SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
         + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) DESC, cp.created_at DESC`
-    : 'hot_score DESC';
+    : `${hotScoreExpr} + (random() - 0.5) * 0.3 DESC`;
   const { rows } = await pool.query(
     `SELECT cp.*, u.username, u.display_name, u.avatar,
        (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
        (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
        (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked,
-       LOG(10, GREATEST(
-         (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
-         + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) * 2,
-       1)::numeric) + EXTRACT(EPOCH FROM cp.created_at) / 45000 AS hot_score
+       ${hotScoreExpr} AS hot_score
      FROM club_posts cp JOIN users u ON u.id = cp.author_user_id
      WHERE cp.club_id = $1 ${adminOnly ? 'AND cp.is_admin_post = TRUE' : ''}
      ORDER BY ${orderBy} LIMIT 100`,
@@ -6769,24 +6774,24 @@ app.get('/api/clubs-feed', async (req, res) => {
   }
 
   // Same alias-in-ORDER-BY limitation as the per-club posts endpoint above.
+  const hotScoreExpr = `LOG(10, GREATEST(
+         (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
+         + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) * 2,
+       1)::numeric)
+         + EXTRACT(EPOCH FROM cp.created_at) / 45000
+         + CASE WHEN cm.user_id IS NOT NULL THEN 2 ELSE 0 END
+         + CASE WHEN cv.user_id IS NOT NULL AND cv.last_visited_at > NOW() - INTERVAL '30 days' THEN 0.5 ELSE 0 END`;
   const orderBy = sort === 'new' ? 'cp.created_at DESC'
     : sort === 'top' ? `(SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
         + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) DESC, cp.created_at DESC`
-    : 'hot_score DESC';
+    : `${hotScoreExpr} + (random() - 0.5) * 0.3 DESC`;
 
   const { rows } = await pool.query(
     `SELECT cp.*, u.username, u.display_name, u.avatar, c.slug AS club_slug, c.name AS club_name, c.icon_url AS club_icon,
        (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
        (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
        (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked,
-       LOG(10, GREATEST(
-         (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
-         + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) * 2,
-       1)::numeric)
-         + EXTRACT(EPOCH FROM cp.created_at) / 45000
-         + CASE WHEN cm.user_id IS NOT NULL THEN 2 ELSE 0 END
-         + CASE WHEN cv.user_id IS NOT NULL AND cv.last_visited_at > NOW() - INTERVAL '30 days' THEN 0.5 ELSE 0 END
-       AS hot_score
+       ${hotScoreExpr} AS hot_score
      FROM club_posts cp
      JOIN users u ON u.id = cp.author_user_id
      JOIN clubs c ON c.id = cp.club_id
@@ -6846,7 +6851,7 @@ app.get('/api/clubs-recommended', async (req, res) => {
        WHERE 1=1 ${nsfwAllowed ? '' : 'AND c.is_nsfw = FALSE'}
        ORDER BY cp.club_id, hot_score DESC
      )
-     SELECT * FROM per_club ORDER BY already_joined ASC, recently_visited DESC, hot_score DESC LIMIT $1`,
+     SELECT * FROM per_club ORDER BY already_joined ASC, recently_visited DESC, hot_score + (random() - 0.5) * 0.3 DESC LIMIT $1`,
     [limit, viewerId || 0]
   );
   res.json({ posts: rows.map(p => ({
