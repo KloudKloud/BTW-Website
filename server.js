@@ -834,6 +834,20 @@ async function initDb() {
     UPDATE club_posts SET image_urls = jsonb_build_array(image_url) WHERE image_url != '' AND image_urls = '[]'::jsonb;
   `).catch(e => console.error('club_posts image_urls backfill:', e.message));
 
+  // Poll votes — once-castable (UNIQUE per post/user). option_indices is an
+  // array so a single "multiple choice" vote can cover more than one
+  // option; "single" polls just store a one-element array.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS club_post_poll_votes (
+      id             SERIAL      PRIMARY KEY,
+      post_id        INTEGER     NOT NULL REFERENCES club_posts(id) ON DELETE CASCADE,
+      user_id        INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      option_indices INTEGER[]   NOT NULL,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(post_id, user_id)
+    );
+  `).catch(e => console.error('club_post_poll_votes migration:', e.message));
+
   // "Featured Cards" (was "Meet the Admins") — turned out clubs want to
   // spotlight whatever matters to them, not necessarily their admin roster
   // (e.g. a club's own cast of important characters). Each card is just a
@@ -5843,12 +5857,30 @@ app.delete('/api/clubs/:slug/members/:userId', requireAuth, async (req, res) => 
   res.json({ message: 'Member removed.' });
 });
 
-function clubPostPublicShape(p) {
+// `voteRows` is every club_post_poll_votes row for this post (only ever
+// non-empty when the post actually has a poll). Results stay hidden from
+// the client's perspective until the viewer has voted — that's enforced
+// here, not just in the UI, so opening devtools doesn't reveal them early.
+function clubPostPublicShape(p, voteRows, viewerId) {
+  let poll = p.poll || null;
+  if (poll) {
+    const rows = voteRows || [];
+    const counts = new Array(poll.options.length).fill(0);
+    rows.forEach(r => r.option_indices.forEach(i => { if (counts[i] !== undefined) counts[i]++; }));
+    const mine = viewerId ? rows.find(r => r.user_id === viewerId) : null;
+    poll = {
+      ...poll,
+      total_votes: rows.length,
+      viewer_voted: !!mine,
+      viewer_choice: mine ? mine.option_indices : null,
+      results: mine ? counts : null, // masked until the viewer casts a vote
+    };
+  }
   return {
     id: p.id, title: p.title, body: p.body,
     image_url: p.image_url, image_urls: p.image_urls || [],
     preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
-    poll: p.poll || null,
+    poll,
     created_at: p.created_at, is_admin_post: p.is_admin_post,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
     like_count: Number(p.like_count) || 0,
@@ -5902,7 +5934,19 @@ app.get('/api/clubs/:slug/posts', async (req, res) => {
      ORDER BY ${orderBy} LIMIT 100`,
     [club.id, viewerId || 0]
   );
-  res.json({ posts: rows.map(clubPostPublicShape), sort });
+  const pollPostIds = rows.filter(p => p.poll).map(p => p.id);
+  let votesByPost = new Map();
+  if (pollPostIds.length) {
+    const { rows: voteRows } = await pool.query(
+      'SELECT post_id, user_id, option_indices FROM club_post_poll_votes WHERE post_id = ANY($1)',
+      [pollPostIds]
+    );
+    voteRows.forEach(v => {
+      if (!votesByPost.has(v.post_id)) votesByPost.set(v.post_id, []);
+      votesByPost.get(v.post_id).push(v);
+    });
+  }
+  res.json({ posts: rows.map(p => clubPostPublicShape(p, votesByPost.get(p.id), viewerId)), sort });
 });
 
 // GET /api/clubs/:slug/posts/:postId — a single post, for the post detail
@@ -5921,7 +5965,63 @@ app.get('/api/clubs/:slug/posts/:postId', async (req, res) => {
     [req.params.postId, club.id, viewerId || 0]
   );
   if (!p) return res.status(404).json({ error: 'Post not found.' });
-  res.json({ post: clubPostPublicShape(p) });
+  let voteRows = [];
+  if (p.poll) {
+    const { rows } = await pool.query(
+      'SELECT post_id, user_id, option_indices FROM club_post_poll_votes WHERE post_id = $1',
+      [p.id]
+    );
+    voteRows = rows;
+  }
+  res.json({ post: clubPostPublicShape(p, voteRows, viewerId) });
+});
+
+// POST /api/clubs/:slug/posts/:postId/poll/vote — once-castable: a second
+// attempt gets rejected (409) rather than overwriting the first vote, since
+// there's no "change your vote" UI and the results being masked pre-vote
+// depends on there being exactly one honest vote per viewer.
+app.post('/api/clubs/:slug/posts/:postId/poll/vote', requireAuth, async (req, res) => {
+  const { rows: [post] } = await pool.query(
+    `SELECT cp.id, cp.poll FROM club_posts cp JOIN clubs c ON c.id = cp.club_id WHERE c.slug = $1 AND cp.id = $2`,
+    [req.params.slug, req.params.postId]
+  );
+  if (!post) return res.status(404).json({ error: 'Post not found.' });
+  if (!post.poll) return res.status(400).json({ error: 'This post has no poll.' });
+
+  const optionIndices = Array.isArray(req.body.option_indices) ? req.body.option_indices.map(Number) : [];
+  const optionCount = post.poll.options.length;
+  const valid = optionIndices.length > 0
+    && optionIndices.every(i => Number.isInteger(i) && i >= 0 && i < optionCount)
+    && new Set(optionIndices).size === optionIndices.length
+    && (post.poll.type === 'multiple' || optionIndices.length === 1);
+  if (!valid) return res.status(400).json({ error: 'Invalid vote.' });
+
+  const { rows: [existing] } = await pool.query(
+    'SELECT id FROM club_post_poll_votes WHERE post_id = $1 AND user_id = $2',
+    [post.id, req.user.id]
+  );
+  if (existing) return res.status(409).json({ error: 'You already voted on this poll.' });
+
+  await pool.query(
+    'INSERT INTO club_post_poll_votes (post_id, user_id, option_indices) VALUES ($1, $2, $3)',
+    [post.id, req.user.id, optionIndices]
+  );
+
+  const { rows: voteRows } = await pool.query(
+    'SELECT post_id, user_id, option_indices FROM club_post_poll_votes WHERE post_id = $1',
+    [post.id]
+  );
+  const counts = new Array(optionCount).fill(0);
+  voteRows.forEach(v => v.option_indices.forEach(i => counts[i]++));
+  res.json({
+    poll: {
+      ...post.poll,
+      total_votes: voteRows.length,
+      viewer_voted: true,
+      viewer_choice: optionIndices,
+      results: counts,
+    },
+  });
 });
 
 app.post('/api/clubs/:slug/posts/:postId/like', requireAuth, async (req, res) => {
