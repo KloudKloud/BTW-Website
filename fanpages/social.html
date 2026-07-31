@@ -201,6 +201,10 @@
       <label for="soc-create-name">Club Name</label>
       <input class="mod-input" id="soc-create-name" maxlength="60" placeholder="e.g. Cafe Plaisir" />
     </div>
+    <div class="mod-field">
+      <label>Types <span style="font-weight:400;color:#888;">(pick up to 3 — helps people find your club)</span></label>
+      <div class="wiki-meta-check-row" id="soc-create-types"></div>
+    </div>
     <div class="mod-field" style="margin-bottom:0;">
       <label>NSFW?</label>
       <div class="nsfw-toggle-row">
@@ -300,13 +304,42 @@ function sidebarClubLink(c, showOwnerRose) {
 }
 
 // ── Create Club modal ────────────────────────────────────────────────────
-document.getElementById('soc-create-club-btn').addEventListener('click', () => {
+let clubTypesCatalog = [];
+async function loadClubTypesCatalog() {
+  if (clubTypesCatalog.length) return clubTypesCatalog;
+  try {
+    const res = await fetch(`${API}/club-types`);
+    if (res.ok) clubTypesCatalog = (await res.json()).types || [];
+  } catch {}
+  return clubTypesCatalog;
+}
+function buildTypeChecks(selected) {
+  const wrap = document.getElementById('soc-create-types');
+  wrap.innerHTML = '';
+  clubTypesCatalog.forEach(t => {
+    const isChecked = selected.includes(t);
+    const label = document.createElement('label');
+    label.className = 'wiki-meta-check-item' + (isChecked ? ' wiki-meta-check-item--checked' : '');
+    label.innerHTML = `<input type="checkbox" value="${escapeHtml(t)}" ${isChecked ? 'checked' : ''} /> <span>${escapeHtml(t)}</span>`;
+    const input = label.querySelector('input');
+    input.addEventListener('change', () => {
+      const checkedCount = wrap.querySelectorAll('input:checked').length;
+      // Cap at 3 — same convention as Reddit's per-community topic count.
+      if (input.checked && checkedCount > 3) { input.checked = false; return; }
+      label.classList.toggle('wiki-meta-check-item--checked', input.checked);
+    });
+    wrap.appendChild(label);
+  });
+}
+document.getElementById('soc-create-club-btn').addEventListener('click', async () => {
   if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent('/fanpages/social')}`; return; }
   document.getElementById('soc-create-name').value = '';
   document.getElementById('soc-create-nsfw-toggle').checked = false;
   document.getElementById('soc-create-nsfw-label').textContent = 'SFW';
   document.getElementById('soc-create-nsfw-label').classList.add('nsfw-toggle-label--sfw');
   document.getElementById('soc-create-msg').textContent = '';
+  await loadClubTypesCatalog();
+  buildTypeChecks([]);
   document.getElementById('soc-create-overlay').hidden = false;
 });
 document.getElementById('soc-create-cancel').addEventListener('click', () => {
@@ -329,6 +362,7 @@ document.getElementById('soc-create-save').addEventListener('click', async () =>
   const name = document.getElementById('soc-create-name').value.trim();
   if (!name) { msgEl.className = 'mod-panel-msg mod-panel-msg--error'; msgEl.textContent = 'A club name is required.'; return; }
   const isNsfw = document.getElementById('soc-create-nsfw-toggle').checked;
+  const clubTypes = Array.from(document.querySelectorAll('#soc-create-types input:checked')).map(c => c.value);
 
   const btn = document.getElementById('soc-create-save');
   btn.disabled = true;
@@ -337,7 +371,7 @@ document.getElementById('soc-create-save').addEventListener('click', async () =>
     const res = await fetch(`${API}/clubs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ name, is_nsfw: isNsfw }),
+      body: JSON.stringify({ name, is_nsfw: isNsfw, club_types: clubTypes }),
     });
     const data = await res.json();
     if (!res.ok) {

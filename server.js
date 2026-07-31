@@ -1017,6 +1017,17 @@ async function initDb() {
     UPDATE clubs SET name = 'BTW Clubhouse' WHERE slug = 'btwclub' AND name != 'BTW Clubhouse';
   `).catch(e => console.error('BTWClub rename migration:', e.message));
 
+  // Club Types — Reddit-style topic tags (Sports, Writing, Gaming, etc.),
+  // up to 3 per club. Fixed list (not a grown-by-hand catalog like Fandom),
+  // powers the Explore page's topic filters.
+  await pool.query(`
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_types JSONB NOT NULL DEFAULT '[]';
+  `).catch(e => console.error('clubs club_types migration:', e.message));
+  await pool.query(`
+    UPDATE clubs SET club_types = '["Community", "Writing", "Gaming"]'::jsonb
+    WHERE slug = 'btwclub' AND club_types = '[]'::jsonb;
+  `).catch(e => console.error('BTWClub types seed:', e.message));
+
   await pool.query(`
     INSERT INTO club_members (club_id, user_id, role)
     SELECT c.id, u.id, CASE WHEN u.id = c.owner_user_id THEN 'owner' ELSE 'member' END
@@ -5438,6 +5449,31 @@ async function requireClubPageAdmin(req, res) {
   if (!page) { res.status(404).json({ error: 'Page not found.' }); return null; }
   return { ...ctx, page };
 }
+// Club Types — fixed list (not user-grown like Fandom/Tags), same idea as
+// Reddit's community topics. Kept in a random, non-alphabetical order on
+// purpose — this is a flat set of options, not a ranked list.
+const CLUB_TYPES = [
+  'Music', 'Gaming', 'Places & Travel', 'Sciences', 'Community', 'Anime & Cosplay',
+  'Adult Content', 'Home & Garden', 'Food & Drinks', 'Movies & TV', 'Sports',
+  'Humanities & Law', 'Q&As & Stories', 'Internet Culture', 'Writing', 'Vehicles',
+  'Fashion & Beauty', 'Pop Culture', 'Wellness', 'Technology', 'Health', 'Spooky',
+  'Business & Finance', 'Identity & Relationships', 'News & Politics', 'Art',
+  'Collectibles & Other Hobbies', 'Reading & Writing', 'Mature Topics',
+  'Nature & Outdoors', 'Education & Career', 'Games',
+];
+function sanitizeClubTypes(raw) {
+  if (!Array.isArray(raw)) return null;
+  const seen = new Set();
+  const out = [];
+  for (const t of raw) {
+    if (typeof t !== 'string' || !CLUB_TYPES.includes(t) || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
 function clubPublicShape(c, viewerRole) {
   return {
     id: c.id, slug: c.slug, name: c.name, description: c.description,
@@ -5447,12 +5483,19 @@ function clubPublicShape(c, viewerRole) {
     sidebar_title: c.sidebar_title || '', sidebar_message: c.sidebar_message || '', is_nsfw: !!c.is_nsfw,
     welcome_title: c.welcome_title || '', cover_mode: c.cover_mode || 'static', cover_image_url: c.cover_image_url || '',
     featured_cards_title: c.featured_cards_title || 'Featured Cards',
+    club_types: c.club_types || [],
     member_count: Number(c.member_count) || 0,
     post_count: c.post_count !== undefined ? Number(c.post_count) || 0 : undefined,
     created_at: c.created_at,
     viewer_role: viewerRole || null,
   };
 }
+
+// GET /api/club-types — public, powers the Create/Edit Club type picker
+// and (later) the Explore page's topic filters.
+app.get('/api/club-types', (req, res) => {
+  res.json({ types: CLUB_TYPES });
+});
 
 // GET /api/clubs — browse/search. ?q= filters by name, ?mine=1 restricts to
 // clubs the viewer belongs to (requires auth). Optional auth otherwise, so
@@ -5500,6 +5543,7 @@ app.get('/api/clubs', async (req, res) => {
 app.post('/api/clubs', requireAuth, async (req, res) => {
   const name = String(req.body.name || '').trim().slice(0, 60);
   const isNsfw = req.body.is_nsfw === true || req.body.is_nsfw === 'true';
+  const clubTypes = sanitizeClubTypes(req.body.club_types) || [];
   if (!name) return res.status(400).json({ error: 'A club name is required.' });
 
   const slug = await uniqueClubSlug(name);
@@ -5507,8 +5551,8 @@ app.post('/api/clubs', requireAuth, async (req, res) => {
   try {
     await client.query('BEGIN');
     const { rows: [club] } = await client.query(
-      `INSERT INTO clubs (slug, name, owner_user_id, is_nsfw) VALUES ($1, $2, $3, $4) RETURNING *`,
-      [slug, name, req.user.id, isNsfw]
+      `INSERT INTO clubs (slug, name, owner_user_id, is_nsfw, club_types) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [slug, name, req.user.id, isNsfw, JSON.stringify(clubTypes)]
     );
     await client.query(
       `INSERT INTO club_members (club_id, user_id, role) VALUES ($1, $2, 'owner')`,
@@ -5583,6 +5627,12 @@ app.put('/api/clubs/:slug', requireAuth, uploadModImage.single('banner'), async 
   const welcomeTitle = req.body.welcome_title !== undefined ? String(req.body.welcome_title).trim().slice(0, 100) : club.welcome_title;
   const positionX = req.body.banner_position_x !== undefined ? clampPosition(req.body.banner_position_x) : club.banner_position_x;
   const positionY = req.body.banner_position_y !== undefined ? clampPosition(req.body.banner_position_y) : club.banner_position_y;
+  let clubTypes = club.club_types;
+  if (req.body.club_types !== undefined) {
+    let parsed = req.body.club_types;
+    if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch { parsed = []; } }
+    clubTypes = sanitizeClubTypes(parsed) ?? club.club_types;
+  }
 
   let bannerUrl = club.banner_url;
   if (req.file) {
@@ -5594,9 +5644,9 @@ app.put('/api/clubs/:slug', requireAuth, uploadModImage.single('banner'), async 
   }
 
   const { rows: [updated] } = await pool.query(
-    `UPDATE clubs SET name = $1, description = $2, banner_url = $3, banner_position_x = $4, banner_position_y = $5, welcome_title = $6
-     WHERE id = $7 RETURNING *`,
-    [name, description, bannerUrl, positionX, positionY, welcomeTitle, club.id]
+    `UPDATE clubs SET name = $1, description = $2, banner_url = $3, banner_position_x = $4, banner_position_y = $5, welcome_title = $6, club_types = $7
+     WHERE id = $8 RETURNING *`,
+    [name, description, bannerUrl, positionX, positionY, welcomeTitle, JSON.stringify(clubTypes), club.id]
   );
   res.json({ club: clubPublicShape(updated, role) });
 });
