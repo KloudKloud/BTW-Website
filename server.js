@@ -6789,6 +6789,7 @@ app.get('/api/clubs-feed', async (req, res) => {
   );
   res.json({ posts: rows.map(p => ({
     id: p.id, title: p.title, body: p.body, created_at: p.created_at,
+    image_url: p.image_url || '', preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
     like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_liked: !!p.user_liked,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
     club: { slug: p.club_slug, name: p.club_name, icon_url: p.club_icon || null },
