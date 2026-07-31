@@ -48,13 +48,8 @@
     <div class="mod-gallery-main" id="gallery-grid-view">
 
       <div class="chars-sidebar-col">
-        <aside class="chars-create-box" id="gallery-create-box" style="display:none;">
-          <button class="chars-create-btn" id="gallery-create-btn" type="button">
-            <span class="chars-create-btn-icon">➕</span> Create Gallery Post
-          </button>
-          <button class="chars-create-btn" id="gallery-link-btn" type="button" style="margin-top:0.6rem; background:transparent; border:1px solid rgba(255,255,255,0.25); box-shadow:none;">
-            <span class="chars-create-btn-icon">🔗</span> Link Existing
-          </button>
+        <aside class="chars-create-box" id="gallery-storyeditor-box" style="display:none;">
+          <button class="chars-create-btn chars-create-btn--edit" id="gallery-storyeditor-btn" type="button">Story Editor</button>
         </aside>
 
         <aside class="chars-create-box">
@@ -78,7 +73,7 @@
     <div class="art-view-wrapper" id="gallery-detail-view" style="display:none; max-width:none; margin:0; padding:0;">
       <div class="art-view-back-row">
         <a class="art-view-back" href="#" id="gallery-detail-back">← Back to Gallery</a>
-        <button class="art-view-edit-btn" id="gallery-detail-edit-btn" type="button" style="display:none;">✏️ Edit</button>
+        <button class="art-view-edit-btn" id="gallery-detail-edit-btn" type="button" style="display:none;">✏️ Story Editor</button>
       </div>
 
       <div class="art-view-image-wrap">
@@ -143,18 +138,6 @@
   </main>
 </div>
 
-<!-- Link Existing picker — search the owner's own gallery posts (standalone
-     or already linked elsewhere) and add one to this story's gallery. -->
-<div class="char-editor-overlay" id="gallery-link-overlay" hidden>
-  <div class="char-editor-modal" style="max-width:440px;">
-    <h2 class="char-editor-title">Link Existing Gallery Post</h2>
-    <input class="mod-input" id="gallery-link-search" placeholder="Search your gallery posts…" style="margin-bottom:1rem;" />
-    <div id="gallery-link-results" style="display:flex; flex-direction:column; gap:0.5rem; max-height:320px; overflow-y:auto;"></div>
-    <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
-      <button type="button" class="mod-btn" id="gallery-link-cancel">Close</button>
-    </div>
-  </div>
-</div>
 
 <!-- Gallery post editor modal — owner only -->
 <div class="char-editor-overlay" id="gallery-editor-overlay" hidden>
@@ -545,7 +528,9 @@ function openPostDetail(item, pushHistory) {
   const editBtn = document.getElementById('gallery-detail-edit-btn');
   if (IS_SELF) {
     editBtn.style.display = '';
-    editBtn.onclick = () => openGalleryEditor(item);
+    // Straight to the Gallery tab of the main Story Editor hub — editing a
+    // gallery post no longer happens in place on this page at all.
+    editBtn.onclick = () => { window.location.href = `${STORY_BASE}/edit#gallery`; };
   } else {
     editBtn.style.display = 'none';
   }
@@ -1121,59 +1106,13 @@ function closeGalleryEditor() {
   document.getElementById('gallery-editor-overlay').hidden = true;
 }
 
-document.getElementById('gallery-create-btn').addEventListener('click', () => openGalleryEditor(null));
 document.getElementById('gallery-editor-cancel').addEventListener('click', closeGalleryEditor);
 // No click-outside-to-close here on purpose — accidental clicks shouldn't wipe out a half-filled post.
 
-// ── Link Existing — search the owner's own gallery posts not yet on this
-// story's roster, and add one without duplicating it. ──
-let galleryLinkDebounce;
-async function runGalleryLinkSearch(q) {
-  const resultsWrap = document.getElementById('gallery-link-results');
-  resultsWrap.innerHTML = '<p style="color:#888;font-size:0.85rem;">Loading…</p>';
-  try {
-    const res = await fetch(`/api/moderator/gallery/linkable?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
-    const data = await res.json();
-    const items = data.gallery || [];
-    if (!items.length) {
-      resultsWrap.innerHTML = '<p style="color:#888;font-size:0.85rem;">No matching posts — try Create instead.</p>';
-      return;
-    }
-    resultsWrap.innerHTML = '';
-    items.forEach(g => {
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'mod-panel-list-item';
-      row.style.cssText = 'width:100%; text-align:left; background:#161616; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:0.5rem 0.75rem; cursor:pointer;';
-      row.innerHTML = `
-        <span style="display:flex; align-items:center; gap:0.6rem;">
-          <img src="${g.image_url}" alt="" style="width:36px;height:36px;border-radius:6px;object-fit:cover;" />
-          ${g.title || 'Untitled'}
-        </span>
-      `;
-      row.addEventListener('click', async () => {
-        row.disabled = true;
-        await fetch(`/api/moderator/gallery/${g.id}/link`, { method: 'POST', headers: authHeaders() });
-        document.getElementById('gallery-link-overlay').hidden = true;
-        reloadGallery();
-      });
-      resultsWrap.appendChild(row);
-    });
-  } catch {
-    resultsWrap.innerHTML = '<p style="color:#888;font-size:0.85rem;">Couldn\'t load your gallery posts right now.</p>';
-  }
-}
-document.getElementById('gallery-link-btn').addEventListener('click', () => {
-  document.getElementById('gallery-link-search').value = '';
-  document.getElementById('gallery-link-overlay').hidden = false;
-  runGalleryLinkSearch('');
-});
-document.getElementById('gallery-link-cancel').addEventListener('click', () => {
-  document.getElementById('gallery-link-overlay').hidden = true;
-});
-document.getElementById('gallery-link-search').addEventListener('input', (e) => {
-  clearTimeout(galleryLinkDebounce);
-  galleryLinkDebounce = setTimeout(() => runGalleryLinkSearch(e.target.value.trim()), 300);
+// Straight to the Gallery tab of the main Story Editor hub — creating and
+// linking gallery posts no longer happens in place on this page at all.
+document.getElementById('gallery-storyeditor-btn').addEventListener('click', () => {
+  window.location.href = `${STORY_BASE}/edit#gallery`;
 });
 
 document.getElementById('gallery-editor-img-wrap').addEventListener('click', () => {
@@ -1449,7 +1388,7 @@ function renderBookBox(site) {
   renderLinkToCards();
 
   if (IS_SELF) {
-    document.getElementById('gallery-create-box').style.display = 'block';
+    document.getElementById('gallery-storyeditor-box').style.display = 'block';
   }
 
   GALLERY_ART      = (data && data.gallery_sfw)      || [];

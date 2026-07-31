@@ -107,19 +107,6 @@
   <div class="chars-layout">
 
     <div class="chars-sidebar-col">
-      <aside class="chars-create-box" id="chars-create-box" style="display:none;">
-        <button class="chars-create-btn" id="chars-create-btn" type="button">
-          <span class="chars-create-btn-icon">➕</span> Create New Character
-        </button>
-        <button class="chars-create-btn" id="chars-link-btn" type="button" style="margin-top:0.6rem; background:transparent; border:1px solid rgba(255,255,255,0.25); box-shadow:none;">
-          <span class="chars-create-btn-icon">🔗</span> Link Existing
-        </button>
-        <hr class="chars-reorder-divider" />
-        <button class="chars-create-btn" id="chars-reorder-btn" type="button" style="background:transparent; border:1px solid rgba(255,255,255,0.25); box-shadow:none;">
-          <span class="chars-create-btn-icon">↕️</span> Reorder
-        </button>
-      </aside>
-
       <aside class="chars-create-box" id="char-edit-box" style="display:none;">
         <button class="chars-create-btn chars-create-btn--edit" id="char-edit-btn" type="button"></button>
       </aside>
@@ -129,21 +116,8 @@
         <div class="chars-nav-scroller" id="chars-nav-scroller">
           <div class="chars-nav" id="chars-nav"></div>
         </div>
-
-        <!-- Reorder mode's own list — swapped in over the normal nav, never
-             shown alongside it. -->
-        <div id="chars-reorder-panel" hidden>
-          <span class="chars-reorder-label">Drag to reorder</span>
-          <div class="chars-reorder-list" id="chars-reorder-list"></div>
-          <div class="chars-reorder-actions">
-            <button class="chars-reorder-btn2 chars-reorder-btn2--cancel" id="chars-reorder-cancel" type="button">Cancel</button>
-            <button class="chars-reorder-btn2 chars-reorder-btn2--save" id="chars-reorder-save" type="button">Save Order</button>
-          </div>
-        </div>
       </aside>
     </div>
-
-    <div class="chars-reorder-scrim" id="chars-reorder-scrim"></div>
 
     <main class="chars-main">
       <div id="char-profile" class="char-profile"></div>
@@ -183,29 +157,6 @@
 
     </div>
 
-  </div>
-</div>
-
-<!-- Link Existing picker — same shopping-style "Your X"/"Other X" tabs as
-     the relationships field. Your Characters = your own characters not yet
-     on this story's roster; Other Characters = search across everyone, so
-     you can tag a friend's character onto your story too. -->
-<div class="char-link-picker-overlay" id="chars-linkexist-overlay" hidden>
-  <div class="char-link-picker-modal" style="max-width:480px;">
-    <h3 class="char-link-picker-title">Link Existing Character</h3>
-    <div class="char-link-picker-tabs">
-      <button type="button" class="char-link-picker-tab active" id="chars-linkexist-tab-mine">Your Characters</button>
-      <button type="button" class="char-link-picker-tab" id="chars-linkexist-tab-other">Other Characters</button>
-    </div>
-    <div id="chars-linkexist-mine">
-      <input class="mod-input" id="chars-linkexist-mine-search" placeholder="Search your characters…" style="margin-bottom:0.75rem;" />
-      <div class="char-link-picker-scroll" id="chars-linkexist-mine-list"></div>
-    </div>
-    <div id="chars-linkexist-other" hidden>
-      <input class="mod-input" id="chars-linkexist-other-search" placeholder="Search characters by name…" style="margin-bottom:0.75rem;" />
-      <div class="char-link-picker-scroll" id="chars-linkexist-other-list"></div>
-    </div>
-    <button class="mod-btn mod-btn--small" id="chars-linkexist-close" type="button" style="margin-top:0.75rem;">Close</button>
   </div>
 </div>
 
@@ -691,8 +642,12 @@ function renderProfile(char) {
   if (IS_SELF && char.isMine) {
     editBox.style.display = 'block';
     editBtn.className = 'chars-create-btn chars-create-btn--edit';
-    editBtn.textContent = `✏️ Edit ${char.name}?`;
-    editBtn.onclick = () => openCharEditor(char);
+    editBtn.style.flexDirection = 'column';
+    editBtn.style.lineHeight = '1.4';
+    editBtn.innerHTML = `Edit ${escapeHtml(char.name)}<br><span style="font-size:0.76em; opacity:0.9;">Story Editor</span>`;
+    // Straight to the character's own tab in the main Story Editor hub —
+    // editing a character no longer happens in place on this page at all.
+    editBtn.onclick = () => { window.location.href = `${STORY_BASE}/edit?char=${char.id}#characters`; };
   } else if (IS_SELF && !char.isMine) {
     editBox.style.display = 'block';
     editBtn.className = 'chars-create-btn chars-create-btn--danger';
@@ -1102,178 +1057,7 @@ function closeCharEditor() {
   document.getElementById('char-editor-overlay').hidden = true;
 }
 
-document.getElementById('chars-create-btn').addEventListener('click', () => openCharEditor(null));
 document.getElementById('char-editor-cancel').addEventListener('click', closeCharEditor);
-
-// ── Link Existing — same "Your X"/"Other X" tabbed picker as the
-// relationships field. Your Characters = your own not yet on this story's
-// roster (via /api/moderator/characters/linkable); Other Characters =
-// search across everyone (via /api/characters/search), so you can tag a
-// friend's character onto your story too. ──
-let linkExistingMineDebounce, linkExistingOtherDebounce;
-
-function linkExistingItemEl(c, showOwner) {
-  const item = document.createElement('button');
-  item.type = 'button';
-  item.className = 'char-link-picker-item--big';
-  item.innerHTML = `
-    <img src="${c.ref_image || '/images/defaultchar.jpg'}" alt="" />
-    <span>
-      <span class="char-link-picker-item-name">${c.name}</span>
-      ${showOwner ? `<span class="char-link-picker-item-owner">${c.owner_display_name || c.owner_username}</span>` : ''}
-    </span>
-  `;
-  item.addEventListener('click', async () => {
-    item.disabled = true;
-    await fetch(`/api/moderator/characters/${c.id}/link`, { method: 'POST', headers: authHeaders() });
-    document.getElementById('chars-linkexist-overlay').hidden = true;
-    const fresh = await ModeratorSite.load(SLUG);
-    renderCharList((fresh && fresh.characters) || []);
-  });
-  return item;
-}
-async function loadLinkExistingMine(q) {
-  const list = document.getElementById('chars-linkexist-mine-list');
-  list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
-  try {
-    const res = await fetch(`/api/moderator/characters/linkable?q=${encodeURIComponent(q || '')}`, { headers: authHeaders() });
-    const data = await res.json();
-    const chars = data.characters || [];
-    if (!chars.length) { list.innerHTML = `<p class="char-link-picker-empty">${q ? 'No matching characters found.' : 'No matching characters — try Create New instead.'}</p>`; return; }
-    list.innerHTML = '';
-    chars.forEach(c => list.appendChild(linkExistingItemEl(c, false)));
-  } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t load your characters right now.</p>'; }
-}
-async function loadLinkExistingOther(q) {
-  const list = document.getElementById('chars-linkexist-other-list');
-  list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
-  try {
-    const res = await fetch(`/api/characters/search?q=${encodeURIComponent(q || '')}`, { headers: authHeaders() });
-    const data = await res.json();
-    const chars = data.characters || [];
-    if (!chars.length) { list.innerHTML = '<p class="char-link-picker-empty">No matching characters found.</p>'; return; }
-    list.innerHTML = '';
-    chars.forEach(c => list.appendChild(linkExistingItemEl(c, true)));
-  } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t search right now.</p>'; }
-}
-function switchLinkExistingTab(tab) {
-  document.getElementById('chars-linkexist-tab-mine').classList.toggle('active', tab === 'mine');
-  document.getElementById('chars-linkexist-tab-other').classList.toggle('active', tab === 'other');
-  document.getElementById('chars-linkexist-mine').hidden = tab !== 'mine';
-  document.getElementById('chars-linkexist-other').hidden = tab !== 'other';
-  if (tab === 'mine') { document.getElementById('chars-linkexist-mine-search').value = ''; loadLinkExistingMine(''); }
-  else { document.getElementById('chars-linkexist-other-search').value = ''; loadLinkExistingOther(''); }
-}
-document.getElementById('chars-linkexist-tab-mine').addEventListener('click', () => switchLinkExistingTab('mine'));
-document.getElementById('chars-linkexist-tab-other').addEventListener('click', () => switchLinkExistingTab('other'));
-document.getElementById('chars-linkexist-mine-search').addEventListener('input', (e) => {
-  clearTimeout(linkExistingMineDebounce);
-  linkExistingMineDebounce = setTimeout(() => loadLinkExistingMine(e.target.value.trim()), 300);
-});
-document.getElementById('chars-linkexist-other-search').addEventListener('input', (e) => {
-  clearTimeout(linkExistingOtherDebounce);
-  linkExistingOtherDebounce = setTimeout(() => loadLinkExistingOther(e.target.value.trim()), 300);
-});
-document.getElementById('chars-link-btn').addEventListener('click', () => {
-  document.getElementById('chars-linkexist-overlay').hidden = false;
-  switchLinkExistingTab('mine');
-});
-document.getElementById('chars-linkexist-close').addEventListener('click', () => {
-  document.getElementById('chars-linkexist-overlay').hidden = true;
-});
-
-// ── Reorder Characters ────────────────────────────────────────────────────
-// A drag-and-drop pass over the sidebar's own cast list, scoped to just this
-// story's link table (character_story_links.sort_order) — dragging never
-// touches the characters themselves, just where they fall in THIS story's
-// roster.
-let reorderDragId = null;
-
-function buildReorderRow(char) {
-  const row = document.createElement('div');
-  row.className = 'chars-reorder-row';
-  row.draggable = true;
-  row.dataset.id = char.id;
-  row.innerHTML = `
-    <span class="chars-reorder-handle">⠿</span>
-    <img class="chars-reorder-thumb" src="${char.ref || '/images/defaultchar.jpg'}" alt="" />
-    <span class="chars-reorder-name">${escapeHtml(char.name)}</span>
-  `;
-
-  row.addEventListener('dragstart', (e) => {
-    reorderDragId = char.id;
-    row.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-  });
-  row.addEventListener('dragend', () => {
-    row.classList.remove('dragging');
-    document.querySelectorAll('.chars-reorder-row.drop-target').forEach(r => r.classList.remove('drop-target'));
-  });
-  row.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    if (String(char.id) === String(reorderDragId)) return;
-    row.classList.add('drop-target');
-  });
-  row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
-  row.addEventListener('drop', (e) => {
-    e.preventDefault();
-    row.classList.remove('drop-target');
-    if (reorderDragId == null || String(char.id) === String(reorderDragId)) return;
-    const list = document.getElementById('chars-reorder-list');
-    const dragEl = list.querySelector(`.chars-reorder-row[data-id="${CSS.escape(String(reorderDragId))}"]`);
-    if (!dragEl) return;
-    // Always land the dragged row directly in the target's slot the moment
-    // it glows and you let go — no dependency on which half of the target
-    // row the cursor happens to be over, which used to make drops silently
-    // no-op when released just below a target's top half.
-    list.insertBefore(dragEl, row);
-  });
-
-  return row;
-}
-
-function enterReorderMode() {
-  const list = document.getElementById('chars-reorder-list');
-  list.innerHTML = '';
-  CHARACTERS.forEach(char => list.appendChild(buildReorderRow(char)));
-  document.getElementById('chars-nav-scroller').hidden = true;
-  document.getElementById('chars-sidebar-label').hidden = true;
-  document.getElementById('chars-reorder-panel').hidden = false;
-  document.body.classList.add('chars-reorder-active');
-}
-
-function exitReorderMode() {
-  document.body.classList.remove('chars-reorder-active');
-  document.getElementById('chars-reorder-panel').hidden = true;
-  document.getElementById('chars-nav-scroller').hidden = false;
-  document.getElementById('chars-sidebar-label').hidden = false;
-}
-
-document.getElementById('chars-reorder-btn').addEventListener('click', enterReorderMode);
-document.getElementById('chars-reorder-cancel').addEventListener('click', exitReorderMode);
-document.getElementById('chars-reorder-save').addEventListener('click', async () => {
-  const saveBtn = document.getElementById('chars-reorder-save');
-  const order = [...document.querySelectorAll('#chars-reorder-list .chars-reorder-row')].map(r => r.dataset.id);
-  saveBtn.disabled = true;
-  saveBtn.textContent = 'Saving…';
-  try {
-    const res = await fetch('/api/moderator/characters/reorder', {
-      method: 'PUT',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order }),
-    });
-    if (!res.ok) throw new Error('save failed');
-    const fresh = await ModeratorSite.load(SLUG);
-    if (!fresh) throw new Error('reload failed');
-    renderCharList(fresh.characters || []);
-    exitReorderMode();
-  } catch {
-    alert('Could not save the new order — please try again.');
-  } finally {
-    saveBtn.disabled = false;
-    saveBtn.textContent = 'Save Order';
-  }
-});
 
 document.getElementById('char-editor-delete-forever').addEventListener('click', async () => {
   if (!editingCharId) return;
@@ -1664,10 +1448,6 @@ document.getElementById('cc-compose-btn').addEventListener('click', async () => 
   const linkNoteEl = document.getElementById('char-linkto-story-note');
   if (linkNoteEl) linkNoteEl.innerHTML = `This character is linked to <strong>${escapeHtml(STORY_TITLE)}</strong>! To add more stories or unlink added novels, you can manage your characters through the character editor on your account :3`;
   renderLockedStoryCard();
-
-  if (IS_SELF) {
-    document.getElementById('chars-create-box').style.display = 'block';
-  }
 
   renderCharList((data && data.characters) || []);
 

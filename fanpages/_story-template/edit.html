@@ -577,7 +577,8 @@
             <button class="chars-create-btn" id="se-chapter-create-btn" type="button">
               <span class="chars-create-btn-icon">➕</span> New Chapter
             </button>
-            <button class="chars-create-btn" id="se-chapter-reorder-btn" type="button" style="margin-top:0.6rem; background:transparent; border:1px solid rgba(255,255,255,0.25); box-shadow:none;">
+            <hr class="chars-reorder-divider" />
+            <button class="chars-create-btn" id="se-chapter-reorder-btn" type="button" style="background:transparent; border:1px solid rgba(255,255,255,0.25); box-shadow:none;">
               <span class="chars-create-btn-icon">↕️</span> Reorder Chapters
             </button>
           </aside>
@@ -715,7 +716,7 @@
               <span class="chars-create-btn-icon">➕</span> Create Story Gallery
             </button>
             <button class="chars-create-btn" id="se-gallery-link-btn" type="button" style="margin-top:0.6rem; background:transparent; border:1px solid rgba(255,255,255,0.25); box-shadow:none;">
-              <span class="chars-create-btn-icon">🔗</span> Link Existing Gallery
+              <span class="chars-create-btn-icon">🔗</span> Link Existing Art
             </button>
             <hr class="chars-reorder-divider" />
             <button class="chars-create-btn" id="se-gallery-reorder-btn" type="button" style="background:transparent; border:1px solid rgba(255,255,255,0.25); box-shadow:none;">
@@ -1524,9 +1525,9 @@ function switchEditorSection(section) {
   document.getElementById('se-nav-chapters').classList.toggle('active', section === 'chapters');
   document.getElementById('se-nav-characters').classList.toggle('active', section === 'characters');
   document.getElementById('se-nav-gallery').classList.toggle('active', section === 'gallery');
-  if (section === 'chapters') loadSeChapters();
-  if (section === 'characters') loadSeCharacters();
-  if (section === 'gallery') loadSeGallery();
+  if (section === 'chapters') return loadSeChapters();
+  if (section === 'characters') return loadSeCharacters();
+  if (section === 'gallery') return loadSeGallery();
 }
 document.getElementById('se-nav-details').addEventListener('click', () => switchEditorSection('details'));
 document.getElementById('se-nav-chapters').addEventListener('click', () => switchEditorSection('chapters'));
@@ -2919,7 +2920,22 @@ document.getElementById('se-chapter-reorder-save').addEventListener('click', asy
   populateForm(siteData.site);
   applyTheme(siteData.site.theme || 'default', siteData.site.theme_bg_url);
 
-  if (window.location.hash === '#characters') switchEditorSection('characters');
+  // Deep-linked from the story's own Characters/Gallery/Chapters pages —
+  // land straight on that tab, and for Characters, on the specific
+  // character that was clicked (?char=<id>).
+  const bootHash = window.location.hash.slice(1);
+  if (['chapters', 'characters', 'gallery'].includes(bootHash)) {
+    const loadPromise = switchEditorSection(bootHash);
+    if (bootHash === 'characters') {
+      const charId = new URLSearchParams(window.location.search).get('char');
+      if (charId && loadPromise) {
+        loadPromise.then(() => {
+          const char = SE_CHARACTERS.find(c => String(c.id) === String(charId));
+          if (char) openOrBlockCharEditor(char);
+        });
+      }
+    }
+  }
 
   try {
     const catRes = await fetch('/api/fandom-catalog');
