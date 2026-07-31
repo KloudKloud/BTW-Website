@@ -24,6 +24,21 @@
     .wiki-meta-field { margin-bottom: 1.85rem; }
     .wiki-meta-field:last-child { margin-bottom: 0; }
 
+    /* Fandom — AO3-style typeahead: suggestions drop below the bubble-tag
+       input as the author types, matching against the preloaded catalog. */
+    .wiki-fandom-input-wrap { position: relative; }
+    .wiki-fandom-suggest {
+      position: absolute; top: calc(100% + 0.4rem); left: 0; right: 0; z-index: 30;
+      background: #141018; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.55); overflow: hidden;
+    }
+    .wiki-fandom-suggest-item {
+      display: block; width: 100%; text-align: left; background: none; border: none;
+      color: #f0f0f0; font-family: 'Inter', sans-serif; font-size: 0.85rem;
+      padding: 0.6rem 0.9rem; cursor: pointer;
+    }
+    .wiki-fandom-suggest-item:hover, .wiki-fandom-suggest-item.active { background: rgba(127,168,217,0.15); }
+
     /* Cover/Cards now live inside the big form box, as its first block —
        give it some breathing room below before Title starts, and stretch
        it to fill the box's full width instead of sitting narrow on the
@@ -201,35 +216,31 @@
         <div class="wiki-meta-field mod-editable-block">
           <div class="mod-field-label-row">
             <span class="mod-field-label">Rating</span>
-            <button class="wiki-tags-tip-icon" id="rating-tip-icon" type="button" aria-label="Rating help">ⓘ</button>
+            <button class="wiki-tags-tip-icon" id="rating-tip-icon" type="button" aria-label="Rating help">💡</button>
             <div class="wiki-tags-tip-popover" id="rating-tip-popover" hidden>
-              <p><strong>Not Rated (Adult!)</strong> — For searching, screening, and other site functions, this may get treated the same way as Explicit content. Choose this if you'd rather not rate your content.</p>
-              <p><strong>General Audiences</strong> — Suitable for anyone.</p>
-              <p><strong>Teen And Up Audiences</strong> — May be inappropriate for audiences under 13.</p>
-              <p><strong>Mature (Adult!)</strong> — Adult themes (sex, violence, etc.) that aren't as graphic as Explicit.</p>
-              <p><strong>Explicit (Adult!)</strong> — Porn, graphic violence, etc.</p>
+              <p><strong>General Audiences</strong> — Suitable for everyone</p>
+              <p><strong>Teen And Up Audiences</strong> — May not be suitable for all audiences, but not expressly explicit. Light themes of violence, language, or other mature elements that don't teeter into adult.</p>
+              <p><strong>Mature (Adult!)</strong> — Porn, graphic violence, or explictly adult themes</p>
             </div>
           </div>
           <select class="mod-input" id="rating-select">
-            <option value="Not Rated">Not Rated (Adult!)</option>
             <option value="General Audiences">General Audiences</option>
-            <option value="Teen And Up Audiences">Teen And Up Audiences</option>
-            <option value="Mature">Mature (Adult!)</option>
-            <option value="Explicit">Explicit (Adult!)</option>
+            <option value="Teen & Up">Teen & Up</option>
+            <option value="Mature/Explicit (Adult)">Mature/Explicit (Adult)</option>
           </select>
         </div>
 
         <div class="wiki-meta-field mod-editable-block">
           <div class="mod-field-label-row">
             <span class="mod-field-label">Category</span>
-            <button class="wiki-tags-tip-icon" id="category-tip-icon" type="button" aria-label="Category help">ⓘ</button>
+            <button class="wiki-tags-tip-icon" id="category-tip-icon" type="button" aria-label="Category help">💡</button>
             <div class="wiki-tags-tip-popover" id="category-tip-popover" hidden>
-              <p>There are 6 categories. Definitions vary fic to fic — use whichever feel applicable, or none:</p>
-              <p><strong>F/F</strong> — Female/Female relationships</p>
-              <p><strong>F/M</strong> — Female/Male relationships</p>
-              <p><strong>Gen</strong> — General: no romantic/sexual relationships, or not the main focus</p>
+              <p>These definitions vary, and feel free to select the categories that suit your fic best :3</p>
+              <p><strong>Gen</strong> — No romantic/sexual relationships, or not the main focus</p>
+              <p><strong>M/F</strong> — Male/Female relationships</p>
               <p><strong>M/M</strong> — Male/Male relationships</p>
-              <p><strong>Multi</strong> — More than one kind of relationship, or a relationship with multiple partners</p>
+              <p><strong>F/F</strong> — Female/Female relationships</p>
+              <p><strong>Multi</strong> — Multiple relationships, or a relationship with more than one partner</p>
               <p><strong>Other</strong> — Other relationships</p>
             </div>
           </div>
@@ -239,7 +250,11 @@
         <div class="wiki-meta-field mod-editable-block">
           <div class="mod-field-label-row">
             <span class="mod-field-label">Relationships</span>
-            <span class="mod-field-hint">e.g. "Umbreon/Espeon". Press Enter to add.</span>
+            <span class="mod-field-hint"> (e.g. "Umbreon"/"Espeon". Press Enter to add.)</span>
+            <button class="wiki-tags-tip-icon" id="relationships-tip-icon" type="button" aria-label="Relationships help">💡</button>
+            <div class="wiki-tags-tip-popover" id="relationships-tip-popover" hidden>
+              Tag the relationships in your work. This applies heavily for fanfiction, and should be used to group recognizable characters together (e.g. "Umbreon"/"Espeon") to help discoverability. If the characters don't appear as a selectable object, enter them with their full names, and use a "/" to denote individual characters. Please be advised, if your relationship includes several characters, consider shortening their names if needed to ensure that the tag stays under 150 characters!
+            </div>
           </div>
           <div class="wiki-tags-input-box" id="relationships-input-box">
             <input type="text" class="wiki-tags-input" id="relationships-text-input" placeholder="Type a relationship and press Enter…" />
@@ -248,8 +263,22 @@
 
         <div class="wiki-meta-field mod-editable-block">
           <div class="mod-field-label-row">
+            <span class="mod-field-label">Fandom</span>
+            <button class="wiki-tags-tip-icon" id="fandom-tip-icon" type="button" aria-label="Fandom help">💡</button>
+            <div class="wiki-tags-tip-popover" id="fandom-tip-popover" hidden>
+              Start typing and pick a match if one shows up — that keeps everyone's tagging consistent so stories in the same fandom can actually find each other. Don't see yours? Type it anyway; we'll add popular new ones to the official list over time, just like AO3 does.
+            </div>
+          </div>
+          <div class="wiki-tags-input-box wiki-fandom-input-wrap" id="fandom-input-box">
+            <input type="text" class="wiki-tags-input" id="fandom-text-input" placeholder="Type a fandom and press Enter…" autocomplete="off" />
+            <div class="wiki-fandom-suggest" id="fandom-suggest" hidden></div>
+          </div>
+        </div>
+
+        <div class="wiki-meta-field mod-editable-block">
+          <div class="mod-field-label-row">
             <span class="mod-field-label">Additional Tags</span>
-            <button class="wiki-tags-tip-icon" id="tags-tip-icon" type="button" aria-label="Tag tips">ⓘ</button>
+            <button class="wiki-tags-tip-icon" id="tags-tip-icon" type="button" aria-label="Tag tips">💡</button>
             <div class="wiki-tags-tip-popover" id="tags-tip-popover" hidden>
               Tag up to 100 simple, relevant, searchable tags to help your story be discovered! For example: Pokemon, Furry, Mystery, Love, Ships, Umbreon, Lucario, Sexual_Intimacy... - Use "_" instead of spaces. Enter tags one at a time. Duplicate tags will be auto-deleted for your convienency. No need to tag specific character names: your character names are tied inside of your story and will be searchable in meta-data by default. Still tag species or other relevant traits about them that you feel could attract readers.
             </div>
@@ -338,8 +367,21 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// ── Story Metadata — Rating / Category / Relationships ──────────────────────
-const CATEGORY_OPTIONS = ['F/F', 'F/M', 'Gen', 'M/M', 'Multi', 'Other'];
+// ── Story Metadata — Rating / Category / Relationships / Fandom ────────────
+const CATEGORY_OPTIONS = ['Gen', 'M/F', 'M/M', 'F/F', 'Multi', 'Other'];
+
+// Older stories may still carry the previous 5-tier rating / F/M category
+// naming — remap those onto the current options so the form never shows a
+// blank/unselected field for content saved before this rewrite.
+function mapLegacyRating(rating) {
+  if (['General Audiences', 'Teen & Up', 'Mature/Explicit (Adult)'].includes(rating)) return rating;
+  if (rating === 'Teen And Up Audiences') return 'Teen & Up';
+  if (rating === 'Mature' || rating === 'Explicit') return 'Mature/Explicit (Adult)';
+  return 'General Audiences';
+}
+function mapLegacyCategory(cat) {
+  return cat === 'F/M' ? 'M/F' : cat;
+}
 
 function buildCategoryChecks(selected) {
   const wrap = document.getElementById('category-checks');
@@ -352,7 +394,13 @@ function buildCategoryChecks(selected) {
   });
 }
 
-[['rating-tip-icon', 'rating-tip-popover'], ['category-tip-icon', 'category-tip-popover'], ['tags-tip-icon', 'tags-tip-popover']].forEach(([iconId, popId]) => {
+[
+  ['rating-tip-icon', 'rating-tip-popover'],
+  ['category-tip-icon', 'category-tip-popover'],
+  ['relationships-tip-icon', 'relationships-tip-popover'],
+  ['fandom-tip-icon', 'fandom-tip-popover'],
+  ['tags-tip-icon', 'tags-tip-popover'],
+].forEach(([iconId, popId]) => {
   const icon = document.getElementById(iconId);
   const pop = document.getElementById(popId);
   icon.addEventListener('click', (e) => {
@@ -402,6 +450,89 @@ relationshipsTextInput.addEventListener('keydown', (e) => {
     workingRelationships.pop();
     renderRelationshipsEditor();
   }
+});
+
+// ── Fandom — bubble-tag input with AO3-style typeahead against a shared
+// catalog. Anything typed that doesn't match a suggestion still saves as
+// freeform text; popular freeform entries get promoted into the official
+// catalog by hand later, same as AO3's tag wrangling. ───────────────────────
+let workingFandoms = [];
+let fandomCatalog = [];
+let fandomSuggestIndex = -1;
+
+function renderFandomsEditor() {
+  const box = document.getElementById('fandom-input-box');
+  const input = document.getElementById('fandom-text-input');
+  box.querySelectorAll('.wiki-tag-bubble--editable').forEach(b => b.remove());
+  workingFandoms.forEach(f => {
+    const bubble = document.createElement('span');
+    bubble.className = 'wiki-tag-bubble wiki-tag-bubble--editable';
+    bubble.innerHTML = `${escapeHtml(f)} <button class="wiki-tag-bubble-remove" type="button" aria-label="Remove fandom">✕</button>`;
+    bubble.querySelector('.wiki-tag-bubble-remove').addEventListener('click', () => {
+      workingFandoms = workingFandoms.filter(x => x !== f);
+      renderFandomsEditor();
+    });
+    box.insertBefore(bubble, input);
+  });
+}
+
+function addWorkingFandom(raw) {
+  const clean = raw.trim().slice(0, 100);
+  if (!clean) return;
+  if (workingFandoms.some(f => f.toLowerCase() === clean.toLowerCase())) return;
+  if (workingFandoms.length >= 10) return;
+  workingFandoms.push(clean);
+  renderFandomsEditor();
+}
+
+function renderFandomSuggest(matches) {
+  const wrap = document.getElementById('fandom-suggest');
+  fandomSuggestIndex = -1;
+  if (!matches.length) { wrap.hidden = true; wrap.innerHTML = ''; return; }
+  wrap.innerHTML = matches.map(m => `<button type="button" class="wiki-fandom-suggest-item">${escapeHtml(m)}</button>`).join('');
+  wrap.hidden = false;
+  wrap.querySelectorAll('.wiki-fandom-suggest-item').forEach(btn => {
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault(); // fires before the input's blur would hide the dropdown
+      addWorkingFandom(btn.textContent);
+      fandomTextInput.value = '';
+      renderFandomSuggest([]);
+    });
+  });
+}
+
+const fandomTextInput = document.getElementById('fandom-text-input');
+fandomTextInput.addEventListener('input', () => {
+  const q = fandomTextInput.value.trim().toLowerCase();
+  if (!q) { renderFandomSuggest([]); return; }
+  const matches = fandomCatalog.filter(f => f.toLowerCase().includes(q) && !workingFandoms.some(w => w.toLowerCase() === f.toLowerCase())).slice(0, 6);
+  renderFandomSuggest(matches);
+});
+fandomTextInput.addEventListener('keydown', (e) => {
+  const items = document.querySelectorAll('#fandom-suggest .wiki-fandom-suggest-item');
+  if (e.key === 'ArrowDown' && items.length) {
+    e.preventDefault();
+    fandomSuggestIndex = Math.min(fandomSuggestIndex + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('active', i === fandomSuggestIndex));
+  } else if (e.key === 'ArrowUp' && items.length) {
+    e.preventDefault();
+    fandomSuggestIndex = Math.max(fandomSuggestIndex - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('active', i === fandomSuggestIndex));
+  } else if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const picked = fandomSuggestIndex >= 0 && items[fandomSuggestIndex] ? items[fandomSuggestIndex].textContent : fandomTextInput.value;
+    addWorkingFandom(picked);
+    fandomTextInput.value = '';
+    renderFandomSuggest([]);
+  } else if (e.key === 'Backspace' && !fandomTextInput.value && workingFandoms.length) {
+    workingFandoms.pop();
+    renderFandomsEditor();
+  } else if (e.key === 'Escape') {
+    renderFandomSuggest([]);
+  }
+});
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('fandom-input-box').contains(e.target)) renderFandomSuggest([]);
 });
 
 // ── Additional Tags — e621/Wattpad-style bubble input ───────────────────────
@@ -480,10 +611,12 @@ function populateForm(s) {
   document.getElementById('meet-heading').textContent = meetText;
   document.getElementById('bio-field-label').textContent = meetText;
 
-  document.getElementById('rating-select').value = s.rating || 'Not Rated';
-  buildCategoryChecks(s.categories || []);
+  document.getElementById('rating-select').value = mapLegacyRating(s.rating);
+  buildCategoryChecks((s.categories || []).map(mapLegacyCategory));
   workingRelationships = (s.relationships || []).slice();
   renderRelationshipsEditor();
+  workingFandoms = (s.fandoms || []).slice();
+  renderFandomsEditor();
   workingTags = (s.tags || []).slice();
   renderTagsEditor();
 
@@ -574,6 +707,10 @@ document.getElementById('save-edit-btn').addEventListener('click', async () => {
     addWorkingRelationship(relationshipsTextInput.value);
     relationshipsTextInput.value = '';
   }
+  if (fandomTextInput.value.trim()) {
+    addWorkingFandom(fandomTextInput.value);
+    fandomTextInput.value = '';
+  }
   const categories = Array.from(document.querySelectorAll('#category-checks input:checked')).map(c => c.value);
 
   const body = {
@@ -585,6 +722,7 @@ document.getElementById('save-edit-btn').addEventListener('click', async () => {
     rating: document.getElementById('rating-select').value,
     categories,
     relationships: workingRelationships,
+    fandoms: workingFandoms,
   };
 
   const saveBtn = document.getElementById('save-edit-btn');
@@ -759,6 +897,11 @@ async function uploadQnCard(kind, blob) {
   siteData = data;
   populateForm(siteData.site);
   applyTheme(siteData.site.theme || 'default', siteData.site.theme_bg_url);
+
+  try {
+    const catRes = await fetch('/api/fandom-catalog');
+    if (catRes.ok) fandomCatalog = (await catRes.json()).fandoms || [];
+  } catch {}
 })();
 </script>
 

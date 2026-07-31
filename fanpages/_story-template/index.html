@@ -174,7 +174,7 @@
             <div class="wiki-meta-display" id="wiki-meta-display">
               <div class="wiki-meta-badge-group">
                 <span class="wiki-meta-badge-label">Rating</span>
-                <span class="wiki-rating-badge wiki-rating-badge--not-rated" id="wiki-meta-rating-badge">Not Rated</span>
+                <span class="wiki-rating-badge wiki-rating-badge--general" id="wiki-meta-rating-badge">General Audiences</span>
               </div>
               <div class="wiki-meta-badge-group">
                 <span class="wiki-meta-badge-label">Category</span>
@@ -184,6 +184,10 @@
                 <span class="wiki-meta-badge-label">Relationships</span>
                 <span class="wiki-meta-badge-list" id="wiki-meta-relationship-badges"><span class="wiki-tags-empty">N/A</span></span>
               </div>
+              <div class="wiki-meta-badge-group">
+                <span class="wiki-meta-badge-label">Fandom</span>
+                <span class="wiki-meta-badge-list" id="wiki-meta-fandom-badges"><span class="wiki-tags-empty">N/A</span></span>
+              </div>
             </div>
           </div>
         </div>
@@ -191,7 +195,7 @@
         <div class="wiki-meta-editor mod-editable-block" id="wiki-meta-editor" style="display:none;">
           <div class="mod-field-label-row">
             <span class="mod-field-label">Rating</span>
-            <button class="wiki-tags-tip-icon" id="rating-tip-icon" type="button" aria-label="Rating help">ⓘ</button>
+            <button class="wiki-tags-tip-icon" id="rating-tip-icon" type="button" aria-label="Rating help">💡</button>
             <div class="wiki-tags-tip-popover" id="rating-tip-popover" hidden>
               <p><strong>Not Rated (Adult!)</strong> — For searching, screening, and other site functions, this may get treated the same way as Explicit content. Choose this if you'd rather not rate your content.</p>
               <p><strong>General Audiences</strong> — Suitable for anyone.</p>
@@ -210,7 +214,7 @@
 
           <div class="mod-field-label-row" style="margin-top:1.25rem;">
             <span class="mod-field-label">Category</span>
-            <button class="wiki-tags-tip-icon" id="category-tip-icon" type="button" aria-label="Category help">ⓘ</button>
+            <button class="wiki-tags-tip-icon" id="category-tip-icon" type="button" aria-label="Category help">💡</button>
             <div class="wiki-tags-tip-popover" id="category-tip-popover" hidden>
               <p>There are 6 categories. Definitions vary fic to fic — use whichever feel applicable, or none:</p>
               <p><strong>F/F</strong> — Female/Female relationships</p>
@@ -272,7 +276,7 @@
       <section class="wiki-section wiki-tags-section">
         <div class="wiki-tags-title-row">
           <h2 class="wiki-section-title">🏷️ Tags</h2>
-          <button class="wiki-tags-tip-icon" id="tags-tip-icon" type="button" aria-label="Tag tips" style="display:none;">ⓘ</button>
+          <button class="wiki-tags-tip-icon" id="tags-tip-icon" type="button" aria-label="Tag tips" style="display:none;">💡</button>
           <div class="wiki-tags-tip-popover" id="tags-tip-popover" hidden>
             Tag up to 100 simple, relevant, searchable tags to help your story be discovered! For example: Pokemon, Furry, Mystery, Love, Ships, Umbreon, Lucario, Sexual_Intimacy... - Use "_" instead of spaces. Enter tags one at a time. Duplicate tags will be auto-deleted for your convienency. No need to tag specific character names: your character names are tied inside of your story and will be searchable in meta-data by default. Still tag species or other relevant traits about them that you feel could attract readers.
           </div>
@@ -497,18 +501,16 @@ function linkIcon(label, url) {
   return match ? match[1] : '🔗';
 }
 
-// ── Story Metadata — Rating / Category / Relationships ──────────────────────
+// ── Story Metadata — Rating / Category / Relationships / Fandom ────────────
 const RATING_META = {
-  'Not Rated':               { label: 'Not Rated',              cls: 'not-rated' },
-  'General Audiences':       { label: 'General Audiences',      cls: 'general' },
-  'Teen And Up Audiences':   { label: 'Teen And Up Audiences',  cls: 'teen' },
-  'Mature':                  { label: 'Mature',                  cls: 'mature' },
-  'Explicit':                { label: 'Explicit',                cls: 'explicit' },
+  'General Audiences':        { label: 'General Audiences',        cls: 'general' },
+  'Teen & Up':                 { label: 'Teen & Up',                 cls: 'teen' },
+  'Mature/Explicit (Adult)':   { label: 'Mature/Explicit (Adult)',   cls: 'mature' },
 };
-const CATEGORY_OPTIONS = ['F/F', 'F/M', 'Gen', 'M/M', 'Multi', 'Other'];
+const CATEGORY_OPTIONS = ['Gen', 'M/F', 'M/M', 'F/F', 'Multi', 'Other'];
 
 function renderMetaDisplay(s) {
-  const rating = RATING_META[s.rating] || RATING_META['Not Rated'];
+  const rating = RATING_META[s.rating] || RATING_META['General Audiences'];
   const badge = document.getElementById('wiki-meta-rating-badge');
   badge.textContent = rating.label;
   badge.className = `wiki-rating-badge wiki-rating-badge--${rating.cls}`;
@@ -523,6 +525,12 @@ function renderMetaDisplay(s) {
   const rels = s.relationships || [];
   relWrap.innerHTML = rels.length
     ? rels.map(r => `<span class="wiki-meta-badge-list-item wiki-meta-badge-list-item--relationship">${escapeHtml(r)}</span>`).join('')
+    : '<span class="wiki-tags-empty">N/A</span>';
+
+  const fanWrap = document.getElementById('wiki-meta-fandom-badges');
+  const fandoms = s.fandoms || [];
+  fanWrap.innerHTML = fandoms.length
+    ? fandoms.map(f => `<span class="wiki-meta-badge-list-item">${escapeHtml(f)}</span>`).join('')
     : '<span class="wiki-tags-empty">N/A</span>';
 }
 

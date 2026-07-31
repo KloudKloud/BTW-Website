@@ -300,10 +300,36 @@ async function initDb() {
   // 6 fixed options), Relationships (freeform, up to 20 per story). Feeds
   // the discoverability work — filtering/faceting comes in a later phase.
   await pool.query(`
-    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS rating TEXT NOT NULL DEFAULT 'Not Rated';
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS rating TEXT NOT NULL DEFAULT 'General Audiences';
     ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS categories JSONB NOT NULL DEFAULT '[]';
     ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS relationships JSONB NOT NULL DEFAULT '[]';
   `).catch(e => console.error('moderator_sites metadata migration:', e.message));
+  // Rating went from a 5-tier scale to 3 (General Audiences / Teen & Up /
+  // Mature/Explicit (Adult)) — remap anything still on the old values so
+  // existing stories don't end up on a rating that no longer exists.
+  await pool.query(`
+    UPDATE moderator_sites SET rating = 'General Audiences' WHERE rating = 'Not Rated';
+    UPDATE moderator_sites SET rating = 'Teen & Up' WHERE rating = 'Teen And Up Audiences';
+    UPDATE moderator_sites SET rating = 'Mature/Explicit (Adult)' WHERE rating IN ('Mature', 'Explicit');
+    UPDATE moderator_sites SET categories = (
+      SELECT jsonb_agg(CASE WHEN c = 'F/M' THEN 'M/F' ELSE c END)
+      FROM jsonb_array_elements_text(categories) AS c
+    ) WHERE categories::text LIKE '%F/M%';
+  `).catch(e => console.error('moderator_sites rating/category remap:', e.message));
+
+  // Fandom — freeform, autocompleted against a shared catalog (AO3-style
+  // tag wrangling, but seeded small and grown by hand over time).
+  await pool.query(`
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS fandoms JSONB NOT NULL DEFAULT '[]';
+    CREATE TABLE IF NOT EXISTS fandom_catalog (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL
+    );
+  `).catch(e => console.error('moderator_sites fandoms migration:', e.message));
+  await pool.query(`
+    INSERT INTO fandom_catalog (name) VALUES ('Pokemon'), ('Furry Fandom'), ('Original Works')
+    ON CONFLICT (name) DO NOTHING;
+  `).catch(e => console.error('fandom_catalog seed:', e.message));
 
   // Structured relationships — replaces the old free-text stats.Relationships
   // string. Each entry is { name, type, character_id }, where character_id
@@ -3921,7 +3947,8 @@ async function sendSiteLookup(query, params, req, res) {
       author_display_name: site.author_display_name, author_username: site.author_username,
       author_avatar: site.author_avatar || null, author_bio: site.author_bio || '',
       tags: site.tags || [],
-      rating: site.rating || 'Not Rated', categories: site.categories || [], relationships: site.relationships || [],
+      rating: site.rating || 'General Audiences', categories: site.categories || [], relationships: site.relationships || [],
+      fandoms: site.fandoms || [],
       is_self: viewerId === site.owner_user_id,
       is_following: isFollowing.rows.length > 0,
       is_bookmarked: isBookmarked.rows.length > 0,
@@ -4069,8 +4096,8 @@ function sanitizeTags(raw) {
   return out;
 }
 
-const RATING_OPTIONS = ['Not Rated', 'General Audiences', 'Teen And Up Audiences', 'Mature', 'Explicit'];
-const CATEGORY_OPTIONS = ['F/F', 'F/M', 'Gen', 'M/M', 'Multi', 'Other'];
+const RATING_OPTIONS = ['General Audiences', 'Teen & Up', 'Mature/Explicit (Adult)'];
+const CATEGORY_OPTIONS = ['Gen', 'M/F', 'M/M', 'F/F', 'Multi', 'Other'];
 
 function sanitizeCategories(raw) {
   if (!Array.isArray(raw)) return null;
@@ -4099,12 +4126,32 @@ function sanitizeRelationships(raw) {
   return out;
 }
 
+// Fandom is freeform (like a tag) rather than locked to a fixed option list —
+// the catalog only powers autocomplete suggestions; anything typed still
+// saves, and popular freeform entries get promoted into the catalog by hand.
+function sanitizeFandoms(raw) {
+  if (!Array.isArray(raw)) return null;
+  const seen = new Set();
+  const out = [];
+  for (const f of raw) {
+    if (typeof f !== 'string') continue;
+    const clean = f.trim().slice(0, 100);
+    const key = clean.toLowerCase();
+    if (!clean || seen.has(key)) continue;
+    seen.add(key);
+    out.push(clean);
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
 app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) => {
   const { site_title, synopsis, bio, links, theme } = req.body;
   const tags = req.body.tags !== undefined ? sanitizeTags(req.body.tags) : undefined;
   const rating = req.body.rating !== undefined && RATING_OPTIONS.includes(req.body.rating) ? req.body.rating : undefined;
   const categories = req.body.categories !== undefined ? sanitizeCategories(req.body.categories) : undefined;
   const relationships = req.body.relationships !== undefined ? sanitizeRelationships(req.body.relationships) : undefined;
+  const fandoms = req.body.fandoms !== undefined ? sanitizeFandoms(req.body.fandoms) : undefined;
   const { rows: [site] } = await pool.query(
     `UPDATE moderator_sites SET
        site_title    = COALESCE($1, site_title),
@@ -4116,15 +4163,27 @@ app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) =
        rating        = COALESCE($7, rating),
        categories    = COALESCE($8, categories),
        relationships = COALESCE($9, relationships),
+       fandoms       = COALESCE($10, fandoms),
        updated_at    = NOW()
-     WHERE id = $10 RETURNING *`,
+     WHERE id = $11 RETURNING *`,
     [site_title, synopsis, bio, links !== undefined ? JSON.stringify(links) : null, theme,
      tags !== undefined ? JSON.stringify(tags) : null, rating,
      categories !== undefined ? JSON.stringify(categories) : null,
      relationships !== undefined ? JSON.stringify(relationships) : null,
+     fandoms !== undefined ? JSON.stringify(fandoms) : null,
      req.modSite.id]
   );
+
   res.json({ site });
+});
+
+// GET /api/fandom-catalog — public, powers the Fandom field's typeahead.
+// Starts seeded with a handful of options; new entries get added by hand
+// as freeform fandoms typed on stories turn out to be popular, mirroring
+// how AO3's tag wrangling promotes free-text tags into canonical ones.
+app.get('/api/fandom-catalog', async (req, res) => {
+  const { rows } = await pool.query('SELECT name FROM fandom_catalog ORDER BY name ASC');
+  res.json({ fandoms: rows.map(r => r.name) });
 });
 
 // DELETE /api/moderator/site — permanently deletes the whole story. Characters/
