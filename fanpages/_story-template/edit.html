@@ -72,6 +72,13 @@
       margin: 0; line-height: 1.2;
     }
 
+    /* Grayed out until an actual change is made in the Story Details form —
+       once dirty it stays enabled, even if the change gets undone. */
+    .mod-edit-bar-save:disabled {
+      background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.35);
+      cursor: default; pointer-events: none;
+    }
+
     /* ── Story Editor hub — sticky Chapters/Characters/Gallery nav column,
        same idea as the Club editor's sticky Pages column, just at the page
        level instead of inside a modal (this editor IS the whole page). ── */
@@ -98,6 +105,8 @@
       font-family: 'Cinzel', serif; font-weight: 700; color: #f0f0f0; font-size: 0.92rem;
       margin: 0 0 0.6rem; text-align: center; line-height: 1.3;
     }
+    .se-edit-nav-cover-link { display: block; border-radius: 10px; transition: box-shadow 0.15s, transform 0.15s; }
+    .se-edit-nav-cover-link:hover { box-shadow: 0 0 0 2px rgba(240,192,96,0.5); transform: translateY(-1px); }
     .se-edit-nav-cover-img {
       width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px;
       border: 1px solid rgba(255,255,255,0.12); display: block; background: #161616;
@@ -231,7 +240,7 @@
     <button class="mod-edit-bar-delete" id="delete-story-btn" type="button">🗑️ Delete Story</button>
   </div>
   <div class="mod-edit-bar-actions">
-    <button class="mod-edit-bar-save" id="save-edit-btn">Save Changes</button>
+    <button class="mod-edit-bar-save" id="save-edit-btn" disabled>Save Changes</button>
     <button class="mod-edit-bar-cancel" id="cancel-edit-btn" type="button">Cancel</button>
   </div>
 </div>
@@ -837,7 +846,9 @@
 
       <div class="se-edit-nav-cover-wrap">
         <p class="se-edit-nav-cover-title" id="se-edit-nav-cover-title">Loading…</p>
-        <img class="se-edit-nav-cover-img" id="se-edit-nav-cover-img" alt="" />
+        <a class="se-edit-nav-cover-link" id="se-edit-nav-cover-link" href="#" title="Back to the story">
+          <img class="se-edit-nav-cover-img" id="se-edit-nav-cover-img" alt="" />
+        </a>
       </div>
     </div>
     </div>
@@ -1266,6 +1277,7 @@ function populateForm(s) {
   }
 
   document.getElementById('se-edit-nav-cover-title').textContent = s.site_title || 'Untitled Story';
+  document.getElementById('se-edit-nav-cover-link').href = STORY_BASE;
   const navCoverImg = document.getElementById('se-edit-nav-cover-img');
   navCoverImg.src = s.cover_url || '/images/characters/noreference.png';
   navCoverImg.style.objectPosition = 'center';
@@ -1319,6 +1331,17 @@ document.getElementById('delete-story-btn').addEventListener('click', async () =
     btn.textContent = '🗑️ Delete Story';
   }
 });
+
+// Save Changes stays grayed out until the author actually touches the
+// Story Details form — any input/change/click inside it (typing, a
+// checkbox, adding/removing a tag or link row) flips it on for good, even
+// if the change gets undone afterward. populateForm() sets values directly
+// rather than through user interaction, so it never trips this.
+function enableSaveButton() {
+  document.getElementById('save-edit-btn').disabled = false;
+}
+const editorFormBox = document.getElementById('editor-form-box');
+['input', 'change', 'click'].forEach(evt => editorFormBox.addEventListener(evt, enableSaveButton));
 
 document.getElementById('save-edit-btn').addEventListener('click', async () => {
   const links = Array.from(document.querySelectorAll('#site-links-editor .mod-stat-row')).map(row => ({
