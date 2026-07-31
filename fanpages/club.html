@@ -681,6 +681,16 @@
       font-size: 0.74rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
       color: #999; margin: 0 0 0.8rem;
     }
+    /* Quick shortcut into Edit Club's Create Page template picker, without
+       having to open Edit Club and hunt for the button in the Pages
+       column first. Owner/admin only, sits right above Home in the list. */
+    .cl-side-add-page-btn {
+      width: 100%; box-sizing: border-box; margin-bottom: 0.6rem; padding: 0.5em 0.7em; border-radius: 8px;
+      cursor: pointer; background: transparent; border: 1px dashed rgba(255,255,255,0.25); color: #aaa;
+      font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600; text-align: left;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .cl-side-add-page-btn:hover { border-color: rgba(240,192,96,0.5); color: #f0c060; }
     .cl-side-empty { color: #888; font-size: 0.85rem; margin: 0; }
 
     /* ── Rules — preview title always visible, full description opens on
@@ -746,14 +756,22 @@
     .cl-edit-modal::-webkit-scrollbar-track { background: transparent; }
     .cl-edit-modal::-webkit-scrollbar-thumb { background: rgba(127,168,217,0.4); border-radius: 3px; }
     .cl-edit-modal::-webkit-scrollbar-thumb:hover { background: rgba(127,168,217,0.65); }
-    .cl-edit-layout { display: flex; align-items: stretch; }
+    .cl-edit-layout { display: flex; align-items: flex-start; }
     .cl-edit-main { flex: 1; min-width: 0; }
     .cl-edit-section-title {
       font-family: 'Cinzel', Georgia, serif; font-size: 1.05rem; font-weight: 700; color: #f0f0f0;
       margin: 0 0 1.1rem; padding-bottom: 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.1);
     }
     .cl-edit-divider { width: 1px; background: rgba(255,255,255,0.12); flex-shrink: 0; margin: 0 1.75rem; }
-    .cl-edit-pages-col { width: 180px; flex-shrink: 0; display: flex; flex-direction: column; }
+    /* Sticky within the modal's own scroll (the modal itself is the
+       overflow-y:auto container, not the page) — follows along instead of
+       scrolling away with the rest of the form. align-items was switched
+       from stretch to flex-start on .cl-edit-layout above so this can take
+       its own height instead of being stretched to match .cl-edit-main. */
+    .cl-edit-pages-col {
+      width: 180px; flex-shrink: 0; display: flex; flex-direction: column;
+      position: sticky; top: 0; max-height: 80vh; overflow-y: auto;
+    }
     .cl-edit-pages-title {
       font-family: 'Cinzel', serif; font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase;
       color: #888; margin: 0 0 0.85rem;
@@ -847,7 +865,7 @@
     @media (max-width: 700px) {
       .cl-edit-layout { flex-direction: column; }
       .cl-edit-divider { display: none; }
-      .cl-edit-pages-col { width: auto; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); }
+      .cl-edit-pages-col { width: auto; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); position: static; max-height: none; overflow-y: visible; }
     }
 
     /* Generic reusable image-upload box — same recipe as
@@ -1268,6 +1286,7 @@
       <hr class="cl-side-rule2" />
 
       <p class="cl-side-section-title">More Pages</p>
+      <button class="cl-side-add-page-btn" id="cl-side-add-page-btn" type="button" style="display:none;">+ Page</button>
       <div class="cl-side-pages-list" id="cl-side-pages-list"><p class="cl-side-empty">Loading…</p></div>
 
       <hr class="cl-side-rule2" />
@@ -2024,6 +2043,7 @@ function renderClub(club, members) {
 
   const isAdminOrOwner = club.viewer_role === 'owner' || club.viewer_role === 'admin';
   document.getElementById('cl-side-admin-badge').style.display = isAdminOrOwner ? 'block' : 'none';
+  document.getElementById('cl-side-add-page-btn').style.display = isAdminOrOwner ? 'block' : 'none';
   document.getElementById('cl-banner-recrop-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
   document.getElementById('cl-side-splash-edit-btn').style.display = isAdminOrOwner ? 'inline-block' : 'none';
   document.getElementById('cl-create-news-post-btn').style.display = isAdminOrOwner ? 'block' : 'none';
@@ -3496,16 +3516,26 @@ function confirmDiscardIfDirty() {
   return false;
 }
 
-async function openEditClubModal() {
+async function openEditClubModal(opts) {
   if (!currentClub) return;
   editDirty = false;
   document.getElementById('cl-edit-msg').textContent = '';
   document.getElementById('cl-edit-overlay').hidden = false;
   document.getElementById('cl-edit-main-actions').style.display = 'flex';
+  // Always land at the top of the modal — it's tall enough (Cover Image,
+  // Icon, NSFW, Welcome Message, Description...) that opening it while
+  // scrolled from a previous session left you staring at the middle of
+  // the form with no idea how you got there.
+  document.querySelector('.cl-edit-modal').scrollTop = 0;
   // Jump straight to whatever page/Home you're currently viewing, instead
   // of always landing on Home — loadEditPages() must resolve first since
   // switchEditView('page', ...) looks the slug up in editPagesCache.
   await loadEditPages();
+  if (opts && opts.createPage) {
+    switchEditView('home', null, true);
+    openCreatePageTemplateView();
+    return;
+  }
   if (currentPageSlug && editPagesCache.some(p => p.slug === currentPageSlug)) {
     switchEditView('page', currentPageSlug, true);
   } else {
@@ -3516,7 +3546,8 @@ function closeEditClubModal() {
   document.getElementById('cl-edit-overlay').hidden = true;
   closeCardForm();
 }
-document.getElementById('cl-side-edit-btn').addEventListener('click', openEditClubModal);
+document.getElementById('cl-side-edit-btn').addEventListener('click', () => openEditClubModal());
+document.getElementById('cl-side-add-page-btn').addEventListener('click', () => openEditClubModal({ createPage: true }));
 document.getElementById('cl-edit-cancel').addEventListener('click', () => {
   if (!confirmDiscardIfDirty()) return;
   closeEditClubModal();
@@ -4561,8 +4592,10 @@ document.getElementById('cl-club-delete-confirm-yes').addEventListener('click', 
 });
 
 // ── Create Page — template picker ─────────────────────────────────────────
-document.getElementById('cl-edit-pages-create-btn').addEventListener('click', () => {
-  if (!confirmDiscardIfDirty()) return;
+// Extracted so the sidebar's "+ Page" shortcut (opens straight to this view)
+// and the Pages column's own "+ Create Page" button share the exact same
+// open logic instead of drifting apart.
+function openCreatePageTemplateView() {
   editReturnView = { view: editActiveView, pageSlug: editActivePageSlug };
   editTemplateChosenType = null;
   document.querySelectorAll('.cl-edit-template-card').forEach(c => c.classList.remove('active'));
@@ -4575,6 +4608,10 @@ document.getElementById('cl-edit-pages-create-btn').addEventListener('click', ()
   document.getElementById('cl-edit-main-actions').style.display = 'none';
   editActiveView = 'template';
   highlightEditPagesList();
+}
+document.getElementById('cl-edit-pages-create-btn').addEventListener('click', () => {
+  if (!confirmDiscardIfDirty()) return;
+  openCreatePageTemplateView();
 });
 ['general', 'promotion', 'gallery'].forEach(type => {
   document.getElementById(`cl-edit-template-${type}`).addEventListener('click', () => {
