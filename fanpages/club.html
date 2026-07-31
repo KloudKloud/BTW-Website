@@ -1895,13 +1895,7 @@ if (token && currentUser) {
         <span class="soc-sidebar-username">${escapeHtml(currentUser.display_name || currentUser.username)}</span>
       </button>
       <div class="soc-sidebar-user-menu" id="soc-sidebar-user-menu" hidden>
-        <div class="soc-sidebar-user-menu-status">
-          <span class="soc-sidebar-user-menu-status-label nsfw-toggle-label" id="soc-sidebar-nsfw-label">NSFW</span>
-          <label class="nsfw-toggle-switch">
-            <input type="checkbox" id="soc-sidebar-nsfw-toggle" />
-            <span class="nsfw-toggle-slider"></span>
-          </label>
-        </div>
+        <p class="soc-sidebar-user-menu-status-text" id="soc-sidebar-nsfw-label"></p>
         <a class="soc-sidebar-user-menu-item" href="/fanpages/${encodeURIComponent(currentUser.username)}">View Profile</a>
         <a class="soc-sidebar-user-menu-item" href="/fanpages/account-settings">Account Settings</a>
       </div>
@@ -1914,29 +1908,15 @@ if (token && currentUser) {
   document.addEventListener('click', (e) => {
     if (!sidebarMenu.hidden && !e.target.closest('.soc-sidebar-user-wrap')) sidebarMenu.hidden = true;
   });
-  document.getElementById('soc-sidebar-nsfw-toggle').addEventListener('change', async function () {
-    const enabled = this.checked;
-    setSidebarNsfwState(enabled);
-    try {
-      await fetch(`${API}/auth/profile`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ nsfw_enabled: enabled }),
-      });
-      currentUser.nsfw_enabled = enabled;
-      const store = localStorage.getItem('btw_user') ? localStorage : sessionStorage;
-      store.setItem('btw_user', JSON.stringify(currentUser));
-    } catch { setSidebarNsfwState(!enabled); }
-  });
 } else {
   sidebarUserSlot.innerHTML = `<a class="soc-sidebar-login" href="/fanpages/login?from=${encodeURIComponent(location.pathname + location.search)}">Log In / Register</a>`;
 }
 function setSidebarNsfwState(enabled) {
-  const toggle = document.getElementById('soc-sidebar-nsfw-toggle');
   const label = document.getElementById('soc-sidebar-nsfw-label');
-  if (!toggle) return;
-  toggle.checked = enabled;
-  label.textContent = enabled ? 'NSFW' : 'SFW Mode: On';
-  label.classList.toggle('nsfw-toggle-label--sfw', !enabled);
+  if (!label) return;
+  label.innerHTML = enabled
+    ? 'You are in: <strong class="nsfw-toggle-label">NSFW Mode</strong> <span class="soc-sidebar-user-menu-status-hint">(Change preferences in Account Settings)</span>'
+    : 'You are in: <strong class="nsfw-toggle-label nsfw-toggle-label--sfw">SFW Mode</strong> <span class="soc-sidebar-user-menu-status-hint">(Change preferences in Account Settings)</span>';
 }
 
 function clubIconHtml(c, sizeClass) {
