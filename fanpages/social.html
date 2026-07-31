@@ -650,9 +650,17 @@ async function loadFeed() {
 // first — the whole point is nudging them toward joining something.
 function recommendedCard(p) {
   const card = feedCard(p);
-  if (p.recently_visited) {
+  if (p.recently_visited && !p.already_joined) {
     const clubRow = card.querySelector('.soc-feed-card-club');
     if (clubRow) clubRow.insertAdjacentHTML('beforeend', '<span class="soc-rec-visited-tag">Visited</span>');
+  }
+  // Already a member — no need to sell them on joining, just a quiet tag
+  // so it's clear why this one's mixed in (fills out the panel instead of
+  // going empty when they've joined every club with posts).
+  if (p.already_joined) {
+    const clubRow = card.querySelector('.soc-feed-card-club');
+    if (clubRow) clubRow.insertAdjacentHTML('beforeend', '<span class="soc-rec-visited-tag">Your Club</span>');
+    return card;
   }
   const joinBtn = document.createElement('button');
   joinBtn.type = 'button';
@@ -677,7 +685,7 @@ async function loadPopular() {
     const res = await fetch(`${API}/clubs-recommended?limit=6`, { headers: authHeaders() });
     const data = await res.json();
     const posts = data.posts || [];
-    if (!posts.length) { list.innerHTML = '<p class="soc-feed-empty">You\'re already in every club with posts — nice!</p>'; return; }
+    if (!posts.length) { list.innerHTML = '<p class="soc-feed-empty">Nothing to recommend yet.</p>'; return; }
     list.innerHTML = '';
     posts.forEach(p => list.appendChild(recommendedCard(p)));
   } catch {

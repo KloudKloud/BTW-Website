@@ -6808,10 +6808,12 @@ app.get('/api/clubs-feed', async (req, res) => {
 
 // GET /api/clubs-recommended — the home page's "Recommended Clubs" panel.
 // One post per club (its own best-scoring one, so the panel reads as
-// "here's a taste of each place" rather than one club flooding the list),
-// from clubs the viewer HASN'T joined — clubs they've visited recently but
-// not joined surface first (the nudge-to-join signal), then by the same
-// Hot score used everywhere else. Never shows a club they're already in.
+// "here's a taste of each place" rather than one club flooding the list).
+// Unjoined clubs sort first — clubs they've visited recently but not
+// joined take priority over that (the nudge-to-join signal), then Hot
+// score. Joined clubs aren't excluded anymore, just deprioritized — if
+// someone's already in every club with posts, the panel still has
+// something to show instead of going empty.
 app.get('/api/clubs-recommended', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 6, 20);
   let viewerId = null;
@@ -6831,6 +6833,7 @@ app.get('/api/clubs-recommended', async (req, res) => {
          (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
          (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
          (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked,
+         EXISTS(SELECT 1 FROM club_members cm WHERE cm.club_id = cp.club_id AND cm.user_id = $2) AS already_joined,
          (cv.user_id IS NOT NULL AND cv.last_visited_at > NOW() - INTERVAL '30 days') AS recently_visited,
          LOG(10, GREATEST(
            (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
@@ -6840,18 +6843,17 @@ app.get('/api/clubs-recommended', async (req, res) => {
        JOIN users u ON u.id = cp.author_user_id
        JOIN clubs c ON c.id = cp.club_id
        LEFT JOIN club_visits cv ON cv.club_id = cp.club_id AND cv.user_id = $2
-       WHERE NOT EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = cp.club_id AND cm.user_id = $2)
-         ${nsfwAllowed ? '' : 'AND c.is_nsfw = FALSE'}
+       WHERE 1=1 ${nsfwAllowed ? '' : 'AND c.is_nsfw = FALSE'}
        ORDER BY cp.club_id, hot_score DESC
      )
-     SELECT * FROM per_club ORDER BY recently_visited DESC, hot_score DESC LIMIT $1`,
+     SELECT * FROM per_club ORDER BY already_joined ASC, recently_visited DESC, hot_score DESC LIMIT $1`,
     [limit, viewerId || 0]
   );
   res.json({ posts: rows.map(p => ({
     id: p.id, title: p.title, body: p.body, created_at: p.created_at,
     image_url: p.image_url || '', preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
     like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_liked: !!p.user_liked,
-    recently_visited: !!p.recently_visited,
+    already_joined: !!p.already_joined, recently_visited: !!p.recently_visited,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
     club: { slug: p.club_slug, name: p.club_name, icon_url: p.club_icon || null },
   })) });
