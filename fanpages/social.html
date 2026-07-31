@@ -99,12 +99,45 @@
     .soc-sidebar-club-owner-rose { flex-shrink: 0; font-size: 0.85rem; }
     .soc-sidebar-empty, .soc-sidebar-note { font-size: 0.9rem; color: #888; padding: 0.4rem 0.5rem; line-height: 1.5; }
 
+    /* Moderation section — label row with a collapse arrow (screenshot
+       reference: Discord's "COMMUNITIES ⌃" header), a Manage button that
+       opens the full-list modal, and an inline preview of up to 5 clubs. */
+    .soc-sidebar-label-row { display: flex; align-items: center; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.5rem; }
+    .soc-sidebar-label-row .soc-sidebar-label { padding: 0; margin-bottom: 0; }
+    .soc-sidebar-collapse-btn {
+      background: none; border: none; color: #999; cursor: pointer; font-size: 0.85rem;
+      padding: 0.2rem; display: flex; align-items: center; justify-content: center;
+      transition: transform 0.2s, color 0.15s;
+    }
+    .soc-sidebar-collapse-btn:hover { color: #fff; }
+    .soc-sidebar-collapse-btn.soc-collapsed { transform: rotate(-90deg); }
+    #soc-mod-content { transition: none; }
+    #soc-mod-content.soc-collapsed { display: none; }
+    .soc-sidebar-manage-btn {
+      display: flex; align-items: center; gap: 0.6rem; width: 100%; box-sizing: border-box;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+      color: #ddd; font-family: inherit; font-size: 0.95rem; font-weight: 600; text-align: left;
+      padding: 0.55rem 0.6rem; cursor: pointer; transition: background 0.15s; margin-bottom: 0.35rem;
+    }
+    .soc-sidebar-manage-btn:hover { background: rgba(255,255,255,0.08); }
+    .soc-sidebar-showall-btn {
+      background: none; border: none; color: #7fa8d9; font-family: inherit; font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; padding: 0.4rem 0.5rem; text-align: left;
+    }
+    .soc-sidebar-showall-btn:hover { text-decoration: underline; }
+    .soc-sidebar-club-role-badge {
+      flex-shrink: 0; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+      color: #f0c060; background: rgba(240,192,96,0.12); border: 1px solid rgba(240,192,96,0.3);
+      border-radius: 10px; padding: 0.1em 0.5em;
+    }
+    .soc-manage-list { display: flex; flex-direction: column; gap: 0.3rem; max-height: 50vh; overflow-y: auto; margin-bottom: 1rem; }
+
     /* ── Main content ──
        Offset by the fixed sidebar's width on the left and the fixed
        Popular Posts panel's width on the right, since both are taken out
        of normal flow now. */
     .soc-main {
-      margin-left: 250px; margin-right: 336px; padding: 6.5rem 2.5rem 5rem;
+      margin-left: 250px; margin-right: 336px; padding: 1.5rem 2.5rem 5rem;
       transition: margin-left 0.2s ease;
     }
 
@@ -201,6 +234,17 @@
     .soc-popular-list .soc-feed-card-club { font-size: 0.72rem; }
     .soc-popular-list .soc-feed-card-meta { font-size: 0.68rem; }
     .soc-popular-list .soc-feed-card-stats { font-size: 0.7rem; gap: 0.7rem; }
+    .soc-rec-visited-tag {
+      font-size: 0.66rem; font-weight: 700; color: #f0c060; background: rgba(240,192,96,0.12);
+      border: 1px solid rgba(240,192,96,0.3); border-radius: 8px; padding: 0.1em 0.45em; margin-left: 0.4rem;
+    }
+    .soc-rec-join-btn {
+      display: inline-block; margin-top: 0.4rem; background: rgba(127,168,217,0.15);
+      border: 1px solid rgba(127,168,217,0.5); color: #cfe0f5; border-radius: 14px;
+      padding: 0.25em 0.8em; font-size: 0.72rem; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .soc-rec-join-btn:hover { background: rgba(127,168,217,0.28); }
+    .soc-rec-join-btn.soc-joined { background: rgba(127,168,217,0.3); color: #fff; cursor: default; }
 
     @media (max-width: 1100px) {
       /* Not enough room for both fixed side panels plus real content —
@@ -212,7 +256,7 @@
       /* Fixed sidebar doesn't make sense on a narrow screen — drop it back
          into normal flow, stacked above the main content. */
       .soc-sidebar { position: static; width: auto; height: auto; border-right: none; }
-      .soc-main { margin-left: 0; padding: 6.5rem 1.25rem 4rem; }
+      .soc-main { margin-left: 0; padding: 1.5rem 1.25rem 4rem; }
       .soc-layout.soc-collapsed .soc-main { margin-left: 0; }
     }
   </style>
@@ -242,11 +286,18 @@
         <button class="soc-nav-create-btn" id="soc-create-club-btn" type="button"><span>+</span> Start a Club</button>
       </nav>
 
-      <div id="soc-sidebar-created-clubs-section" style="display:none;">
+      <div id="soc-sidebar-moderation-section" style="display:none;">
         <hr class="soc-sidebar-rule" />
-        <p class="soc-sidebar-label">Created Clubs</p>
+        <div class="soc-sidebar-label-row">
+          <p class="soc-sidebar-label">Moderation</p>
+          <button class="soc-sidebar-collapse-btn" id="soc-mod-collapse-btn" type="button" title="Collapse" aria-label="Collapse Moderation section">▾</button>
+        </div>
         <hr class="soc-sidebar-rule" />
-        <div class="soc-sidebar-clubs" id="soc-sidebar-created-clubs"></div>
+        <div id="soc-mod-content">
+          <button class="soc-sidebar-manage-btn" id="soc-mod-manage-btn" type="button"><span>⚙️</span> Manage</button>
+          <div class="soc-sidebar-clubs" id="soc-sidebar-mod-clubs"></div>
+          <button class="soc-sidebar-showall-btn" id="soc-mod-showall-btn" type="button" style="display:none;">Show All</button>
+        </div>
       </div>
 
       <hr class="soc-sidebar-rule" />
@@ -273,10 +324,21 @@
   </main>
 
   <aside class="soc-right-panel">
-    <p class="soc-right-panel-title">🕓 Recent Activity</p>
+    <p class="soc-right-panel-title">✨ Recommended Clubs</p>
     <div class="soc-popular-list" id="soc-popular-list"><p class="soc-feed-empty">Loading…</p></div>
   </aside>
 
+</div>
+
+<!-- Manage Communities modal — every club the viewer owns or moderates -->
+<div class="char-editor-overlay" id="soc-manage-overlay" hidden>
+  <div class="char-editor-modal">
+    <h2 class="char-editor-title">Manage Communities</h2>
+    <div class="soc-manage-list" id="soc-manage-list"></div>
+    <div class="char-editor-actions">
+      <button class="mod-btn" id="soc-manage-close" type="button">Close</button>
+    </div>
+  </div>
 </div>
 
 <!-- Create Club modal -->
@@ -348,14 +410,14 @@ function clubIconHtml(club, sizeClass) {
   return `<span class="${sizeClass}-fallback">${letter}</span>`;
 }
 
-// ── Sidebar: Created Clubs (owned) + Your Clubs (every membership) ───────
+// ── Sidebar: Moderation (owned/admin) + Your Clubs (every membership) ────
+let modClubsCache = [];
 async function loadSidebarClubs() {
   const wrap = document.getElementById('soc-sidebar-clubs');
-  const createdSection = document.getElementById('soc-sidebar-created-clubs-section');
-  const createdWrap = document.getElementById('soc-sidebar-created-clubs');
+  const modSection = document.getElementById('soc-sidebar-moderation-section');
   if (!token) {
     wrap.innerHTML = '<p class="soc-sidebar-note">Log in to see your clubs~</p>';
-    createdSection.style.display = 'none';
+    modSection.style.display = 'none';
     return;
   }
   try {
@@ -363,24 +425,19 @@ async function loadSidebarClubs() {
     const data = await res.json();
     const clubs = data.clubs || [];
 
-    const owned = clubs.filter(c => c.viewer_role === 'owner');
-    if (owned.length) {
-      createdSection.style.display = '';
-      createdWrap.innerHTML = '';
-      owned.forEach(c => createdWrap.appendChild(sidebarClubLink(c, true)));
-    } else {
-      createdSection.style.display = 'none';
-    }
+    modClubsCache = clubs.filter(c => c.viewer_role === 'owner' || c.viewer_role === 'admin');
+    modSection.style.display = modClubsCache.length ? '' : 'none';
+    renderModClubsPreview();
 
     if (!clubs.length) {
       wrap.innerHTML = '<p class="soc-sidebar-note">You haven\'t joined any clubs yet.</p>';
       return;
     }
     wrap.innerHTML = '';
-    clubs.forEach(c => wrap.appendChild(sidebarClubLink(c, false)));
+    clubs.forEach(c => wrap.appendChild(sidebarClubLink(c, c.viewer_role === 'owner')));
   } catch {
     wrap.innerHTML = '<p class="soc-sidebar-note">Couldn\'t load your clubs.</p>';
-    createdSection.style.display = 'none';
+    modSection.style.display = 'none';
   }
 }
 function sidebarClubLink(c, showOwnerRose) {
@@ -390,6 +447,52 @@ function sidebarClubLink(c, showOwnerRose) {
   a.innerHTML = `${clubIconHtml(c, 'soc-sidebar-club-icon')}<span class="soc-sidebar-club-name">${escapeHtml(c.name)}</span>${showOwnerRose ? '<span class="soc-sidebar-club-owner-rose" title="You own this club">🌹</span>' : ''}`;
   return a;
 }
+function sidebarModClubLink(c) {
+  const a = document.createElement('a');
+  a.className = 'soc-sidebar-club-link';
+  a.href = `/fanpages/club?slug=${encodeURIComponent(c.slug)}`;
+  a.innerHTML = `${clubIconHtml(c, 'soc-sidebar-club-icon')}<span class="soc-sidebar-club-name">${escapeHtml(c.name)}</span><span class="soc-sidebar-club-role-badge">${c.viewer_role}</span>`;
+  return a;
+}
+
+// Preview: up to 5 inline, "Show All" reveals the rest without opening
+// the modal — the modal (Manage button) is for the full browsable list.
+let modPreviewExpanded = false;
+function renderModClubsPreview() {
+  const wrap = document.getElementById('soc-sidebar-mod-clubs');
+  const showAllBtn = document.getElementById('soc-mod-showall-btn');
+  wrap.innerHTML = '';
+  const shown = modPreviewExpanded ? modClubsCache : modClubsCache.slice(0, 5);
+  shown.forEach(c => wrap.appendChild(sidebarModClubLink(c)));
+  showAllBtn.style.display = (!modPreviewExpanded && modClubsCache.length > 5) ? 'block' : 'none';
+}
+document.getElementById('soc-mod-showall-btn').addEventListener('click', () => {
+  modPreviewExpanded = true;
+  renderModClubsPreview();
+});
+
+// Collapse arrow — persisted the same way as the whole-sidebar toggle.
+const modCollapseBtn = document.getElementById('soc-mod-collapse-btn');
+function setModCollapsed(collapsed) {
+  modCollapseBtn.classList.toggle('soc-collapsed', collapsed);
+  document.getElementById('soc-mod-content').classList.toggle('soc-collapsed', collapsed);
+  localStorage.setItem('soc_mod_collapsed', collapsed ? '1' : '0');
+}
+modCollapseBtn.addEventListener('click', () => setModCollapsed(!modCollapseBtn.classList.contains('soc-collapsed')));
+if (localStorage.getItem('soc_mod_collapsed') === '1') setModCollapsed(true);
+
+// "⚙️ Manage" — the full list in a modal, same clubs as the preview.
+document.getElementById('soc-mod-manage-btn').addEventListener('click', () => {
+  const list = document.getElementById('soc-manage-list');
+  list.innerHTML = modClubsCache.length
+    ? ''
+    : '<p class="soc-sidebar-note">Nothing to manage yet.</p>';
+  modClubsCache.forEach(c => list.appendChild(sidebarModClubLink(c)));
+  document.getElementById('soc-manage-overlay').hidden = false;
+});
+document.getElementById('soc-manage-close').addEventListener('click', () => {
+  document.getElementById('soc-manage-overlay').hidden = true;
+});
 
 // ── Create Club modal ────────────────────────────────────────────────────
 let clubTypesCatalog = [];
@@ -541,19 +644,42 @@ async function loadFeed() {
     list.innerHTML = '<p class="soc-feed-empty">Couldn\'t load the feed right now.</p>';
   }
 }
-// "Recent Activity" (sort=new), not "Popular" — a sidebar sorted by Top
-// would just be a shorter copy of the main feed's own Top tab. Newest-first
-// instead gives brand-new posts a spot to be seen before they've built up
-// enough likes/comments to ever place well on Best or Top.
+// "Recommended Clubs" — a discovery panel, not another ranked-posts list
+// (which is what Best/Top already are). One post per club, only clubs the
+// viewer hasn't joined, clubs they've visited-but-not-joined bubble up
+// first — the whole point is nudging them toward joining something.
+function recommendedCard(p) {
+  const card = feedCard(p);
+  if (p.recently_visited) {
+    const clubRow = card.querySelector('.soc-feed-card-club');
+    if (clubRow) clubRow.insertAdjacentHTML('beforeend', '<span class="soc-rec-visited-tag">Visited</span>');
+  }
+  const joinBtn = document.createElement('button');
+  joinBtn.type = 'button';
+  joinBtn.className = 'soc-rec-join-btn';
+  joinBtn.textContent = '+ Join';
+  joinBtn.addEventListener('click', async (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent('/fanpages/social')}`; return; }
+    joinBtn.disabled = true;
+    try {
+      const res = await fetch(`${API}/clubs/${encodeURIComponent(p.club.slug)}/join`, { method: 'POST', headers: authHeaders() });
+      if (res.ok) { joinBtn.textContent = '✓ Joined'; joinBtn.classList.add('soc-joined'); }
+    } catch {}
+    joinBtn.disabled = false;
+  });
+  card.querySelector('.soc-feed-card-body').appendChild(joinBtn);
+  return card;
+}
 async function loadPopular() {
   const list = document.getElementById('soc-popular-list');
   try {
-    const res = await fetch(`${API}/clubs-feed?sort=new&limit=6`, { headers: authHeaders() });
+    const res = await fetch(`${API}/clubs-recommended?limit=6`, { headers: authHeaders() });
     const data = await res.json();
     const posts = data.posts || [];
-    if (!posts.length) { list.innerHTML = '<p class="soc-feed-empty">Nothing yet.</p>'; return; }
+    if (!posts.length) { list.innerHTML = '<p class="soc-feed-empty">You\'re already in every club with posts — nice!</p>'; return; }
     list.innerHTML = '';
-    posts.forEach(p => list.appendChild(feedCard(p)));
+    posts.forEach(p => list.appendChild(recommendedCard(p)));
   } catch {
     list.innerHTML = '<p class="soc-feed-empty">Couldn\'t load right now.</p>';
   }

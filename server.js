@@ -6781,6 +6781,57 @@ app.get('/api/clubs-feed', async (req, res) => {
   })), sort });
 });
 
+// GET /api/clubs-recommended — the home page's "Recommended Clubs" panel.
+// One post per club (its own best-scoring one, so the panel reads as
+// "here's a taste of each place" rather than one club flooding the list),
+// from clubs the viewer HASN'T joined — clubs they've visited recently but
+// not joined surface first (the nudge-to-join signal), then by the same
+// Hot score used everywhere else. Never shows a club they're already in.
+app.get('/api/clubs-recommended', async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit, 10) || 6, 20);
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+  let nsfwAllowed = false;
+  if (viewerId) {
+    const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
+    nsfwAllowed = !!(row && row.nsfw_enabled);
+  }
+  const { rows } = await pool.query(
+    `WITH per_club AS (
+       SELECT DISTINCT ON (cp.club_id) cp.*, u.username, u.display_name, u.avatar,
+         c.slug AS club_slug, c.name AS club_name, c.icon_url AS club_icon,
+         (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
+         (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
+         (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked,
+         (cv.user_id IS NOT NULL AND cv.last_visited_at > NOW() - INTERVAL '30 days') AS recently_visited,
+         LOG(10, GREATEST(
+           (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
+           + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) * 2,
+         1)::numeric) + EXTRACT(EPOCH FROM cp.created_at) / 45000 AS hot_score
+       FROM club_posts cp
+       JOIN users u ON u.id = cp.author_user_id
+       JOIN clubs c ON c.id = cp.club_id
+       LEFT JOIN club_visits cv ON cv.club_id = cp.club_id AND cv.user_id = $2
+       WHERE NOT EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = cp.club_id AND cm.user_id = $2)
+         ${nsfwAllowed ? '' : 'AND c.is_nsfw = FALSE'}
+       ORDER BY cp.club_id, hot_score DESC
+     )
+     SELECT * FROM per_club ORDER BY recently_visited DESC, hot_score DESC LIMIT $1`,
+    [limit, viewerId || 0]
+  );
+  res.json({ posts: rows.map(p => ({
+    id: p.id, title: p.title, body: p.body, created_at: p.created_at,
+    image_url: p.image_url || '', preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
+    like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_liked: !!p.user_liked,
+    recently_visited: !!p.recently_visited,
+    author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
+    club: { slug: p.club_slug, name: p.club_name, icon_url: p.club_icon || null },
+  })) });
+});
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
 initDb().then(() => {
