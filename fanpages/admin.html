@@ -81,6 +81,29 @@
       background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.15); border-radius: 20px;
       padding: 0.6rem 1rem; color: #f0f0f0; font-family: inherit; font-size: 0.88rem;
     }
+
+    /* A pill marked for removal — struck through and dimmed, still visible
+       (not yanked out of the list) until Save actually commits it, so a
+       misclick is just another click away from undone. */
+    .wiki-tag-bubble--pending-delete {
+      opacity: 0.45; text-decoration: line-through; border-style: dashed;
+    }
+    .wiki-tag-bubble--pending-delete .wiki-tag-bubble-remove { color: #d97a72; }
+
+    .adm-dict-savebar {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 150;
+      display: flex; align-items: center; justify-content: space-between;
+      background: #161616; border-top: 1px solid rgba(255,255,255,0.1);
+      padding: 1rem 2rem; font-family: 'Inter', sans-serif; font-size: 0.88rem; color: #ccc;
+    }
+    .adm-dict-savebar-actions { display: flex; gap: 0.75rem; }
+    .adm-dict-save-btn {
+      border: none; cursor: pointer; font-family: 'Fredoka', 'Inter', sans-serif;
+      font-size: 0.9rem; font-weight: 600; padding: 0.65rem 1.5rem; border-radius: 22px;
+      background: #1fb6a8; color: #fff;
+    }
+    .adm-dict-save-btn:hover { background: #1a9d91; }
+    .adm-dict-save-btn:disabled { opacity: 0.5; cursor: default; }
   </style>
 </head>
 <body class="mod-theme">
@@ -221,7 +244,7 @@
 
   <!-- ══ Tag Dictionary ══════════════════════════════════════════════ -->
   <div class="adm-panel" id="adm-panel-dictionary">
-    <p class="hb-sub">Every entry currently in the Fandom, Additional Tags, and Relationships typeahead catalogs — the shared vocabulary suggested to writers as they tag a story.</p>
+    <p class="hb-sub">Every entry currently in the Fandom, Additional Tags, and Relationships typeahead catalogs — the shared vocabulary suggested to writers as they tag a story. Click ✕ to mark an entry for removal, then Save to commit.</p>
 
     <div class="adm-dict-search">
       <input type="text" id="adm-dict-search-input" placeholder="🔍 Filter the dictionary…" />
@@ -243,6 +266,17 @@
       <h2 class="adm-dict-heading">Relationships</h2>
       <p class="adm-dict-sub" id="dict-relationship-sub"></p>
       <div class="adm-dict-list" id="dict-relationship-list"></div>
+    </div>
+  </div>
+
+  <!-- Save bar — sticks to the bottom of the viewport once at least one
+       entry is marked for removal, same idea as the story editor's edit
+       bar. Only appears while the Tag Dictionary tab is active. -->
+  <div class="adm-dict-savebar" id="adm-dict-savebar" hidden>
+    <span id="adm-dict-savebar-count">0 changes pending</span>
+    <div class="adm-dict-savebar-actions">
+      <button class="mod-btn" id="adm-dict-discard-btn" type="button">Discard</button>
+      <button class="adm-dict-save-btn" id="adm-dict-save-btn" type="button">Save Changes</button>
     </div>
   </div>
 
@@ -346,6 +380,9 @@ function switchAdmTab(tab) {
     document.getElementById(`adm-panel-${t}`).classList.toggle('active', t === tab);
   });
   history.replaceState(null, '', tab === 'bulletin' ? '#bulletin' : `#${tab}`);
+  // The dictionary's save bar only makes sense while its own tab is open —
+  // pending removals stay staged either way, just hidden from view.
+  if (typeof updateSavebar === 'function') updateSavebar();
 }
 ADM_TABS.forEach(t => document.getElementById(`adm-tab-${t}`).addEventListener('click', () => switchAdmTab(t)));
 window.addEventListener('hashchange', () => switchAdmTab(location.hash.slice(1)));
@@ -827,34 +864,79 @@ const DICT_SECTIONS = {
   relationship: { key: 'relationships', endpoint: 'relationship-catalog', noun: 'relationship' },
 };
 
-async function deleteDictEntry(section, name) {
-  const { key, endpoint } = DICT_SECTIONS[section];
-  try {
-    await fetch(`/api/admin/${endpoint}/${encodeURIComponent(name)}`, { method: 'DELETE', headers: authHeaders() });
-  } catch {}
-  dictData[key] = dictData[key].filter(x => x !== name);
-  renderDictionary(document.getElementById('adm-dict-search-input').value);
+// Clicking ✕ only *stages* a removal (toggle-able) — nothing hits the
+// server until Save Changes is clicked, so a run of misclicks costs
+// nothing and there's an explicit "commit" moment, same as the rest of
+// the site's editors.
+const pendingDeletes = { fandom: new Set(), tag: new Set(), relationship: new Set() };
+
+function updateSavebar() {
+  const total = pendingDeletes.fandom.size + pendingDeletes.tag.size + pendingDeletes.relationship.size;
+  const onDictTab = document.getElementById('adm-tab-dictionary').classList.contains('active');
+  const bar = document.getElementById('adm-dict-savebar');
+  bar.hidden = total === 0 || !onDictTab;
+  document.getElementById('adm-dict-savebar-count').textContent = `${total} change${total === 1 ? '' : 's'} pending`;
+}
+
+function toggleDictEntry(section, name) {
+  const set = pendingDeletes[section];
+  if (set.has(name)) set.delete(name); else set.add(name);
+  renderDictList(section, currentDictItems(section));
+  updateSavebar();
+}
+
+function currentDictItems(section) {
+  const q = document.getElementById('adm-dict-search-input').value.trim().toLowerCase();
+  const arr = dictData[DICT_SECTIONS[section].key];
+  return q ? arr.filter(x => x.toLowerCase().includes(q)) : arr;
 }
 
 function renderDictList(section, items) {
   const { noun } = DICT_SECTIONS[section];
   document.getElementById(`dict-${section}-sub`).textContent = `${items.length} ${noun}${items.length === 1 ? '' : 's'}`;
   const wrap = document.getElementById(`dict-${section}-list`);
+  const pending = pendingDeletes[section];
   wrap.innerHTML = items.length
-    ? items.map(t => `<span class="wiki-tag-bubble wiki-tag-bubble--editable">${escapeHtml(t)} <button type="button" class="wiki-tag-bubble-remove" aria-label="Remove ${escapeHtml(noun)}" data-name="${escapeHtml(t)}">✕</button></span>`).join('')
+    ? items.map(t => `<span class="wiki-tag-bubble wiki-tag-bubble--editable${pending.has(t) ? ' wiki-tag-bubble--pending-delete' : ''}">${escapeHtml(t)} <button type="button" class="wiki-tag-bubble-remove" aria-label="${pending.has(t) ? 'Undo remove' : 'Remove'} ${escapeHtml(noun)}" data-name="${escapeHtml(t)}">${pending.has(t) ? '↺' : '✕'}</button></span>`).join('')
     : '<span class="wiki-tags-empty">None yet.</span>';
   wrap.querySelectorAll('.wiki-tag-bubble-remove').forEach(btn => {
-    btn.addEventListener('click', () => deleteDictEntry(section, btn.dataset.name));
+    btn.addEventListener('click', () => toggleDictEntry(section, btn.dataset.name));
   });
 }
 function renderDictionary(filter) {
-  const q = (filter || '').trim().toLowerCase();
-  const match = (arr) => q ? arr.filter(x => x.toLowerCase().includes(q)) : arr;
-  renderDictList('fandom', match(dictData.fandoms));
-  renderDictList('tag', match(dictData.tags));
-  renderDictList('relationship', match(dictData.relationships));
+  ['fandom', 'tag', 'relationship'].forEach(section => renderDictList(section, currentDictItems(section)));
 }
-document.getElementById('adm-dict-search-input').addEventListener('input', (e) => renderDictionary(e.target.value));
+document.getElementById('adm-dict-search-input').addEventListener('input', () => renderDictionary());
+
+document.getElementById('adm-dict-discard-btn').addEventListener('click', () => {
+  pendingDeletes.fandom.clear(); pendingDeletes.tag.clear(); pendingDeletes.relationship.clear();
+  renderDictionary();
+  updateSavebar();
+});
+
+document.getElementById('adm-dict-save-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('adm-dict-save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    for (const section of ['fandom', 'tag', 'relationship']) {
+      const { key, endpoint } = DICT_SECTIONS[section];
+      for (const name of pendingDeletes[section]) {
+        await fetch(`/api/admin/${endpoint}/${encodeURIComponent(name)}`, { method: 'DELETE', headers: authHeaders() });
+        dictData[key] = dictData[key].filter(x => x !== name);
+      }
+      pendingDeletes[section].clear();
+    }
+    renderDictionary();
+    updateSavebar();
+    document.getElementById('cat-fandom-count').textContent = dictData.fandoms.length;
+    document.getElementById('cat-tag-count').textContent = dictData.tags.length;
+    document.getElementById('cat-relationship-count').textContent = dictData.relationships.length;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Changes';
+  }
+});
 
 /* ═══════════════════════════════════════════════════════════════════════
    Boot — one shared admin gate for the whole page.
