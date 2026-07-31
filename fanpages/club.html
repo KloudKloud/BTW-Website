@@ -118,6 +118,21 @@
       width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
       background: linear-gradient(135deg, #2a1a3a, #3a1f2a); color: rgba(255,255,255,0.2); font-size: 3rem;
     }
+    /* Join/Joined — top-right of the banner, Reddit-style: outlined pill
+       to join, filled and glowing blue once you have. Owner never sees
+       this (they can't leave their own club — see DELETE .../leave). */
+    .cl-banner-join-btn {
+      position: absolute; top: 1.1rem; right: 1.1rem; z-index: 3;
+      background: rgba(0,0,0,0.55); border: 1.5px solid #7fa8d9; color: #7fa8d9;
+      border-radius: 20px; padding: 0.5em 1.3em; font-size: 0.9rem; font-weight: 700;
+      cursor: pointer; font-family: 'Inter', sans-serif; transition: background 0.15s, box-shadow 0.2s, transform 0.15s;
+    }
+    .cl-banner-join-btn:hover { background: rgba(127,168,217,0.2); transform: translateY(-1px); }
+    .cl-banner-join-btn.cl-joined {
+      background: #7fa8d9; border-color: #7fa8d9; color: #0a0a0a;
+      box-shadow: 0 0 18px rgba(127,168,217,0.75), 0 0 4px rgba(127,168,217,0.9);
+    }
+    .cl-banner-join-btn.cl-joined:hover { background: #6f97c8; }
     /* .cl-body-row lays out the main column and the right sidebar as actual
        flex siblings — the sidebar's horizontal position (far right) comes
        from being LAST in a flex row, not from position:fixed, which is
@@ -956,6 +971,7 @@
     <div class="cl-banner-img-slot" id="cl-banner-img-slot"></div>
     <button class="cl-banner-recrop-btn" id="cl-banner-recrop-btn" type="button" style="display:none;" title="Change banner image">✏️</button>
     <input type="file" id="cl-banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+    <button class="cl-banner-join-btn" id="cl-banner-join-btn" type="button" style="display:none;">Join</button>
   </div>
 
   <div class="cl-body-row" id="cl-body-row">
@@ -1852,6 +1868,35 @@ async function loadClub() {
   }
 }
 
+// ── Join/Joined button — top-right of the banner ─────────────────────────
+function renderJoinBtn(club) {
+  const btn = document.getElementById('cl-banner-join-btn');
+  if (club.viewer_role === 'owner') { btn.style.display = 'none'; return; }
+  btn.style.display = 'block';
+  const joined = !!club.viewer_role;
+  btn.textContent = joined ? '✓ Joined' : 'Join';
+  btn.classList.toggle('cl-joined', joined);
+  btn.title = joined ? 'Click to leave' : 'Join this club';
+}
+document.getElementById('cl-banner-join-btn').addEventListener('click', async () => {
+  if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(location.pathname + location.search)}`; return; }
+  if (!currentClub) return;
+  const btn = document.getElementById('cl-banner-join-btn');
+  const wasJoined = !!currentClub.viewer_role;
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/${wasJoined ? 'leave' : 'join'}`, {
+      method: wasJoined ? 'DELETE' : 'POST', headers: authHeaders(),
+    });
+    if (res.ok) {
+      currentClub.viewer_role = wasJoined ? null : 'member';
+      currentClub.member_count = (currentClub.member_count || 0) + (wasJoined ? -1 : 1);
+      renderJoinBtn(currentClub);
+    }
+  } catch {}
+  btn.disabled = false;
+});
+
 let currentClub = null;
 let currentMembers = [];
 
@@ -1866,6 +1911,8 @@ function renderClub(club, members) {
   document.getElementById('cl-banner-img-slot').innerHTML = club.banner_url
     ? `<img src="${club.banner_url}" alt="" style="object-position:${club.banner_position_x}% ${club.banner_position_y}%;" />`
     : `<div class="cl-banner-fallback"></div>`;
+
+  renderJoinBtn(club);
 
   document.getElementById('cl-icon-wrap').innerHTML = club.icon_url
     ? `<img src="${club.icon_url}" alt="" />`
