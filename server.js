@@ -392,6 +392,22 @@ async function initDb() {
     );
   `).catch(e => console.error('moderator_bookmarks migration:', e.message));
 
+  // Likes on a whole story — distinct from moderator_bookmarks (save for
+  // later) the same way gallery_likes is distinct from gallery_bookmarks.
+  // Story comments don't need a new table: content_comments is already
+  // polymorphic (target_type/target_id) with a user_id column, so
+  // target_type='story' already gives per-user story comments for free —
+  // nothing here needed for that part, it just needs to be used.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS moderator_site_likes (
+      id         SERIAL      PRIMARY KEY,
+      user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      site_id    INTEGER     NOT NULL REFERENCES moderator_sites(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, site_id)
+    );
+  `).catch(e => console.error('moderator_site_likes migration:', e.message));
+
   // Likes on gallery posts — mirrors moderator_bookmarks, feeds the Library's "Galleries" tab.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS moderator_gallery_likes (
