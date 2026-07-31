@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Edit Story ✦ Fanpages</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css?v=20260726b" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
+  <style>
+    /* Editor-page-only tweaks — this dedicated page wants Notes/Find Me
+       sitting side by side (unlike the old in-place editor on the story's
+       own page, which stacked them to save width), plus a distinct heading
+       + divider in front of the Rating/Category/Relationships/Tags group. */
+    body.mod-editing-active .wiki-meet-split { grid-template-columns: 1fr 1px 240px; gap: 1.75rem; }
+    body.mod-editing-active .wiki-meet-divider { display: block; }
+
+    .wiki-mega-divider { border: none; border-top: 2px solid rgba(255,255,255,0.14); margin: 0 0 2.5rem; }
+    .wiki-meta-section-title {
+      font-family: 'Cinzel', serif; font-size: 1.3rem; font-weight: 700; color: #f0f0f0; margin: 0 0 1.5rem;
+    }
+    .wiki-meta-field { margin-bottom: 1.85rem; }
+    .wiki-meta-field:last-child { margin-bottom: 0; }
+  </style>
+</head>
+<body class="mod-theme mod-editing-active">
+
+<script src="/fanpages/fanpages-nav.js"></script>
+<script src="/fanpages/vendor/cropper.min.js"></script>
+<script src="/fanpages/crop-modal.js"></script>
+
+<!-- Edit bar -->
+<div class="mod-edit-bar" id="edit-bar" style="display:flex;">
+  <div class="mod-edit-bar-left">
+    <span class="mod-edit-bar-label">Editing your story</span>
+    <button class="mod-edit-bar-delete" id="delete-story-btn" type="button">🗑️ Delete Story</button>
+  </div>
+  <div class="mod-edit-bar-actions">
+    <button class="mod-edit-bar-save" id="save-edit-btn">Save Changes</button>
+    <button class="mod-edit-bar-cancel" id="cancel-edit-btn" type="button">Cancel</button>
+  </div>
+</div>
+
+<!-- Delete-story confirmation — centered on-page modal -->
+<div class="mod-confirm-overlay" id="delete-story-confirm-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title">Delete this entire story?</p>
+    <p class="mod-confirm-text">This permanently deletes the story, its characters, chapters, and gallery. This can't be undone.</p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="delete-story-confirm-cancel" type="button">Cancel</button>
+      <button class="mod-btn mod-btn--danger" id="delete-story-confirm-yes" type="button">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Banner -->
+<div class="wiki-cover mod-editing-banner" id="wiki-cover" style="margin-top:68px;">
+  <img alt="Story banner" id="banner-img" class="mod-banner-loading" draggable="false" />
+  <button class="fp-recrop-btn" id="banner-recrop-btn" type="button" style="display:none; position:absolute; right:1.5rem; top:1.25rem; z-index:5;">✏️ Recrop</button>
+  <div class="mod-banner-edit-wrap" id="banner-edit-wrap" style="display:flex;">
+    <button class="mod-banner-edit-btn" id="banner-edit-btn" type="button">📷 Change Banner Image</button>
+    <span class="mod-banner-edit-hint">Recommended size: 1600 × 560px</span>
+  </div>
+  <input type="file" id="banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+</div>
+
+<main class="wiki-layout">
+  <div class="wiki-main">
+
+    <!-- Cover/Cards -->
+    <div class="mod-editor-top-row" id="editor-top-row">
+      <div class="mod-quick-nav">
+        <div class="mod-quick-nav-row">
+          <a class="mod-quick-nav-card" id="qn-characters" href="#">
+            <img id="qn-characters-img" alt="Characters" draggable="false" />
+            <div class="mod-quick-nav-card-overlay"><span class="mod-quick-nav-card-label">Characters</span></div>
+            <button class="mod-quick-nav-card-edit-btn" id="qn-characters-edit-btn" type="button" title="Change card image">📷</button>
+            <button class="fp-recrop-btn mod-quick-nav-card-recrop-btn" id="qn-characters-recrop-btn" type="button" style="display:none;">✏️ Recrop</button>
+          </a>
+          <a class="mod-quick-nav-card" id="qn-chapters" href="#">
+            <img id="qn-chapters-img" alt="Chapters" draggable="false" />
+            <div class="mod-quick-nav-card-overlay"><span class="mod-quick-nav-card-label">Chapters</span></div>
+            <button class="mod-quick-nav-card-edit-btn" id="qn-chapters-edit-btn" type="button" title="Change card image">📷</button>
+            <button class="fp-recrop-btn mod-quick-nav-card-recrop-btn" id="qn-chapters-recrop-btn" type="button" style="display:none;">✏️ Recrop</button>
+          </a>
+        </div>
+        <div class="mod-quick-nav-row mod-quick-nav-row--single">
+          <a class="mod-quick-nav-card" id="qn-gallery" href="#">
+            <img id="qn-gallery-img" alt="Gallery" draggable="false" />
+            <div class="mod-quick-nav-card-overlay"><span class="mod-quick-nav-card-label">Gallery</span></div>
+            <button class="mod-quick-nav-card-edit-btn" id="qn-gallery-edit-btn" type="button" title="Change card image">📷</button>
+            <button class="fp-recrop-btn mod-quick-nav-card-recrop-btn" id="qn-gallery-recrop-btn" type="button" style="display:none;">✏️ Recrop</button>
+          </a>
+        </div>
+        <input type="file" id="qn-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+      </div>
+      <div class="mod-editor-cover-slot" id="editor-cover-slot">
+        <div class="mod-cover-wrap" id="cover-wrap">
+          <img id="cover-img" alt="Book cover" style="display:none;" draggable="false" />
+          <div class="mod-cover-placeholder" id="cover-placeholder">No cover yet</div>
+          <button class="mod-cover-edit-btn" id="cover-edit-btn" type="button">📷 Change Cover</button>
+          <input type="file" id="cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+          <button class="fp-recrop-btn" id="cover-recrop-btn" type="button" style="display:none; position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mod-editor-form-box" id="editor-form-box">
+
+      <!-- Title -->
+      <div class="wiki-title-share-row">
+        <div class="mod-editable-block">
+          <span class="mod-field-label">Title</span>
+          <input class="mod-input mod-edit-input" id="site-title-input" maxlength="60" />
+        </div>
+      </div>
+
+      <!-- Story Description -->
+      <section class="wiki-section">
+        <h2 class="wiki-section-title" id="description-heading">Story Description</h2>
+        <div class="wiki-rule"></div>
+        <div class="mod-editable-block">
+          <div class="mod-field-label-row">
+            <span class="mod-field-label">Story Description</span>
+            <span class="mod-field-hint">Descriptions will appear in italics!</span>
+          </div>
+          <textarea class="mod-textarea mod-edit-input" id="site-synopsis-input"></textarea>
+        </div>
+      </section>
+
+      <!-- Notes From <owner> | Find Me -->
+      <section class="wiki-section">
+        <h2 class="wiki-section-title" id="meet-heading">Notes From the Author</h2>
+        <div class="wiki-rule"></div>
+        <div class="wiki-meet-split">
+          <div class="wiki-meet-text mod-editable-block">
+            <div class="mod-field-label-row">
+              <span class="mod-field-label" id="bio-field-label">Notes From the Author</span>
+              <span class="mod-field-hint">Use *text* for italics, **text** for bold.</span>
+            </div>
+            <textarea class="mod-textarea mod-edit-input" id="site-bio-input"></textarea>
+          </div>
+          <div class="wiki-meet-divider"></div>
+          <div class="wiki-meet-links mod-editable-block">
+            <p class="wiki-meet-links-label">Find Me</p>
+            <div id="site-links-editor"></div>
+            <button class="mod-btn mod-btn--small" id="add-link-edit-row" type="button">+ Add Link</button>
+          </div>
+        </div>
+      </section>
+
+      <hr class="wiki-mega-divider" />
+
+      <!-- Tags/Categories -->
+      <section class="wiki-section">
+        <h2 class="wiki-meta-section-title">Tags/Categories</h2>
+
+        <div class="wiki-meta-field mod-editable-block">
+          <div class="mod-field-label-row">
+            <span class="mod-field-label">Rating</span>
+            <button class="wiki-tags-tip-icon" id="rating-tip-icon" type="button" aria-label="Rating help">ⓘ</button>
+            <div class="wiki-tags-tip-popover" id="rating-tip-popover" hidden>
+              <p><strong>Not Rated (Adult!)</strong> — For searching, screening, and other site functions, this may get treated the same way as Explicit content. Choose this if you'd rather not rate your content.</p>
+              <p><strong>General Audiences</strong> — Suitable for anyone.</p>
+              <p><strong>Teen And Up Audiences</strong> — May be inappropriate for audiences under 13.</p>
+              <p><strong>Mature (Adult!)</strong> — Adult themes (sex, violence, etc.) that aren't as graphic as Explicit.</p>
+              <p><strong>Explicit (Adult!)</strong> — Porn, graphic violence, etc.</p>
+            </div>
+          </div>
+          <select class="mod-input" id="rating-select">
+            <option value="Not Rated">Not Rated (Adult!)</option>
+            <option value="General Audiences">General Audiences</option>
+            <option value="Teen And Up Audiences">Teen And Up Audiences</option>
+            <option value="Mature">Mature (Adult!)</option>
+            <option value="Explicit">Explicit (Adult!)</option>
+          </select>
+        </div>
+
+        <div class="wiki-meta-field mod-editable-block">
+          <div class="mod-field-label-row">
+            <span class="mod-field-label">Category</span>
+            <button class="wiki-tags-tip-icon" id="category-tip-icon" type="button" aria-label="Category help">ⓘ</button>
+            <div class="wiki-tags-tip-popover" id="category-tip-popover" hidden>
+              <p>There are 6 categories. Definitions vary fic to fic — use whichever feel applicable, or none:</p>
+              <p><strong>F/F</strong> — Female/Female relationships</p>
+              <p><strong>F/M</strong> — Female/Male relationships</p>
+              <p><strong>Gen</strong> — General: no romantic/sexual relationships, or not the main focus</p>
+              <p><strong>M/M</strong> — Male/Male relationships</p>
+              <p><strong>Multi</strong> — More than one kind of relationship, or a relationship with multiple partners</p>
+              <p><strong>Other</strong> — Other relationships</p>
+            </div>
+          </div>
+          <div class="wiki-meta-check-row" id="category-checks"></div>
+        </div>
+
+        <div class="wiki-meta-field mod-editable-block">
+          <div class="mod-field-label-row">
+            <span class="mod-field-label">Relationships</span>
+            <span class="mod-field-hint">e.g. "Umbreon/Espeon". Press Enter to add.</span>
+          </div>
+          <div class="wiki-tags-input-box" id="relationships-input-box">
+            <input type="text" class="wiki-tags-input" id="relationships-text-input" placeholder="Type a relationship and press Enter…" />
+          </div>
+        </div>
+
+        <div class="wiki-meta-field mod-editable-block">
+          <div class="mod-field-label-row">
+            <span class="mod-field-label">Additional Tags</span>
+            <button class="wiki-tags-tip-icon" id="tags-tip-icon" type="button" aria-label="Tag tips">ⓘ</button>
+            <div class="wiki-tags-tip-popover" id="tags-tip-popover" hidden>
+              Tag up to 100 simple, relevant, searchable tags to help your story be discovered! For example: Pokemon, Furry, Mystery, Love, Ships, Umbreon, Lucario, Sexual_Intimacy... - Use "_" instead of spaces. Enter tags one at a time. Duplicate tags will be auto-deleted for your convienency. No need to tag specific character names: your character names are tied inside of your story and will be searchable in meta-data by default. Still tag species or other relevant traits about them that you feel could attract readers.
+            </div>
+            <span class="wiki-tags-count" id="tags-count">0/100</span>
+          </div>
+          <div class="wiki-tags-editor" id="site-tags-editor">
+            <div class="wiki-tags-input-box" id="tags-input-box">
+              <input type="text" class="wiki-tags-input" id="tags-text-input" placeholder="Type a tag and press Enter…" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</main>
+
+<footer>
+  <p id="footer-text">This story is a fan-made page hosted on Between Two Worlds.</p>
+</footer>
+
+<script src="/fanpages/fanpages-site.js"></script>
+<script>
+// ── Which story is this? Derived from the URL: /fanpages/<owner>/<story>/edit ──
+const PATH_PARTS = window.location.pathname.split('/').filter(Boolean);
+const SLUG = PATH_PARTS.slice(1, 3).join('/');
+const STORY_BASE = '/' + PATH_PARTS.slice(0, 3).join('/');
+// Reached from the Creator Hub (?from=hub) — Save/Cancel should return there
+// instead of dropping the author back on the story's own page.
+const RETURN_TO = new URLSearchParams(window.location.search).get('from') === 'hub'
+  ? '/fanpages/editor#stories' : STORY_BASE;
+
+const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+if (!token) window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+const authHeaders = () => ({ Authorization: `Bearer ${token}`, 'X-Story-Path': SLUG });
+
+let siteData = { site: {} };
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── Story Metadata — Rating / Category / Relationships ──────────────────────
+const CATEGORY_OPTIONS = ['F/F', 'F/M', 'Gen', 'M/M', 'Multi', 'Other'];
+
+function buildCategoryChecks(selected) {
+  const wrap = document.getElementById('category-checks');
+  wrap.innerHTML = '';
+  CATEGORY_OPTIONS.forEach(opt => {
+    const label = document.createElement('label');
+    label.className = 'wiki-meta-check-item';
+    label.innerHTML = `<input type="checkbox" value="${opt}" ${selected.includes(opt) ? 'checked' : ''} /> <span>${opt}</span>`;
+    wrap.appendChild(label);
+  });
+}
+
+[['rating-tip-icon', 'rating-tip-popover'], ['category-tip-icon', 'category-tip-popover'], ['tags-tip-icon', 'tags-tip-popover']].forEach(([iconId, popId]) => {
+  const icon = document.getElementById(iconId);
+  const pop = document.getElementById(popId);
+  icon.addEventListener('click', (e) => {
+    e.stopPropagation();
+    pop.hidden = !pop.hidden;
+  });
+  document.addEventListener('click', (e) => {
+    if (!pop.hidden && !pop.contains(e.target) && e.target !== icon) pop.hidden = true;
+  });
+});
+
+// ── Relationships — bubble-tag input, same pattern as Additional Tags ──────
+let workingRelationships = [];
+
+function renderRelationshipsEditor() {
+  const box = document.getElementById('relationships-input-box');
+  const input = document.getElementById('relationships-text-input');
+  box.querySelectorAll('.wiki-tag-bubble--editable').forEach(b => b.remove());
+  workingRelationships.forEach(r => {
+    const bubble = document.createElement('span');
+    bubble.className = 'wiki-tag-bubble wiki-tag-bubble--editable';
+    bubble.innerHTML = `${escapeHtml(r)} <button class="wiki-tag-bubble-remove" type="button" aria-label="Remove relationship">✕</button>`;
+    bubble.querySelector('.wiki-tag-bubble-remove').addEventListener('click', () => {
+      workingRelationships = workingRelationships.filter(x => x !== r);
+      renderRelationshipsEditor();
+    });
+    box.insertBefore(bubble, input);
+  });
+}
+
+function addWorkingRelationship(raw) {
+  const clean = raw.trim().slice(0, 150);
+  if (!clean) return;
+  if (workingRelationships.includes(clean)) return;
+  if (workingRelationships.length >= 20) return;
+  workingRelationships.push(clean);
+  renderRelationshipsEditor();
+}
+
+const relationshipsTextInput = document.getElementById('relationships-text-input');
+relationshipsTextInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    addWorkingRelationship(relationshipsTextInput.value);
+    relationshipsTextInput.value = '';
+  } else if (e.key === 'Backspace' && !relationshipsTextInput.value && workingRelationships.length) {
+    workingRelationships.pop();
+    renderRelationshipsEditor();
+  }
+});
+
+// ── Additional Tags — e621/Wattpad-style bubble input ───────────────────────
+let workingTags = [];
+
+function renderTagsEditor() {
+  const box = document.getElementById('tags-input-box');
+  const input = document.getElementById('tags-text-input');
+  box.querySelectorAll('.wiki-tag-bubble--editable').forEach(b => b.remove());
+  workingTags.forEach(t => {
+    const bubble = document.createElement('span');
+    bubble.className = 'wiki-tag-bubble wiki-tag-bubble--editable';
+    bubble.innerHTML = `${escapeHtml(t)} <button class="wiki-tag-bubble-remove" type="button" aria-label="Remove tag">✕</button>`;
+    bubble.querySelector('.wiki-tag-bubble-remove').addEventListener('click', () => {
+      workingTags = workingTags.filter(x => x !== t);
+      renderTagsEditor();
+    });
+    box.insertBefore(bubble, input);
+  });
+  document.getElementById('tags-count').textContent = `${workingTags.length}/100`;
+}
+
+function addWorkingTag(raw) {
+  const clean = raw.trim().replace(/\s+/g, '_').toLowerCase().slice(0, 40);
+  if (!clean) return;
+  if (workingTags.includes(clean)) return; // duplicates silently dropped
+  if (workingTags.length >= 100) return;
+  workingTags.push(clean);
+  renderTagsEditor();
+}
+
+const tagsTextInput = document.getElementById('tags-text-input');
+tagsTextInput.addEventListener('input', () => {
+  tagsTextInput.value = tagsTextInput.value.replace(/\s/g, '_');
+});
+tagsTextInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    addWorkingTag(tagsTextInput.value);
+    tagsTextInput.value = '';
+  } else if (e.key === 'Backspace' && !tagsTextInput.value && workingTags.length) {
+    workingTags.pop();
+    renderTagsEditor();
+  }
+});
+
+// ── Find Me links ────────────────────────────────────────────────────────────
+function addLinkEditRow(label, url) {
+  const wrap = document.createElement('div');
+  wrap.className = 'mod-stat-row';
+  wrap.innerHTML = `
+    <input class="mod-input link-label" placeholder="Label (e.g. Twitter)" value="${label || ''}" />
+    <input class="mod-input link-url" placeholder="https://…" value="${url || ''}" />
+    <button class="mod-btn mod-btn--small mod-btn--danger" type="button">✕</button>`;
+  wrap.querySelector('button').addEventListener('click', () => wrap.remove());
+  document.getElementById('site-links-editor').appendChild(wrap);
+}
+document.getElementById('add-link-edit-row').addEventListener('click', () => addLinkEditRow('', ''));
+
+// ── Fill the form from the loaded story ─────────────────────────────────────
+function populateForm(s) {
+  document.title = `Edit — ${s.site_title || 'Untitled Story'} ✦ Fanpages`;
+  document.getElementById('footer-text').textContent = `${s.site_title || 'Untitled Story'} is a fan-made page hosted on Between Two Worlds.`;
+
+  document.getElementById('site-title-input').value = s.site_title || '';
+  document.getElementById('site-synopsis-input').value = s.synopsis || '';
+  document.getElementById('site-bio-input').value = s.bio || '';
+
+  const meetText = 'Notes From ' + (s.author_display_name || s.author_username || 'the Author');
+  document.getElementById('meet-heading').textContent = meetText;
+  document.getElementById('bio-field-label').textContent = meetText;
+
+  document.getElementById('rating-select').value = s.rating || 'Not Rated';
+  buildCategoryChecks(s.categories || []);
+  workingRelationships = (s.relationships || []).slice();
+  renderRelationshipsEditor();
+  workingTags = (s.tags || []).slice();
+  renderTagsEditor();
+
+  document.getElementById('site-links-editor').innerHTML = '';
+  const links = s.links && s.links.length ? s.links : [{ label: '', url: '' }];
+  links.forEach(l => addLinkEditRow(l.label, l.url));
+
+  const bannerImg = document.getElementById('banner-img');
+  bannerImg.src = s.banner_url || '/images/gallery/pixernbath_13.png';
+  bannerImg.style.objectPosition = 'center';
+  bannerImg.classList.remove('mod-banner-loading');
+  document.getElementById('banner-recrop-btn').style.display = s.banner_url ? 'block' : 'none';
+
+  const coverImg = document.getElementById('cover-img');
+  const coverPlaceholder = document.getElementById('cover-placeholder');
+  if (s.cover_url) {
+    coverImg.src = s.cover_url;
+    coverImg.style.objectPosition = 'center';
+    coverImg.style.display = 'block';
+    coverPlaceholder.style.display = 'none';
+    document.getElementById('cover-recrop-btn').style.display = 'block';
+  } else {
+    coverImg.style.display = 'none';
+    coverPlaceholder.style.display = 'flex';
+  }
+
+  document.getElementById('qn-characters-img').src = s.characters_card_url || NAV_CARD_DEFAULT.characters;
+  document.getElementById('qn-chapters-img').src   = s.chapters_card_url   || NAV_CARD_DEFAULT.chapters;
+  document.getElementById('qn-gallery-img').src    = s.gallery_card_url    || NAV_CARD_DEFAULT.gallery;
+  ['characters', 'chapters', 'gallery'].forEach(kind => {
+    document.getElementById(`qn-${kind}-img`).style.objectPosition = 'center';
+    const url = s[NAV_CARD_FIELD[kind]];
+    document.getElementById(`qn-${kind}-recrop-btn`).style.display = (url && url !== NAV_CARD_DEFAULT[kind]) ? 'flex' : 'none';
+  });
+}
+
+// ── Save / Cancel / Delete ───────────────────────────────────────────────────
+document.getElementById('cancel-edit-btn').addEventListener('click', () => {
+  window.location.href = RETURN_TO;
+});
+
+function confirmDeleteStory() {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('delete-story-confirm-overlay');
+    const yesBtn = document.getElementById('delete-story-confirm-yes');
+    const cancelBtn = document.getElementById('delete-story-confirm-cancel');
+    overlay.hidden = false;
+    const cleanup = (result) => {
+      overlay.hidden = true;
+      yesBtn.removeEventListener('click', onYes);
+      cancelBtn.removeEventListener('click', onCancel);
+      resolve(result);
+    };
+    const onYes = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    yesBtn.addEventListener('click', onYes);
+    cancelBtn.addEventListener('click', onCancel);
+  });
+}
+
+document.getElementById('delete-story-btn').addEventListener('click', async () => {
+  if (!await confirmDeleteStory()) return;
+  const btn = document.getElementById('delete-story-btn');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+  try {
+    const res = await fetch('/api/moderator/site', { method: 'DELETE', headers: authHeaders() });
+    if (!res.ok) throw new Error();
+    window.location.href = '/fanpages/my-stories';
+  } catch {
+    alert('Something went wrong deleting this story. Please try again.');
+    btn.disabled = false;
+    btn.textContent = '🗑️ Delete Story';
+  }
+});
+
+document.getElementById('save-edit-btn').addEventListener('click', async () => {
+  const links = Array.from(document.querySelectorAll('#site-links-editor .mod-stat-row')).map(row => ({
+    label: row.querySelector('.link-label').value.trim(),
+    url:   row.querySelector('.link-url').value.trim(),
+  })).filter(l => l.label && l.url);
+
+  if (tagsTextInput.value.trim()) {
+    addWorkingTag(tagsTextInput.value);
+    tagsTextInput.value = '';
+  }
+  if (relationshipsTextInput.value.trim()) {
+    addWorkingRelationship(relationshipsTextInput.value);
+    relationshipsTextInput.value = '';
+  }
+  const categories = Array.from(document.querySelectorAll('#category-checks input:checked')).map(c => c.value);
+
+  const body = {
+    site_title: document.getElementById('site-title-input').value.trim(),
+    synopsis:   document.getElementById('site-synopsis-input').value.trim(),
+    bio:        document.getElementById('site-bio-input').value.trim(),
+    links,
+    tags: workingTags,
+    rating: document.getElementById('rating-select').value,
+    categories,
+    relationships: workingRelationships,
+  };
+
+  const saveBtn = document.getElementById('save-edit-btn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+  const res = await fetch('/api/moderator/site', {
+    method: 'PUT',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (res.ok) {
+    window.location.href = RETURN_TO;
+  } else {
+    alert('Something went wrong saving. Please try again.');
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save Changes';
+  }
+});
+
+// ── Banner image — crop-and-upload via the shared Cropper.js modal ─────────
+document.getElementById('banner-edit-btn').addEventListener('click', () => {
+  document.getElementById('banner-file-input').click();
+});
+document.getElementById('banner-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  openCropModal({
+    title: 'Crop Story Banner', imageSrc: URL.createObjectURL(file), aspectRatio: 1600 / 560, round: false,
+    onSave: uploadBanner,
+  });
+  e.target.value = '';
+});
+document.getElementById('banner-recrop-btn').addEventListener('click', () => {
+  if (!siteData.site || !siteData.site.banner_url) return;
+  openCropModal({
+    title: 'Crop Story Banner', imageSrc: siteData.site.banner_url, aspectRatio: 1600 / 560, round: false,
+    onSave: uploadBanner,
+  });
+});
+async function uploadBanner(blob) {
+  const bannerImg = document.getElementById('banner-img');
+  const fd = new FormData();
+  fd.append('banner', blob, 'banner.jpg');
+  fd.append('position', 50);
+  const res = await fetch('/api/moderator/site/banner', { method: 'PUT', headers: authHeaders(), body: fd });
+  if (res.ok) {
+    const { site } = await res.json();
+    siteData.site = { ...siteData.site, ...site };
+    bannerImg.src = site.banner_url + '?t=' + Date.now();
+    bannerImg.style.objectPosition = 'center';
+    bannerImg.classList.remove('mod-banner-loading');
+    document.getElementById('banner-recrop-btn').style.display = 'block';
+  } else {
+    alert('Banner upload failed. Please try again.');
+  }
+}
+
+// ── Book cover — crop-and-upload via the shared Cropper.js modal ───────────
+document.getElementById('cover-edit-btn').addEventListener('click', () => {
+  document.getElementById('cover-file-input').click();
+});
+document.getElementById('cover-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  openCropModal({
+    title: 'Crop Book Cover', imageSrc: URL.createObjectURL(file), aspectRatio: 2 / 3, round: false,
+    onSave: uploadCover,
+  });
+  e.target.value = '';
+});
+document.getElementById('cover-recrop-btn').addEventListener('click', () => {
+  if (!siteData.site || !siteData.site.cover_url) return;
+  openCropModal({
+    title: 'Crop Book Cover', imageSrc: siteData.site.cover_url, aspectRatio: 2 / 3, round: false,
+    onSave: uploadCover,
+  });
+});
+async function uploadCover(blob) {
+  const coverImg = document.getElementById('cover-img');
+  const fd = new FormData();
+  fd.append('cover', blob, 'cover.jpg');
+  fd.append('position_x', 50);
+  fd.append('position_y', 50);
+  const res = await fetch('/api/moderator/site/cover', { method: 'PUT', headers: authHeaders(), body: fd });
+  if (res.ok) {
+    const { site } = await res.json();
+    siteData.site = { ...siteData.site, ...site };
+    coverImg.src = site.cover_url + '?t=' + Date.now();
+    coverImg.style.objectPosition = 'center';
+    coverImg.style.display = 'block';
+    document.getElementById('cover-placeholder').style.display = 'none';
+    document.getElementById('cover-recrop-btn').style.display = 'block';
+  } else {
+    alert('Cover upload failed. Please try again.');
+  }
+}
+
+// ── Quick-nav card art (Characters/Chapters/Gallery) ────────────────────────
+const NAV_CARD_FIELD = { characters: 'characters_card_url', chapters: 'chapters_card_url', gallery: 'gallery_card_url' };
+const NAV_CARD_DEFAULT = {
+  characters: '/images/characters/kloudreference.png',
+  chapters: '/images/gallery/autumnleave_11.png',
+  gallery: '/images/gallery/apolloref_10.png',
+};
+const NAV_CARD_LABEL = { characters: 'Characters', chapters: 'Chapters', gallery: 'Gallery' };
+let qnUploadKind = null;
+const qnFileInput = document.getElementById('qn-file-input');
+
+// The cards are just a canvas for the camera/recrop buttons here — never
+// let a click on them navigate away like they do on the story's own page.
+['characters', 'chapters', 'gallery'].forEach(kind => {
+  document.getElementById(`qn-${kind}`).addEventListener('click', (e) => e.preventDefault());
+  document.getElementById(`qn-${kind}`).classList.add('mod-editing');
+  document.getElementById(`qn-${kind}-edit-btn`).style.display = 'flex';
+});
+
+['characters', 'chapters', 'gallery'].forEach(kind => {
+  document.getElementById(`qn-${kind}-edit-btn`).addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    qnUploadKind = kind;
+    qnFileInput.click();
+  });
+  document.getElementById(`qn-${kind}-recrop-btn`).addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const url = siteData.site && siteData.site[NAV_CARD_FIELD[kind]];
+    if (!url) return;
+    openCropModal({
+      title: `Crop ${NAV_CARD_LABEL[kind]} Card`, imageSrc: url, aspectRatio: 1, round: false,
+      onSave: (blob) => uploadQnCard(kind, blob),
+    });
+  });
+});
+
+qnFileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  const kind = qnUploadKind;
+  qnFileInput.value = '';
+  qnUploadKind = null;
+  if (!file || !kind) return;
+  openCropModal({
+    title: `Crop ${NAV_CARD_LABEL[kind]} Card`, imageSrc: URL.createObjectURL(file), aspectRatio: 1, round: false,
+    onSave: (blob) => uploadQnCard(kind, blob),
+  });
+});
+
+async function uploadQnCard(kind, blob) {
+  const img = document.getElementById(`qn-${kind}-img`);
+  const fd = new FormData();
+  fd.append('image', blob, `${kind}.jpg`);
+  const res = await fetch(`/api/moderator/site/nav-card/${kind}`, { method: 'PUT', headers: authHeaders(), body: fd });
+  if (res.ok) {
+    const { site } = await res.json();
+    siteData.site = { ...siteData.site, ...site };
+    img.src = site[NAV_CARD_FIELD[kind]] + '?t=' + Date.now();
+    img.style.objectPosition = 'center';
+    document.getElementById(`qn-${kind}-recrop-btn`).style.display = 'flex';
+  } else {
+    alert('Card image upload failed. Please try again.');
+  }
+}
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+(async () => {
+  const data = await ModeratorSite.load(SLUG);
+  if (!data || !data.site || !data.site.is_self) {
+    // Not the owner (or story doesn't exist) — bounce to the read-only page.
+    window.location.href = STORY_BASE;
+    return;
+  }
+  siteData = data;
+  populateForm(siteData.site);
+})();
+</script>
+
+</body>
+</html>
