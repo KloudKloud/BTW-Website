@@ -76,6 +76,7 @@
         </button>
         <div class="nav-user-dropdown" id="nav-user-dropdown" hidden>
           <a href="/profile?from=${encodeURIComponent(here)}" id="nav-profile">Account Settings</a>
+          <a href="/fanpages/admin?ctx=main" id="nav-admin-link" style="display:none;">Admin</a>
           <a href="#" id="nav-logout">Logout</a>
         </div>
       </div>
@@ -101,25 +102,6 @@
       clearAuth();
       window.location.href = homeHref;
     });
-
-    // ── Admin dropdown (Hub Image Builder / Stats) — hidden until an
-    // is_admin check comes back, sits as its own pill to the right of
-    // the profile menu rather than buried inside Account Settings.
-    const adminLi = document.getElementById('nav-admin-li');
-    if (adminLi) {
-      const adminBtn = document.getElementById('nav-admin-btn');
-      const adminDropdown = document.getElementById('nav-admin-dropdown');
-      adminBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const open = !adminDropdown.hidden;
-        adminDropdown.hidden = open;
-        adminBtn.setAttribute('aria-expanded', String(!open));
-      });
-      document.addEventListener('click', () => {
-        adminDropdown.hidden = true;
-        adminBtn.setAttribute('aria-expanded', 'false');
-      });
-    }
   }
 
   function updateInboxBadge(count) {
@@ -154,10 +136,10 @@
       storage.setItem('btw_user', JSON.stringify(data.user));
       renderUserNav(data.user);
 
-      // Reveal the Admin pill (Hub Image Builder / Stats) for admins only
+      // Admin link — tucked into the account dropdown above Logout, admins only.
       if (data.user.is_admin) {
-        const adminLi = document.getElementById('nav-admin-li');
-        if (adminLi) adminLi.style.display = '';
+        const adminLink = document.getElementById('nav-admin-link');
+        if (adminLink) adminLink.style.display = '';
       }
 
       // Fetch unread inbox count for badge

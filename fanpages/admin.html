@@ -85,8 +85,42 @@
 </head>
 <body class="mod-theme">
 
+<!-- Context-aware top bar — Admin covers the whole site (not just Fanpages),
+     so it wears whichever nav the visitor arrived under: the plain BTW bar
+     if opened from a root page (?ctx=main), the Fanpages bar otherwise. -->
+<nav id="adm-main-nav" style="display:none;">
+  <div class="nav-left">
+    <a class="nav-brand" href="/">Between Two Worlds</a>
+  </div>
+  <ul class="nav-links">
+    <li><a href="/">Home</a></li>
+    <li><a href="/chapters">Chapters</a></li>
+    <li><a href="/characters">Characters</a></li>
+    <li><a href="/art">Gallery</a></li>
+    <li><a href="/spicy">Spicy</a></li>
+    <li><a href="/fanpages/join">Community</a></li>
+    <li><a href="/discord">Discord</a></li>
+    <li><a href="/inbox">Inbox</a></li>
+    <li><a href="/login" class="nav-login">Log In / Register</a></li>
+  </ul>
+</nav>
 <div id="fanpages-topbar-root"></div>
-<script src="/fanpages/fanpages-nav.js"></script>
+<script>
+  // Picks the nav script to load *before* anything else runs — never both,
+  // so there's only ever one auth-state listener wiring up a dropdown.
+  (function () {
+    const ctx = new URLSearchParams(location.search).get('ctx') === 'main' ? 'main' : 'fanpages';
+    const s = document.createElement('script');
+    if (ctx === 'main') {
+      document.getElementById('adm-main-nav').style.display = '';
+      document.getElementById('fanpages-topbar-root').style.display = 'none';
+      s.src = '/nav.js';
+    } else {
+      s.src = '/fanpages/fanpages-nav.js';
+    }
+    document.head.appendChild(s);
+  })();
+</script>
 <script src="/fanpages/vendor/cropper.min.js"></script>
 
 <div class="adm-wrap" id="adm-wrap" style="display:none;">
@@ -785,19 +819,40 @@ async function loadSiteStats() {
    Tag Dictionary
    ═══════════════════════════════════════════════════════════════════════ */
 let dictData = { fandoms: [], tags: [], relationships: [] };
-function renderDictList(listId, subId, items, noun) {
-  document.getElementById(subId).textContent = `${items.length} ${noun}${items.length === 1 ? '' : 's'}`;
-  const wrap = document.getElementById(listId);
+// Maps each dictionary section to its GET-response key (dictData[key]) and
+// the DELETE endpoint segment used to prune an entry.
+const DICT_SECTIONS = {
+  fandom: { key: 'fandoms', endpoint: 'fandom-catalog', noun: 'fandom' },
+  tag: { key: 'tags', endpoint: 'tag-catalog', noun: 'tag' },
+  relationship: { key: 'relationships', endpoint: 'relationship-catalog', noun: 'relationship' },
+};
+
+async function deleteDictEntry(section, name) {
+  const { key, endpoint } = DICT_SECTIONS[section];
+  try {
+    await fetch(`/api/admin/${endpoint}/${encodeURIComponent(name)}`, { method: 'DELETE', headers: authHeaders() });
+  } catch {}
+  dictData[key] = dictData[key].filter(x => x !== name);
+  renderDictionary(document.getElementById('adm-dict-search-input').value);
+}
+
+function renderDictList(section, items) {
+  const { noun } = DICT_SECTIONS[section];
+  document.getElementById(`dict-${section}-sub`).textContent = `${items.length} ${noun}${items.length === 1 ? '' : 's'}`;
+  const wrap = document.getElementById(`dict-${section}-list`);
   wrap.innerHTML = items.length
-    ? items.map(t => `<span class="wiki-tag-bubble">${escapeHtml(t)}</span>`).join('')
+    ? items.map(t => `<span class="wiki-tag-bubble wiki-tag-bubble--editable">${escapeHtml(t)} <button type="button" class="wiki-tag-bubble-remove" aria-label="Remove ${escapeHtml(noun)}" data-name="${escapeHtml(t)}">✕</button></span>`).join('')
     : '<span class="wiki-tags-empty">None yet.</span>';
+  wrap.querySelectorAll('.wiki-tag-bubble-remove').forEach(btn => {
+    btn.addEventListener('click', () => deleteDictEntry(section, btn.dataset.name));
+  });
 }
 function renderDictionary(filter) {
   const q = (filter || '').trim().toLowerCase();
   const match = (arr) => q ? arr.filter(x => x.toLowerCase().includes(q)) : arr;
-  renderDictList('dict-fandom-list', 'dict-fandom-sub', match(dictData.fandoms), 'fandom');
-  renderDictList('dict-tag-list', 'dict-tag-sub', match(dictData.tags), 'tag');
-  renderDictList('dict-relationship-list', 'dict-relationship-sub', match(dictData.relationships), 'relationship');
+  renderDictList('fandom', match(dictData.fandoms));
+  renderDictList('tag', match(dictData.tags));
+  renderDictList('relationship', match(dictData.relationships));
 }
 document.getElementById('adm-dict-search-input').addEventListener('input', (e) => renderDictionary(e.target.value));
 

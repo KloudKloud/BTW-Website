@@ -4235,6 +4235,23 @@ app.get('/api/relationship-catalog', async (req, res) => {
   res.json({ relationships: rows.map(r => r.name) });
 });
 
+// DELETE /api/admin/{fandom,tag,relationship}-catalog/:name — lets the
+// admin prune entries straight from the Tag Dictionary panel (typos, or
+// anything that shouldn't have made the initial seed). Name is unique per
+// table, so it's enough of a key — no ids exposed on the public GETs above.
+app.delete('/api/admin/fandom-catalog/:name', requireAuth, requireAdmin, async (req, res) => {
+  await pool.query('DELETE FROM fandom_catalog WHERE name = $1', [req.params.name]);
+  res.json({ message: 'Deleted.' });
+});
+app.delete('/api/admin/tag-catalog/:name', requireAuth, requireAdmin, async (req, res) => {
+  await pool.query('DELETE FROM tag_catalog WHERE name = $1', [req.params.name]);
+  res.json({ message: 'Deleted.' });
+});
+app.delete('/api/admin/relationship-catalog/:name', requireAuth, requireAdmin, async (req, res) => {
+  await pool.query('DELETE FROM relationship_catalog WHERE name = $1', [req.params.name]);
+  res.json({ message: 'Deleted.' });
+});
+
 // DELETE /api/moderator/site — permanently deletes the whole story. Characters/
 // chapters/gallery/bookmarks cascade via FK; uploaded images/files are best-effort
 // cleaned up first (shared static assets on migrated data are never touched).
