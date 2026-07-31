@@ -118,7 +118,7 @@
     .fp-banner-edit-pencil:hover { background: rgba(0,0,0,0.85); }
     body.fp-editing .fp-banner-edit-pencil { display: none !important; }
 
-    .fp-header { max-width: 1560px; margin: 0 auto; padding: 0 2rem; position: relative; }
+    .fp-header { max-width: 1200px; margin: 0 auto; padding: 0 2rem; position: relative; }
     .fp-avatar-wrap { position: absolute; top: -64px; left: 50%; transform: translateX(-50%); width: 128px; height: 128px; }
     .fp-avatar {
       width: 128px; height: 128px; border-radius: 50%;
@@ -262,6 +262,11 @@
     .fp-follow-name:hover { color: #7fa8d9; }
     .fp-follow-handle { color: #999; font-size: 0.82rem; }
     .fp-follow-sub { color: #888; font-size: 0.78rem; margin-top: 0.1rem; }
+    .fp-club-role-badge {
+      flex-shrink: 0; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+      color: #f0c060; background: rgba(240,192,96,0.12); border: 1px solid rgba(240,192,96,0.3);
+      border-radius: 10px; padding: 0.1em 0.5em;
+    }
     .fp-follow-btn {
       flex-shrink: 0; border: none; cursor: pointer; font-family: inherit;
       font-size: 0.8rem; font-weight: 700; padding: 0.5rem 1.1rem; border-radius: 20px;
@@ -294,7 +299,7 @@
       height: 3px; background: #f0c060; border-radius: 2px;
     }
 
-    .fp-tab-view { max-width: 1560px; margin: 0 auto; padding: 2rem; }
+    .fp-tab-view { max-width: 1200px; margin: 0 auto; padding: 2rem; }
     /* Characters/Gallery reuse the story-context layouts (.chars-layout,
        .mod-gallery-main), which already carry their own max-width/padding —
        let them own the spacing instead of double-boxing inside .fp-tab-view. */
@@ -305,7 +310,7 @@
     /* Match .chars-layout's max-width/padding exactly so the "Browse" box
        lines up with the "Character Spotlights" box on the Characters tab
        instead of sitting slightly further left. */
-    .fp-gallery-page-row { max-width: 1560px; margin: 0 auto; padding: 0 2rem; }
+    .fp-gallery-page-row { max-width: 1240px; margin: 0 auto; padding: 0 2rem; }
     .fp-gallery-page-row .mod-gallery-main { grid-template-columns: 240px 1fr; gap: 2rem; }
     /* Nudge the Browse box down a bit so it doesn't sit flush against the
        top of the column. */
@@ -323,7 +328,7 @@
        exact same width as the story-context version; a visible Navigate
        box isn't needed for that, just the reserved track. */
     .fp-gallery-detail-row {
-      max-width: 1600px; margin: 3rem auto 0; padding: 0 3rem;
+      max-width: 1340px; margin: 3rem auto 0; padding: 0 3rem;
       display: grid; grid-template-columns: 1fr 220px; gap: 2rem; align-items: start;
     }
     /* #fp-gallery-detail-view otherwise keeps the base .art-view-wrapper's
@@ -368,7 +373,7 @@
 
     /* ── Body: About (~33%) | Stories | Links ── */
     .fp-body {
-      max-width: 1560px; margin: 0 auto; padding: 2rem 2rem 3rem;
+      max-width: 1200px; margin: 0 auto; padding: 2rem 2rem 3rem;
       display: grid; grid-template-columns: 1fr 2fr 220px; gap: 2rem; align-items: start;
     }
 
@@ -474,7 +479,7 @@
 
     /* Featured Characters / Featured Gallery */
     .fp-featured {
-      max-width: 1560px; margin: 0 auto; padding: 0 2rem 2.5rem;
+      max-width: 1200px; margin: 0 auto; padding: 0 2rem 2.5rem;
     }
     .fp-featured-title {
       font-family: 'Cinzel', Georgia, serif; font-size: 1.6rem; font-weight: 700;
@@ -668,7 +673,7 @@
 
     /* Disclaimer */
     .fp-disclaimer {
-      max-width: 1560px; margin: 0 auto 4rem; padding: 0 2rem;
+      max-width: 1200px; margin: 0 auto 4rem; padding: 0 2rem;
     }
     .fp-disclaimer-box {
       border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1.5rem;
@@ -853,6 +858,7 @@
   <div class="fp-stats">
     <button type="button" class="fp-stat" id="fp-following-stat"><b id="fp-following-count">0</b><span>Following</span></button>
     <button type="button" class="fp-stat" id="fp-follower-stat"><b id="fp-follower-count">0</b><span>Followers</span></button>
+    <button type="button" class="fp-stat" id="fp-clubs-stat"><b id="fp-clubs-count">0</b><span>Clubs</span></button>
   </div>
 
   <div class="fp-tabs-row">
@@ -2326,6 +2332,73 @@
   document.getElementById('fp-follow-modal-close').addEventListener('click', () => { fpFollowModalOverlay.hidden = true; });
   fpFollowModalOverlay.addEventListener('click', (e) => { if (e.target === fpFollowModalOverlay) fpFollowModalOverlay.hidden = true; });
 
+  // ── Clubs modal — same shell as Followers/Following, different row shape:
+  // no follow button, a role badge (Owner/Admin/Member) instead. ──────────
+  const CLUB_ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' };
+  function fpClubRow(c) {
+    const row = document.createElement('a');
+    row.className = 'fp-follow-row';
+    row.href = `/fanpages/club?slug=${encodeURIComponent(c.slug)}`;
+    row.style.textDecoration = 'none';
+    row.style.color = 'inherit';
+
+    if (c.icon_url) {
+      const img = document.createElement('img');
+      img.className = 'fp-follow-avatar';
+      img.src = c.icon_url;
+      img.alt = '';
+      row.appendChild(img);
+    } else {
+      const fallback = document.createElement('span');
+      fallback.className = 'fp-follow-avatar-fallback';
+      fallback.textContent = c.name.charAt(0).toUpperCase();
+      row.appendChild(fallback);
+    }
+
+    const info = document.createElement('div');
+    info.className = 'fp-follow-info';
+    const nameRow = document.createElement('div');
+    nameRow.className = 'fp-follow-name-row';
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'fp-follow-name';
+    nameSpan.textContent = c.name;
+    nameRow.appendChild(nameSpan);
+    if (c.role === 'owner' || c.role === 'admin') {
+      const badge = document.createElement('span');
+      badge.className = 'fp-club-role-badge';
+      badge.textContent = CLUB_ROLE_LABEL[c.role];
+      nameRow.appendChild(badge);
+    }
+    info.appendChild(nameRow);
+    if (c.role === 'member') {
+      const sub = document.createElement('p');
+      sub.className = 'fp-follow-sub';
+      sub.textContent = 'Member';
+      info.appendChild(sub);
+    }
+    row.appendChild(info);
+    return row;
+  }
+  async function openClubsModal() {
+    fpFollowModalTitle.textContent = 'Clubs';
+    fpFollowList.innerHTML = '<p class="fp-follow-loading">Loading…</p>';
+    fpFollowModalOverlay.hidden = false;
+    try {
+      const res = await fetch(`/api/fanpage-profile/${USERNAME}/clubs`, { headers: authHeaders() });
+      const data = await res.json();
+      const clubs = data.clubs || [];
+      if (!clubs.length) {
+        fpFollowList.innerHTML = '<p class="fp-follow-empty">Not in any clubs yet.</p>';
+        return;
+      }
+      fpFollowList.innerHTML = '';
+      clubs.forEach(c => fpFollowList.appendChild(fpClubRow(c)));
+    } catch {
+      fpFollowList.innerHTML = '<p class="fp-follow-empty">Couldn\'t load this list right now.</p>';
+    }
+  }
+  document.getElementById('fp-clubs-stat').addEventListener('click', openClubsModal);
+
   // ── Featured rows (display mode) ────────────────────────────────────────
   // Links straight to the specific character/gallery entry on the
   // Characters/Gallery tab (via ?char=/gallery=#tab, read on load below)
@@ -3337,6 +3410,7 @@
       document.getElementById('fp-handle').textContent = `@${a.username}`;
       document.getElementById('fp-follower-count').textContent = data.follower_count;
       document.getElementById('fp-following-count').textContent = data.following_count;
+      document.getElementById('fp-clubs-count').textContent = data.club_count || 0;
       document.title = `${a.display_name} ✦ Fanpages`;
       applyProfileTheme(a.profile_theme, a.profile_theme_bg_url);
 

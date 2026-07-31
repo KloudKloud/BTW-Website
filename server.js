@@ -3152,13 +3152,17 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
 
-  const [{ rows: sites }, followerCount, followingCount, isFollowing, featuredChars, featuredGallery] = await Promise.all([
+  const [{ rows: sites }, followerCount, followingCount, clubCount, isFollowing, featuredChars, featuredGallery] = await Promise.all([
     pool.query(
       'SELECT id, slug, story_path, site_title, cover_url, banner_url, synopsis FROM moderator_sites WHERE owner_user_id = $1 ORDER BY created_at ASC',
       [author.id]
     ),
     pool.query('SELECT COUNT(*)::int AS n FROM user_follows WHERE followed_id = $1', [author.id]),
     pool.query('SELECT COUNT(*)::int AS n FROM user_follows WHERE follower_id = $1', [author.id]),
+    pool.query(
+      `SELECT COUNT(*)::int AS n FROM club_members cm JOIN clubs c ON c.id = cm.club_id WHERE cm.user_id = $1`,
+      [author.id]
+    ),
     viewerId
       ? pool.query('SELECT 1 FROM user_follows WHERE follower_id = $1 AND followed_id = $2', [viewerId, author.id])
       : Promise.resolve({ rows: [] }),
@@ -3236,8 +3240,29 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     })),
     follower_count: followerCount.rows[0].n,
     following_count: followingCount.rows[0].n,
+    club_count: clubCount.rows[0].n,
     is_following: isFollowing.rows.length > 0,
   });
+});
+
+// GET /api/fanpage-profile/:username/clubs — every club this user belongs
+// to, for the profile page's "Clubs" stat modal. NSFW clubs are dropped for
+// viewers who shouldn't see them (logged out or SFW Mode), same gate used
+// everywhere else — otherwise this list would leak which NSFW club someone
+// is in to a viewer who can't even open that club.
+app.get('/api/fanpage-profile/:username/clubs', async (req, res) => {
+  const { rows: [author] } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]);
+  if (!author) return res.status(404).json({ error: 'Not found.' });
+
+  const { viewerId, nsfwAllowed } = await getViewerNsfwAccess(req);
+  const { rows } = await pool.query(
+    `SELECT c.slug, c.name, c.icon_url, c.is_nsfw, cm.role
+     FROM club_members cm JOIN clubs c ON c.id = cm.club_id
+     WHERE cm.user_id = $1 ${nsfwAllowed || viewerId === author.id ? '' : 'AND c.is_nsfw = FALSE'}
+     ORDER BY (cm.role = 'owner') DESC, (cm.role = 'admin') DESC, c.name ASC`,
+    [author.id]
+  );
+  res.json({ clubs: rows.map(r => ({ slug: r.slug, name: r.name, icon_url: r.icon_url || null, is_nsfw: r.is_nsfw, role: r.role })) });
 });
 
 // Shared by the followers/following list modal — each row carries enough to
