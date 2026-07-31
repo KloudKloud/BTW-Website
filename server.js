@@ -327,9 +327,40 @@ async function initDb() {
     );
   `).catch(e => console.error('moderator_sites fandoms migration:', e.message));
   await pool.query(`
-    INSERT INTO fandom_catalog (name) VALUES ('Pokemon'), ('Furry Fandom'), ('Original Works')
+    INSERT INTO fandom_catalog (name) VALUES ('Pokemon'), ('Original Furry Characters'), ('Original Works')
     ON CONFLICT (name) DO NOTHING;
   `).catch(e => console.error('fandom_catalog seed:', e.message));
+  // Renamed after the initial seed shipped — "Furry Fandom" read like it was
+  // naming an actual fandom rather than a bucket for original furry OCs.
+  // The seed insert above already adds the new name, so this just drops the
+  // stray old row rather than UPDATE-ing (which would collide with it).
+  await pool.query(`
+    DELETE FROM fandom_catalog WHERE name = 'Furry Fandom';
+  `).catch(e => console.error('fandom_catalog rename:', e.message));
+
+  // Additional Tags / Relationships catalogs — same shared-vocabulary idea as
+  // Fandom. Seeded day-one from 5 real AO3 works' public tag lists (Rating/
+  // Archive Warnings excluded; Character tags folded in here too, since this
+  // site doesn't have a separate Characters tag system — Japanese Pokemon
+  // names collapsed to their English name).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tag_catalog (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS relationship_catalog (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL
+    );
+  `).catch(e => console.error('tag/relationship catalog migration:', e.message));
+  const TAG_CATALOG_SEED = ['Umbreon', 'Espeon', 'Sylveon', 'Leafeon', 'Flareon', 'Jolteon', 'Lucario', 'Riolu', 'Blaziken', 'Meowscarada', 'Grovyle', 'Absol', 'Kloud', 'Saphero', 'Zoroark', 'Gallade', 'Arcanine', 'Eevee', 'Delcatty', 'Romance', 'Love', 'Psychological Horror', 'Pokemon', 'Comedy', 'Angst', 'Fluff', 'Slow Burn', 'Teasing', 'Flirting', 'Hurt/Comfort', 'Enemies to Lovers', 'Implied Sexual Content', 'Romantic Comedy', 'Intimacy', 'Slow Romance', 'Horror', 'Fluff and Angst', 'Action', 'Friends to Lovers', 'A little bit of everything', 'Adventure', 'Dimensions', 'Alternate Dimensions', 'Pokemon Only', 'Abuse', 'Sexual Content', 'Sexual Tension', 'Mystery', 'Stakes', 'Eeveelutions', 'PMD', 'Depression', 'Cuddling & Snuggling', 'intimate cuddling', 'Gay', 'gay relationships', 'Straight Relationships', 'Parallel Universe', 'Torracat', 'Lycanroc', 'Vulpix (Alolan)', 'Original Human Character(s)', 'Buizel', 'Glaceon', 'Seel', 'Floatzel', 'Pokephilia', 'Vaginal', 'Anal Sex', 'Blow Jobs', 'Clothed Sex', 'Knotting', 'Orgasm', 'Face-Fucking', 'Rough Oral Sex', 'Submissive Character', 'Multiple Sex Positions', 'Sex with Sentient Animals', 'Porn with Plot', 'Secret Relationship', 'Deepthroating', 'Sex on Furniture', 'Lust', 'Dominance', 'Oral Knotting', 'Rough Sex', 'Teen Romance', 'Interspecies Sex', 'Mating Cycles/In Heat', 'Cock Slut', 'Implied/Referenced Sex', 'Guilty Pleasures', 'Light Dom/sub', 'Blood', 'Mating Bites', 'Taboo', 'Bad Decisions', 'Poor Life Choices', 'Established Relationship', 'Hawaiian Character', 'Implied/Referenced Underage Sex', 'Condoms', 'Voyeurism', 'Possessive Behavior', 'Possessive Sex', 'Drunk Sex', 'Alcohol Abuse/Alcoholism', 'Crush at First Sight', 'Infidelity', 'Babysitting', 'Slice of Life', 'Waiters & Waitresses', 'Drama', 'Cars', 'Pictures', 'Audio Format: MP3', 'Braixen', 'Gardevoir', 'Liepard', 'Original Pokemon Trainer(s)', 'Delphox', 'Vaginal Sex', 'Pokemon Battle', 'Pokemon Journey', 'Action/Adventure', 'Pokemon Gym Leader(s)', 'Love Confessions', 'Loss of Virginity', 'Self Confidence Issues', 'Female Protagonist', 'Emotional Hurt/Comfort', 'Pokemon Training', 'Interspecies Romance', 'Telepathy', 'Telepathic Bond', 'Canon Dialogue', 'Platonic Relationships', 'Loss of Parent(s)', 'Romantic Fluff', 'Developing Relationship', 'Childhood Trauma', 'French Characters', 'French', 'Monogamy', 'Young Love', 'Non-Graphic Violence', 'Psychic Bond', 'Original Furry Character(s)', 'Original Anthropomorphic Character(s)', 'Original Male Character(s)', 'Original Female Character(s)', 'Nazi Germany', 'Nazis', 'War', 'World War II', 'Alternate History', 'Alternate Universe - Historical', 'Spies & Secret Agents', 'Undercover Missions', 'Undercover', 'Military', 'Alternate Universe - Military', 'Military Uniforms', 'Women in the Military', 'Military Kink', 'Femdom', 'Interspecies Relationship(s)', 'Rape/Non-con Elements', 'Dog', 'Racism', 'Period-Typical Racism', 'Rape', 'POV Second Person', 'Torture', 'Interrogation', 'Sexual Harassment', 'Face-Sitting', 'Cunnilingus', 'Oral Sex', 'Prostitution', 'Sex Toys', 'Scent Kink', 'Scent Marking', 'Communism', 'Irish Republicanism', 'Hand Jobs', 'Public Sex', 'Exhibitionism', 'Semi-Public Sex', 'Gender Role Reversal', 'Vaginal Fingering', 'Breastfeeding', 'Threesome - F/F/M', 'Rough Kissing', 'Kissing Kink', 'Estrus', 'Impregnation', 'Suspicions', 'Blackmail', 'Creampie', 'Human Male on Female Anthro', 'HMOFA (Furry)', 'Lopunny', 'Suicune', 'Mew', 'Vulpix', 'Ninetales', 'Primarina', 'Dragonair', 'Vaporeon', 'Luxray', 'Porn', 'Dubious Consent', 'Bondage', 'psychic bondage', 'Illusions', 'Flexibility', 'Breeding', 'Human/Pokemon Relationship(s)', 'Multiple Partners', 'Pornography', 'pornography watching', 'Oil', 'Erotic Electrostimulation', 'Electrocution', 'Imprisonment', 'open mouth', 'Dirty Talk'];
+  const RELATIONSHIP_CATALOG_SEED = ['Umbreon/Espeon', 'Sylveon/Blaziken', 'Umbreon/Leafeon', 'Espeon/Jolteon', 'Lucario/Zoroark', 'Lycanroc/Original Character(s)', 'Pokemon/Original Human Character(s)', 'Pokemon/Original Character(s)', 'Original Female Character/Original Male Character', 'Floatzel/Original Character(s)', 'Buizel/Original Pokemon Trainer(s)', 'Arcanine/Original Female Character(s)', 'Umbreon/Glaceon', 'Eevee/Original Female Character(s)', 'Seel/Original Female Character(s)', 'Braixen/Original Female Character(s)', 'Riolu & Original Pokemon Trainer(s)', 'Gardevoir/Braixen', 'Delphox/Original Character(s)', 'Female Anthro/Male Human', 'Original Female Anthro Character(s)/Original Male Human Character(s)', 'Anthro/Human', 'Female Absol/Male Human', 'Female Ninetales/Male Human', 'Female Lopunny/Male Human', 'Female Suicune/Male Human', 'Female Mew/Male Human', 'Female Braixen/Male Human', 'Female Dragonair/Male Human', 'Female Eevee/Male Human', 'Female Lucario/Male Human', 'Female Vulpix/Male Human', 'Male Arcanine/Female Human', 'Female Lycanroc & Male Human', 'Female Leafeon/Male Human', 'Female Primarina/Male Human', 'Female Arcanine/Male Arcanine', 'Female Zoroark/Male Human', 'Female Vaporeon/Male Human', 'Female Luxray/Male Human', 'Female Lycanroc/Male Human', 'Female Arcanine/Male Human'];
+  await pool.query(
+    `INSERT INTO tag_catalog (name) SELECT unnest($1::text[]) ON CONFLICT (name) DO NOTHING`, [TAG_CATALOG_SEED]
+  ).catch(e => console.error('tag_catalog seed:', e.message));
+  await pool.query(
+    `INSERT INTO relationship_catalog (name) SELECT unnest($1::text[]) ON CONFLICT (name) DO NOTHING`, [RELATIONSHIP_CATALOG_SEED]
+  ).catch(e => console.error('relationship_catalog seed:', e.message));
 
   // Structured relationships — replaces the old free-text stats.Relationships
   // string. Each entry is { name, type, character_id }, where character_id
@@ -4087,7 +4118,7 @@ function sanitizeTags(raw) {
   const out = [];
   for (const t of raw) {
     if (typeof t !== 'string') continue;
-    const clean = t.trim().replace(/\s+/g, '_').toLowerCase().slice(0, 40);
+    const clean = t.trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 40);
     if (!clean || seen.has(clean)) continue;
     seen.add(clean);
     out.push(clean);
@@ -4184,6 +4215,19 @@ app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) =
 app.get('/api/fandom-catalog', async (req, res) => {
   const { rows } = await pool.query('SELECT name FROM fandom_catalog ORDER BY name ASC');
   res.json({ fandoms: rows.map(r => r.name) });
+});
+
+// GET /api/tag-catalog + /api/relationship-catalog — same idea as fandoms,
+// seeded from real AO3 works. Not wired into the editor's typeahead yet
+// (Additional Tags/Relationships are still freeform-only) — these exist so
+// that work can be added later without another data migration.
+app.get('/api/tag-catalog', async (req, res) => {
+  const { rows } = await pool.query('SELECT name FROM tag_catalog ORDER BY name ASC');
+  res.json({ tags: rows.map(r => r.name) });
+});
+app.get('/api/relationship-catalog', async (req, res) => {
+  const { rows } = await pool.query('SELECT name FROM relationship_catalog ORDER BY name ASC');
+  res.json({ relationships: rows.map(r => r.name) });
 });
 
 // DELETE /api/moderator/site — permanently deletes the whole story. Characters/
