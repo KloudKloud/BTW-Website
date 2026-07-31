@@ -3994,8 +3994,11 @@ async function sendSiteLookup(query, params, req, res) {
   const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds, bookmarkedGalleryIds] = await Promise.all([
     pool.query('SELECT id, title, teaser, links, image_url, file_url, file_name FROM moderator_chapters WHERE site_id = $1 ORDER BY sort_order, id', [site.id]),
     pool.query(`
-      SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.description, mc.stats, mc.facts, mc.lore, mc.relationships, mc.owner_user_id, mc.ref_is_nsfw
-      FROM character_story_links csl JOIN moderator_characters mc ON mc.id = csl.character_id
+      SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.description, mc.stats, mc.facts, mc.lore, mc.relationships, mc.owner_user_id, mc.ref_is_nsfw,
+             ou.display_name AS owner_display_name, ou.username AS owner_username
+      FROM character_story_links csl
+      JOIN moderator_characters mc ON mc.id = csl.character_id
+      JOIN users ou ON ou.id = mc.owner_user_id
       WHERE csl.site_id = $1 ORDER BY csl.sort_order, mc.id
     `, [site.id]),
     pool.query(`
