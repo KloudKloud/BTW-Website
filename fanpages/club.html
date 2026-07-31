@@ -39,14 +39,32 @@
     .soc-layout.soc-collapsed .soc-sidebar { width: 56px; padding-left: 0.6rem; padding-right: 0.6rem; }
     .soc-layout.soc-collapsed .soc-sidebar-content { display: none; }
     .soc-layout.soc-collapsed #cl-page, .soc-layout.soc-collapsed #cl-notfound { margin-left: 56px; }
+    .soc-sidebar-user-wrap { position: relative; margin-bottom: 0.5rem; }
     .soc-sidebar-user {
       display: flex; align-items: center; gap: 0.65rem; text-decoration: none; color: inherit;
-      padding: 0.4rem 0.4rem 0.9rem; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding: 0.4rem 0.4rem 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+      width: 100%; background: none; border-left: none; border-right: none; border-top: none;
+      cursor: pointer; font-family: inherit; text-align: left;
     }
     .soc-sidebar-avatar, .soc-sidebar-avatar-fallback { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
     .soc-sidebar-avatar-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 1.25rem; }
     .soc-sidebar-username { font-weight: 700; font-size: 1.1rem; color: #f0f0f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .soc-sidebar-login { font-size: 1rem; color: #7fa8d9; text-decoration: none; display: block; padding: 0.4rem 0.4rem 0.9rem; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .soc-sidebar-user-menu {
+      position: absolute; top: 100%; left: 0.2rem; right: 0.2rem; margin-top: 0.35rem;
+      background: #1c1c1e; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.45); padding: 0.5rem; z-index: 60;
+    }
+    .soc-sidebar-user-menu-status {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.5rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 0.3rem;
+    }
+    .soc-sidebar-user-menu-status-label { font-size: 0.85rem; }
+    .soc-sidebar-user-menu-item {
+      display: block; padding: 0.55rem 0.6rem; border-radius: 6px; color: #ddd;
+      text-decoration: none; font-size: 0.9rem;
+    }
+    .soc-sidebar-user-menu-item:hover { background: rgba(255,255,255,0.08); }
     .soc-sidebar-nav {
       display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;
       gap: 0.2rem; position: static; height: auto; padding: 0; background: none; border: none; backdrop-filter: none;
@@ -1645,9 +1663,9 @@
         <p class="mod-panel-msg" id="cl-edit-msg"></p>
         <div class="char-editor-actions" id="cl-edit-main-actions">
           <button class="mod-btn mod-btn--danger" id="cl-edit-page-delete-btn" type="button" style="margin-right:auto;" hidden>Delete Page</button>
+          <button class="mod-btn mod-btn--danger" id="cl-edit-club-delete-btn" type="button" style="margin-right:auto;" hidden>Delete Club</button>
           <button class="mod-btn mod-btn--cancel" id="cl-edit-cancel" type="button">Cancel</button>
           <button class="mod-btn" id="cl-edit-save" type="button">Save</button>
-          <button class="mod-btn mod-btn--danger" id="cl-edit-club-delete-btn" type="button" hidden>Delete Club</button>
         </div>
       </div>
 
@@ -1871,13 +1889,54 @@ if (token && currentUser) {
     ? `<img class="soc-sidebar-avatar" src="${currentUser.avatar}" alt="" />`
     : `<span class="soc-sidebar-avatar-fallback">${escapeHtml((currentUser.display_name || currentUser.username || '?').charAt(0).toUpperCase())}</span>`;
   sidebarUserSlot.innerHTML = `
-    <a class="soc-sidebar-user" href="/fanpages/${encodeURIComponent(currentUser.username)}">
-      ${sidebarAvatarHtml}
-      <span class="soc-sidebar-username">${escapeHtml(currentUser.display_name || currentUser.username)}</span>
-    </a>
+    <div class="soc-sidebar-user-wrap">
+      <button type="button" class="soc-sidebar-user" id="soc-sidebar-user-btn">
+        ${sidebarAvatarHtml}
+        <span class="soc-sidebar-username">${escapeHtml(currentUser.display_name || currentUser.username)}</span>
+      </button>
+      <div class="soc-sidebar-user-menu" id="soc-sidebar-user-menu" hidden>
+        <div class="soc-sidebar-user-menu-status">
+          <span class="soc-sidebar-user-menu-status-label nsfw-toggle-label" id="soc-sidebar-nsfw-label">NSFW</span>
+          <label class="nsfw-toggle-switch">
+            <input type="checkbox" id="soc-sidebar-nsfw-toggle" />
+            <span class="nsfw-toggle-slider"></span>
+          </label>
+        </div>
+        <a class="soc-sidebar-user-menu-item" href="/fanpages/${encodeURIComponent(currentUser.username)}">View Profile</a>
+        <a class="soc-sidebar-user-menu-item" href="/fanpages/account-settings">Account Settings</a>
+      </div>
+    </div>
   `;
+  setSidebarNsfwState(currentUser.nsfw_enabled !== false);
+  const sidebarMenuBtn = document.getElementById('soc-sidebar-user-btn');
+  const sidebarMenu = document.getElementById('soc-sidebar-user-menu');
+  sidebarMenuBtn.addEventListener('click', (e) => { e.stopPropagation(); sidebarMenu.hidden = !sidebarMenu.hidden; });
+  document.addEventListener('click', (e) => {
+    if (!sidebarMenu.hidden && !e.target.closest('.soc-sidebar-user-wrap')) sidebarMenu.hidden = true;
+  });
+  document.getElementById('soc-sidebar-nsfw-toggle').addEventListener('change', async function () {
+    const enabled = this.checked;
+    setSidebarNsfwState(enabled);
+    try {
+      await fetch(`${API}/auth/profile`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ nsfw_enabled: enabled }),
+      });
+      currentUser.nsfw_enabled = enabled;
+      const store = localStorage.getItem('btw_user') ? localStorage : sessionStorage;
+      store.setItem('btw_user', JSON.stringify(currentUser));
+    } catch { setSidebarNsfwState(!enabled); }
+  });
 } else {
   sidebarUserSlot.innerHTML = `<a class="soc-sidebar-login" href="/fanpages/login?from=${encodeURIComponent(location.pathname + location.search)}">Log In / Register</a>`;
+}
+function setSidebarNsfwState(enabled) {
+  const toggle = document.getElementById('soc-sidebar-nsfw-toggle');
+  const label = document.getElementById('soc-sidebar-nsfw-label');
+  if (!toggle) return;
+  toggle.checked = enabled;
+  label.textContent = enabled ? 'NSFW' : 'SFW Mode: On';
+  label.classList.toggle('nsfw-toggle-label--sfw', !enabled);
 }
 
 function clubIconHtml(c, sizeClass) {

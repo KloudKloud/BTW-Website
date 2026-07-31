@@ -44,14 +44,34 @@
     .soc-layout.soc-collapsed .soc-sidebar { width: 56px; padding-left: 0.6rem; padding-right: 0.6rem; }
     .soc-layout.soc-collapsed .soc-sidebar-content { display: none; }
     .soc-layout.soc-collapsed .soc-main { margin-left: 56px; }
+    .soc-sidebar-user-wrap { position: relative; margin-bottom: 0.5rem; }
     .soc-sidebar-user {
       display: flex; align-items: center; gap: 0.65rem; text-decoration: none; color: inherit;
-      padding: 0.4rem 0.4rem 0.9rem; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding: 0.4rem 0.4rem 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+      width: 100%; background: none; border-left: none; border-right: none; border-top: none;
+      cursor: pointer; font-family: inherit; text-align: left;
     }
     .soc-sidebar-avatar, .soc-sidebar-avatar-fallback { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
     .soc-sidebar-avatar-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 1.25rem; }
     .soc-sidebar-username { font-weight: 700; font-size: 1.1rem; color: #f0f0f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .soc-sidebar-login { font-size: 1rem; color: #7fa8d9; text-decoration: none; display: block; padding: 0.4rem 0.4rem 0.9rem; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    /* Popup menu off the sidebar profile block: SFW/NSFW status up top,
+       then plain nav links — closes on any click outside it. */
+    .soc-sidebar-user-menu {
+      position: absolute; top: 100%; left: 0.2rem; right: 0.2rem; margin-top: 0.35rem;
+      background: #1c1c1e; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.45); padding: 0.5rem; z-index: 60;
+    }
+    .soc-sidebar-user-menu-status {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.5rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 0.3rem;
+    }
+    .soc-sidebar-user-menu-status-label { font-size: 0.85rem; }
+    .soc-sidebar-user-menu-item {
+      display: block; padding: 0.55rem 0.6rem; border-radius: 6px; color: #ddd;
+      text-decoration: none; font-size: 0.9rem;
+    }
+    .soc-sidebar-user-menu-item:hover { background: rgba(255,255,255,0.08); }
 
     /* style.css has a bare `nav { display:flex; ... }` rule meant for the
        site's topbar — since this is also a <nav> element, that rule was
@@ -235,9 +255,13 @@
       border: 1px solid rgba(240,192,96,0.3); border-radius: 8px; padding: 0.1em 0.45em; margin-left: 0.4rem;
     }
     .soc-rec-join-btn {
-      display: inline-block; margin-top: 0.4rem; background: rgba(127,168,217,0.15);
+      /* Lives inline in the stats row (margin-left:auto pushes it to the
+         end) instead of its own line below — otherwise it adds a whole
+         extra row of height and the card ends up taller than a plain
+         home-feed card, which this is supposed to match. */
+      display: inline-block; margin-left: auto; background: rgba(127,168,217,0.15);
       border: 1px solid rgba(127,168,217,0.5); color: #cfe0f5; border-radius: 14px;
-      padding: 0.25em 0.8em; font-size: 0.72rem; font-weight: 700; cursor: pointer; font-family: inherit;
+      padding: 0.15em 0.7em; font-size: 0.72rem; font-weight: 700; cursor: pointer; font-family: inherit;
     }
     .soc-rec-join-btn:hover { background: rgba(127,168,217,0.28); }
     .soc-rec-join-btn.soc-joined { background: rgba(127,168,217,0.3); color: #fff; cursor: default; }
@@ -387,19 +411,64 @@ function escapeHtml(s) {
 }
 
 // ── Sidebar: user block ─────────────────────────────────────────────────
+// Clicking the profile block opens a small popup (SFW/NSFW status + View
+// Profile + Account Settings) instead of navigating straight to the
+// profile page — closes on any click outside the wrap.
 const sidebarUserSlot = document.getElementById('soc-sidebar-user-slot');
 if (token && currentUser) {
   const avatarHtml = currentUser.avatar
     ? `<img class="soc-sidebar-avatar" src="${currentUser.avatar}" alt="" />`
     : `<span class="soc-sidebar-avatar-fallback">${escapeHtml((currentUser.display_name || currentUser.username || '?').charAt(0).toUpperCase())}</span>`;
   sidebarUserSlot.innerHTML = `
-    <a class="soc-sidebar-user" href="/fanpages/${encodeURIComponent(currentUser.username)}">
-      ${avatarHtml}
-      <span class="soc-sidebar-username">${escapeHtml(currentUser.display_name || currentUser.username)}</span>
-    </a>
+    <div class="soc-sidebar-user-wrap">
+      <button type="button" class="soc-sidebar-user" id="soc-sidebar-user-btn">
+        ${avatarHtml}
+        <span class="soc-sidebar-username">${escapeHtml(currentUser.display_name || currentUser.username)}</span>
+      </button>
+      <div class="soc-sidebar-user-menu" id="soc-sidebar-user-menu" hidden>
+        <div class="soc-sidebar-user-menu-status">
+          <span class="soc-sidebar-user-menu-status-label nsfw-toggle-label" id="soc-sidebar-nsfw-label">NSFW</span>
+          <label class="nsfw-toggle-switch">
+            <input type="checkbox" id="soc-sidebar-nsfw-toggle" />
+            <span class="nsfw-toggle-slider"></span>
+          </label>
+        </div>
+        <a class="soc-sidebar-user-menu-item" href="/fanpages/${encodeURIComponent(currentUser.username)}">View Profile</a>
+        <a class="soc-sidebar-user-menu-item" href="/fanpages/account-settings">Account Settings</a>
+      </div>
+    </div>
   `;
+  setSidebarNsfwState(currentUser.nsfw_enabled !== false);
+  const menuBtn = document.getElementById('soc-sidebar-user-btn');
+  const menu = document.getElementById('soc-sidebar-user-menu');
+  menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+  document.addEventListener('click', (e) => {
+    if (!menu.hidden && !e.target.closest('.soc-sidebar-user-wrap')) menu.hidden = true;
+  });
+  document.getElementById('soc-sidebar-nsfw-toggle').addEventListener('click', e => e.stopPropagation());
+  document.getElementById('soc-sidebar-nsfw-toggle').addEventListener('change', async function () {
+    const enabled = this.checked;
+    setSidebarNsfwState(enabled);
+    try {
+      await fetch(`${API}/auth/profile`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ nsfw_enabled: enabled }),
+      });
+      currentUser.nsfw_enabled = enabled;
+      const store = localStorage.getItem('btw_user') ? localStorage : sessionStorage;
+      store.setItem('btw_user', JSON.stringify(currentUser));
+    } catch { setSidebarNsfwState(!enabled); }
+  });
 } else {
   sidebarUserSlot.innerHTML = `<a class="soc-sidebar-login" href="/fanpages/login?from=${encodeURIComponent('/fanpages/social')}">Log In / Register</a>`;
+}
+function setSidebarNsfwState(enabled) {
+  const toggle = document.getElementById('soc-sidebar-nsfw-toggle');
+  const label = document.getElementById('soc-sidebar-nsfw-label');
+  if (!toggle) return;
+  toggle.checked = enabled;
+  label.textContent = enabled ? 'NSFW' : 'SFW Mode: On';
+  label.classList.toggle('nsfw-toggle-label--sfw', !enabled);
 }
 
 function clubIconHtml(club, sizeClass) {
@@ -674,7 +743,7 @@ function recommendedCard(p) {
     } catch {}
     joinBtn.disabled = false;
   });
-  card.querySelector('.soc-feed-card-body').appendChild(joinBtn);
+  card.querySelector('.soc-feed-card-stats').appendChild(joinBtn);
   return card;
 }
 async function loadPopular() {
