@@ -1041,21 +1041,6 @@ async function initDb() {
     WHERE slug = 'btwclub' AND club_types = '[]'::jsonb;
   `).catch(e => console.error('BTWClub types seed:', e.message));
 
-  // Blue's own club, matching his story's name — same pattern as the
-  // BTWClub seed above, just owned by Blue instead of the admin account.
-  await pool.query(`
-    INSERT INTO clubs (slug, name, description, owner_user_id, club_types)
-    SELECT 'above-all-else', 'Above All Else', 'Community hub for Above All Else — come chat!', u.id,
-           '["Reading & Writing", "Community"]'::jsonb
-    FROM users u
-    WHERE u.username = 'blue' AND NOT EXISTS (SELECT 1 FROM clubs WHERE slug = 'above-all-else')
-  `).catch(e => console.error('Blue club seed:', e.message));
-  await pool.query(`
-    INSERT INTO club_members (club_id, user_id, role)
-    SELECT c.id, c.owner_user_id, 'owner' FROM clubs c
-    WHERE c.slug = 'above-all-else'
-    ON CONFLICT (club_id, user_id) DO NOTHING
-  `).catch(e => console.error('Blue club owner membership seed:', e.message));
 
   await pool.query(`
     INSERT INTO club_members (club_id, user_id, role)
