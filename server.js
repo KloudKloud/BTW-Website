@@ -361,6 +361,11 @@ async function initDb() {
   await pool.query(
     `INSERT INTO relationship_catalog (name) SELECT unnest($1::text[]) ON CONFLICT (name) DO NOTHING`, [RELATIONSHIP_CATALOG_SEED]
   ).catch(e => console.error('relationship_catalog seed:', e.message));
+  // Trimmed after the initial seed — these came from a WWII-furry source
+  // work and don't belong in a general-purpose site tag catalog.
+  await pool.query(`
+    DELETE FROM tag_catalog WHERE lower(name) IN ('racism', 'nazis', 'nazi germany', 'world war ii', 'period-typical racism', 'torture');
+  `).catch(e => console.error('tag_catalog trim:', e.message));
 
   // Structured relationships — replaces the old free-text stats.Relationships
   // string. Each entry is { name, type, character_id }, where character_id

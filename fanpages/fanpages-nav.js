@@ -19,14 +19,6 @@
       <a class="fpnav-brand" href="/fanpages"><img class="fpnav-brand-logo" src="/images/fanpagelogo.png" alt="Fanpages" width="52" height="44" /></a>
       <a class="fpnav-link${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Clubs</a>
 
-      <div class="fpnav-dropdown-wrap" id="fpnav-admin-wrap" style="display:none;">
-        <button class="fpnav-trigger-btn fpnav-admin-btn" id="fpnav-admin-btn" type="button">Admin <span class="fpnav-caret">▾</span></button>
-        <div class="fpnav-dropdown" id="fpnav-admin-dropdown" hidden>
-          <a href="/fanpages/hub-builder">Hub Image Builder</a>
-          <a href="/stats">Stats</a>
-        </div>
-      </div>
-
       <div class="fpnav-search"><input type="search" id="fpnav-search-input" placeholder="🔍 Search stories…" /></div>
       <div class="fpnav-right">
 
@@ -62,6 +54,7 @@
             <div class="fpnav-dropdown-divider"></div>
             <a href="${homeHref}">BTW Homepage</a>
             <a href="#" id="fpnav-edit-profile-link">Account Settings</a>
+            <a href="/fanpages/admin" id="fpnav-admin-link" style="display:none;">Admin</a>
             <a href="#" id="fpnav-logout-link">Logout</a>
           </div>
         </div>
@@ -103,7 +96,6 @@
   }
   wireDropdown('fpnav-upload-btn', 'fpnav-upload-dropdown');
   wireDropdown('fpnav-avatar-btn', 'fpnav-avatar-dropdown');
-  wireDropdown('fpnav-admin-btn', 'fpnav-admin-dropdown');
   document.addEventListener('click', () => {
     document.querySelectorAll('.fpnav-dropdown').forEach(el => { el.hidden = true; });
   });
@@ -184,12 +176,10 @@
       document.getElementById('fpnav-my-profile-link').href = `/fanpages/${u.username}`;
       document.getElementById('fpnav-edit-profile-link').href = `/fanpages/account-settings?from=${encodeURIComponent(here)}`;
 
-      // Reveal the standalone Admin pill (Hub Image Builder / Stats) —
-      // its own dropdown next to the profile menu rather than buried
-      // inside Account Settings.
+      // Admin link — tucked into the avatar dropdown above Logout, admins only.
       if (u.is_admin) {
-        const adminWrap = document.getElementById('fpnav-admin-wrap');
-        if (adminWrap) adminWrap.style.display = '';
+        const adminLink = document.getElementById('fpnav-admin-link');
+        if (adminLink) adminLink.style.display = '';
       }
     })
     .catch(() => {});

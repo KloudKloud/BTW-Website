@@ -26,7 +26,7 @@
 
     /* Fandom — AO3-style typeahead: suggestions drop below the bubble-tag
        input as the author types, matching against the preloaded catalog. */
-    .wiki-fandom-input-wrap { position: relative; }
+    .wiki-suggest-input-wrap { position: relative; }
     .wiki-fandom-suggest {
       position: absolute; top: calc(100% + 0.4rem); left: 0; right: 0; z-index: 30;
       background: #141018; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
@@ -256,8 +256,9 @@
               Tag the relationships in your work. This applies heavily for fanfiction, and should be used to group recognizable characters together (e.g. "Umbreon"/"Espeon") to help discoverability. If the characters don't appear as a selectable object, enter them with their full names, and use a "/" to denote individual characters. Please be advised, if your relationship includes several characters, consider shortening their names if needed to ensure that the tag stays under 150 characters!
             </div>
           </div>
-          <div class="wiki-tags-input-box" id="relationships-input-box">
-            <input type="text" class="wiki-tags-input" id="relationships-text-input" placeholder="Type a relationship and press Enter…" />
+          <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="relationships-input-box">
+            <input type="text" class="wiki-tags-input" id="relationships-text-input" placeholder="Type a relationship and press Enter…" autocomplete="off" />
+            <div class="wiki-fandom-suggest" id="relationships-suggest" hidden></div>
           </div>
         </div>
 
@@ -269,7 +270,7 @@
               Start typing and pick a match if one shows up! That keeps everyone's tagging consistent so stories in the same fandom can actually find each other. Don't see yours? Type it anyway; we'll add popular new ones to the official list over time.
             </div>
           </div>
-          <div class="wiki-tags-input-box wiki-fandom-input-wrap" id="fandom-input-box">
+          <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="fandom-input-box">
             <input type="text" class="wiki-tags-input" id="fandom-text-input" placeholder="Type a fandom and press Enter…" autocomplete="off" />
             <div class="wiki-fandom-suggest" id="fandom-suggest" hidden></div>
           </div>
@@ -285,8 +286,9 @@
             <span class="wiki-tags-count" id="tags-count">0/100</span>
           </div>
           <div class="wiki-tags-editor" id="site-tags-editor">
-            <div class="wiki-tags-input-box" id="tags-input-box">
-              <input type="text" class="wiki-tags-input" id="tags-text-input" placeholder="Type a tag and press Enter…" />
+            <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="tags-input-box">
+              <input type="text" class="wiki-tags-input" id="tags-text-input" placeholder="Type a tag and press Enter…" autocomplete="off" />
+              <div class="wiki-fandom-suggest" id="tags-suggest" hidden></div>
             </div>
           </div>
         </div>
@@ -418,6 +420,7 @@ function buildCategoryChecks(selected) {
 
 // ── Relationships — bubble-tag input, same pattern as Additional Tags ──────
 let workingRelationships = [];
+let relationshipsCatalog = [];
 
 function renderRelationshipsEditor() {
   const box = document.getElementById('relationships-input-box');
@@ -445,15 +448,43 @@ function addWorkingRelationship(raw) {
 }
 
 const relationshipsTextInput = document.getElementById('relationships-text-input');
-relationshipsTextInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' || e.key === ',') {
-    e.preventDefault();
-    addWorkingRelationship(relationshipsTextInput.value);
+let relationshipsSuggestIndex = -1;
+relationshipsTextInput.addEventListener('input', () => {
+  const q = relationshipsTextInput.value.trim().toLowerCase();
+  if (!q) { renderSuggestDropdown('relationships-suggest', [], () => {}); return; }
+  const matches = relationshipsCatalog.filter(r => r.toLowerCase().includes(q) && !workingRelationships.some(w => w.toLowerCase() === r.toLowerCase())).slice(0, 6);
+  relationshipsSuggestIndex = -1;
+  renderSuggestDropdown('relationships-suggest', matches, (val) => {
+    addWorkingRelationship(val);
     relationshipsTextInput.value = '';
+    renderSuggestDropdown('relationships-suggest', [], () => {});
+  });
+});
+relationshipsTextInput.addEventListener('keydown', (e) => {
+  const items = document.querySelectorAll('#relationships-suggest .wiki-fandom-suggest-item');
+  if (e.key === 'ArrowDown' && items.length) {
+    e.preventDefault();
+    relationshipsSuggestIndex = Math.min(relationshipsSuggestIndex + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('active', i === relationshipsSuggestIndex));
+  } else if (e.key === 'ArrowUp' && items.length) {
+    e.preventDefault();
+    relationshipsSuggestIndex = Math.max(relationshipsSuggestIndex - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('active', i === relationshipsSuggestIndex));
+  } else if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const picked = relationshipsSuggestIndex >= 0 && items[relationshipsSuggestIndex] ? items[relationshipsSuggestIndex].textContent : relationshipsTextInput.value;
+    addWorkingRelationship(picked);
+    relationshipsTextInput.value = '';
+    renderSuggestDropdown('relationships-suggest', [], () => {});
   } else if (e.key === 'Backspace' && !relationshipsTextInput.value && workingRelationships.length) {
     workingRelationships.pop();
     renderRelationshipsEditor();
+  } else if (e.key === 'Escape') {
+    renderSuggestDropdown('relationships-suggest', [], () => {});
   }
+});
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('relationships-input-box').contains(e.target)) renderSuggestDropdown('relationships-suggest', [], () => {});
 });
 
 // ── Fandom — bubble-tag input with AO3-style typeahead against a shared
@@ -539,8 +570,22 @@ document.addEventListener('click', (e) => {
   if (!document.getElementById('fandom-input-box').contains(e.target)) renderFandomSuggest([]);
 });
 
+// Shared render/click-wiring for the Additional Tags and Relationships
+// typeahead dropdowns below — same visual/behavior as Fandom's above, just
+// generic enough to reuse for both instead of tripling the same block.
+function renderSuggestDropdown(wrapId, matches, onPick) {
+  const wrap = document.getElementById(wrapId);
+  if (!matches.length) { wrap.hidden = true; wrap.innerHTML = ''; return; }
+  wrap.innerHTML = matches.map(m => `<button type="button" class="wiki-fandom-suggest-item">${escapeHtml(m)}</button>`).join('');
+  wrap.hidden = false;
+  wrap.querySelectorAll('.wiki-fandom-suggest-item').forEach(btn => {
+    btn.addEventListener('mousedown', (e) => { e.preventDefault(); onPick(btn.textContent); });
+  });
+}
+
 // ── Additional Tags — e621/Wattpad-style bubble input ───────────────────────
 let workingTags = [];
+let tagsCatalog = [];
 
 function renderTagsEditor() {
   const box = document.getElementById('tags-input-box');
@@ -569,15 +614,43 @@ function addWorkingTag(raw) {
 }
 
 const tagsTextInput = document.getElementById('tags-text-input');
-tagsTextInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    addWorkingTag(tagsTextInput.value);
+let tagsSuggestIndex = -1;
+tagsTextInput.addEventListener('input', () => {
+  const q = tagsTextInput.value.trim().toLowerCase();
+  if (!q) { renderSuggestDropdown('tags-suggest', [], () => {}); return; }
+  const matches = tagsCatalog.filter(t => t.toLowerCase().includes(q) && !workingTags.includes(t.toLowerCase())).slice(0, 6);
+  tagsSuggestIndex = -1;
+  renderSuggestDropdown('tags-suggest', matches, (val) => {
+    addWorkingTag(val);
     tagsTextInput.value = '';
+    renderSuggestDropdown('tags-suggest', [], () => {});
+  });
+});
+tagsTextInput.addEventListener('keydown', (e) => {
+  const items = document.querySelectorAll('#tags-suggest .wiki-fandom-suggest-item');
+  if (e.key === 'ArrowDown' && items.length) {
+    e.preventDefault();
+    tagsSuggestIndex = Math.min(tagsSuggestIndex + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('active', i === tagsSuggestIndex));
+  } else if (e.key === 'ArrowUp' && items.length) {
+    e.preventDefault();
+    tagsSuggestIndex = Math.max(tagsSuggestIndex - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('active', i === tagsSuggestIndex));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const picked = tagsSuggestIndex >= 0 && items[tagsSuggestIndex] ? items[tagsSuggestIndex].textContent : tagsTextInput.value;
+    addWorkingTag(picked);
+    tagsTextInput.value = '';
+    renderSuggestDropdown('tags-suggest', [], () => {});
   } else if (e.key === 'Backspace' && !tagsTextInput.value && workingTags.length) {
     workingTags.pop();
     renderTagsEditor();
+  } else if (e.key === 'Escape') {
+    renderSuggestDropdown('tags-suggest', [], () => {});
   }
+});
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('tags-input-box').contains(e.target)) renderSuggestDropdown('tags-suggest', [], () => {});
 });
 
 // ── Find Me links ────────────────────────────────────────────────────────────
@@ -902,6 +975,14 @@ async function uploadQnCard(kind, blob) {
   try {
     const catRes = await fetch('/api/fandom-catalog');
     if (catRes.ok) fandomCatalog = (await catRes.json()).fandoms || [];
+  } catch {}
+  try {
+    const tagRes = await fetch('/api/tag-catalog');
+    if (tagRes.ok) tagsCatalog = (await tagRes.json()).tags || [];
+  } catch {}
+  try {
+    const relRes = await fetch('/api/relationship-catalog');
+    if (relRes.ok) relationshipsCatalog = (await relRes.json()).relationships || [];
   } catch {}
 })();
 </script>
