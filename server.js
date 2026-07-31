@@ -4813,6 +4813,29 @@ app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage
   res.json({ item });
 });
 
+// Same idea as /api/moderator/characters/reorder — persists
+// gallery_story_links.sort_order. Must be registered BEFORE the
+// PUT /api/moderator/gallery/:id route below, or Express matches "reorder"
+// as the :id param and this never gets hit.
+app.put('/api/moderator/gallery/reorder', requireAuth, requireModerator, async (req, res) => {
+  const order = req.body.order;
+  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of gallery IDs.' });
+  await pool.query('BEGIN');
+  try {
+    for (let i = 0; i < order.length; i++) {
+      await pool.query(
+        'UPDATE gallery_story_links SET sort_order = $1 WHERE gallery_id = $2 AND site_id = $3',
+        [i, order[i], req.modSite.id]
+      );
+    }
+    await pool.query('COMMIT');
+  } catch (e) {
+    await pool.query('ROLLBACK');
+    return res.status(500).json({ error: 'Could not save the new order.' });
+  }
+  res.json({ message: 'Order saved.' });
+});
+
 // Editing/deleting a gallery post is about owning it, same as characters —
 // works from any context, story-linked or standalone.
 app.put('/api/moderator/gallery/:id', requireAuth, uploadModImage.single('image'), async (req, res) => {

@@ -147,6 +147,64 @@
     .se-char-card-menu-item:hover { background: rgba(255,255,255,0.08); }
     .se-char-card-menu-item--danger { color: #d97a72; }
     .se-char-empty { color: rgba(255,255,255,0.4); text-align: center; padding: 2rem 0; }
+
+    /* Divider + Save/Cancel button pair — ported from the story's own
+       Characters page, which only ever defined these in its own page-scoped
+       <style> block rather than the shared fanpages.css. */
+    .chars-reorder-divider { border: none; border-top: 1px solid rgba(255,255,255,0.12); margin: 0.75rem 0.4rem; }
+    .chars-reorder-label {
+      display: block; font-family: 'Cinzel', serif; font-size: 0.66rem; letter-spacing: 0.16em;
+      text-transform: uppercase; color: #f0c060;
+    }
+    .chars-reorder-actions { display: flex; gap: 0.6rem; }
+    .chars-reorder-btn2 {
+      flex: 1; padding: 0.6em 0.8em; border-radius: 10px; border: none; cursor: pointer;
+      font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.85rem;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .chars-reorder-btn2:hover { transform: translateY(-1px); }
+    .chars-reorder-btn2--save {
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff;
+      box-shadow: 0 0 16px rgba(107,63,160,0.5);
+    }
+    .chars-reorder-btn2--cancel {
+      background: transparent; color: #ccc; border: 1px solid rgba(255,255,255,0.25);
+    }
+
+    /* ── Reorder mode — the character stack itself becomes the drag list
+       (no separate compact list); everything else on the page blurs and
+       goes inert behind a scrim, same "one thing you can interact with"
+       treatment as the story's own Characters page used, just centered on
+       the card stack instead of the whole sidebar. ── */
+    .se-char-reorder-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      margin-bottom: 0.85rem; position: sticky; top: 84px; z-index: 45;
+      background: #141018; border: 1px solid rgba(240,192,96,0.3); border-radius: 12px;
+      padding: 0.75rem 1rem;
+    }
+    body.se-reorder-active .wiki-cover,
+    body.se-reorder-active .se-edit-nav-col,
+    body.se-reorder-active .se-char-sidebar,
+    body.se-reorder-active #fanpages-topbar-root,
+    body.se-reorder-active .wiki-editing-indicator,
+    body.se-reorder-active .mod-page-bg-overlay {
+      filter: blur(6px); pointer-events: none; user-select: none; transition: filter 0.25s ease;
+    }
+    body.se-reorder-active .se-char-stack-col { position: relative; z-index: 40; }
+    .se-char-reorder-scrim {
+      position: fixed; inset: 0; z-index: 30;
+      background: rgba(0,0,0,0.55); opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+    }
+    body.se-reorder-active .se-char-reorder-scrim { opacity: 1; pointer-events: auto; }
+    .se-char-card--reorder { cursor: grab; }
+    .se-char-card--reorder.dragging { opacity: 0.35; cursor: grabbing; }
+    .se-char-card--reorder.drop-target { border-color: rgba(240,192,96,0.7); background: rgba(240,192,96,0.14); }
+    .se-char-card-drag-handle {
+      flex-shrink: 0; width: 34px; height: 34px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(240,192,96,0.1); border: 1px solid rgba(240,192,96,0.35);
+      color: #f0c060; font-size: 1.15rem; cursor: grab;
+    }
   </style>
 </head>
 <body class="mod-theme mod-editing-active">
@@ -186,7 +244,7 @@
     <h2 class="char-editor-title editor-title-glow" id="char-editor-title">Create New Character</h2>
 
     <div class="mod-tip-box" id="char-editor-create-note" style="margin-bottom:1.25rem; display:none;">
-      Note: Creating a character through this menu will link it to your story and add it to your general profile. If you wish to delete this character later on, or unlink it from the story, please access the character editors.
+      Note: Creating a character through this menu will link it to your story and add it to your general profile. If you wish to delete this character later on, or unlink it from this story, please access the character editors.
     </div>
 
     <div class="mod-error-banner" id="char-editor-error-banner">
@@ -516,18 +574,18 @@
           </aside>
         </div>
         <div class="se-char-stack-col">
-          <div class="se-char-stack" id="se-char-stack"></div>
-          <div id="se-char-reorder-panel" hidden>
-            <span class="chars-reorder-label">Drag to reorder</span>
-            <div class="chars-reorder-list" id="se-char-reorder-list"></div>
-            <div class="chars-reorder-actions">
+          <div class="se-char-reorder-bar" id="se-char-reorder-bar" hidden>
+            <span class="chars-reorder-label" style="margin:0;">Drag to reorder</span>
+            <div class="chars-reorder-actions" style="margin:0;">
               <button class="chars-reorder-btn2 chars-reorder-btn2--cancel" id="se-char-reorder-cancel" type="button">Cancel</button>
               <button class="chars-reorder-btn2 chars-reorder-btn2--save" id="se-char-reorder-save" type="button">Save Order</button>
             </div>
           </div>
+          <div class="se-char-stack" id="se-char-stack"></div>
         </div>
       </div>
     </div>
+    <div class="se-char-reorder-scrim" id="se-char-reorder-scrim"></div>
 
     <!-- Link Existing picker — same tabbed picker as the Relationships field. -->
     <div class="char-link-picker-overlay" id="se-chars-linkexist-overlay" hidden>
@@ -549,6 +607,112 @@
       </div>
     </div>
 
+    <!-- Gallery tab — hidden until picked from the nav column -->
+    <div id="se-gallery-view" style="display:none;">
+      <div class="se-char-view-row">
+        <div class="se-char-sidebar">
+          <aside class="chars-create-box">
+            <button class="chars-create-btn" id="se-gallery-create-btn" type="button">
+              <span class="chars-create-btn-icon">➕</span> Create Story Gallery
+            </button>
+            <button class="chars-create-btn" id="se-gallery-link-btn" type="button" style="margin-top:0.6rem; background:transparent; border:1px solid rgba(255,255,255,0.25); box-shadow:none;">
+              <span class="chars-create-btn-icon">🔗</span> Link Existing Gallery
+            </button>
+            <hr class="chars-reorder-divider" />
+            <button class="chars-create-btn" id="se-gallery-reorder-btn" type="button" style="background:transparent; border:1px solid rgba(255,255,255,0.25); box-shadow:none;">
+              <span class="chars-create-btn-icon">↕️</span> Reorder
+            </button>
+          </aside>
+        </div>
+        <div class="se-char-stack-col">
+          <div class="se-char-reorder-bar" id="se-gallery-reorder-bar" hidden>
+            <span class="chars-reorder-label" style="margin:0;">Drag to reorder</span>
+            <div class="chars-reorder-actions" style="margin:0;">
+              <button class="chars-reorder-btn2 chars-reorder-btn2--cancel" id="se-gallery-reorder-cancel" type="button">Cancel</button>
+              <button class="chars-reorder-btn2 chars-reorder-btn2--save" id="se-gallery-reorder-save" type="button">Save Order</button>
+            </div>
+          </div>
+          <div class="se-char-stack" id="se-gallery-stack"></div>
+        </div>
+      </div>
+    </div>
+    <div class="se-char-reorder-scrim" id="se-gallery-reorder-scrim"></div>
+
+    <!-- Link Existing Gallery picker — your own unlinked posts only. -->
+    <div class="char-editor-overlay" id="se-gallery-link-overlay" hidden>
+      <div class="char-editor-modal" style="max-width:440px;">
+        <h2 class="char-editor-title">Link Existing Gallery Post</h2>
+        <input class="mod-input" id="se-gallery-link-search" placeholder="Search your gallery posts…" style="margin-bottom:1rem;" />
+        <div id="se-gallery-link-results" style="display:flex; flex-direction:column; gap:0.5rem; max-height:320px; overflow-y:auto;"></div>
+        <div style="display:flex; justify-content:flex-end; margin-top:1.25rem;">
+          <button type="button" class="mod-btn" id="se-gallery-link-cancel">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gallery post editor modal — create/edit, story-scoped -->
+    <div class="char-editor-overlay" id="se-gallery-editor-overlay" hidden>
+      <div class="char-editor-modal">
+        <h2 class="char-editor-title editor-title-glow" id="se-gallery-editor-title">Create Gallery Post</h2>
+
+        <div class="mod-error-banner" id="se-gallery-editor-error-banner">
+          <span class="mod-error-banner-icon">⚠️</span>
+          <span id="se-gallery-editor-error-banner-text"></span>
+        </div>
+
+        <p class="mod-field-label-standalone">Media <span class="mod-required-star">*</span></p>
+        <div class="char-editor-ref-wrap" id="se-gallery-editor-img-wrap" style="max-width: 520px; aspect-ratio: 4 / 3;">
+          <img id="se-gallery-editor-img" alt="" style="display:none;" draggable="false" />
+          <div class="char-editor-ref-placeholder" id="se-gallery-editor-img-placeholder">Click to upload your artwork</div>
+          <div class="char-editor-ref-overlay">📷 Change Image</div>
+        </div>
+        <input type="file" id="se-gallery-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+
+        <div class="gallery-cat-field">
+          <p class="gallery-cat-label">Category</p>
+          <div class="gallery-cat-row" id="se-gallery-editor-cat-row">
+            <label class="gallery-cat-option">
+              <input type="radio" name="se-gallery-editor-category" value="sfw" checked />
+              <span>SFW</span>
+            </label>
+            <label class="gallery-cat-option">
+              <input type="radio" name="se-gallery-editor-category" value="sketches" />
+              <span>Sketch</span>
+            </label>
+            <label class="gallery-cat-option gallery-cat-option--spicy">
+              <input type="radio" name="se-gallery-editor-category" value="spicy" />
+              <span>Spicy</span>
+            </label>
+          </div>
+          <p class="char-editor-facts-hint">All NSFW artwork MUST be labeled as Spicy. Ensure this is selected if your piece is heavily suggestive or NSFW (18+).</p>
+        </div>
+
+        <div class="mod-field">
+          <label for="se-gallery-editor-name">Name <span class="mod-required-star">*</span></label>
+          <input class="mod-input" id="se-gallery-editor-name" maxlength="60" placeholder="Give your piece a title" />
+        </div>
+
+        <div class="mod-field">
+          <label for="se-gallery-editor-desc">Description <span style="font-weight:400;color:#888;">(use *word* for italics, **word** for bold)</span></label>
+          <textarea class="mod-textarea" id="se-gallery-editor-desc" placeholder="No description provided"></textarea>
+          <p class="mod-tip-box">💡 To credit an artist, write it like this: [Artist Name]&lt;https://link-to-artist&gt;</p>
+        </div>
+
+        <label class="gallery-consent-row">
+          <input type="checkbox" id="se-gallery-editor-consent" />
+          <span>I confirm I am the owner of this art and/or have explicit permission to post it here (a gift, commission, or self-drawn piece). The gallery is for <strong>original art only</strong>. If you commission art for your story/characters, you can also tag the artist who made it in the description!</span>
+        </label>
+
+        <p class="mod-panel-msg" id="se-gallery-editor-msg"></p>
+
+        <div class="char-editor-actions">
+          <button class="mod-btn mod-btn--danger" id="se-gallery-editor-delete" type="button" style="display:none;">Remove from Story</button>
+          <button class="mod-btn" id="se-gallery-editor-cancel" type="button">Cancel</button>
+          <button class="mod-btn" id="se-gallery-editor-save" type="button">Post</button>
+        </div>
+      </div>
+    </div>
+
     </div>
     <div class="se-edit-divider"></div>
     <div class="se-edit-nav-col">
@@ -557,7 +721,7 @@
       </button>
       <button class="se-edit-nav-item" id="se-nav-characters" type="button">Characters</button>
       <a class="se-edit-nav-item" id="se-nav-chapters" href="#">Chapters</a>
-      <a class="se-edit-nav-item" id="se-nav-gallery" href="#">Gallery</a>
+      <button class="se-edit-nav-item" id="se-nav-gallery" type="button">Gallery</button>
 
       <div class="se-edit-nav-cover-wrap">
         <p class="se-edit-nav-cover-title" id="se-edit-nav-cover-title">Loading…</p>
@@ -1239,17 +1403,21 @@ async function uploadQnCard(kind, blob) {
 }
 
 // ── Story Editor hub — nav column (Story Details / Characters / Chapters /
-// Gallery). Chapters/Gallery just navigate away for now — only Story
-// Details and Characters actually live inside this hub. ────────────────────
+// Gallery). Chapters just navigates away for now — Story Details,
+// Characters, and Gallery all live inside this hub. ─────────────────────────
 function switchEditorSection(section) {
   document.getElementById('editor-form-box').style.display = section === 'details' ? '' : 'none';
   document.getElementById('se-characters-view').style.display = section === 'characters' ? '' : 'none';
+  document.getElementById('se-gallery-view').style.display = section === 'gallery' ? '' : 'none';
   document.getElementById('se-nav-details').classList.toggle('active', section === 'details');
   document.getElementById('se-nav-characters').classList.toggle('active', section === 'characters');
+  document.getElementById('se-nav-gallery').classList.toggle('active', section === 'gallery');
   if (section === 'characters') loadSeCharacters();
+  if (section === 'gallery') loadSeGallery();
 }
 document.getElementById('se-nav-details').addEventListener('click', () => switchEditorSection('details'));
 document.getElementById('se-nav-characters').addEventListener('click', () => switchEditorSection('characters'));
+document.getElementById('se-nav-gallery').addEventListener('click', () => switchEditorSection('gallery'));
 
 // ── Characters tab — card stack, ported from the story's own Characters
 // page's data shape so the editor modal below (also ported) can populate
@@ -1269,6 +1437,7 @@ function normalizeChar(r) {
     lore: r.lore || [],
     relationships: r.relationships || [],
     refIsNsfw: !!r.ref_is_nsfw,
+    isMine: !!r.is_mine,
   };
 }
 
@@ -1285,6 +1454,17 @@ function seCharTeaser(char) {
   if (!text || text === NA) return 'No description yet.';
   return text.length > 90 ? text.slice(0, 90).trim() + '…' : text;
 }
+// Borrowed characters (not owned by the viewer) can't be opened in the
+// editor — only unlinked. Same guard whether triggered by clicking the
+// card body or the "..." menu's "Open Editor" item.
+function openOrBlockCharEditor(char) {
+  if (!char.isMine) {
+    if (confirm('You can not edit this character. Would you like to unlink instead?')) unlinkSeCharacter(char);
+    return;
+  }
+  openCharEditor(char);
+}
+
 function renderSeCharStack() {
   const stack = document.getElementById('se-char-stack');
   if (!SE_CHARACTERS.length) {
@@ -1294,27 +1474,41 @@ function renderSeCharStack() {
   stack.innerHTML = '';
   SE_CHARACTERS.forEach(char => {
     const card = document.createElement('div');
-    card.className = 'se-char-card';
-    card.innerHTML = `
-      <img class="se-char-card-avatar" src="${char.ref || DEFAULT_REF}" alt="" />
-      <div class="se-char-card-body">
-        <p class="se-char-card-name">${escapeHtml(char.name)}</p>
-        <p class="se-char-card-teaser">${escapeHtml(seCharTeaser(char))}</p>
-      </div>
-      <div class="se-char-card-menu-wrap">
-        <button type="button" class="se-char-card-menu-btn" title="More options">⋯</button>
-        <div class="se-char-card-menu" hidden>
-          <button type="button" class="se-char-card-menu-item" data-action="edit">Open Editor</button>
-          <button type="button" class="se-char-card-menu-item se-char-card-menu-item--danger" data-action="unlink">Unlink Character</button>
+    card.dataset.id = char.id;
+    if (seReorderActive) {
+      card.className = 'se-char-card se-char-card--reorder';
+      card.draggable = true;
+      card.innerHTML = `
+        <span class="se-char-card-drag-handle">⠿</span>
+        <img class="se-char-card-avatar" src="${char.ref || DEFAULT_REF}" alt="" />
+        <div class="se-char-card-body">
+          <p class="se-char-card-name">${escapeHtml(char.name)}</p>
         </div>
-      </div>
-    `;
-    card.addEventListener('click', () => openCharEditor(char));
-    const menuBtn = card.querySelector('.se-char-card-menu-btn');
-    const menu = card.querySelector('.se-char-card-menu');
-    menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
-    menu.querySelector('[data-action="edit"]').addEventListener('click', (e) => { e.stopPropagation(); openCharEditor(char); });
-    menu.querySelector('[data-action="unlink"]').addEventListener('click', (e) => { e.stopPropagation(); unlinkSeCharacter(char); });
+      `;
+      seWireCardDrag(card, char);
+    } else {
+      card.className = 'se-char-card';
+      card.innerHTML = `
+        <img class="se-char-card-avatar" src="${char.ref || DEFAULT_REF}" alt="" />
+        <div class="se-char-card-body">
+          <p class="se-char-card-name">${escapeHtml(char.name)}</p>
+          <p class="se-char-card-teaser">${escapeHtml(seCharTeaser(char))}</p>
+        </div>
+        <div class="se-char-card-menu-wrap">
+          <button type="button" class="se-char-card-menu-btn" title="More options">⋯</button>
+          <div class="se-char-card-menu" hidden>
+            <button type="button" class="se-char-card-menu-item" data-action="edit">Open Editor</button>
+            <button type="button" class="se-char-card-menu-item se-char-card-menu-item--danger" data-action="unlink">Unlink Character</button>
+          </div>
+        </div>
+      `;
+      card.addEventListener('click', () => openOrBlockCharEditor(char));
+      const menuBtn = card.querySelector('.se-char-card-menu-btn');
+      const menu = card.querySelector('.se-char-card-menu');
+      menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+      menu.querySelector('[data-action="edit"]').addEventListener('click', (e) => { e.stopPropagation(); openOrBlockCharEditor(char); });
+      menu.querySelector('[data-action="unlink"]').addEventListener('click', (e) => { e.stopPropagation(); unlinkSeCharacter(char); });
+    }
     stack.appendChild(card);
   });
 }
@@ -1322,9 +1516,13 @@ document.addEventListener('click', () => {
   document.querySelectorAll('.se-char-card-menu').forEach(m => { m.hidden = true; });
 });
 async function unlinkSeCharacter(char) {
-  if (!confirm(`Remove ${char.name} from this story? It will still exist on your profile (and any other stories it's linked to).`)) return;
+  const confirmMsg = char.isMine
+    ? `Remove ${char.name} from this story? It will still exist on your profile (and any other stories it's linked to).`
+    : `Unlink ${char.name} from your story?`;
+  if (!confirm(confirmMsg)) return;
   try {
     await fetch(`/api/moderator/characters/${char.id}`, { method: 'DELETE', headers: authHeaders() });
+    if (!char.isMine) alert(`${char.name} unlinked from your story~`);
     loadSeCharacters();
   } catch {}
 }
@@ -1404,61 +1602,53 @@ document.getElementById('se-chars-linkexist-close').addEventListener('click', ()
   document.getElementById('se-chars-linkexist-overlay').hidden = true;
 });
 
-// ── Reorder — same drag-and-drop mechanics as the story's own Characters
-// page, scoped to just this story's character_story_links.sort_order.
+// ── Reorder — drags the actual character cards in place (rest of the page
+// blurs behind a scrim) instead of swapping to a separate compact list.
+let seReorderActive = false;
 let seReorderDragId = null;
-function seBuildReorderRow(char) {
-  const row = document.createElement('div');
-  row.className = 'chars-reorder-row';
-  row.draggable = true;
-  row.dataset.id = char.id;
-  row.innerHTML = `
-    <span class="chars-reorder-handle">⠿</span>
-    <img class="chars-reorder-thumb" src="${char.ref || DEFAULT_REF}" alt="" />
-    <span class="chars-reorder-name">${escapeHtml(char.name)}</span>
-  `;
-  row.addEventListener('dragstart', (e) => {
+function seWireCardDrag(card, char) {
+  card.addEventListener('dragstart', (e) => {
     seReorderDragId = char.id;
-    row.classList.add('dragging');
+    card.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
   });
-  row.addEventListener('dragend', () => {
-    row.classList.remove('dragging');
-    document.querySelectorAll('.chars-reorder-row.drop-target').forEach(r => r.classList.remove('drop-target'));
+  card.addEventListener('dragend', () => {
+    card.classList.remove('dragging');
+    document.querySelectorAll('.se-char-card.drop-target').forEach(r => r.classList.remove('drop-target'));
   });
-  row.addEventListener('dragover', (e) => {
+  card.addEventListener('dragover', (e) => {
     e.preventDefault();
     if (String(char.id) === String(seReorderDragId)) return;
-    row.classList.add('drop-target');
+    card.classList.add('drop-target');
   });
-  row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
-  row.addEventListener('drop', (e) => {
+  card.addEventListener('dragleave', () => card.classList.remove('drop-target'));
+  card.addEventListener('drop', (e) => {
     e.preventDefault();
-    row.classList.remove('drop-target');
+    card.classList.remove('drop-target');
     if (seReorderDragId == null || String(char.id) === String(seReorderDragId)) return;
-    const list = document.getElementById('se-char-reorder-list');
-    const dragEl = list.querySelector(`.chars-reorder-row[data-id="${CSS.escape(String(seReorderDragId))}"]`);
+    const stack = document.getElementById('se-char-stack');
+    const dragEl = stack.querySelector(`.se-char-card[data-id="${CSS.escape(String(seReorderDragId))}"]`);
     if (!dragEl) return;
-    list.insertBefore(dragEl, row);
+    stack.insertBefore(dragEl, card);
   });
-  return row;
 }
 function seEnterReorderMode() {
-  const list = document.getElementById('se-char-reorder-list');
-  list.innerHTML = '';
-  SE_CHARACTERS.forEach(char => list.appendChild(seBuildReorderRow(char)));
-  document.getElementById('se-char-stack').hidden = true;
-  document.getElementById('se-char-reorder-panel').hidden = false;
+  seReorderActive = true;
+  document.body.classList.add('se-reorder-active');
+  document.getElementById('se-char-reorder-bar').hidden = false;
+  renderSeCharStack();
 }
 function seExitReorderMode() {
-  document.getElementById('se-char-reorder-panel').hidden = true;
-  document.getElementById('se-char-stack').hidden = false;
+  seReorderActive = false;
+  document.body.classList.remove('se-reorder-active');
+  document.getElementById('se-char-reorder-bar').hidden = true;
+  renderSeCharStack();
 }
 document.getElementById('se-chars-reorder-btn').addEventListener('click', seEnterReorderMode);
 document.getElementById('se-char-reorder-cancel').addEventListener('click', seExitReorderMode);
 document.getElementById('se-char-reorder-save').addEventListener('click', async () => {
   const saveBtn = document.getElementById('se-char-reorder-save');
-  const order = [...document.querySelectorAll('#se-char-reorder-list .chars-reorder-row')].map(r => r.dataset.id);
+  const order = [...document.querySelectorAll('#se-char-stack .se-char-card')].map(r => r.dataset.id);
   saveBtn.disabled = true;
   saveBtn.textContent = 'Saving…';
   try {
@@ -1893,6 +2083,340 @@ document.getElementById('char-editor-save').addEventListener('click', async () =
   }
 });
 
+// ── Gallery tab — same Create/Link Existing/Reorder pattern as Characters.
+// Every gallery post linked to a story is always owned by the story owner
+// (unlike characters, gallery has no cross-owner "borrowed" linking), so
+// there's no ownership guard needed here — every card is always editable.
+const GALLERY_CAT_LABEL = { sfw: 'SFW', sketches: 'Sketch', spicy: 'Spicy' };
+let SE_GALLERY = [];
+async function loadSeGallery() {
+  const stack = document.getElementById('se-gallery-stack');
+  stack.innerHTML = '<p class="se-char-empty">Loading…</p>';
+  const fresh = await ModeratorSite.load(SLUG);
+  // Merged across all three categories — this is the editor, so unlike the
+  // public Gallery page it should never hide the viewer's own Spicy posts
+  // just because their own account happens to have SFW Mode on.
+  SE_GALLERY = fresh ? [...(fresh.gallery_sfw || []), ...(fresh.gallery_sketches || []), ...(fresh.gallery_spicy || [])] : [];
+  renderSeGalleryStack();
+}
+let seGalleryReorderActive = false;
+function renderSeGalleryStack() {
+  const stack = document.getElementById('se-gallery-stack');
+  if (!SE_GALLERY.length) {
+    stack.innerHTML = '<p class="se-char-empty">No gallery posts linked to this story yet.</p>';
+    return;
+  }
+  stack.innerHTML = '';
+  SE_GALLERY.forEach(item => {
+    const card = document.createElement('div');
+    card.dataset.id = item.id;
+    if (seGalleryReorderActive) {
+      card.className = 'se-char-card se-char-card--reorder';
+      card.draggable = true;
+      card.innerHTML = `
+        <span class="se-char-card-drag-handle">⠿</span>
+        <img class="se-char-card-avatar" style="border-radius:8px;" src="${item.image_url}" alt="" />
+        <div class="se-char-card-body">
+          <p class="se-char-card-name">${escapeHtml(item.title || 'Untitled')}</p>
+        </div>
+      `;
+      seWireGalleryCardDrag(card, item);
+    } else {
+      card.className = 'se-char-card';
+      card.innerHTML = `
+        <img class="se-char-card-avatar" style="border-radius:8px;" src="${item.image_url}" alt="" />
+        <div class="se-char-card-body">
+          <p class="se-char-card-name">${escapeHtml(item.title || 'Untitled')}</p>
+          <p class="se-char-card-teaser">${GALLERY_CAT_LABEL[item.category] || 'SFW'} — Click to edit or delete</p>
+        </div>
+        <div class="se-char-card-menu-wrap">
+          <button type="button" class="se-char-card-menu-btn" title="More options">⋯</button>
+          <div class="se-char-card-menu" hidden>
+            <button type="button" class="se-char-card-menu-item" data-action="edit">Open Editor</button>
+            <button type="button" class="se-char-card-menu-item se-char-card-menu-item--danger" data-action="unlink">Remove from Story</button>
+          </div>
+        </div>
+      `;
+      card.addEventListener('click', () => openGalleryEditor(item));
+      const menuBtn = card.querySelector('.se-char-card-menu-btn');
+      const menu = card.querySelector('.se-char-card-menu');
+      menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+      menu.querySelector('[data-action="edit"]').addEventListener('click', (e) => { e.stopPropagation(); openGalleryEditor(item); });
+      menu.querySelector('[data-action="unlink"]').addEventListener('click', (e) => { e.stopPropagation(); unlinkSeGalleryItem(item); });
+    }
+    stack.appendChild(card);
+  });
+}
+document.addEventListener('click', () => {
+  document.querySelectorAll('.se-char-card-menu').forEach(m => { m.hidden = true; });
+});
+async function unlinkSeGalleryItem(item) {
+  if (!confirm(`Remove "${item.title || 'Untitled'}" from this story? It will still exist on your profile (and any other stories it's linked to).`)) return;
+  try {
+    await fetch(`/api/moderator/gallery/${item.id}`, { method: 'DELETE', headers: authHeaders() });
+    loadSeGallery();
+  } catch {}
+}
+
+// ── Create / Edit modal — plain image upload (gallery posts were never run
+// through the Cropper.js flow, just an optional focal-point reposition that
+// this hub skips for now, same as everywhere else that defaults to 50/50).
+let seGalleryEditingId = null;
+let seGallerySelectedFile = null;
+function seGetSelectedCategory() {
+  return document.querySelector('input[name="se-gallery-editor-category"]:checked').value;
+}
+function openGalleryEditor(item) {
+  seGalleryEditingId = item ? item.id : null;
+  seGallerySelectedFile = null;
+
+  document.getElementById('se-gallery-editor-title').textContent = item ? 'Edit Gallery Post' : 'Create Gallery Post';
+  document.getElementById('se-gallery-editor-delete').style.display = item ? '' : 'none';
+  document.getElementById('se-gallery-editor-save').textContent = item ? 'Save and Close' : 'Post';
+
+  const img = document.getElementById('se-gallery-editor-img');
+  const placeholder = document.getElementById('se-gallery-editor-img-placeholder');
+  if (item) {
+    img.src = item.image_url;
+    img.style.display = 'block';
+    placeholder.style.display = 'none';
+  } else {
+    img.style.display = 'none';
+    placeholder.style.display = 'block';
+  }
+
+  const catInput = document.querySelector(`input[name="se-gallery-editor-category"][value="${item ? item.category : 'sfw'}"]`);
+  if (catInput) catInput.checked = true;
+  document.getElementById('se-gallery-editor-name').value = item ? (item.title || '') : '';
+  document.getElementById('se-gallery-editor-desc').value = item ? (item.description || '') : '';
+  // Consent was already given when the post was first created — only a
+  // brand-new post needs it (re)checked.
+  document.getElementById('se-gallery-editor-consent').checked = !!item;
+  document.getElementById('se-gallery-editor-msg').textContent = '';
+  document.getElementById('se-gallery-editor-error-banner').classList.remove('show');
+  document.getElementById('se-gallery-editor-overlay').hidden = false;
+}
+function closeGalleryEditor() {
+  document.getElementById('se-gallery-editor-overlay').hidden = true;
+}
+document.getElementById('se-gallery-create-btn').addEventListener('click', () => openGalleryEditor(null));
+document.getElementById('se-gallery-editor-cancel').addEventListener('click', closeGalleryEditor);
+
+document.getElementById('se-gallery-editor-img-wrap').addEventListener('click', () => {
+  document.getElementById('se-gallery-editor-file-input').click();
+});
+document.getElementById('se-gallery-editor-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  seGallerySelectedFile = file;
+  document.getElementById('se-gallery-editor-img-wrap').classList.remove('mod-input--flash-error');
+  document.getElementById('se-gallery-editor-error-banner').classList.remove('show');
+  const img = document.getElementById('se-gallery-editor-img');
+  img.src = URL.createObjectURL(file);
+  img.style.display = 'block';
+  document.getElementById('se-gallery-editor-img-placeholder').style.display = 'none';
+});
+
+function seFlashField(el) {
+  el.classList.remove('mod-input--flash-error');
+  void el.offsetWidth;
+  el.classList.add('mod-input--flash-error');
+}
+
+document.getElementById('se-gallery-editor-delete').addEventListener('click', async () => {
+  if (!seGalleryEditingId) return;
+  const item = SE_GALLERY.find(g => String(g.id) === String(seGalleryEditingId));
+  if (!confirm(`Remove "${item ? (item.title || 'Untitled') : 'this post'}" from this story? It will still exist on your profile (and any other stories it's linked to).`)) return;
+  const deleteBtn = document.getElementById('se-gallery-editor-delete');
+  deleteBtn.disabled = true;
+  deleteBtn.textContent = 'Removing…';
+  try {
+    await fetch(`/api/moderator/gallery/${seGalleryEditingId}`, { method: 'DELETE', headers: authHeaders() });
+    closeGalleryEditor();
+    loadSeGallery();
+  } catch {
+    document.getElementById('se-gallery-editor-msg').className = 'mod-panel-msg mod-panel-msg--error';
+    document.getElementById('se-gallery-editor-msg').textContent = 'Failed to remove. Please try again.';
+  } finally {
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = 'Remove from Story';
+  }
+});
+
+document.getElementById('se-gallery-editor-name').addEventListener('input', () => {
+  document.getElementById('se-gallery-editor-name').classList.remove('mod-input--flash-error');
+  document.getElementById('se-gallery-editor-error-banner').classList.remove('show');
+});
+
+document.getElementById('se-gallery-editor-save').addEventListener('click', async () => {
+  const name = document.getElementById('se-gallery-editor-name').value.trim();
+  const consent = document.getElementById('se-gallery-editor-consent').checked;
+  const msgEl = document.getElementById('se-gallery-editor-msg');
+  const errorBanner = document.getElementById('se-gallery-editor-error-banner');
+  const errorBannerText = document.getElementById('se-gallery-editor-error-banner-text');
+  msgEl.textContent = '';
+  errorBanner.classList.remove('show');
+
+  const missingFile = !seGalleryEditingId && !seGallerySelectedFile;
+  const missingName = !name;
+  if (missingFile || missingName) {
+    errorBannerText.textContent = 'All Gallery posts must have a media file and name!';
+    errorBanner.classList.add('show');
+    if (missingFile) seFlashField(document.getElementById('se-gallery-editor-img-wrap'));
+    if (missingName) { seFlashField(document.getElementById('se-gallery-editor-name')); document.getElementById('se-gallery-editor-name').focus(); }
+    errorBanner.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  if (!seGalleryEditingId && !consent) {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Please confirm the art belongs to you before posting.';
+    document.querySelector('#se-gallery-editor-overlay .gallery-consent-row').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
+  const fd = new FormData();
+  if (seGallerySelectedFile) fd.append('image', seGallerySelectedFile);
+  fd.append('category', seGetSelectedCategory());
+  fd.append('title', name);
+  fd.append('description', document.getElementById('se-gallery-editor-desc').value.trim());
+
+  const saveBtn = document.getElementById('se-gallery-editor-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = seGalleryEditingId ? 'Saving…' : 'Posting…';
+  try {
+    const url = seGalleryEditingId ? `/api/moderator/gallery/${seGalleryEditingId}` : '/api/moderator/gallery';
+    const method = seGalleryEditingId ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: authHeaders(), body: fd });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+      msgEl.textContent = data.error || 'Something went wrong. Please try again.';
+      return;
+    }
+    closeGalleryEditor();
+    loadSeGallery();
+  } catch {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Network error. Please try again.';
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = seGalleryEditingId ? 'Save and Close' : 'Post';
+  }
+});
+
+// ── Link Existing Gallery — your own unlinked posts only, single list. ─────
+let seGalleryLinkDebounce;
+async function seRunGalleryLinkSearch(q) {
+  const resultsWrap = document.getElementById('se-gallery-link-results');
+  resultsWrap.innerHTML = '<p style="color:#888;font-size:0.85rem;">Loading…</p>';
+  try {
+    const res = await fetch(`/api/moderator/gallery/linkable?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+    const data = await res.json();
+    const items = data.gallery || [];
+    if (!items.length) {
+      resultsWrap.innerHTML = '<p style="color:#888;font-size:0.85rem;">No matching posts — try Create instead.</p>';
+      return;
+    }
+    resultsWrap.innerHTML = '';
+    items.forEach(g => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.style.cssText = 'width:100%; text-align:left; background:#161616; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:0.5rem 0.75rem; cursor:pointer;';
+      row.innerHTML = `
+        <span style="display:flex; align-items:center; gap:0.6rem; color:#f0f0f0;">
+          <img src="${g.image_url}" alt="" style="width:36px;height:36px;border-radius:6px;object-fit:cover;" />
+          ${escapeHtml(g.title || 'Untitled')}
+        </span>
+      `;
+      row.addEventListener('click', async () => {
+        row.disabled = true;
+        await fetch(`/api/moderator/gallery/${g.id}/link`, { method: 'POST', headers: authHeaders() });
+        document.getElementById('se-gallery-link-overlay').hidden = true;
+        loadSeGallery();
+      });
+      resultsWrap.appendChild(row);
+    });
+  } catch {
+    resultsWrap.innerHTML = '<p style="color:#888;font-size:0.85rem;">Couldn\'t load your gallery posts right now.</p>';
+  }
+}
+document.getElementById('se-gallery-link-btn').addEventListener('click', () => {
+  document.getElementById('se-gallery-link-search').value = '';
+  document.getElementById('se-gallery-link-overlay').hidden = false;
+  seRunGalleryLinkSearch('');
+});
+document.getElementById('se-gallery-link-cancel').addEventListener('click', () => {
+  document.getElementById('se-gallery-link-overlay').hidden = true;
+});
+document.getElementById('se-gallery-link-search').addEventListener('input', (e) => {
+  clearTimeout(seGalleryLinkDebounce);
+  seGalleryLinkDebounce = setTimeout(() => seRunGalleryLinkSearch(e.target.value.trim()), 300);
+});
+
+// ── Reorder — identical in-place drag mechanics to the Characters tab. ─────
+let seGalleryReorderDragId = null;
+function seWireGalleryCardDrag(card, item) {
+  card.addEventListener('dragstart', (e) => {
+    seGalleryReorderDragId = item.id;
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  card.addEventListener('dragend', () => {
+    card.classList.remove('dragging');
+    document.querySelectorAll('#se-gallery-stack .drop-target').forEach(r => r.classList.remove('drop-target'));
+  });
+  card.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (String(item.id) === String(seGalleryReorderDragId)) return;
+    card.classList.add('drop-target');
+  });
+  card.addEventListener('dragleave', () => card.classList.remove('drop-target'));
+  card.addEventListener('drop', (e) => {
+    e.preventDefault();
+    card.classList.remove('drop-target');
+    if (seGalleryReorderDragId == null || String(item.id) === String(seGalleryReorderDragId)) return;
+    const stack = document.getElementById('se-gallery-stack');
+    const dragEl = stack.querySelector(`.se-char-card[data-id="${CSS.escape(String(seGalleryReorderDragId))}"]`);
+    if (!dragEl) return;
+    stack.insertBefore(dragEl, card);
+  });
+}
+function seEnterGalleryReorderMode() {
+  seGalleryReorderActive = true;
+  document.body.classList.add('se-reorder-active');
+  document.getElementById('se-gallery-reorder-bar').hidden = false;
+  renderSeGalleryStack();
+}
+function seExitGalleryReorderMode() {
+  seGalleryReorderActive = false;
+  document.body.classList.remove('se-reorder-active');
+  document.getElementById('se-gallery-reorder-bar').hidden = true;
+  renderSeGalleryStack();
+}
+document.getElementById('se-gallery-reorder-btn').addEventListener('click', seEnterGalleryReorderMode);
+document.getElementById('se-gallery-reorder-cancel').addEventListener('click', seExitGalleryReorderMode);
+document.getElementById('se-gallery-reorder-save').addEventListener('click', async () => {
+  const saveBtn = document.getElementById('se-gallery-reorder-save');
+  const order = [...document.querySelectorAll('#se-gallery-stack .se-char-card')].map(r => r.dataset.id);
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+  try {
+    const res = await fetch('/api/moderator/gallery/reorder', {
+      method: 'PUT',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order }),
+    });
+    if (!res.ok) throw new Error('save failed');
+    await loadSeGallery();
+    seExitGalleryReorderMode();
+  } catch {
+    alert('Could not save the new order — please try again.');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save Order';
+  }
+});
+
 // ── Boot ─────────────────────────────────────────────────────────────────────
 (async () => {
   const data = await ModeratorSite.load(SLUG);
@@ -1906,7 +2430,6 @@ document.getElementById('char-editor-save').addEventListener('click', async () =
   applyTheme(siteData.site.theme || 'default', siteData.site.theme_bg_url);
 
   document.getElementById('se-nav-chapters').href = STORY_BASE + '/chapters';
-  document.getElementById('se-nav-gallery').href = STORY_BASE + '/gallery';
   if (window.location.hash === '#characters') switchEditorSection('characters');
 
   try {
