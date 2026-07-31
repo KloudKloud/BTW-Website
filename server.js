@@ -4383,6 +4383,28 @@ app.post('/api/moderator/chapters', requireAuth, requireModerator, uploadChapter
   res.json({ chapter });
 });
 
+// Must be registered BEFORE PUT /api/moderator/chapters/:id below, or
+// Express matches "reorder" as the :id param — same gotcha as the
+// gallery/characters reorder routes elsewhere in this file.
+app.put('/api/moderator/chapters/reorder', requireAuth, requireModerator, async (req, res) => {
+  const order = req.body.order;
+  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of chapter IDs.' });
+  await pool.query('BEGIN');
+  try {
+    for (let i = 0; i < order.length; i++) {
+      await pool.query(
+        'UPDATE moderator_chapters SET sort_order = $1 WHERE id = $2 AND site_id = $3',
+        [i, order[i], req.modSite.id]
+      );
+    }
+    await pool.query('COMMIT');
+  } catch (e) {
+    await pool.query('ROLLBACK');
+    return res.status(500).json({ error: 'Could not save the new order.' });
+  }
+  res.json({ message: 'Order saved.' });
+});
+
 app.put('/api/moderator/chapters/:id', requireAuth, requireModerator, uploadChapter.fields([{ name: 'image', maxCount: 1 }, { name: 'file', maxCount: 1 }]), async (req, res) => {
   const { rows: [existing] } = await pool.query(
     'SELECT * FROM moderator_chapters WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
