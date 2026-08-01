@@ -592,40 +592,55 @@ body.mod-editing-active .mod-field-label-row { display: flex; }
 /* Hidden while editing — only ever relevant on the display view. */
 body.mod-editing-active .fp-share-icon-btn { display: none; }
 
-/* ── Hero — big cover beside title/rating-fandom/actions, the page's real
-   entry point now. Cover reuses .mod-cover-wrap's normal size+shape;
-   everything to its right is vertically centered against it. ── */
-.wiki-hero { display: flex; gap: 2.25rem; align-items: center; margin-bottom: 2.75rem; }
-.wiki-hero-cover { width: 240px; height: 360px; }
-.wiki-hero-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1.1rem; }
-.wiki-hero-title { margin-bottom: 0; }
-.wiki-hero-meta {
-  flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 1.5rem;
-  background: none; border: none; padding: 0;
-}
-/* Rating/Fandom badge-groups hug their own content — they're flex column
-   items in a flex row, so without this they'd stretch to the row's cross-
-   axis size instead of staying just as wide as "Rating"/the badge text. */
-.wiki-hero-meta .wiki-meta-badge-group { gap: 0.4rem; flex: 0 0 auto; align-self: flex-start; }
+/* Big centered title, sitting right under the banner, above the tab row —
+   pulled out of the hero card entirely now. */
+.wiki-page-title-block { text-align: center; margin-bottom: 0.6rem; }
+.wiki-page-title { display: inline-block; margin-bottom: 0; font-size: 3rem; }
 
-/* Reads/Likes/Parts — its own centered row, styled like a little stat
-   card rather than tucked inline next to Rating/Fandom. */
-.wiki-hero-stats-row { display: flex; justify-content: center; margin: 0.35rem 0; }
-.wiki-hero-stats {
-  display: flex; align-items: stretch;
-  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.09);
-  border-radius: 16px; padding: 0.85rem 0;
+/* ── "Start Reading" card — AO3-style. Cover on the left, a vertical
+   divider, then a clamped-height tag cloud (every Rating/Fandom/
+   Category/Relationship in red, Additional Tags in blue, no labels —
+   see renderHeroTagCloud in index.html), the actions row, and a compact
+   stat bar at the bottom. Tag cloud height is driven entirely by the
+   cover's height via flex, not a hardcoded number, so it stays in sync
+   if the cover size ever changes. ── */
+.wiki-hero {
+  display: flex; align-items: stretch; gap: 0;
+  margin: 0 0 2.75rem;
+  background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px; padding: 1.75rem;
 }
-.wiki-hero-stat { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; padding: 0 2rem; }
-.wiki-hero-stat-icon { font-size: 1.3rem; opacity: 0.9; line-height: 1; }
-.wiki-hero-stat-num { font-family: 'Cinzel', serif; font-size: 1.5rem; font-weight: 700; color: #f0f0f0; line-height: 1; }
-.wiki-hero-stat-label {
-  font-family: 'Inter', sans-serif; font-size: 0.64rem; font-weight: 700;
-  letter-spacing: 0.14em; text-transform: uppercase; color: var(--mod-text-secondary, #999);
-}
-.wiki-hero-stat-divider { width: 1px; align-self: center; height: 38px; background: rgba(255,255,255,0.12); }
+.wiki-hero-cover-col { flex-shrink: 0; }
+.wiki-hero-cover { width: 260px; height: 400px; margin: 0; }
+.wiki-hero-divider { width: 1px; align-self: stretch; background: rgba(255,255,255,0.1); margin: 0 1.85rem; }
+.wiki-hero-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
-.wiki-hero-actions { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.25rem; }
+.wiki-hero-tagcloud-wrap { position: relative; flex: 1; min-height: 0; }
+.wiki-hero-tagcloud {
+  height: 100%; overflow: hidden;
+  display: flex; flex-wrap: wrap; align-content: flex-start; gap: 0.5rem;
+  -webkit-mask-image: linear-gradient(to bottom, #000 85%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 85%, transparent 100%);
+}
+/* Expanded: the wrap stops being flex:1-clamped to the cover's height and
+   grows to fit the full list instead, pushing Start Reading/Share/Edit
+   and the stat bar further down — the whole card grows, nothing overlaps. */
+.wiki-hero-tagcloud-wrap.expanded { flex: none; }
+.wiki-hero-tagcloud-wrap.expanded .wiki-hero-tagcloud {
+  height: auto; overflow: visible; -webkit-mask-image: none; mask-image: none;
+}
+.wiki-hero-tagcloud-expand {
+  position: absolute; right: 0; bottom: 0; z-index: 2;
+  width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(20,20,20,0.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  color: #f0f0f0; font-size: 1.3rem; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; line-height: 1;
+  transition: background 0.15s, transform 0.15s;
+}
+.wiki-hero-tagcloud-expand:hover { background: rgba(20,20,20,0.8); transform: scale(1.06); }
+.wiki-hero-tagcloud-expand.expanded { font-size: 1.7rem; }
+
+.wiki-hero-actions { display: flex; align-items: center; gap: 0.9rem; margin: 1.5rem 0 1.25rem; }
 .wiki-hero-actions .fp-share-icon-btn { width: 52px; height: 52px; }
 .wiki-hero-btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -644,6 +659,22 @@ body.mod-editing-active .fp-share-icon-btn { display: none; }
 }
 .wiki-hero-btn--edit:hover { border-color: #7fa8d9; color: #a8c6e8; background: var(--mod-accent-bg, rgba(127,168,217,0.08)); box-shadow: 0 0 20px rgba(127,168,217,0.55); }
 
+/* Compact Reads/Likes/Parts strip along the bottom of the card. */
+.wiki-hero-stats-bar {
+  display: flex; align-items: center; gap: 1.1rem;
+  border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.9rem; margin-top: auto;
+}
+.wiki-hero-stat-sm {
+  display: inline-flex; align-items: baseline; gap: 0.35rem;
+  font-family: 'Inter', sans-serif; font-size: 0.88rem; font-weight: 700; color: #ddd;
+}
+.wiki-hero-stat-sm-icon { font-size: 0.88rem; opacity: 0.85; }
+.wiki-hero-stat-sm-label {
+  font-size: 0.66rem; font-weight: 600; color: var(--mod-text-secondary, #999);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.wiki-hero-stat-sm-divider { width: 1px; height: 16px; background: rgba(255,255,255,0.15); }
+
 /* ── Story tabs — Home/Chapters/Characters/Gallery, replaces the old
    "Navigate" side box on every story-context page. Transparent, clean
    underline-on-active style — same idiom as .fp-tab on the profile page
@@ -652,10 +683,15 @@ body.mod-editing-active .fp-share-icon-btn { display: none; }
    above Story Description) and as the top-of-page nav on Characters/
    Chapters/Gallery (via .wiki-story-tabs--top). ── */
 .wiki-story-tabs {
-  display: flex; align-items: baseline; gap: 2.1rem;
+  display: flex; align-items: baseline; gap: 2.1rem; background: transparent;
   border-bottom: 1px solid rgba(255,255,255,0.08);
   margin-bottom: 2.75rem;
 }
+/* Sits under the page title now (home page only) instead of above
+   Description — centered under the centered title, thin line bleeding
+   straight down into the "Start Reading" card below it. */
+.wiki-story-tabs--centered { justify-content: center; gap: 2.6rem; margin-bottom: 2.25rem; }
+.wiki-story-tabs--centered .wiki-story-tab { font-size: 1.1rem; }
 .wiki-story-tab {
   background: none; border: none; cursor: pointer; text-decoration: none;
   color: #999; font-family: 'Inter', sans-serif; font-size: 1.06rem; font-weight: 700;
@@ -682,11 +718,13 @@ body.mod-editing-active .fp-share-icon-btn { display: none; }
 /* Small cover + clickable author avatar, floated so the paragraph text
    wraps cleanly underneath once it runs taller. Inset well away from the
    box's outer edge (not flush right) so it reads closer to centered over
-   the description text instead of pinned to the far corner. */
+   the description text instead of pinned to the far corner. Wide enough
+   that a full 20-character display name next to the avatar never needs
+   to ellipsis. */
 .wiki-desc-side {
   float: right;
-  width: 130px;
-  margin: 0 12% 1rem 2rem;
+  width: 230px;
+  margin: 0 18% 1rem 2rem;
   display: flex; flex-direction: column; align-items: center; gap: 0.75rem;
 }
 .wiki-desc-cover-wrap {
@@ -1906,14 +1944,23 @@ a.wiki-tag-bubble:hover { background: rgba(127,168,217,0.15); border-color: rgba
   .mod-quick-nav-row--single .mod-quick-nav-card { width: 100%; }
   .mod-quick-nav-row { gap: 1rem; }
 
-  /* Hero — cover stacks above the title/meta/actions instead of sitting
-     beside them, centered, at a saner size than the desktop 240×360. */
-  .wiki-hero { flex-direction: column; align-items: center; text-align: center; }
-  .wiki-hero-cover { margin: 0 auto; width: 160px; height: 240px; }
-  .wiki-hero-info { align-items: center; }
-  .wiki-hero-meta { justify-content: center; }
-  .wiki-hero-meta .wiki-meta-badge-group { align-self: center; }
-  .wiki-hero-stat { padding: 0 1.1rem; }
+  .wiki-page-title { font-size: 2rem; }
+
+  /* "Start Reading" card — cover stacks above the tag cloud instead of
+     sitting beside it, centered, at a saner size than the desktop 260×400.
+     Tag cloud drops its height clamp on mobile — a fixed-height column
+     next to nothing (the cover's now above it, not beside it) doesn't
+     mean much, so just let the card grow with however many tags there are. */
+  .wiki-hero { flex-direction: column; align-items: center; text-align: center; padding: 1.25rem; }
+  .wiki-hero-cover { margin: 0 auto 1.25rem; width: 160px; height: 240px; }
+  .wiki-hero-divider { display: none; }
+  .wiki-hero-info { align-items: center; width: 100%; }
+  .wiki-hero-tagcloud-wrap { flex: none; width: 100%; }
+  .wiki-hero-tagcloud {
+    height: auto; max-height: 220px; justify-content: center;
+  }
+  .wiki-hero-actions { justify-content: center; flex-wrap: wrap; }
+  .wiki-hero-stats-bar { justify-content: center; flex-wrap: wrap; }
   .mod-cover-wrap { margin: 0 auto; width: 160px; height: 240px; }
   .wiki-meta-display { width: 100%; max-width: 260px; }
 
@@ -1925,7 +1972,7 @@ a.wiki-tag-bubble:hover { background: rgba(127,168,217,0.15); border-color: rgba
   /* Description's floated cover+avatar box — full-width above the text
      instead of a narrow float, same as the old cover+meta column used to
      stack on mobile. */
-  .wiki-desc-side { float: none; width: 140px; margin: 0 auto 1.25rem; }
+  .wiki-desc-side { float: none; width: 200px; margin: 0 auto 1.25rem; }
 
   /* Three cards stack instead of squeezing into one row. */
   .wiki-story-cards-row { grid-template-columns: 1fr; gap: 1rem; }
