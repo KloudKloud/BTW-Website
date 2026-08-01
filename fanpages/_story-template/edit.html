@@ -442,6 +442,15 @@
       <h1 class="wiki-editing-indicator-title" id="wiki-editing-indicator-title">Loading…</h1>
     </div>
 
+    <!-- Onboarding-only — Characters/Gallery as top tabs instead of the
+         side nav column (which only has those two left once Story
+         Details/Chapters are hidden here). A preview of how the general
+         Story Editor nav will eventually work too. -->
+    <nav class="wiki-story-tabs wiki-story-tabs--centered" id="onboarding-tabs" style="display:none;">
+      <a href="#" id="onboarding-tab-characters" class="wiki-story-tab active">Characters</a>
+      <a href="#" id="onboarding-tab-gallery" class="wiki-story-tab">Gallery</a>
+    </nav>
+
     <div class="se-edit-row">
     <div class="se-edit-main">
     <div class="mod-editor-form-box" id="editor-form-box">
@@ -882,6 +891,29 @@ if (ONBOARDING) {
   document.getElementById('onboarding-link-now-btn').addEventListener('click', () => {
     document.getElementById('onboarding-link-prompt').hidden = true;
   });
+
+  // Characters/Gallery move up to top tabs — the side nav column keeps
+  // only the cover+title, which is no longer a link out (clicking it used
+  // to jump straight to the story's home page, bailing out of onboarding
+  // entirely with nothing saved past that point).
+  document.getElementById('se-nav-characters').style.display = 'none';
+  document.getElementById('se-nav-gallery').style.display = 'none';
+  document.getElementById('onboarding-tabs').style.display = 'flex';
+  document.getElementById('se-edit-nav-cover-link').addEventListener('click', (e) => e.preventDefault());
+  const onboardingTabCharacters = document.getElementById('onboarding-tab-characters');
+  const onboardingTabGallery = document.getElementById('onboarding-tab-gallery');
+  onboardingTabCharacters.addEventListener('click', (e) => {
+    e.preventDefault();
+    onboardingTabCharacters.classList.add('active');
+    onboardingTabGallery.classList.remove('active');
+    switchEditorSection('characters');
+  });
+  onboardingTabGallery.addEventListener('click', (e) => {
+    e.preventDefault();
+    onboardingTabGallery.classList.add('active');
+    onboardingTabCharacters.classList.remove('active');
+    switchEditorSection('gallery');
+  });
 }
 
 let siteData = { site: {} };
@@ -1287,7 +1319,7 @@ function populateForm(s) {
   document.getElementById('se-edit-nav-cover-title').textContent = s.site_title || 'Untitled Story';
   document.getElementById('se-edit-nav-cover-link').href = STORY_BASE;
   const navCoverImg = document.getElementById('se-edit-nav-cover-img');
-  navCoverImg.src = s.cover_url || '/images/characters/noreference.png';
+  navCoverImg.src = s.cover_url || '/images/defaultcover.png';
   navCoverImg.style.objectPosition = 'center';
 
   document.getElementById('qn-characters-img').src = s.characters_card_url || NAV_CARD_DEFAULT.characters;
@@ -2032,7 +2064,7 @@ function renderLockedStoryCard() {
   wrap.className = 'gallery-linkto-card gallery-linkto-card--locked';
   const imgEl = document.createElement('img');
   imgEl.className = 'gallery-linkto-card-img';
-  imgEl.src = (siteData.site && siteData.site.cover_url) || DEFAULT_REF;
+  imgEl.src = (siteData.site && siteData.site.cover_url) || '/images/defaultcover.png';
   imgEl.alt = '';
   wrap.appendChild(imgEl);
   const nameEl = document.createElement('p');

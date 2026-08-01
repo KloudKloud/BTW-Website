@@ -12,18 +12,55 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&display=swap" />
   <style>
     body { background: #0a0a0a; }
-    .cs-layout { max-width: 1090px; margin: 0 auto; padding: 2.5rem 3rem 5rem; }
 
-    .cs-page-title {
-      font-family: 'Cinzel', serif; font-size: 2rem; font-weight: 700; color: #f0f0f0;
-      margin: 0 0 2rem;
+    /* ── Sticky top bar — trumps the site's own nav entirely, same idea as
+       .mod-edit-bar in the Story Editor. Fixed, always visible, glued to
+       the top through the whole scroll. ── */
+    #fanpages-topbar-root { display: none; }
+    .cs-topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 150; height: 68px; box-sizing: border-box;
+      display: flex; align-items: center; justify-content: space-between;
+      background: #161616; border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding: 0 1.5rem;
     }
+    .cs-topbar-left { display: flex; align-items: center; gap: 1rem; min-width: 0; }
+    .cs-topbar-back { color: #aaa; font-size: 1.4rem; text-decoration: none; padding: 0.3rem; flex-shrink: 0; }
+    .cs-topbar-back:hover { color: #fff; }
+    .cs-topbar-titles { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+    .cs-topbar-eyebrow { font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #999; }
+    .cs-topbar-title {
+      font-family: 'Baloo 2', 'Georgia', serif; font-size: 1.08rem; font-weight: 700; color: #f0f0f0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .cs-topbar-actions { display: flex; align-items: center; gap: 0.85rem; flex-shrink: 0; }
+    .cs-topbar-cancel {
+      color: #ccc; font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 600; text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.25); border-radius: 22px; padding: 0.6em 1.4em;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .cs-topbar-cancel:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+    .cs-topbar-continue {
+      background: linear-gradient(135deg, #f0c060, #f5cd77); color: #1a1408; border: none;
+      font-family: 'Inter', sans-serif; font-size: 0.94rem; font-weight: 700;
+      padding: 0.65em 1.7em; border-radius: 22px; cursor: pointer;
+      box-shadow: 0 0 14px rgba(240,192,96,0.4); transition: box-shadow 0.15s, transform 0.15s;
+    }
+    .cs-topbar-continue:hover { box-shadow: 0 0 20px rgba(240,192,96,0.6); transform: translateY(-1px); }
+    .cs-topbar-continue:disabled { opacity: 0.6; cursor: default; transform: none; box-shadow: none; }
+
+    .cs-layout { max-width: none; margin: 0; padding: calc(68px + 2.5rem) 3rem 5rem; }
+
+    .cs-error {
+      background: rgba(217,122,114,0.12); border: 1px solid rgba(217,122,114,0.4); border-radius: 10px;
+      color: #d97a72; font-size: 0.9rem; padding: 0.85rem 1.1rem; margin-bottom: 1.75rem;
+    }
+    .cs-error a { color: #f0c060; text-decoration: underline; }
 
     /* Cover (left) + form (right) — the cover stays put beside the form as
        it scrolls, same "glance over and check it" idea as the Story
        Editor's own cover-beside-cards row. */
-    .cs-main-row { display: flex; gap: 2.5rem; align-items: flex-start; }
-    .cs-cover-col { flex-shrink: 0; position: sticky; top: 1.5rem; }
+    .cs-main-row { display: flex; gap: 3rem; align-items: flex-start; }
+    .cs-cover-col { flex-shrink: 0; position: sticky; top: calc(68px + 1.5rem); }
     .cs-form-col { flex: 1; min-width: 0; }
 
     .cs-required-dot {
@@ -31,40 +68,69 @@
       background: #d9534f; margin-left: 0.4em; vertical-align: middle;
     }
 
-    .cs-actions-row {
-      display: flex; align-items: center; gap: 1rem; margin-top: 2.5rem;
-      padding-top: 1.75rem; border-top: 1px solid rgba(255,255,255,0.08);
+    /* Big, plain field titles — Title/Description/Rating/Story Notes all
+       read as top-level fields, not tucked under a boxed section heading. */
+    .cs-field-block { margin-bottom: 2.25rem; }
+    .cs-field-title-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.7rem; position: relative; }
+    .cs-field-title {
+      font-family: 'Baloo 2', 'Georgia', serif; font-size: 1.3rem; font-weight: 700; color: #f0f0f0;
     }
-    .cs-continue-btn {
-      background: linear-gradient(135deg, #f0c060, #f5cd77); color: #1a1408; border: none;
-      font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 700;
-      padding: 0.85em 2.2em; border-radius: 26px; cursor: pointer;
-      box-shadow: 0 0 18px rgba(240,192,96,0.4); transition: box-shadow 0.15s, transform 0.15s;
+    .cs-field-hint { font-family: 'Inter', sans-serif; font-size: 0.82rem; color: #999; }
+    .cs-input-lg, .cs-textarea-lg, .cs-select-lg {
+      width: 100%; box-sizing: border-box; background: #17171a; border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 12px; color: #f0f0f0; font-family: 'Inter', sans-serif; font-size: 1.02rem;
+      padding: 0.9rem 1.1rem; transition: border-color 0.15s;
     }
-    .cs-continue-btn:hover { box-shadow: 0 0 26px rgba(240,192,96,0.6); transform: translateY(-1px); }
-    .cs-continue-btn:disabled { opacity: 0.6; cursor: default; transform: none; box-shadow: none; }
-    .cs-cancel-link { color: #999; font-family: 'Inter', sans-serif; font-size: 0.9rem; text-decoration: none; }
-    .cs-cancel-link:hover { color: #ccc; text-decoration: underline; }
+    .cs-input-lg:focus, .cs-textarea-lg:focus, .cs-select-lg:focus { outline: none; border-color: #7fa8d9; }
+    .cs-textarea-lg { resize: vertical; min-height: 130px; line-height: 1.7; font-family: 'Lora', 'Georgia', serif; }
+    .cs-textarea-lg#cs-bio-input { min-height: 160px; }
+    .cs-select-lg { cursor: pointer; max-width: 340px; }
 
-    .cs-error {
-      background: rgba(217,122,114,0.12); border: 1px solid rgba(217,122,114,0.4); border-radius: 8px;
-      color: #d97a72; font-size: 0.88rem; padding: 0.75rem 1rem; margin-bottom: 1.5rem;
+    .cs-lightbulb {
+      background: none; border: none; color: #f0c060; font-size: 1rem; cursor: pointer;
+      padding: 0.1rem; line-height: 1; opacity: 0.85; flex-shrink: 0;
     }
-    .cs-error a { color: #f0c060; text-decoration: underline; }
+    .cs-lightbulb:hover { opacity: 1; }
+
+    /* Prettier divider — a soft fade instead of a flat solid rule. */
+    .cs-divider {
+      border: none; height: 1px; margin: 3rem 0;
+      background: linear-gradient(to right, transparent, rgba(240,192,96,0.5) 50%, transparent);
+    }
+
+    .cs-meta-title {
+      font-family: 'Cinzel', serif; font-size: 1.35rem; font-weight: 700; color: #f0f0f0;
+      margin: 0 0 1.75rem;
+    }
+    .cs-meta-field { margin-bottom: 2rem; }
 
     @media (max-width: 720px) {
-      .cs-layout { padding: 2rem 1.25rem 4rem; }
+      .cs-layout { padding: calc(68px + 2rem) 1.25rem 4rem; }
       .cs-main-row { flex-direction: column; align-items: center; }
       .cs-cover-col { position: static; }
+      .cs-topbar-eyebrow { display: none; }
     }
   </style>
 </head>
 <body>
 
-<div id="fanpages-topbar-root"></div>
 <script src="/fanpages/fanpages-nav.js"></script>
 <script src="/fanpages/vendor/cropper.min.js"></script>
 <script src="/fanpages/crop-modal.js"></script>
+
+<div class="cs-topbar">
+  <div class="cs-topbar-left">
+    <a class="cs-topbar-back" id="cs-topbar-back" href="/fanpages" title="Back">←</a>
+    <div class="cs-topbar-titles">
+      <span class="cs-topbar-eyebrow">Add Story Info</span>
+      <span class="cs-topbar-title" id="cs-topbar-title">Untitled Story</span>
+    </div>
+  </div>
+  <div class="cs-topbar-actions">
+    <a class="cs-topbar-cancel" id="cs-cancel-link" href="/fanpages">Cancel</a>
+    <button class="cs-topbar-continue" id="cs-submit-btn" type="button">Save and Continue →</button>
+  </div>
+</div>
 
 <!-- Banner — same crop-and-upload system as the Story Editor's, just
      staged locally (as a blob) until the story actually exists to attach
@@ -79,8 +145,6 @@
 </div>
 
 <div class="cs-layout">
-  <h1 class="cs-page-title">Create Your Story</h1>
-
   <p class="cs-error" id="cs-error" hidden></p>
 
   <div class="cs-main-row">
@@ -95,64 +159,59 @@
 
     <div class="cs-form-col">
 
-      <div class="mod-editable-block" style="margin-bottom: 2rem;">
-        <span class="mod-field-label" style="display:block;">Title<span class="cs-required-dot" title="Required"></span></span>
-        <input class="mod-input" id="cs-title-input" maxlength="60" placeholder="e.g. Above All Else" />
+      <div class="cs-field-block mod-editable-block">
+        <div class="cs-field-title-row">
+          <label class="cs-field-title" for="cs-title-input">Title<span class="cs-required-dot" title="Required"></span></label>
+        </div>
+        <input class="cs-input-lg" id="cs-title-input" maxlength="60" placeholder="e.g. Above All Else" />
       </div>
 
-      <section class="wiki-section">
-        <h2 class="wiki-section-title">Story Description</h2>
-        <div class="wiki-rule"></div>
-        <div class="mod-editable-block">
-          <div class="mod-field-label-row" style="display:flex;">
-            <span class="mod-field-label">Description<span class="cs-required-dot" title="Required"></span></span>
-            <span class="mod-field-hint">Use *text* for italics, **text** for bold.</span>
-          </div>
-          <textarea class="mod-textarea" id="cs-synopsis-input" placeholder="What's your story about?"></textarea>
+      <div class="cs-field-block mod-editable-block">
+        <div class="cs-field-title-row">
+          <label class="cs-field-title" for="cs-synopsis-input">Description<span class="cs-required-dot" title="Required"></span></label>
+          <span class="cs-field-hint">Descriptions will appear in italics for the story view</span>
         </div>
-      </section>
+        <textarea class="cs-textarea-lg" id="cs-synopsis-input" placeholder="What's your story about?"></textarea>
+      </div>
 
-      <section class="wiki-section">
-        <div class="wiki-meta-field mod-editable-block">
-          <div class="mod-field-label-row" style="display:flex;">
-            <span class="mod-field-label">Rating<span class="cs-required-dot" title="Required"></span></span>
-            <button class="wiki-tags-tip-icon" id="rating-tip-icon" type="button" aria-label="Rating help">💡</button>
-            <div class="wiki-tags-tip-popover" id="rating-tip-popover" hidden>
-              <p><strong>General Audiences</strong> — Suitable for everyone</p>
-              <p><strong>Teen And Up Audiences</strong> — May not be suitable for all audiences, but not expressly explicit. Light themes of violence, language, or other mature elements that don't teeter into adult.</p>
-              <p><strong>Mature (Adult!)</strong> — Porn, graphic violence, or explictly adult themes</p>
-            </div>
+      <div class="cs-field-block mod-editable-block">
+        <div class="cs-field-title-row">
+          <label class="cs-field-title" for="cs-rating-select">Rating<span class="cs-required-dot" title="Required"></span></label>
+          <button class="cs-lightbulb" id="rating-tip-icon" type="button" aria-label="Rating help">💡</button>
+          <div class="wiki-tags-tip-popover" id="rating-tip-popover" hidden>
+            <p><strong>General Audiences</strong> — Suitable for everyone</p>
+            <p><strong>Teen And Up Audiences</strong> — May not be suitable for all audiences, but not expressly explicit. Light themes of violence, language, or other mature elements that don't teeter into adult.</p>
+            <p><strong>Mature (Adult!)</strong> — Porn, graphic violence, or explictly adult themes</p>
           </div>
-          <select class="mod-input" id="cs-rating-select">
-            <option value="" selected disabled>Choose a rating…</option>
-            <option value="General Audiences">General Audiences</option>
-            <option value="Teen & Up">Teen &amp; Up</option>
-            <option value="Mature/Explicit (Adult)">Mature/Explicit (Adult)</option>
-          </select>
         </div>
-      </section>
+        <select class="cs-select-lg" id="cs-rating-select">
+          <option value="" selected disabled>Choose a rating…</option>
+          <option value="General Audiences">General Audiences</option>
+          <option value="Teen & Up">Teen &amp; Up</option>
+          <option value="Mature/Explicit (Adult)">Mature/Explicit (Adult)</option>
+        </select>
+      </div>
 
-      <section class="wiki-section">
-        <h2 class="wiki-section-title">Story Notes</h2>
-        <div class="wiki-rule"></div>
-        <div class="mod-editable-block">
-          <div class="mod-field-label-row" style="display:flex;">
-            <span class="mod-field-label">Story Notes</span>
-            <span class="mod-field-hint">Give the readers a behind-the-scenes on your story/one-shot. Who are the characters, what's the inspiration, and/or what can they expect out of reading. (Or just share inspirations/whatever details you want to, related or unrelated :3) Use *text* for italics, **text** for bold.</span>
+      <div class="cs-field-block mod-editable-block">
+        <div class="cs-field-title-row">
+          <label class="cs-field-title" for="cs-bio-input">Story Notes</label>
+          <button class="cs-lightbulb" id="notes-tip-icon" type="button" aria-label="Story Notes help">💡</button>
+          <div class="wiki-tags-tip-popover" id="notes-tip-popover" hidden>
+            Give the readers a behind-the-scenes on your story/one-shot. Who are the characters, what's the inspiration, and/or what can they expect out of reading. (Or just share inspirations/whatever details you want to, related or unrelated :3) Use *text* for italics, **text** for bold.
           </div>
-          <textarea class="mod-textarea" id="cs-bio-input"></textarea>
         </div>
-      </section>
+        <textarea class="cs-textarea-lg" id="cs-bio-input"></textarea>
+      </div>
 
-      <hr class="wiki-mega-divider" />
+      <hr class="cs-divider" />
 
-      <section class="wiki-section">
-        <h2 class="wiki-meta-section-title">Tags/Categories</h2>
+      <section>
+        <h2 class="cs-meta-title">Tags/Categories</h2>
 
-        <div class="wiki-meta-field mod-editable-block">
-          <div class="mod-field-label-row" style="display:flex;">
-            <span class="mod-field-label">Fandom</span>
-            <button class="wiki-tags-tip-icon" id="fandom-tip-icon" type="button" aria-label="Fandom help">💡</button>
+        <div class="cs-meta-field cs-field-block mod-editable-block">
+          <div class="cs-field-title-row">
+            <label class="cs-field-title" for="fandom-text-input" style="font-size:1.05rem;">Fandom</label>
+            <button class="cs-lightbulb" id="fandom-tip-icon" type="button" aria-label="Fandom help">💡</button>
             <div class="wiki-tags-tip-popover" id="fandom-tip-popover" hidden>
               Start typing and pick a match if one shows up! That keeps everyone's tagging consistent so stories in the same fandom can actually find each other. Don't see yours? Type it anyway; we'll add popular new ones to the official list over time.
             </div>
@@ -163,10 +222,10 @@
           </div>
         </div>
 
-        <div class="wiki-meta-field mod-editable-block">
-          <div class="mod-field-label-row" style="display:flex;">
-            <span class="mod-field-label">Categories</span>
-            <button class="wiki-tags-tip-icon" id="category-tip-icon" type="button" aria-label="Category help">💡</button>
+        <div class="cs-meta-field cs-field-block mod-editable-block">
+          <div class="cs-field-title-row">
+            <label class="cs-field-title" style="font-size:1.05rem;">Categories</label>
+            <button class="cs-lightbulb" id="category-tip-icon" type="button" aria-label="Category help">💡</button>
             <div class="wiki-tags-tip-popover" id="category-tip-popover" hidden>
               <p>These definitions vary, and feel free to select the categories that suit your fic best :3</p>
               <p><strong>Gen</strong> — No romantic/sexual relationships, or not the main focus</p>
@@ -180,14 +239,14 @@
           <div class="wiki-meta-check-row" id="category-checks"></div>
         </div>
 
-        <div class="wiki-meta-field mod-editable-block">
-          <div class="mod-field-label-row" style="display:flex;">
-            <span class="mod-field-label">Relationships</span>
-            <span class="mod-field-hint"> (e.g. "Umbreon"/"Espeon". Press Enter to add.)</span>
-            <button class="wiki-tags-tip-icon" id="relationships-tip-icon" type="button" aria-label="Relationships help">💡</button>
+        <div class="cs-meta-field cs-field-block mod-editable-block">
+          <div class="cs-field-title-row">
+            <label class="cs-field-title" for="relationships-text-input" style="font-size:1.05rem;">Relationships</label>
+            <button class="cs-lightbulb" id="relationships-tip-icon" type="button" aria-label="Relationships help">💡</button>
             <div class="wiki-tags-tip-popover" id="relationships-tip-popover" hidden>
               Tag the relationships in your work. This applies heavily for fanfiction, and should be used to group recognizable characters together (e.g. "Umbreon"/"Espeon") to help discoverability. If the characters don't appear as a selectable object, enter them with their full names, and use a "/" to denote individual characters. Please be advised, if your relationship includes several characters, consider shortening their names if needed to ensure that the tag stays under 150 characters!
             </div>
+            <span class="cs-field-hint">e.g. "Umbreon"/"Espeon". Press Enter to add.</span>
           </div>
           <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="relationships-input-box">
             <input type="text" class="wiki-tags-input" id="relationships-text-input" placeholder="Type a relationship and press Enter…" autocomplete="off" />
@@ -195,10 +254,10 @@
           </div>
         </div>
 
-        <div class="wiki-meta-field mod-editable-block">
-          <div class="mod-field-label-row" style="display:flex;">
-            <span class="mod-field-label">Additional Tags</span>
-            <button class="wiki-tags-tip-icon" id="tags-tip-icon" type="button" aria-label="Tag tips">💡</button>
+        <div class="cs-meta-field cs-field-block mod-editable-block">
+          <div class="cs-field-title-row">
+            <label class="cs-field-title" for="tags-text-input" style="font-size:1.05rem;">Additional Tags</label>
+            <button class="cs-lightbulb" id="tags-tip-icon" type="button" aria-label="Tag tips">💡</button>
             <div class="wiki-tags-tip-popover" id="tags-tip-popover" hidden>
               Tag up to 100 simple, relevant, searchable tags to help your story be discovered! For example: Pokemon, Furry, Mystery, Love, Ships, Umbreon, Lucario, Sexual Intimacy... Enter tags one at a time. Duplicate tags will be auto-deleted for your convienency. No need to tag specific character names: your character names are tied inside of your story and will be searchable in meta-data by default. Still tag species or other relevant traits about them that you feel could attract readers.
             </div>
@@ -213,19 +272,15 @@
         </div>
       </section>
 
-      <section class="wiki-section">
-        <h2 class="wiki-section-title">Links</h2>
-        <div class="wiki-rule"></div>
-        <div class="mod-editable-block">
+      <hr class="cs-divider" />
+
+      <section>
+        <h2 class="cs-meta-title">Links</h2>
+        <div class="cs-field-block mod-editable-block">
           <div id="site-links-editor"></div>
           <button class="mod-btn mod-btn--small" id="add-link-edit-row" type="button">+ Add Link</button>
         </div>
       </section>
-
-      <div class="cs-actions-row">
-        <button class="cs-continue-btn" id="cs-submit-btn" type="button">Save and Continue →</button>
-        <a class="cs-cancel-link" href="/fanpages" id="cs-cancel-link">Cancel</a>
-      </div>
 
     </div>
   </div>
@@ -240,7 +295,14 @@ const authHeadersFor = (storyPath) => ({ Authorization: `Bearer ${token}`, 'X-St
 
 if (document.referrer && document.referrer.startsWith(window.location.origin)) {
   document.getElementById('cs-cancel-link').href = document.referrer;
+  document.getElementById('cs-topbar-back').href = document.referrer;
 }
+
+// Live-updates the topbar title as the author types, same "Untitled Story"
+// placeholder behavior as the reference.
+document.getElementById('cs-title-input').addEventListener('input', (e) => {
+  document.getElementById('cs-topbar-title').textContent = e.target.value.trim() || 'Untitled Story';
+});
 
 function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -266,6 +328,7 @@ buildCategoryChecks();
 
 [
   ['rating-tip-icon', 'rating-tip-popover'],
+  ['notes-tip-icon', 'notes-tip-popover'],
   ['category-tip-icon', 'category-tip-popover'],
   ['relationships-tip-icon', 'relationships-tip-popover'],
   ['fandom-tip-icon', 'fandom-tip-popover'],
