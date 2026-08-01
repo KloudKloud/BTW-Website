@@ -814,6 +814,16 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS video_url TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('moderator_chapters editor migration:', e.message));
 
+  // Last-touched timestamp — the "Continue Writing" chapter list on the
+  // Creator Hub shows when each part was last saved/published, which
+  // created_at alone can't answer once a chapter's been edited since.
+  // Backfilled from created_at so existing chapters get a sane starting
+  // value instead of NULL.
+  await pool.query(`
+    ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+    UPDATE moderator_chapters SET updated_at = created_at WHERE updated_at IS NULL;
+  `).catch(e => console.error('moderator_chapters updated_at migration:', e.message));
+
   // Chapter likes — same shape as moderator_gallery_likes.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS chapter_likes (
@@ -3165,7 +3175,7 @@ app.post('/api/moderator/site/create', requireAuth, async (req, res) => {
       [slug, req.user.id, title, storyPath, synopsis, rating]
     );
     const { rows: [chapter] } = await pool.query(
-      `INSERT INTO moderator_chapters (site_id, title, sort_order, status) VALUES ($1, 'Untitled Part: 1', 0, 'draft') RETURNING *`,
+      `INSERT INTO moderator_chapters (site_id, title, sort_order, status, updated_at) VALUES ($1, 'Untitled Part: 1', 0, 'draft', NOW()) RETURNING *`,
       [site.id]
     );
     res.json({ site, chapter });
@@ -4285,9 +4295,11 @@ app.get('/api/moderator-sites/:slug/is-owner', requireAuth, async (req, res) => 
 // to a single story — this deliberately lists all of them.
 app.get('/api/moderator/my-sites', requireAuth, async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, u.avatar,
+    `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.view_count, ms.updated_at, u.avatar,
        (SELECT COUNT(*)::int FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0) AS published_chapter_count,
-       (SELECT COUNT(*)::int FROM moderator_chapters mc WHERE mc.site_id = ms.id AND (mc.status = 'draft' OR length(trim(mc.body)) = 0)) AS draft_chapter_count
+       (SELECT COUNT(*)::int FROM moderator_chapters mc WHERE mc.site_id = ms.id AND (mc.status = 'draft' OR length(trim(mc.body)) = 0)) AS draft_chapter_count,
+       (SELECT COUNT(*)::int FROM moderator_site_likes WHERE site_id = ms.id) AS like_count,
+       (SELECT COUNT(*)::int FROM content_comments cc JOIN moderator_chapters mc ON mc.id = cc.target_id AND cc.target_type = 'chapter' WHERE mc.site_id = ms.id) AS comment_count
      FROM moderator_sites ms JOIN users u ON u.id = ms.owner_user_id
      WHERE ms.owner_user_id = $1 ORDER BY ms.created_at ASC`,
     [req.user.id]
@@ -4653,8 +4665,8 @@ app.post('/api/moderator/chapters', requireAuth, requireModerator, uploadChapter
   if (!title) title = `Untitled Part: ${chapterCount + 1}`;
 
   const { rows: [chapter] } = await pool.query(
-    `INSERT INTO moderator_chapters (site_id, title, teaser, links, image_url, file_url, file_name, sort_order, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'draft') RETURNING *`,
+    `INSERT INTO moderator_chapters (site_id, title, teaser, links, image_url, file_url, file_name, sort_order, status, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'draft', NOW()) RETURNING *`,
     [req.modSite.id, title, (teaser || '').trim(), JSON.stringify(links), imageUrl, fileUrl, fileName, maxOrder + 1]
   );
   res.json({ chapter });
@@ -4665,7 +4677,7 @@ app.put('/api/moderator/chapters/:id/status', requireAuth, requireModerator, asy
   const status = req.body.status;
   if (!['draft', 'published'].includes(status)) return res.status(400).json({ error: 'status must be draft or published.' });
   const { rows: [chapter] } = await pool.query(
-    'UPDATE moderator_chapters SET status = $1 WHERE id = $2 AND site_id = $3 RETURNING *',
+    'UPDATE moderator_chapters SET status = $1, updated_at = NOW() WHERE id = $2 AND site_id = $3 RETURNING *',
     [status, req.params.id, req.modSite.id]
   );
   if (!chapter) return res.status(404).json({ error: 'Not found.' });
@@ -4689,7 +4701,7 @@ app.put('/api/moderator/chapters/:id/body', requireAuth, requireModerator, async
   const videoUrl = hasVideoUrl ? String(req.body.video_url || '') : null;
   const { rows: [chapter] } = await pool.query(
     `UPDATE moderator_chapters SET
-       title = $1, body = $2,
+       title = $1, body = $2, updated_at = NOW(),
        image_url = CASE WHEN $3 THEN $4 ELSE image_url END,
        video_url = CASE WHEN $5 THEN $6 ELSE video_url END
      WHERE id = $7 AND site_id = $8 RETURNING *`,

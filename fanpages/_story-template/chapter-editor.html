@@ -314,6 +314,73 @@
       box-shadow: 0 0 18px rgba(240,192,96,0.4); transition: box-shadow 0.15s, transform 0.15s;
     }
     .ce-intro-btn:hover { box-shadow: 0 0 26px rgba(240,192,96,0.6); transform: translateY(-1px); }
+
+    /* ── Save/unsaved indicator — sits right after the word count on the
+       status line, next to the cover thumbnail. ── */
+    .ce-save-indicator { font-weight: 700; }
+    .ce-save-indicator--unsaved { color: #d97a72; }
+    .ce-save-indicator--saved { color: #7fa8d9; }
+    .ce-btn--save { background: none; border: 1px solid rgba(127,168,217,0.5); color: #7fa8d9; }
+    .ce-btn--save:hover { border-color: #7fa8d9; background: rgba(127,168,217,0.1); }
+    .ce-btn--save:disabled { opacity: 0.45; cursor: default; }
+
+    /* ── "Congrats, you published!" — shown once, the first time a draft
+       flips to published, then sends the author to the story's own page to
+       see it live. Same modal recipe as .ce-intro-*. ── */
+    .ce-congrats-overlay {
+      position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.72); padding: 1.5rem;
+    }
+    .ce-congrats-modal {
+      background: #171717; border: 1px solid rgba(127,168,217,0.3); border-radius: 20px;
+      max-width: 440px; width: 100%; padding: 2.25rem; text-align: center;
+      box-shadow: 0 24px 70px rgba(0,0,0,0.65);
+    }
+    .ce-congrats-icon { font-size: 2.4rem; margin: 0 0 0.6rem; line-height: 1; }
+    .ce-congrats-title {
+      font-family: 'Baloo 2', 'Georgia', serif; font-size: 1.4rem; font-weight: 700;
+      color: #7fa8d9; margin: 0 0 0.9rem; line-height: 1.4;
+    }
+    .ce-congrats-text {
+      font-family: 'Inter', sans-serif; font-size: 0.92rem; line-height: 1.6; color: #ccc;
+      margin: 0 0 1.5rem;
+    }
+    .ce-congrats-btn {
+      background: linear-gradient(135deg, #3d6fa8, #7fa8d9); color: #0d1b2a; border: none;
+      font-family: 'Inter', sans-serif; font-size: 0.98rem; font-weight: 700;
+      padding: 0.8em 2.6em; border-radius: 24px; cursor: pointer;
+      box-shadow: 0 0 18px rgba(127,168,217,0.5); transition: box-shadow 0.15s, transform 0.15s;
+    }
+    .ce-congrats-btn:hover { box-shadow: 0 0 26px rgba(127,168,217,0.7); transform: translateY(-1px); }
+
+    /* ── Unsaved-changes exit warning — offered whenever leaving the page
+       through an in-app link (back arrow, cover, Cancel) while dirty,
+       instead of a bare browser confirm(). ── */
+    .ce-exit-overlay {
+      position: fixed; inset: 0; z-index: 205; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.72); padding: 1.5rem;
+    }
+    .ce-exit-modal {
+      background: #171717; border: 1px solid rgba(255,255,255,0.1); border-radius: 18px;
+      max-width: 400px; width: 100%; padding: 1.9rem; text-align: center;
+      box-shadow: 0 24px 70px rgba(0,0,0,0.65);
+    }
+    .ce-exit-title {
+      font-family: 'Baloo 2', 'Georgia', serif; font-size: 1.2rem; font-weight: 700;
+      color: #f0f0f0; margin: 0 0 0.6rem;
+    }
+    .ce-exit-text { font-family: 'Inter', sans-serif; font-size: 0.88rem; line-height: 1.6; color: #bbb; margin: 0 0 1.4rem; }
+    .ce-exit-actions { display: flex; flex-direction: column; gap: 0.6rem; }
+    .ce-exit-btn {
+      font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 700;
+      padding: 0.7em 1.2em; border-radius: 22px; cursor: pointer; border: none;
+    }
+    .ce-exit-btn--save { background: linear-gradient(135deg, #3d6fa8, #7fa8d9); color: #0d1b2a; }
+    .ce-exit-btn--save:hover { box-shadow: 0 0 18px rgba(127,168,217,0.5); }
+    .ce-exit-btn--discard { background: none; border: 1px solid rgba(217,122,114,0.5); color: #d97a72; }
+    .ce-exit-btn--discard:hover { background: rgba(217,122,114,0.1); }
+    .ce-exit-btn--stay { background: none; border: 1px solid rgba(255,255,255,0.2); color: #ccc; }
+    .ce-exit-btn--stay:hover { border-color: rgba(255,255,255,0.4); color: #fff; }
   </style>
 </head>
 <body>
@@ -349,9 +416,31 @@
   </div>
   <div class="ce-topbar-actions">
     <button class="ce-btn ce-btn--cancel" id="ce-import-docx-btn" type="button">📄 Import</button>
-    <button class="ce-btn ce-btn--publish" id="ce-publish-btn" type="button" disabled>Publish Changes</button>
-    <button class="ce-btn ce-btn--cancel" id="ce-cancel-btn" type="button">Cancel</button>
+    <button class="ce-btn ce-btn--publish" id="ce-publish-btn" type="button" disabled>Publish</button>
+    <button class="ce-btn ce-btn--save" id="ce-save-draft-btn" type="button" disabled>💾 Save</button>
+    <button class="ce-btn ce-btn--cancel" id="ce-cancel-btn" type="button" hidden>Cancel</button>
     <input type="file" id="ce-docx-file-input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none;" />
+  </div>
+</div>
+
+<div class="ce-congrats-overlay" id="ce-congrats-overlay" hidden>
+  <div class="ce-congrats-modal">
+    <p class="ce-congrats-icon">🎉</p>
+    <p class="ce-congrats-title" id="ce-congrats-title">Congrats! You published your chapter!</p>
+    <p class="ce-congrats-text">Let's go take a look at it live on your story's page.</p>
+    <button class="ce-congrats-btn" id="ce-congrats-btn" type="button">Take Me There →</button>
+  </div>
+</div>
+
+<div class="ce-exit-overlay" id="ce-exit-overlay" hidden>
+  <div class="ce-exit-modal">
+    <p class="ce-exit-title">Unsaved changes</p>
+    <p class="ce-exit-text">You've got changes that haven't been saved yet. Want to save before you go?</p>
+    <div class="ce-exit-actions">
+      <button class="ce-exit-btn ce-exit-btn--save" id="ce-exit-save-btn" type="button">Save & Exit</button>
+      <button class="ce-exit-btn ce-exit-btn--discard" id="ce-exit-discard-btn" type="button">Exit Without Saving</button>
+      <button class="ce-exit-btn ce-exit-btn--stay" id="ce-exit-stay-btn" type="button">Keep Editing</button>
+    </div>
   </div>
 </div>
 
@@ -467,34 +556,118 @@ function escapeHtml(s) {
 
 let currentChapter = null;
 let dirty = false;
+let everPublished = false; // becomes true right after the first successful publish, gates the congrats modal to only ever show once per chapter
 const editor = document.getElementById('ce-editor');
 
+// Draft vs published changes which buttons make sense: a draft has nothing
+// public yet to "cancel" back to, so it gets an explicit Save instead; a
+// published chapter already has a live version, so Cancel (discard edits)
+// makes sense there and a separate Save button doesn't.
+function updateButtonsForStatus() {
+  const isDraft = !currentChapter || currentChapter.status === 'draft';
+  document.getElementById('ce-publish-btn').textContent = isDraft ? 'Publish' : 'Save Changes';
+  document.getElementById('ce-save-draft-btn').hidden = !isDraft;
+  document.getElementById('ce-cancel-btn').hidden = isDraft;
+}
 function markDirty() {
   dirty = true;
   document.getElementById('ce-publish-btn').disabled = false;
+  document.getElementById('ce-save-draft-btn').disabled = false;
+  updateStatusLine();
 }
 function updateStatusLine() {
   const words = editor.textContent.trim() ? editor.textContent.trim().split(/\s+/).length : 0;
   const status = currentChapter ? currentChapter.status : 'draft';
+  const indicator = dirty
+    ? '<span class="ce-save-indicator ce-save-indicator--unsaved">Unsaved changes</span>'
+    : '<span class="ce-save-indicator ce-save-indicator--saved">All Changes Saved</span>';
   document.getElementById('ce-topbar-status').innerHTML =
-    `<span class="ce-topbar-status-word">${status === 'draft' ? 'Draft' : 'Published'}</span> (${words} Word${words === 1 ? '' : 's'})`;
+    `<span class="ce-topbar-status-word">${status === 'draft' ? 'Draft' : 'Published'}</span> (${words} Word${words === 1 ? '' : 's'}) — ${indicator}`;
 }
 
-document.getElementById('ce-back-btn').addEventListener('click', () => {
+// Saves the title/body (no status change) — shared by the draft Save
+// button, the periodic autosave, and as the first step of Publish/Save
+// Changes. Returns true on success.
+async function saveChapterBody() {
+  const title = document.getElementById('ce-big-title-input').value.trim();
+  const body = editor.innerHTML;
+  const res = await fetch(`${API}/moderator/chapters/${CHAPTER_ID}/body`, {
+    method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, body, image_url: coverImageUrl, video_url: coverVideoUrl }),
+  });
+  if (!res.ok) return false;
+  dirty = false;
+  updateStatusLine();
+  return true;
+}
+
+// Custom 3-way "you've got unsaved changes" prompt — used by every in-app
+// exit point instead of a bare browser confirm(), so leaving with unsaved
+// work is always a deliberate choice with an easy way to save first.
+function confirmExitWithUnsavedChanges() {
+  if (!dirty) return Promise.resolve('discard');
+  return new Promise(resolve => {
+    const overlay = document.getElementById('ce-exit-overlay');
+    const saveBtn = document.getElementById('ce-exit-save-btn');
+    const discardBtn = document.getElementById('ce-exit-discard-btn');
+    const stayBtn = document.getElementById('ce-exit-stay-btn');
+    overlay.hidden = false;
+    const cleanup = (result) => {
+      overlay.hidden = true;
+      saveBtn.removeEventListener('click', onSave);
+      discardBtn.removeEventListener('click', onDiscard);
+      stayBtn.removeEventListener('click', onStay);
+      resolve(result);
+    };
+    const onSave = async () => {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
+      const ok = await saveChapterBody();
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save & Exit';
+      cleanup(ok ? 'save' : 'stay');
+    };
+    const onDiscard = () => cleanup('discard');
+    const onStay = () => cleanup('stay');
+    saveBtn.addEventListener('click', onSave);
+    discardBtn.addEventListener('click', onDiscard);
+    stayBtn.addEventListener('click', onStay);
+  });
+}
+
+document.getElementById('ce-back-btn').addEventListener('click', async () => {
+  const result = await confirmExitWithUnsavedChanges();
+  if (result === 'stay') return;
   // Straight to the Creator Hub's Stories tab, not back into the Story
   // Editor's Chapters list — that's where the story itself (with its
   // live Published/Draft count) is actually visible.
   window.location.href = '/fanpages/editor#stories';
 });
-document.getElementById('ce-cancel-btn').addEventListener('click', () => {
-  if (dirty && !confirm('Discard unsaved changes?')) return;
+document.getElementById('ce-cancel-btn').addEventListener('click', async () => {
+  const result = await confirmExitWithUnsavedChanges();
+  if (result === 'stay') return;
   window.location.href = `${STORY_BASE}/edit#chapters`;
 });
-document.getElementById('ce-topbar-cover-link').addEventListener('click', (e) => {
+document.getElementById('ce-topbar-cover-link').addEventListener('click', async (e) => {
   e.preventDefault();
-  if (dirty && !confirm('Discard unsaved changes?')) return;
+  const result = await confirmExitWithUnsavedChanges();
+  if (result === 'stay') return;
   window.location.href = STORY_BASE;
 });
+document.getElementById('ce-save-draft-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('ce-save-draft-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  const ok = await saveChapterBody();
+  btn.textContent = ok ? 'Saved ✓' : '💾 Save';
+  if (!ok) alert('Something went wrong saving. Please try again.');
+  setTimeout(() => { btn.textContent = '💾 Save'; btn.disabled = !dirty; }, ok ? 1200 : 0);
+});
+// Autosave — drafts only. Published chapters only ever save when the
+// author explicitly clicks Save Changes.
+setInterval(() => {
+  if (currentChapter && currentChapter.status === 'draft' && dirty) saveChapterBody();
+}, 20000);
 document.getElementById('ce-big-title-input').addEventListener('input', (e) => {
   document.getElementById('ce-title-display').textContent = e.target.value.trim() || 'Untitled Part';
   markDirty();
@@ -1083,36 +1256,42 @@ document.getElementById('ce-image-file-input').addEventListener('change', async 
 
 document.getElementById('ce-publish-btn').addEventListener('click', async () => {
   const title = document.getElementById('ce-big-title-input').value.trim();
-  const body = editor.innerHTML;
   if (!title) { alert('Chapter title is required.'); return; }
+  const wasDraft = currentChapter && currentChapter.status === 'draft';
 
   const btn = document.getElementById('ce-publish-btn');
   btn.disabled = true;
   btn.textContent = 'Saving…';
   try {
-    const res = await fetch(`${API}/moderator/chapters/${CHAPTER_ID}/body`, {
-      method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, body, image_url: coverImageUrl, video_url: coverVideoUrl }),
-    });
-    if (!res.ok) throw new Error('save failed');
-    // "Publish Changes" also flips a draft to published — writing is done,
-    // this is the moment it becomes visible to readers.
-    if (currentChapter && currentChapter.status === 'draft') {
+    const ok = await saveChapterBody();
+    if (!ok) throw new Error('save failed');
+    // For a draft, this button also flips it to published — writing is
+    // done, this is the moment it becomes visible to readers.
+    if (wasDraft) {
       await fetch(`${API}/moderator/chapters/${CHAPTER_ID}/status`, {
         method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'published' }),
       });
       currentChapter.status = 'published';
+      updateButtonsForStatus();
     }
-    dirty = false;
     updateStatusLine();
     btn.textContent = 'Saved ✓';
-    setTimeout(() => { btn.textContent = 'Publish Changes'; btn.disabled = true; }, 1500);
+    setTimeout(() => { btn.textContent = wasDraft ? 'Save Changes' : (currentChapter.status === 'draft' ? 'Publish' : 'Save Changes'); btn.disabled = true; }, 1200);
+    if (wasDraft && !everPublished) {
+      everPublished = true;
+      document.getElementById('ce-congrats-title').textContent =
+        `Congrats! You published "${title}" for ${document.getElementById('ce-story-title').textContent}!`;
+      document.getElementById('ce-congrats-overlay').hidden = false;
+    }
   } catch {
     alert('Something went wrong saving. Please try again.');
     btn.disabled = false;
-    btn.textContent = 'Publish Changes';
+    btn.textContent = wasDraft ? 'Publish' : 'Save Changes';
   }
+});
+document.getElementById('ce-congrats-btn').addEventListener('click', () => {
+  window.location.href = STORY_BASE;
 });
 
 window.addEventListener('beforeunload', (e) => {
@@ -1134,6 +1313,8 @@ window.addEventListener('beforeunload', (e) => {
   }
   const { chapter } = await chapterRes.json();
   currentChapter = chapter;
+  everPublished = chapter.status === 'published';
+  updateButtonsForStatus();
 
   if (siteRes && siteRes.ok) {
     const { site } = await siteRes.json();

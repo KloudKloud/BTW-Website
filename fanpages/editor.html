@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>My Editor Hub ✦ Fanpages</title>
+  <title>My Creator Hub ✦ Fanpages</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
@@ -105,9 +105,74 @@
     .ed-card-arrow { flex-shrink: 0; color: #666; font-size: 1.3rem; }
     .ed-card:hover .ed-card-arrow { color: #f0c060; }
 
+    /* ── Story row — same shell as .ed-card, but the right side is a
+       "Continue Writing" dropdown + delete icon instead of a plain arrow,
+       and the info column carries a colored status line, last-updated
+       time, and a mini stat row. Characters/Gallery cards stay the plain
+       .ed-card arrow-link — only stories get this treatment. ── */
+    .ed-story-row {
+      display: flex; align-items: center; gap: 1.1rem;
+      background: #161616; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+      padding: 0.9rem 1.1rem; transition: border-color 0.15s, background 0.15s;
+    }
+    .ed-story-row:hover { border-color: rgba(240,192,96,0.4); background: #1a1a1a; }
+    .ed-story-link { display: flex; align-items: center; gap: 1.1rem; flex: 1; min-width: 0; text-decoration: none; color: inherit; }
+    .ed-card-status { font-size: 0.85rem; font-family: 'Inter', sans-serif; margin: 0 0 0.2rem; }
+    .ed-status-published { color: #7fa8d9; font-weight: 700; }
+    .ed-status-draft { color: #f0c060; font-weight: 700; }
+    .ed-status-sep { color: #777; }
+    .ed-card-updated { font-size: 0.76rem; color: #888; margin: 0 0 0.4rem; }
+    .ed-card-stats { display: flex; gap: 0.9rem; font-size: 0.76rem; color: #999; }
+
+    .ed-story-actions { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
+    .ed-continue-wrap { position: relative; }
+    .ed-continue-btn {
+      display: flex; align-items: center; gap: 0.45rem;
+      background: linear-gradient(135deg, #c94f1f, #e0703b); color: #fff; border: none; border-radius: 22px;
+      padding: 0.65em 1.3em; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.9rem; cursor: pointer;
+      box-shadow: 0 0 14px rgba(224,112,59,0.4); transition: box-shadow 0.15s;
+      white-space: nowrap;
+    }
+    .ed-continue-btn:hover { box-shadow: 0 0 20px rgba(224,112,59,0.6); }
+    .ed-continue-caret { font-size: 0.7rem; opacity: 0.85; }
+    .ed-delete-icon-btn {
+      background: none; border: 1px solid rgba(217,122,114,0.4); color: #d97a72; border-radius: 10px;
+      width: 42px; height: 42px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 1rem; transition: border-color 0.15s, background 0.15s;
+    }
+    .ed-delete-icon-btn:hover { border-color: #d97a72; background: rgba(217,122,114,0.12); }
+
+    .ed-continue-dropdown {
+      position: absolute; top: calc(100% + 0.6rem); right: 0; z-index: 40;
+      width: 300px; max-height: 320px; overflow-y: auto;
+      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.14); border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.55); padding: 0.4rem;
+    }
+    .ed-continue-item {
+      display: block; padding: 0.6rem 0.75rem; border-radius: 8px; text-decoration: none; color: inherit;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .ed-continue-item:last-of-type { border-bottom: none; }
+    .ed-continue-item:hover { background: rgba(255,255,255,0.06); }
+    .ed-continue-item-title {
+      font-size: 0.88rem; font-weight: 700; color: #f0f0f0; margin: 0 0 0.15rem;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .ed-continue-item-sub { font-size: 0.76rem; margin: 0; font-family: 'Inter', sans-serif; }
+    .ed-continue-empty { color: #888; font-size: 0.82rem; padding: 0.75rem; text-align: center; }
+    .ed-continue-new {
+      display: flex; align-items: center; justify-content: center; gap: 0.4rem; width: 100%; margin-top: 0.3rem;
+      background: linear-gradient(135deg, #c94f1f, #e0703b); color: #fff; border: none; border-radius: 20px;
+      padding: 0.65em; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.85rem; cursor: pointer;
+      box-shadow: 0 0 12px rgba(224,112,59,0.35);
+    }
+    .ed-continue-new:hover { box-shadow: 0 0 18px rgba(224,112,59,0.55); }
+
     @media (max-width: 700px) {
       .ed-layout { grid-template-columns: 1fr; }
       .ed-create-btn { min-height: 90px; flex-direction: row; }
+      .ed-story-row { flex-wrap: wrap; }
+      .ed-story-actions { width: 100%; justify-content: flex-end; }
     }
   </style>
 </head>
@@ -116,7 +181,7 @@
 <div id="fanpages-topbar-root"></div>
 
 <main class="ed-page">
-  <h1 class="ed-title">My Editor Hub</h1>
+  <h1 class="ed-title">My Creator Hub</h1>
 
   <div class="ed-tabs">
     <button class="ed-tab active" id="ed-tab-stories" type="button" data-tab="stories">Stories</button>
@@ -142,6 +207,17 @@
     <div class="ed-list-col" id="ed-list"><p class="ed-empty">Loading…</p></div>
   </div>
 </main>
+
+<div class="mod-confirm-overlay" id="ed-delete-confirm-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title">Delete this entire story?</p>
+    <p class="mod-confirm-text">This permanently deletes the story, its characters, chapters, and gallery. This can't be undone.</p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="ed-delete-confirm-cancel" type="button">Cancel</button>
+      <button class="mod-btn mod-btn--danger" id="ed-delete-confirm-yes" type="button">Delete</button>
+    </div>
+  </div>
+</div>
 
 <script src="/fanpages/fanpages-nav.js"></script>
 <script>
@@ -196,17 +272,176 @@
     renderItems(currentTab, filtered, true);
   });
 
-  // "2 Published Chapters · 1 Draft" — same counts GET /api/moderator/my-sites
+  // "2 Published Parts - 1 Draft" — same counts GET /api/moderator/my-sites
   // already returns, so a freshly onboarded story shows its real "1 Draft"
-  // state right here instead of a static "click to edit" hint.
-  function storyStatusSub(s) {
+  // state right here instead of a static "click to edit" hint. Published in
+  // blue, Draft in gold — same colors as the chapter list itself uses.
+  function storyStatusHtml(s) {
     const pub = s.published_chapter_count || 0;
     const draft = s.draft_chapter_count || 0;
-    if (!pub && !draft) return 'Click to edit this story →';
+    if (!pub && !draft) return '<span class="ed-status-draft">No parts yet</span>';
     const parts = [];
-    if (pub) parts.push(`${pub} Published Chapter${pub === 1 ? '' : 's'}`);
-    if (draft) parts.push(`${draft} Draft${draft === 1 ? '' : 's'}`);
-    return parts.join(' · ');
+    if (pub) parts.push(`<span class="ed-status-published">${pub} Published Part${pub === 1 ? '' : 's'}</span>`);
+    if (draft) parts.push(`<span class="ed-status-draft">${draft} Draft${draft === 1 ? '' : 's'}</span>`);
+    return parts.join('<span class="ed-status-sep"> - </span>');
+  }
+
+  function formatCount(n) {
+    n = n || 0;
+    if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+    return String(n);
+  }
+
+  // Wattpad-style: relative for the first 24 hours, then a plain date —
+  // "Updated 11 hours ago" fresh, "Updated Jul 19, 2026" once it's old news.
+  function updatedLabel(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    const sec = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (sec < 86400) {
+      const units = [['hour', 3600], ['minute', 60]];
+      for (const [name, secs] of units) {
+        const val = Math.floor(sec / secs);
+        if (val >= 1) return `Updated ${val} ${name}${val > 1 ? 's' : ''} ago`;
+      }
+      return 'Updated just now';
+    }
+    return `Updated ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  }
+
+  // ── "Continue Writing" dropdown — lists the story's chapters (draft +
+  // published) so picking up where you left off doesn't require going
+  // through the full Story Editor first. Fetched lazily on open, not
+  // upfront for every story card on the page. ──────────────────────────────
+  let openDropdownStoryId = null;
+  function closeAllContinueDropdowns() {
+    document.querySelectorAll('.ed-continue-dropdown').forEach(d => d.remove());
+    openDropdownStoryId = null;
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.ed-continue-wrap')) closeAllContinueDropdowns();
+  });
+
+  async function loadChaptersFor(storyPath) {
+    const res = await fetch('/api/moderator/chapters', { headers: { ...authHeaders(), 'X-Story-Path': storyPath } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.chapters || [];
+  }
+
+  function chapterRowHtml(ch, storyPath) {
+    const statusHtml = ch.status === 'published'
+      ? '<span class="ed-status-published">Published</span>'
+      : '<span class="ed-status-draft">Draft</span>';
+    const date = ch.updated_at ? new Date(ch.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    return `<a class="ed-continue-item" href="/fanpages/${storyPath}/chapter-editor?id=${ch.id}">
+      <p class="ed-continue-item-title">${escapeHtml(ch.title || 'Untitled Part')}</p>
+      <p class="ed-continue-item-sub">${statusHtml}${date ? ` - ${date}` : ''}</p>
+    </a>`;
+  }
+
+  async function toggleContinueDropdown(btn, s) {
+    const wrap = btn.closest('.ed-continue-wrap');
+    const storyPath = s.story_path || s.slug;
+    if (openDropdownStoryId === s.id) { closeAllContinueDropdowns(); return; }
+    closeAllContinueDropdowns();
+    openDropdownStoryId = s.id;
+    const dropdown = document.createElement('div');
+    dropdown.className = 'ed-continue-dropdown';
+    dropdown.innerHTML = '<p class="ed-continue-empty">Loading…</p>';
+    wrap.appendChild(dropdown);
+    const chapters = await loadChaptersFor(storyPath);
+    if (openDropdownStoryId !== s.id) return; // closed again while this was loading
+    dropdown.innerHTML = chapters.length
+      ? chapters.map(ch => chapterRowHtml(ch, storyPath)).join('')
+      : '<p class="ed-continue-empty">No parts yet.</p>';
+    const newBtn = document.createElement('button');
+    newBtn.className = 'ed-continue-new';
+    newBtn.type = 'button';
+    newBtn.textContent = '+ New Part';
+    newBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      newBtn.disabled = true;
+      newBtn.textContent = 'Creating…';
+      try {
+        const res = await fetch('/api/moderator/chapters', { method: 'POST', headers: { ...authHeaders(), 'X-Story-Path': storyPath } });
+        const data = await res.json();
+        if (!data.chapter) throw new Error();
+        window.location.href = `/fanpages/${storyPath}/chapter-editor?id=${data.chapter.id}`;
+      } catch {
+        alert('Could not create a new part — please try again.');
+        newBtn.disabled = false;
+        newBtn.textContent = '+ New Part';
+      }
+    });
+    dropdown.appendChild(newBtn);
+  }
+
+  function confirmDeleteStoryFromHub() {
+    return new Promise(resolve => {
+      const overlay = document.getElementById('ed-delete-confirm-overlay');
+      const yesBtn = document.getElementById('ed-delete-confirm-yes');
+      const cancelBtn = document.getElementById('ed-delete-confirm-cancel');
+      overlay.hidden = false;
+      const cleanup = (result) => {
+        overlay.hidden = true;
+        yesBtn.removeEventListener('click', onYes);
+        cancelBtn.removeEventListener('click', onCancel);
+        resolve(result);
+      };
+      const onYes = () => cleanup(true);
+      const onCancel = () => cleanup(false);
+      yesBtn.addEventListener('click', onYes);
+      cancelBtn.addEventListener('click', onCancel);
+    });
+  }
+
+  function edStoryCard(s) {
+    const storyPath = s.story_path || s.slug;
+    const row = document.createElement('div');
+    row.className = 'ed-story-row';
+    row.innerHTML = `
+      <a class="ed-story-link" href="/fanpages/${storyPath}/edit?from=hub">
+        ${window.wikiGeneratedCoverHtml(s, { imgClass: 'ed-card-img ed-card-img--story', small: true })}
+        <div class="ed-card-info">
+          <p class="ed-card-title">${escapeHtml(s.site_title)}</p>
+          <p class="ed-card-status">${storyStatusHtml(s)}</p>
+          <p class="ed-card-updated">${updatedLabel(s.updated_at)}</p>
+          <div class="ed-card-stats">
+            <span title="Views">👁 ${formatCount(s.view_count)}</span>
+            <span title="Likes">⭐ ${formatCount(s.like_count)}</span>
+            <span title="Comments">💬 ${formatCount(s.comment_count)}</span>
+          </div>
+        </div>
+      </a>
+      <div class="ed-story-actions">
+        <div class="ed-continue-wrap">
+          <button class="ed-continue-btn" type="button">Continue Writing <span class="ed-continue-caret">▾</span></button>
+        </div>
+        <button class="ed-delete-icon-btn" type="button" title="Delete story">🗑</button>
+      </div>
+    `;
+    row.querySelector('.ed-continue-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleContinueDropdown(e.currentTarget, s);
+    });
+    row.querySelector('.ed-delete-icon-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!await confirmDeleteStoryFromHub()) return;
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/moderator/site', { method: 'DELETE', headers: { ...authHeaders(), 'X-Story-Path': storyPath } });
+        if (!res.ok) throw new Error();
+        cache.stories = (cache.stories || []).filter(x => x.id !== s.id);
+        renderItems('stories', cache.stories, false);
+      } catch {
+        alert('Could not delete this story — please try again.');
+        btn.disabled = false;
+      }
+    });
+    return row;
   }
 
   function edCard(href, coverHtml, title, sub) {
@@ -263,12 +498,9 @@
       return;
     }
     list.innerHTML = '';
+    closeAllContinueDropdowns();
     if (tab === 'stories') {
-      items.forEach(s => list.appendChild(edCard(
-        `/fanpages/${s.story_path || s.slug}/edit?from=hub`,
-        window.wikiGeneratedCoverHtml(s, { imgClass: 'ed-card-img ed-card-img--story', small: true }),
-        s.site_title, storyStatusSub(s)
-      )));
+      items.forEach(s => list.appendChild(edStoryCard(s)));
     } else if (tab === 'characters') {
       items.forEach(c => list.appendChild(edCard(
         `/fanpages/create-character?id=${c.id}`,
