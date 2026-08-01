@@ -342,20 +342,6 @@ body.mod-theme {
   .mod-quick-nav { max-width: 100%; }
 }
 
-/* Sidebar variant — sits in the 220px-wide side column next to the Story
-   Description now, so the same upside-down-triangle layout just needs to
-   scale way down (labels included) to fit cleanly. */
-.mod-quick-nav--sidebar {
-  max-width: 220px;
-  margin: 0;
-}
-.mod-quick-nav--sidebar .mod-quick-nav-row { gap: 0.6rem; }
-.mod-quick-nav--sidebar .mod-quick-nav-row + .mod-quick-nav-row { margin-top: 0.6rem; }
-.mod-quick-nav--sidebar .mod-quick-nav-row--single .mod-quick-nav-card { width: calc(50% - 0.3rem); }
-.mod-quick-nav--sidebar .mod-quick-nav-card { border-radius: 10px; }
-.mod-quick-nav--sidebar .mod-quick-nav-card-overlay { padding: 0.45rem 0.5rem; }
-.mod-quick-nav--sidebar .mod-quick-nav-card-label { font-size: 0.6rem; letter-spacing: 0.05em; }
-.mod-quick-nav--sidebar .mod-quick-nav-card-edit-btn { width: 22px; height: 22px; font-size: 0.65rem; }
 
 .mod-banner-edit-wrap {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 3;
@@ -565,17 +551,18 @@ body.mod-editing-active .mod-field-label-row { display: flex; }
 }
 .mod-page-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.72); z-index: 0; }
 
-/* ── Wiki layout ── */
+/* ── Wiki layout — single column now that Navigate/quick-nav/Author have
+   all moved out of a side rail (into tabs, a full-width card row, and the
+   Description box respectively), so this can stretch to use the space
+   that column used to eat. Only index.html uses this class — the other
+   story sub-pages (.chars-layout/.mod-page-row) keep their own side
+   column untouched. ── */
 .wiki-layout {
   position: relative;
   z-index: 1;
-  max-width: 1100px;
+  max-width: 1300px;
   margin: 0 auto;
   padding: 4.5rem 3rem 4rem;
-  display: grid;
-  grid-template-columns: 1fr 220px;
-  gap: 3rem;
-  align-items: start;
 }
 
 .wiki-title {
@@ -597,10 +584,22 @@ body.mod-editing-active .fp-share-icon-btn { display: none; }
 .wiki-hero-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1.1rem; }
 .wiki-hero-title { margin-bottom: 0; }
 .wiki-hero-meta {
-  flex-direction: row; flex-wrap: wrap; gap: 1.5rem;
+  flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 1.5rem;
   background: none; border: none; padding: 0;
 }
-.wiki-hero-meta .wiki-meta-badge-group { gap: 0.4rem; }
+/* Rating/Fandom badge-groups hug their own content — they're flex column
+   items in a flex row, so without this they'd stretch to the row's cross-
+   axis size instead of staying just as wide as "Rating"/the badge text. */
+.wiki-hero-meta .wiki-meta-badge-group { gap: 0.4rem; flex: 0 0 auto; align-self: flex-start; }
+
+/* Views/Likes/Chapters — fills the rest of the row, pushed to the far
+   right of whatever space Rating/Fandom don't use. */
+.wiki-hero-stats { display: flex; align-items: center; gap: 1.5rem; margin-left: auto; padding-top: 0.2rem; }
+.wiki-hero-stat {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font-family: 'Inter', sans-serif; font-size: 0.92rem; font-weight: 700; color: var(--mod-text-secondary, #aaa);
+}
+.wiki-hero-stat-icon { font-size: 0.95rem; opacity: 0.85; }
 .wiki-hero-actions { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.25rem; }
 .wiki-hero-btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -618,6 +617,74 @@ body.mod-editing-active .fp-share-icon-btn { display: none; }
   box-shadow: 0 0 12px rgba(127,168,217,0.3);
 }
 .wiki-hero-btn--edit:hover { border-color: #7fa8d9; color: #a8c6e8; background: var(--mod-accent-bg, rgba(127,168,217,0.08)); box-shadow: 0 0 20px rgba(127,168,217,0.55); }
+
+/* ── Story tabs — Home/Chapters/Characters/Gallery, replaces the old
+   "Navigate" side box. Same underline-active idiom as .mod-panel-tab
+   elsewhere in this file, just bigger since it's primary navigation here
+   instead of a utility tab strip. ── */
+.wiki-story-tabs {
+  display: flex; gap: 0.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 2.75rem;
+}
+.wiki-story-tab {
+  display: inline-flex; align-items: center;
+  background: none; border: none; cursor: pointer; text-decoration: none;
+  font-family: 'Inter', sans-serif; font-size: 0.98rem; font-weight: 600; color: #999;
+  padding: 0.85rem 1.35rem; border-bottom: 3px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.wiki-story-tab:hover { color: #f0f0f0; }
+.wiki-story-tab.active { color: #f0c060; border-bottom-color: #f0c060; font-weight: 700; }
+
+/* New block-formatting context so this block's own height still wraps
+   around the floated cover+avatar box below, instead of collapsing to
+   the (possibly shorter) text and letting the next section overlap it. */
+#about-row { display: flow-root; }
+
+/* Small cover + clickable author avatar, floated in the top-right corner
+   of the Description box so the paragraph text wraps cleanly underneath
+   once it runs taller. */
+.wiki-desc-side {
+  float: right;
+  width: 130px;
+  margin: 0 0 1rem 1.75rem;
+  display: flex; flex-direction: column; align-items: center; gap: 0.75rem;
+}
+.wiki-desc-cover-wrap {
+  position: relative; width: 100%; aspect-ratio: 2 / 3;
+  border-radius: 8px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+}
+.wiki-desc-cover-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
+.wiki-desc-cover-placeholder {
+  width: 100%; height: 100%; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; text-align: center; padding: 0.75rem;
+  border: 2px dashed var(--mod-card-border, rgba(255,255,255,0.15));
+  background: var(--mod-card-bg, #161616);
+  color: var(--mod-text-secondary, #999);
+  font-size: 0.7rem;
+}
+.wiki-desc-author-link { display: flex; }
+.wiki-desc-author-avatar, .wiki-desc-author-avatar-fallback {
+  width: 52px; height: 52px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid rgba(255,255,255,0.18); box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  transition: border-color 0.15s;
+}
+.wiki-desc-author-avatar { object-fit: cover; background: #333; }
+.wiki-desc-author-avatar-fallback {
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #7fa8d9, #d97a72); color: #fff; font-weight: 700; font-size: 1.15rem;
+}
+.wiki-desc-author-link:hover .wiki-desc-author-avatar,
+.wiki-desc-author-link:hover .wiki-desc-author-avatar-fallback { border-color: #7fa8d9; }
+
+/* Characters/Chapters/Gallery — one full-width row of three, sitting
+   between Description and Notes From the Author. Reuses .mod-quick-nav-card
+   itself (and its hover/overlay/edit-btn styling) unchanged — just a
+   different, wider grid wrapper and a shorter card shape than the square
+   cards edit.html's own quick-nav still uses. */
+.wiki-story-cards-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.75rem; margin: 0 0 2.75rem; }
+.wiki-story-cards-row .mod-quick-nav-card { aspect-ratio: 16 / 9; width: 100%; }
 
 .wiki-section { margin-bottom: 2.75rem; }
 
@@ -1784,13 +1851,8 @@ a.wiki-tag-bubble:hover { background: rgba(127,168,217,0.15); border-color: rgba
   .wiki-cover { height: 320px; }
   .wiki-title { font-size: 1.8rem; }
 
-  /* Quick-nav cards: keep the 2-up top row (they're small enough), but the
-     centered single Gallery card can go full-width instead of half. Now
-     that they live in the sidebar, that column is full-width here too, so
-     they can grow back up a bit from the fixed 220px desktop size. */
   .mod-quick-nav-row--single .mod-quick-nav-card { width: 100%; }
   .mod-quick-nav-row { gap: 1rem; }
-  .mod-quick-nav--sidebar { max-width: 340px; margin: 0 auto 1.5rem; }
 
   /* Hero — cover stacks above the title/meta/actions instead of sitting
      beside them, centered, at a saner size than the desktop 240×360. */
@@ -1798,8 +1860,23 @@ a.wiki-tag-bubble:hover { background: rgba(127,168,217,0.15); border-color: rgba
   .wiki-hero-cover { margin: 0 auto; width: 160px; height: 240px; }
   .wiki-hero-info { align-items: center; }
   .wiki-hero-meta { justify-content: center; }
+  .wiki-hero-meta .wiki-meta-badge-group { align-self: center; }
+  .wiki-hero-stats { margin-left: 0; justify-content: center; }
   .mod-cover-wrap { margin: 0 auto; width: 160px; height: 240px; }
   .wiki-meta-display { width: 100%; max-width: 260px; }
+
+  /* Story tabs — scroll horizontally instead of wrapping onto a cramped
+     second line. */
+  .wiki-story-tabs { overflow-x: auto; flex-wrap: nowrap; }
+  .wiki-story-tab { flex-shrink: 0; }
+
+  /* Description's floated cover+avatar box — full-width above the text
+     instead of a narrow float, same as the old cover+meta column used to
+     stack on mobile. */
+  .wiki-desc-side { float: none; width: 140px; margin: 0 auto 1.25rem; }
+
+  /* Three cards stack instead of squeezing into one row. */
+  .wiki-story-cards-row { grid-template-columns: 1fr; gap: 1rem; }
 
   /* Bio | divider | links → stacked, divider becomes a horizontal rule. */
   .wiki-meet-split { grid-template-columns: 1fr; gap: 1.5rem; }

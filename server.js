@@ -408,6 +408,13 @@ async function initDb() {
     );
   `).catch(e => console.error('moderator_site_likes migration:', e.message));
 
+  // Story-level view counter — bumped once per home-page load (see the
+  // /view endpoint below), separate from moderator_chapters.view_count
+  // which tracks per-chapter reads instead.
+  await pool.query(`
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0;
+  `).catch(e => console.error('moderator_sites view_count migration:', e.message));
+
   // Likes on gallery posts — mirrors moderator_bookmarks, feeds the Library's "Galleries" tab.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS moderator_gallery_likes (
@@ -4012,6 +4019,32 @@ app.get('/api/moderator-sites/by-path/:owner/:story', async (req, res) => {
   );
 });
 
+// POST .../view — bumps the story's home-page view counter. Fired once per
+// page load from the story hub itself (not the Characters/Chapters/Gallery
+// sub-pages, which all share the GET lookup above but shouldn't each count
+// as a "view" of the story). The owner's own visits don't count, so authors
+// previewing their own page can't inflate it. Easy/naive by design for now —
+// "views" here just means home-page loads, no de-duping by visitor yet.
+async function bumpSiteViewCount(req, res, whereClause, params) {
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+  const { rows: [site] } = await pool.query(`SELECT id, owner_user_id FROM moderator_sites WHERE ${whereClause}`, params);
+  if (!site) return res.status(404).json({ error: 'Not found.' });
+  if (viewerId !== site.owner_user_id) {
+    await pool.query('UPDATE moderator_sites SET view_count = view_count + 1 WHERE id = $1', [site.id]);
+  }
+  res.json({ ok: true });
+}
+app.post('/api/moderator-sites/:slug/view', async (req, res) => {
+  await bumpSiteViewCount(req, res, 'slug = $1', [req.params.slug]);
+});
+app.post('/api/moderator-sites/by-path/:owner/:story/view', async (req, res) => {
+  await bumpSiteViewCount(req, res, 'story_path = $1', [`${req.params.owner}/${req.params.story}`]);
+});
+
 async function sendSiteLookup(query, params, req, res) {
   const { rows: [site] } = await pool.query(query, params);
   if (!site) return res.status(404).json({ error: 'Not found.' });
@@ -4030,7 +4063,7 @@ async function sendSiteLookup(query, params, req, res) {
   // + NSFW mode -> full access.
   const spicyLock = !loggedIn ? 'login' : (!viewerNsfwEnabled ? 'sfw_mode' : null);
 
-  const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds, bookmarkedGalleryIds] = await Promise.all([
+  const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds, bookmarkedGalleryIds, siteLikeCount] = await Promise.all([
     // Drafts only ever show to the story's own owner (previewing via "View
     // as Reader") — everyone else only ever sees published chapters.
     pool.query(
@@ -4066,6 +4099,7 @@ async function sendSiteLookup(query, params, req, res) {
     viewerId
       ? pool.query('SELECT gallery_id FROM moderator_gallery_bookmarks WHERE user_id = $1', [viewerId])
       : Promise.resolve({ rows: [] }),
+    pool.query('SELECT count(*) FROM moderator_site_likes WHERE site_id = $1', [site.id]),
   ]);
 
   const likedSet = new Set(likedGalleryIds.rows.map(r => r.gallery_id));
@@ -4102,6 +4136,8 @@ async function sendSiteLookup(query, params, req, res) {
       is_self: viewerId === site.owner_user_id,
       is_following: isFollowing.rows.length > 0,
       is_bookmarked: isBookmarked.rows.length > 0,
+      view_count: site.view_count || 0,
+      like_count: Number(siteLikeCount.rows[0].count),
     },
     chapters,
     characters,
