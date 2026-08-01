@@ -19,6 +19,11 @@ html { background: #0a0a0a; }
    so the main site's own use of .site-banner is untouched. */
 .site-banner-inner { max-height: 460px; }
 .site-banner img { height: 460px; }
+/* Same reason as .wiki-cover's z-index:1 above — .mod-page-bg-wrap right
+   after this is a positioned stack-level-0 box now, which without this
+   would paint its (now viewport-covering, fixed) background straight over
+   this banner instead of staying behind it. */
+.site-banner-inner { position: relative; z-index: 1; }
 
 /* Cozy blue/red theme, dark background by default. Redeclaring these custom
    properties re-skins every reused BTW class (rules, borders, footer text,
@@ -79,7 +84,16 @@ body.mod-theme {
 
 /* ── Cover ── */
 .wiki-cover {
+  /* z-index:1 is required, not optional — .mod-page-bg-wrap (a sibling
+     right after this) is position:relative + z-index:0 (needed so ITS OWN
+     negative-z-index children stay contained), which makes the whole wrap
+     a "positioned, stack-level-0" box that paints AFTER ordinary
+     non-positioned siblings like this banner regardless of DOM order.
+     Without an explicit z-index here to counter that, the wrap's now-
+     viewport-covering fixed background overlay paints straight over the
+     banner, hiding it completely. */
   position: relative;
+  z-index: 1;
   width: 100%;
   height: 460px;
   overflow: hidden;
