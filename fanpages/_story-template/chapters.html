@@ -30,16 +30,35 @@
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       font-size: 1.5rem; background: rgba(0,0,0,0.25); color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,0.6);
     }
-    .ch-card-info { flex: 1; min-width: 0; }
+    .ch-card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; align-self: stretch; padding: 0.15rem 0; }
     .ch-card-title {
       font-family: 'Baloo 2', 'Cinzel', serif; font-weight: 700; font-size: 1.25rem;
       color: #f0f0f0; margin: 0 0 0.3rem; line-height: 1.25;
     }
-    .ch-card-meta { font-size: 0.85rem; margin: 0 0 0.5rem; font-family: 'Inter', sans-serif; }
+    /* Sits at the bottom of the left side now (.ch-card-info is a column
+       flexed to fill the card's full height), bigger than before so it
+       reads as real information instead of a small afterthought caption. */
+    .ch-card-meta { font-size: 0.95rem; margin: 0; font-family: 'Inter', sans-serif; }
     .ch-card-status--published { color: #7fa8d9; font-weight: 700; }
     .ch-card-status--draft { color: #f0c060; font-weight: 700; }
-    .ch-card-meta-date { color: #888; }
-    .ch-card-stats { display: flex; gap: 1.1rem; font-size: 0.82rem; color: #aaa; }
+    .ch-card-meta-date { color: #999; }
+
+    /* Placeholder for real reading-progress tracking once the in-browser
+       reader exists — always 0% for now, Wattpad-style pill + bar. */
+    .ch-card-progress {
+      display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+      flex-shrink: 0; width: 120px;
+    }
+    .ch-card-progress-label { font-size: 0.8rem; color: #999; font-weight: 700; font-family: 'Inter', sans-serif; white-space: nowrap; }
+    .ch-card-progress-bar { width: 100%; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.1); overflow: hidden; }
+    .ch-card-progress-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #7fa8d9, #3dd6b8); border-radius: 3px; }
+
+    /* Center-right of the card, not flush against the right edge. */
+    .ch-card-stats {
+      display: flex; flex-direction: column; gap: 0.5rem; flex-shrink: 0;
+      font-size: 0.85rem; color: #aaa; margin-right: 2.5rem;
+    }
+    .ch-card-stats span { white-space: nowrap; }
   </style>
 </head>
 <body class="mod-theme">
@@ -75,11 +94,11 @@
   <!-- Same 1300px cap as the story home page's .wiki-layout — the shared
        .mod-page-row class (also used by profile-template.html) defaults
        to 1340px, which read visibly wider than Home. -->
-  <main class="mod-page-row" style="padding: 0 3rem; margin-top: 3rem; max-width: 1300px;">
+  <main class="mod-page-row" style="padding: 0 3rem; margin-top: 3rem; max-width: 1300px; grid-template-columns: 1fr;">
 
     <div class="mod-chapters-main" id="chapters-list-view">
 
-      <h1 class="hub-title">Chapters</h1>
+      <h1 class="wiki-section-title">Chapters</h1>
 
       <div class="ch-card-list" id="chapters-list">
         <p class="gallery-empty-msg">Loading…</p>
@@ -116,17 +135,6 @@
         </div>
         <iframe id="chapter-pdf-iframe" class="chapter-pdf-viewer" title="Chapter PDF"></iframe>
       </div>
-    </div>
-
-    <div class="wiki-side-col">
-
-      <aside class="chars-create-box" id="chapter-action-box" style="display:none;">
-        <button class="chars-create-btn" id="chapter-action-btn" type="button">
-          <span class="chars-create-btn-icon" id="chapter-action-icon">➕</span>
-          <span id="chapter-action-label">Create New Chapter</span>
-        </button>
-      </aside>
-
     </div>
 
   </main>
@@ -235,11 +243,17 @@ function renderChapterList() {
       <div class="ch-card-info">
         <p class="ch-card-title">${escapeHtml(ch.title || 'Untitled Chapter')}</p>
         <p class="ch-card-meta">${dateLabel}</p>
-        <div class="ch-card-stats">
-          <span>👁 ${formatStatCount(ch.view_count)}</span>
-          <span>⭐ ${formatStatCount(ch.like_count)}</span>
-          <span>💬 ${formatStatCount(ch.comment_count)}</span>
-        </div>
+      </div>
+      <!-- Placeholder until the in-browser reader tracks real progress —
+           always 0% for now. -->
+      <div class="ch-card-progress">
+        <span class="ch-card-progress-label">0% Complete</span>
+        <div class="ch-card-progress-bar"><div class="ch-card-progress-bar-fill"></div></div>
+      </div>
+      <div class="ch-card-stats">
+        <span>👁 ${formatStatCount(ch.view_count)}</span>
+        <span>⭐ ${formatStatCount(ch.like_count)}</span>
+        <span>💬 ${formatStatCount(ch.comment_count)}</span>
       </div>`;
     card.addEventListener('click', (e) => {
       e.preventDefault();
@@ -308,8 +322,6 @@ function openChapterDetail(ch, pushHistory) {
   document.title = `${ch.title || 'Chapter'} ✦ ${document.title.split('✦').pop().trim()}`;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  updateActionBox();
-
   if (pushHistory) history.pushState({ ch: ch.id }, '', `${STORY_BASE}/chapters?ch=${ch.id}`);
 }
 
@@ -318,7 +330,6 @@ function closeChapterDetail(pushHistory) {
   closePdfView();
   document.getElementById('chapter-detail-view').style.display = 'none';
   document.getElementById('chapters-list-view').style.display = '';
-  updateActionBox();
   if (pushHistory) history.pushState({}, '', `${STORY_BASE}/chapters`);
 }
 
@@ -349,20 +360,6 @@ window.addEventListener('popstate', () => {
   if (ch) openChapterDetail(ch, false);
 });
 
-// ── Owner-only action box — always the same button now, straight to the
-// Chapters tab of the main Story Editor hub. Creating/editing chapters no
-// longer happens in place on this page at all. ─────────────────────────────
-function updateActionBox() {
-  const box = document.getElementById('chapter-action-box');
-  if (!IS_SELF) { box.style.display = 'none'; return; }
-  box.style.display = 'block';
-  document.getElementById('chapter-action-icon').textContent = '✏️';
-  document.getElementById('chapter-action-label').textContent = 'Chapter Editor';
-  document.getElementById('chapter-action-btn').onclick = () => {
-    window.location.href = `${STORY_BASE}/edit#chapters`;
-  };
-}
-
 (async () => {
   const data = await ModeratorSite.load(SLUG);
   SITE = (data && data.site) || null;
@@ -377,7 +374,6 @@ function updateActionBox() {
 
   CHAPTERS = (data && data.chapters) || [];
   renderChapterList();
-  updateActionBox();
 
   const deepLinkId = new URLSearchParams(window.location.search).get('ch');
   const deepLinkChapter = deepLinkId ? CHAPTERS.find(c => String(c.id) === String(deepLinkId)) : null;
