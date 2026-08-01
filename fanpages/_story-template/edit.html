@@ -1351,7 +1351,11 @@ document.getElementById('save-edit-btn').addEventListener('click', async () => {
   }
 });
 
-// ── Banner image — crop-and-upload via the shared Cropper.js modal ─────────
+// ── Banner image — crop-and-upload via the shared Cropper.js modal. The
+// original (pre-crop) file is kept server-side as banner_original_url
+// alongside the baked-in crop (banner_url), so Recrop always has the full
+// image to work from instead of re-cropping an already-cropped image and
+// only ever being able to zoom in further. ─────────────────────────────
 document.getElementById('banner-edit-btn').addEventListener('click', () => {
   document.getElementById('banner-file-input').click();
 });
@@ -1360,21 +1364,23 @@ document.getElementById('banner-file-input').addEventListener('change', (e) => {
   if (!file) return;
   openCropModal({
     title: 'Crop Story Banner', imageSrc: URL.createObjectURL(file), aspectRatio: 1600 / 560, round: false,
-    onSave: uploadBanner,
+    onSave: (blob) => uploadBanner(blob, file),
   });
   e.target.value = '';
 });
 document.getElementById('banner-recrop-btn').addEventListener('click', () => {
-  if (!siteData.site || !siteData.site.banner_url) return;
+  const src = siteData.site && (siteData.site.banner_original_url || siteData.site.banner_url);
+  if (!src) return;
   openCropModal({
-    title: 'Crop Story Banner', imageSrc: siteData.site.banner_url, aspectRatio: 1600 / 560, round: false,
-    onSave: uploadBanner,
+    title: 'Crop Story Banner', imageSrc: src, aspectRatio: 1600 / 560, round: false,
+    onSave: (blob) => uploadBanner(blob),
   });
 });
-async function uploadBanner(blob) {
+async function uploadBanner(blob, originalFile) {
   const bannerImg = document.getElementById('banner-img');
   const fd = new FormData();
   fd.append('banner', blob, 'banner.jpg');
+  if (originalFile) fd.append('banner_original', originalFile, originalFile.name || 'banner-original.jpg');
   fd.append('position', 50);
   const res = await fetch('/api/moderator/site/banner', { method: 'PUT', headers: authHeaders(), body: fd });
   if (res.ok) {

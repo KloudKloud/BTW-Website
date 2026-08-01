@@ -264,6 +264,14 @@ async function initDb() {
     ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS theme_bg_url TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('moderator_sites banner/theme migration:', e.message));
 
+  // Uncropped source image behind banner_url — banner_url is always the
+  // baked-in crop actually shown; without keeping the original around too,
+  // "Recrop" had nothing to recrop but the already-cropped result, which
+  // meant every recrop could only ever zoom further into a shrinking image.
+  await pool.query(`
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS banner_original_url TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('moderator_sites banner_original_url migration:', e.message));
+
   // Book cover — sits beside the story description, like BTW's own synopsis-cover
   await pool.query(`
     ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS cover_url TEXT NOT NULL DEFAULT '';
@@ -2840,7 +2848,10 @@ const uploadModImage = multer({
     destination: (req, file, cb) => cb(null, MOD_IMAGES_DIR),
     filename: (req, file, cb) => {
       const ext = ({ 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' })[file.mimetype] || '.jpg';
-      cb(null, `${req.user.id}_${Date.now()}${ext}`);
+      // fieldname suffix keeps this collision-free when a route uploads more
+      // than one file at once (e.g. banner + banner_original together) —
+      // Date.now() alone can land on the same millisecond for both.
+      cb(null, `${req.user.id}_${Date.now()}_${file.fieldname}${ext}`);
     },
   }),
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -4175,14 +4186,26 @@ app.get('/api/moderator/site', requireAuth, requireModerator, async (req, res) =
   res.json({ site: req.modSite });
 });
 
-app.put('/api/moderator/site/banner', requireAuth, requireModerator, uploadModImage.single('banner'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
-  const bannerUrl = `/images/moderators/${req.file.filename}`;
-  const position = parseInt(req.body.position, 10);
-  const { rows: [site] } = await pool.query(
-    'UPDATE moderator_sites SET banner_url = $1, banner_position = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
-    [bannerUrl, Number.isFinite(position) ? position : 50, req.modSite.id]
-  );
+// `banner` (the baked-in crop actually shown) is always required.
+// `banner_original` is only sent the first time a NEW source photo is
+// picked — Recrop re-sends just `banner` from the existing original, so
+// banner_original_url stays untouched and there's always a full image left
+// to recrop from, not just whatever was cropped last time.
+app.put('/api/moderator/site/banner', requireAuth, requireModerator, uploadModImage.fields([{ name: 'banner', maxCount: 1 }, { name: 'banner_original', maxCount: 1 }]), async (req, res) => {
+  const bannerFile = req.files && req.files.banner && req.files.banner[0];
+  if (!bannerFile) return res.status(400).json({ error: 'Image is required.' });
+  const bannerUrl = `/images/moderators/${bannerFile.filename}`;
+  const originalFile = req.files.banner_original && req.files.banner_original[0];
+  const position = Number.isFinite(parseInt(req.body.position, 10)) ? parseInt(req.body.position, 10) : 50;
+  const { rows: [site] } = originalFile
+    ? await pool.query(
+        'UPDATE moderator_sites SET banner_url = $1, banner_original_url = $2, banner_position = $3, updated_at = NOW() WHERE id = $4 RETURNING *',
+        [bannerUrl, `/images/moderators/${originalFile.filename}`, position, req.modSite.id]
+      )
+    : await pool.query(
+        'UPDATE moderator_sites SET banner_url = $1, banner_position = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
+        [bannerUrl, position, req.modSite.id]
+      );
   res.json({ site });
 });
 
