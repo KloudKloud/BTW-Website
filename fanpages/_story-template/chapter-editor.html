@@ -178,12 +178,27 @@
       display: flex; align-items: center; justify-content: center; transition: background 0.15s;
     }
     .ce-video-thumb-wrap:hover .ce-video-play-btn { background: rgba(220,30,30,0.85); }
+    /* Title bar that fades in on hover — clicking it (like Wattpad/YouTube)
+       opens the video on YouTube itself, separate from the play button
+       which plays inline. */
+    .ce-video-thumb-title {
+      position: absolute; left: 0; right: 0; bottom: 0; padding: 1.6rem 1rem 0.7rem;
+      background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+      color: #fff; font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      opacity: 0; transition: opacity 0.15s; cursor: pointer;
+    }
+    .ce-video-thumb-title:hover { text-decoration: underline; }
+    .ce-video-thumb-wrap:hover .ce-video-thumb-title { opacity: 1; }
     .ce-video-block { position: relative; margin: 0 0 1.4em; border-radius: 10px; transition: opacity 0.15s, box-shadow 0.15s; }
     .ce-video-block.ce-dragging { opacity: 0.4; }
     .ce-video-block.ce-drop-target { box-shadow: 0 0 0 2px rgba(240,192,96,0.7); }
     .ce-video-block .ce-video-thumb-wrap { aspect-ratio: 16 / 9; width: 100%; }
     .ce-video-block iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: none; border-radius: 10px; }
-    #ce-cover-video-thumb-wrap { width: min(70%, 640px); aspect-ratio: 16 / 9; }
+    /* Cover video fills the box's full height, same as the cover image —
+       centered horizontally, capped to the box width so wide videos don't
+       overflow. */
+    #ce-cover-video-thumb-wrap { height: 100%; width: auto; max-width: 100%; aspect-ratio: 16 / 9; }
     #ce-cover-video-thumb-wrap iframe { width: 100%; height: 100%; border: none; }
 
     /* ── Big chapter title, centered, above the writing surface. ── */
@@ -410,17 +425,30 @@ function buildVideoThumbMarkup(videoId) {
   return `
     <img src="https://img.youtube.com/vi/${videoId}/hqdefault.jpg" alt="" />
     <button type="button" class="ce-video-play-btn" title="Play video">▶</button>
+    <div class="ce-video-thumb-title" title="Watch on YouTube">Watch on YouTube</div>
   `;
 }
 function wireVideoThumb(wrap, videoId) {
   wrap.innerHTML = buildVideoThumbMarkup(videoId);
-  wrap.querySelector('img').addEventListener('click', () => {
-    window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank', 'noopener');
+  const openOnYouTube = () => window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank', 'noopener');
+  wrap.querySelector('img').addEventListener('click', openOnYouTube);
+  wrap.querySelector('.ce-video-thumb-title').addEventListener('click', (e) => {
+    e.stopPropagation();
+    openOnYouTube();
   });
   wrap.querySelector('.ce-video-play-btn').addEventListener('click', (e) => {
     e.stopPropagation();
     wrap.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1" allow="autoplay; encrypted-media" allowfullscreen title="Chapter video"></iframe>`;
   });
+  // Real video title via YouTube's no-key oEmbed endpoint — falls back to
+  // the generic label above if the request fails (e.g. offline, invalid ID).
+  fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + videoId)}&format=json`)
+    .then(res => res.ok ? res.json() : null)
+    .then(data => {
+      const titleEl = wrap.querySelector('.ce-video-thumb-title');
+      if (data && data.title && titleEl) { titleEl.textContent = data.title; titleEl.title = data.title; }
+    })
+    .catch(() => {});
 }
 function showCoverPreview() {
   document.getElementById('ce-cover-buttons').hidden = true;
