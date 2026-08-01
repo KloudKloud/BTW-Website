@@ -261,8 +261,11 @@
 <!-- Edit bar -->
 <div class="mod-edit-bar" id="edit-bar" style="display:flex;">
   <div class="mod-edit-bar-left" id="edit-bar-left">
-    <span class="mod-edit-bar-label" id="edit-bar-label">Editing your story</span>
-    <button class="mod-edit-bar-delete" id="delete-story-btn" type="button">🗑️ Delete Story</button>
+    <a class="mod-edit-bar-back" id="edit-bar-back" href="/fanpages/editor#stories" title="Back to Creator Hub">←</a>
+    <div class="mod-edit-bar-titles">
+      <span class="mod-edit-bar-label" id="edit-bar-label">Editing Your Story</span>
+      <span class="mod-edit-bar-title" id="edit-bar-title">Untitled Story</span>
+    </div>
   </div>
   <div class="mod-edit-bar-actions">
     <button class="mod-edit-bar-save" id="save-edit-btn" disabled>Save Changes</button>
@@ -428,7 +431,7 @@
 </div>
 
 <!-- Banner -->
-<div class="wiki-cover mod-editing-banner" id="wiki-cover" style="margin-top:76px;">
+<div class="wiki-cover mod-editing-banner" id="wiki-cover" style="margin-top:84px;">
   <img alt="Story banner" id="banner-img" class="mod-banner-loading" draggable="false" />
   <button class="fp-recrop-btn" id="banner-recrop-btn" type="button" style="display:none; position:absolute; right:1.5rem; top:1.25rem; z-index:5;">✏️ Recrop</button>
   <div class="mod-banner-edit-wrap" id="banner-edit-wrap" style="display:flex;">
@@ -888,7 +891,6 @@ if (ONBOARDING) {
   document.body.classList.add('se-onboarding-active');
   document.getElementById('se-nav-details').style.display = 'none';
   document.getElementById('se-nav-chapters').style.display = 'none';
-  document.getElementById('delete-story-btn').style.display = 'none';
   document.getElementById('edit-bar-label').textContent = 'Setting up your story';
   document.getElementById('save-edit-btn').style.display = 'none';
   document.getElementById('cancel-edit-btn').style.display = 'none';
@@ -1285,6 +1287,7 @@ function populateForm(s) {
   document.title = `Edit — ${s.site_title || 'Untitled Story'} ✦ Fanpages`;
   document.getElementById('footer-text').textContent = `${s.site_title || 'Untitled Story'} is a fan-made page hosted on Between Two Worlds.`;
   document.getElementById('wiki-editing-indicator-title').textContent = s.site_title || 'Untitled Story';
+  document.getElementById('edit-bar-title').textContent = s.site_title || 'Untitled Story';
 
   document.getElementById('site-title-input').value = s.site_title || '';
   document.getElementById('site-synopsis-input').value = s.synopsis || '';
@@ -1366,21 +1369,20 @@ function confirmDeleteStory(extraNote) {
   });
 }
 
-document.getElementById('delete-story-btn').addEventListener('click', async () => {
-  if (!await confirmDeleteStory()) return;
-  const btn = document.getElementById('delete-story-btn');
-  btn.disabled = true;
-  btn.textContent = 'Deleting…';
+// The only way to delete a whole story from inside the Story Editor now —
+// there's no standalone Delete Story button anymore (that lives in the
+// Creator Hub's "..." menu instead). This is reached only by deleting a
+// story's last remaining chapter, which the Wattpad-style rule treats as
+// deleting the book itself.
+async function deleteEntireStory() {
   try {
     const res = await fetch('/api/moderator/site', { method: 'DELETE', headers: authHeaders() });
     if (!res.ok) throw new Error();
     window.location.href = '/fanpages/my-stories';
   } catch {
     alert('Something went wrong deleting this story. Please try again.');
-    btn.disabled = false;
-    btn.textContent = '🗑️ Delete Story';
   }
-});
+}
 
 // Save Changes stays grayed out until the author actually touches the
 // Story Details form — any input/change/click inside it (typing, a
@@ -2779,7 +2781,7 @@ function renderSeChapterStack() {
       menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
       menu.querySelector('[data-action="read"]').addEventListener('click', (e) => {
         e.stopPropagation();
-        window.location.href = `${STORY_BASE}/chapters?ch=${ch.id}`;
+        window.open(`${STORY_BASE}/chapters?ch=${ch.id}`, '_blank');
       });
       menu.querySelector('[data-action="toggle-status"]').addEventListener('click', (e) => { e.stopPropagation(); toggleSeChapterStatus(ch); });
       menu.querySelector('[data-action="delete"]').addEventListener('click', (e) => { e.stopPropagation(); deleteSeChapter(ch); });
@@ -2809,16 +2811,7 @@ async function deleteSeChapter(ch) {
   // instead, same as Wattpad, with a note explaining why.
   if (SE_CHAPTERS.length === 1) {
     if (!await confirmDeleteStory(true)) return;
-    const btn = document.getElementById('delete-story-btn');
-    btn.disabled = true;
-    try {
-      const res = await fetch('/api/moderator/site', { method: 'DELETE', headers: authHeaders() });
-      if (!res.ok) throw new Error();
-      window.location.href = '/fanpages/my-stories';
-    } catch {
-      alert('Something went wrong deleting this story. Please try again.');
-      btn.disabled = false;
-    }
+    await deleteEntireStory();
     return;
   }
   if (!confirm(`Delete "${ch.title || 'this chapter'}"? This can't be undone.`)) return;

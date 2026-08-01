@@ -4589,6 +4589,17 @@ app.delete('/api/moderator/site', requireAuth, requireModerator, async (req, res
   res.json({ message: 'Deleted.' });
 });
 
+// Flips every published chapter back to draft in one shot — the Creator
+// Hub's "Unpublish Story" action. Drafts stay drafts (nothing to flip), so
+// this is safe to call even if the story's already partway unpublished.
+app.put('/api/moderator/site/unpublish', requireAuth, requireModerator, async (req, res) => {
+  await pool.query(
+    `UPDATE moderator_chapters SET status = 'draft', updated_at = NOW() WHERE site_id = $1 AND status = 'published'`,
+    [req.modSite.id]
+  );
+  res.json({ message: 'Unpublished.' });
+});
+
 // ── Chapters ───────────────────────────────────────────────────────────────────
 app.get('/api/moderator/chapters', requireAuth, requireModerator, async (req, res) => {
   const { rows } = await pool.query(

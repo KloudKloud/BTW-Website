@@ -7,7 +7,6 @@
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&display=swap" />
   <style>
     * { box-sizing: border-box; }
     body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; margin: 0; padding: 0; }
@@ -127,21 +126,41 @@
 
     .ed-story-actions { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
     .ed-continue-wrap { position: relative; }
+    /* Same recipe as .chars-create-btn ("New Chapter" in the Story Editor) —
+       Inter, not Baloo 2. Baloo 2 at this weight/size rendered noticeably
+       blurry on this button; Inter is the font every other create/action
+       button on the site already uses at this size, proven not to. */
     .ed-continue-btn {
       display: flex; align-items: center; gap: 0.45rem;
-      background: linear-gradient(135deg, #1fb6a8, #3dd6b8); color: #05261f; border: none; border-radius: 22px;
-      padding: 0.65em 1.3em; font-family: 'Baloo 2', 'Inter', sans-serif; font-weight: 700; font-size: 0.92rem; cursor: pointer;
-      box-shadow: 0 0 14px rgba(31,182,168,0.45); transition: box-shadow 0.15s;
-      white-space: nowrap; letter-spacing: 0.01em;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; border: none; border-radius: 22px;
+      padding: 0.65em 1.3em; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.92rem; cursor: pointer;
+      box-shadow: 0 0 14px rgba(107,63,160,0.5); transition: box-shadow 0.15s, transform 0.15s;
+      white-space: nowrap;
     }
-    .ed-continue-btn:hover { box-shadow: 0 0 20px rgba(31,182,168,0.65); }
+    .ed-continue-btn:hover { box-shadow: 0 0 22px rgba(107,63,160,0.75); transform: translateY(-1px); }
     .ed-continue-caret { font-size: 0.7rem; opacity: 0.85; }
-    .ed-delete-icon-btn {
-      background: none; border: 1px solid rgba(217,122,114,0.4); color: #d97a72; border-radius: 10px;
-      width: 42px; height: 42px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-      cursor: pointer; font-size: 1rem; transition: border-color 0.15s, background 0.15s;
+    /* "..." menu — View as Reader / Unpublish Story / Delete. Replaces the
+       standalone trash icon; Delete is now one option among several
+       instead of its own always-visible button. */
+    .ed-more-wrap { position: relative; flex-shrink: 0; }
+    .ed-more-btn {
+      background: none; border: 1px solid rgba(255,255,255,0.2); color: #ccc; border-radius: 10px;
+      width: 42px; height: 42px; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 1.2rem; font-weight: 700; line-height: 1;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
     }
-    .ed-delete-icon-btn:hover { border-color: #d97a72; background: rgba(217,122,114,0.12); }
+    .ed-more-btn:hover { border-color: rgba(255,255,255,0.4); color: #fff; background: rgba(255,255,255,0.06); }
+    .ed-more-menu {
+      position: absolute; top: calc(100% + 0.5rem); right: 0; z-index: 45; min-width: 190px;
+      background: #1c1c1e; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.5); padding: 0.4rem;
+    }
+    .ed-more-menu-item {
+      display: block; width: 100%; text-align: left; padding: 0.6rem 0.7rem; border-radius: 6px;
+      background: none; border: none; color: #ddd; font-family: 'Inter', sans-serif; font-size: 0.87rem; cursor: pointer;
+    }
+    .ed-more-menu-item:hover { background: rgba(255,255,255,0.08); }
+    .ed-more-menu-item--danger { color: #d97a72; }
 
     .ed-continue-dropdown {
       position: absolute; top: calc(100% + 0.6rem); right: 0; z-index: 40;
@@ -163,11 +182,11 @@
     .ed-continue-empty { color: #888; font-size: 0.82rem; padding: 0.75rem; text-align: center; }
     .ed-continue-new {
       display: flex; align-items: center; justify-content: center; gap: 0.4rem; width: 100%; margin-top: 0.3rem;
-      background: linear-gradient(135deg, #1fb6a8, #3dd6b8); color: #05261f; border: none; border-radius: 20px;
-      padding: 0.65em; font-family: 'Baloo 2', 'Inter', sans-serif; font-weight: 700; font-size: 0.86rem; cursor: pointer;
-      box-shadow: 0 0 12px rgba(31,182,168,0.4); letter-spacing: 0.01em;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; border: none; border-radius: 20px;
+      padding: 0.65em; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.86rem; cursor: pointer;
+      box-shadow: 0 0 12px rgba(107,63,160,0.45);
     }
-    .ed-continue-new:hover { box-shadow: 0 0 18px rgba(31,182,168,0.6); }
+    .ed-continue-new:hover { box-shadow: 0 0 18px rgba(107,63,160,0.65); }
 
     @media (max-width: 700px) {
       .ed-layout { grid-template-columns: 1fr; }
@@ -216,6 +235,17 @@
     <div class="mod-confirm-actions">
       <button class="mod-btn" id="ed-delete-confirm-cancel" type="button">Cancel</button>
       <button class="mod-btn mod-btn--danger" id="ed-delete-confirm-yes" type="button">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="mod-confirm-overlay" id="ed-unpublish-confirm-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title">Are you sure you want to unpublish your story?</p>
+    <p class="mod-confirm-text">Draft stories can not be seen by other members on the website, and you'll need to republish your chapter(s) in order to gain new reads, likes, and comments.</p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn mod-btn--teal" id="ed-unpublish-confirm-yes" type="button">Yes, Unpublish this story</button>
+      <button class="mod-btn" id="ed-unpublish-confirm-cancel" type="button">No, do not unpublish</button>
     </div>
   </div>
 </div>
@@ -379,11 +409,13 @@
     dropdown.appendChild(newBtn);
   }
 
-  function confirmDeleteStoryFromHub() {
+  // Generic overlay-with-two-buttons confirm — shared shape for both the
+  // delete and unpublish confirmations, just pointed at different elements.
+  function confirmOverlay(overlayId, yesId, cancelId) {
     return new Promise(resolve => {
-      const overlay = document.getElementById('ed-delete-confirm-overlay');
-      const yesBtn = document.getElementById('ed-delete-confirm-yes');
-      const cancelBtn = document.getElementById('ed-delete-confirm-cancel');
+      const overlay = document.getElementById(overlayId);
+      const yesBtn = document.getElementById(yesId);
+      const cancelBtn = document.getElementById(cancelId);
       overlay.hidden = false;
       const cleanup = (result) => {
         overlay.hidden = true;
@@ -395,6 +427,64 @@
       const onCancel = () => cleanup(false);
       yesBtn.addEventListener('click', onYes);
       cancelBtn.addEventListener('click', onCancel);
+    });
+  }
+  const confirmDeleteStoryFromHub = () => confirmOverlay('ed-delete-confirm-overlay', 'ed-delete-confirm-yes', 'ed-delete-confirm-cancel');
+  const confirmUnpublishStory = () => confirmOverlay('ed-unpublish-confirm-overlay', 'ed-unpublish-confirm-yes', 'ed-unpublish-confirm-cancel');
+
+  // ── "..." menu — View as Reader / Unpublish Story / Delete ─────────────────
+  let openMoreMenuStoryId = null;
+  function closeAllMoreMenus() {
+    document.querySelectorAll('.ed-more-menu').forEach(m => m.remove());
+    openMoreMenuStoryId = null;
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.ed-more-wrap')) closeAllMoreMenus();
+  });
+
+  function toggleMoreMenu(btn, s, storyPath) {
+    const wrap = btn.closest('.ed-more-wrap');
+    if (openMoreMenuStoryId === s.id) { closeAllMoreMenus(); return; }
+    closeAllMoreMenus();
+    openMoreMenuStoryId = s.id;
+    const menu = document.createElement('div');
+    menu.className = 'ed-more-menu';
+    menu.innerHTML = `
+      <button type="button" class="ed-more-menu-item" data-action="read">View as Reader</button>
+      <button type="button" class="ed-more-menu-item" data-action="unpublish">Unpublish Story</button>
+      <button type="button" class="ed-more-menu-item ed-more-menu-item--danger" data-action="delete">Delete</button>
+    `;
+    wrap.appendChild(menu);
+    menu.querySelector('[data-action="read"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.open(`/fanpages/${storyPath}`, '_blank');
+      closeAllMoreMenus();
+    });
+    menu.querySelector('[data-action="unpublish"]').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      closeAllMoreMenus();
+      if (!await confirmUnpublishStory()) return;
+      try {
+        const res = await fetch('/api/moderator/site/unpublish', { method: 'PUT', headers: { ...authHeaders(), 'X-Story-Path': storyPath } });
+        if (!res.ok) throw new Error();
+        cache.stories = null;
+        renderItems('stories', await loadStories(), false);
+      } catch {
+        alert('Could not unpublish this story — please try again.');
+      }
+    });
+    menu.querySelector('[data-action="delete"]').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      closeAllMoreMenus();
+      if (!await confirmDeleteStoryFromHub()) return;
+      try {
+        const res = await fetch('/api/moderator/site', { method: 'DELETE', headers: { ...authHeaders(), 'X-Story-Path': storyPath } });
+        if (!res.ok) throw new Error();
+        cache.stories = (cache.stories || []).filter(x => x.id !== s.id);
+        renderItems('stories', cache.stories, false);
+      } catch {
+        alert('Could not delete this story — please try again.');
+      }
     });
   }
 
@@ -420,27 +510,18 @@
         <div class="ed-continue-wrap">
           <button class="ed-continue-btn" type="button">Continue Writing <span class="ed-continue-caret">▾</span></button>
         </div>
-        <button class="ed-delete-icon-btn" type="button" title="Delete story">🗑</button>
+        <div class="ed-more-wrap">
+          <button class="ed-more-btn" type="button" title="More options">⋯</button>
+        </div>
       </div>
     `;
     row.querySelector('.ed-continue-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       toggleContinueDropdown(e.currentTarget, s);
     });
-    row.querySelector('.ed-delete-icon-btn').addEventListener('click', async (e) => {
+    row.querySelector('.ed-more-btn').addEventListener('click', (e) => {
       e.stopPropagation();
-      if (!await confirmDeleteStoryFromHub()) return;
-      const btn = e.currentTarget;
-      btn.disabled = true;
-      try {
-        const res = await fetch('/api/moderator/site', { method: 'DELETE', headers: { ...authHeaders(), 'X-Story-Path': storyPath } });
-        if (!res.ok) throw new Error();
-        cache.stories = (cache.stories || []).filter(x => x.id !== s.id);
-        renderItems('stories', cache.stories, false);
-      } catch {
-        alert('Could not delete this story — please try again.');
-        btn.disabled = false;
-      }
+      toggleMoreMenu(e.currentTarget, s, storyPath);
     });
     return row;
   }
