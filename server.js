@@ -3203,7 +3203,7 @@ app.get('/api/moderator-sites', async (req, res) => {
   // the owner's own management views (My Stories, the Story Editor, or the
   // story's own page for its owner) — only this public browse/search list.
   const { rows: sites } = await pool.query(`
-    SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.tags,
+    SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.tags, ms.synopsis,
            u.username, u.display_name, u.avatar
     FROM moderator_sites ms
     JOIN users u ON u.id = ms.owner_user_id
@@ -3235,6 +3235,7 @@ app.get('/api/moderator-sites', async (req, res) => {
       cover_url: s.cover_url,
       banner_url: s.banner_url,
       tags: s.tags || [],
+      synopsis: s.synopsis || '',
       author: s.display_name || s.username,
       author_username: s.username,
       author_avatar: s.avatar || null,
@@ -4196,18 +4197,19 @@ async function sendSiteLookup(query, params, req, res) {
   // + NSFW mode -> full access.
   const spicyLock = !loggedIn ? 'login' : (!viewerNsfwEnabled ? 'sfw_mode' : null);
 
-  const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds, bookmarkedGalleryIds, siteLikeCount, siteCommentCount] = await Promise.all([
+  const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds, bookmarkedGalleryIds, siteLikeCount, siteCommentCount, siteBookmarkCount] = await Promise.all([
     // Drafts only ever show to the story's own owner (previewing via "View
     // as Reader") — everyone else only ever sees published chapters.
     pool.query(
       `SELECT mc.id, mc.title, mc.teaser, mc.links, mc.image_url, mc.video_url, mc.file_url, mc.file_name,
               mc.status, mc.body, mc.view_count, mc.created_at, mc.updated_at,
               (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'chapter' AND target_id = mc.id) AS comment_count,
-              (SELECT COUNT(*)::int FROM chapter_likes WHERE chapter_id = mc.id) AS like_count
+              (SELECT COUNT(*)::int FROM chapter_likes WHERE chapter_id = mc.id) AS like_count,
+              EXISTS(SELECT 1 FROM chapter_likes WHERE chapter_id = mc.id AND user_id = $2) AS liked
        FROM moderator_chapters mc
        WHERE mc.site_id = $1 ${viewerId === site.owner_user_id ? '' : "AND mc.status = 'published'"}
        ORDER BY mc.sort_order, mc.id`,
-      [site.id]
+      [site.id, viewerId]
     ),
     pool.query(`
       SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.description, mc.stats, mc.facts, mc.lore, mc.relationships, mc.owner_user_id, mc.ref_is_nsfw,
@@ -4242,6 +4244,7 @@ async function sendSiteLookup(query, params, req, res) {
        WHERE mc.site_id = $1`,
       [site.id]
     ),
+    pool.query('SELECT COUNT(*)::int AS count FROM moderator_bookmarks WHERE site_id = $1', [site.id]),
   ]);
 
   const likedSet = new Set(likedGalleryIds.rows.map(r => r.gallery_id));
@@ -4281,6 +4284,7 @@ async function sendSiteLookup(query, params, req, res) {
       view_count: site.view_count || 0,
       like_count: Number(siteLikeCount.rows[0].count),
       comment_count: Number(siteCommentCount.rows[0].count),
+      bookmark_count: Number(siteBookmarkCount.rows[0].count),
     },
     chapters,
     characters,
@@ -5461,6 +5465,25 @@ app.post('/api/moderator/gallery/:id/bookmark', requireAuth, async (req, res) =>
 app.delete('/api/moderator/gallery/:id/bookmark', requireAuth, async (req, res) => {
   await pool.query('DELETE FROM moderator_gallery_bookmarks WHERE user_id = $1 AND gallery_id = $2', [req.user.id, req.params.id]);
   res.json({ bookmarked: false });
+});
+
+// ── Chapter likes — any logged-in user can like any story's chapter, from
+// the Reader view ──────────────────────────────────────────────────────────
+app.post('/api/chapters/:id/like', requireAuth, async (req, res) => {
+  const { rows: [ch] } = await pool.query('SELECT id FROM moderator_chapters WHERE id = $1', [req.params.id]);
+  if (!ch) return res.status(404).json({ error: 'Not found.' });
+  await pool.query(
+    'INSERT INTO chapter_likes (user_id, chapter_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [req.user.id, ch.id]
+  );
+  const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM chapter_likes WHERE chapter_id = $1', [ch.id]);
+  res.json({ liked: true, like_count: Number(count) });
+});
+
+app.delete('/api/chapters/:id/like', requireAuth, async (req, res) => {
+  await pool.query('DELETE FROM chapter_likes WHERE user_id = $1 AND chapter_id = $2', [req.user.id, req.params.id]);
+  const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM chapter_likes WHERE chapter_id = $1', [req.params.id]);
+  res.json({ liked: false, like_count: Number(count) });
 });
 
 // ── Universal comments — target_type/target_id, reusable for gallery posts

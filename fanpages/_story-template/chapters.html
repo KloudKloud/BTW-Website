@@ -106,37 +106,6 @@
 
     </div>
 
-    <!-- Chapter detail "page" — swapped in for #chapters-list-view -->
-    <div class="chapter-detail-view" id="chapter-detail-view" style="display:none;">
-      <a class="art-view-back" href="#" id="chapter-detail-back">← Back to Chapters</a>
-
-      <div class="chapter-detail-card">
-        <div class="chapter-detail-side">
-          <p class="chapter-detail-side-label">Where to Read!</p>
-          <div class="chapter-view-links" id="chapter-detail-links"></div>
-          <button class="btn btn-outline chapter-read-btn" id="chapter-detail-pdf-btn" type="button" style="display:none; margin-top:0.5rem;">📄 Read as PDF?</button>
-          <p class="chapter-detail-no-pdf" id="chapter-detail-no-pdf" style="display:none;"><em>No PDF available to view</em></p>
-        </div>
-
-        <div class="chapter-detail-main">
-          <h1 class="chapter-detail-title" id="chapter-detail-title"></h1>
-          <p class="chapter-detail-teaser" id="chapter-detail-teaser"></p>
-          <div class="chapter-detail-image-wrap" id="chapter-detail-image-wrap">
-            <img id="chapter-detail-image" alt="" />
-          </div>
-        </div>
-      </div>
-
-      <!-- In-page PDF reader -->
-      <div id="chapter-pdf-view" hidden>
-        <div class="chapter-pdf-header">
-          <button class="chapter-pdf-back" id="chapter-pdf-close" type="button">← Back to Chapter</button>
-          <a class="chapter-pdf-download" id="chapter-pdf-download" download>⬇ Download</a>
-        </div>
-        <iframe id="chapter-pdf-iframe" class="chapter-pdf-viewer" title="Chapter PDF"></iframe>
-      </div>
-    </div>
-
   </main>
 </div>
 
@@ -156,13 +125,9 @@ document.getElementById('tab-chapters').href = STORY_BASE + '/chapters';
 document.getElementById('tab-characters').href = STORY_BASE + '/characters';
 document.getElementById('tab-gallery').href = STORY_BASE + '/gallery';
 
-const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
-const authHeaders = () => ({ Authorization: `Bearer ${token}`, 'X-Story-Path': SLUG });
-
 let CHAPTERS = [];
 let SITE = null;
 let IS_SELF = false;
-let currentDetailChapter = null;
 
 function renderVipBadge(s) {
   document.getElementById('vip-badge').style.display =
@@ -234,7 +199,7 @@ function renderChapterList() {
       : `<span class="ch-card-status--draft">Draft</span> - <span class="ch-card-meta-date">${formatChapterDate(ch.created_at)}</span>`;
     const card = document.createElement('a');
     card.className = 'ch-card';
-    card.href = `${STORY_BASE}/chapters?ch=${ch.id}`;
+    card.href = `${STORY_BASE}/reader?ch=${ch.id}`;
     card.innerHTML = `
       <div class="ch-card-thumb">
         <img src="${thumb.src}" alt="${escapeHtml(ch.title)} thumbnail" />
@@ -255,110 +220,9 @@ function renderChapterList() {
         <span>⭐ ${formatStatCount(ch.like_count)}</span>
         <span>💬 ${formatStatCount(ch.comment_count)}</span>
       </div>`;
-    card.addEventListener('click', (e) => {
-      e.preventDefault();
-      openChapterDetail(ch, true);
-    });
     list.appendChild(card);
   });
 }
-
-// ── Chapter detail "page" ───────────────────────────────────────────────
-function closePdfView() {
-  document.getElementById('chapter-pdf-view').hidden = true;
-  document.getElementById('chapter-detail-image-wrap').style.display = 'block';
-  document.getElementById('chapter-pdf-iframe').src = '';
-}
-
-function truncateLabel(s, n) { return s.length > n ? s.slice(0, n).trimEnd() + '…' : s; }
-
-// Counts as a "read" once per chapter per browser session — opening the
-// same chapter again (or just refreshing the page on it) within the same
-// tab session doesn't re-count, so this can't be spammed by reloading.
-// Owner previews of their own story don't count either (handled server-side).
-function trackChapterView(ch) {
-  const key = `btw_viewed_ch_${ch.id}`;
-  if (sessionStorage.getItem(key)) return;
-  sessionStorage.setItem(key, '1');
-  const url = SLUG.includes('/') ? `/api/moderator-sites/by-path/${SLUG}/view` : `/api/moderator-sites/${SLUG}/view`;
-  fetch(url, { method: 'POST', headers: authHeaders() }).catch(() => {});
-}
-
-function openChapterDetail(ch, pushHistory) {
-  currentDetailChapter = ch;
-  closePdfView();
-  trackChapterView(ch);
-
-  document.getElementById('chapter-detail-title').textContent = ch.title || 'Untitled Chapter';
-  document.getElementById('chapter-detail-teaser').textContent = ch.teaser && ch.teaser.trim() ? ch.teaser : 'No description provided';
-
-  document.getElementById('chapter-detail-image').src = chapterThumb(ch).src;
-  document.getElementById('chapter-detail-image-wrap').style.display = 'block';
-
-  const linksWrap = document.getElementById('chapter-detail-links');
-  linksWrap.innerHTML = '';
-  (ch.links || []).forEach(l => {
-    const a = document.createElement('a');
-    a.className = 'btn btn-primary chapter-read-btn';
-    a.href = l.url;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.textContent = truncateLabel(l.label, 20);
-    linksWrap.appendChild(a);
-  });
-
-  const pdfBtn = document.getElementById('chapter-detail-pdf-btn');
-  const noPdf = document.getElementById('chapter-detail-no-pdf');
-  if (ch.file_url) {
-    pdfBtn.style.display = 'block';
-    noPdf.style.display = 'none';
-  } else {
-    pdfBtn.style.display = 'none';
-    noPdf.style.display = 'block';
-  }
-
-  document.getElementById('chapters-list-view').style.display = 'none';
-  document.getElementById('chapter-detail-view').style.display = 'block';
-  document.title = `${ch.title || 'Chapter'} ✦ ${document.title.split('✦').pop().trim()}`;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-
-  if (pushHistory) history.pushState({ ch: ch.id }, '', `${STORY_BASE}/chapters?ch=${ch.id}`);
-}
-
-function closeChapterDetail(pushHistory) {
-  currentDetailChapter = null;
-  closePdfView();
-  document.getElementById('chapter-detail-view').style.display = 'none';
-  document.getElementById('chapters-list-view').style.display = '';
-  if (pushHistory) history.pushState({}, '', `${STORY_BASE}/chapters`);
-}
-
-document.getElementById('chapter-detail-back').addEventListener('click', (e) => {
-  e.preventDefault();
-  closeChapterDetail(true);
-});
-
-document.getElementById('chapter-detail-pdf-btn').addEventListener('click', () => {
-  if (!currentDetailChapter || !currentDetailChapter.file_url) return;
-  const iframe = document.getElementById('chapter-pdf-iframe');
-  if (!iframe.src) iframe.src = currentDetailChapter.file_url;
-  document.getElementById('chapter-pdf-download').href = currentDetailChapter.file_url;
-  document.getElementById('chapter-pdf-download').setAttribute('download', currentDetailChapter.file_name || '');
-  document.getElementById('chapter-detail-image-wrap').style.display = 'none';
-  document.getElementById('chapter-pdf-view').hidden = false;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-});
-document.getElementById('chapter-pdf-close').addEventListener('click', () => {
-  document.getElementById('chapter-pdf-view').hidden = true;
-  document.getElementById('chapter-detail-image-wrap').style.display = 'block';
-});
-
-window.addEventListener('popstate', () => {
-  const id = new URLSearchParams(window.location.search).get('ch');
-  if (!id) { closeChapterDetail(false); return; }
-  const ch = CHAPTERS.find(c => String(c.id) === String(id));
-  if (ch) openChapterDetail(ch, false);
-});
 
 (async () => {
   const data = await ModeratorSite.load(SLUG);
@@ -374,10 +238,6 @@ window.addEventListener('popstate', () => {
 
   CHAPTERS = (data && data.chapters) || [];
   renderChapterList();
-
-  const deepLinkId = new URLSearchParams(window.location.search).get('ch');
-  const deepLinkChapter = deepLinkId ? CHAPTERS.find(c => String(c.id) === String(deepLinkId)) : null;
-  if (deepLinkChapter) openChapterDetail(deepLinkChapter, false);
 })();
 </script>
 </body>

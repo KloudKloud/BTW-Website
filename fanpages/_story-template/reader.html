@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reader ✦ Fanpages</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <style>
+    /* ── Reader top bar — bleeds into the site's own dark top nav (same
+       #141414), a second row carrying the book's own identity + actions. ── */
+    .rd-topbar { background: #141414; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .rd-topbar-inner {
+      max-width: 1500px; margin: 0 auto; padding: 0.75rem 2rem;
+      display: flex; align-items: center; justify-content: space-between; gap: 1.5rem;
+      position: relative;
+    }
+    .rd-topbar-book { display: flex; align-items: center; gap: 0.85rem; text-decoration: none; color: inherit; min-width: 0; }
+    .rd-topbar-cover {
+      width: 42px; height: 62px; object-fit: cover; border-radius: 4px; flex-shrink: 0;
+      background: #222; border: 1px solid rgba(255,255,255,0.12);
+    }
+    .rd-topbar-book-text { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+    .rd-topbar-title {
+      font-family: 'Cinzel', serif; font-size: 1.1rem; color: #f0f0f0; font-weight: 700;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 340px;
+    }
+    .rd-toc-toggle {
+      background: none; border: none; padding: 0; cursor: pointer;
+      font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #999; text-align: left;
+    }
+    .rd-toc-toggle:hover { color: #7fa8d9; }
+    .rd-toc-toggle span { color: #ccc; font-weight: 600; }
+    .rd-toc-toggle:hover span { color: #7fa8d9; }
+    .rd-toc-dropdown {
+      position: absolute; top: 100%; left: 2rem; margin-top: 0.4rem; z-index: 40;
+      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+      max-height: 60vh; overflow-y: auto; min-width: 280px; box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+    }
+    .rd-toc-item {
+      display: block; padding: 0.65rem 1rem; text-decoration: none; color: #ddd;
+      font-family: 'Inter', sans-serif; font-size: 0.92rem; border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .rd-toc-item:last-child { border-bottom: none; }
+    .rd-toc-item:hover { background: rgba(127,168,217,0.1); color: #a8c6e8; }
+    .rd-toc-item.active { color: #7fa8d9; font-weight: 700; }
+    .rd-toc-item-draft { color: #f0c060; font-size: 0.75rem; font-weight: 700; margin-left: 0.4rem; }
+
+    .rd-topbar-actions { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
+    .rd-edit-btn {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      font-family: 'Inter', sans-serif; font-size: 0.88rem; font-weight: 700; color: #fff;
+      background: linear-gradient(135deg, #3d6fa8, #7fa8d9); border: none; border-radius: 18px;
+      padding: 0.5em 1.2em; text-decoration: none; white-space: nowrap;
+      box-shadow: 0 0 12px rgba(127,168,217,0.4); transition: box-shadow 0.15s, transform 0.15s;
+    }
+    .rd-edit-btn:hover { box-shadow: 0 0 20px rgba(127,168,217,0.65); transform: translateY(-1px); }
+    .rd-icon-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+      width: 40px; height: 40px; border-radius: 50%; box-sizing: border-box;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+      color: #ccc; cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    }
+    .rd-icon-btn svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; }
+    .rd-icon-btn.bookmarked, .rd-icon-btn.bookmarked svg { color: #7fa8d9; border-color: #7fa8d9; background: rgba(127,168,217,0.16); box-shadow: 0 0 12px rgba(127,168,217,0.5); }
+    .rd-icon-btn.bookmarked svg { fill: currentColor; }
+    .rd-like-btn { width: auto; padding: 0 0.9rem 0 0.75rem; border-radius: 20px; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 700; }
+    .rd-like-btn.liked { color: #e06080; border-color: #e06080; background: rgba(224,96,128,0.14); }
+    .rd-like-btn.liked svg { fill: currentColor; stroke: #e06080; }
+
+    /* ── Left floating control panel — fixed to the viewport, not the page
+       flow, so it stays put while the article scrolls. ── */
+    .rd-side-panel {
+      position: fixed; left: 1.5rem; top: 50%; transform: translateY(-50%); z-index: 30;
+      width: 132px; background: rgba(10,10,10,0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 1.1rem 0.9rem;
+      display: flex; flex-direction: column; gap: 1.25rem;
+    }
+    .rd-side-label { font-family: 'Inter', sans-serif; font-size: 0.68rem; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 0.5rem; }
+    .rd-theme-row { display: flex; gap: 0.5rem; }
+    .rd-theme-swatch {
+      width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; color: #fff;
+      box-sizing: border-box; border: 2px solid transparent;
+    }
+    .rd-theme-swatch--dark { background: #0a0a0a; border-color: #333; }
+    .rd-theme-swatch--custom { background: linear-gradient(135deg, #6b3fa0, #c2547a); }
+    .rd-theme-swatch.active { border-color: #7fa8d9; box-shadow: 0 0 8px rgba(127,168,217,0.6); }
+    .rd-theme-custom-pickers { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.6rem; }
+    .rd-theme-custom-pickers label { display: flex; align-items: center; justify-content: space-between; font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #999; }
+    .rd-theme-custom-pickers input[type="color"] { width: 28px; height: 22px; border: none; background: none; cursor: pointer; padding: 0; }
+    .rd-font-row { display: flex; gap: 0.5rem; }
+    .rd-font-btn {
+      width: 34px; height: 30px; border-radius: 8px; cursor: pointer;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #ddd;
+      font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.85rem;
+    }
+    .rd-font-btn:hover { border-color: #7fa8d9; color: #a8c6e8; }
+    .rd-author-card { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; text-decoration: none; padding-top: 0.25rem; border-top: 1px solid rgba(255,255,255,0.08); }
+    .rd-author-avatar {
+      width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(127,168,217,0.5);
+    }
+    .rd-author-card-name { font-family: 'Inter', sans-serif; font-size: 0.78rem; font-weight: 700; color: #ccc; text-align: center; }
+    .rd-author-card:hover .rd-author-card-name { color: #7fa8d9; }
+
+    /* ── Main reading layout — wider than Wattpad's own column, plus a
+       right-hand recommendations rail. ── */
+    .rd-layout {
+      max-width: 1500px; margin: 0 auto; padding: 3rem 2rem 6rem;
+      display: grid; grid-template-columns: 1fr 300px; gap: 3rem; align-items: start;
+    }
+    .rd-article { max-width: 900px; margin: 0 auto; width: 100%; }
+
+    .rd-meta-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px;
+      padding: 1.5rem 1.75rem; margin-bottom: 2.5rem; font-family: 'Inter', sans-serif; font-size: 0.9rem;
+    }
+    .rd-meta-row { display: flex; gap: 0.6rem; padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .rd-meta-row:last-child { border-bottom: none; }
+    .rd-meta-row-label { flex-shrink: 0; width: 110px; color: #888; font-weight: 700; }
+    .rd-meta-row-value { color: #ddd; }
+    .rd-meta-tag {
+      display: inline-block; background: rgba(127,168,217,0.12); color: #a8c6e8; border-radius: 12px;
+      padding: 0.2em 0.7em; font-size: 0.82rem; margin: 0.1rem 0.3rem 0.1rem 0;
+    }
+    .rd-meta-stats { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; }
+    .rd-meta-stats span { color: #aaa; }
+    .rd-meta-stats strong { color: #ddd; }
+
+    .rd-chapter-image-wrap { margin-bottom: 2rem; border-radius: 14px; overflow: hidden; }
+    .rd-chapter-image-wrap img, .rd-chapter-image-wrap iframe { width: 100%; display: block; border: none; aspect-ratio: 16/9; object-fit: cover; }
+    .rd-chapter-title {
+      font-family: 'Cinzel', serif; font-size: 2.2rem; color: #f0f0f0; text-align: center; margin: 0 0 2.5rem;
+    }
+    .rd-chapter-body {
+      font-family: 'Lora', 'Georgia', serif; color: #e8e8e8; line-height: 1.9;
+      font-size: calc(1.15rem * var(--rd-font-scale, 1));
+    }
+    .rd-chapter-body p { margin: 0 0 1.2em; }
+    .rd-chapter-body img { max-width: 100%; border-radius: 10px; display: block; margin: 0 auto 1.2em; }
+    .rd-chapter-empty { color: #888; font-style: italic; }
+
+    .rd-chapter-nav { display: flex; justify-content: space-between; gap: 1rem; margin-top: 3.5rem; }
+    .rd-chapter-nav a {
+      flex: 1; text-decoration: none; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px; padding: 0.9rem 1.2rem; color: #ddd; font-family: 'Inter', sans-serif;
+    }
+    .rd-chapter-nav a:hover { border-color: #7fa8d9; color: #a8c6e8; }
+    .rd-chapter-nav a.rd-nav-next { text-align: right; }
+    .rd-chapter-nav-label { display: block; font-size: 0.72rem; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.2rem; }
+
+    .rd-recs-title { font-family: 'Cinzel', serif; font-size: 1.05rem; color: #ccc; margin: 0 0 1rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .rd-recs-list { display: flex; flex-direction: column; gap: 1rem; }
+    .rd-rec-card { display: flex; gap: 0.75rem; text-decoration: none; color: inherit; }
+    .rd-rec-cover { width: 56px; height: 80px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1); }
+    .rd-rec-info { min-width: 0; }
+    .rd-rec-title { font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 700; color: #e8e8e8; margin: 0 0 0.2rem; line-height: 1.3; }
+    .rd-rec-card:hover .rd-rec-title { color: #7fa8d9; }
+    .rd-rec-teaser { font-size: 0.78rem; color: #999; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+    @media (max-width: 1100px) {
+      .rd-side-panel { display: none; }
+      .rd-layout { grid-template-columns: 1fr; }
+      .rd-recs { display: none; }
+    }
+  </style>
+</head>
+<body class="mod-theme" id="reader-body">
+
+<div id="fanpages-topbar-root"></div>
+<script src="/fanpages/fanpages-nav.js"></script>
+
+<div class="rd-topbar">
+  <div class="rd-topbar-inner">
+    <a class="rd-topbar-book" href="#" id="rd-story-link">
+      <img class="rd-topbar-cover" id="rd-story-cover" alt="" />
+      <span class="rd-topbar-book-text">
+        <span class="rd-topbar-title" id="rd-story-title">Loading…</span>
+        <button class="rd-toc-toggle" id="rd-toc-toggle" type="button">by <span id="rd-author-name"></span> ▾</button>
+      </span>
+    </a>
+    <div class="rd-toc-dropdown" id="rd-toc-dropdown" hidden></div>
+
+    <div class="rd-topbar-actions">
+      <a class="rd-edit-btn" id="rd-edit-btn" href="#" style="display:none;">✎ Edit Chapter</a>
+      <button class="rd-icon-btn" id="rd-bookmark-btn" type="button" title="Bookmark">
+        <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
+      </button>
+      <button class="rd-icon-btn rd-like-btn" id="rd-like-btn" type="button" title="Like">
+        <svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.7-10.2-9.3C.4 9 1.2 5.6 4.2 4.2 6.6 3 9.2 3.8 12 7c2.8-3.2 5.4-4 7.8-2.8 3 1.4 3.8 4.8 2.4 7.5C19.5 16.3 12 21 12 21z"/></svg>
+        <span id="rd-like-count">0</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<aside class="rd-side-panel" id="rd-side-panel">
+  <div>
+    <p class="rd-side-label">Theme</p>
+    <div class="rd-theme-row">
+      <button class="rd-theme-swatch rd-theme-swatch--dark active" id="rd-theme-dark" type="button" title="Dark"></button>
+      <button class="rd-theme-swatch rd-theme-swatch--custom" id="rd-theme-custom" type="button" title="Custom">+</button>
+    </div>
+    <div class="rd-theme-custom-pickers" id="rd-theme-custom-pickers" hidden>
+      <label>Background <input type="color" id="rd-bg-color" value="#141414" /></label>
+      <label>Text <input type="color" id="rd-text-color" value="#e8e8e8" /></label>
+    </div>
+  </div>
+  <div>
+    <p class="rd-side-label">Text Size</p>
+    <div class="rd-font-row">
+      <button class="rd-font-btn" id="rd-font-minus" type="button">A-</button>
+      <button class="rd-font-btn" id="rd-font-plus" type="button">A+</button>
+    </div>
+  </div>
+  <a class="rd-author-card" id="rd-author-card" href="#">
+    <img class="rd-author-avatar" id="rd-author-avatar" alt="" />
+    <span class="rd-author-card-name" id="rd-author-card-name"></span>
+  </a>
+</aside>
+
+<main class="rd-layout">
+  <article class="rd-article">
+    <div class="rd-meta-card" id="rd-meta-card"></div>
+
+    <div class="rd-chapter-image-wrap" id="rd-chapter-image-wrap" style="display:none;"></div>
+
+    <h1 class="rd-chapter-title" id="rd-chapter-title"></h1>
+    <div class="rd-chapter-body" id="rd-chapter-body"></div>
+
+    <div class="rd-chapter-nav" id="rd-chapter-nav"></div>
+  </article>
+
+  <aside class="rd-recs" id="rd-recs">
+    <p class="rd-recs-title">You Might Also Like</p>
+    <div class="rd-recs-list" id="rd-recs-list">
+      <p style="color:#888; font-size:0.85rem;">Loading…</p>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <p>This story is a fan-made page hosted on Between Two Worlds.</p>
+</footer>
+
+<script src="/fanpages/fanpages-site.js"></script>
+<script>
+const PATH_PARTS = window.location.pathname.split('/').filter(Boolean);
+const SLUG = PATH_PARTS.slice(1, 3).join('/');
+const STORY_BASE = '/' + PATH_PARTS.slice(0, 3).join('/');
+
+document.getElementById('tab-home') && (document.getElementById('tab-home').href = STORY_BASE);
+
+const authToken = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+const authHeaders = () => ({ Authorization: `Bearer ${authToken}` });
+
+let SITE = null;
+let CHAPTERS = [];
+let CURRENT = null;
+let IS_SELF = false;
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function formatChapterDate(dateStr) {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function extractYouTubeId(url) {
+  const m = String(url || '').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{6,})/);
+  return m ? m[1] : null;
+}
+
+// ── Reader prefs (theme + text size) — a per-reader preference that
+// follows them across every story, not a per-story setting, so it lives in
+// localStorage rather than on the site record. ─────────────────────────────
+const READER_PREFS_KEY = 'btw_reader_prefs';
+function loadReaderPrefs() {
+  try {
+    return { theme: 'dark', bg: '#141414', text: '#e8e8e8', fontScale: 1, ...JSON.parse(localStorage.getItem(READER_PREFS_KEY) || '{}') };
+  } catch { return { theme: 'dark', bg: '#141414', text: '#e8e8e8', fontScale: 1 }; }
+}
+function saveReaderPrefs(prefs) { localStorage.setItem(READER_PREFS_KEY, JSON.stringify(prefs)); }
+
+let readerPrefs = loadReaderPrefs();
+
+function applyReaderPrefs() {
+  const body = document.getElementById('reader-body');
+  if (readerPrefs.theme === 'custom') {
+    body.style.background = readerPrefs.bg;
+    body.style.color = readerPrefs.text;
+  } else {
+    body.style.background = '';
+    body.style.color = '';
+  }
+  document.getElementById('rd-theme-dark').classList.toggle('active', readerPrefs.theme === 'dark');
+  document.getElementById('rd-theme-custom').classList.toggle('active', readerPrefs.theme === 'custom');
+  document.getElementById('rd-theme-custom-pickers').hidden = readerPrefs.theme !== 'custom';
+  document.getElementById('rd-bg-color').value = readerPrefs.bg;
+  document.getElementById('rd-text-color').value = readerPrefs.text;
+  document.documentElement.style.setProperty('--rd-font-scale', readerPrefs.fontScale);
+}
+
+document.getElementById('rd-theme-dark').addEventListener('click', () => {
+  readerPrefs.theme = 'dark';
+  saveReaderPrefs(readerPrefs);
+  applyReaderPrefs();
+});
+document.getElementById('rd-theme-custom').addEventListener('click', () => {
+  readerPrefs.theme = 'custom';
+  saveReaderPrefs(readerPrefs);
+  applyReaderPrefs();
+});
+document.getElementById('rd-bg-color').addEventListener('input', (e) => {
+  readerPrefs.bg = e.target.value;
+  saveReaderPrefs(readerPrefs);
+  applyReaderPrefs();
+});
+document.getElementById('rd-text-color').addEventListener('input', (e) => {
+  readerPrefs.text = e.target.value;
+  saveReaderPrefs(readerPrefs);
+  applyReaderPrefs();
+});
+document.getElementById('rd-font-minus').addEventListener('click', () => {
+  readerPrefs.fontScale = Math.max(0.75, +(readerPrefs.fontScale - 0.1).toFixed(2));
+  saveReaderPrefs(readerPrefs);
+  applyReaderPrefs();
+});
+document.getElementById('rd-font-plus').addEventListener('click', () => {
+  readerPrefs.fontScale = Math.min(1.6, +(readerPrefs.fontScale + 0.1).toFixed(2));
+  saveReaderPrefs(readerPrefs);
+  applyReaderPrefs();
+});
+
+// ── Table of contents dropdown ──────────────────────────────────────────
+document.getElementById('rd-toc-toggle').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const dd = document.getElementById('rd-toc-dropdown');
+  dd.hidden = !dd.hidden;
+});
+document.addEventListener('click', () => { document.getElementById('rd-toc-dropdown').hidden = true; });
+
+function renderToc() {
+  const dd = document.getElementById('rd-toc-dropdown');
+  dd.innerHTML = CHAPTERS.map(ch => `
+    <a class="rd-toc-item ${CURRENT && ch.id === CURRENT.id ? 'active' : ''}" href="${STORY_BASE}/reader?ch=${ch.id}">
+      ${escapeHtml(ch.title || 'Untitled Chapter')}${ch.status !== 'published' ? '<span class="rd-toc-item-draft">DRAFT</span>' : ''}
+    </a>
+  `).join('') || '<p style="padding:1rem; color:#888; font-size:0.85rem;">No chapters yet.</p>';
+}
+
+// ── Metadata card — AO3-style, built from the story's own tags/rating/etc. ──
+function renderMetaCard() {
+  const s = SITE;
+  const idx = CHAPTERS.findIndex(c => CURRENT && c.id === CURRENT.id);
+  const rows = [];
+  rows.push(['Rating', escapeHtml(s.rating || 'General Audiences')]);
+  if (s.categories && s.categories.length) rows.push(['Categories', s.categories.map(c => `<span class="rd-meta-tag">${escapeHtml(c)}</span>`).join('')]);
+  if (s.fandoms && s.fandoms.length) rows.push(['Fandom', s.fandoms.map(f => `<span class="rd-meta-tag">${escapeHtml(f)}</span>`).join('')]);
+  if (s.relationships && s.relationships.length) rows.push(['Relationships', s.relationships.map(r => `<span class="rd-meta-tag">${escapeHtml(r)}</span>`).join('')]);
+  if (s.tags && s.tags.length) rows.push(['Additional Tags', s.tags.map(t => `<span class="rd-meta-tag">${escapeHtml(t)}</span>`).join('')]);
+  rows.push(['Language', 'English']);
+  rows.push(['Stats', `
+    <div class="rd-meta-stats">
+      <span>Published: <strong>${formatChapterDate(CURRENT.created_at)}</strong></span>
+      <span>Updated: <strong>${formatChapterDate(CURRENT.updated_at || CURRENT.created_at)}</strong></span>
+      <span>Chapters: <strong>${idx + 1}/${CHAPTERS.length}</strong></span>
+      <span>Comments: <strong>${CURRENT.comment_count || 0}</strong></span>
+      <span>Kudos: <strong>${CURRENT.like_count || 0}</strong></span>
+      <span>Bookmarks: <strong>${s.bookmark_count || 0}</strong></span>
+      <span>Hits: <strong>${CURRENT.view_count || 0}</strong></span>
+    </div>
+  `]);
+
+  document.getElementById('rd-meta-card').innerHTML = rows.map(([label, value]) => `
+    <div class="rd-meta-row">
+      <span class="rd-meta-row-label">${label}:</span>
+      <span class="rd-meta-row-value">${value}</span>
+    </div>
+  `).join('');
+}
+
+function renderChapterImage() {
+  const wrap = document.getElementById('rd-chapter-image-wrap');
+  if (CURRENT.image_url) {
+    wrap.innerHTML = `<img src="${CURRENT.image_url}" alt="${escapeHtml(CURRENT.title || '')}" />`;
+    wrap.style.display = 'block';
+    return;
+  }
+  const videoId = extractYouTubeId(CURRENT.video_url);
+  if (videoId) {
+    wrap.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}" title="${escapeHtml(CURRENT.title || '')}" allowfullscreen></iframe>`;
+    wrap.style.display = 'block';
+    return;
+  }
+  wrap.style.display = 'none';
+  wrap.innerHTML = '';
+}
+
+function renderChapterNav() {
+  const idx = CHAPTERS.findIndex(c => CURRENT && c.id === CURRENT.id);
+  const prev = idx > 0 ? CHAPTERS[idx - 1] : null;
+  const next = idx >= 0 && idx < CHAPTERS.length - 1 ? CHAPTERS[idx + 1] : null;
+  const nav = document.getElementById('rd-chapter-nav');
+  nav.innerHTML = `
+    ${prev ? `<a class="rd-nav-prev" href="${STORY_BASE}/reader?ch=${prev.id}"><span class="rd-chapter-nav-label">← Previous</span>${escapeHtml(prev.title || 'Untitled Chapter')}</a>` : '<span></span>'}
+    ${next ? `<a class="rd-nav-next" href="${STORY_BASE}/reader?ch=${next.id}"><span class="rd-chapter-nav-label">Next →</span>${escapeHtml(next.title || 'Untitled Chapter')}</a>` : '<span></span>'}
+  `;
+}
+
+function renderChapter() {
+  document.title = `${CURRENT.title || 'Chapter'} ✦ ${SITE.site_title || 'Fanpages'}`;
+  document.getElementById('rd-chapter-title').textContent = CURRENT.title || 'Untitled Chapter';
+  const bodyEl = document.getElementById('rd-chapter-body');
+  bodyEl.innerHTML = (CURRENT.body && CURRENT.body.trim()) ? CURRENT.body : '<p class="rd-chapter-empty">This chapter doesn\'t have any text yet.</p>';
+  renderChapterImage();
+  renderMetaCard();
+  renderChapterNav();
+  renderToc();
+  renderLikeState();
+
+  const editBtn = document.getElementById('rd-edit-btn');
+  if (IS_SELF) {
+    editBtn.style.display = '';
+    editBtn.href = `${STORY_BASE}/chapter-editor?id=${CURRENT.id}`;
+  } else {
+    editBtn.style.display = 'none';
+  }
+
+  window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+  history.replaceState({}, '', `${STORY_BASE}/reader?ch=${CURRENT.id}`);
+}
+
+// ── Like (chapter-level) ─────────────────────────────────────────────────
+function renderLikeState() {
+  const btn = document.getElementById('rd-like-btn');
+  btn.classList.toggle('liked', !!CURRENT.liked);
+  document.getElementById('rd-like-count').textContent = CURRENT.like_count || 0;
+}
+document.getElementById('rd-like-btn').addEventListener('click', async () => {
+  if (!authToken) { window.location.href = '/login.html'; return; }
+  const wasLiked = !!CURRENT.liked;
+  try {
+    const res = await fetch(`/api/chapters/${CURRENT.id}/like`, { method: wasLiked ? 'DELETE' : 'POST', headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    CURRENT.liked = data.liked;
+    CURRENT.like_count = data.like_count;
+    renderLikeState();
+  } catch {}
+});
+
+// ── Bookmark (story-level — same as the story home page's own bookmark) ──
+function renderBookmarkState() {
+  document.getElementById('rd-bookmark-btn').classList.toggle('bookmarked', !!SITE.is_bookmarked);
+}
+document.getElementById('rd-bookmark-btn').addEventListener('click', async () => {
+  if (!authToken) { window.location.href = '/login.html'; return; }
+  const wasBookmarked = !!SITE.is_bookmarked;
+  try {
+    await fetch(`/api/bookmarks/by-path/${SLUG}`, { method: wasBookmarked ? 'DELETE' : 'POST', headers: authHeaders() });
+    SITE.is_bookmarked = !wasBookmarked;
+    renderBookmarkState();
+  } catch {}
+});
+
+// ── Recommended rail — reuses the public story-browse endpoint, current
+// story filtered out; no real recommendation algorithm yet. ────────────────
+async function renderRecs() {
+  const list = document.getElementById('rd-recs-list');
+  try {
+    const res = await fetch('/api/moderator-sites');
+    const data = await res.json();
+    const others = (data.sites || []).filter(s => s.story_path !== SITE.story_path).sort(() => Math.random() - 0.5).slice(0, 6);
+    if (!others.length) { list.innerHTML = '<p style="color:#888; font-size:0.85rem;">Nothing else here yet.</p>'; return; }
+    list.innerHTML = others.map(s => `
+      <a class="rd-rec-card" href="/fanpages/${escapeHtml(s.story_path)}">
+        <img class="rd-rec-cover" src="${s.cover_url || '/images/gallery/pixernbath_13.png'}" alt="" />
+        <span class="rd-rec-info">
+          <p class="rd-rec-title">${escapeHtml(s.site_title || 'Untitled Story')}</p>
+          <p class="rd-rec-teaser">${escapeHtml(s.synopsis || 'No description yet.')}</p>
+        </span>
+      </a>
+    `).join('');
+  } catch {
+    list.innerHTML = '';
+  }
+}
+
+(async () => {
+  applyReaderPrefs();
+
+  const data = await ModeratorSite.load(SLUG);
+  SITE = (data && data.site) || null;
+  if (!SITE) { document.getElementById('rd-chapter-body').innerHTML = '<p class="rd-chapter-empty">Story not found.</p>'; return; }
+  CHAPTERS = (data && data.chapters) || [];
+  IS_SELF = !!SITE.is_self;
+
+  document.getElementById('rd-story-link').href = STORY_BASE;
+  document.getElementById('rd-story-cover').src = SITE.cover_url || '/images/gallery/pixernbath_13.png';
+  document.getElementById('rd-story-title').textContent = SITE.site_title || 'Fanpages';
+  document.getElementById('rd-author-name').textContent = SITE.author_display_name || SITE.author_username || '';
+
+  const authorHref = SITE.author_username ? `/fanpages/${SITE.author_username}` : '#';
+  document.getElementById('rd-author-card').href = authorHref;
+  document.getElementById('rd-author-avatar').src = SITE.author_avatar || '/images/noimage.png';
+  document.getElementById('rd-author-card-name').textContent = SITE.author_display_name || SITE.author_username || '';
+
+  renderBookmarkState();
+
+  const requestedId = new URLSearchParams(window.location.search).get('ch');
+  CURRENT = (requestedId && CHAPTERS.find(c => String(c.id) === String(requestedId))) || CHAPTERS[0] || null;
+
+  if (!CURRENT) {
+    document.getElementById('rd-chapter-body').innerHTML = '<p class="rd-chapter-empty">No chapters yet — check back soon.</p>';
+    document.getElementById('rd-meta-card').style.display = 'none';
+    renderToc();
+    return;
+  }
+
+  renderChapter();
+  renderRecs();
+})();
+</script>
+</body>
+</html>
