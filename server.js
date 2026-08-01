@@ -474,6 +474,45 @@ async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_content_comments_target ON content_comments(target_type, target_id, created_at);
   `).catch(e => console.error('content_comments migration:', e.message));
 
+  // TOS Blobs — free-text reference storage for policy/rules copy (Terms of
+  // Service, community guidelines, etc.), admin-only for now. Just a place
+  // to write and keep drafts before real dedicated pages exist for them —
+  // seeded once with the story-creation TOS that used to be hardcoded
+  // directly into create.html, so the current wording isn't lost.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tos_blobs (
+      id         SERIAL      PRIMARY KEY,
+      name       TEXT        NOT NULL,
+      content    TEXT        NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(e => console.error('tos_blobs migration:', e.message));
+  await pool.query(`
+    INSERT INTO tos_blobs (name, content)
+    SELECT 'Story Creation TOS (legacy)', $1
+    WHERE NOT EXISTS (SELECT 1 FROM tos_blobs)
+  `, [
+`By creating a story on this platform, you are agreeing to share your world with the community members across this website! Things you can look forward to:
+
+- Promoting Your Existing Story Links To A Community of Readers
+- Creating Beautiful Character Cards For The Cast In Your Story
+- Posting Art You Make/Commission For Characters, Scenes, And Moments In Your Story
+- Having A Real, Awesome Page Made and Designed By YOU! A Place You Can Share on AO3, Wattpad, Fanfic.net, or ANY Platform You Wish! Centralize All of Your Readers From All Over Into ONE Place!
+
+Consider this a website FOR YOU, and a website that you can share to merge readers from AO3, Wattpad, Furaffinity, Fanfic.net, or wherever you post your writing/fics! Link to every platform you post on, your general socials (Discord servers, etc.), and any and everything you! I personally love my website because I now have a gallery to share all of the art I commission with my Between Two Worlds readers~
+
+RULES
+
+1. All media you post to this story's "gallery" section MUST be yours. That means you drew it, you commissioned it, or it was a gift made specifically for your book. The gallery section is meant to be original art ONLY. Don't just take art from online and label it as art belonging to your story.
+2. Media you post for your "character" cards may be references from other places, but if it is artwork belonging to a specific person that is not yourself, please try and credit them and ensure it is free use. You can also specify in the builder that the character ref is "not" official. I know some stories have dozens of characters, and getting handmade art for each and every one takes a while. So feel free to use free, credited refs online if needed. (Alternatively, you could just use the default image as a placeholder until you get art for a specified character).
+3. NSFW MEDIA IS FINE, BUT IT MUST BE LABELED AS "Spicy" for the gallery, or marked NSFW on the character cards! Non-logged in users will not be able to see NSFW posts until they make an account.
+
+Overall, NSFW and spicy media is acceptable here! But please, label it correctly. Your gallery image may be removed if it is not labeled correctly.
+
+I can't wait to browse your stories! Please read the terms above, and if you agree with them, click the box below and get to making!`
+  ]).catch(e => console.error('tos_blobs seed:', e.message));
+
   // Fanpages hub billboard — admin-managed promo carousel on /fanpages.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS hub_billboard_slides (
@@ -2946,6 +2985,35 @@ app.get('/api/hub-billboard', async (req, res) => {
     isAdmin = !!(u && u.email_hash === process.env.ADMIN_EMAIL_HASH);
   }
   res.json({ slides: (nsfwAllowed || isAdmin) ? rows : rows.filter(s => !s.is_nsfw) });
+});
+
+// ── TOS Blobs — simple named-text storage, admin only ──────────────────────
+app.get('/api/admin/tos-blobs', requireAuth, requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM tos_blobs ORDER BY created_at ASC');
+  res.json({ blobs: rows });
+});
+app.post('/api/admin/tos-blobs', requireAuth, requireAdmin, async (req, res) => {
+  const name = String(req.body.name || '').trim().slice(0, 120);
+  if (!name) return res.status(400).json({ error: 'A name is required.' });
+  const { rows: [blob] } = await pool.query(
+    'INSERT INTO tos_blobs (name, content) VALUES ($1, $2) RETURNING *',
+    [name, String(req.body.content || '')]
+  );
+  res.json({ blob });
+});
+app.put('/api/admin/tos-blobs/:id', requireAuth, requireAdmin, async (req, res) => {
+  const name = String(req.body.name || '').trim().slice(0, 120);
+  if (!name) return res.status(400).json({ error: 'A name is required.' });
+  const { rows: [blob] } = await pool.query(
+    'UPDATE tos_blobs SET name = $1, content = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
+    [name, String(req.body.content || ''), req.params.id]
+  );
+  if (!blob) return res.status(404).json({ error: 'Not found.' });
+  res.json({ blob });
+});
+app.delete('/api/admin/tos-blobs/:id', requireAuth, requireAdmin, async (req, res) => {
+  await pool.query('DELETE FROM tos_blobs WHERE id = $1', [req.params.id]);
+  res.json({ message: 'Deleted.' });
 });
 
 const HUB_ANIMATION_TYPES = ['none', 'pan_v', 'pan_h', 'zoom'];

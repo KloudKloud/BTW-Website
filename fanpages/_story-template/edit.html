@@ -255,13 +255,30 @@
 
 <!-- Edit bar -->
 <div class="mod-edit-bar" id="edit-bar" style="display:flex;">
-  <div class="mod-edit-bar-left">
-    <span class="mod-edit-bar-label">Editing your story</span>
+  <div class="mod-edit-bar-left" id="edit-bar-left">
+    <span class="mod-edit-bar-label" id="edit-bar-label">Editing your story</span>
     <button class="mod-edit-bar-delete" id="delete-story-btn" type="button">🗑️ Delete Story</button>
   </div>
   <div class="mod-edit-bar-actions">
     <button class="mod-edit-bar-save" id="save-edit-btn" disabled>Save Changes</button>
     <button class="mod-edit-bar-cancel" id="cancel-edit-btn" type="button">Cancel</button>
+    <!-- Onboarding-only — a brand-new story being set up right after
+         creation swaps Save Changes/Cancel for this single button, since
+         Characters/Gallery links already save themselves immediately. -->
+    <button class="mod-edit-bar-save" id="onboarding-continue-btn" type="button" style="display:none;">Save and Continue →</button>
+  </div>
+</div>
+
+<!-- Onboarding-only — "link existing Characters/Art?" prompt, shown once
+     right after a brand-new story is created. -->
+<div class="mod-confirm-overlay" id="onboarding-link-prompt" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title">Link Existing Characters/Art Pieces to Your Story?</p>
+    <p class="mod-confirm-text">If there are already posted characters/art that are relevant to this story, you can link them fast. Alternatively, you can always create new characters and link them later, through the main story editor &lt;3</p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="onboarding-link-skip-btn" type="button">Skip</button>
+      <button class="mod-btn" id="onboarding-link-now-btn" type="button" style="border-color:#f0c060; color:#f0c060;">Link Now?</button>
+    </div>
   </div>
 </div>
 
@@ -836,6 +853,36 @@ const RETURN_TO = new URLSearchParams(window.location.search).get('from') === 'h
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
 if (!token) window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`;
 const authHeaders = () => ({ Authorization: `Bearer ${token}`, 'X-Story-Path': SLUG });
+
+// ── Onboarding mode — right after a brand-new story is created, create.html
+// lands here with ?onboarding=1&chapter=<id> instead of the normal editor.
+// Only Characters/Gallery are reachable (nothing to write Story Details or
+// Chapters for is any different than what create.html just collected), and
+// the edit bar becomes a single "Save and Continue" straight into the
+// chapter editor instead of Save Changes/Cancel/Delete. ────────────────────
+const onboardingParams = new URLSearchParams(window.location.search);
+const ONBOARDING = onboardingParams.get('onboarding') === '1';
+const ONBOARDING_CHAPTER_ID = onboardingParams.get('chapter');
+function goToOnboardingChapter() {
+  window.location.href = `${STORY_BASE}/chapter-editor?id=${ONBOARDING_CHAPTER_ID}&intro=1`;
+}
+if (ONBOARDING) {
+  document.getElementById('se-nav-details').style.display = 'none';
+  document.getElementById('se-nav-chapters').style.display = 'none';
+  document.getElementById('delete-story-btn').style.display = 'none';
+  document.getElementById('edit-bar-label').textContent = 'Setting up your story';
+  document.getElementById('save-edit-btn').style.display = 'none';
+  document.getElementById('cancel-edit-btn').style.display = 'none';
+  document.getElementById('onboarding-continue-btn').style.display = 'inline-block';
+  document.getElementById('onboarding-continue-btn').addEventListener('click', goToOnboardingChapter);
+  document.getElementById('onboarding-link-skip-btn').addEventListener('click', () => {
+    document.getElementById('onboarding-link-prompt').hidden = true;
+    goToOnboardingChapter();
+  });
+  document.getElementById('onboarding-link-now-btn').addEventListener('click', () => {
+    document.getElementById('onboarding-link-prompt').hidden = true;
+  });
+}
 
 let siteData = { site: {} };
 
@@ -2822,19 +2869,24 @@ document.getElementById('se-chapter-reorder-save').addEventListener('click', asy
   populateForm(siteData.site);
   applyTheme(siteData.site.theme || 'default', siteData.site.theme_bg_url);
 
-  // Deep-linked from the story's own Characters/Gallery/Chapters pages —
-  // land straight on that tab, and for Characters, on the specific
-  // character that was clicked (?char=<id>).
-  const bootHash = window.location.hash.slice(1);
-  if (['chapters', 'characters', 'gallery'].includes(bootHash)) {
-    const loadPromise = switchEditorSection(bootHash);
-    if (bootHash === 'characters') {
-      const charId = new URLSearchParams(window.location.search).get('char');
-      if (charId && loadPromise) {
-        loadPromise.then(() => {
-          const char = SE_CHARACTERS.find(c => String(c.id) === String(charId));
-          if (char) openOrBlockCharEditor(char);
-        });
+  if (ONBOARDING) {
+    switchEditorSection('characters');
+    document.getElementById('onboarding-link-prompt').hidden = false;
+  } else {
+    // Deep-linked from the story's own Characters/Gallery/Chapters pages —
+    // land straight on that tab, and for Characters, on the specific
+    // character that was clicked (?char=<id>).
+    const bootHash = window.location.hash.slice(1);
+    if (['chapters', 'characters', 'gallery'].includes(bootHash)) {
+      const loadPromise = switchEditorSection(bootHash);
+      if (bootHash === 'characters') {
+        const charId = new URLSearchParams(window.location.search).get('char');
+        if (charId && loadPromise) {
+          loadPromise.then(() => {
+            const char = SE_CHARACTERS.find(c => String(c.id) === String(charId));
+            if (char) openOrBlockCharEditor(char);
+          });
+        }
       }
     }
   }

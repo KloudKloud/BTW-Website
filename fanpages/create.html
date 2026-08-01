@@ -6,242 +6,649 @@
   <title>Create Your Story ✦ Fanpages</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css?v=20260801h" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
-  <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&display=swap" />
   <style>
-    * { box-sizing: border-box; }
-    body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; }
+    body { background: #0a0a0a; }
+    .cs-layout { max-width: 1090px; margin: 0 auto; padding: 2.5rem 3rem 5rem; }
 
-    .cs-wrap { max-width: 700px; margin: 0 auto; padding: 6.5rem 1.5rem 4rem; }
-
-    .cs-card {
-      background: rgba(15,15,15,0.92); border: 1px solid rgba(255,255,255,0.1); border-radius: 18px;
-      padding: 2.5rem 2.25rem; backdrop-filter: blur(6px);
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    .cs-page-title {
+      font-family: 'Cinzel', serif; font-size: 2rem; font-weight: 700; color: #f0f0f0;
+      margin: 0 0 2rem;
     }
 
-    .cs-title {
-      font-family: 'Cinzel', Georgia, serif; font-size: 2rem; text-align: center;
-      color: #f0c060; margin-bottom: 2rem;
-    }
+    /* Cover (left) + form (right) — the cover stays put beside the form as
+       it scrolls, same "glance over and check it" idea as the Story
+       Editor's own cover-beside-cards row. */
+    .cs-main-row { display: flex; gap: 2.5rem; align-items: flex-start; }
+    .cs-cover-col { flex-shrink: 0; position: sticky; top: 1.5rem; }
+    .cs-form-col { flex: 1; min-width: 0; }
 
-    .cs-label {
-      display: block; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
-      color: #d97a72; margin-bottom: 0.5rem;
-    }
-    /* Red dot marking a must-fill-out field — Title/Description/Rating are
-       all required now, since a story needs enough substance to actually
-       start a chapter from, not just a name. */
     .cs-required-dot {
       display: inline-block; width: 6px; height: 6px; border-radius: 50%;
       background: #d9534f; margin-left: 0.4em; vertical-align: middle;
     }
-    .cs-input, .cs-textarea, .cs-select {
-      width: 100%; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
-      color: #f0f0f0; font-family: inherit; font-size: 1.05rem; padding: 0.85rem 1rem; margin-bottom: 2rem;
-    }
-    .cs-input:focus, .cs-textarea:focus, .cs-select:focus { outline: none; border-color: #7fa8d9; }
-    .cs-textarea { resize: vertical; min-height: 110px; font-family: inherit; }
-    .cs-select { cursor: pointer; }
 
-    .cs-tos {
-      background: #161616; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
-      padding: 1.5rem 1.5rem; margin-bottom: 1.5rem; max-height: 340px; overflow-y: auto;
-      font-size: 0.9rem; line-height: 1.75; color: #ccc;
+    .cs-actions-row {
+      display: flex; align-items: center; gap: 1rem; margin-top: 2.5rem;
+      padding-top: 1.75rem; border-top: 1px solid rgba(255,255,255,0.08);
     }
-    .cs-tos h2 {
-      font-family: 'Cinzel', Georgia, serif; font-size: 1.2rem; color: #f0f0f0; margin-bottom: 0.75rem;
+    .cs-continue-btn {
+      background: linear-gradient(135deg, #f0c060, #f5cd77); color: #1a1408; border: none;
+      font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 700;
+      padding: 0.85em 2.2em; border-radius: 26px; cursor: pointer;
+      box-shadow: 0 0 18px rgba(240,192,96,0.4); transition: box-shadow 0.15s, transform 0.15s;
     }
-    .cs-tos h3 {
-      font-family: 'Cinzel', Georgia, serif; font-size: 1.05rem; color: #d97a72;
-      margin: 1.5rem 0 0.75rem; letter-spacing: 0.04em;
-    }
-    .cs-tos p { margin-bottom: 0.9rem; }
-    .cs-tos em { color: #f0c060; font-style: italic; }
-    .cs-tos ul, .cs-tos ol { margin: 0 0 0.9rem 1.4rem; }
-    .cs-tos li { margin-bottom: 0.5rem; }
-    .cs-tos .cs-sig { display: block; margin-top: 1rem; color: #999; }
-
-    .cs-agree-row {
-      display: flex; align-items: flex-start; gap: 0.65rem; cursor: pointer;
-      font-size: 0.9rem; color: #ddd; margin-bottom: 1.5rem; line-height: 1.5;
-    }
-    .cs-agree-row input { margin-top: 0.2rem; width: 16px; height: 16px; flex-shrink: 0; }
+    .cs-continue-btn:hover { box-shadow: 0 0 26px rgba(240,192,96,0.6); transform: translateY(-1px); }
+    .cs-continue-btn:disabled { opacity: 0.6; cursor: default; transform: none; box-shadow: none; }
+    .cs-cancel-link { color: #999; font-family: 'Inter', sans-serif; font-size: 0.9rem; text-decoration: none; }
+    .cs-cancel-link:hover { color: #ccc; text-decoration: underline; }
 
     .cs-error {
       background: rgba(217,122,114,0.12); border: 1px solid rgba(217,122,114,0.4); border-radius: 8px;
-      color: #d97a72; font-size: 0.88rem; padding: 0.75rem 1rem; margin-bottom: 1.25rem;
+      color: #d97a72; font-size: 0.88rem; padding: 0.75rem 1rem; margin-bottom: 1.5rem;
     }
     .cs-error a { color: #f0c060; text-decoration: underline; }
 
-    .cs-submit-row { text-align: center; }
-    .cs-submit-row .btn { font-size: 1rem; padding: 0.9rem 2.5rem; }
-    .cs-submit-row .btn:disabled { opacity: 0.6; cursor: default; transform: none; }
+    @media (max-width: 720px) {
+      .cs-layout { padding: 2rem 1.25rem 4rem; }
+      .cs-main-row { flex-direction: column; align-items: center; }
+      .cs-cover-col { position: static; }
+    }
   </style>
 </head>
 <body>
 
 <div id="fanpages-topbar-root"></div>
+<script src="/fanpages/fanpages-nav.js"></script>
+<script src="/fanpages/vendor/cropper.min.js"></script>
+<script src="/fanpages/crop-modal.js"></script>
 
-<div class="mod-page-bg-wrap-static">
-  <img class="mod-page-bg-img-static" src="/images/gallery/kloudsaphbedroom_1.png" alt="" />
-  <div class="mod-page-bg-overlay-static"></div>
+<!-- Banner — same crop-and-upload system as the Story Editor's, just
+     staged locally (as a blob) until the story actually exists to attach
+     it to; uploaded for real right after creation succeeds. -->
+<div class="wiki-cover mod-editing-banner" id="wiki-cover" style="margin-top:68px;">
+  <img alt="Story banner" id="banner-img" style="display:none;" draggable="false" />
+  <div class="mod-banner-edit-wrap" id="banner-edit-wrap" style="display:flex;">
+    <button class="mod-banner-edit-btn" id="banner-edit-btn" type="button">📷 Change Banner Image</button>
+    <span class="mod-banner-edit-hint">Recommended size: 1600 × 560px</span>
+  </div>
+  <input type="file" id="banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
 </div>
 
-<div class="cs-wrap" id="cs-wrap">
-  <div class="cs-card">
-    <h1 class="cs-title">Create Your Story</h1>
+<div class="cs-layout">
+  <h1 class="cs-page-title">Create Your Story</h1>
 
-    <label class="cs-label" for="cs-title-input">Title<span class="cs-required-dot" title="Required"></span></label>
-    <input class="cs-input" id="cs-title-input" maxlength="60" placeholder="e.g. Above All Else" />
+  <p class="cs-error" id="cs-error" hidden></p>
 
-    <label class="cs-label" for="cs-synopsis-input">Description<span class="cs-required-dot" title="Required"></span></label>
-    <textarea class="cs-textarea" id="cs-synopsis-input" maxlength="2000" placeholder="What's your story about?"></textarea>
-
-    <label class="cs-label" for="cs-rating-select">Rating<span class="cs-required-dot" title="Required"></span></label>
-    <select class="cs-select" id="cs-rating-select">
-      <option value="" selected disabled>Choose a rating…</option>
-      <option value="General Audiences">General Audiences</option>
-      <option value="Teen & Up">Teen &amp; Up</option>
-      <option value="Mature/Explicit (Adult)">Mature/Explicit (Adult)</option>
-    </select>
-
-    <div class="cs-tos">
-      <h2>TOS</h2>
-      <p>
-        By creating a story on this platform, you are agreeing to share your world with the community members
-        across this website! Things you can look forward to:
-      </p>
-      <ul>
-        <li>Promoting Your Existing Story Links To A Community of Readers</li>
-        <li>Creating Beautiful Character Cards For The Cast In Your Story</li>
-        <li>Posting Art You Make/Commission For Characters, Scenes, And Moments In Your Story</li>
-        <li>Having A Real, Awesome Page Made and Designed By YOU! A Place You Can Share on AO3, Wattpad, Fanfic.net, or ANY Platform You Wish! Centralize All of Your Readers From All Over Into ONE Place!</li>
-      </ul>
-      <p>
-        Consider this a website FOR YOU, and a website that you can share to merge readers from AO3, Wattpad,
-        Furaffinity, Fanfic.net, or wherever you post your writing/fics! Link to every platform you post on, your
-        general socials (Discord servers, etc.), and any and everything you! I personally love my website because
-        I now have a gallery to share all of the art I commission with my <em>Between Two Worlds</em> readers~
-      </p>
-
-      <h3>RULES</h3>
-      <ol>
-        <li>
-          All media you post to this story's "gallery" section MUST be yours. That means you drew it, you
-          commissioned it, or it was a gift made specifically for your book. The gallery section is meant to be
-          original art <strong>ONLY</strong>. Don't just take art from online and label it as art belonging to
-          your story.
-        </li>
-        <li>
-          Media you post for your "character" cards may be references from other places, but if it is artwork
-          belonging to a specific person that is not yourself, please try and credit them and ensure it is free
-          use. You can also specify in the builder that the character ref is "not" official. I know some stories
-          have dozens of characters, and getting handmade art for each and every one takes a while. So feel free
-          to use free, credited refs online if needed. (Alternatively, you could just use the default image as a
-          placeholder until you get art for a specified character).
-        </li>
-        <li>
-          NSFW MEDIA IS FINE, BUT IT MUST BE LABELED AS "Spicy" for the gallery, or marked NSFW on the character
-          cards! Non-logged in users will not be able to see NSFW posts until they make an account.
-        </li>
-      </ol>
-      <p>
-        Overall, NSFW and spicy media is acceptable here! But please, label it correctly. Your gallery image may
-        be removed if it is not labeled correctly.
-      </p>
-      <p>
-        I can't wait to browse your stories! Please read the terms above, and if you agree with them, click the
-        box below and get to making!
-      </p>
+  <div class="cs-main-row">
+    <div class="cs-cover-col">
+      <div class="mod-cover-wrap" id="cover-wrap">
+        <img id="cover-img" alt="Book cover" style="display:none;" draggable="false" />
+        <div class="mod-cover-placeholder" id="cover-placeholder">Add a cover</div>
+        <button class="mod-cover-edit-btn" id="cover-edit-btn" type="button">📷 Change Cover</button>
+        <input type="file" id="cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+      </div>
     </div>
 
-    <label class="cs-agree-row">
-      <input type="checkbox" id="cs-agree-check" />
-      <span>I have read and agree to the Terms of Service above.</span>
-    </label>
+    <div class="cs-form-col">
 
-    <p class="cs-error" id="cs-error" hidden></p>
+      <div class="mod-editable-block" style="margin-bottom: 2rem;">
+        <span class="mod-field-label" style="display:block;">Title<span class="cs-required-dot" title="Required"></span></span>
+        <input class="mod-input" id="cs-title-input" maxlength="60" placeholder="e.g. Above All Else" />
+      </div>
 
-    <div class="cs-submit-row">
-      <a class="mod-btn mod-btn--cancel" href="/fanpages" id="cs-cancel-link" style="margin-right:0.75rem;">Cancel</a>
-      <button class="btn btn-primary" id="cs-submit-btn" type="button">Save and Continue →</button>
+      <section class="wiki-section">
+        <h2 class="wiki-section-title">Story Description</h2>
+        <div class="wiki-rule"></div>
+        <div class="mod-editable-block">
+          <div class="mod-field-label-row" style="display:flex;">
+            <span class="mod-field-label">Description<span class="cs-required-dot" title="Required"></span></span>
+            <span class="mod-field-hint">Use *text* for italics, **text** for bold.</span>
+          </div>
+          <textarea class="mod-textarea" id="cs-synopsis-input" placeholder="What's your story about?"></textarea>
+        </div>
+      </section>
+
+      <section class="wiki-section">
+        <div class="wiki-meta-field mod-editable-block">
+          <div class="mod-field-label-row" style="display:flex;">
+            <span class="mod-field-label">Rating<span class="cs-required-dot" title="Required"></span></span>
+            <button class="wiki-tags-tip-icon" id="rating-tip-icon" type="button" aria-label="Rating help">💡</button>
+            <div class="wiki-tags-tip-popover" id="rating-tip-popover" hidden>
+              <p><strong>General Audiences</strong> — Suitable for everyone</p>
+              <p><strong>Teen And Up Audiences</strong> — May not be suitable for all audiences, but not expressly explicit. Light themes of violence, language, or other mature elements that don't teeter into adult.</p>
+              <p><strong>Mature (Adult!)</strong> — Porn, graphic violence, or explictly adult themes</p>
+            </div>
+          </div>
+          <select class="mod-input" id="cs-rating-select">
+            <option value="" selected disabled>Choose a rating…</option>
+            <option value="General Audiences">General Audiences</option>
+            <option value="Teen & Up">Teen &amp; Up</option>
+            <option value="Mature/Explicit (Adult)">Mature/Explicit (Adult)</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="wiki-section">
+        <h2 class="wiki-section-title">Story Notes</h2>
+        <div class="wiki-rule"></div>
+        <div class="mod-editable-block">
+          <div class="mod-field-label-row" style="display:flex;">
+            <span class="mod-field-label">Story Notes</span>
+            <span class="mod-field-hint">Give the readers a behind-the-scenes on your story/one-shot. Who are the characters, what's the inspiration, and/or what can they expect out of reading. (Or just share inspirations/whatever details you want to, related or unrelated :3) Use *text* for italics, **text** for bold.</span>
+          </div>
+          <textarea class="mod-textarea" id="cs-bio-input"></textarea>
+        </div>
+      </section>
+
+      <hr class="wiki-mega-divider" />
+
+      <section class="wiki-section">
+        <h2 class="wiki-meta-section-title">Tags/Categories</h2>
+
+        <div class="wiki-meta-field mod-editable-block">
+          <div class="mod-field-label-row" style="display:flex;">
+            <span class="mod-field-label">Fandom</span>
+            <button class="wiki-tags-tip-icon" id="fandom-tip-icon" type="button" aria-label="Fandom help">💡</button>
+            <div class="wiki-tags-tip-popover" id="fandom-tip-popover" hidden>
+              Start typing and pick a match if one shows up! That keeps everyone's tagging consistent so stories in the same fandom can actually find each other. Don't see yours? Type it anyway; we'll add popular new ones to the official list over time.
+            </div>
+          </div>
+          <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="fandom-input-box">
+            <input type="text" class="wiki-tags-input" id="fandom-text-input" placeholder="Type a fandom and press Enter…" autocomplete="off" />
+            <div class="wiki-fandom-suggest" id="fandom-suggest" hidden></div>
+          </div>
+        </div>
+
+        <div class="wiki-meta-field mod-editable-block">
+          <div class="mod-field-label-row" style="display:flex;">
+            <span class="mod-field-label">Categories</span>
+            <button class="wiki-tags-tip-icon" id="category-tip-icon" type="button" aria-label="Category help">💡</button>
+            <div class="wiki-tags-tip-popover" id="category-tip-popover" hidden>
+              <p>These definitions vary, and feel free to select the categories that suit your fic best :3</p>
+              <p><strong>Gen</strong> — No romantic/sexual relationships, or not the main focus</p>
+              <p><strong>M/F</strong> — Male/Female relationships</p>
+              <p><strong>M/M</strong> — Male/Male relationships</p>
+              <p><strong>F/F</strong> — Female/Female relationships</p>
+              <p><strong>Multi</strong> — Multiple relationships, or a relationship with more than one partner</p>
+              <p><strong>Other</strong> — Other relationships</p>
+            </div>
+          </div>
+          <div class="wiki-meta-check-row" id="category-checks"></div>
+        </div>
+
+        <div class="wiki-meta-field mod-editable-block">
+          <div class="mod-field-label-row" style="display:flex;">
+            <span class="mod-field-label">Relationships</span>
+            <span class="mod-field-hint"> (e.g. "Umbreon"/"Espeon". Press Enter to add.)</span>
+            <button class="wiki-tags-tip-icon" id="relationships-tip-icon" type="button" aria-label="Relationships help">💡</button>
+            <div class="wiki-tags-tip-popover" id="relationships-tip-popover" hidden>
+              Tag the relationships in your work. This applies heavily for fanfiction, and should be used to group recognizable characters together (e.g. "Umbreon"/"Espeon") to help discoverability. If the characters don't appear as a selectable object, enter them with their full names, and use a "/" to denote individual characters. Please be advised, if your relationship includes several characters, consider shortening their names if needed to ensure that the tag stays under 150 characters!
+            </div>
+          </div>
+          <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="relationships-input-box">
+            <input type="text" class="wiki-tags-input" id="relationships-text-input" placeholder="Type a relationship and press Enter…" autocomplete="off" />
+            <div class="wiki-fandom-suggest" id="relationships-suggest" hidden></div>
+          </div>
+        </div>
+
+        <div class="wiki-meta-field mod-editable-block">
+          <div class="mod-field-label-row" style="display:flex;">
+            <span class="mod-field-label">Additional Tags</span>
+            <button class="wiki-tags-tip-icon" id="tags-tip-icon" type="button" aria-label="Tag tips">💡</button>
+            <div class="wiki-tags-tip-popover" id="tags-tip-popover" hidden>
+              Tag up to 100 simple, relevant, searchable tags to help your story be discovered! For example: Pokemon, Furry, Mystery, Love, Ships, Umbreon, Lucario, Sexual Intimacy... Enter tags one at a time. Duplicate tags will be auto-deleted for your convienency. No need to tag specific character names: your character names are tied inside of your story and will be searchable in meta-data by default. Still tag species or other relevant traits about them that you feel could attract readers.
+            </div>
+            <span class="wiki-tags-count" id="tags-count">0/100</span>
+          </div>
+          <div class="wiki-tags-editor" id="site-tags-editor">
+            <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="tags-input-box">
+              <input type="text" class="wiki-tags-input" id="tags-text-input" placeholder="Type a tag and press Enter…" autocomplete="off" />
+              <div class="wiki-fandom-suggest" id="tags-suggest" hidden></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="wiki-section">
+        <h2 class="wiki-section-title">Links</h2>
+        <div class="wiki-rule"></div>
+        <div class="mod-editable-block">
+          <div id="site-links-editor"></div>
+          <button class="mod-btn mod-btn--small" id="add-link-edit-row" type="button">+ Add Link</button>
+        </div>
+      </section>
+
+      <div class="cs-actions-row">
+        <button class="cs-continue-btn" id="cs-submit-btn" type="button">Save and Continue →</button>
+        <a class="cs-cancel-link" href="/fanpages" id="cs-cancel-link">Cancel</a>
+      </div>
+
     </div>
   </div>
 </div>
 
-<script src="/fanpages/fanpages-nav.js"></script>
 <script>
-  const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
-  if (!token) {
-    window.location.href = '/fanpages/login?from=' + encodeURIComponent(window.location.pathname);
+const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+if (!token) {
+  window.location.href = '/fanpages/login?from=' + encodeURIComponent(window.location.pathname);
+}
+const authHeadersFor = (storyPath) => ({ Authorization: `Bearer ${token}`, 'X-Story-Path': storyPath });
+
+if (document.referrer && document.referrer.startsWith(window.location.origin)) {
+  document.getElementById('cs-cancel-link').href = document.referrer;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── Story Metadata — Category checks + tip popovers (same pattern as the
+// Story Editor's Story Details tab) ─────────────────────────────────────
+const CATEGORY_OPTIONS = ['Gen', 'M/F', 'M/M', 'F/F', 'Multi', 'Other'];
+function buildCategoryChecks() {
+  const wrap = document.getElementById('category-checks');
+  wrap.innerHTML = '';
+  CATEGORY_OPTIONS.forEach(opt => {
+    const label = document.createElement('label');
+    label.className = 'wiki-meta-check-item';
+    label.innerHTML = `<input type="checkbox" value="${opt}" /> <span>${opt}</span>`;
+    label.querySelector('input').addEventListener('change', (e) => {
+      label.classList.toggle('wiki-meta-check-item--checked', e.target.checked);
+    });
+    wrap.appendChild(label);
+  });
+}
+buildCategoryChecks();
+
+[
+  ['rating-tip-icon', 'rating-tip-popover'],
+  ['category-tip-icon', 'category-tip-popover'],
+  ['relationships-tip-icon', 'relationships-tip-popover'],
+  ['fandom-tip-icon', 'fandom-tip-popover'],
+  ['tags-tip-icon', 'tags-tip-popover'],
+].forEach(([iconId, popId]) => {
+  const icon = document.getElementById(iconId);
+  const pop = document.getElementById(popId);
+  icon.addEventListener('click', (e) => {
+    e.stopPropagation();
+    pop.hidden = !pop.hidden;
+  });
+  document.addEventListener('click', (e) => {
+    if (!pop.hidden && !pop.contains(e.target) && e.target !== icon) pop.hidden = true;
+  });
+});
+
+// ── Relationships — bubble-tag input w/ typeahead ───────────────────────────
+let workingRelationships = [];
+let relationshipsCatalog = [];
+function renderRelationshipsEditor() {
+  const box = document.getElementById('relationships-input-box');
+  const input = document.getElementById('relationships-text-input');
+  box.querySelectorAll('.wiki-tag-bubble--editable').forEach(b => b.remove());
+  workingRelationships.forEach(r => {
+    const bubble = document.createElement('span');
+    bubble.className = 'wiki-tag-bubble wiki-tag-bubble--editable';
+    bubble.innerHTML = `${escapeHtml(r)} <button class="wiki-tag-bubble-remove" type="button" aria-label="Remove relationship">✕</button>`;
+    bubble.querySelector('.wiki-tag-bubble-remove').addEventListener('click', () => {
+      workingRelationships = workingRelationships.filter(x => x !== r);
+      renderRelationshipsEditor();
+    });
+    box.insertBefore(bubble, input);
+  });
+}
+function addWorkingRelationship(raw) {
+  const clean = raw.trim().slice(0, 150);
+  if (!clean) return;
+  if (workingRelationships.includes(clean)) return;
+  if (workingRelationships.length >= 20) return;
+  workingRelationships.push(clean);
+  renderRelationshipsEditor();
+}
+function renderSuggestDropdown(wrapId, matches, onPick) {
+  const wrap = document.getElementById(wrapId);
+  if (!matches.length) { wrap.hidden = true; wrap.innerHTML = ''; return; }
+  wrap.innerHTML = matches.map(m => `<button type="button" class="wiki-fandom-suggest-item">${escapeHtml(m)}</button>`).join('');
+  wrap.hidden = false;
+  wrap.querySelectorAll('.wiki-fandom-suggest-item').forEach(btn => {
+    btn.addEventListener('mousedown', (e) => { e.preventDefault(); onPick(btn.textContent); });
+  });
+}
+const relationshipsTextInput = document.getElementById('relationships-text-input');
+let relationshipsSuggestIndex = -1;
+relationshipsTextInput.addEventListener('input', () => {
+  const q = relationshipsTextInput.value.trim().toLowerCase();
+  if (!q) { renderSuggestDropdown('relationships-suggest', [], () => {}); return; }
+  const matches = relationshipsCatalog.filter(r => r.toLowerCase().includes(q) && !workingRelationships.some(w => w.toLowerCase() === r.toLowerCase())).slice(0, 6);
+  relationshipsSuggestIndex = -1;
+  renderSuggestDropdown('relationships-suggest', matches, (val) => {
+    addWorkingRelationship(val);
+    relationshipsTextInput.value = '';
+    renderSuggestDropdown('relationships-suggest', [], () => {});
+  });
+});
+relationshipsTextInput.addEventListener('keydown', (e) => {
+  const items = document.querySelectorAll('#relationships-suggest .wiki-fandom-suggest-item');
+  if (e.key === 'ArrowDown' && items.length) {
+    e.preventDefault();
+    relationshipsSuggestIndex = Math.min(relationshipsSuggestIndex + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('active', i === relationshipsSuggestIndex));
+  } else if (e.key === 'ArrowUp' && items.length) {
+    e.preventDefault();
+    relationshipsSuggestIndex = Math.max(relationshipsSuggestIndex - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('active', i === relationshipsSuggestIndex));
+  } else if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const picked = relationshipsSuggestIndex >= 0 && items[relationshipsSuggestIndex] ? items[relationshipsSuggestIndex].textContent : relationshipsTextInput.value;
+    addWorkingRelationship(picked);
+    relationshipsTextInput.value = '';
+    renderSuggestDropdown('relationships-suggest', [], () => {});
+  } else if (e.key === 'Backspace' && !relationshipsTextInput.value && workingRelationships.length) {
+    workingRelationships.pop();
+    renderRelationshipsEditor();
+  } else if (e.key === 'Escape') {
+    renderSuggestDropdown('relationships-suggest', [], () => {});
   }
+});
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('relationships-input-box').contains(e.target)) renderSuggestDropdown('relationships-suggest', [], () => {});
+});
 
-  // Cancel returns to whatever page you were actually on when you clicked
-  // "+ Story", instead of always dumping you at the Fanpage Hub.
-  if (document.referrer && document.referrer.startsWith(window.location.origin)) {
-    document.getElementById('cs-cancel-link').href = document.referrer;
+// ── Fandom — bubble-tag input w/ typeahead ──────────────────────────────────
+let workingFandoms = [];
+let fandomCatalog = [];
+let fandomSuggestIndex = -1;
+function renderFandomsEditor() {
+  const box = document.getElementById('fandom-input-box');
+  const input = document.getElementById('fandom-text-input');
+  box.querySelectorAll('.wiki-tag-bubble--editable').forEach(b => b.remove());
+  workingFandoms.forEach(f => {
+    const bubble = document.createElement('span');
+    bubble.className = 'wiki-tag-bubble wiki-tag-bubble--editable';
+    bubble.innerHTML = `${escapeHtml(f)} <button class="wiki-tag-bubble-remove" type="button" aria-label="Remove fandom">✕</button>`;
+    bubble.querySelector('.wiki-tag-bubble-remove').addEventListener('click', () => {
+      workingFandoms = workingFandoms.filter(x => x !== f);
+      renderFandomsEditor();
+    });
+    box.insertBefore(bubble, input);
+  });
+}
+function addWorkingFandom(raw) {
+  const clean = raw.trim().slice(0, 100);
+  if (!clean) return;
+  if (workingFandoms.some(f => f.toLowerCase() === clean.toLowerCase())) return;
+  if (workingFandoms.length >= 10) return;
+  workingFandoms.push(clean);
+  renderFandomsEditor();
+}
+const fandomTextInput = document.getElementById('fandom-text-input');
+fandomTextInput.addEventListener('input', () => {
+  const q = fandomTextInput.value.trim().toLowerCase();
+  if (!q) { renderSuggestDropdown('fandom-suggest', [], () => {}); return; }
+  const matches = fandomCatalog.filter(f => f.toLowerCase().includes(q) && !workingFandoms.some(w => w.toLowerCase() === f.toLowerCase())).slice(0, 6);
+  fandomSuggestIndex = -1;
+  renderSuggestDropdown('fandom-suggest', matches, (val) => {
+    addWorkingFandom(val);
+    fandomTextInput.value = '';
+    renderSuggestDropdown('fandom-suggest', [], () => {});
+  });
+});
+fandomTextInput.addEventListener('keydown', (e) => {
+  const items = document.querySelectorAll('#fandom-suggest .wiki-fandom-suggest-item');
+  if (e.key === 'ArrowDown' && items.length) {
+    e.preventDefault();
+    fandomSuggestIndex = Math.min(fandomSuggestIndex + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('active', i === fandomSuggestIndex));
+  } else if (e.key === 'ArrowUp' && items.length) {
+    e.preventDefault();
+    fandomSuggestIndex = Math.max(fandomSuggestIndex - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('active', i === fandomSuggestIndex));
+  } else if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const picked = fandomSuggestIndex >= 0 && items[fandomSuggestIndex] ? items[fandomSuggestIndex].textContent : fandomTextInput.value;
+    addWorkingFandom(picked);
+    fandomTextInput.value = '';
+    renderSuggestDropdown('fandom-suggest', [], () => {});
+  } else if (e.key === 'Backspace' && !fandomTextInput.value && workingFandoms.length) {
+    workingFandoms.pop();
+    renderFandomsEditor();
+  } else if (e.key === 'Escape') {
+    renderSuggestDropdown('fandom-suggest', [], () => {});
   }
+});
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('fandom-input-box').contains(e.target)) renderSuggestDropdown('fandom-suggest', [], () => {});
+});
 
-  document.getElementById('cs-submit-btn').addEventListener('click', async () => {
-    const title = document.getElementById('cs-title-input').value.trim();
-    const synopsis = document.getElementById('cs-synopsis-input').value.trim();
-    const rating = document.getElementById('cs-rating-select').value;
-    const agreed = document.getElementById('cs-agree-check').checked;
-    const errEl = document.getElementById('cs-error');
-    errEl.hidden = true;
+// ── Additional Tags — e621/Wattpad-style bubble input ───────────────────────
+let workingTags = [];
+let tagsCatalog = [];
+function renderTagsEditor() {
+  const box = document.getElementById('tags-input-box');
+  const input = document.getElementById('tags-text-input');
+  box.querySelectorAll('.wiki-tag-bubble--editable').forEach(b => b.remove());
+  workingTags.forEach(t => {
+    const bubble = document.createElement('span');
+    bubble.className = 'wiki-tag-bubble wiki-tag-bubble--editable';
+    bubble.innerHTML = `${escapeHtml(t)} <button class="wiki-tag-bubble-remove" type="button" aria-label="Remove tag">✕</button>`;
+    bubble.querySelector('.wiki-tag-bubble-remove').addEventListener('click', () => {
+      workingTags = workingTags.filter(x => x !== t);
+      renderTagsEditor();
+    });
+    box.insertBefore(bubble, input);
+  });
+  document.getElementById('tags-count').textContent = `${workingTags.length}/100`;
+}
+function addWorkingTag(raw) {
+  const clean = raw.trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 40);
+  if (!clean) return;
+  if (workingTags.includes(clean)) return;
+  if (workingTags.length >= 100) return;
+  workingTags.push(clean);
+  renderTagsEditor();
+}
+const tagsTextInput = document.getElementById('tags-text-input');
+let tagsSuggestIndex = -1;
+tagsTextInput.addEventListener('input', () => {
+  const q = tagsTextInput.value.trim().toLowerCase();
+  if (!q) { renderSuggestDropdown('tags-suggest', [], () => {}); return; }
+  const matches = tagsCatalog.filter(t => t.toLowerCase().includes(q) && !workingTags.includes(t.toLowerCase())).slice(0, 6);
+  tagsSuggestIndex = -1;
+  renderSuggestDropdown('tags-suggest', matches, (val) => {
+    addWorkingTag(val);
+    tagsTextInput.value = '';
+    renderSuggestDropdown('tags-suggest', [], () => {});
+  });
+});
+tagsTextInput.addEventListener('keydown', (e) => {
+  const items = document.querySelectorAll('#tags-suggest .wiki-fandom-suggest-item');
+  if (e.key === 'ArrowDown' && items.length) {
+    e.preventDefault();
+    tagsSuggestIndex = Math.min(tagsSuggestIndex + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('active', i === tagsSuggestIndex));
+  } else if (e.key === 'ArrowUp' && items.length) {
+    e.preventDefault();
+    tagsSuggestIndex = Math.max(tagsSuggestIndex - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('active', i === tagsSuggestIndex));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const picked = tagsSuggestIndex >= 0 && items[tagsSuggestIndex] ? items[tagsSuggestIndex].textContent : tagsTextInput.value;
+    addWorkingTag(picked);
+    tagsTextInput.value = '';
+    renderSuggestDropdown('tags-suggest', [], () => {});
+  } else if (e.key === 'Backspace' && !tagsTextInput.value && workingTags.length) {
+    workingTags.pop();
+    renderTagsEditor();
+  } else if (e.key === 'Escape') {
+    renderSuggestDropdown('tags-suggest', [], () => {});
+  }
+});
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('tags-input-box').contains(e.target)) renderSuggestDropdown('tags-suggest', [], () => {});
+});
+renderTagsEditor();
 
-    if (!title) {
-      errEl.textContent = 'A title is required.';
-      errEl.hidden = false;
-      return;
-    }
-    if (!synopsis) {
-      errEl.textContent = 'A description is required.';
-      errEl.hidden = false;
-      return;
-    }
-    if (!rating) {
-      errEl.textContent = 'Please choose a rating.';
-      errEl.hidden = false;
-      return;
-    }
-    if (!agreed) {
-      errEl.textContent = 'You must agree to the Terms of Service to continue.';
-      errEl.hidden = false;
-      return;
-    }
+// ── Links ────────────────────────────────────────────────────────────────
+function addLinkEditRow(label, url) {
+  const wrap = document.createElement('div');
+  wrap.className = 'mod-stat-row';
+  wrap.innerHTML = `
+    <input class="mod-input link-label" placeholder="Label (e.g. Twitter)" value="${label || ''}" />
+    <input class="mod-input link-url" placeholder="https://…" value="${url || ''}" />
+    <button class="mod-btn mod-btn--small mod-btn--danger" type="button">✕</button>`;
+  wrap.querySelector('button').addEventListener('click', () => wrap.remove());
+  document.getElementById('site-links-editor').appendChild(wrap);
+}
+document.getElementById('add-link-edit-row').addEventListener('click', () => addLinkEditRow('', ''));
+addLinkEditRow('', '');
 
-    const btn = document.getElementById('cs-submit-btn');
-    btn.disabled = true;
-    btn.textContent = 'Creating…';
-    try {
-      const res = await fetch('/api/moderator/site/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ title, synopsis, rating }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        errEl.innerHTML = res.status === 409
-          ? 'You already have a story — manage it from <a href="/fanpages/my-stories">My Stories</a>.'
-          : (data.error || 'Something went wrong. Please try again.');
-        errEl.hidden = false;
-        btn.disabled = false;
-        btn.textContent = 'Save and Continue →';
-        return;
-      }
-      // Straight into the chapter editor with the auto-created first draft
-      // chapter, instead of the (now still-empty) story home page — a
-      // freshly created story has nothing to look at until a chapter exists.
-      window.location.href = `/fanpages/${data.site.story_path}/chapter-editor?id=${data.chapter.id}`;
-    } catch {
-      errEl.textContent = 'Network error. Please try again.';
+// ── Banner/Cover — staged locally until the story actually exists, then
+// uploaded for real as part of the Save and Continue flow below. ───────────
+let pendingBannerBlob = null;
+let pendingBannerOriginalFile = null;
+let pendingCoverBlob = null;
+
+document.getElementById('banner-edit-btn').addEventListener('click', () => {
+  document.getElementById('banner-file-input').click();
+});
+document.getElementById('banner-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  openCropModal({
+    title: 'Crop Story Banner', imageSrc: URL.createObjectURL(file), aspectRatio: 1600 / 560, round: false,
+    onSave: async (blob) => {
+      pendingBannerBlob = blob;
+      pendingBannerOriginalFile = file;
+      const img = document.getElementById('banner-img');
+      img.src = URL.createObjectURL(blob);
+      img.style.display = 'block';
+      img.style.objectPosition = 'center';
+    },
+  });
+  e.target.value = '';
+});
+
+document.getElementById('cover-edit-btn').addEventListener('click', () => {
+  document.getElementById('cover-file-input').click();
+});
+document.getElementById('cover-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  openCropModal({
+    title: 'Crop Book Cover', imageSrc: URL.createObjectURL(file), aspectRatio: 2 / 3, round: false,
+    onSave: async (blob) => {
+      pendingCoverBlob = blob;
+      const img = document.getElementById('cover-img');
+      img.src = URL.createObjectURL(blob);
+      img.style.display = 'block';
+      img.style.objectPosition = 'center';
+      document.getElementById('cover-placeholder').style.display = 'none';
+    },
+  });
+  e.target.value = '';
+});
+
+// ── Save and Continue ────────────────────────────────────────────────────
+document.getElementById('cs-submit-btn').addEventListener('click', async () => {
+  const title = document.getElementById('cs-title-input').value.trim();
+  const synopsis = document.getElementById('cs-synopsis-input').value.trim();
+  const rating = document.getElementById('cs-rating-select').value;
+  const errEl = document.getElementById('cs-error');
+  errEl.hidden = true;
+
+  if (!title) { errEl.textContent = 'A title is required.'; errEl.hidden = false; window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  if (!synopsis) { errEl.textContent = 'A description is required.'; errEl.hidden = false; window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  if (!rating) { errEl.textContent = 'Please choose a rating.'; errEl.hidden = false; window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+
+  if (tagsTextInput.value.trim()) { addWorkingTag(tagsTextInput.value); tagsTextInput.value = ''; }
+  if (relationshipsTextInput.value.trim()) { addWorkingRelationship(relationshipsTextInput.value); relationshipsTextInput.value = ''; }
+  if (fandomTextInput.value.trim()) { addWorkingFandom(fandomTextInput.value); fandomTextInput.value = ''; }
+  const categories = Array.from(document.querySelectorAll('#category-checks input:checked')).map(c => c.value);
+  const links = Array.from(document.querySelectorAll('#site-links-editor .mod-stat-row')).map(row => ({
+    label: row.querySelector('.link-label').value.trim(),
+    url:   row.querySelector('.link-url').value.trim(),
+  })).filter(l => l.label && l.url);
+  const bio = document.getElementById('cs-bio-input').value.trim();
+
+  const btn = document.getElementById('cs-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+  try {
+    const res = await fetch('/api/moderator/site/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ title, synopsis, rating }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.innerHTML = res.status === 409
+        ? 'You already have a story — manage it from <a href="/fanpages/my-stories">My Stories</a>.'
+        : (data.error || 'Something went wrong. Please try again.');
       errEl.hidden = false;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       btn.disabled = false;
       btn.textContent = 'Save and Continue →';
+      return;
     }
-  });
+
+    const storyPath = data.site.story_path;
+    const headers = authHeadersFor(storyPath);
+
+    // The rest of the form (bio, tags, categories, relationships, fandoms,
+    // links) now that the site row actually exists to attach it to.
+    await fetch('/api/moderator/site', {
+      method: 'PUT',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bio, tags: workingTags, categories, relationships: workingRelationships, fandoms: workingFandoms, links }),
+    }).catch(() => {});
+
+    if (pendingBannerBlob) {
+      const fd = new FormData();
+      fd.append('banner', pendingBannerBlob, 'banner.jpg');
+      if (pendingBannerOriginalFile) fd.append('banner_original', pendingBannerOriginalFile, pendingBannerOriginalFile.name || 'banner-original.jpg');
+      fd.append('position', 50);
+      await fetch('/api/moderator/site/banner', { method: 'PUT', headers, body: fd }).catch(() => {});
+    }
+    if (pendingCoverBlob) {
+      const fd = new FormData();
+      fd.append('cover', pendingCoverBlob, 'cover.jpg');
+      fd.append('position_x', 50);
+      fd.append('position_y', 50);
+      await fetch('/api/moderator/site/cover', { method: 'PUT', headers, body: fd }).catch(() => {});
+    }
+
+    // Straight into the "link existing Characters/Art?" step, carrying the
+    // auto-created first chapter's id through to wherever that step ends up
+    // sending them next (skip, or after linking).
+    window.location.href = `/fanpages/${storyPath}/edit?onboarding=1&chapter=${data.chapter.id}`;
+  } catch {
+    errEl.textContent = 'Network error. Please try again.';
+    errEl.hidden = false;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    btn.disabled = false;
+    btn.textContent = 'Save and Continue →';
+  }
+});
+
+// ── Boot — just the shared fandom/tag/relationship catalogs, no existing
+// site to load. ─────────────────────────────────────────────────────────
+(async () => {
+  try {
+    const catRes = await fetch('/api/fandom-catalog');
+    if (catRes.ok) fandomCatalog = (await catRes.json()).fandoms || [];
+  } catch {}
+  try {
+    const tagRes = await fetch('/api/tag-catalog');
+    if (tagRes.ok) tagsCatalog = (await tagRes.json()).tags || [];
+  } catch {}
+  try {
+    const relRes = await fetch('/api/relationship-catalog');
+    if (relRes.ok) relationshipsCatalog = (await relRes.json()).relationships || [];
+  } catch {}
+})();
 </script>
 </body>
 </html>

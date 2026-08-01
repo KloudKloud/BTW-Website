@@ -90,6 +90,25 @@
     }
     .wiki-tag-bubble--pending-delete .wiki-tag-bubble-remove { color: #d97a72; }
 
+    .tos-blob-card {
+      background: #161616; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
+      padding: 1.25rem; margin-bottom: 1.25rem;
+    }
+    .tos-blob-name {
+      width: 100%; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
+      color: #f0c060; font-family: 'Cinzel', serif; font-size: 1.1rem; font-weight: 700;
+      padding: 0.6rem 0.8rem; margin-bottom: 0.85rem;
+    }
+    .tos-blob-content {
+      width: 100%; min-height: 160px; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px; color: #ddd; font-family: 'Inter', sans-serif; font-size: 0.88rem; line-height: 1.6;
+      padding: 0.8rem; resize: vertical; margin-bottom: 0.85rem;
+    }
+    .tos-blob-name:focus, .tos-blob-content:focus { outline: none; border-color: #7fa8d9; }
+    .tos-blob-actions { display: flex; align-items: center; gap: 0.75rem; }
+    .tos-blob-saved { font-size: 0.8rem; color: #7ac98d; opacity: 0; transition: opacity 0.2s; }
+    .tos-blob-saved.show { opacity: 1; }
+
     .adm-dict-savebar {
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 150;
       display: flex; align-items: center; justify-content: space-between;
@@ -153,6 +172,7 @@
     <button class="adm-tab active" id="adm-tab-bulletin" type="button" data-tab="bulletin">Bulletin</button>
     <button class="adm-tab" id="adm-tab-stats" type="button" data-tab="stats">Stats</button>
     <button class="adm-tab" id="adm-tab-dictionary" type="button" data-tab="dictionary">Tag Dictionary</button>
+    <button class="adm-tab" id="adm-tab-tos" type="button" data-tab="tos">TOS Blobs</button>
   </div>
 
   <!-- ══ Bulletin (Hub Image Builder) ══════════════════════════════════ -->
@@ -269,6 +289,17 @@
     </div>
   </div>
 
+  <!-- ══ TOS Blobs ═══════════════════════════════════════════════════ -->
+  <div class="adm-panel" id="adm-panel-tos">
+    <p class="hb-sub">Free-text storage for Terms of Service / rules copy — a scratchpad for drafting policy text before it has a real page of its own. Not shown anywhere on the site yet.</p>
+
+    <button class="chars-create-btn" id="tos-add-btn" type="button" style="max-width: 260px; margin-bottom: 1.5rem;">
+      <span class="chars-create-btn-icon">➕</span> New Blob
+    </button>
+
+    <div id="tos-blob-list"></div>
+  </div>
+
   <!-- Save bar — sticks to the bottom of the viewport once at least one
        entry is marked for removal, same idea as the story editor's edit
        bar. Only appears while the Tag Dictionary tab is active. -->
@@ -372,7 +403,7 @@ function escapeHtml(s) {
 }
 
 // ── Tabs ─────────────────────────────────────────────────────────────────
-const ADM_TABS = ['bulletin', 'stats', 'dictionary'];
+const ADM_TABS = ['bulletin', 'stats', 'dictionary', 'tos'];
 function switchAdmTab(tab) {
   if (!ADM_TABS.includes(tab)) tab = 'bulletin';
   ADM_TABS.forEach(t => {
@@ -939,6 +970,76 @@ document.getElementById('adm-dict-save-btn').addEventListener('click', async () 
 });
 
 /* ═══════════════════════════════════════════════════════════════════════
+   TOS Blobs — free-text scratchpad, not shown anywhere on the site yet.
+   ═══════════════════════════════════════════════════════════════════════ */
+function tosBlobCardEl(blob) {
+  const card = document.createElement('div');
+  card.className = 'tos-blob-card';
+  const isNew = blob.id == null;
+  card.innerHTML = `
+    <input class="tos-blob-name" value="${escapeHtml(blob.name || '')}" placeholder="Blob name…" />
+    <textarea class="tos-blob-content" placeholder="Write here…">${escapeHtml(blob.content || '')}</textarea>
+    <div class="tos-blob-actions">
+      <button class="mod-btn mod-btn--small" type="button" data-action="save">${isNew ? 'Create' : 'Save'}</button>
+      <button class="mod-btn mod-btn--small mod-btn--danger" type="button" data-action="delete" ${isNew ? 'style="display:none;"' : ''}>Delete</button>
+      <span class="tos-blob-saved">Saved ✓</span>
+    </div>
+  `;
+  const nameInput = card.querySelector('.tos-blob-name');
+  const contentInput = card.querySelector('.tos-blob-content');
+  const savedLabel = card.querySelector('.tos-blob-saved');
+  let id = blob.id;
+
+  card.querySelector('[data-action="save"]').addEventListener('click', async (e) => {
+    const name = nameInput.value.trim();
+    if (!name) { nameInput.focus(); return; }
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const res = await fetch(id ? `/api/admin/tos-blobs/${id}` : '/api/admin/tos-blobs', {
+        method: id ? 'PUT' : 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, content: contentInput.value }),
+      });
+      if (res.ok) {
+        const { blob: saved } = await res.json();
+        id = saved.id;
+        btn.textContent = 'Save';
+        card.querySelector('[data-action="delete"]').style.display = '';
+        savedLabel.classList.add('show');
+        setTimeout(() => savedLabel.classList.remove('show'), 1500);
+      } else {
+        alert('Something went wrong saving that blob.');
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  card.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+    if (!id || !confirm(`Delete "${nameInput.value.trim() || 'this blob'}"?`)) return;
+    await fetch(`/api/admin/tos-blobs/${id}`, { method: 'DELETE', headers: authHeaders() });
+    card.remove();
+  });
+
+  return card;
+}
+async function loadTosBlobs() {
+  const res = await fetch('/api/admin/tos-blobs', { headers: authHeaders() }).catch(() => null);
+  const list = document.getElementById('tos-blob-list');
+  list.innerHTML = '';
+  if (!res || !res.ok) return;
+  const { blobs } = await res.json();
+  blobs.forEach(b => list.appendChild(tosBlobCardEl(b)));
+}
+document.getElementById('tos-add-btn').addEventListener('click', () => {
+  const list = document.getElementById('tos-blob-list');
+  const card = tosBlobCardEl({ id: null, name: '', content: '' });
+  list.insertBefore(card, list.firstChild);
+  card.querySelector('.tos-blob-name').focus();
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
    Boot — one shared admin gate for the whole page.
    ═══════════════════════════════════════════════════════════════════════ */
 (async () => {
@@ -958,6 +1059,7 @@ document.getElementById('adm-dict-save-btn').addEventListener('click', async () 
     dictData = summary;
     renderDictionary('');
     await loadSiteStats();
+    await loadTosBlobs();
   } catch {
     document.getElementById('adm-forbidden').style.display = 'block';
   }
