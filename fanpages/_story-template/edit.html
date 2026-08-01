@@ -50,15 +50,17 @@
     body.mod-editing-active #editor-top-row #editor-quick-nav {
       width: auto; flex: 1 1 0; max-width: none; margin: 0;
     }
+    /* Vertical stack instead of 3-across — each card ends up much wider
+       (full column width instead of a third of it), so the cropped
+       preview is actually easy to see. */
     body.mod-editing-active #editor-top-row #editor-quick-nav-row {
-      grid-template-columns: repeat(3, 1fr); gap: 1.25rem;
+      grid-template-columns: 1fr; gap: 1.25rem;
     }
     body.mod-editing-active #editor-top-row .mod-cover-wrap {
       width: 220px; height: 330px;
     }
     @media (max-width: 820px) {
       body.mod-editing-active #editor-top-row #editor-quick-nav { width: 100%; flex: none; }
-      body.mod-editing-active #editor-top-row #editor-quick-nav-row { grid-template-columns: 1fr 1fr; }
       body.mod-editing-active #editor-top-row .mod-cover-wrap { width: 160px; height: 240px; margin: 0 auto; }
     }
 
@@ -1503,6 +1505,11 @@ async function uploadQnCard(kind, blob) {
     img.src = site[NAV_CARD_FIELD[kind]] + '?t=' + Date.now();
     img.style.objectPosition = 'center';
     document.getElementById(`qn-${kind}-recrop-btn`).style.display = 'flex';
+    // Same fix as the banner — this PUT already saves the card art
+    // immediately, but it lives outside #editor-form-box so the normal
+    // input/change/click listener never fires for it. Flip Save Changes on
+    // explicitly so it doesn't sit misleadingly grayed-out after a real change.
+    enableSaveButton();
   } else {
     alert('Card image upload failed. Please try again.');
   }
@@ -1511,6 +1518,11 @@ async function uploadQnCard(kind, blob) {
 // ── Story Editor hub — nav column (Story Details / Chapters / Characters /
 // Gallery), all four now live inside this hub. ──────────────────────────────
 function switchEditorSection(section) {
+  // Banner only ever belongs to Story Details — the fixed nav bar's own
+  // 68px spacer (#fanpages-topbar-root) already clears the page below it,
+  // so hiding this needs no extra top padding of its own; Chapters/
+  // Characters/Gallery's content just starts right where the banner used to.
+  document.getElementById('wiki-cover').style.display = section === 'details' ? '' : 'none';
   document.getElementById('editor-form-box').style.display = section === 'details' ? '' : 'none';
   document.getElementById('se-chapters-view').style.display = section === 'chapters' ? '' : 'none';
   document.getElementById('se-characters-view').style.display = section === 'characters' ? '' : 'none';
