@@ -4594,6 +4594,31 @@ app.get('/api/moderator/chapters/:id', requireAuth, requireModerator, async (req
   res.json({ chapter });
 });
 
+// POST /api/moderator/chapters/import-docx — pulls text out of a .docx into
+// HTML for the chapter editor's "Import" button. Memory storage only, since
+// the file itself never needs to be kept around — just read once, converted,
+// discarded. Returns raw HTML from mammoth as-is; the client runs it through
+// the same sanitizePastedHtml() pipeline already used for pasted Word/
+// Wattpad content, so this doesn't need its own separate cleanup pass.
+const mammoth = require('mammoth');
+const uploadDocx = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    cb(null, file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  },
+});
+app.post('/api/moderator/chapters/import-docx', requireAuth, requireModerator, uploadDocx.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'A .docx file is required.' });
+  try {
+    const { value: html } = await mammoth.convertToHtml({ buffer: req.file.buffer });
+    res.json({ html });
+  } catch (e) {
+    console.error('docx import error:', e.message);
+    res.status(400).json({ error: "Couldn't read that file — make sure it's a valid .docx." });
+  }
+});
+
 function parseChapterLinks(raw) {
   let links = [];
   try { links = JSON.parse(raw || '[]'); } catch { links = []; }
