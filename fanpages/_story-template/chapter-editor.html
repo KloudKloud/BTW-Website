@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chapter Editor ✦ Fanpages</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&display=swap" />
   <style>
     * { box-sizing: border-box; }
     body {
@@ -101,16 +102,29 @@
     .ce-cover-mini-btn--ghost { background: none; border: 1px solid rgba(255,255,255,0.25); color: #ccc; }
     .ce-cover-mini-btn--ghost:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
     .ce-cover-preview { position: relative; width: 100%; display: flex; justify-content: center; }
-    .ce-cover-preview img { max-width: 220px; max-height: 220px; border-radius: 10px; object-fit: cover; display: block; }
-    .ce-cover-video-preview-box {
-      display: flex; align-items: center; gap: 0.5rem; color: #ccc;
-      font-family: 'Inter', sans-serif; font-size: 0.85rem;
-    }
+    .ce-cover-preview-inner { position: relative; display: inline-block; }
+    .ce-cover-preview img { max-width: min(70%, 640px); max-height: 380px; border-radius: 10px; object-fit: contain; display: block; }
     .ce-cover-remove-btn {
       position: absolute; top: -0.6rem; right: -0.6rem; width: 26px; height: 26px; border-radius: 50%;
       background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.2); color: #fff; cursor: pointer; font-size: 0.75rem;
     }
     .ce-cover-remove-btn:hover { background: rgba(0,0,0,0.9); }
+    .ce-cover-edit-btn {
+      position: absolute; bottom: 0.6rem; right: 0.6rem; width: 34px; height: 34px; border-radius: 50%;
+      background: rgba(0,0,0,0.65); border: 1px solid rgba(255,255,255,0.3); color: #fff; cursor: pointer; font-size: 0.9rem;
+    }
+    .ce-cover-edit-btn:hover { background: rgba(0,0,0,0.85); }
+    .ce-cover-edit-menu {
+      position: absolute; bottom: 3.2rem; right: 0.6rem; z-index: 10; min-width: 170px;
+      background: #1c1c1e; border: 1px solid rgba(255,255,255,0.16); border-radius: 10px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.5); padding: 0.35rem;
+    }
+    .ce-cover-edit-menu button {
+      display: block; width: 100%; text-align: left; padding: 0.5rem 0.65rem; border-radius: 6px;
+      background: none; border: none; color: #ddd; font-family: 'Inter', sans-serif; font-size: 0.85rem; cursor: pointer;
+    }
+    .ce-cover-edit-menu button:hover { background: rgba(255,255,255,0.08); }
+    .ce-cover-edit-menu button[data-action="remove"] { color: #d97a72; }
 
     /* ── Inline media icons — appear over whichever paragraph is empty and
        currently being hovered (Wattpad-style "insert something here"),
@@ -125,15 +139,39 @@
     }
     .ce-inline-media-btns button:hover { background: rgba(240,192,96,0.18); color: #f0c060; }
     .ce-inline-video-entry {
-      position: fixed; z-index: 16; display: flex; align-items: center; gap: 0.4rem;
+      position: fixed; z-index: 16;
       background: #1c1c1e; border: 1px solid rgba(127,168,217,0.5); border-radius: 8px; padding: 0.35rem;
     }
+    .ce-inline-video-entry-row { display: flex; align-items: center; gap: 0.4rem; }
     .ce-inline-video-entry input {
       background: #232325; border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; color: #eee;
       font-family: 'Inter', sans-serif; font-size: 0.82rem; padding: 0.4em 0.6em; outline: none; width: 220px;
     }
+    .ce-video-error {
+      margin: 0.4rem 0 0; color: #f5b3ac; font-family: 'Inter', sans-serif; font-size: 0.78rem;
+    }
+    .ce-cover-video-entry-wrap { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 460px; }
+    .ce-cover-video-entry-wrap .ce-video-error { text-align: center; }
+
+    /* ── YouTube video blocks — a clickable thumbnail (real YouTube preview
+       image + play button) rather than an always-live embed; clicking the
+       thumbnail (not the play button) opens the video on YouTube itself,
+       clicking play swaps it for a real playing embed in place. Shared by
+       both the chapter cover and inline body videos. ── */
+    .ce-video-thumb-wrap { position: relative; cursor: pointer; border-radius: 10px; overflow: hidden; background: #000; }
+    .ce-video-thumb-wrap img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .ce-video-play-btn {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 56px; height: 56px; border-radius: 12px; border: none; cursor: pointer;
+      background: rgba(20,20,20,0.55); color: #fff; font-size: 1.5rem; line-height: 1;
+      display: flex; align-items: center; justify-content: center; transition: background 0.15s;
+    }
+    .ce-video-thumb-wrap:hover .ce-video-play-btn { background: rgba(220,30,30,0.85); }
     .ce-video-block { position: relative; margin: 0 0 1.4em; }
+    .ce-video-block .ce-video-thumb-wrap { aspect-ratio: 16 / 9; width: 100%; }
     .ce-video-block iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: none; border-radius: 10px; }
+    #ce-cover-video-thumb-wrap { width: min(70%, 640px); aspect-ratio: 16 / 9; }
+    #ce-cover-video-thumb-wrap iframe { width: 100%; height: 100%; border: none; }
 
     /* ── Big chapter title, centered, above the writing surface. ── */
     .ce-title-block { margin-top: 2rem; }
@@ -148,10 +186,10 @@
        <p> elements (Enter = new paragraph, matching the "blank line between
        paragraphs" convention Wattpad/AO3 both use). Not a rich toolbar-
        heavy editor on purpose yet — this is the "start simple" pass. ── */
-    .ce-page { max-width: 760px; margin: 0 auto; padding: 1.5rem 1.5rem 8rem; }
+    .ce-page { max-width: 880px; margin: 0 auto; padding: 1.5rem 1.5rem 8rem; }
     .ce-editor {
       min-height: 60vh; color: #e8e8e8;
-      font-family: 'Georgia', serif; font-size: 1.15rem; line-height: 1.9; outline: none;
+      font-family: 'Lora', 'Georgia', serif; font-size: 1.24rem; line-height: 1.9; outline: none;
     }
     .ce-editor p { margin: 0 0 1.2em; }
     .ce-editor p:empty::before { content: '\00a0'; }
@@ -219,15 +257,26 @@
     <button type="button" class="ce-cover-big-btn" id="ce-cover-image-btn" title="Add a cover image">🖼️</button>
     <button type="button" class="ce-cover-big-btn" id="ce-cover-video-btn" title="Add a cover video">🎥</button>
   </div>
-  <div class="ce-cover-video-entry" id="ce-cover-video-entry" hidden>
-    <input type="text" id="ce-cover-video-input" placeholder="Paste YouTube URL" />
-    <button type="button" class="ce-cover-mini-btn ce-cover-mini-btn--add" id="ce-cover-video-add">Add</button>
-    <button type="button" class="ce-cover-mini-btn ce-cover-mini-btn--ghost" id="ce-cover-video-cancel">Cancel</button>
+  <div class="ce-cover-video-entry-wrap" id="ce-cover-video-entry-wrap" hidden>
+    <div class="ce-cover-video-entry">
+      <input type="text" id="ce-cover-video-input" placeholder="Paste YouTube URL" />
+      <button type="button" class="ce-cover-mini-btn ce-cover-mini-btn--add" id="ce-cover-video-add">Add</button>
+      <button type="button" class="ce-cover-mini-btn ce-cover-mini-btn--ghost" id="ce-cover-video-cancel">Cancel</button>
+    </div>
+    <p class="ce-video-error" id="ce-cover-video-error" hidden>Error with the link. Please try another YouTube link.</p>
   </div>
   <div class="ce-cover-preview" id="ce-cover-preview" hidden>
-    <img id="ce-cover-image-preview" alt="" hidden />
-    <div class="ce-cover-video-preview-box" id="ce-cover-video-preview-box" hidden>🎥 <span id="ce-cover-video-preview-text"></span></div>
-    <button type="button" class="ce-cover-remove-btn" id="ce-cover-remove-btn" title="Remove">✕</button>
+    <div class="ce-cover-preview-inner" id="ce-cover-preview-inner">
+      <img id="ce-cover-image-preview" alt="" hidden />
+      <div class="ce-video-thumb-wrap" id="ce-cover-video-thumb-wrap" hidden></div>
+      <button type="button" class="ce-cover-remove-btn" id="ce-cover-remove-btn" title="Remove" hidden>✕</button>
+      <button type="button" class="ce-cover-edit-btn" id="ce-cover-edit-btn" title="Edit cover" hidden>✏️</button>
+      <div class="ce-cover-edit-menu" id="ce-cover-edit-menu" hidden>
+        <button type="button" data-action="replace">Replace Image</button>
+        <button type="button" data-action="remove">Remove Image</button>
+        <button type="button" data-action="video">Add YouTube Video</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -247,9 +296,12 @@
   <button type="button" data-action="video" title="Insert YouTube Video">🎥</button>
 </div>
 <div class="ce-inline-video-entry" id="ce-inline-video-entry" hidden>
-  <input type="text" id="ce-inline-video-input" placeholder="Paste YouTube URL" />
-  <button type="button" class="ce-cover-mini-btn ce-cover-mini-btn--add" id="ce-inline-video-add">Add</button>
-  <button type="button" class="ce-cover-mini-btn ce-cover-mini-btn--ghost" id="ce-inline-video-cancel">Cancel</button>
+  <div class="ce-inline-video-entry-row">
+    <input type="text" id="ce-inline-video-input" placeholder="Paste YouTube URL" />
+    <button type="button" class="ce-cover-mini-btn ce-cover-mini-btn--add" id="ce-inline-video-add">Add</button>
+    <button type="button" class="ce-cover-mini-btn ce-cover-mini-btn--ghost" id="ce-inline-video-cancel">Cancel</button>
+  </div>
+  <p class="ce-video-error" id="ce-inline-video-error" hidden>Error with the link. Please try another YouTube link.</p>
 </div>
 
 <div class="ce-sel-toolbar" id="ce-sel-toolbar" hidden>
@@ -320,26 +372,55 @@ let coverImageUrl = '';
 let coverVideoUrl = '';
 function showCoverButtons() {
   document.getElementById('ce-cover-buttons').hidden = false;
-  document.getElementById('ce-cover-video-entry').hidden = true;
+  document.getElementById('ce-cover-video-entry-wrap').hidden = true;
   document.getElementById('ce-cover-preview').hidden = true;
 }
 function showCoverVideoEntry() {
   document.getElementById('ce-cover-buttons').hidden = true;
-  document.getElementById('ce-cover-video-entry').hidden = false;
+  document.getElementById('ce-cover-video-entry-wrap').hidden = false;
   document.getElementById('ce-cover-preview').hidden = true;
+  document.getElementById('ce-cover-video-error').hidden = true;
   document.getElementById('ce-cover-video-input').focus();
+}
+// Shared by the chapter cover and inline body videos: a real YouTube
+// thumbnail image with a play button overlay, instead of an always-live
+// (and always-loading) iframe. Clicking the thumbnail itself opens the
+// video on YouTube; clicking play swaps this same element for a real
+// playing embed in place.
+function buildVideoThumbMarkup(videoId) {
+  return `
+    <img src="https://img.youtube.com/vi/${videoId}/hqdefault.jpg" alt="" />
+    <button type="button" class="ce-video-play-btn" title="Play video">▶</button>
+  `;
+}
+function wireVideoThumb(wrap, videoId) {
+  wrap.innerHTML = buildVideoThumbMarkup(videoId);
+  wrap.querySelector('img').addEventListener('click', () => {
+    window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank', 'noopener');
+  });
+  wrap.querySelector('.ce-video-play-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    wrap.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1" allow="autoplay; encrypted-media" allowfullscreen title="Chapter video"></iframe>`;
+  });
 }
 function showCoverPreview() {
   document.getElementById('ce-cover-buttons').hidden = true;
-  document.getElementById('ce-cover-video-entry').hidden = true;
+  document.getElementById('ce-cover-video-entry-wrap').hidden = true;
   document.getElementById('ce-cover-preview').hidden = false;
+  document.getElementById('ce-cover-edit-menu').hidden = true;
   const img = document.getElementById('ce-cover-image-preview');
-  const vidBox = document.getElementById('ce-cover-video-preview-box');
+  const vidWrap = document.getElementById('ce-cover-video-thumb-wrap');
+  const removeBtn = document.getElementById('ce-cover-remove-btn');
+  const editBtn = document.getElementById('ce-cover-edit-btn');
   if (coverImageUrl) {
-    img.src = coverImageUrl; img.hidden = false; vidBox.hidden = true;
+    // Image cover gets the pencil menu (Replace/Remove/Add Video); a video
+    // cover keeps the plain ✕ — it never had a "menu" ask for it.
+    img.src = coverImageUrl; img.hidden = false; vidWrap.hidden = true;
+    removeBtn.hidden = true; editBtn.hidden = false;
   } else {
-    img.hidden = true; vidBox.hidden = false;
-    document.getElementById('ce-cover-video-preview-text').textContent = coverVideoUrl;
+    img.hidden = true; vidWrap.hidden = false;
+    wireVideoThumb(vidWrap, extractYouTubeId(coverVideoUrl));
+    removeBtn.hidden = false; editBtn.hidden = true;
   }
 }
 function refreshCoverUi() {
@@ -369,7 +450,10 @@ document.getElementById('ce-cover-video-btn').addEventListener('click', showCove
 document.getElementById('ce-cover-video-cancel').addEventListener('click', refreshCoverUi);
 document.getElementById('ce-cover-video-add').addEventListener('click', () => {
   const url = document.getElementById('ce-cover-video-input').value.trim();
+  const errEl = document.getElementById('ce-cover-video-error');
   if (!url) return;
+  if (!extractYouTubeId(url)) { errEl.hidden = false; return; }
+  errEl.hidden = true;
   coverVideoUrl = url;
   coverImageUrl = '';
   markDirty();
@@ -380,6 +464,32 @@ document.getElementById('ce-cover-remove-btn').addEventListener('click', () => {
   coverVideoUrl = '';
   markDirty();
   refreshCoverUi();
+});
+const coverEditMenu = document.getElementById('ce-cover-edit-menu');
+document.getElementById('ce-cover-edit-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  coverEditMenu.hidden = !coverEditMenu.hidden;
+});
+document.addEventListener('click', (e) => {
+  if (!coverEditMenu.hidden && !coverEditMenu.contains(e.target) && e.target.id !== 'ce-cover-edit-btn') coverEditMenu.hidden = true;
+});
+coverEditMenu.querySelector('[data-action="replace"]').addEventListener('click', () => {
+  coverEditMenu.hidden = true;
+  document.getElementById('ce-image-file-input').dataset.target = 'cover';
+  document.getElementById('ce-image-file-input').click();
+});
+coverEditMenu.querySelector('[data-action="remove"]').addEventListener('click', () => {
+  coverEditMenu.hidden = true;
+  coverImageUrl = '';
+  markDirty();
+  refreshCoverUi();
+});
+coverEditMenu.querySelector('[data-action="video"]').addEventListener('click', () => {
+  coverEditMenu.hidden = true;
+  // Cancel from here just re-shows whatever cover already existed
+  // (the image, untouched) — showCoverVideoEntry/refreshCoverUi already
+  // work off coverImageUrl/coverVideoUrl, which haven't changed yet.
+  showCoverVideoEntry();
 });
 const coverBox = document.getElementById('ce-cover-box');
 coverBox.addEventListener('dragover', (e) => {
@@ -612,21 +722,24 @@ function buildVideoBlock(videoId) {
   const block = document.createElement('div');
   block.className = 'ce-video-block';
   block.contentEditable = 'false';
+  block.dataset.videoId = videoId;
   block.innerHTML = `
-    <iframe src="https://www.youtube.com/embed/${videoId}" allowfullscreen title="Chapter video"></iframe>
+    <div class="ce-video-thumb-wrap"></div>
     <div class="ce-img-controls">
       <button type="button" data-dir="up" title="Move up">▲</button>
       <button type="button" data-dir="down" title="Move down">▼</button>
       <button type="button" data-dir="remove" title="Remove">✕</button>
     </div>
   `;
+  wireVideoThumb(block.querySelector('.ce-video-thumb-wrap'), videoId);
   wireVideoBlock(block);
   return block;
 }
 function insertVideoBlock(url) {
   const id = extractYouTubeId(url);
-  if (!id) { alert("That doesn't look like a YouTube link."); return; }
+  if (!id) return false;
   insertBlockAtAnchor(buildVideoBlock(id));
+  return true;
 }
 
 // ── Inline media icons — appear over whichever paragraph is empty and
@@ -684,6 +797,7 @@ inlineBtns.querySelector('[data-action="video"]').addEventListener('click', () =
   if (!activeEmptyPara) return;
   inlineBtns.hidden = true;
   inlineVideoEntry.hidden = false;
+  document.getElementById('ce-inline-video-error').hidden = true;
   positionOverParagraph(inlineVideoEntry, activeEmptyPara);
   document.getElementById('ce-inline-video-input').value = '';
   document.getElementById('ce-inline-video-input').focus();
@@ -691,8 +805,13 @@ inlineBtns.querySelector('[data-action="video"]').addEventListener('click', () =
 document.getElementById('ce-inline-video-cancel').addEventListener('click', hideInlineUi);
 document.getElementById('ce-inline-video-add').addEventListener('click', () => {
   const url = document.getElementById('ce-inline-video-input').value.trim();
+  const errEl = document.getElementById('ce-inline-video-error');
   if (!url) return;
-  insertVideoBlock(url);
+  if (!insertVideoBlock(url)) {
+    errEl.hidden = false;
+    positionOverParagraph(inlineVideoEntry, activeEmptyPara);
+    return;
+  }
   hideInlineUi();
 });
 document.getElementById('ce-image-file-input').addEventListener('change', async (e) => {
@@ -781,7 +900,12 @@ window.addEventListener('beforeunload', (e) => {
   // instead of an empty div with no cursor target.
   editor.innerHTML = chapter.body && chapter.body.trim() ? chapter.body : '<p><br></p>';
   editor.querySelectorAll('.ce-img-block').forEach(wireImageBlock);
-  editor.querySelectorAll('.ce-video-block').forEach(wireVideoBlock);
+  editor.querySelectorAll('.ce-video-block').forEach(block => {
+    wireVideoBlock(block);
+    // The thumbnail's click-to-play/click-to-YouTube listeners aren't part
+    // of the saved HTML — rebuild them from the stored video ID.
+    if (block.dataset.videoId) wireVideoThumb(block.querySelector('.ce-video-thumb-wrap'), block.dataset.videoId);
+  });
   updateStatusLine();
 
   coverImageUrl = chapter.image_url || '';
