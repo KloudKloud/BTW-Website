@@ -116,13 +116,6 @@
         <input class="mod-input mod-edit-input" id="site-title-input" style="display:none;" maxlength="60" />
       </div>
 
-      <!-- Owner-only — a story with no published chapter isn't public yet
-           (kept out of search/browse server-side), so make that state
-           impossible to miss on the story's own page. -->
-      <div class="wiki-draft-banner" id="wiki-draft-banner" style="display:none;">
-        <span class="wiki-draft-banner-badge">Draft</span>
-        <span id="wiki-draft-banner-text"></span>
-      </div>
 
       <nav class="wiki-story-tabs wiki-story-tabs--centered">
         <a href="#" id="tab-home" class="wiki-story-tab active">Home</a>
@@ -1201,23 +1194,6 @@ function renderPartsStatus(s, chapters) {
   wrap.style.display = (publishedCount > 0 || (s.is_self && draftCount > 0)) ? 'flex' : 'none';
 }
 
-// Owner-only: a story only counts as public once it has a published
-// chapter with real text in it (matches the server-side check gating
-// search/browse) — until then, make that state impossible to miss on the
-// story's own page instead of it just silently not showing up anywhere.
-function renderDraftBanner(s, chapters) {
-  const banner = document.getElementById('wiki-draft-banner');
-  if (!s.is_self) { banner.style.display = 'none'; return; }
-  const list = chapters || [];
-  const publishedCount = list.filter(c => c.status === 'published' && c.body && c.body.trim()).length;
-  if (publishedCount > 0) { banner.style.display = 'none'; return; }
-  const draftCount = list.length;
-  banner.style.display = 'flex';
-  document.getElementById('wiki-draft-banner-text').textContent = draftCount > 0
-    ? `This story isn't public yet — publish a chapter to add it to the algorithm. (${draftCount} draft${draftCount === 1 ? '' : 's'} waiting)`
-    : `This story isn't public yet — publish a chapter to add it to the algorithm.`;
-}
-
 // ── Boot ─────────────────────────────────────────────────────────────────────
 (async () => {
   buildThemeGrid();
@@ -1235,7 +1211,6 @@ function renderDraftBanner(s, chapters) {
   renderStartReadingBtn(siteData.chapters);
   renderHeroStats(s);
   renderPartsStatus(s, siteData.chapters);
-  renderDraftBanner(s, siteData.chapters);
 
   if (s.is_self) {
     isSelf = true;
