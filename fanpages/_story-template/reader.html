@@ -9,19 +9,27 @@
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <style>
-    /* ── Custom reader background — same fixed+blurred recipe as the story
-       page's own custom theme background, a per-reader account setting
-       instead of a per-story one, so it follows this reader into every
-       story instead of living on any one story's record. ── */
+    /* ── Custom reader background — same recipe as the Profile/Notifications
+       pages' own custom backgrounds: z-index:0 fixed layers, with every
+       other direct child of body explicitly promoted to z-index:1 so real
+       content always paints above them (negative z-index alone isn't this
+       codebase's convention and has bitten us before — see .rd-content-z). ── */
     .rd-bg-img {
       position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover;
-      filter: blur(28px) brightness(0.9); z-index: -2; display: none;
+      filter: blur(28px) brightness(0.9); z-index: 0; display: none;
     }
-    .rd-bg-overlay { position: fixed; inset: 0; background: rgba(10,10,10,0.72); z-index: -1; display: none; }
+    .rd-bg-overlay { position: fixed; inset: 0; background: rgba(10,10,10,0.72); z-index: 0; display: none; }
+    .rd-content-z { position: relative; z-index: 1; }
 
     /* ── Reader top bar — bleeds into the site's own dark top nav (same
-       #141414), a second row carrying the book's own identity + actions. ── */
-    .rd-topbar { background: #141414; border-bottom: 1px solid rgba(255,255,255,0.08); }
+       #141414), a second row carrying the book's own identity + actions.
+       Fixed under the main nav bar so it follows scroll the same way the
+       main bar does; .rd-topbar-spacer holds its place in normal flow. ── */
+    .rd-topbar {
+      background: #141414; border-bottom: 1px solid rgba(255,255,255,0.08);
+      position: fixed; top: 76px; left: 0; right: 0; z-index: 150;
+    }
+    .rd-topbar-spacer { height: 86px; }
     .rd-topbar-inner {
       padding: 0.75rem 2rem;
       display: flex; align-items: center; justify-content: space-between; gap: 1.5rem;
@@ -83,45 +91,57 @@
     .rd-like-btn.liked svg { fill: currentColor; stroke: #e06080; }
 
     /* ── Left floating control panel — fixed to the viewport, not the page
-       flow, so it stays put while the article scrolls. ── */
+       flow, so it stays put while the article scrolls. Same width as the
+       right rail (.rd-recs) so the article column between them reads
+       centered instead of lopsided. Order: pfp -> author + Follow -> hr ->
+       Theme -> Text Size. ── */
     .rd-side-panel {
       position: fixed; left: 1.5rem; top: 50%; transform: translateY(-50%); z-index: 30;
-      width: 132px; background: rgba(10,10,10,0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 1.1rem 0.9rem;
-      display: flex; flex-direction: column; gap: 1.25rem;
+      width: 200px; background: rgba(10,10,10,0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 1.5rem 1.1rem;
+      display: flex; flex-direction: column; align-items: center; gap: 1.1rem;
     }
-    .rd-side-label { font-family: 'Inter', sans-serif; font-size: 0.68rem; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 0.5rem; }
-    .rd-theme-row { display: flex; gap: 0.5rem; }
+    .rd-author-avatar {
+      width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(127,168,217,0.5);
+    }
+    .rd-author-card-name { font-family: 'Inter', sans-serif; font-size: 0.92rem; font-weight: 700; color: #ccc; text-align: center; text-decoration: none; }
+    .rd-author-card-name:hover { color: #7fa8d9; }
+    .rd-follow-btn {
+      display: inline-flex; align-items: center; gap: 0.4rem; width: 100%; justify-content: center;
+      background: none; border: 1px solid rgba(255,255,255,0.3); color: #ddd; border-radius: 18px;
+      padding: 0.45em 0.8em; font-family: 'Inter', sans-serif; font-size: 0.82rem; font-weight: 700; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+    .rd-follow-btn:hover { border-color: #7fa8d9; color: #a8c6e8; }
+    .rd-follow-btn.following { border-color: #7fa8d9; color: #7fa8d9; background: rgba(127,168,217,0.1); }
+    .rd-side-hr { width: 100%; height: 1px; background: rgba(255,255,255,0.1); }
+    .rd-side-section { width: 100%; display: flex; flex-direction: column; align-items: center; }
+    .rd-side-label { font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 0.6rem; }
+    .rd-theme-row { display: flex; gap: 0.6rem; }
     .rd-theme-swatch {
-      width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
-      display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; color: #fff;
+      width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 700; color: #fff;
       box-sizing: border-box; border: 2px solid transparent; overflow: hidden; padding: 0;
     }
     .rd-theme-swatch--dark { background: #0a0a0a; border-color: #333; }
     .rd-theme-swatch--custom { background: #1a1a1a; border-style: dashed; border-color: #555; }
     .rd-theme-swatch--custom img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .rd-theme-swatch.active { border-color: #7fa8d9; box-shadow: 0 0 8px rgba(127,168,217,0.6); }
-    .rd-font-row { display: flex; gap: 0.5rem; }
+    .rd-font-row { display: flex; gap: 0.6rem; }
     .rd-font-btn {
-      width: 34px; height: 30px; border-radius: 8px; cursor: pointer;
+      width: 42px; height: 38px; border-radius: 10px; cursor: pointer;
       background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #ddd;
-      font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.85rem;
+      font-family: 'Inter', sans-serif; font-weight: 700; font-size: 1rem;
     }
     .rd-font-btn:hover { border-color: #7fa8d9; color: #a8c6e8; }
-    .rd-author-card { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; text-decoration: none; padding-top: 0.25rem; border-top: 1px solid rgba(255,255,255,0.08); }
-    .rd-author-avatar {
-      width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(127,168,217,0.5);
-    }
-    .rd-author-card-name { font-family: 'Inter', sans-serif; font-size: 0.78rem; font-weight: 700; color: #ccc; text-align: center; }
-    .rd-author-card:hover .rd-author-card-name { color: #7fa8d9; }
 
     /* ── Main reading layout — wider than Wattpad's own column, plus a
        right-hand recommendations rail. ── */
     .rd-layout {
       max-width: 1500px; margin: 0 auto; padding: 3rem 2rem 6rem;
-      display: grid; grid-template-columns: 1fr 240px; gap: 2.5rem; align-items: start;
+      display: grid; grid-template-columns: 1fr 200px; gap: 2.5rem; align-items: start;
     }
-    .rd-article { max-width: 980px; margin: 0 auto; width: 100%; }
+    .rd-article { max-width: 1020px; margin: 0 auto; width: 100%; }
 
     .rd-meta-card {
       background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px;
@@ -144,7 +164,7 @@
     .rd-chapter-title {
       font-family: 'Cinzel', serif; font-size: 2.2rem; color: #f0f0f0; text-align: center; margin: 0 0 1.25rem;
     }
-    .rd-title-rule { width: 120px; height: 3px; background: var(--rose, #d97a72); margin: 0 auto 2.5rem; border-radius: 2px; }
+    .rd-title-rule { width: 100%; height: 1px; background: rgba(255,255,255,0.15); margin: 0 0 2.5rem; }
     .rd-chapter-body {
       font-family: 'Lora', 'Georgia', serif; color: #e8e8e8; line-height: 1.9;
       font-size: calc(1.15rem * var(--rd-font-scale, 1));
@@ -162,7 +182,7 @@
     .rd-chapter-nav a.rd-nav-next { text-align: right; }
     .rd-chapter-nav-label { display: block; font-size: 0.72rem; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.2rem; }
 
-    .rd-recs { position: sticky; top: 92px; max-height: calc(100vh - 112px); overflow-y: auto; }
+    .rd-recs { position: sticky; top: 178px; max-height: calc(100vh - 198px); overflow-y: auto; }
     .rd-recs-title { font-family: 'Cinzel', serif; font-size: 1.05rem; color: #ccc; margin: 0 0 1rem; text-transform: uppercase; letter-spacing: 0.03em; }
     .rd-recs-list { display: flex; flex-direction: column; gap: 1rem; }
     .rd-rec-card { display: flex; gap: 0.75rem; text-decoration: none; color: inherit; }
@@ -171,6 +191,7 @@
     .rd-rec-title { font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 700; color: #e8e8e8; margin: 0 0 0.2rem; line-height: 1.3; }
     .rd-rec-card:hover .rd-rec-title { color: #7fa8d9; }
     .rd-rec-teaser { font-size: 0.78rem; color: #999; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .rd-recs-loading-more { text-align: center; color: #888; font-size: 0.8rem; padding: 1rem 0; }
 
     /* ── Inline paragraph comments ── */
     .rd-para { position: relative; }
@@ -192,6 +213,15 @@
     }
     .rd-para-comment-btn.active { background: #7fa8d9; border-color: #7fa8d9; color: #0d0d0d; opacity: 1; }
     @media (max-width: 1300px) { .rd-para-comment-btn { right: -0.5rem; transform: translateX(100%); } }
+
+    /* Big slide-over drawer, covering the right side of the screen (and the
+       recommended-stories rail underneath it) while a paragraph's comments
+       are open — same panel reused for viewing and replying. */
+    .rd-cp-drawer {
+      position: fixed; top: 162px; right: 0; bottom: 0; width: 520px; max-width: 90vw; z-index: 160;
+      background: #121214; border-left: 1px solid rgba(255,255,255,0.1); box-shadow: -12px 0 40px rgba(0,0,0,0.5);
+      padding: 1.5rem 1.75rem; overflow-y: auto;
+    }
 
     .rd-cp-back {
       background: none; border: none; color: #999; cursor: pointer; font-family: 'Inter', sans-serif;
@@ -258,6 +288,18 @@
     .rd-cp-reply-form { display: none; margin-top: 0.6rem; }
     .rd-cp-reply-form.open { display: block; }
 
+    .rd-bottom-comments { margin-top: 4rem; padding-top: 2.5rem; border-top: 1px solid rgba(255,255,255,0.1); }
+    .rd-cp-replies-toggle {
+      background: none; border: none; color: #7fa8d9; cursor: pointer; font-family: 'Inter', sans-serif;
+      font-size: 0.8rem; font-weight: 700; padding: 0; margin-top: 0.75rem;
+    }
+    .rd-cp-replies-toggle:hover { color: #a8c6e8; }
+    .rd-cp-replies-hidden { display: none; }
+    .rd-cp-para-tag {
+      display: inline-block; font-size: 0.72rem; color: #888; margin-bottom: 0.3rem;
+      background: rgba(255,255,255,0.05); border-radius: 8px; padding: 0.1em 0.5em;
+    }
+
     @media (max-width: 1100px) {
       .rd-side-panel { display: none; }
       .rd-layout { grid-template-columns: 1fr; }
@@ -293,7 +335,7 @@
       <button class="rd-icon-btn" id="rd-bookmark-btn" type="button" title="Bookmark">
         <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
       </button>
-      <span class="rd-topbar-divider"></span>
+      <span class="rd-topbar-divider" id="rd-like-divider"></span>
       <button class="rd-icon-btn rd-like-btn" id="rd-like-btn" type="button" title="Like">
         <svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.7-10.2-9.3C.4 9 1.2 5.6 4.2 4.2 6.6 3 9.2 3.8 12 7c2.8-3.2 5.4-4 7.8-2.8 3 1.4 3.8 4.8 2.4 7.5C19.5 16.3 12 21 12 21z"/></svg>
         <span id="rd-like-count">0</span>
@@ -301,9 +343,19 @@
     </div>
   </div>
 </div>
+<div class="rd-topbar-spacer"></div>
 
 <aside class="rd-side-panel" id="rd-side-panel">
-  <div>
+  <img class="rd-author-avatar" id="rd-author-avatar" alt="" />
+  <a class="rd-author-card-name" id="rd-author-card" href="#"></a>
+  <button class="rd-follow-btn" id="rd-follow-btn" type="button" style="display:none;">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M19 8v4M21 10h-4"/></svg>
+    <span id="rd-follow-btn-label">Follow</span>
+  </button>
+
+  <div class="rd-side-hr"></div>
+
+  <div class="rd-side-section">
     <p class="rd-side-label">Theme</p>
     <div class="rd-theme-row">
       <button class="rd-theme-swatch rd-theme-swatch--dark active" id="rd-theme-dark" type="button" title="Dark"></button>
@@ -313,20 +365,16 @@
       </button>
     </div>
   </div>
-  <div>
+  <div class="rd-side-section">
     <p class="rd-side-label">Text Size</p>
     <div class="rd-font-row">
       <button class="rd-font-btn" id="rd-font-minus" type="button">A-</button>
       <button class="rd-font-btn" id="rd-font-plus" type="button">A+</button>
     </div>
   </div>
-  <a class="rd-author-card" id="rd-author-card" href="#">
-    <img class="rd-author-avatar" id="rd-author-avatar" alt="" />
-    <span class="rd-author-card-name" id="rd-author-card-name"></span>
-  </a>
 </aside>
 
-<main class="rd-layout">
+<main class="rd-layout rd-content-z">
   <article class="rd-article">
     <div class="rd-meta-card" id="rd-meta-card"></div>
 
@@ -337,39 +385,60 @@
     <div class="rd-chapter-body" id="rd-chapter-body"></div>
 
     <div class="rd-chapter-nav" id="rd-chapter-nav"></div>
+
+    <!-- Every comment on this chapter — inline paragraph comments and
+         general ones together, same list, one-level-deep replies collapsed
+         behind a "Show N replies" toggle. -->
+    <div class="rd-bottom-comments">
+      <p class="rd-recs-title">Comments</p>
+      <div class="rd-cp-compose">
+        <textarea class="rd-cp-textarea" id="rd-bc-input" placeholder="Add a comment…" maxlength="2000"></textarea>
+        <div id="rd-bc-gif-preview-wrap" class="rd-cp-gif-preview-wrap" data-target="bc-root" hidden>
+          <img alt="Selected GIF" />
+          <button type="button" class="rd-cp-gif-remove">✕</button>
+        </div>
+        <div class="rd-cp-compose-actions">
+          <button type="button" class="dm-gif-btn" id="rd-bc-gif-btn">GIF</button>
+          <button type="button" class="rd-cp-send-btn" id="rd-bc-send">Post</button>
+        </div>
+      </div>
+      <div class="cc-list" id="rd-bc-list"></div>
+    </div>
   </article>
 
   <aside class="rd-recs" id="rd-recs">
-    <div id="rd-recs-default">
-      <p class="rd-recs-title">You Might Also Like</p>
-      <div class="rd-recs-list" id="rd-recs-list">
-        <p style="color:#888; font-size:0.85rem;">Loading…</p>
-      </div>
+    <p class="rd-recs-title">You Might Also Like</p>
+    <div class="rd-recs-list" id="rd-recs-list">
+      <p style="color:#888; font-size:0.85rem;">Loading…</p>
     </div>
-
-    <div id="rd-comments-panel" hidden>
-      <button class="rd-cp-back" id="rd-cp-back" type="button">← Back</button>
-      <p class="rd-recs-title">Comments</p>
-      <blockquote class="rd-cp-context" id="rd-cp-context"></blockquote>
-
-      <div class="rd-cp-compose">
-        <textarea class="rd-cp-textarea" id="rd-cp-input" placeholder="Add a comment…" maxlength="2000"></textarea>
-        <div id="rd-cp-gif-preview-wrap" class="rd-cp-gif-preview-wrap" hidden>
-          <img id="rd-cp-gif-preview" alt="Selected GIF" />
-          <button type="button" id="rd-cp-gif-remove" class="rd-cp-gif-remove">✕</button>
-        </div>
-        <div class="rd-cp-compose-actions">
-          <button type="button" class="dm-gif-btn" id="rd-cp-gif-btn">GIF</button>
-          <button type="button" class="rd-cp-send-btn" id="rd-cp-send">Post</button>
-        </div>
-      </div>
-
-      <div class="cc-list" id="rd-cp-list"></div>
-    </div>
+    <p class="rd-recs-loading-more" id="rd-recs-loading-more" hidden>Loading more…</p>
   </aside>
 </main>
 
-<footer>
+<!-- Full-height drawer over the right side of the screen — covers the
+     recommended-stories rail while open, same idea used for both viewing
+     and replying to a paragraph's comments. -->
+<div class="rd-cp-drawer" id="rd-comments-panel" hidden>
+  <button class="rd-cp-back" id="rd-cp-back" type="button">← Back</button>
+  <p class="rd-recs-title">Comments</p>
+  <blockquote class="rd-cp-context" id="rd-cp-context"></blockquote>
+
+  <div class="rd-cp-compose">
+    <textarea class="rd-cp-textarea" id="rd-cp-input" placeholder="Add a comment…" maxlength="2000"></textarea>
+    <div id="rd-cp-gif-preview-wrap" class="rd-cp-gif-preview-wrap" hidden>
+      <img id="rd-cp-gif-preview" alt="Selected GIF" />
+      <button type="button" id="rd-cp-gif-remove" class="rd-cp-gif-remove">✕</button>
+    </div>
+    <div class="rd-cp-compose-actions">
+      <button type="button" class="dm-gif-btn" id="rd-cp-gif-btn">GIF</button>
+      <button type="button" class="rd-cp-send-btn" id="rd-cp-send">Post</button>
+    </div>
+  </div>
+
+  <div class="cc-list" id="rd-cp-list"></div>
+</div>
+
+<footer class="rd-content-z">
   <p>This story is a fan-made page hosted on Between Two Worlds.</p>
 </footer>
 
@@ -577,6 +646,7 @@ function renderChapter() {
   renderLikeState();
   setupParagraphComments();
   closeCommentsPanel();
+  loadAllChapterComments();
 
   const editBtn = document.getElementById('rd-edit-btn');
   const editDivider = document.getElementById('rd-edit-divider');
@@ -596,6 +666,11 @@ function renderChapter() {
 // ── Like (chapter-level) ─────────────────────────────────────────────────
 function renderLikeState() {
   const btn = document.getElementById('rd-like-btn');
+  const divider = document.getElementById('rd-like-divider');
+  // Drafts aren't public yet — no liking something only the owner can see.
+  const show = CURRENT.status === 'published';
+  btn.style.display = show ? '' : 'none';
+  divider.style.display = show ? '' : 'none';
   btn.classList.toggle('liked', !!CURRENT.liked);
   document.getElementById('rd-like-count').textContent = CURRENT.like_count || 0;
 }
@@ -626,33 +701,84 @@ document.getElementById('rd-bookmark-btn').addEventListener('click', async () =>
   } catch {}
 });
 
+// ── Follow (the story's author, not the story itself) ────────────────────
+function renderFollowState() {
+  const btn = document.getElementById('rd-follow-btn');
+  if (IS_SELF || !SITE.author_username) { btn.style.display = 'none'; return; }
+  btn.style.display = '';
+  btn.classList.toggle('following', !!SITE.is_following);
+  document.getElementById('rd-follow-btn-label').textContent = SITE.is_following ? 'Following' : 'Follow';
+}
+document.getElementById('rd-follow-btn').addEventListener('click', async () => {
+  if (!authToken) { window.location.href = '/login.html'; return; }
+  const wasFollowing = !!SITE.is_following;
+  try {
+    await fetch(`/api/follows/${SITE.author_username}`, { method: wasFollowing ? 'DELETE' : 'POST', headers: authHeaders() });
+    SITE.is_following = !wasFollowing;
+    renderFollowState();
+  } catch {}
+});
+
 // ── Recommended rail — reuses the public story-browse endpoint, current
 // story filtered out; no real recommendation algorithm yet. ────────────────
+// No real pagination endpoint to page against yet, so the whole pool is
+// fetched once and revealed in batches as the reader scrolls near the
+// bottom of the rail — reads as "infinite" without a backend change.
+let recsPool = [];
+let recsRevealed = 0;
+const RECS_BATCH = 6;
+
+function revealMoreRecs() {
+  const list = document.getElementById('rd-recs-list');
+  const loadingMore = document.getElementById('rd-recs-loading-more');
+  const next = recsPool.slice(recsRevealed, recsRevealed + RECS_BATCH);
+  if (!next.length) { loadingMore.hidden = true; return; }
+  next.forEach(s => {
+    const a = document.createElement('a');
+    a.className = 'rd-rec-card';
+    a.href = `/fanpages/${escapeHtml(s.story_path)}`;
+    a.innerHTML = `
+      <img class="rd-rec-cover" src="${s.cover_url || '/images/gallery/pixernbath_13.png'}" alt="" />
+      <span class="rd-rec-info">
+        <p class="rd-rec-title">${escapeHtml(s.site_title || 'Untitled Story')}</p>
+        <p class="rd-rec-teaser">${escapeHtml(s.synopsis || 'No description yet.')}</p>
+      </span>
+    `;
+    list.appendChild(a);
+  });
+  recsRevealed += next.length;
+  loadingMore.hidden = recsRevealed >= recsPool.length;
+}
+
 async function renderRecs() {
   const list = document.getElementById('rd-recs-list');
   try {
     const res = await fetch('/api/moderator-sites');
     const data = await res.json();
-    const others = (data.sites || []).filter(s => s.story_path !== SITE.story_path).sort(() => Math.random() - 0.5).slice(0, 6);
-    if (!others.length) { list.innerHTML = '<p style="color:#888; font-size:0.85rem;">Nothing else here yet.</p>'; return; }
-    list.innerHTML = others.map(s => `
-      <a class="rd-rec-card" href="/fanpages/${escapeHtml(s.story_path)}">
-        <img class="rd-rec-cover" src="${s.cover_url || '/images/gallery/pixernbath_13.png'}" alt="" />
-        <span class="rd-rec-info">
-          <p class="rd-rec-title">${escapeHtml(s.site_title || 'Untitled Story')}</p>
-          <p class="rd-rec-teaser">${escapeHtml(s.synopsis || 'No description yet.')}</p>
-        </span>
-      </a>
-    `).join('');
+    recsPool = (data.sites || []).filter(s => s.story_path !== SITE.story_path).sort(() => Math.random() - 0.5);
+    recsRevealed = 0;
+    list.innerHTML = '';
+    if (!recsPool.length) { list.innerHTML = '<p style="color:#888; font-size:0.85rem;">Nothing else here yet.</p>'; return; }
+    revealMoreRecs();
   } catch {
     list.innerHTML = '';
   }
 }
 
+const recsRail = document.getElementById('rd-recs');
+recsRail.addEventListener('scroll', () => {
+  if (recsRevealed >= recsPool.length) return;
+  if (recsRail.scrollTop + recsRail.clientHeight > recsRail.scrollHeight - 200) revealMoreRecs();
+});
+
 // ── Inline paragraph comments ───────────────────────────────────────────
+// Two lists share this same rendering/posting code, told apart by a prefix:
+// "rd-cp" is the paragraph drawer (scoped to one paragraph_index), "rd-bc"
+// is the bottom-of-chapter list (every comment on the chapter, inline and
+// general together). Each prefix gets its own pending-gif state so the two
+// composers never clobber each other.
 let activeParagraphIndex = null;
-let rootPendingGifUrl = null;
-const replyPendingGif = {}; // comment id -> selected gif url, for that comment's reply form
+const pendingGif = { 'rd-cp': {}, 'rd-bc': {} }; // prefix -> (target -> gif url), target is 'root' or a comment id
 
 function formatRelativeTime(dateStr) {
   const diffMs = Date.now() - new Date(dateStr).getTime();
@@ -722,12 +848,11 @@ function openParagraphComments(index, wrapEl) {
   document.querySelectorAll('.rd-para-comment-btn').forEach(b => b.classList.remove('active'));
   wrapEl.querySelector('.rd-para-comment-btn').classList.add('active');
 
-  document.getElementById('rd-recs-default').hidden = true;
   document.getElementById('rd-comments-panel').hidden = false;
   document.getElementById('rd-cp-context').textContent = wrapEl.querySelector('p').textContent.trim();
   document.getElementById('rd-cp-input').value = '';
-  rootPendingGifUrl = null;
-  clearGifPreview('root');
+  delete pendingGif['rd-cp'].root;
+  clearGifPreview('rd-cp', 'root');
   document.getElementById('rd-cp-list').innerHTML = '<p class="cc-empty">Loading…</p>';
   loadParagraphThread();
 }
@@ -735,9 +860,7 @@ function openParagraphComments(index, wrapEl) {
 function closeCommentsPanel() {
   activeParagraphIndex = null;
   document.querySelectorAll('.rd-para-comment-btn').forEach(b => b.classList.remove('active'));
-  const defaultPanel = document.getElementById('rd-recs-default');
   const commentsPanel = document.getElementById('rd-comments-panel');
-  if (defaultPanel) defaultPanel.hidden = false;
   if (commentsPanel) commentsPanel.hidden = true;
 }
 document.getElementById('rd-cp-back').addEventListener('click', closeCommentsPanel);
@@ -747,7 +870,7 @@ async function loadParagraphThread() {
   try {
     const res = await fetch(`/api/content-comments?target_type=chapter_paragraph&target_id=${CURRENT.id}&paragraph_index=${activeParagraphIndex}`);
     const data = await res.json();
-    renderCommentThread(data.comments || []);
+    renderCommentThread('rd-cp', data.comments || [], false);
     const wrap = document.querySelector(`.rd-para[data-p-index="${activeParagraphIndex}"]`);
     if (wrap) {
       const btn = wrap.querySelector('.rd-para-comment-btn');
@@ -765,14 +888,23 @@ function commentAvatarHtml(c) {
     : `<span class="cc-avatar-fallback">${escapeHtml(((c.display_name || c.username || '?')[0] || '?').toUpperCase())}</span>`;
 }
 
-function renderCommentItem(c) {
-  const repliesHtml = (c.replies || []).map(r => renderCommentItem(r)).join('');
+// `collapsible` — the bottom-of-chapter list collapses replies behind a
+// "Show N replies" toggle (Clubs-style); the paragraph drawer, already
+// scoped to a single small thread, just shows them inline.
+function renderCommentItem(c, prefix, collapsible) {
+  const repliesHtml = (c.replies || []).map(r => renderCommentItem(r, prefix, collapsible)).join('');
   const rootId = c.parent_id || c.id;
+  const replyCount = (c.replies || []).length;
+  const repliesBlock = !repliesHtml ? '' : (collapsible
+    ? `<button type="button" class="rd-cp-replies-toggle" data-replies-id="${prefix}-replies-${c.id}">Show ${replyCount} repl${replyCount === 1 ? 'y' : 'ies'}</button>
+       <div class="cc-replies rd-cp-replies-hidden" id="${prefix}-replies-${c.id}">${repliesHtml}</div>`
+    : `<div class="cc-replies">${repliesHtml}</div>`);
   return `
     <div class="cc-item" data-comment-id="${c.id}">
       ${commentAvatarHtml(c)}
       <div class="cc-body-wrap">
         <div class="cc-bubble">
+          ${collapsible && c.paragraph_index != null ? `<span class="rd-cp-para-tag">💬 inline comment</span><br>` : ''}
           <span class="cc-name"><a href="/fanpages/${escapeHtml(c.username)}">${escapeHtml(c.display_name || c.username)}</a></span>
           <span class="cc-time">${formatRelativeTime(c.created_at)}</span>
           ${c.reply_to_username ? `<div class="cc-mention">@${escapeHtml(c.reply_to_username)}</div>` : ''}
@@ -780,82 +912,98 @@ function renderCommentItem(c) {
           ${c.gif_url ? `<img class="rd-cp-comment-gif" src="${escapeHtml(c.gif_url)}" alt="GIF" />` : ''}
         </div>
         <div class="cc-actions">
-          <button type="button" class="cc-action-btn rd-cp-reply-toggle" data-comment-id="${c.id}">Reply</button>
+          <button type="button" class="cc-action-btn rd-cp-reply-toggle" data-comment-id="${c.id}" data-prefix="${prefix}">Reply</button>
         </div>
-        <div class="rd-cp-reply-form" id="rd-cp-reply-form-${c.id}">
+        <div class="rd-cp-reply-form" id="${prefix}-reply-form-${c.id}">
           <textarea class="rd-cp-textarea" placeholder="Reply to ${escapeHtml(c.display_name || c.username)}…" maxlength="2000"></textarea>
-          <div class="rd-cp-gif-preview-wrap" id="rd-cp-reply-gif-preview-${c.id}" data-target="${c.id}" hidden>
+          <div class="rd-cp-gif-preview-wrap" id="${prefix}-reply-gif-preview-${c.id}" data-target="${c.id}" hidden>
             <img alt="Selected GIF" />
             <button type="button" class="rd-cp-gif-remove">✕</button>
           </div>
           <div class="rd-cp-compose-actions">
-            <button type="button" class="dm-gif-btn rd-cp-reply-gif-btn" data-target-id="${c.id}">GIF</button>
-            <button type="button" class="rd-cp-send-btn rd-cp-reply-send" data-parent-id="${rootId}" data-target-id="${c.id}">Reply</button>
+            <button type="button" class="dm-gif-btn rd-cp-reply-gif-btn" data-target-id="${c.id}" data-prefix="${prefix}">GIF</button>
+            <button type="button" class="rd-cp-send-btn rd-cp-reply-send" data-parent-id="${rootId}" data-target-id="${c.id}" data-prefix="${prefix}" data-para="${c.paragraph_index != null ? c.paragraph_index : ''}">Reply</button>
           </div>
         </div>
-        ${repliesHtml ? `<div class="cc-replies">${repliesHtml}</div>` : ''}
+        ${repliesBlock}
       </div>
     </div>
   `;
 }
 
-function renderCommentThread(roots) {
-  const list = document.getElementById('rd-cp-list');
-  list.innerHTML = roots.length ? roots.map(c => renderCommentItem(c)).join('') : '<p class="cc-empty">No comments yet — be the first!</p>';
-  wireCommentThreadEvents();
+function renderCommentThread(prefix, roots, collapsible) {
+  const list = document.getElementById(`${prefix}-list`);
+  list.innerHTML = roots.length ? roots.map(c => renderCommentItem(c, prefix, collapsible)).join('') : '<p class="cc-empty">No comments yet — be the first!</p>';
+  wireCommentThreadEvents(prefix, collapsible);
 }
 
-function showGifPreview(target, url) {
-  const wrap = target === 'root' ? document.getElementById('rd-cp-gif-preview-wrap') : document.getElementById(`rd-cp-reply-gif-preview-${target}`);
+function showGifPreview(prefix, target, url) {
+  const wrap = target === 'root' ? document.getElementById(`${prefix}-gif-preview-wrap`) : document.getElementById(`${prefix}-reply-gif-preview-${target}`);
   if (!wrap) return;
   wrap.querySelector('img').src = url;
   wrap.hidden = false;
 }
-function clearGifPreview(target) {
-  const wrap = target === 'root' ? document.getElementById('rd-cp-gif-preview-wrap') : document.getElementById(`rd-cp-reply-gif-preview-${target}`);
+function clearGifPreview(prefix, target) {
+  const wrap = target === 'root' ? document.getElementById(`${prefix}-gif-preview-wrap`) : document.getElementById(`${prefix}-reply-gif-preview-${target}`);
   if (wrap) wrap.hidden = true;
 }
 
-function wireCommentThreadEvents() {
-  document.querySelectorAll('.rd-cp-reply-toggle').forEach(btn => {
+function wireCommentThreadEvents(prefix, collapsible) {
+  const scope = document.getElementById(`${prefix}-list`);
+  scope.querySelectorAll('.rd-cp-replies-toggle').forEach(btn => {
+    const showLabel = btn.textContent;
     btn.addEventListener('click', () => {
-      const form = document.getElementById(`rd-cp-reply-form-${btn.dataset.commentId}`);
+      const repliesEl = document.getElementById(btn.dataset.repliesId);
+      const isHidden = repliesEl.classList.contains('rd-cp-replies-hidden');
+      repliesEl.classList.toggle('rd-cp-replies-hidden');
+      btn.textContent = isHidden ? 'Hide replies' : showLabel;
+    });
+  });
+  scope.querySelectorAll('.rd-cp-reply-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = document.getElementById(`${btn.dataset.prefix}-reply-form-${btn.dataset.commentId}`);
       form.classList.toggle('open');
       if (form.classList.contains('open')) form.querySelector('textarea').focus();
     });
   });
-  document.querySelectorAll('.rd-cp-reply-send').forEach(btn => {
+  scope.querySelectorAll('.rd-cp-reply-send').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!authToken) { window.location.href = '/login.html'; return; }
       const targetId = btn.dataset.targetId;
-      const form = document.getElementById(`rd-cp-reply-form-${targetId}`);
+      const p = btn.dataset.prefix;
+      const form = document.getElementById(`${p}-reply-form-${targetId}`);
       const textarea = form.querySelector('textarea');
       const text = textarea.value.trim();
-      const gifUrl = replyPendingGif[targetId] || null;
+      const gifUrl = pendingGif[p][targetId] || null;
       if (!text && !gifUrl) return;
-      await submitParagraphComment(btn.dataset.parentId, text, gifUrl);
-      delete replyPendingGif[targetId];
+      const paragraphIndex = btn.dataset.para !== '' ? parseInt(btn.dataset.para, 10) : null;
+      await submitComment(p, btn.dataset.parentId, text, gifUrl, paragraphIndex, collapsible);
+      delete pendingGif[p][targetId];
     });
   });
-  document.querySelectorAll('.rd-cp-reply-gif-btn').forEach(btn => {
+  scope.querySelectorAll('.rd-cp-reply-gif-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!authToken) { window.location.href = '/login.html'; return; }
       openGifPicker(btn, (gif) => {
-        replyPendingGif[btn.dataset.targetId] = gif.url;
-        showGifPreview(btn.dataset.targetId, gif.url);
+        pendingGif[btn.dataset.prefix][btn.dataset.targetId] = gif.url;
+        showGifPreview(btn.dataset.prefix, btn.dataset.targetId, gif.url);
       });
     });
   });
-  document.querySelectorAll('#rd-cp-list .rd-cp-gif-remove').forEach(btn => {
+  scope.querySelectorAll('.rd-cp-gif-remove').forEach(btn => {
     btn.addEventListener('click', () => {
       const wrap = btn.closest('.rd-cp-gif-preview-wrap');
-      delete replyPendingGif[wrap.dataset.target];
+      delete pendingGif[prefix][wrap.dataset.target];
       wrap.hidden = true;
     });
   });
 }
 
-async function submitParagraphComment(parentId, text, gifUrl) {
+// `paragraphIndex` is explicit here (rather than always reading the active
+// drawer paragraph) so the bottom list's general composer can post with
+// paragraph_index: null while a reply to an inline comment there still
+// carries that comment's own paragraph_index.
+async function submitComment(prefix, parentId, text, gifUrl, paragraphIndex, collapsible) {
   if (!authToken) { window.location.href = '/login.html'; return; }
   try {
     await fetch('/api/content-comments', {
@@ -863,10 +1011,11 @@ async function submitParagraphComment(parentId, text, gifUrl) {
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         target_type: 'chapter_paragraph', target_id: CURRENT.id,
-        paragraph_index: activeParagraphIndex, parent_id: parentId, body: text, gif_url: gifUrl,
+        paragraph_index: paragraphIndex, parent_id: parentId, body: text, gif_url: gifUrl,
       }),
     });
-    loadParagraphThread();
+    if (prefix === 'rd-cp') loadParagraphThread();
+    else loadAllChapterComments();
   } catch {}
 }
 
@@ -874,23 +1023,60 @@ document.getElementById('rd-cp-send').addEventListener('click', async () => {
   if (!authToken) { window.location.href = '/login.html'; return; }
   const textarea = document.getElementById('rd-cp-input');
   const text = textarea.value.trim();
-  const gifUrl = rootPendingGifUrl;
+  const gifUrl = pendingGif['rd-cp'].root || null;
   if (!text && !gifUrl) return;
-  await submitParagraphComment(null, text, gifUrl);
+  await submitComment('rd-cp', null, text, gifUrl, activeParagraphIndex, false);
   textarea.value = '';
-  rootPendingGifUrl = null;
-  clearGifPreview('root');
+  delete pendingGif['rd-cp'].root;
+  clearGifPreview('rd-cp', 'root');
 });
 document.getElementById('rd-cp-gif-btn').addEventListener('click', () => {
   if (!authToken) { window.location.href = '/login.html'; return; }
   openGifPicker(document.getElementById('rd-cp-gif-btn'), (gif) => {
-    rootPendingGifUrl = gif.url;
-    showGifPreview('root', gif.url);
+    pendingGif['rd-cp'].root = gif.url;
+    showGifPreview('rd-cp', 'root', gif.url);
   });
 });
 document.getElementById('rd-cp-gif-remove').addEventListener('click', () => {
-  rootPendingGifUrl = null;
-  clearGifPreview('root');
+  delete pendingGif['rd-cp'].root;
+  clearGifPreview('rd-cp', 'root');
+});
+
+// ── Bottom-of-chapter comments — every comment on the chapter, inline and
+// general together (no paragraph_index filter = the full thread). ─────────
+async function loadAllChapterComments() {
+  if (!CURRENT) return;
+  const list = document.getElementById('rd-bc-list');
+  list.innerHTML = '<p class="cc-empty">Loading…</p>';
+  try {
+    const res = await fetch(`/api/content-comments?target_type=chapter_paragraph&target_id=${CURRENT.id}`);
+    const data = await res.json();
+    renderCommentThread('rd-bc', data.comments || [], true);
+  } catch {
+    list.innerHTML = '<p class="cc-empty">Couldn\'t load comments.</p>';
+  }
+}
+document.getElementById('rd-bc-send').addEventListener('click', async () => {
+  if (!authToken) { window.location.href = '/login.html'; return; }
+  const textarea = document.getElementById('rd-bc-input');
+  const text = textarea.value.trim();
+  const gifUrl = pendingGif['rd-bc'].root || null;
+  if (!text && !gifUrl) return;
+  await submitComment('rd-bc', null, text, gifUrl, null, true);
+  textarea.value = '';
+  delete pendingGif['rd-bc'].root;
+  clearGifPreview('rd-bc', 'root');
+});
+document.getElementById('rd-bc-gif-btn').addEventListener('click', () => {
+  if (!authToken) { window.location.href = '/login.html'; return; }
+  openGifPicker(document.getElementById('rd-bc-gif-btn'), (gif) => {
+    pendingGif['rd-bc'].root = gif.url;
+    showGifPreview('rd-bc', 'root', gif.url);
+  });
+});
+document.querySelector('#rd-bc-gif-preview-wrap .rd-cp-gif-remove').addEventListener('click', () => {
+  delete pendingGif['rd-bc'].root;
+  clearGifPreview('rd-bc', 'root');
 });
 
 // ── Shared floating GIF picker — one DOM instance retargeted per click,
@@ -1015,10 +1201,11 @@ window.addEventListener('resize', () => { if (!gifPickerWrap.hidden && gifActive
 
   const authorHref = SITE.author_username ? `/fanpages/${SITE.author_username}` : '#';
   document.getElementById('rd-author-card').href = authorHref;
+  document.getElementById('rd-author-card').textContent = SITE.author_display_name || SITE.author_username || '';
   document.getElementById('rd-author-avatar').src = SITE.author_avatar || '/images/noimage.png';
-  document.getElementById('rd-author-card-name').textContent = SITE.author_display_name || SITE.author_username || '';
 
   renderBookmarkState();
+  renderFollowState();
 
   const requestedId = new URLSearchParams(window.location.search).get('ch');
   CURRENT = (requestedId && CHAPTERS.find(c => String(c.id) === String(requestedId))) || CHAPTERS[0] || null;

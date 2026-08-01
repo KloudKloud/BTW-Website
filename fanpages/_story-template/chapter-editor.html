@@ -1315,6 +1315,13 @@ window.addEventListener('beforeunload', (e) => {
   currentChapter = chapter;
   everPublished = chapter.status === 'published';
   updateButtonsForStatus();
+  // A chapter that already has real saved content (title or body text) has
+  // something to publish/save right away — no reason to make the author
+  // type a throwaway edit first just to unlock the buttons.
+  if ((chapter.title && chapter.title.trim()) || (chapter.body && chapter.body.replace(/<[^>]*>/g, '').trim())) {
+    document.getElementById('ce-publish-btn').disabled = false;
+    document.getElementById('ce-save-draft-btn').disabled = false;
+  }
 
   if (siteRes && siteRes.ok) {
     const { site } = await siteRes.json();
