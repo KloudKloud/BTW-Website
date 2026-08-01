@@ -266,3 +266,56 @@ window.fpShare = function (btn, url) {
   });
   setTimeout(() => document.addEventListener('click', fpShareOutsideHandler, true), 0);
 };
+
+// ── Shared "generated cover" — the real default for a story with no cover
+// set. Instead of one static stock image on every uncovered story, this
+// fakes a cover out of a blurred, zoomed-in crop of the author's own avatar
+// with the story title lettered over it (originally built for search.html's
+// card grid; now the shared version every page should use). Only the very
+// first onboarding screen — picking a cover while the story doesn't exist
+// yet — keeps the plain "Add a cover" placeholder instead of this.
+function fpEscapeHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+// Returns an HTML string — for template-literal / innerHTML contexts.
+window.wikiGeneratedCoverHtml = function (site, opts) {
+  opts = opts || {};
+  const cls = opts.imgClass || '';
+  const styleAttr = opts.style ? ` style="${opts.style}"` : '';
+  const alt = opts.alt != null ? opts.alt : `${site.site_title || 'Untitled Story'} cover`;
+  if (site.cover_url) {
+    return `<img class="${cls}" src="${site.cover_url}" alt="${fpEscapeHtml(alt)}" loading="lazy"${styleAttr} />`;
+  }
+  const bgStyle = site.author_avatar ? ` style="background-image:url(${site.author_avatar})"` : '';
+  const titleHtml = opts.small ? '' : `<span class="wiki-generated-cover-title">${fpEscapeHtml(site.site_title || 'Untitled Story')}</span>`;
+  return `<div class="wiki-generated-cover${opts.small ? ' wiki-generated-cover--sm' : ''}${cls ? ' ' + cls : ''}"${styleAttr}>
+    <div class="wiki-generated-cover-bg"${bgStyle}></div>
+    ${titleHtml}
+  </div>`;
+};
+// Returns a DOM node — for appendChild contexts.
+window.wikiBuildGeneratedCover = function (site, opts) {
+  const wrap = document.createElement('div');
+  wrap.innerHTML = window.wikiGeneratedCoverHtml(site, opts).trim();
+  return wrap.firstElementChild;
+};
+// Replaces an existing cover element in place — for pages that already have
+// a fixed <img id="..."> (or a previously-generated <div id="...">, e.g.
+// after a cover gets removed and re-added without a page reload) and just
+// need it set to whatever the current site data says. Keeps the same id so
+// nothing else referencing that id needs to change, except the caller
+// should use the RETURNED element afterward — the original may have been
+// swapped out for a different tag (img <-> div) and is no longer in the DOM.
+window.wikiSetCoverSlot = function (el, site, opts) {
+  if (site.cover_url && el.tagName === 'IMG') {
+    el.src = site.cover_url;
+    el.style.display = '';
+    return el;
+  }
+  const baseClass = (el.dataset.wikiCoverBaseClass || el.className);
+  const replacement = window.wikiBuildGeneratedCover(site, Object.assign({}, opts, { imgClass: [baseClass, opts && opts.imgClass].filter(Boolean).join(' ') }));
+  replacement.id = el.id;
+  replacement.dataset.wikiCoverBaseClass = baseClass;
+  el.replaceWith(replacement);
+  return replacement;
+};

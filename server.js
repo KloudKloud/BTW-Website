@@ -2953,11 +2953,15 @@ async function getMySite(req) {
   const storyPath = req.headers['x-story-path'];
   if (storyPath) {
     const { rows: [site] } = await pool.query(
-      'SELECT * FROM moderator_sites WHERE story_path = $1 AND owner_user_id = $2', [storyPath, req.user.id]
+      `SELECT ms.*, u.avatar AS author_avatar FROM moderator_sites ms JOIN users u ON u.id = ms.owner_user_id
+       WHERE ms.story_path = $1 AND ms.owner_user_id = $2`, [storyPath, req.user.id]
     );
     if (site) return site;
   }
-  const { rows: [site] } = await pool.query('SELECT * FROM moderator_sites WHERE owner_user_id = $1 ORDER BY created_at ASC LIMIT 1', [req.user.id]);
+  const { rows: [site] } = await pool.query(
+    `SELECT ms.*, u.avatar AS author_avatar FROM moderator_sites ms JOIN users u ON u.id = ms.owner_user_id
+     WHERE ms.owner_user_id = $1 ORDER BY ms.created_at ASC LIMIT 1`, [req.user.id]
+  );
   return site || null;
 }
 
@@ -4956,16 +4960,20 @@ app.get('/api/characters/search', requireAuth, async (req, res) => {
 app.get('/api/stories/mine', requireAuth, async (req, res) => {
   const q = `%${(req.query.q || '').trim()}%`;
   const { rows } = await pool.query(
-    `SELECT id, story_path, slug, site_title, cover_url FROM moderator_sites WHERE owner_user_id = $1 AND site_title ILIKE $2 ORDER BY site_title LIMIT 30`,
+    `SELECT ms.id, ms.story_path, ms.slug, ms.site_title, ms.cover_url, u.avatar AS author_avatar
+     FROM moderator_sites ms
+     JOIN users u ON u.id = ms.owner_user_id
+     WHERE ms.owner_user_id = $1 AND ms.site_title ILIKE $2
+     ORDER BY ms.site_title LIMIT 30`,
     [req.user.id, q]
   );
-  res.json({ stories: rows.map(r => ({ id: r.id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url })) });
+  res.json({ stories: rows.map(r => ({ id: r.id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url, author_avatar: r.author_avatar })) });
 });
 
 app.get('/api/stories/search', requireAuth, async (req, res) => {
   const q = `%${(req.query.q || '').trim()}%`;
   const { rows } = await pool.query(
-    `SELECT ms.id, ms.story_path, ms.slug, ms.site_title, ms.cover_url, u.username AS owner_username, u.display_name AS owner_display_name
+    `SELECT ms.id, ms.story_path, ms.slug, ms.site_title, ms.cover_url, u.username AS owner_username, u.display_name AS owner_display_name, u.avatar AS author_avatar
      FROM moderator_sites ms
      JOIN users u ON u.id = ms.owner_user_id
      WHERE ms.owner_user_id <> $1 AND ms.site_title ILIKE $2
@@ -4976,6 +4984,7 @@ app.get('/api/stories/search', requireAuth, async (req, res) => {
     stories: rows.map(r => ({
       id: r.id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url,
       owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
+      author_avatar: r.author_avatar,
     })),
   });
 });
@@ -5039,15 +5048,16 @@ app.get('/api/characters/:id', async (req, res) => {
 // home page).
 app.get('/api/characters/:id/stories', async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT ms.id AS site_id, ms.slug, ms.story_path, ms.site_title, ms.cover_url
+    `SELECT ms.id AS site_id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.avatar AS author_avatar
      FROM character_story_links csl
      JOIN moderator_sites ms ON ms.id = csl.site_id
+     JOIN users u ON u.id = ms.owner_user_id
      WHERE csl.character_id = $1
      ORDER BY csl.sort_order, ms.id`,
     [req.params.id]
   );
   res.json({
-    stories: rows.map(r => ({ id: r.site_id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url })),
+    stories: rows.map(r => ({ id: r.site_id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url, author_avatar: r.author_avatar })),
   });
 });
 
@@ -5273,8 +5283,10 @@ app.get('/api/gallery/:id/links', async (req, res) => {
   const { nsfwAllowed } = await getViewerNsfwAccess(req);
   const [{ rows: stories }, { rows: characters }] = await Promise.all([
     pool.query(
-      `SELECT ms.id AS site_id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.synopsis
-       FROM gallery_story_links gsl JOIN moderator_sites ms ON ms.id = gsl.site_id
+      `SELECT ms.id AS site_id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.synopsis, u.avatar AS author_avatar
+       FROM gallery_story_links gsl
+       JOIN moderator_sites ms ON ms.id = gsl.site_id
+       JOIN users u ON u.id = ms.owner_user_id
        WHERE gsl.gallery_id = $1 ORDER BY gsl.sort_order, ms.id`,
       [req.params.id]
     ),
@@ -5289,7 +5301,7 @@ app.get('/api/gallery/:id/links', async (req, res) => {
     ),
   ]);
   res.json({
-    stories: stories.map(r => ({ id: r.site_id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url, synopsis: r.synopsis || '' })),
+    stories: stories.map(r => ({ id: r.site_id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url, synopsis: r.synopsis || '', author_avatar: r.author_avatar })),
     // Same blur-not-hide treatment as Character Spotlight — an NSFW ref
     // stays listed for everyone, but a viewer who can't see NSFW never
     // gets the real image bytes.

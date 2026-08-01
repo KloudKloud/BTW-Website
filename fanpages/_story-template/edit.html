@@ -1324,9 +1324,8 @@ function populateForm(s) {
 
   document.getElementById('se-edit-nav-cover-title').textContent = s.site_title || 'Untitled Story';
   document.getElementById('se-edit-nav-cover-link').href = STORY_BASE;
-  const navCoverImg = document.getElementById('se-edit-nav-cover-img');
-  navCoverImg.src = s.cover_url || '/images/defaultcover.png';
-  navCoverImg.style.objectPosition = 'center';
+  const navCoverEl = window.wikiSetCoverSlot(document.getElementById('se-edit-nav-cover-img'), s, {});
+  navCoverEl.style.objectPosition = 'center';
 
   document.getElementById('qn-characters-img').src = s.characters_card_url || NAV_CARD_DEFAULT.characters;
   document.getElementById('qn-chapters-img').src   = s.chapters_card_url   || NAV_CARD_DEFAULT.chapters;
@@ -1523,7 +1522,7 @@ async function uploadCover(blob) {
     coverImg.style.display = 'block';
     document.getElementById('cover-placeholder').style.display = 'none';
     document.getElementById('cover-recrop-btn').style.display = 'block';
-    document.getElementById('se-edit-nav-cover-img').src = site.cover_url + '?t=' + Date.now();
+    window.wikiSetCoverSlot(document.getElementById('se-edit-nav-cover-img'), { ...site, cover_url: site.cover_url + '?t=' + Date.now() }, {}).style.objectPosition = 'center';
   } else {
     alert('Cover upload failed. Please try again.');
   }
@@ -2068,11 +2067,8 @@ function renderLockedStoryCard() {
   grid.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'gallery-linkto-card gallery-linkto-card--locked';
-  const imgEl = document.createElement('img');
-  imgEl.className = 'gallery-linkto-card-img';
-  imgEl.src = (siteData.site && siteData.site.cover_url) || '/images/defaultcover.png';
-  imgEl.alt = '';
-  wrap.appendChild(imgEl);
+  const coverEl = window.wikiBuildGeneratedCover(siteData.site || {}, { imgClass: 'gallery-linkto-card-img', alt: '' });
+  wrap.appendChild(coverEl);
   const nameEl = document.createElement('p');
   nameEl.className = 'gallery-linkto-card-name';
   nameEl.textContent = (siteData.site && siteData.site.site_title) || 'Untitled Story';
