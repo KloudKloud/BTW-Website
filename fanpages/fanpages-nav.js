@@ -35,12 +35,6 @@
 
         <a class="fpnav-login-btn" id="fpnav-login-btn" href="/fanpages/login?from=${encodeURIComponent(here)}">Log In / Register</a>
 
-        <button class="fpnav-icon-btn fpnav-icon-btn--labeled" id="fpnav-notif-btn" type="button" aria-label="Notifications" style="display:none;">
-          <span class="fpnav-icon-btn-label">Updates</span>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
-          <span class="fpnav-notif-badge" id="fpnav-notif-badge" hidden></span>
-        </button>
-
         <div class="fpnav-dropdown-wrap" id="fpnav-avatar-wrap" style="display:none;">
           <button class="fpnav-avatar-btn" id="fpnav-avatar-btn" type="button">
             <span id="fpnav-avatar-img-wrap"></span>
@@ -50,6 +44,7 @@
             <a href="#" id="fpnav-my-profile-link">My Profile</a>
             <div class="fpnav-dropdown-divider"></div>
             <a href="/fanpages/library" id="fpnav-library-link">Bookmarks</a>
+            <a href="/fanpages/notifications" id="fpnav-notif-link">Updates <span class="fpnav-notif-badge" id="fpnav-notif-badge" hidden></span></a>
             <a href="/fanpages/notifications#inbox" id="fpnav-updates-link">Inbox</a>
             <div class="fpnav-dropdown-divider"></div>
             <a href="${homeHref}">BTW Homepage</a>
@@ -121,12 +116,6 @@
   document.getElementById('fpnav-modal-close').addEventListener('click', () => { modalOverlay.hidden = true; });
   modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) modalOverlay.hidden = true; });
 
-  // ── Notification bell ────────────────────────────────────────────────────
-  document.getElementById('fpnav-notif-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    window.location.href = '/fanpages/notifications';
-  });
-
   root.querySelectorAll('[data-gate]').forEach(link => {
     link.addEventListener('click', (e) => {
       if (!token) {
@@ -149,10 +138,10 @@
 
       document.getElementById('fpnav-login-btn').style.display = 'none';
       document.getElementById('fpnav-avatar-wrap').style.display = '';
-      document.getElementById('fpnav-notif-btn').style.display = '';
 
-      // Bell lights up for anything unread across all three: notifications,
-      // unread chat messages, AND pending chat requests waiting on you.
+      // Updates badge lights up for anything unread across all three:
+      // notifications, unread chat messages, AND pending chat requests
+      // waiting on you.
       Promise.all([
         fetch('/api/notifications/unread-count', { headers: authHeaders() }).then(r => r.ok ? r.json() : { count: 0 }).catch(() => ({ count: 0 })),
         fetch('/api/dm/unread-count', { headers: authHeaders() }).then(r => r.ok ? r.json() : { count: 0 }).catch(() => ({ count: 0 })),
