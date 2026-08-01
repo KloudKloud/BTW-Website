@@ -1897,13 +1897,21 @@
   // on whichever tab — and whichever open chatroom — was showing, not always
   // reset to Notifications. Runs last so everything switchNotifTab/
   // initDmAppOnce/openDmThread touch is already defined.
-  const notifThreadHashMatch = location.hash.match(/^#inbox\/(\d+)$/);
-  if (notifThreadHashMatch) {
-    switchNotifTab('inbox', false);
-    if (token) openDmThread(parseInt(notifThreadHashMatch[1], 10));
-  } else {
-    switchNotifTab(location.hash === '#inbox' ? 'inbox' : 'notifications', false);
+  function applyHashTab() {
+    const notifThreadHashMatch = location.hash.match(/^#inbox\/(\d+)$/);
+    if (notifThreadHashMatch) {
+      switchNotifTab('inbox', false);
+      if (token) openDmThread(parseInt(notifThreadHashMatch[1], 10));
+    } else {
+      switchNotifTab(location.hash === '#inbox' ? 'inbox' : 'notifications', false);
+    }
   }
+  applyHashTab();
+  // The profile dropdown's "Inbox" link is just an #inbox hash change when
+  // you're already sitting on this page — that fires 'hashchange', not a
+  // real navigation, so without this the tab would silently stay wherever
+  // it was instead of jumping to Inbox.
+  window.addEventListener('hashchange', applyHashTab);
 
   // The Inbox tab badge should show up immediately, even before that tab's
   // ever been clicked (mirrors the bell in the topbar).
