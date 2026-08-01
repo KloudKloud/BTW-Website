@@ -82,13 +82,15 @@
       font-family: 'Baloo 2', 'Georgia', serif; font-size: 1.3rem; font-weight: 700; color: #f0f0f0;
     }
     .cs-field-hint { font-family: 'Inter', sans-serif; font-size: 0.82rem; color: #999; }
+    /* Same bubbly Baloo 2 as the field titles above them, not plain Inter —
+       typed text reads noticeably nicer this way. */
     .cs-input-lg, .cs-textarea-lg, .cs-select-lg {
       width: 100%; box-sizing: border-box; background: #17171a; border: 1px solid rgba(255,255,255,0.14);
-      border-radius: 12px; color: #f0f0f0; font-family: 'Inter', sans-serif; font-size: 1.02rem;
+      border-radius: 12px; color: #f0f0f0; font-family: 'Baloo 2', 'Inter', sans-serif; font-weight: 600; font-size: 1.02rem;
       padding: 0.9rem 1.1rem; transition: border-color 0.15s;
     }
     .cs-input-lg:focus, .cs-textarea-lg:focus, .cs-select-lg:focus { outline: none; border-color: #7fa8d9; }
-    .cs-textarea-lg { resize: vertical; min-height: 130px; line-height: 1.7; font-family: 'Lora', 'Georgia', serif; }
+    .cs-textarea-lg { resize: vertical; min-height: 130px; line-height: 1.7; }
     .cs-textarea-lg#site-bio-input { min-height: 160px; }
     .cs-select-lg { cursor: pointer; max-width: 340px; }
     .cs-meta-title {
@@ -121,16 +123,22 @@
        a side nav column that ate into the content width. This is exactly
        what onboarding's Characters/Gallery tabs already did — now it's how
        the whole editor works, not just onboarding. ── */
-    /* No cap — stretches the entire viewport width, same as the onboarding
-       "Add Story Info" screen (.cs-layout there is max-width:none too). */
-    body.mod-editing-active .wiki-layout { max-width: none; }
+    /* Only Story Details goes full-width (no cap, same as onboarding's
+       "Add Story Info" screen) — Characters/Gallery/Chapters stay a normal
+       page width, same cap the live story pages themselves use.
+       switchEditorSection() toggles .se-section-details on <body>. */
+    body.mod-editing-active .wiki-layout { max-width: 1300px; }
+    body.mod-editing-active.se-section-details .wiki-layout { max-width: none; }
     /* The fixed .mod-edit-bar (84px) replaces #fanpages-topbar-root's own
        in-flow spacer, which is hidden while editing — .wiki-layout's base
        padding-top (4.5rem/72px) alone is 12px short of that, so every tab's
        content (not just the banner, which had its own separate fix) sat
        just barely under the bar. This is the one place all four tabs get
-       their clearance from now; treat the bar as the new ceiling. */
-    body.mod-editing-active .wiki-layout { padding-top: calc(84px + 2rem); }
+       their clearance from now; treat the bar as the new ceiling.
+       !important because a couple of narrower-viewport media queries in
+       the shared stylesheet reset the whole `padding` shorthand (not just
+       padding-top), and this needs to win regardless of viewport width. */
+    body.mod-editing-active .wiki-layout { padding-top: calc(84px + 2rem) !important; }
     .se-edit-main { min-width: 0; }
 
     /* Any gallery-tab modal open — the story's own banner "Change Banner
@@ -259,7 +267,7 @@
     }
   </style>
 </head>
-<body class="mod-theme mod-editing-active">
+<body class="mod-theme mod-editing-active se-section-details">
 
 <script src="/fanpages/fanpages-nav.js"></script>
 <script src="/fanpages/vendor/cropper.min.js"></script>
@@ -1578,10 +1586,10 @@ async function uploadQnCard(kind, blob, originalFile) {
 // ── Story Editor hub — nav column (Story Details / Chapters / Characters /
 // Gallery), all four now live inside this hub. ──────────────────────────────
 function switchEditorSection(section) {
-  // Banner only ever belongs to Story Details — the fixed nav bar's own
-  // spacer (#fanpages-topbar-root) already clears the page below it,
-  // so hiding this needs no extra top padding of its own; Chapters/
-  // Characters/Gallery's content just starts right where the banner used to.
+  // Story Details alone goes full-width (see .se-section-details in the
+  // <style> block above); Chapters/Characters/Gallery stay a normal page
+  // width. Banner only ever belongs to Story Details too.
+  document.body.classList.toggle('se-section-details', section === 'details');
   document.getElementById('wiki-cover').style.display = section === 'details' ? '' : 'none';
   document.getElementById('editor-form-box').style.display = section === 'details' ? '' : 'none';
   document.getElementById('se-chapters-view').style.display = section === 'chapters' ? '' : 'none';
