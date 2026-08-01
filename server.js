@@ -4562,6 +4562,14 @@ app.post('/api/moderator/character-image', requireAuth, uploadModImage.single('i
   res.json({ url: `/images/moderators/${req.file.filename}` });
 });
 
+// Inline images dropped into a chapter's body text (the chapter editor) —
+// same plain "upload it, get a URL back" shape, the editor embeds the URL
+// itself in an image block within the saved body HTML.
+app.post('/api/moderator/chapter-image', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  res.json({ url: `/images/moderators/${req.file.filename}` });
+});
+
 // A story's Characters roster — now a many-to-many via character_story_links,
 // so this lists whatever's linked to the CURRENT story, not everything the
 // user owns.
