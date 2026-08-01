@@ -287,11 +287,15 @@
   </div>
 </div>
 
-<!-- Delete-story confirmation — centered on-page modal -->
+<!-- Delete-story confirmation — centered on-page modal. Also doubles as the
+     "you're deleting your only part" warning: no story, published or
+     unpublished, should ever end up with zero parts, so deleting the last
+     remaining chapter routes here instead of a plain per-chapter confirm. -->
 <div class="mod-confirm-overlay" id="delete-story-confirm-overlay" hidden>
   <div class="mod-confirm-modal">
     <p class="mod-confirm-title">Delete this entire story?</p>
     <p class="mod-confirm-text">This permanently deletes the story, its characters, chapters, and gallery. This can't be undone.</p>
+    <p class="mod-confirm-text" id="delete-story-confirm-extra-note" style="color:#f0c060; font-weight:600;" hidden>You are deleting the only part to your story, which will remove the book entirely.</p>
     <div class="mod-confirm-actions">
       <button class="mod-btn" id="delete-story-confirm-cancel" type="button">Cancel</button>
       <button class="mod-btn mod-btn--danger" id="delete-story-confirm-yes" type="button">Delete</button>
@@ -1342,11 +1346,12 @@ document.getElementById('cancel-edit-btn').addEventListener('click', () => {
   window.location.href = RETURN_TO;
 });
 
-function confirmDeleteStory() {
+function confirmDeleteStory(extraNote) {
   return new Promise(resolve => {
     const overlay = document.getElementById('delete-story-confirm-overlay');
     const yesBtn = document.getElementById('delete-story-confirm-yes');
     const cancelBtn = document.getElementById('delete-story-confirm-cancel');
+    document.getElementById('delete-story-confirm-extra-note').hidden = !extraNote;
     overlay.hidden = false;
     const cleanup = (result) => {
       overlay.hidden = true;
@@ -2799,6 +2804,23 @@ async function toggleSeChapterStatus(ch) {
   } catch {}
 }
 async function deleteSeChapter(ch) {
+  // No story, published or unpublished, should ever end up with zero
+  // parts — deleting the last one left standing deletes the whole story
+  // instead, same as Wattpad, with a note explaining why.
+  if (SE_CHAPTERS.length === 1) {
+    if (!await confirmDeleteStory(true)) return;
+    const btn = document.getElementById('delete-story-btn');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/moderator/site', { method: 'DELETE', headers: authHeaders() });
+      if (!res.ok) throw new Error();
+      window.location.href = '/fanpages/my-stories';
+    } catch {
+      alert('Something went wrong deleting this story. Please try again.');
+      btn.disabled = false;
+    }
+    return;
+  }
   if (!confirm(`Delete "${ch.title || 'this chapter'}"? This can't be undone.`)) return;
   try {
     await fetch(`/api/moderator/chapters/${ch.id}`, { method: 'DELETE', headers: authHeaders() });
