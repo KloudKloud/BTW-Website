@@ -3060,9 +3060,21 @@ app.put('/api/admin/notifications-banner', requireAuth, requireAdmin, uploadModI
 // fanpage identity), while story_path is the unique per-story
 // /fanpages/<slug>/<story> URL, slugified from the title and de-duped if it
 // collides with an existing story (their own or anyone else's).
+// Title/description/rating are all required now — a story isn't just a
+// name anymore, and this is also the only place left where a rating gets
+// set before the very first chapter exists. Immediately chains into
+// creating that story's first (draft) chapter too, so the frontend can
+// send the author straight into the chapter editor instead of an empty
+// story page — a story with zero chapters is never public (see
+// isStoryPublic below), so landing them anywhere else just invites an
+// abandoned, invisible story.
 app.post('/api/moderator/site/create', requireAuth, async (req, res) => {
   const title = String(req.body.title || '').trim().slice(0, 60);
+  const synopsis = String(req.body.synopsis || '').trim();
+  const rating = req.body.rating;
   if (!title) return res.status(400).json({ error: 'A title is required.' });
+  if (!synopsis) return res.status(400).json({ error: 'A description is required.' });
+  if (!RATING_OPTIONS.includes(rating)) return res.status(400).json({ error: 'A valid rating is required.' });
 
   const { rows: [user] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
   const slug = user.username.toLowerCase();
@@ -3077,10 +3089,14 @@ app.post('/api/moderator/site/create', requireAuth, async (req, res) => {
 
   try {
     const { rows: [site] } = await pool.query(
-      `INSERT INTO moderator_sites (slug, owner_user_id, site_title, story_path) VALUES ($1, $2, $3, $4) RETURNING *`,
-      [slug, req.user.id, title, storyPath]
+      `INSERT INTO moderator_sites (slug, owner_user_id, site_title, story_path, synopsis, rating) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [slug, req.user.id, title, storyPath, synopsis, rating]
     );
-    res.json({ site });
+    const { rows: [chapter] } = await pool.query(
+      `INSERT INTO moderator_chapters (site_id, title, sort_order, status) VALUES ($1, 'Untitled Part: 1', 0, 'draft') RETURNING *`,
+      [site.id]
+    );
+    res.json({ site, chapter });
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'That story URL is already taken — please try again.' });
     throw e;
@@ -3098,16 +3114,28 @@ app.get('/api/moderator-sites', async (req, res) => {
   }
 
   const q = (req.query.q || '').trim();
+  // A story only counts as public/discoverable once it has at least one
+  // chapter that's actually published *and* actually has text — a
+  // published-but-empty chapter (or a still-draft one) doesn't count, so an
+  // abandoned "just created it" story never surfaces here. Doesn't affect
+  // the owner's own management views (My Stories, the Story Editor, or the
+  // story's own page for its owner) — only this public browse/search list.
   const { rows: sites } = await pool.query(`
     SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.tags,
            u.username, u.display_name, u.avatar
     FROM moderator_sites ms
     JOIN users u ON u.id = ms.owner_user_id
-    WHERE $1 = '' OR
+    WHERE (
+      $1 = '' OR
       ms.site_title ILIKE '%' || $1 || '%' OR
       u.username ILIKE '%' || $1 || '%' OR
       u.display_name ILIKE '%' || $1 || '%' OR
       EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.tags) tag WHERE tag ILIKE '%' || $1 || '%')
+    )
+    AND EXISTS (
+      SELECT 1 FROM moderator_chapters mc
+      WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+    )
     ORDER BY ms.created_at ASC
   `, [q]);
 
@@ -4185,7 +4213,9 @@ app.get('/api/moderator-sites/:slug/is-owner', requireAuth, async (req, res) => 
 // to a single story — this deliberately lists all of them.
 app.get('/api/moderator/my-sites', requireAuth, async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, u.avatar
+    `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, u.avatar,
+       (SELECT COUNT(*)::int FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0) AS published_chapter_count,
+       (SELECT COUNT(*)::int FROM moderator_chapters mc WHERE mc.site_id = ms.id AND (mc.status = 'draft' OR length(trim(mc.body)) = 0)) AS draft_chapter_count
      FROM moderator_sites ms JOIN users u ON u.id = ms.owner_user_id
      WHERE ms.owner_user_id = $1 ORDER BY ms.created_at ASC`,
     [req.user.id]

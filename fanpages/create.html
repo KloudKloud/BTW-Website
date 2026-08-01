@@ -29,11 +29,20 @@
       display: block; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
       color: #d97a72; margin-bottom: 0.5rem;
     }
-    .cs-input {
+    /* Red dot marking a must-fill-out field — Title/Description/Rating are
+       all required now, since a story needs enough substance to actually
+       start a chapter from, not just a name. */
+    .cs-required-dot {
+      display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+      background: #d9534f; margin-left: 0.4em; vertical-align: middle;
+    }
+    .cs-input, .cs-textarea, .cs-select {
       width: 100%; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
       color: #f0f0f0; font-family: inherit; font-size: 1.05rem; padding: 0.85rem 1rem; margin-bottom: 2rem;
     }
-    .cs-input:focus { outline: none; border-color: #7fa8d9; }
+    .cs-input:focus, .cs-textarea:focus, .cs-select:focus { outline: none; border-color: #7fa8d9; }
+    .cs-textarea { resize: vertical; min-height: 110px; font-family: inherit; }
+    .cs-select { cursor: pointer; }
 
     .cs-tos {
       background: #161616; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
@@ -83,8 +92,19 @@
   <div class="cs-card">
     <h1 class="cs-title">Create Your Story</h1>
 
-    <label class="cs-label" for="cs-title-input">Title</label>
+    <label class="cs-label" for="cs-title-input">Title<span class="cs-required-dot" title="Required"></span></label>
     <input class="cs-input" id="cs-title-input" maxlength="60" placeholder="e.g. Above All Else" />
+
+    <label class="cs-label" for="cs-synopsis-input">Description<span class="cs-required-dot" title="Required"></span></label>
+    <textarea class="cs-textarea" id="cs-synopsis-input" maxlength="2000" placeholder="What's your story about?"></textarea>
+
+    <label class="cs-label" for="cs-rating-select">Rating<span class="cs-required-dot" title="Required"></span></label>
+    <select class="cs-select" id="cs-rating-select">
+      <option value="" selected disabled>Choose a rating…</option>
+      <option value="General Audiences">General Audiences</option>
+      <option value="Teen & Up">Teen &amp; Up</option>
+      <option value="Mature/Explicit (Adult)">Mature/Explicit (Adult)</option>
+    </select>
 
     <div class="cs-tos">
       <h2>TOS</h2>
@@ -145,7 +165,7 @@
 
     <div class="cs-submit-row">
       <a class="mod-btn mod-btn--cancel" href="/fanpages" id="cs-cancel-link" style="margin-right:0.75rem;">Cancel</a>
-      <button class="btn btn-primary" id="cs-submit-btn" type="button">Create My Story →</button>
+      <button class="btn btn-primary" id="cs-submit-btn" type="button">Save and Continue →</button>
     </div>
   </div>
 </div>
@@ -165,12 +185,24 @@
 
   document.getElementById('cs-submit-btn').addEventListener('click', async () => {
     const title = document.getElementById('cs-title-input').value.trim();
+    const synopsis = document.getElementById('cs-synopsis-input').value.trim();
+    const rating = document.getElementById('cs-rating-select').value;
     const agreed = document.getElementById('cs-agree-check').checked;
     const errEl = document.getElementById('cs-error');
     errEl.hidden = true;
 
     if (!title) {
       errEl.textContent = 'A title is required.';
+      errEl.hidden = false;
+      return;
+    }
+    if (!synopsis) {
+      errEl.textContent = 'A description is required.';
+      errEl.hidden = false;
+      return;
+    }
+    if (!rating) {
+      errEl.textContent = 'Please choose a rating.';
       errEl.hidden = false;
       return;
     }
@@ -187,7 +219,7 @@
       const res = await fetch('/api/moderator/site/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title, synopsis, rating }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -196,15 +228,18 @@
           : (data.error || 'Something went wrong. Please try again.');
         errEl.hidden = false;
         btn.disabled = false;
-        btn.textContent = 'Create My Story →';
+        btn.textContent = 'Save and Continue →';
         return;
       }
-      window.location.href = `/fanpages/${data.site.story_path}`;
+      // Straight into the chapter editor with the auto-created first draft
+      // chapter, instead of the (now still-empty) story home page — a
+      // freshly created story has nothing to look at until a chapter exists.
+      window.location.href = `/fanpages/${data.site.story_path}/chapter-editor?id=${data.chapter.id}`;
     } catch {
       errEl.textContent = 'Network error. Please try again.';
       errEl.hidden = false;
       btn.disabled = false;
-      btn.textContent = 'Create My Story →';
+      btn.textContent = 'Save and Continue →';
     }
   });
 </script>
