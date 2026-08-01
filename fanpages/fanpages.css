@@ -578,7 +578,14 @@ body.mod-editing-active .mod-field-label-row { display: flex; }
    visibly washed out underneath this overlay whenever a custom theme
    background was active. Negative z-index keeps both firmly behind
    everything else in this wrapper's own stacking context instead. */
-.mod-page-bg-wrap { position: relative; }
+/* z-index:0 (not just position:relative) is required here — a positioned
+   element with z-index:auto does NOT establish its own stacking context,
+   so the negative z-index on .mod-page-bg-img/.mod-page-bg-overlay below
+   would otherwise escape upward looking for the nearest ancestor that
+   does establish one, landing who-knows-where instead of staying safely
+   behind this wrapper's own real content (which is exactly what broke
+   custom theme backgrounds the moment those two went negative). */
+.mod-page-bg-wrap { position: relative; z-index: 0; }
 .mod-page-bg-img {
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: cover; filter: blur(28px) brightness(0.95); z-index: -2;
@@ -716,20 +723,6 @@ body.mod-editing-active .fp-share-icon-btn { display: none; }
   background: rgba(217,122,114,0.12); border: 1px solid rgba(217,122,114,0.4);
   color: #d97a72; border-radius: 20px; padding: 0.2em 0.85em;
   font-size: 0.78rem; font-weight: 700;
-}
-
-/* Owner-only "not public yet" hint under the title — same idea as the old
-   draft banner, just without an em dash chopping the sentence in two. */
-.wiki-title-hint {
-  display: flex; align-items: center; justify-content: center; gap: 0.6rem;
-  margin: 0.75rem 0 0; text-align: center;
-  font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #999;
-}
-.wiki-title-hint-badge {
-  display: inline-flex; align-items: center; flex-shrink: 0;
-  background: rgba(224,140,74,0.16); border: 1px solid rgba(224,140,74,0.45);
-  color: #e08c4a; border-radius: 20px; padding: 0.25em 0.9em;
-  font-size: 0.72rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
 }
 
 /* Compact Reads/Likes/Parts strip along the bottom of the card. */
