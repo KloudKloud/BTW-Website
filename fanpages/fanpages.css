@@ -571,12 +571,19 @@ body.mod-editing-active .mod-field-label-row { display: flex; }
 
 /* Custom uploaded background — sits beneath the wiki-layout content only,
    never overlapping the banner above it */
+/* z-index:0 here used to mean "these two paint above any ordinary
+   non-positioned content in .mod-page-bg-wrap" — position:absolute +
+   z-index:0 outranks static content in paint order regardless of DOM
+   order, so real page content (tabs, and now the page title) rendered
+   visibly washed out underneath this overlay whenever a custom theme
+   background was active. Negative z-index keeps both firmly behind
+   everything else in this wrapper's own stacking context instead. */
 .mod-page-bg-wrap { position: relative; }
 .mod-page-bg-img {
   position: absolute; inset: 0; width: 100%; height: 100%;
-  object-fit: cover; filter: blur(28px) brightness(0.95); z-index: 0;
+  object-fit: cover; filter: blur(28px) brightness(0.95); z-index: -2;
 }
-.mod-page-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.72); z-index: 0; }
+.mod-page-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.72); z-index: -1; }
 
 /* ── Wiki layout — single column now that Navigate/quick-nav/Author have
    all moved out of a side rail (into tabs, a full-width card row, and the
@@ -606,6 +613,11 @@ body.mod-editing-active .fp-share-icon-btn { display: none; }
 /* Big centered title, sitting right under the banner, above the tab row —
    pulled out of the hero card entirely now. */
 .wiki-page-title-block { text-align: center; margin-bottom: 0.6rem; }
+/* On Chapters/Characters/Gallery, this sits as a direct child right after
+   the banner instead of nested a few levels deep inside the editing form
+   box like it is on Home — give it the same breathing room it effectively
+   gets there instead of sitting flush against the banner. */
+.mod-page-bg-wrap > .wiki-page-title-block { margin-top: 3rem; }
 .wiki-page-title { display: inline-block; margin-bottom: 0; font-size: 3rem; transition: opacity 0.15s; }
 /* Starts empty/invisible in the markup and gets its real text set by JS on
    load — without this, "Untitled Story" (the hardcoded HTML fallback)
@@ -699,6 +711,26 @@ body.mod-editing-active .fp-share-icon-btn { display: none; }
 .wiki-parts-published { color: #7fa8d9; font-weight: 700; }
 .wiki-parts-draft { color: #a8a8a8; font-weight: 700; font-size: 1.05rem; }
 .wiki-parts-hint { color: #888; font-style: italic; }
+.wiki-parts-private-badge {
+  display: inline-flex; align-items: center; gap: 0.3em;
+  background: rgba(217,122,114,0.12); border: 1px solid rgba(217,122,114,0.4);
+  color: #d97a72; border-radius: 20px; padding: 0.2em 0.85em;
+  font-size: 0.78rem; font-weight: 700;
+}
+
+/* Owner-only "not public yet" hint under the title — same idea as the old
+   draft banner, just without an em dash chopping the sentence in two. */
+.wiki-title-hint {
+  display: flex; align-items: center; justify-content: center; gap: 0.6rem;
+  margin: 0.75rem 0 0; text-align: center;
+  font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #999;
+}
+.wiki-title-hint-badge {
+  display: inline-flex; align-items: center; flex-shrink: 0;
+  background: rgba(224,140,74,0.16); border: 1px solid rgba(224,140,74,0.45);
+  color: #e08c4a; border-radius: 20px; padding: 0.25em 0.9em;
+  font-size: 0.72rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+}
 
 /* Compact Reads/Likes/Parts strip along the bottom of the card. */
 .wiki-hero-stats-bar {
