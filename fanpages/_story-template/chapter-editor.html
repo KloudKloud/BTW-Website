@@ -39,12 +39,10 @@
       font-family: 'Inter', sans-serif;
     }
     .ce-breadcrumb-chevron { font-size: 0.7rem; color: #777; }
-    .ce-title-input {
-      display: block; width: 100%; background: none; border: none; color: #f5f5f5;
-      font-family: 'Georgia', serif; font-size: 1.4rem; font-weight: 700;
-      padding: 0.1rem 0; outline: none;
+    .ce-title-display {
+      margin: 0; color: #f5f5f5; font-family: 'Georgia', serif; font-size: 1.4rem; font-weight: 700;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    .ce-title-input::placeholder { color: #666; }
     .ce-topbar-status {
       font-family: 'Inter', sans-serif; font-size: 0.8rem; color: #888; margin: 0.25rem 0 0;
     }
@@ -79,6 +77,47 @@
     }
     .ce-tool-btn:hover { border-color: rgba(240,192,96,0.5); color: #f0c060; }
 
+    /* ── Chapter cover — image or a YouTube link, becomes the card
+       thumbnail later. Two modes, one visible at a time. ── */
+    .ce-cover-box { margin-top: 0.5rem; }
+    .ce-cover-toggle { display: flex; justify-content: center; gap: 0.6rem; margin-bottom: 0.9rem; }
+    .ce-cover-toggle-btn {
+      width: 46px; height: 38px; border-radius: 10px; cursor: pointer; font-size: 1.1rem;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); color: #aaa;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+    .ce-cover-toggle-btn:hover { color: #eee; }
+    .ce-cover-toggle-btn.active { background: rgba(240,192,96,0.14); border-color: rgba(240,192,96,0.5); color: #f0c060; }
+    .ce-cover-image-wrap {
+      max-width: 320px; aspect-ratio: 4 / 3; margin: 0 auto; border-radius: 12px; overflow: hidden;
+      background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.2);
+      display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative;
+    }
+    .ce-cover-image-wrap:hover { border-color: rgba(240,192,96,0.5); }
+    .ce-cover-image-wrap img { width: 100%; height: 100%; object-fit: cover; }
+    .ce-cover-image-placeholder { color: #777; font-family: 'Inter', sans-serif; font-size: 0.85rem; padding: 0 1.5rem; text-align: center; }
+    .ce-cover-remove-btn {
+      display: block; margin: 0.6rem auto 0; background: none; border: none; color: #d97a72;
+      font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+    }
+    .ce-cover-remove-btn:hover { color: #f5b3ac; }
+    .ce-cover-video-input {
+      display: block; max-width: 420px; margin: 0 auto; width: 100%; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.16); border-radius: 10px; color: #eee;
+      font-family: 'Inter', sans-serif; font-size: 0.9rem; padding: 0.6em 0.9em; outline: none;
+    }
+    .ce-cover-video-input:focus { border-color: rgba(240,192,96,0.5); }
+    .ce-cover-video-input::placeholder { color: #666; }
+
+    /* ── Big chapter title, centered, above the writing surface. ── */
+    .ce-title-block { margin-top: 2rem; }
+    .ce-big-title-input {
+      display: block; width: 100%; text-align: center; background: none; border: none; color: #f5f5f5;
+      font-family: 'Georgia', serif; font-size: 2.1rem; font-weight: 700; outline: none;
+    }
+    .ce-big-title-input::placeholder { color: #555; }
+    .ce-title-rule { margin: 1.25rem 0 0; border: none; border-top: 1px solid rgba(255,255,255,0.12); }
+
     /* ── Writing surface — a plain contenteditable div, paragraphs are just
        <p> elements (Enter = new paragraph, matching the "blank line between
        paragraphs" convention Wattpad/AO3 both use). Not a rich toolbar-
@@ -91,7 +130,7 @@
     .ce-editor p { margin: 0 0 1.2em; }
     .ce-editor p:empty::before { content: '\00a0'; }
     .ce-editor:empty::before {
-      content: 'Start writing your chapter here…'; color: #555; pointer-events: none;
+      content: 'Type your text'; color: #555; pointer-events: none;
     }
     .ce-img-block { position: relative; margin: 0 0 1.4em; }
     .ce-img-block img { display: block; max-width: 100%; border-radius: 10px; }
@@ -136,7 +175,7 @@
       <span id="ce-story-title">Loading…</span>
       <span class="ce-breadcrumb-chevron">⌄</span>
     </div>
-    <input class="ce-title-input" id="ce-title-input" placeholder="Chapter title…" maxlength="120" />
+    <p class="ce-title-display" id="ce-title-display"></p>
     <p class="ce-topbar-status" id="ce-topbar-status"></p>
   </div>
   <div class="ce-topbar-actions">
@@ -146,10 +185,35 @@
   </div>
 </div>
 
-<div class="ce-editor-toolbar" id="ce-editor-toolbar" hidden>
-  <button type="button" class="ce-tool-btn" id="ce-insert-image-btn">🖼️ Image</button>
-</div>
 <div class="ce-page" id="ce-page" hidden>
+
+  <!-- Chapter cover — an image or a YouTube link, becomes the card
+       thumbnail later. -->
+  <div class="ce-cover-box">
+    <div class="ce-cover-toggle">
+      <button type="button" class="ce-cover-toggle-btn active" id="ce-cover-mode-image" title="Cover Image">🖼️</button>
+      <button type="button" class="ce-cover-toggle-btn" id="ce-cover-mode-video" title="Cover Video (YouTube)">🎥</button>
+    </div>
+    <div id="ce-cover-image-mode">
+      <div class="ce-cover-image-wrap" id="ce-cover-image-wrap">
+        <img id="ce-cover-image-preview" alt="" hidden />
+        <span class="ce-cover-image-placeholder" id="ce-cover-image-placeholder">Click to add a cover image</span>
+      </div>
+      <button type="button" class="ce-cover-remove-btn" id="ce-cover-image-remove" hidden>✕ Remove Image</button>
+    </div>
+    <div id="ce-cover-video-mode" hidden>
+      <input type="text" class="ce-cover-video-input" id="ce-cover-video-input" placeholder="Paste a YouTube video URL…" />
+    </div>
+  </div>
+
+  <div class="ce-title-block">
+    <input class="ce-big-title-input" id="ce-big-title-input" placeholder="Untitled Part" maxlength="120" />
+  </div>
+  <hr class="ce-title-rule" />
+
+  <div class="ce-editor-toolbar" id="ce-editor-toolbar">
+    <button type="button" class="ce-tool-btn" id="ce-insert-image-btn">🖼️ Image</button>
+  </div>
   <div class="ce-editor" id="ce-editor" contenteditable="true" spellcheck="true"></div>
 </div>
 <p class="ce-loading" id="ce-loading">Loading…</p>
@@ -208,8 +272,53 @@ document.getElementById('ce-topbar-cover-link').addEventListener('click', (e) =>
   if (dirty && !confirm('Discard unsaved changes?')) return;
   window.location.href = STORY_BASE;
 });
-document.getElementById('ce-title-input').addEventListener('input', () => { markDirty(); });
+document.getElementById('ce-big-title-input').addEventListener('input', (e) => {
+  document.getElementById('ce-title-display').textContent = e.target.value.trim() || 'Untitled Part';
+  markDirty();
+});
 editor.addEventListener('input', () => { markDirty(); updateStatusLine(); });
+
+// ── Chapter cover — image or a YouTube link (mutually exclusive; picking
+// one clears the other), becomes the card thumbnail later. ─────────────────
+let coverImageUrl = '';
+let coverVideoUrl = '';
+function setCoverMode(mode) {
+  document.getElementById('ce-cover-mode-image').classList.toggle('active', mode === 'image');
+  document.getElementById('ce-cover-mode-video').classList.toggle('active', mode === 'video');
+  document.getElementById('ce-cover-image-mode').hidden = mode !== 'image';
+  document.getElementById('ce-cover-video-mode').hidden = mode !== 'video';
+}
+function renderCoverImagePreview() {
+  const img = document.getElementById('ce-cover-image-preview');
+  const placeholder = document.getElementById('ce-cover-image-placeholder');
+  const removeBtn = document.getElementById('ce-cover-image-remove');
+  if (coverImageUrl) {
+    img.src = coverImageUrl;
+    img.hidden = false;
+    placeholder.hidden = true;
+    removeBtn.hidden = false;
+  } else {
+    img.hidden = true;
+    placeholder.hidden = false;
+    removeBtn.hidden = true;
+  }
+}
+document.getElementById('ce-cover-mode-image').addEventListener('click', () => setCoverMode('image'));
+document.getElementById('ce-cover-mode-video').addEventListener('click', () => setCoverMode('video'));
+document.getElementById('ce-cover-image-wrap').addEventListener('click', () => {
+  document.getElementById('ce-image-file-input').dataset.target = 'cover';
+  document.getElementById('ce-image-file-input').click();
+});
+document.getElementById('ce-cover-image-remove').addEventListener('click', (e) => {
+  e.stopPropagation();
+  coverImageUrl = '';
+  renderCoverImagePreview();
+  markDirty();
+});
+document.getElementById('ce-cover-video-input').addEventListener('input', (e) => {
+  coverVideoUrl = e.target.value.trim();
+  markDirty();
+});
 
 // ── Images pasted along with rich text get dropped on purpose (per spec —
 // re-attach images yourself); only formatted TEXT gets translated. ─────────
@@ -385,10 +494,12 @@ function insertImageBlock(url) {
   updateStatusLine();
 }
 document.getElementById('ce-insert-image-btn').addEventListener('click', () => {
+  document.getElementById('ce-image-file-input').dataset.target = 'inline';
   document.getElementById('ce-image-file-input').click();
 });
 document.getElementById('ce-image-file-input').addEventListener('change', async (e) => {
   const file = e.target.files[0];
+  const target = e.target.dataset.target || 'inline';
   e.target.value = '';
   if (!file) return;
   const fd = new FormData();
@@ -396,15 +507,21 @@ document.getElementById('ce-image-file-input').addEventListener('change', async 
   try {
     const res = await fetch(`${API}/moderator/chapter-image`, { method: 'POST', headers: authHeaders(), body: fd });
     const data = await res.json();
-    if (data.url) insertImageBlock(data.url);
-    else alert('Image upload failed. Please try again.');
+    if (!data.url) { alert('Image upload failed. Please try again.'); return; }
+    if (target === 'cover') {
+      coverImageUrl = data.url;
+      renderCoverImagePreview();
+      markDirty();
+    } else {
+      insertImageBlock(data.url);
+    }
   } catch {
     alert('Image upload failed. Please try again.');
   }
 });
 
 document.getElementById('ce-publish-btn').addEventListener('click', async () => {
-  const title = document.getElementById('ce-title-input').value.trim();
+  const title = document.getElementById('ce-big-title-input').value.trim();
   const body = editor.innerHTML;
   if (!title) { alert('Chapter title is required.'); return; }
 
@@ -414,7 +531,7 @@ document.getElementById('ce-publish-btn').addEventListener('click', async () => 
   try {
     const res = await fetch(`${API}/moderator/chapters/${CHAPTER_ID}/body`, {
       method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, body }),
+      body: JSON.stringify({ title, body, image_url: coverImageUrl, video_url: coverVideoUrl }),
     });
     if (!res.ok) throw new Error('save failed');
     // "Publish Changes" also flips a draft to published — writing is done,
@@ -464,13 +581,20 @@ window.addEventListener('beforeunload', (e) => {
     document.getElementById('ce-story-cover').src = site.cover_url || '/images/characters/noreference.png';
   }
 
-  document.getElementById('ce-title-input').value = chapter.title || '';
+  document.getElementById('ce-big-title-input').value = chapter.title || '';
+  document.getElementById('ce-title-display').textContent = chapter.title || 'Untitled Part';
   // Old chapters made before this editor existed have no HTML body — an
   // empty <p> gives the contenteditable a real first line to click into
   // instead of an empty div with no cursor target.
   editor.innerHTML = chapter.body && chapter.body.trim() ? chapter.body : '<p><br></p>';
   editor.querySelectorAll('.ce-img-block').forEach(wireImageBlock);
   updateStatusLine();
+
+  coverImageUrl = chapter.image_url || '';
+  coverVideoUrl = chapter.video_url || '';
+  renderCoverImagePreview();
+  document.getElementById('ce-cover-video-input').value = coverVideoUrl;
+  setCoverMode(coverVideoUrl && !coverImageUrl ? 'video' : 'image');
 
   document.getElementById('ce-loading').hidden = true;
   document.getElementById('ce-editor-toolbar').hidden = false;

@@ -748,6 +748,7 @@ async function initDb() {
     ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS body TEXT NOT NULL DEFAULT '';
     ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'published';
     ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE moderator_chapters ADD COLUMN IF NOT EXISTS video_url TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('moderator_chapters editor migration:', e.message));
 
   // Chapter likes — same shape as moderator_gallery_likes.
@@ -4464,13 +4465,26 @@ app.put('/api/moderator/chapters/:id/status', requireAuth, requireModerator, asy
 
 // Saves title + body text from the chapter editor page — plain JSON, no
 // multipart, since there's no file/image involved in this save.
+// image_url/video_url are optional — the editor's cover picker uploads the
+// image separately (POST /api/moderator/chapter-image) and just passes the
+// resulting URL through here alongside title/body, same save action as
+// everything else in the editor. Picking one clears the other (a chapter
+// cover is either an image or a YouTube link, not both).
 app.put('/api/moderator/chapters/:id/body', requireAuth, requireModerator, async (req, res) => {
   const title = String(req.body.title || '').trim();
   const body = String(req.body.body || '');
   if (!title) return res.status(400).json({ error: 'Title is required.' });
+  const hasImageUrl = req.body.image_url !== undefined;
+  const hasVideoUrl = req.body.video_url !== undefined;
+  const imageUrl = hasImageUrl ? String(req.body.image_url || '') : null;
+  const videoUrl = hasVideoUrl ? String(req.body.video_url || '') : null;
   const { rows: [chapter] } = await pool.query(
-    'UPDATE moderator_chapters SET title = $1, body = $2 WHERE id = $3 AND site_id = $4 RETURNING *',
-    [title, body, req.params.id, req.modSite.id]
+    `UPDATE moderator_chapters SET
+       title = $1, body = $2,
+       image_url = CASE WHEN $3 THEN $4 ELSE image_url END,
+       video_url = CASE WHEN $5 THEN $6 ELSE video_url END
+     WHERE id = $7 AND site_id = $8 RETURNING *`,
+    [title, body, hasImageUrl, imageUrl, hasVideoUrl, videoUrl, req.params.id, req.modSite.id]
   );
   if (!chapter) return res.status(404).json({ error: 'Not found.' });
   res.json({ chapter });
