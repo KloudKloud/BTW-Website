@@ -24,8 +24,9 @@
       padding: 1rem 1.75rem;
     }
     .ce-back-btn {
-      background: none; border: none; color: #aaa; font-size: 1.5rem; cursor: pointer;
+      background: none; border: none; color: #aaa; cursor: pointer;
       padding: 0.2rem 0.4rem; line-height: 1; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
     }
     .ce-back-btn:hover { color: #fff; }
     .ce-topbar-cover-link { flex-shrink: 0; display: block; border-radius: 8px; }
@@ -50,15 +51,17 @@
     .ce-topbar-status-word { color: #7fa8d9; font-weight: 700; }
     .ce-topbar-actions { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
     .ce-btn {
-      font-family: 'Baloo 2', 'Inter', sans-serif; font-size: 1rem; font-weight: 700;
+      font-family: 'Inter', sans-serif; font-size: 0.95rem; font-weight: 700;
       padding: 0.7em 1.7em; border-radius: 24px; cursor: pointer; border: none;
       transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
     }
     .ce-btn:active { transform: translateY(1px); }
     .ce-btn--cancel { background: none; border: 1px solid rgba(255,255,255,0.25); color: #ccc; }
     .ce-btn--cancel:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
-    .ce-btn--publish { background: linear-gradient(135deg, #3d6fa8, #7fa8d9); color: #0d1b2a; box-shadow: 0 0 14px rgba(127,168,217,0.4); }
-    .ce-btn--publish:hover { box-shadow: 0 0 20px rgba(127,168,217,0.6); }
+    /* Same blue gradient + white text as the story view's own "Edit
+       <character name>" button, for a consistent "primary action" look. */
+    .ce-btn--publish { background: linear-gradient(135deg, #3d6fa8, #7fa8d9); color: #fff; box-shadow: 0 0 16px rgba(127,168,217,0.5); }
+    .ce-btn--publish:hover { box-shadow: 0 0 26px rgba(127,168,217,0.75); }
     .ce-btn--publish:disabled { opacity: 0.45; box-shadow: none; cursor: default; }
     /* ── Import .docx — preview the extracted text before committing it. ── */
     .ce-import-overlay {
@@ -324,35 +327,6 @@
     .ce-btn--save:hover { border-color: #7fa8d9; background: rgba(127,168,217,0.1); }
     .ce-btn--save:disabled { opacity: 0.45; cursor: default; }
 
-    /* ── "Congrats, you published!" — shown once, the first time a draft
-       flips to published, then sends the author to the story's own page to
-       see it live. Same modal recipe as .ce-intro-*. ── */
-    .ce-congrats-overlay {
-      position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
-      background: rgba(0,0,0,0.72); padding: 1.5rem;
-    }
-    .ce-congrats-modal {
-      background: #171717; border: 1px solid rgba(127,168,217,0.3); border-radius: 20px;
-      max-width: 440px; width: 100%; padding: 2.25rem; text-align: center;
-      box-shadow: 0 24px 70px rgba(0,0,0,0.65);
-    }
-    .ce-congrats-icon { font-size: 2.4rem; margin: 0 0 0.6rem; line-height: 1; }
-    .ce-congrats-title {
-      font-family: 'Baloo 2', 'Georgia', serif; font-size: 1.4rem; font-weight: 700;
-      color: #7fa8d9; margin: 0 0 0.9rem; line-height: 1.4;
-    }
-    .ce-congrats-text {
-      font-family: 'Inter', sans-serif; font-size: 0.92rem; line-height: 1.6; color: #ccc;
-      margin: 0 0 1.5rem;
-    }
-    .ce-congrats-btn {
-      background: linear-gradient(135deg, #3d6fa8, #7fa8d9); color: #0d1b2a; border: none;
-      font-family: 'Inter', sans-serif; font-size: 0.98rem; font-weight: 700;
-      padding: 0.8em 2.6em; border-radius: 24px; cursor: pointer;
-      box-shadow: 0 0 18px rgba(127,168,217,0.5); transition: box-shadow 0.15s, transform 0.15s;
-    }
-    .ce-congrats-btn:hover { box-shadow: 0 0 26px rgba(127,168,217,0.7); transform: translateY(-1px); }
-
     /* ── Unsaved-changes exit warning — offered whenever leaving the page
        through an in-app link (back arrow, cover, Cancel) while dirty,
        instead of a bare browser confirm(). ── */
@@ -402,7 +376,9 @@
 </div>
 
 <div class="ce-topbar">
-  <button class="ce-back-btn" id="ce-back-btn" type="button" title="Back to Chapters">←</button>
+  <button class="ce-back-btn" id="ce-back-btn" type="button" title="Back to Chapters">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>
   <a class="ce-topbar-cover-link" id="ce-topbar-cover-link" href="#">
     <img class="ce-topbar-cover" id="ce-story-cover" src="/images/defaultcover.png" alt="" />
   </a>
@@ -420,15 +396,6 @@
     <button class="ce-btn ce-btn--save" id="ce-save-draft-btn" type="button" disabled>💾 Save</button>
     <button class="ce-btn ce-btn--cancel" id="ce-cancel-btn" type="button" hidden>Cancel</button>
     <input type="file" id="ce-docx-file-input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none;" />
-  </div>
-</div>
-
-<div class="ce-congrats-overlay" id="ce-congrats-overlay" hidden>
-  <div class="ce-congrats-modal">
-    <p class="ce-congrats-icon">🎉</p>
-    <p class="ce-congrats-title" id="ce-congrats-title">Congrats! You published your chapter!</p>
-    <p class="ce-congrats-text">Let's go take a look at it live on your story's page.</p>
-    <button class="ce-congrats-btn" id="ce-congrats-btn" type="button">Take Me There →</button>
   </div>
 </div>
 
@@ -1277,21 +1244,24 @@ document.getElementById('ce-publish-btn').addEventListener('click', async () => 
     }
     updateStatusLine();
     btn.textContent = 'Saved ✓';
-    setTimeout(() => { btn.textContent = wasDraft ? 'Save Changes' : (currentChapter.status === 'draft' ? 'Publish' : 'Save Changes'); btn.disabled = true; }, 1200);
+    // First-ever publish of this chapter: rather than popping the congrats
+    // modal right here (over the editor the author's about to leave
+    // anyway), send them back to the Story Editor's Chapters tab and let
+    // that page show the congrats — see the sessionStorage flag below.
     if (wasDraft && !everPublished) {
       everPublished = true;
-      document.getElementById('ce-congrats-title').textContent =
-        `Congrats! You published "${title}" for ${document.getElementById('ce-story-title').textContent}!`;
-      document.getElementById('ce-congrats-overlay').hidden = false;
+      sessionStorage.setItem('btw_just_published', JSON.stringify({
+        title, storyTitle: document.getElementById('ce-story-title').textContent,
+      }));
+      window.location.href = `${STORY_BASE}/edit#chapters`;
+      return;
     }
+    setTimeout(() => { btn.textContent = wasDraft ? 'Save Changes' : (currentChapter.status === 'draft' ? 'Publish' : 'Save Changes'); btn.disabled = true; }, 1200);
   } catch {
     alert('Something went wrong saving. Please try again.');
     btn.disabled = false;
     btn.textContent = wasDraft ? 'Publish' : 'Save Changes';
   }
-});
-document.getElementById('ce-congrats-btn').addEventListener('click', () => {
-  window.location.href = STORY_BASE;
 });
 
 window.addEventListener('beforeunload', (e) => {

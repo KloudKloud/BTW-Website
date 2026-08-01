@@ -5858,10 +5858,17 @@ app.get('/api/spotlight/gallery', async (req, res) => {
 
 app.get('/api/spotlight/stories', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 12, 100);
+  // Same "actually discoverable" rule as the public browse/search endpoint —
+  // a story only counts once it has at least one published chapter with
+  // real text, so a story that's still all-drafts never gets spotlighted.
   const { rows } = await pool.query(
     `SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.username, u.display_name, u.avatar
      FROM moderator_sites ms
      JOIN users u ON u.id = ms.owner_user_id
+     WHERE EXISTS (
+       SELECT 1 FROM moderator_chapters mc
+       WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+     )
      ORDER BY RANDOM() LIMIT $1`,
     [limit]
   );

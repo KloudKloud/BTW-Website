@@ -227,6 +227,11 @@
       transition: border-color 0.15s, background 0.15s;
     }
     .se-chap-card:hover { border-color: rgba(240,192,96,0.35); background: rgba(255,255,255,0.06); }
+    .se-chap-card-thumb {
+      width: 64px; height: 64px; flex-shrink: 0; border-radius: 8px; overflow: hidden;
+      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.08);
+    }
+    .se-chap-card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .se-chap-card-main { flex: 1; min-width: 0; }
     .se-chap-card-title {
       font-family: 'Baloo 2', 'Cinzel', serif; font-weight: 700; font-size: 1.35rem;
@@ -293,6 +298,34 @@
       background: rgba(240,192,96,0.1); border: 1px solid rgba(240,192,96,0.35);
       color: #f0c060; font-size: 1.15rem; cursor: grab;
     }
+
+    /* ── "Congrats, you published!" — shown once, the first time a draft
+       flips to published. Same modal recipe as .ce-intro-*. ── */
+    .ce-congrats-overlay {
+      position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.72); padding: 1.5rem;
+    }
+    .ce-congrats-modal {
+      background: #171717; border: 1px solid rgba(127,168,217,0.3); border-radius: 20px;
+      max-width: 440px; width: 100%; padding: 2.25rem; text-align: center;
+      box-shadow: 0 24px 70px rgba(0,0,0,0.65);
+    }
+    .ce-congrats-icon { font-size: 2.4rem; margin: 0 0 0.6rem; line-height: 1; }
+    .ce-congrats-title {
+      font-family: 'Baloo 2', 'Georgia', serif; font-size: 1.4rem; font-weight: 700;
+      color: #7fa8d9; margin: 0 0 0.9rem; line-height: 1.4;
+    }
+    .ce-congrats-text {
+      font-family: 'Inter', sans-serif; font-size: 0.92rem; line-height: 1.6; color: #ccc;
+      margin: 0 0 1.5rem;
+    }
+    .ce-congrats-btn {
+      background: linear-gradient(135deg, #3d6fa8, #7fa8d9); color: #0d1b2a; border: none;
+      font-family: 'Inter', sans-serif; font-size: 0.98rem; font-weight: 700;
+      padding: 0.8em 2.6em; border-radius: 24px; cursor: pointer;
+      box-shadow: 0 0 18px rgba(127,168,217,0.5); transition: box-shadow 0.15s, transform 0.15s;
+    }
+    .ce-congrats-btn:hover { box-shadow: 0 0 26px rgba(127,168,217,0.7); transform: translateY(-1px); }
   </style>
 </head>
 <body class="mod-theme mod-editing-active se-section-details">
@@ -304,7 +337,9 @@
 <!-- Edit bar -->
 <div class="mod-edit-bar" id="edit-bar" style="display:flex;">
   <div class="mod-edit-bar-left" id="edit-bar-left">
-    <a class="mod-edit-bar-back" id="edit-bar-back" href="/fanpages/editor#stories" title="Back to Creator Hub">←</a>
+    <a class="mod-edit-bar-back" id="edit-bar-back" href="/fanpages/editor#stories" title="Back to Creator Hub">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
     <div class="mod-edit-bar-titles">
       <span class="mod-edit-bar-label" id="edit-bar-label">Editing Your Story</span>
       <span class="mod-edit-bar-title" id="edit-bar-title">Untitled Story</span>
@@ -346,6 +381,19 @@
       <button class="mod-btn" id="delete-story-confirm-cancel" type="button">Cancel</button>
       <button class="mod-btn mod-btn--danger" id="delete-story-confirm-yes" type="button">Delete</button>
     </div>
+  </div>
+</div>
+
+<!-- "Congrats, you published!" — shown here (not in the chapter editor
+     itself) since the chapter editor sends the author straight back to
+     this page's Chapters tab on a first publish. "Take Me There" opens the
+     live story page in a new tab rather than navigating away from here. -->
+<div class="ce-congrats-overlay" id="ce-congrats-overlay" hidden>
+  <div class="ce-congrats-modal">
+    <p class="ce-congrats-icon">🎉</p>
+    <p class="ce-congrats-title" id="ce-congrats-title">Congrats! You published your chapter!</p>
+    <p class="ce-congrats-text">Let's go take a look at it live on your story's page.</p>
+    <button class="ce-congrats-btn" id="ce-congrats-btn" type="button">Take Me There →</button>
   </div>
 </div>
 
@@ -2778,6 +2826,7 @@ function renderSeChapterStack() {
       const isDraft = ch.status === 'draft';
       card.className = 'se-chap-card';
       card.innerHTML = `
+        ${ch.image_url ? `<div class="se-chap-card-thumb"><img src="${escapeHtml(ch.image_url)}" alt="" /></div>` : ''}
         <div class="se-chap-card-main">
           <p class="se-chap-card-title">${escapeHtml(ch.title || 'Untitled Chapter')}</p>
           <p class="se-chap-card-meta"><span class="se-chap-card-status">${isDraft ? 'Draft' : 'Published'}</span>${ch.created_at ? ' - ' + seChapterDate(ch) : ''}</p>
@@ -2843,22 +2892,22 @@ async function deleteSeChapter(ch) {
 }
 
 // "+ New Chapter" — instant, no form. Creates a draft with an auto
-// placeholder title, jumps the screen to it, then the author writes the
-// actual content in the dedicated chapter editor page.
+// placeholder title ("Untitled Part: N") and jumps straight into the
+// dedicated chapter editor page to start writing right away.
 document.getElementById('se-chapter-create-btn').addEventListener('click', async () => {
   const btn = document.getElementById('se-chapter-create-btn');
   btn.disabled = true;
   try {
     const res = await fetch(`/api/moderator/chapters`, { method: 'POST', headers: authHeaders() });
     const data = await res.json().catch(() => ({}));
-    await loadSeChapters();
     if (data.chapter) {
-      const card = document.querySelector(`#se-chapter-stack [data-id="${data.chapter.id}"]`);
-      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.location.href = `${STORY_BASE}/chapter-editor?id=${data.chapter.id}`;
+    } else {
+      alert('Could not create a new chapter — please try again.');
+      btn.disabled = false;
     }
   } catch {
     alert('Could not create a new chapter — please try again.');
-  } finally {
     btn.disabled = false;
   }
 });
@@ -2926,6 +2975,23 @@ document.getElementById('se-chapter-reorder-save').addEventListener('click', asy
     saveBtn.textContent = 'Save Order';
   }
 });
+
+// The chapter editor sets this right before sending the author back here
+// on a first publish — pop the congrats modal once, then clear it so a
+// later refresh of this same page doesn't show it again.
+document.getElementById('ce-congrats-btn').addEventListener('click', () => {
+  window.open(STORY_BASE, '_blank');
+});
+(() => {
+  const raw = sessionStorage.getItem('btw_just_published');
+  if (!raw) return;
+  sessionStorage.removeItem('btw_just_published');
+  try {
+    const { title, storyTitle } = JSON.parse(raw);
+    document.getElementById('ce-congrats-title').textContent = `Congrats! You published "${title}" for ${storyTitle}!`;
+    document.getElementById('ce-congrats-overlay').hidden = false;
+  } catch {}
+})();
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 (async () => {
