@@ -586,11 +586,18 @@ body.mod-editing-active .mod-field-label-row { display: flex; }
    behind this wrapper's own real content (which is exactly what broke
    custom theme backgrounds the moment those two went negative). */
 .mod-page-bg-wrap { position: relative; z-index: 0; }
+/* Fixed, not absolute — .mod-page-bg-wrap only grows as tall as its own
+   content (title/tabs/list), so an absolutely-positioned bg only ever
+   covered that content's height. On a page with a short list, that left
+   the blurred background as a visibly short box that stopped partway
+   down instead of reading as a full-page ambient background, cutting off
+   to plain black beyond it. Fixed positioning covers the whole viewport
+   regardless of how tall the actual content ends up being. */
 .mod-page-bg-img {
-  position: absolute; inset: 0; width: 100%; height: 100%;
+  position: fixed; inset: 0; width: 100%; height: 100%;
   object-fit: cover; filter: blur(28px) brightness(0.95); z-index: -2;
 }
-.mod-page-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.72); z-index: -1; }
+.mod-page-bg-overlay { position: fixed; inset: 0; background: rgba(10,10,10,0.72); z-index: -1; }
 
 /* ── Wiki layout — single column now that Navigate/quick-nav/Author have
    all moved out of a side rail (into tabs, a full-width card row, and the
@@ -624,7 +631,12 @@ body.mod-editing-active .fp-share-icon-btn { display: none; }
    the banner instead of nested a few levels deep inside the editing form
    box like it is on Home — give it the same breathing room it effectively
    gets there instead of sitting flush against the banner. */
-.mod-page-bg-wrap > .wiki-page-title-block { margin-top: 3rem; }
+/* Matches .wiki-layout's own padding-top (4.5rem) exactly — Home's title
+   effectively gets that same offset for free by sitting inside
+   .wiki-layout; this needs to say so explicitly since it's a direct
+   .mod-page-bg-wrap child instead, so banner->title distance reads
+   identically switching between Home and these three tabs. */
+.mod-page-bg-wrap > .wiki-page-title-block { margin-top: 4.5rem; }
 .wiki-page-title { display: inline-block; margin-bottom: 0; font-size: 3rem; transition: opacity 0.15s; }
 /* Starts empty/invisible in the markup and gets its real text set by JS on
    load — without this, "Untitled Story" (the hardcoded HTML fallback)
@@ -774,7 +786,10 @@ body.mod-editing-active .fp-share-icon-btn { display: none; }
    the banner instead of inline above Story Description. Same visual tab,
    just its own max-width/padding so it lines up with each page's content
    below it regardless of that page's own layout class. */
-.wiki-story-tabs--top { max-width: 1300px; margin: 0 auto 2.5rem; padding: 0 3rem; }
+/* margin-bottom matches --centered's own 2.25rem (not a separate 2.5rem) —
+   this and Home's version of the tab row need to read as pixel-identical
+   switching between them. */
+.wiki-story-tabs--top { max-width: 1300px; margin: 0 auto 2.25rem; padding: 0 3rem; }
 
 /* New block-formatting context so this block's own height still wraps
    around the floated cover+avatar box below, instead of collapsing to

@@ -4200,10 +4200,13 @@ async function sendSiteLookup(query, params, req, res) {
     // Drafts only ever show to the story's own owner (previewing via "View
     // as Reader") — everyone else only ever sees published chapters.
     pool.query(
-      `SELECT id, title, teaser, links, image_url, file_url, file_name, status, body
-       FROM moderator_chapters
-       WHERE site_id = $1 ${viewerId === site.owner_user_id ? '' : "AND status = 'published'"}
-       ORDER BY sort_order, id`,
+      `SELECT mc.id, mc.title, mc.teaser, mc.links, mc.image_url, mc.video_url, mc.file_url, mc.file_name,
+              mc.status, mc.body, mc.view_count, mc.created_at, mc.updated_at,
+              (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'chapter' AND target_id = mc.id) AS comment_count,
+              (SELECT COUNT(*)::int FROM chapter_likes WHERE chapter_id = mc.id) AS like_count
+       FROM moderator_chapters mc
+       WHERE mc.site_id = $1 ${viewerId === site.owner_user_id ? '' : "AND mc.status = 'published'"}
+       ORDER BY mc.sort_order, mc.id`,
       [site.id]
     ),
     pool.query(`

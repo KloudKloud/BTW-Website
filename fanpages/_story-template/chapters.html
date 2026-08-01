@@ -8,6 +8,39 @@
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <style>
+    /* ── Chapter cards — thumbnail (chapter art, or a YouTube thumbnail if
+       the chapter's cover is a video instead of an image), title, a
+       colored Published/Draft + date line, and a mini stat row. Replaces
+       the old bare "thumbnail + title" .chapter-row list. ── */
+    .ch-card-list { display: flex; flex-direction: column; gap: 0.9rem; margin-top: 1.5rem; }
+    .ch-card {
+      display: flex; align-items: center; gap: 1.25rem;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+      padding: 1rem 1.25rem; text-decoration: none; color: inherit;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .ch-card:hover { border-color: rgba(240,192,96,0.35); background: rgba(255,255,255,0.06); }
+    .ch-card-thumb {
+      width: 96px; height: 96px; flex-shrink: 0; border-radius: 10px; overflow: hidden;
+      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.08); position: relative;
+    }
+    .ch-card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .ch-card-thumb-play {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; background: rgba(0,0,0,0.25); color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    }
+    .ch-card-info { flex: 1; min-width: 0; }
+    .ch-card-title {
+      font-family: 'Baloo 2', 'Cinzel', serif; font-weight: 700; font-size: 1.25rem;
+      color: #f0f0f0; margin: 0 0 0.3rem; line-height: 1.25;
+    }
+    .ch-card-meta { font-size: 0.85rem; margin: 0 0 0.5rem; font-family: 'Inter', sans-serif; }
+    .ch-card-status--published { color: #7fa8d9; font-weight: 700; }
+    .ch-card-status--draft { color: #f0c060; font-weight: 700; }
+    .ch-card-meta-date { color: #888; }
+    .ch-card-stats { display: flex; gap: 1.1rem; font-size: 0.82rem; color: #aaa; }
+  </style>
 </head>
 <body class="mod-theme">
 
@@ -48,7 +81,7 @@
 
       <h1 class="hub-title">Chapters</h1>
 
-      <div class="chapters-list" id="chapters-list">
+      <div class="ch-card-list" id="chapters-list">
         <p class="gallery-empty-msg">Loading…</p>
       </div>
 
@@ -152,8 +185,27 @@ function escapeHtml(s) {
 }
 
 // ── Chapter list ─────────────────────────────────────────────────────────
+function extractYouTubeId(url) {
+  const m = String(url || '').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{6,})/);
+  return m ? m[1] : null;
+}
+// Chapter art wins if it's set; otherwise a YouTube video's own thumbnail
+// (there's clearly a cover either way); otherwise the story's own cover.
 function chapterThumb(ch) {
-  return ch.image_url || (SITE && SITE.cover_url) || '/images/gallery/pixernbath_13.png';
+  if (ch.image_url) return { src: ch.image_url, isVideo: false };
+  const videoId = extractYouTubeId(ch.video_url);
+  if (videoId) return { src: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`, isVideo: true };
+  return { src: (SITE && SITE.cover_url) || '/images/gallery/pixernbath_13.png', isVideo: false };
+}
+function formatChapterDate(dateStr) {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function formatStatCount(n) {
+  n = n || 0;
+  if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return String(n);
 }
 
 function renderChapterList() {
@@ -164,18 +216,36 @@ function renderChapterList() {
   }
   list.innerHTML = '';
   CHAPTERS.forEach(ch => {
-    const row = document.createElement('div');
-    row.className = 'chapter-row';
-    row.innerHTML = `
-      <a class="chapter-row-link" href="${STORY_BASE}/chapters?ch=${ch.id}">
-        <div class="cr-thumb"><img src="${chapterThumb(ch)}" alt="${escapeHtml(ch.title)} thumbnail" /></div>
-        <div class="cr-info"><span class="cr-title">${escapeHtml(ch.title)}</span></div>
-      </a>`;
-    row.querySelector('.chapter-row-link').addEventListener('click', (e) => {
+    const isPublished = ch.status === 'published';
+    const thumb = chapterThumb(ch);
+    // Everyone sees "Published - <date>" on real chapters; only the owner
+    // sees "Draft - <date created>" ones at all (server already keeps
+    // drafts out of CHAPTERS for anyone else).
+    const dateLabel = isPublished
+      ? `<span class="ch-card-status--published">Published</span> - <span class="ch-card-meta-date">${formatChapterDate(ch.updated_at || ch.created_at)}</span>`
+      : `<span class="ch-card-status--draft">Draft</span> - <span class="ch-card-meta-date">${formatChapterDate(ch.created_at)}</span>`;
+    const card = document.createElement('a');
+    card.className = 'ch-card';
+    card.href = `${STORY_BASE}/chapters?ch=${ch.id}`;
+    card.innerHTML = `
+      <div class="ch-card-thumb">
+        <img src="${thumb.src}" alt="${escapeHtml(ch.title)} thumbnail" />
+        ${thumb.isVideo ? '<span class="ch-card-thumb-play">▶</span>' : ''}
+      </div>
+      <div class="ch-card-info">
+        <p class="ch-card-title">${escapeHtml(ch.title || 'Untitled Chapter')}</p>
+        <p class="ch-card-meta">${dateLabel}</p>
+        <div class="ch-card-stats">
+          <span>👁 ${formatStatCount(ch.view_count)}</span>
+          <span>⭐ ${formatStatCount(ch.like_count)}</span>
+          <span>💬 ${formatStatCount(ch.comment_count)}</span>
+        </div>
+      </div>`;
+    card.addEventListener('click', (e) => {
       e.preventDefault();
       openChapterDetail(ch, true);
     });
-    list.appendChild(row);
+    list.appendChild(card);
   });
 }
 
@@ -208,7 +278,7 @@ function openChapterDetail(ch, pushHistory) {
   document.getElementById('chapter-detail-title').textContent = ch.title || 'Untitled Chapter';
   document.getElementById('chapter-detail-teaser').textContent = ch.teaser && ch.teaser.trim() ? ch.teaser : 'No description provided';
 
-  document.getElementById('chapter-detail-image').src = chapterThumb(ch);
+  document.getElementById('chapter-detail-image').src = chapterThumb(ch).src;
   document.getElementById('chapter-detail-image-wrap').style.display = 'block';
 
   const linksWrap = document.getElementById('chapter-detail-links');
