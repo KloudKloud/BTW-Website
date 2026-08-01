@@ -216,8 +216,11 @@
     }
     .ce-editor p { margin: 0 0 1.2em; }
     .ce-editor p:empty::before { content: '\00a0'; }
-    .ce-editor:empty::before {
-      content: 'Type your text'; color: #555; pointer-events: none;
+    /* Splash placeholder — shown once the cursor leaves an empty editor
+       (toggled via JS, not just :empty, since a cleared editor is usually
+       left with a stray `<p><br></p>` rather than truly no children). */
+    .ce-editor.ce-editor--empty::before {
+      content: 'Type text here'; color: #555; pointer-events: none;
     }
     .ce-img-block { position: relative; margin: 0 0 1.4em; border-radius: 10px; transition: opacity 0.15s, box-shadow 0.15s; }
     .ce-img-block img { display: block; max-width: 100%; border-radius: 10px; }
@@ -388,7 +391,12 @@ document.getElementById('ce-big-title-input').addEventListener('input', (e) => {
   document.getElementById('ce-title-display').textContent = e.target.value.trim() || 'Untitled Part';
   markDirty();
 });
-editor.addEventListener('input', () => { markDirty(); updateStatusLine(); });
+editor.addEventListener('input', () => { markDirty(); updateStatusLine(); editor.classList.remove('ce-editor--empty'); });
+function updateEditorEmptyPlaceholder() {
+  editor.classList.toggle('ce-editor--empty', editor.textContent.trim() === '');
+}
+editor.addEventListener('blur', updateEditorEmptyPlaceholder);
+editor.addEventListener('focus', () => editor.classList.remove('ce-editor--empty'));
 
 // ── Chapter cover — image or a YouTube link (mutually exclusive; picking
 // one clears the other), becomes the card thumbnail later. No toggle state:
@@ -969,6 +977,7 @@ window.addEventListener('beforeunload', (e) => {
   // empty <p> gives the contenteditable a real first line to click into
   // instead of an empty div with no cursor target.
   editor.innerHTML = chapter.body && chapter.body.trim() ? chapter.body : '<p><br></p>';
+  updateEditorEmptyPlaceholder();
   editor.querySelectorAll('.ce-img-block').forEach(wireImageBlock);
   editor.querySelectorAll('.ce-video-block').forEach(block => {
     wireVideoBlock(block);
