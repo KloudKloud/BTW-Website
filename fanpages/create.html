@@ -11,7 +11,15 @@
   <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&display=swap" />
   <style>
-    body { background: #0a0a0a; }
+    /* Root cause of "the background never shows", found for real this time:
+       style.css sets html{background:#000} + body{background:transparent}
+       specifically so a fixed z-index:-1 .page-bg layer can show through
+       underneath (documented there, and in club.html/social.html etc. which
+       already use it). An opaque body background here was silently painting
+       over that layer every time, regardless of what the layer itself
+       contained — no amount of fixing the image/filter could ever have
+       shown through it. */
+    body { background: transparent; }
 
     /* ── Fandom/Relationships/Tags typeahead — suggestions drop below the
        bubble-tag input as the author types, matching against the
@@ -43,19 +51,10 @@
     .cs-panel .wiki-tags-input { font-size: 1rem; min-width: 220px; padding: 0.4em 0; }
     .cs-panel .wiki-tag-bubble--editable { font-size: 0.92rem; padding: 0.5em 1em; }
 
-    /* Full-page blurred background — same filter/scale recipe as the
-       "generated cover" cards on search.html/library.html/index.html
-       (background-image + blur/saturate/brightness on an oversized div),
-       just stretched to the whole viewport instead of a card. That combo
-       is proven to actually render visibly; the previous attempt here
-       (an <img> dimmed further by a separate dark overlay div) rendered
-       too close to black to read as a photo at all. */
-    .cs-page-bg-wrap { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: #0d0d0d; }
-    .cs-page-bg-img {
-      position: absolute; inset: -15%; background-image: url(/images/gallery/pixiegarden_5.png);
-      background-size: cover; background-position: center;
-      filter: blur(12px) saturate(1.3) brightness(0.55);
-    }
+    /* Full-page blurred background — .page-bg/.page-bg-overlay are the real
+       shared classes from style.css (already loaded here), same ones
+       club.html/social.html/chapters.html etc. use. No page-specific CSS
+       needed for this part at all. */
 
     /* ── Sticky top bar — trumps the site's own nav entirely, same idea as
        .mod-edit-bar in the Story Editor. Fixed, always visible, glued to
@@ -169,8 +168,9 @@
 </head>
 <body>
 
-<div class="cs-page-bg-wrap">
-  <div class="cs-page-bg-img"></div>
+<div class="page-bg">
+  <img src="/images/gallery/pixiegarden_5.png" alt="" />
+  <div class="page-bg-overlay"></div>
 </div>
 
 <script src="/fanpages/fanpages-nav.js"></script>
