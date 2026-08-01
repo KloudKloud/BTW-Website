@@ -175,7 +175,6 @@
             <button class="fp-share-icon-btn" id="story-share-btn" type="button" title="Share this story">
               <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
             </button>
-            <button class="wiki-hero-btn wiki-hero-btn--edit" id="edit-profile-btn" style="display:none;" type="button">✎ Edit Story</button>
           </div>
 
           <div class="wiki-hero-stats-bar" id="wiki-hero-stats-bar">
@@ -183,13 +182,24 @@
             <span class="wiki-hero-stat-sm-divider"></span>
             <span class="wiki-hero-stat-sm" title="Likes"><span class="wiki-hero-stat-sm-icon">♥</span><span id="hero-stat-likes">0</span> <span class="wiki-hero-stat-sm-label">Likes</span></span>
             <span class="wiki-hero-stat-sm-divider"></span>
-            <span class="wiki-hero-stat-sm" title="Parts"><span class="wiki-hero-stat-sm-icon">📚</span><span id="hero-stat-chapters">0</span> <span class="wiki-hero-stat-sm-label">Parts</span></span>
+            <span class="wiki-hero-stat-sm" title="Comments"><span class="wiki-hero-stat-sm-icon">💬</span><span id="hero-stat-comments">0</span> <span class="wiki-hero-stat-sm-label">Comments</span></span>
           </div>
         </div>
       </div>
 
+      <!-- Published is visible to everyone; Drafts + the publish nudge are
+           owner-only (renderPartsStatus gates that). -->
+      <div class="wiki-parts-status" id="wiki-parts-status" style="display:none;">
+        <span class="wiki-parts-published" id="wiki-parts-published" style="display:none;"></span>
+        <span class="wiki-parts-draft" id="wiki-parts-draft" style="display:none;"></span>
+        <span class="wiki-parts-hint" id="wiki-parts-hint" style="display:none;">Publish a chapter for others to find your story!</span>
+      </div>
+
       <section class="wiki-section">
-        <h2 class="wiki-section-title" id="description-heading">Story Description</h2>
+        <div class="wiki-section-title-row">
+          <h2 class="wiki-section-title" id="description-heading">Story Description</h2>
+          <button class="wiki-hero-btn wiki-hero-btn--edit" id="edit-profile-btn" style="display:none;" type="button">✎ Edit Story</button>
+        </div>
         <div class="wiki-rule"></div>
         <div class="mod-editable-block" id="about-row">
           <div class="mod-field-label-row">
@@ -1161,10 +1171,34 @@ function formatCount(n) {
   return (n / 1000000).toFixed(n % 1000000 >= 100000 ? 1 : 0).replace(/\.0$/, '') + 'M';
 }
 
-function renderHeroStats(s, chapters) {
+function renderHeroStats(s) {
   document.getElementById('hero-stat-views').textContent = formatCount(s.view_count);
   document.getElementById('hero-stat-likes').textContent = formatCount(s.like_count);
-  document.getElementById('hero-stat-chapters').textContent = formatCount(chapters ? chapters.length : 0);
+  document.getElementById('hero-stat-comments').textContent = formatCount(s.comment_count);
+}
+
+// "X Published Parts" is visible to every visitor the moment the story has
+// one — "X Drafts" and the nudge to publish are owner-only, same privacy
+// rule as the draft banner above: a purely-drafted story stays completely
+// private, nothing about its drafts leaks to anyone but its author.
+function renderPartsStatus(s, chapters) {
+  const wrap = document.getElementById('wiki-parts-status');
+  const publishedEl = document.getElementById('wiki-parts-published');
+  const draftEl = document.getElementById('wiki-parts-draft');
+  const hintEl = document.getElementById('wiki-parts-hint');
+  const list = chapters || [];
+  const publishedCount = list.filter(c => c.status === 'published' && c.body && c.body.trim()).length;
+  const draftCount = s.is_self ? list.filter(c => !(c.status === 'published' && c.body && c.body.trim())).length : 0;
+
+  publishedEl.style.display = publishedCount > 0 ? '' : 'none';
+  if (publishedCount > 0) publishedEl.textContent = `${publishedCount} Published Part${publishedCount === 1 ? '' : 's'}`;
+
+  draftEl.style.display = s.is_self && draftCount > 0 ? '' : 'none';
+  if (s.is_self && draftCount > 0) draftEl.textContent = `${draftCount} Draft${draftCount === 1 ? '' : 's'}`;
+
+  hintEl.style.display = s.is_self && draftCount > 0 ? '' : 'none';
+
+  wrap.style.display = (publishedCount > 0 || (s.is_self && draftCount > 0)) ? 'flex' : 'none';
 }
 
 // Owner-only: a story only counts as public once it has a published
@@ -1199,7 +1233,8 @@ function renderDraftBanner(s, chapters) {
   renderAuthorTeaserCard(s);
   renderBookmarkBtn(s);
   renderStartReadingBtn(siteData.chapters);
-  renderHeroStats(s, siteData.chapters);
+  renderHeroStats(s);
+  renderPartsStatus(s, siteData.chapters);
   renderDraftBanner(s, siteData.chapters);
 
   if (s.is_self) {

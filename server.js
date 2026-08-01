@@ -4196,7 +4196,7 @@ async function sendSiteLookup(query, params, req, res) {
   // + NSFW mode -> full access.
   const spicyLock = !loggedIn ? 'login' : (!viewerNsfwEnabled ? 'sfw_mode' : null);
 
-  const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds, bookmarkedGalleryIds, siteLikeCount] = await Promise.all([
+  const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds, bookmarkedGalleryIds, siteLikeCount, siteCommentCount] = await Promise.all([
     // Drafts only ever show to the story's own owner (previewing via "View
     // as Reader") — everyone else only ever sees published chapters.
     pool.query(
@@ -4233,6 +4233,12 @@ async function sendSiteLookup(query, params, req, res) {
       ? pool.query('SELECT gallery_id FROM moderator_gallery_bookmarks WHERE user_id = $1', [viewerId])
       : Promise.resolve({ rows: [] }),
     pool.query('SELECT count(*) FROM moderator_site_likes WHERE site_id = $1', [site.id]),
+    pool.query(
+      `SELECT COUNT(*)::int AS count FROM content_comments cc
+       JOIN moderator_chapters mc ON mc.id = cc.target_id AND cc.target_type = 'chapter'
+       WHERE mc.site_id = $1`,
+      [site.id]
+    ),
   ]);
 
   const likedSet = new Set(likedGalleryIds.rows.map(r => r.gallery_id));
@@ -4271,6 +4277,7 @@ async function sendSiteLookup(query, params, req, res) {
       is_bookmarked: isBookmarked.rows.length > 0,
       view_count: site.view_count || 0,
       like_count: Number(siteLikeCount.rows[0].count),
+      comment_count: Number(siteCommentCount.rows[0].count),
     },
     chapters,
     characters,
