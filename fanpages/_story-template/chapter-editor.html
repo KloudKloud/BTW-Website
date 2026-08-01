@@ -60,24 +60,6 @@
     .ce-btn--publish { background: linear-gradient(135deg, #3d6fa8, #7fa8d9); color: #0d1b2a; box-shadow: 0 0 14px rgba(127,168,217,0.4); }
     .ce-btn--publish:hover { box-shadow: 0 0 20px rgba(127,168,217,0.6); }
     .ce-btn--publish:disabled { opacity: 0.45; box-shadow: none; cursor: default; }
-    .ce-topbar-actions { position: relative; }
-    .ce-more-btn {
-      background: none; border: 1px solid rgba(255,255,255,0.2); color: #aaa;
-      width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-size: 1rem; line-height: 1;
-    }
-    .ce-more-btn:hover { border-color: rgba(255,255,255,0.4); color: #fff; }
-    .ce-more-menu {
-      position: absolute; top: calc(100% + 0.5rem); right: 0; z-index: 30; min-width: 190px;
-      background: #1c1c1e; border: 1px solid rgba(255,255,255,0.16); border-radius: 10px;
-      box-shadow: 0 10px 28px rgba(0,0,0,0.5); padding: 0.35rem;
-    }
-    .ce-more-menu button {
-      display: flex; align-items: center; gap: 0.5rem; width: 100%; text-align: left;
-      padding: 0.55rem 0.7rem; border-radius: 6px;
-      background: none; border: none; color: #ddd; font-family: 'Inter', sans-serif; font-size: 0.88rem; cursor: pointer;
-    }
-    .ce-more-menu button:hover { background: rgba(255,255,255,0.08); }
-
     /* ── Import .docx — preview the extracted text before committing it. ── */
     .ce-import-overlay {
       position: fixed; inset: 0; z-index: 210; display: flex; align-items: center; justify-content: center;
@@ -364,12 +346,9 @@
     <p class="ce-topbar-status" id="ce-topbar-status"></p>
   </div>
   <div class="ce-topbar-actions">
+    <button class="ce-btn ce-btn--cancel" id="ce-import-docx-btn" type="button">📄 Import</button>
     <button class="ce-btn ce-btn--publish" id="ce-publish-btn" type="button" disabled>Publish Changes</button>
     <button class="ce-btn ce-btn--cancel" id="ce-cancel-btn" type="button">Cancel</button>
-    <button class="ce-more-btn" id="ce-more-btn" type="button" title="More">⋯</button>
-    <div class="ce-more-menu" id="ce-more-menu" hidden>
-      <button type="button" id="ce-import-docx-btn">📄 Import .docx</button>
-    </div>
     <input type="file" id="ce-docx-file-input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none;" />
   </div>
 </div>
@@ -500,7 +479,10 @@ function updateStatusLine() {
 }
 
 document.getElementById('ce-back-btn').addEventListener('click', () => {
-  window.location.href = `${STORY_BASE}/edit#chapters`;
+  // Straight to the Creator Hub's Stories tab, not back into the Story
+  // Editor's Chapters list — that's where the story itself (with its
+  // live Published/Draft count) is actually visible.
+  window.location.href = '/fanpages/editor#stories';
 });
 document.getElementById('ce-cancel-btn').addEventListener('click', () => {
   if (dirty && !confirm('Discard unsaved changes?')) return;
@@ -778,19 +760,8 @@ editor.addEventListener('paste', (e) => {
 // sanitizePastedHtml() pipeline as pasted content so it's cleaned up the
 // same way, previewed, and only touches the editor once the author
 // confirms with Upload. ──────────────────────────────────────────────────
-const moreBtn = document.getElementById('ce-more-btn');
-const moreMenu = document.getElementById('ce-more-menu');
-moreBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  moreMenu.hidden = !moreMenu.hidden;
-});
-document.addEventListener('click', (e) => {
-  if (!moreMenu.hidden && !moreMenu.contains(e.target) && e.target !== moreBtn) moreMenu.hidden = true;
-});
-
 const docxFileInput = document.getElementById('ce-docx-file-input');
 document.getElementById('ce-import-docx-btn').addEventListener('click', () => {
-  moreMenu.hidden = true;
   docxFileInput.click();
 });
 
