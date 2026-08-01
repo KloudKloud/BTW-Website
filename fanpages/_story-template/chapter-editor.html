@@ -110,11 +110,6 @@
     /* Fills the box's full height and stays centered horizontally — no
        cropping (object-fit:contain), so nothing of the art gets cut off. */
     .ce-cover-preview img { height: 100%; width: auto; max-width: 100%; object-fit: contain; display: block; }
-    .ce-cover-remove-btn {
-      position: absolute; top: 0.75rem; right: 0.75rem; width: 26px; height: 26px; border-radius: 50%;
-      background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.2); color: #fff; cursor: pointer; font-size: 0.75rem;
-    }
-    .ce-cover-remove-btn:hover { background: rgba(0,0,0,0.9); }
     /* Pinned to the far bottom-right of the WHOLE box (not just the image),
        since the box always spans the full page width regardless of how
        narrow the image itself renders. */
@@ -301,14 +296,13 @@
     <div class="ce-cover-preview-inner" id="ce-cover-preview-inner">
       <img id="ce-cover-image-preview" alt="" hidden />
       <div class="ce-video-thumb-wrap" id="ce-cover-video-thumb-wrap" hidden></div>
-      <button type="button" class="ce-cover-remove-btn" id="ce-cover-remove-btn" title="Remove" hidden>✕</button>
     </div>
   </div>
   <button type="button" class="ce-cover-edit-btn" id="ce-cover-edit-btn" title="Edit cover" hidden>✏️</button>
   <div class="ce-cover-edit-menu" id="ce-cover-edit-menu" hidden>
     <button type="button" data-action="replace">Replace Image</button>
     <button type="button" data-action="remove">Remove Image</button>
-    <button type="button" data-action="video">Add YouTube Video</button>
+    <button type="button" data-action="other">Add YouTube Video</button>
   </div>
 </div>
 
@@ -450,6 +444,20 @@ function wireVideoThumb(wrap, videoId) {
     })
     .catch(() => {});
 }
+function updateCoverEditMenuLabels() {
+  const replaceBtn = coverEditMenu.querySelector('[data-action="replace"]');
+  const removeBtn = coverEditMenu.querySelector('[data-action="remove"]');
+  const otherBtn = coverEditMenu.querySelector('[data-action="other"]');
+  if (coverImageUrl) {
+    replaceBtn.textContent = 'Replace Image';
+    removeBtn.textContent = 'Remove Image';
+    otherBtn.textContent = 'Add YouTube Video';
+  } else {
+    replaceBtn.textContent = 'Replace Video';
+    removeBtn.textContent = 'Remove Video';
+    otherBtn.textContent = 'Add Image';
+  }
+}
 function showCoverPreview() {
   document.getElementById('ce-cover-buttons').hidden = true;
   document.getElementById('ce-cover-video-entry-wrap').hidden = true;
@@ -458,17 +466,15 @@ function showCoverPreview() {
   coverBox.classList.add('ce-cover-box--has-preview');
   const img = document.getElementById('ce-cover-image-preview');
   const vidWrap = document.getElementById('ce-cover-video-thumb-wrap');
-  const removeBtn = document.getElementById('ce-cover-remove-btn');
-  const editBtn = document.getElementById('ce-cover-edit-btn');
+  // Both image and video covers get the same pencil menu, bottom-right of
+  // the box, with labels swapped to match whichever type is active.
+  document.getElementById('ce-cover-edit-btn').hidden = false;
+  updateCoverEditMenuLabels();
   if (coverImageUrl) {
-    // Image cover gets the pencil menu (Replace/Remove/Add Video); a video
-    // cover keeps the plain ✕ — it never had a "menu" ask for it.
     img.src = coverImageUrl; img.hidden = false; vidWrap.hidden = true;
-    removeBtn.hidden = true; editBtn.hidden = false;
   } else {
     img.hidden = true; vidWrap.hidden = false;
     wireVideoThumb(vidWrap, extractYouTubeId(coverVideoUrl));
-    removeBtn.hidden = false; editBtn.hidden = true;
   }
 }
 function refreshCoverUi() {
@@ -507,12 +513,6 @@ document.getElementById('ce-cover-video-add').addEventListener('click', () => {
   markDirty();
   refreshCoverUi();
 });
-document.getElementById('ce-cover-remove-btn').addEventListener('click', () => {
-  coverImageUrl = '';
-  coverVideoUrl = '';
-  markDirty();
-  refreshCoverUi();
-});
 const coverEditMenu = document.getElementById('ce-cover-edit-menu');
 document.getElementById('ce-cover-edit-btn').addEventListener('click', (e) => {
   e.stopPropagation();
@@ -523,21 +523,33 @@ document.addEventListener('click', (e) => {
 });
 coverEditMenu.querySelector('[data-action="replace"]').addEventListener('click', () => {
   coverEditMenu.hidden = true;
-  document.getElementById('ce-image-file-input').dataset.target = 'cover';
-  document.getElementById('ce-image-file-input').click();
+  if (coverImageUrl) {
+    // Replace Image — same type, pick a new file.
+    document.getElementById('ce-image-file-input').dataset.target = 'cover';
+    document.getElementById('ce-image-file-input').click();
+  } else {
+    // Replace Video — same type, paste a new link.
+    showCoverVideoEntry();
+  }
 });
 coverEditMenu.querySelector('[data-action="remove"]').addEventListener('click', () => {
   coverEditMenu.hidden = true;
   coverImageUrl = '';
+  coverVideoUrl = '';
   markDirty();
   refreshCoverUi();
 });
-coverEditMenu.querySelector('[data-action="video"]').addEventListener('click', () => {
+coverEditMenu.querySelector('[data-action="other"]').addEventListener('click', () => {
   coverEditMenu.hidden = true;
-  // Cancel from here just re-shows whatever cover already existed
-  // (the image, untouched) — showCoverVideoEntry/refreshCoverUi already
-  // work off coverImageUrl/coverVideoUrl, which haven't changed yet.
-  showCoverVideoEntry();
+  if (coverImageUrl) {
+    // Add YouTube Video — switch away from the image to a video.
+    showCoverVideoEntry();
+    return;
+  }
+  // Add Image — switch away from the video; picking a file replaces
+  // coverVideoUrl with coverImageUrl via uploadCoverImageFile() below.
+  document.getElementById('ce-image-file-input').dataset.target = 'cover';
+  document.getElementById('ce-image-file-input').click();
 });
 const coverBox = document.getElementById('ce-cover-box');
 coverBox.addEventListener('dragover', (e) => {
