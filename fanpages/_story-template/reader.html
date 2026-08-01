@@ -9,14 +9,26 @@
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <style>
+    /* ── Custom reader background — same fixed+blurred recipe as the story
+       page's own custom theme background, a per-reader account setting
+       instead of a per-story one, so it follows this reader into every
+       story instead of living on any one story's record. ── */
+    .rd-bg-img {
+      position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover;
+      filter: blur(28px) brightness(0.9); z-index: -2; display: none;
+    }
+    .rd-bg-overlay { position: fixed; inset: 0; background: rgba(10,10,10,0.72); z-index: -1; display: none; }
+
     /* ── Reader top bar — bleeds into the site's own dark top nav (same
        #141414), a second row carrying the book's own identity + actions. ── */
     .rd-topbar { background: #141414; border-bottom: 1px solid rgba(255,255,255,0.08); }
     .rd-topbar-inner {
-      max-width: 1500px; margin: 0 auto; padding: 0.75rem 2rem;
+      padding: 0.75rem 2rem;
       display: flex; align-items: center; justify-content: space-between; gap: 1.5rem;
       position: relative;
     }
+    .rd-topbar-left { display: flex; align-items: center; gap: 1.25rem; min-width: 0; }
+    .rd-topbar-divider { width: 1px; height: 30px; background: rgba(255,255,255,0.14); flex-shrink: 0; }
     .rd-topbar-book { display: flex; align-items: center; gap: 0.85rem; text-decoration: none; color: inherit; min-width: 0; }
     .rd-topbar-cover {
       width: 42px; height: 62px; object-fit: cover; border-radius: 4px; flex-shrink: 0;
@@ -83,14 +95,12 @@
     .rd-theme-swatch {
       width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
       display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; color: #fff;
-      box-sizing: border-box; border: 2px solid transparent;
+      box-sizing: border-box; border: 2px solid transparent; overflow: hidden; padding: 0;
     }
     .rd-theme-swatch--dark { background: #0a0a0a; border-color: #333; }
-    .rd-theme-swatch--custom { background: linear-gradient(135deg, #6b3fa0, #c2547a); }
+    .rd-theme-swatch--custom { background: #1a1a1a; border-style: dashed; border-color: #555; }
+    .rd-theme-swatch--custom img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .rd-theme-swatch.active { border-color: #7fa8d9; box-shadow: 0 0 8px rgba(127,168,217,0.6); }
-    .rd-theme-custom-pickers { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.6rem; }
-    .rd-theme-custom-pickers label { display: flex; align-items: center; justify-content: space-between; font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #999; }
-    .rd-theme-custom-pickers input[type="color"] { width: 28px; height: 22px; border: none; background: none; cursor: pointer; padding: 0; }
     .rd-font-row { display: flex; gap: 0.5rem; }
     .rd-font-btn {
       width: 34px; height: 30px; border-radius: 8px; cursor: pointer;
@@ -109,9 +119,9 @@
        right-hand recommendations rail. ── */
     .rd-layout {
       max-width: 1500px; margin: 0 auto; padding: 3rem 2rem 6rem;
-      display: grid; grid-template-columns: 1fr 300px; gap: 3rem; align-items: start;
+      display: grid; grid-template-columns: 1fr 240px; gap: 2.5rem; align-items: start;
     }
-    .rd-article { max-width: 900px; margin: 0 auto; width: 100%; }
+    .rd-article { max-width: 980px; margin: 0 auto; width: 100%; }
 
     .rd-meta-card {
       background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px;
@@ -132,8 +142,9 @@
     .rd-chapter-image-wrap { margin-bottom: 2rem; border-radius: 14px; overflow: hidden; }
     .rd-chapter-image-wrap img, .rd-chapter-image-wrap iframe { width: 100%; display: block; border: none; aspect-ratio: 16/9; object-fit: cover; }
     .rd-chapter-title {
-      font-family: 'Cinzel', serif; font-size: 2.2rem; color: #f0f0f0; text-align: center; margin: 0 0 2.5rem;
+      font-family: 'Cinzel', serif; font-size: 2.2rem; color: #f0f0f0; text-align: center; margin: 0 0 1.25rem;
     }
+    .rd-title-rule { width: 120px; height: 3px; background: var(--rose, #d97a72); margin: 0 auto 2.5rem; border-radius: 2px; }
     .rd-chapter-body {
       font-family: 'Lora', 'Georgia', serif; color: #e8e8e8; line-height: 1.9;
       font-size: calc(1.15rem * var(--rd-font-scale, 1));
@@ -151,6 +162,7 @@
     .rd-chapter-nav a.rd-nav-next { text-align: right; }
     .rd-chapter-nav-label { display: block; font-size: 0.72rem; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.2rem; }
 
+    .rd-recs { position: sticky; top: 92px; max-height: calc(100vh - 112px); overflow-y: auto; }
     .rd-recs-title { font-family: 'Cinzel', serif; font-size: 1.05rem; color: #ccc; margin: 0 0 1rem; text-transform: uppercase; letter-spacing: 0.03em; }
     .rd-recs-list { display: flex; flex-direction: column; gap: 1rem; }
     .rd-rec-card { display: flex; gap: 0.75rem; text-decoration: none; color: inherit; }
@@ -159,6 +171,92 @@
     .rd-rec-title { font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 700; color: #e8e8e8; margin: 0 0 0.2rem; line-height: 1.3; }
     .rd-rec-card:hover .rd-rec-title { color: #7fa8d9; }
     .rd-rec-teaser { font-size: 0.78rem; color: #999; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+    /* ── Inline paragraph comments ── */
+    .rd-para { position: relative; }
+    .rd-para-comment-btn {
+      position: absolute; right: -2.4rem; bottom: 0.1rem; z-index: 5;
+      width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: #ccc; cursor: pointer;
+      opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
+      font-size: 0.85rem; gap: 0.25rem; padding: 0;
+    }
+    .rd-para:hover .rd-para-comment-btn { opacity: 1; }
+    .rd-para-comment-btn:hover { background: rgba(127,168,217,0.2); border-color: #7fa8d9; color: #a8c6e8; }
+    /* Once a paragraph has comments, its icon stays visible permanently and
+       carries the running count — not just a hover affordance anymore. */
+    .rd-para-comment-btn.has-comments {
+      opacity: 1; width: auto; padding: 0 0.55rem 0 0.45rem; border-radius: 14px;
+      background: rgba(127,168,217,0.16); border-color: rgba(127,168,217,0.5); color: #a8c6e8;
+      font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 700; display: inline-flex;
+    }
+    .rd-para-comment-btn.active { background: #7fa8d9; border-color: #7fa8d9; color: #0d0d0d; opacity: 1; }
+    @media (max-width: 1300px) { .rd-para-comment-btn { right: -0.5rem; transform: translateX(100%); } }
+
+    .rd-cp-back {
+      background: none; border: none; color: #999; cursor: pointer; font-family: 'Inter', sans-serif;
+      font-size: 0.82rem; font-weight: 700; padding: 0; margin-bottom: 0.75rem;
+    }
+    .rd-cp-back:hover { color: #7fa8d9; }
+    .rd-cp-context {
+      margin: 0 0 1.25rem; padding: 0.75rem 0.9rem; border-left: 3px solid #7fa8d9;
+      background: rgba(127,168,217,0.08); border-radius: 0 8px 8px 0;
+      font-family: 'Lora', 'Georgia', serif; font-size: 0.85rem; color: #ccc; line-height: 1.6;
+      max-height: 130px; overflow-y: auto;
+    }
+    .rd-cp-compose { margin-bottom: 1.5rem; }
+    /* Same bubbly Baloo 2 treatment as the Story Editor's own synopsis/author
+       notes fields, per request — reads nicer than a plain system font. */
+    .rd-cp-textarea {
+      width: 100%; box-sizing: border-box; background: #17171a; border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 12px; color: #f0f0f0; font-family: 'Baloo 2', 'Inter', sans-serif; font-weight: 600; font-size: 0.92rem;
+      padding: 0.75rem 0.9rem; resize: vertical; min-height: 70px; transition: border-color 0.15s;
+    }
+    .rd-cp-textarea:focus { outline: none; border-color: #7fa8d9; }
+    .rd-cp-compose-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 0.5rem; }
+    .rd-cp-send-btn {
+      background: #f0c060; color: #0d0d0d; border: none; border-radius: 16px; padding: 0.45rem 1.1rem;
+      font-weight: 700; font-size: 0.82rem; cursor: pointer; font-family: 'Inter', sans-serif;
+    }
+    .rd-cp-send-btn:hover { background: #e0b050; }
+    .rd-cp-send-btn:disabled { opacity: 0.6; cursor: default; }
+    .rd-cp-gif-preview-wrap { position: relative; display: inline-block; margin-top: 0.6rem; }
+    .rd-cp-gif-preview-wrap img { max-width: 140px; border-radius: 8px; display: block; }
+    .rd-cp-gif-remove {
+      position: absolute; top: -8px; right: -8px; width: 22px; height: 22px; border-radius: 50%;
+      background: #0d0d0d; border: 1px solid rgba(255,255,255,0.3); color: #fff; cursor: pointer; font-size: 0.7rem;
+    }
+
+    /* GIF picker — same recipe as the Inbox DM composer's own GIF button,
+       duplicated here rather than shared since it's scoped to that page's
+       own <style> block. */
+    .dm-gif-btn {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px;
+      color: #999; font-family: 'Inter', sans-serif; font-size: 0.68rem; font-weight: 700;
+      letter-spacing: 0.05em; padding: 0.32rem 0.6rem; cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    .dm-gif-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .dm-gif-picker {
+      position: fixed; z-index: 400; width: 260px;
+      background: rgba(15,15,20,0.97); border: 1px solid rgba(255,255,255,0.13); border-radius: 14px;
+      box-shadow: 0 14px 48px rgba(0,0,0,0.75); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    .dm-gif-picker-top { padding: 0.6rem 0.7rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.07); }
+    .dm-gif-search {
+      width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.11);
+      border-radius: 8px; color: #f0f0f0; font-family: inherit; font-size: 0.85rem; padding: 0.4rem 0.7rem; outline: none;
+    }
+    .dm-gif-search:focus { border-color: #7fa8d9; }
+    .dm-gif-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #888; padding: 0.4rem 0.7rem 0.2rem; }
+    .dm-gif-results { display: grid; grid-template-columns: repeat(3, 1fr); align-content: start; gap: 3px; max-height: 264px; overflow-y: auto; padding: 3px; }
+    .dm-gif-item { width: 100%; aspect-ratio: 1; object-fit: contain; background: rgba(255,255,255,0.04); cursor: pointer; border-radius: 4px; display: block; }
+    .dm-gif-item:hover { opacity: 0.8; }
+    .dm-gif-loading { grid-column: 1 / -1; text-align: center; color: #777; font-size: 0.78rem; padding: 1.5rem; }
+
+    .rd-cp-comment-gif { max-width: 180px; border-radius: 8px; display: block; margin-top: 0.4rem; }
+    .rd-cp-reply-form { display: none; margin-top: 0.6rem; }
+    .rd-cp-reply-form.open { display: block; }
 
     @media (max-width: 1100px) {
       .rd-side-panel { display: none; }
@@ -169,25 +267,33 @@
 </head>
 <body class="mod-theme" id="reader-body">
 
+<img class="rd-bg-img" id="rd-bg-img" alt="" />
+<div class="rd-bg-overlay" id="rd-bg-overlay"></div>
+
 <div id="fanpages-topbar-root"></div>
 <script src="/fanpages/fanpages-nav.js"></script>
 
 <div class="rd-topbar">
   <div class="rd-topbar-inner">
-    <a class="rd-topbar-book" href="#" id="rd-story-link">
-      <img class="rd-topbar-cover" id="rd-story-cover" alt="" />
-      <span class="rd-topbar-book-text">
-        <span class="rd-topbar-title" id="rd-story-title">Loading…</span>
-        <button class="rd-toc-toggle" id="rd-toc-toggle" type="button">by <span id="rd-author-name"></span> ▾</button>
-      </span>
-    </a>
+    <div class="rd-topbar-left">
+      <a class="rd-topbar-book" href="#" id="rd-story-link">
+        <img class="rd-topbar-cover" id="rd-story-cover" alt="" />
+        <span class="rd-topbar-book-text">
+          <span class="rd-topbar-title" id="rd-story-title">Loading…</span>
+          <button class="rd-toc-toggle" id="rd-toc-toggle" type="button">by <span id="rd-author-name"></span> ▾</button>
+        </span>
+      </a>
+      <span class="rd-topbar-divider"></span>
+    </div>
     <div class="rd-toc-dropdown" id="rd-toc-dropdown" hidden></div>
 
     <div class="rd-topbar-actions">
       <a class="rd-edit-btn" id="rd-edit-btn" href="#" style="display:none;">✎ Edit Chapter</a>
+      <span class="rd-topbar-divider" id="rd-edit-divider" style="display:none;"></span>
       <button class="rd-icon-btn" id="rd-bookmark-btn" type="button" title="Bookmark">
         <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
       </button>
+      <span class="rd-topbar-divider"></span>
       <button class="rd-icon-btn rd-like-btn" id="rd-like-btn" type="button" title="Like">
         <svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.7-10.2-9.3C.4 9 1.2 5.6 4.2 4.2 6.6 3 9.2 3.8 12 7c2.8-3.2 5.4-4 7.8-2.8 3 1.4 3.8 4.8 2.4 7.5C19.5 16.3 12 21 12 21z"/></svg>
         <span id="rd-like-count">0</span>
@@ -201,11 +307,10 @@
     <p class="rd-side-label">Theme</p>
     <div class="rd-theme-row">
       <button class="rd-theme-swatch rd-theme-swatch--dark active" id="rd-theme-dark" type="button" title="Dark"></button>
-      <button class="rd-theme-swatch rd-theme-swatch--custom" id="rd-theme-custom" type="button" title="Custom">+</button>
-    </div>
-    <div class="rd-theme-custom-pickers" id="rd-theme-custom-pickers" hidden>
-      <label>Background <input type="color" id="rd-bg-color" value="#141414" /></label>
-      <label>Text <input type="color" id="rd-text-color" value="#e8e8e8" /></label>
+      <button class="rd-theme-swatch rd-theme-swatch--custom" id="rd-theme-custom" type="button" title="Upload a custom background">
+        <img id="rd-theme-custom-preview" alt="" style="display:none;" />
+        <span id="rd-theme-custom-plus">+</span>
+      </button>
     </div>
   </div>
   <div>
@@ -228,15 +333,38 @@
     <div class="rd-chapter-image-wrap" id="rd-chapter-image-wrap" style="display:none;"></div>
 
     <h1 class="rd-chapter-title" id="rd-chapter-title"></h1>
+    <div class="rd-title-rule"></div>
     <div class="rd-chapter-body" id="rd-chapter-body"></div>
 
     <div class="rd-chapter-nav" id="rd-chapter-nav"></div>
   </article>
 
   <aside class="rd-recs" id="rd-recs">
-    <p class="rd-recs-title">You Might Also Like</p>
-    <div class="rd-recs-list" id="rd-recs-list">
-      <p style="color:#888; font-size:0.85rem;">Loading…</p>
+    <div id="rd-recs-default">
+      <p class="rd-recs-title">You Might Also Like</p>
+      <div class="rd-recs-list" id="rd-recs-list">
+        <p style="color:#888; font-size:0.85rem;">Loading…</p>
+      </div>
+    </div>
+
+    <div id="rd-comments-panel" hidden>
+      <button class="rd-cp-back" id="rd-cp-back" type="button">← Back</button>
+      <p class="rd-recs-title">Comments</p>
+      <blockquote class="rd-cp-context" id="rd-cp-context"></blockquote>
+
+      <div class="rd-cp-compose">
+        <textarea class="rd-cp-textarea" id="rd-cp-input" placeholder="Add a comment…" maxlength="2000"></textarea>
+        <div id="rd-cp-gif-preview-wrap" class="rd-cp-gif-preview-wrap" hidden>
+          <img id="rd-cp-gif-preview" alt="Selected GIF" />
+          <button type="button" id="rd-cp-gif-remove" class="rd-cp-gif-remove">✕</button>
+        </div>
+        <div class="rd-cp-compose-actions">
+          <button type="button" class="dm-gif-btn" id="rd-cp-gif-btn">GIF</button>
+          <button type="button" class="rd-cp-send-btn" id="rd-cp-send">Post</button>
+        </div>
+      </div>
+
+      <div class="cc-list" id="rd-cp-list"></div>
     </div>
   </aside>
 </main>
@@ -273,65 +401,92 @@ function extractYouTubeId(url) {
   return m ? m[1] : null;
 }
 
-// ── Reader prefs (theme + text size) — a per-reader preference that
-// follows them across every story, not a per-story setting, so it lives in
-// localStorage rather than on the site record. ─────────────────────────────
-const READER_PREFS_KEY = 'btw_reader_prefs';
-function loadReaderPrefs() {
-  try {
-    return { theme: 'dark', bg: '#141414', text: '#e8e8e8', fontScale: 1, ...JSON.parse(localStorage.getItem(READER_PREFS_KEY) || '{}') };
-  } catch { return { theme: 'dark', bg: '#141414', text: '#e8e8e8', fontScale: 1 }; }
-}
-function saveReaderPrefs(prefs) { localStorage.setItem(READER_PREFS_KEY, JSON.stringify(prefs)); }
+// ── Reader theme (dark, or a custom uploaded+blurred background) — an
+// account-level setting (like Notifications' own page-background picker),
+// so it follows this reader into every story instead of living on any one
+// story's record. Text size stays a lighter localStorage-only preference. ──
+const FONT_SCALE_KEY = 'btw_reader_font_scale';
+let readerFontScale = parseFloat(localStorage.getItem(FONT_SCALE_KEY)) || 1;
+let readerTheme = 'dark';
+let readerThemeBgUrl = '';
 
-let readerPrefs = loadReaderPrefs();
-
-function applyReaderPrefs() {
-  const body = document.getElementById('reader-body');
-  if (readerPrefs.theme === 'custom') {
-    body.style.background = readerPrefs.bg;
-    body.style.color = readerPrefs.text;
+function applyReaderTheme() {
+  const bgImg = document.getElementById('rd-bg-img');
+  const bgOverlay = document.getElementById('rd-bg-overlay');
+  if (readerTheme === 'custom' && readerThemeBgUrl) {
+    bgImg.src = readerThemeBgUrl;
+    bgImg.style.display = 'block';
+    bgOverlay.style.display = 'block';
   } else {
-    body.style.background = '';
-    body.style.color = '';
+    bgImg.style.display = 'none';
+    bgOverlay.style.display = 'none';
   }
-  document.getElementById('rd-theme-dark').classList.toggle('active', readerPrefs.theme === 'dark');
-  document.getElementById('rd-theme-custom').classList.toggle('active', readerPrefs.theme === 'custom');
-  document.getElementById('rd-theme-custom-pickers').hidden = readerPrefs.theme !== 'custom';
-  document.getElementById('rd-bg-color').value = readerPrefs.bg;
-  document.getElementById('rd-text-color').value = readerPrefs.text;
-  document.documentElement.style.setProperty('--rd-font-scale', readerPrefs.fontScale);
+  document.getElementById('rd-theme-dark').classList.toggle('active', readerTheme !== 'custom');
+  document.getElementById('rd-theme-custom').classList.toggle('active', readerTheme === 'custom');
+  const preview = document.getElementById('rd-theme-custom-preview');
+  const plus = document.getElementById('rd-theme-custom-plus');
+  if (readerThemeBgUrl) {
+    preview.src = readerThemeBgUrl;
+    preview.style.display = 'block';
+    plus.style.display = 'none';
+  } else {
+    preview.style.display = 'none';
+    plus.style.display = '';
+  }
+}
+function applyFontScale() {
+  document.documentElement.style.setProperty('--rd-font-scale', readerFontScale);
 }
 
-document.getElementById('rd-theme-dark').addEventListener('click', () => {
-  readerPrefs.theme = 'dark';
-  saveReaderPrefs(readerPrefs);
-  applyReaderPrefs();
-});
+async function setReaderTheme(theme) {
+  readerTheme = theme;
+  applyReaderTheme();
+  if (!authToken) return;
+  await fetch('/api/account/reader-theme', {
+    method: 'PUT',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ theme }),
+  }).catch(() => {});
+}
+
+document.getElementById('rd-theme-dark').addEventListener('click', () => setReaderTheme('dark'));
 document.getElementById('rd-theme-custom').addEventListener('click', () => {
-  readerPrefs.theme = 'custom';
-  saveReaderPrefs(readerPrefs);
-  applyReaderPrefs();
+  if (!authToken) { window.location.href = '/login.html'; return; }
+  document.getElementById('rd-theme-bg-file-input').click();
 });
-document.getElementById('rd-bg-color').addEventListener('input', (e) => {
-  readerPrefs.bg = e.target.value;
-  saveReaderPrefs(readerPrefs);
-  applyReaderPrefs();
+
+const readerThemeBgFileInput = document.createElement('input');
+readerThemeBgFileInput.type = 'file';
+readerThemeBgFileInput.accept = 'image/png,image/jpeg,image/webp,image/gif';
+readerThemeBgFileInput.id = 'rd-theme-bg-file-input';
+readerThemeBgFileInput.hidden = true;
+document.body.appendChild(readerThemeBgFileInput);
+readerThemeBgFileInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  readerTheme = 'custom';
+  readerThemeBgUrl = URL.createObjectURL(file); // instant preview
+  applyReaderTheme();
+  const fd = new FormData();
+  fd.append('image', file);
+  const res = await fetch('/api/account/reader-theme-bg', { method: 'PUT', headers: authHeaders(), body: fd });
+  if (res.ok) {
+    const data = await res.json();
+    readerThemeBgUrl = data.theme_bg_url;
+    applyReaderTheme();
+  }
+  readerThemeBgFileInput.value = '';
 });
-document.getElementById('rd-text-color').addEventListener('input', (e) => {
-  readerPrefs.text = e.target.value;
-  saveReaderPrefs(readerPrefs);
-  applyReaderPrefs();
-});
+
 document.getElementById('rd-font-minus').addEventListener('click', () => {
-  readerPrefs.fontScale = Math.max(0.75, +(readerPrefs.fontScale - 0.1).toFixed(2));
-  saveReaderPrefs(readerPrefs);
-  applyReaderPrefs();
+  readerFontScale = Math.max(0.75, +(readerFontScale - 0.1).toFixed(2));
+  localStorage.setItem(FONT_SCALE_KEY, readerFontScale);
+  applyFontScale();
 });
 document.getElementById('rd-font-plus').addEventListener('click', () => {
-  readerPrefs.fontScale = Math.min(1.6, +(readerPrefs.fontScale + 0.1).toFixed(2));
-  saveReaderPrefs(readerPrefs);
-  applyReaderPrefs();
+  readerFontScale = Math.min(1.6, +(readerFontScale + 0.1).toFixed(2));
+  localStorage.setItem(FONT_SCALE_KEY, readerFontScale);
+  applyFontScale();
 });
 
 // ── Table of contents dropdown ──────────────────────────────────────────
@@ -420,13 +575,18 @@ function renderChapter() {
   renderChapterNav();
   renderToc();
   renderLikeState();
+  setupParagraphComments();
+  closeCommentsPanel();
 
   const editBtn = document.getElementById('rd-edit-btn');
+  const editDivider = document.getElementById('rd-edit-divider');
   if (IS_SELF) {
     editBtn.style.display = '';
+    editDivider.style.display = '';
     editBtn.href = `${STORY_BASE}/chapter-editor?id=${CURRENT.id}`;
   } else {
     editBtn.style.display = 'none';
+    editDivider.style.display = 'none';
   }
 
   window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
@@ -489,8 +649,358 @@ async function renderRecs() {
   }
 }
 
+// ── Inline paragraph comments ───────────────────────────────────────────
+let activeParagraphIndex = null;
+let rootPendingGifUrl = null;
+const replyPendingGif = {}; // comment id -> selected gif url, for that comment's reply form
+
+function formatRelativeTime(dateStr) {
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `${weeks}w ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
+function paragraphCommentIcon() {
+  return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
+}
+function markCommentBtnCount(btn, count) {
+  if (!btn) return;
+  if (count > 0) {
+    btn.classList.add('has-comments');
+    btn.innerHTML = `${paragraphCommentIcon()}<span>${count}</span>`;
+  } else {
+    btn.classList.remove('has-comments');
+    btn.innerHTML = paragraphCommentIcon();
+  }
+}
+
+// Wraps every real paragraph in the rendered chapter body with a hoverable
+// container carrying a comment button, indexed in document order — that
+// index is what ties a comment to "the 4th paragraph" server-side.
+function setupParagraphComments() {
+  const bodyEl = document.getElementById('rd-chapter-body');
+  const paragraphs = Array.from(bodyEl.querySelectorAll('p')).filter(p => p.textContent.trim());
+  paragraphs.forEach((p, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'rd-para';
+    wrap.dataset.pIndex = i;
+    p.parentNode.insertBefore(wrap, p);
+    wrap.appendChild(p);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'rd-para-comment-btn';
+    btn.innerHTML = paragraphCommentIcon();
+    btn.title = 'Comment on this paragraph';
+    btn.addEventListener('click', () => openParagraphComments(i, wrap));
+    wrap.appendChild(btn);
+  });
+
+  if (!CURRENT) return;
+  fetch(`/api/content-comments/paragraph-counts?target_type=chapter_paragraph&target_id=${CURRENT.id}`)
+    .then(r => r.json())
+    .then(data => {
+      const counts = data.counts || {};
+      Object.keys(counts).forEach(idx => {
+        const wrap = bodyEl.querySelector(`.rd-para[data-p-index="${idx}"]`);
+        if (wrap) markCommentBtnCount(wrap.querySelector('.rd-para-comment-btn'), counts[idx]);
+      });
+    })
+    .catch(() => {});
+}
+
+function openParagraphComments(index, wrapEl) {
+  activeParagraphIndex = index;
+  document.querySelectorAll('.rd-para-comment-btn').forEach(b => b.classList.remove('active'));
+  wrapEl.querySelector('.rd-para-comment-btn').classList.add('active');
+
+  document.getElementById('rd-recs-default').hidden = true;
+  document.getElementById('rd-comments-panel').hidden = false;
+  document.getElementById('rd-cp-context').textContent = wrapEl.querySelector('p').textContent.trim();
+  document.getElementById('rd-cp-input').value = '';
+  rootPendingGifUrl = null;
+  clearGifPreview('root');
+  document.getElementById('rd-cp-list').innerHTML = '<p class="cc-empty">Loading…</p>';
+  loadParagraphThread();
+}
+
+function closeCommentsPanel() {
+  activeParagraphIndex = null;
+  document.querySelectorAll('.rd-para-comment-btn').forEach(b => b.classList.remove('active'));
+  const defaultPanel = document.getElementById('rd-recs-default');
+  const commentsPanel = document.getElementById('rd-comments-panel');
+  if (defaultPanel) defaultPanel.hidden = false;
+  if (commentsPanel) commentsPanel.hidden = true;
+}
+document.getElementById('rd-cp-back').addEventListener('click', closeCommentsPanel);
+
+async function loadParagraphThread() {
+  if (activeParagraphIndex == null || !CURRENT) return;
+  try {
+    const res = await fetch(`/api/content-comments?target_type=chapter_paragraph&target_id=${CURRENT.id}&paragraph_index=${activeParagraphIndex}`);
+    const data = await res.json();
+    renderCommentThread(data.comments || []);
+    const wrap = document.querySelector(`.rd-para[data-p-index="${activeParagraphIndex}"]`);
+    if (wrap) {
+      const btn = wrap.querySelector('.rd-para-comment-btn');
+      markCommentBtnCount(btn, data.count || 0);
+      btn.classList.add('active');
+    }
+  } catch {
+    document.getElementById('rd-cp-list').innerHTML = '<p class="cc-empty">Couldn\'t load comments.</p>';
+  }
+}
+
+function commentAvatarHtml(c) {
+  return c.avatar
+    ? `<img class="cc-avatar" src="${escapeHtml(c.avatar)}" alt="" />`
+    : `<span class="cc-avatar-fallback">${escapeHtml(((c.display_name || c.username || '?')[0] || '?').toUpperCase())}</span>`;
+}
+
+function renderCommentItem(c) {
+  const repliesHtml = (c.replies || []).map(r => renderCommentItem(r)).join('');
+  const rootId = c.parent_id || c.id;
+  return `
+    <div class="cc-item" data-comment-id="${c.id}">
+      ${commentAvatarHtml(c)}
+      <div class="cc-body-wrap">
+        <div class="cc-bubble">
+          <span class="cc-name"><a href="/fanpages/${escapeHtml(c.username)}">${escapeHtml(c.display_name || c.username)}</a></span>
+          <span class="cc-time">${formatRelativeTime(c.created_at)}</span>
+          ${c.reply_to_username ? `<div class="cc-mention">@${escapeHtml(c.reply_to_username)}</div>` : ''}
+          ${c.body ? `<p class="cc-text">${escapeHtml(c.body)}</p>` : ''}
+          ${c.gif_url ? `<img class="rd-cp-comment-gif" src="${escapeHtml(c.gif_url)}" alt="GIF" />` : ''}
+        </div>
+        <div class="cc-actions">
+          <button type="button" class="cc-action-btn rd-cp-reply-toggle" data-comment-id="${c.id}">Reply</button>
+        </div>
+        <div class="rd-cp-reply-form" id="rd-cp-reply-form-${c.id}">
+          <textarea class="rd-cp-textarea" placeholder="Reply to ${escapeHtml(c.display_name || c.username)}…" maxlength="2000"></textarea>
+          <div class="rd-cp-gif-preview-wrap" id="rd-cp-reply-gif-preview-${c.id}" data-target="${c.id}" hidden>
+            <img alt="Selected GIF" />
+            <button type="button" class="rd-cp-gif-remove">✕</button>
+          </div>
+          <div class="rd-cp-compose-actions">
+            <button type="button" class="dm-gif-btn rd-cp-reply-gif-btn" data-target-id="${c.id}">GIF</button>
+            <button type="button" class="rd-cp-send-btn rd-cp-reply-send" data-parent-id="${rootId}" data-target-id="${c.id}">Reply</button>
+          </div>
+        </div>
+        ${repliesHtml ? `<div class="cc-replies">${repliesHtml}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function renderCommentThread(roots) {
+  const list = document.getElementById('rd-cp-list');
+  list.innerHTML = roots.length ? roots.map(c => renderCommentItem(c)).join('') : '<p class="cc-empty">No comments yet — be the first!</p>';
+  wireCommentThreadEvents();
+}
+
+function showGifPreview(target, url) {
+  const wrap = target === 'root' ? document.getElementById('rd-cp-gif-preview-wrap') : document.getElementById(`rd-cp-reply-gif-preview-${target}`);
+  if (!wrap) return;
+  wrap.querySelector('img').src = url;
+  wrap.hidden = false;
+}
+function clearGifPreview(target) {
+  const wrap = target === 'root' ? document.getElementById('rd-cp-gif-preview-wrap') : document.getElementById(`rd-cp-reply-gif-preview-${target}`);
+  if (wrap) wrap.hidden = true;
+}
+
+function wireCommentThreadEvents() {
+  document.querySelectorAll('.rd-cp-reply-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = document.getElementById(`rd-cp-reply-form-${btn.dataset.commentId}`);
+      form.classList.toggle('open');
+      if (form.classList.contains('open')) form.querySelector('textarea').focus();
+    });
+  });
+  document.querySelectorAll('.rd-cp-reply-send').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!authToken) { window.location.href = '/login.html'; return; }
+      const targetId = btn.dataset.targetId;
+      const form = document.getElementById(`rd-cp-reply-form-${targetId}`);
+      const textarea = form.querySelector('textarea');
+      const text = textarea.value.trim();
+      const gifUrl = replyPendingGif[targetId] || null;
+      if (!text && !gifUrl) return;
+      await submitParagraphComment(btn.dataset.parentId, text, gifUrl);
+      delete replyPendingGif[targetId];
+    });
+  });
+  document.querySelectorAll('.rd-cp-reply-gif-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!authToken) { window.location.href = '/login.html'; return; }
+      openGifPicker(btn, (gif) => {
+        replyPendingGif[btn.dataset.targetId] = gif.url;
+        showGifPreview(btn.dataset.targetId, gif.url);
+      });
+    });
+  });
+  document.querySelectorAll('#rd-cp-list .rd-cp-gif-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const wrap = btn.closest('.rd-cp-gif-preview-wrap');
+      delete replyPendingGif[wrap.dataset.target];
+      wrap.hidden = true;
+    });
+  });
+}
+
+async function submitParagraphComment(parentId, text, gifUrl) {
+  if (!authToken) { window.location.href = '/login.html'; return; }
+  try {
+    await fetch('/api/content-comments', {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target_type: 'chapter_paragraph', target_id: CURRENT.id,
+        paragraph_index: activeParagraphIndex, parent_id: parentId, body: text, gif_url: gifUrl,
+      }),
+    });
+    loadParagraphThread();
+  } catch {}
+}
+
+document.getElementById('rd-cp-send').addEventListener('click', async () => {
+  if (!authToken) { window.location.href = '/login.html'; return; }
+  const textarea = document.getElementById('rd-cp-input');
+  const text = textarea.value.trim();
+  const gifUrl = rootPendingGifUrl;
+  if (!text && !gifUrl) return;
+  await submitParagraphComment(null, text, gifUrl);
+  textarea.value = '';
+  rootPendingGifUrl = null;
+  clearGifPreview('root');
+});
+document.getElementById('rd-cp-gif-btn').addEventListener('click', () => {
+  if (!authToken) { window.location.href = '/login.html'; return; }
+  openGifPicker(document.getElementById('rd-cp-gif-btn'), (gif) => {
+    rootPendingGifUrl = gif.url;
+    showGifPreview('root', gif.url);
+  });
+});
+document.getElementById('rd-cp-gif-remove').addEventListener('click', () => {
+  rootPendingGifUrl = null;
+  clearGifPreview('root');
+});
+
+// ── Shared floating GIF picker — one DOM instance retargeted per click,
+// same recipe as the Inbox DM composer's own picker. ─────────────────────
+const gifPickerWrap = document.createElement('div');
+gifPickerWrap.className = 'dm-gif-picker';
+gifPickerWrap.hidden = true;
+gifPickerWrap.innerHTML = `
+  <div class="dm-gif-picker-top"><input type="text" class="dm-gif-search" id="rd-gif-search" placeholder="🔍 Search GIFs…" /></div>
+  <div class="dm-gif-label" id="rd-gif-label">✨ Trending</div>
+  <div class="dm-gif-results" id="rd-gif-results"></div>
+`;
+document.body.appendChild(gifPickerWrap);
+const gifSearchInput = document.getElementById('rd-gif-search');
+const gifLabel = document.getElementById('rd-gif-label');
+const gifResults = document.getElementById('rd-gif-results');
+let gifTrendingCache = null;
+let gifSearchTimer = null;
+let gifSelectCallback = null;
+let gifActiveBtn = null;
+
+function populateGifResults(gifs) {
+  gifResults.innerHTML = '';
+  if (!gifs.length) { gifResults.innerHTML = '<div class="dm-gif-loading">No GIFs found.</div>'; return; }
+  gifs.forEach(gif => {
+    const img = document.createElement('img');
+    img.src = gif.preview; img.title = gif.title; img.className = 'dm-gif-item'; img.loading = 'lazy';
+    img.addEventListener('click', () => {
+      if (gifSelectCallback) gifSelectCallback(gif);
+      gifPickerWrap.hidden = true;
+      gifSearchInput.value = '';
+      gifLabel.textContent = '✨ Trending';
+    });
+    gifResults.appendChild(img);
+  });
+}
+async function loadTrendingGifs() {
+  if (gifTrendingCache) { populateGifResults(gifTrendingCache); return; }
+  gifResults.innerHTML = '<div class="dm-gif-loading">Loading…</div>';
+  try {
+    const res = await fetch('/api/giphy/trending');
+    const data = await res.json();
+    gifTrendingCache = data.gifs || [];
+    populateGifResults(gifTrendingCache);
+  } catch { gifResults.innerHTML = '<div class="dm-gif-loading">Could not load.</div>'; }
+}
+async function searchGifs(q) {
+  gifResults.innerHTML = '<div class="dm-gif-loading">Searching…</div>';
+  try {
+    const res = await fetch('/api/giphy/search?q=' + encodeURIComponent(q));
+    const data = await res.json();
+    populateGifResults(data.gifs || []);
+  } catch { gifResults.innerHTML = '<div class="dm-gif-loading">Failed to load.</div>'; }
+}
+gifSearchInput.addEventListener('input', () => {
+  clearTimeout(gifSearchTimer);
+  const q = gifSearchInput.value.trim();
+  if (!q) { gifLabel.textContent = '✨ Trending'; gifSearchTimer = setTimeout(loadTrendingGifs, 150); return; }
+  gifLabel.textContent = 'Results';
+  gifSearchTimer = setTimeout(() => searchGifs(q), 350);
+});
+function positionGifPicker(btn) {
+  const rect = btn.getBoundingClientRect();
+  const pw = 260;
+  const estHeight = 360;
+  let left = rect.left;
+  if (left + pw > window.innerWidth - 10) left = window.innerWidth - pw - 10;
+  left = Math.max(10, left);
+  gifPickerWrap.style.left = left + 'px';
+  const spaceBelow = window.innerHeight - rect.bottom;
+  if (spaceBelow < estHeight + 10 && rect.top > estHeight + 10) {
+    gifPickerWrap.style.top = 'auto';
+    gifPickerWrap.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+    gifPickerWrap.style.maxHeight = Math.min(estHeight, rect.top - 16) + 'px';
+  } else {
+    gifPickerWrap.style.bottom = 'auto';
+    gifPickerWrap.style.top = (rect.bottom + 6) + 'px';
+    gifPickerWrap.style.maxHeight = Math.min(estHeight, spaceBelow - 16) + 'px';
+  }
+}
+function openGifPicker(btn, onSelect) {
+  gifSelectCallback = onSelect;
+  if (gifActiveBtn === btn && !gifPickerWrap.hidden) { gifPickerWrap.hidden = true; gifActiveBtn = null; return; }
+  gifActiveBtn = btn;
+  positionGifPicker(btn);
+  gifPickerWrap.hidden = false;
+  loadTrendingGifs();
+  setTimeout(() => gifSearchInput.focus(), 50);
+}
+document.addEventListener('click', (e) => {
+  if (!gifPickerWrap.hidden && !gifPickerWrap.contains(e.target) && !(e.target.classList && e.target.classList.contains('dm-gif-btn'))) {
+    gifPickerWrap.hidden = true;
+  }
+});
+window.addEventListener('resize', () => { if (!gifPickerWrap.hidden && gifActiveBtn) positionGifPicker(gifActiveBtn); });
+
 (async () => {
-  applyReaderPrefs();
+  applyFontScale();
+  applyReaderTheme();
+  if (authToken) {
+    fetch('/api/auth/me', { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data || !data.user) return;
+        readerTheme = data.user.reader_theme || 'dark';
+        readerThemeBgUrl = data.user.reader_theme_bg_url || '';
+        applyReaderTheme();
+      })
+      .catch(() => {});
+  }
 
   const data = await ModeratorSite.load(SLUG);
   SITE = (data && data.site) || null;

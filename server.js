@@ -176,6 +176,8 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_theme_bg_url TEXT NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_theme TEXT NOT NULL DEFAULT 'default';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_theme_bg_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS reader_theme TEXT NOT NULL DEFAULT 'dark';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS reader_theme_bg_url TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('account profile fields migration:', e.message));
   // Add newsletter opt-in column if missing (default true for existing users)
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_newsletter BOOLEAN DEFAULT true`).catch(() => {});
@@ -473,6 +475,17 @@ async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_content_comments_target ON content_comments(target_type, target_id, created_at);
   `).catch(e => console.error('content_comments migration:', e.message));
+
+  // paragraph_index: which paragraph a comment is pinned to, for the
+  // Reader's inline paragraph comments (target_type = 'chapter_paragraph',
+  // target_id = chapter id). NULL for every other comment type. gif_url:
+  // an optional GIF attachment, same idea as the DM composer's GIF picker —
+  // a comment can be text, a GIF, or both.
+  await pool.query(`
+    ALTER TABLE content_comments ADD COLUMN IF NOT EXISTS paragraph_index INTEGER;
+    ALTER TABLE content_comments ADD COLUMN IF NOT EXISTS gif_url TEXT;
+    CREATE INDEX IF NOT EXISTS idx_content_comments_paragraph ON content_comments(target_type, target_id, paragraph_index);
+  `).catch(e => console.error('content_comments paragraph/gif migration:', e.message));
 
   // TOS Blobs — free-text reference storage for policy/rules copy (Terms of
   // Service, community guidelines, etc.), admin-only for now. Just a place
@@ -1529,7 +1542,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
     `SELECT id, username, display_name, avatar, avatar_position_x, avatar_position_y, email_hash,
-            notif_theme, notif_theme_bg_url, nsfw_enabled
+            notif_theme, notif_theme_bg_url, reader_theme, reader_theme_bg_url, nsfw_enabled
      FROM users WHERE id = $1`, [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
@@ -1541,6 +1554,7 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
     avatar_position_x: user.avatar_position_x, avatar_position_y: user.avatar_position_y,
     is_admin, is_moderator, nsfw_enabled: user.nsfw_enabled,
     notif_theme: user.notif_theme || 'default', notif_theme_bg_url: user.notif_theme_bg_url || '',
+    reader_theme: user.reader_theme || 'dark', reader_theme_bg_url: user.reader_theme_bg_url || '',
   } });
 });
 
@@ -4011,6 +4025,22 @@ app.put('/api/account/notif-theme-bg', requireAuth, uploadModImage.single('image
   res.json({ theme: 'custom', theme_bg_url: bgUrl });
 });
 
+// Same default/custom-background pattern, scoped to the Reader — a
+// per-reader preference (not per-story), so it follows the same person
+// into every story they read rather than living on the story record.
+app.put('/api/account/reader-theme', requireAuth, async (req, res) => {
+  const theme = req.body.theme === 'custom' ? 'custom' : 'dark';
+  await pool.query('UPDATE users SET reader_theme = $1 WHERE id = $2', [theme, req.user.id]);
+  res.json({ theme });
+});
+
+app.put('/api/account/reader-theme-bg', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const bgUrl = `/images/moderators/${req.file.filename}`;
+  await pool.query(`UPDATE users SET reader_theme_bg_url = $1, reader_theme = 'custom' WHERE id = $2`, [bgUrl, req.user.id]);
+  res.json({ theme: 'custom', theme_bg_url: bgUrl });
+});
+
 // PUT /api/account/banner — the profile page's own banner image, distinct
 // from a moderator's story banner. Reuses the moderator image upload dir
 // since it's already public under /images/moderators/.
@@ -5514,6 +5544,16 @@ async function commentTargetInfo(targetType, targetId) {
     if (!c) return null;
     return { title: c.name || 'Unnamed', link: `/fanpages/${c.owner_username}?char=${targetId}#characters` };
   }
+  if (targetType === 'chapter_paragraph') {
+    const { rows: [c] } = await pool.query(
+      `SELECT mc.title, ms.story_path
+       FROM moderator_chapters mc JOIN moderator_sites ms ON ms.id = mc.site_id
+       WHERE mc.id = $1`,
+      [targetId]
+    );
+    if (!c) return null;
+    return { title: c.title || 'Untitled Chapter', link: `/fanpages/${c.story_path}/reader?ch=${targetId}` };
+  }
   if (targetType === 'club_post') {
     const { rows: [p] } = await pool.query(
       `SELECT cp.title, c.slug
@@ -5544,19 +5584,25 @@ app.get('/api/content-comments', async (req, res) => {
   const targetType = String(req.query.target_type || '');
   const targetId = parseInt(req.query.target_id, 10);
   if (!targetType || !targetId) return res.json({ comments: [] });
+  // Reader paragraph comments pass paragraph_index to scope to one paragraph's
+  // thread; every other comment type leaves it off and gets everything for
+  // the target (paragraph_index is NULL for those rows anyway).
+  const hasParagraph = req.query.paragraph_index !== undefined && req.query.paragraph_index !== '';
+  const paragraphIndex = hasParagraph ? parseInt(req.query.paragraph_index, 10) : null;
   const { rows } = await pool.query(
-    `SELECT cc.id, cc.parent_id, cc.reply_to_username, cc.body, cc.created_at, cc.user_id,
+    `SELECT cc.id, cc.parent_id, cc.reply_to_username, cc.body, cc.gif_url, cc.paragraph_index, cc.created_at, cc.user_id,
             u.username, u.display_name, u.avatar
      FROM content_comments cc JOIN users u ON u.id = cc.user_id
-     WHERE cc.target_type = $1 AND cc.target_id = $2
+     WHERE cc.target_type = $1 AND cc.target_id = $2 ${hasParagraph ? 'AND cc.paragraph_index = $3' : ''}
      ORDER BY cc.created_at ASC`,
-    [targetType, targetId]
+    hasParagraph ? [targetType, targetId, paragraphIndex] : [targetType, targetId]
   );
   const byId = {};
   const roots = [];
   rows.forEach(r => {
     const c = {
-      id: r.id, body: r.body, created_at: r.created_at, reply_to_username: r.reply_to_username,
+      id: r.id, body: r.body, gif_url: r.gif_url, paragraph_index: r.paragraph_index,
+      created_at: r.created_at, reply_to_username: r.reply_to_username,
       user_id: r.user_id, username: r.username, display_name: r.display_name, avatar: r.avatar, replies: [],
     };
     byId[c.id] = c;
@@ -5566,13 +5612,34 @@ app.get('/api/content-comments', async (req, res) => {
   res.json({ comments: roots, count: rows.length });
 });
 
+// Comment counts per paragraph for a whole chapter, so the Reader can show
+// permanent "N comments" badges without fetching every paragraph's full
+// thread up front.
+app.get('/api/content-comments/paragraph-counts', async (req, res) => {
+  const targetType = String(req.query.target_type || '');
+  const targetId = parseInt(req.query.target_id, 10);
+  if (!targetType || !targetId) return res.json({ counts: {} });
+  const { rows } = await pool.query(
+    `SELECT paragraph_index, COUNT(*)::int AS count FROM content_comments
+     WHERE target_type = $1 AND target_id = $2 AND paragraph_index IS NOT NULL
+     GROUP BY paragraph_index`,
+    [targetType, targetId]
+  );
+  const counts = {};
+  rows.forEach(r => { counts[r.paragraph_index] = r.count; });
+  res.json({ counts });
+});
+
 app.post('/api/content-comments', requireAuth, async (req, res) => {
   const targetType = String(req.body.target_type || '');
   const targetId = parseInt(req.body.target_id, 10);
   const text = String(req.body.body || '').trim();
+  const gifUrl = req.body.gif_url ? String(req.body.gif_url).slice(0, 500) : null;
+  const paragraphIndex = req.body.paragraph_index !== undefined && req.body.paragraph_index !== null && req.body.paragraph_index !== ''
+    ? parseInt(req.body.paragraph_index, 10) : null;
   const parentId = req.body.parent_id ? parseInt(req.body.parent_id, 10) : null;
   if (!targetType || !targetId) return res.status(400).json({ error: 'target_type and target_id are required.' });
-  if (!text) return res.status(400).json({ error: 'Comment cannot be empty.' });
+  if (!text && !gifUrl) return res.status(400).json({ error: 'Comment cannot be empty.' });
   if (text.length > 2000) return res.status(400).json({ error: 'Comment is too long (max 2000 characters).' });
 
   let rootParentId = null;
@@ -5593,9 +5660,9 @@ app.post('/api/content-comments', requireAuth, async (req, res) => {
 
   const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
   const { rows: [comment] } = await pool.query(
-    `INSERT INTO content_comments (target_type, target_id, user_id, parent_id, reply_to_username, body)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`,
-    [targetType, targetId, req.user.id, rootParentId, replyToUsername, text]
+    `INSERT INTO content_comments (target_type, target_id, user_id, parent_id, reply_to_username, body, gif_url, paragraph_index)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, created_at`,
+    [targetType, targetId, req.user.id, rootParentId, replyToUsername, text, gifUrl, paragraphIndex]
   );
 
   // Notify: the comment you directly replied to gets "replied to your
@@ -5627,7 +5694,8 @@ app.post('/api/content-comments', requireAuth, async (req, res) => {
 
   res.json({
     comment: {
-      id: comment.id, body: text, created_at: comment.created_at, reply_to_username: replyToUsername,
+      id: comment.id, body: text, gif_url: gifUrl, paragraph_index: paragraphIndex,
+      created_at: comment.created_at, reply_to_username: replyToUsername,
       user_id: req.user.id, username: author.username, display_name: author.display_name, avatar: author.avatar,
       parent_id: rootParentId, replies: [],
     },
