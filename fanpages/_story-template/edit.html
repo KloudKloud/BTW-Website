@@ -40,29 +40,62 @@
     }
     .wiki-fandom-suggest-item:hover, .wiki-fandom-suggest-item.active { background: rgba(127,168,217,0.15); }
 
-    /* Cover/Cards now live inside the big form box, as its first block —
-       give it some breathing room below before Title starts, and stretch
-       it to fill the box's full width instead of sitting narrow on the
-       left (the compact size made sense for the old in-place editor,
-       which was squeezed into the story's normal two-column layout —
-       this dedicated page has the whole box width to work with). */
-    body.mod-editing-active #editor-top-row { align-items: center; margin-bottom: 2rem; }
-    body.mod-editing-active #editor-top-row #editor-quick-nav {
-      width: auto; flex: 1 1 0; max-width: none; margin: 0;
+    /* ── Story Details tab — cover + quick-nav cards glued to the left in
+       their own sticky box (small, out of the way), fields on the right in
+       frosted panels — same layout language as the onboarding "Add Story
+       Info" screen (create.html's .cs-cover-col/.cs-panel/.cs-field-title),
+       ported over verbatim. The one real difference: this page can also
+       customize the three quick-nav card images, which onboarding never
+       shows at all. ── */
+    .se-details-row { display: flex; gap: 2.5rem; align-items: flex-start; }
+    .se-details-cover-col { flex-shrink: 0; width: 190px; position: sticky; top: calc(84px + 1.5rem); }
+    .se-details-form-col { flex: 1; min-width: 0; }
+    .se-details-cover-col .cs-panel { padding: 1rem; margin-bottom: 1.25rem; }
+    /* Needs to beat fanpages.css's own body.mod-editing-active .mod-cover-wrap
+       (170x255 fixed) on specificity, not just cascade order. */
+    body.mod-editing-active .se-details-cover-col .mod-cover-wrap { width: 100%; height: auto; aspect-ratio: 2 / 3; }
+    .se-cards-panel-title {
+      font-family: 'Baloo 2', 'Georgia', serif; font-size: 0.92rem; font-weight: 700; color: #ccc;
+      margin: 0 0 0.85rem; text-align: center;
     }
-    /* Vertical stack instead of 3-across — each card ends up much wider
-       (full column width instead of a third of it), so the cropped
-       preview is actually easy to see. */
-    body.mod-editing-active #editor-top-row #editor-quick-nav-row {
-      grid-template-columns: 1fr; gap: 1.25rem;
+    .se-details-cover-col .mod-quick-nav { max-width: none; margin: 0; }
+    .se-details-cover-col .mod-quick-nav-row { grid-template-columns: 1fr; gap: 0.85rem; }
+    .se-details-cover-col .mod-quick-nav-card-recrop-btn,
+    .se-details-cover-col .mod-quick-nav-card-edit-btn { font-size: 0.7rem; padding: 0.35em 0.6em; }
+    @media (max-width: 900px) {
+      .se-details-row { flex-direction: column; }
+      .se-details-cover-col { width: 100%; position: static; }
+      .se-details-cover-col .mod-quick-nav-row { grid-template-columns: 1fr 1fr 1fr; }
     }
-    body.mod-editing-active #editor-top-row .mod-cover-wrap {
-      width: 220px; height: 330px;
+
+    /* Frosted panels + big field titles — ported from create.html's
+       .cs-panel/.cs-field-block/.cs-field-title/.cs-input-lg/.cs-meta-*. */
+    .cs-panel {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px;
+      padding: 2rem 2.25rem; margin-bottom: 2rem;
     }
-    @media (max-width: 820px) {
-      body.mod-editing-active #editor-top-row #editor-quick-nav { width: 100%; flex: none; }
-      body.mod-editing-active #editor-top-row .mod-cover-wrap { width: 160px; height: 240px; margin: 0 auto; }
+    .cs-panel .cs-field-block:last-child { margin-bottom: 0; }
+    .cs-panel .cs-meta-field:last-child { margin-bottom: 0; }
+    .cs-field-block { margin-bottom: 2.25rem; }
+    .cs-field-title-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.7rem; position: relative; flex-wrap: wrap; }
+    .cs-field-title {
+      font-family: 'Baloo 2', 'Georgia', serif; font-size: 1.3rem; font-weight: 700; color: #f0f0f0;
     }
+    .cs-field-hint { font-family: 'Inter', sans-serif; font-size: 0.82rem; color: #999; }
+    .cs-input-lg, .cs-textarea-lg, .cs-select-lg {
+      width: 100%; box-sizing: border-box; background: #17171a; border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 12px; color: #f0f0f0; font-family: 'Inter', sans-serif; font-size: 1.02rem;
+      padding: 0.9rem 1.1rem; transition: border-color 0.15s;
+    }
+    .cs-input-lg:focus, .cs-textarea-lg:focus, .cs-select-lg:focus { outline: none; border-color: #7fa8d9; }
+    .cs-textarea-lg { resize: vertical; min-height: 130px; line-height: 1.7; font-family: 'Lora', 'Georgia', serif; }
+    .cs-textarea-lg#site-bio-input { min-height: 160px; }
+    .cs-select-lg { cursor: pointer; max-width: 340px; }
+    .cs-meta-title {
+      font-family: 'Cinzel', serif; font-size: 1.35rem; font-weight: 700; color: #f0f0f0;
+      margin: 0 0 1.75rem;
+    }
+    .cs-meta-field { margin-bottom: 2rem; }
 
     /* Big "what am I editing" indicator, above the box. */
     .wiki-editing-indicator { margin-bottom: 1.5rem; }
@@ -88,7 +121,16 @@
        a side nav column that ate into the content width. This is exactly
        what onboarding's Characters/Gallery tabs already did — now it's how
        the whole editor works, not just onboarding. ── */
-    body.mod-editing-active .wiki-layout { max-width: 1090px; }
+    /* No cap — stretches the entire viewport width, same as the onboarding
+       "Add Story Info" screen (.cs-layout there is max-width:none too). */
+    body.mod-editing-active .wiki-layout { max-width: none; }
+    /* The fixed .mod-edit-bar (84px) replaces #fanpages-topbar-root's own
+       in-flow spacer, which is hidden while editing — .wiki-layout's base
+       padding-top (4.5rem/72px) alone is 12px short of that, so every tab's
+       content (not just the banner, which had its own separate fix) sat
+       just barely under the bar. This is the one place all four tabs get
+       their clearance from now; treat the bar as the new ceiling. */
+    body.mod-editing-active .wiki-layout { padding-top: calc(84px + 2rem); }
     .se-edit-main { min-width: 0; }
 
     /* Any gallery-tab modal open — the story's own banner "Change Banner
@@ -396,7 +438,7 @@
 </div>
 
 <!-- Banner -->
-<div class="wiki-cover mod-editing-banner" id="wiki-cover" style="margin-top:84px;">
+<div class="wiki-cover mod-editing-banner" id="wiki-cover">
   <img alt="Story banner" id="banner-img" class="mod-banner-loading" draggable="false" />
   <button class="fp-recrop-btn" id="banner-recrop-btn" type="button" style="display:none; position:absolute; right:1.5rem; top:1.25rem; z-index:5;">✏️ Recrop</button>
   <div class="mod-banner-edit-wrap" id="banner-edit-wrap" style="display:flex;">
@@ -434,170 +476,167 @@
     <div class="se-edit-main">
     <div class="mod-editor-form-box" id="editor-form-box">
 
-      <!-- Cover/Cards -->
-      <div class="mod-editor-top-row" id="editor-top-row">
-        <div class="mod-quick-nav" id="editor-quick-nav">
-          <div class="mod-quick-nav-row" id="editor-quick-nav-row">
-            <a class="mod-quick-nav-card" id="qn-characters" href="#">
-              <img id="qn-characters-img" alt="Characters" draggable="false" />
-              <div class="mod-quick-nav-card-overlay"><span class="mod-quick-nav-card-label">Characters</span></div>
-              <button class="mod-quick-nav-card-edit-btn" id="qn-characters-edit-btn" type="button" title="Change card image">📷</button>
-              <button class="fp-recrop-btn mod-quick-nav-card-recrop-btn" id="qn-characters-recrop-btn" type="button" style="display:none;">✏️ Recrop</button>
-            </a>
-            <a class="mod-quick-nav-card" id="qn-chapters" href="#">
-              <img id="qn-chapters-img" alt="Chapters" draggable="false" />
-              <div class="mod-quick-nav-card-overlay"><span class="mod-quick-nav-card-label">Chapters</span></div>
-              <button class="mod-quick-nav-card-edit-btn" id="qn-chapters-edit-btn" type="button" title="Change card image">📷</button>
-              <button class="fp-recrop-btn mod-quick-nav-card-recrop-btn" id="qn-chapters-recrop-btn" type="button" style="display:none;">✏️ Recrop</button>
-            </a>
-            <a class="mod-quick-nav-card" id="qn-gallery" href="#">
-              <img id="qn-gallery-img" alt="Gallery" draggable="false" />
-              <div class="mod-quick-nav-card-overlay"><span class="mod-quick-nav-card-label">Gallery</span></div>
-              <button class="mod-quick-nav-card-edit-btn" id="qn-gallery-edit-btn" type="button" title="Change card image">📷</button>
-              <button class="fp-recrop-btn mod-quick-nav-card-recrop-btn" id="qn-gallery-recrop-btn" type="button" style="display:none;">✏️ Recrop</button>
-            </a>
-          </div>
-          <input type="file" id="qn-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-        </div>
-        <div class="mod-editor-cover-slot" id="editor-cover-slot">
-          <div class="mod-cover-wrap" id="cover-wrap">
-            <img id="cover-img" alt="Book cover" style="display:none;" draggable="false" />
-            <div class="mod-cover-placeholder" id="cover-placeholder">No cover yet</div>
-            <button class="mod-cover-edit-btn" id="cover-edit-btn" type="button">📷 Change Cover</button>
-            <input type="file" id="cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-            <button class="fp-recrop-btn" id="cover-recrop-btn" type="button" style="display:none; position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Title -->
-      <div class="wiki-title-share-row">
-        <div class="mod-editable-block">
-          <span class="mod-field-label">Title</span>
-          <input class="mod-input mod-edit-input" id="site-title-input" maxlength="60" />
-        </div>
-      </div>
-
-      <!-- Story Description -->
-      <section class="wiki-section">
-        <h2 class="wiki-section-title" id="description-heading">Story Description</h2>
-        <div class="wiki-rule"></div>
-        <div class="mod-editable-block">
-          <div class="mod-field-label-row">
-            <span class="mod-field-label">Story Description</span>
-            <span class="mod-field-hint">Descriptions will appear in italics!</span>
-          </div>
-          <textarea class="mod-textarea mod-edit-input" id="site-synopsis-input"></textarea>
-        </div>
-      </section>
-
-      <!-- Notes From <owner> | Find Me -->
-      <section class="wiki-section">
-        <h2 class="wiki-section-title" id="meet-heading">Notes From the Author</h2>
-        <div class="wiki-rule"></div>
-        <div class="wiki-meet-split">
-          <div class="wiki-meet-text mod-editable-block">
-            <div class="mod-field-label-row">
-              <span class="mod-field-label" id="bio-field-label">Notes From the Author</span>
-              <span class="mod-field-hint">Use *text* for italics, **text** for bold.</span>
+      <div class="se-details-row">
+        <!-- Cover + quick-nav cards — glued to the left, sticky as the page
+             scrolls, same idea as onboarding's cover column. Smaller than
+             they used to be (kept at their real 2:3/16:9 aspect ratios). -->
+        <div class="se-details-cover-col">
+          <div class="cs-panel">
+            <div class="mod-editor-cover-slot" id="editor-cover-slot">
+              <div class="mod-cover-wrap" id="cover-wrap">
+                <img id="cover-img" alt="Book cover" style="display:none;" draggable="false" />
+                <div class="mod-cover-placeholder" id="cover-placeholder">No cover yet</div>
+                <button class="mod-cover-edit-btn" id="cover-edit-btn" type="button">📷 Change Cover</button>
+                <input type="file" id="cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+                <button class="fp-recrop-btn" id="cover-recrop-btn" type="button" style="display:none; position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
+              </div>
             </div>
-            <textarea class="mod-textarea mod-edit-input" id="site-bio-input"></textarea>
           </div>
-          <div class="wiki-meet-divider"></div>
-          <div class="wiki-meet-links mod-editable-block">
-            <p class="wiki-meet-links-label">Find Me</p>
+          <div class="cs-panel">
+            <p class="se-cards-panel-title">Quick-Nav Cards</p>
+            <div class="mod-quick-nav" id="editor-quick-nav">
+              <div class="mod-quick-nav-row" id="editor-quick-nav-row">
+                <a class="mod-quick-nav-card" id="qn-characters" href="#">
+                  <img id="qn-characters-img" alt="Characters" draggable="false" />
+                  <div class="mod-quick-nav-card-overlay"><span class="mod-quick-nav-card-label">Characters</span></div>
+                  <button class="mod-quick-nav-card-edit-btn" id="qn-characters-edit-btn" type="button" title="Change card image">📷</button>
+                  <button class="fp-recrop-btn mod-quick-nav-card-recrop-btn" id="qn-characters-recrop-btn" type="button" style="display:none;">✏️ Recrop</button>
+                </a>
+                <a class="mod-quick-nav-card" id="qn-chapters" href="#">
+                  <img id="qn-chapters-img" alt="Chapters" draggable="false" />
+                  <div class="mod-quick-nav-card-overlay"><span class="mod-quick-nav-card-label">Chapters</span></div>
+                  <button class="mod-quick-nav-card-edit-btn" id="qn-chapters-edit-btn" type="button" title="Change card image">📷</button>
+                  <button class="fp-recrop-btn mod-quick-nav-card-recrop-btn" id="qn-chapters-recrop-btn" type="button" style="display:none;">✏️ Recrop</button>
+                </a>
+                <a class="mod-quick-nav-card" id="qn-gallery" href="#">
+                  <img id="qn-gallery-img" alt="Gallery" draggable="false" />
+                  <div class="mod-quick-nav-card-overlay"><span class="mod-quick-nav-card-label">Gallery</span></div>
+                  <button class="mod-quick-nav-card-edit-btn" id="qn-gallery-edit-btn" type="button" title="Change card image">📷</button>
+                  <button class="fp-recrop-btn mod-quick-nav-card-recrop-btn" id="qn-gallery-recrop-btn" type="button" style="display:none;">✏️ Recrop</button>
+                </a>
+              </div>
+              <input type="file" id="qn-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Fields — same frosted-panel/big-field-title/lightbulb-tip layout
+             as onboarding's "Add Story Info" screen. -->
+        <div class="se-details-form-col">
+          <div class="cs-panel">
+            <div class="cs-field-block">
+              <div class="cs-field-title-row"><span class="cs-field-title">Title</span></div>
+              <input class="cs-input-lg" id="site-title-input" maxlength="60" />
+            </div>
+
+            <div class="cs-field-block">
+              <div class="cs-field-title-row">
+                <span class="cs-field-title">Description</span>
+                <span class="cs-field-hint">Descriptions will appear in italics!</span>
+              </div>
+              <textarea class="cs-textarea-lg" id="site-synopsis-input"></textarea>
+            </div>
+
+            <div class="cs-field-block">
+              <div class="cs-field-title-row">
+                <span class="cs-field-title">Rating</span>
+                <button class="wiki-tags-tip-icon" id="rating-tip-icon" type="button" aria-label="Rating help">💡</button>
+                <div class="wiki-tags-tip-popover" id="rating-tip-popover" hidden>
+                  <p><strong>General Audiences</strong> — Suitable for everyone</p>
+                  <p><strong>Teen And Up Audiences</strong> — May not be suitable for all audiences, but not expressly explicit. Light themes of violence, language, or other mature elements that don't teeter into adult.</p>
+                  <p><strong>Mature (Adult!)</strong> — Porn, graphic violence, or explictly adult themes</p>
+                </div>
+              </div>
+              <select class="cs-select-lg" id="rating-select">
+                <option value="General Audiences">General Audiences</option>
+                <option value="Teen & Up">Teen & Up</option>
+                <option value="Mature/Explicit (Adult)">Mature/Explicit (Adult)</option>
+              </select>
+            </div>
+
+            <div class="cs-field-block">
+              <div class="cs-field-title-row">
+                <span class="cs-field-title" id="bio-field-label">Notes From the Author</span>
+                <span class="cs-field-hint">Use *text* for italics, **text** for bold.</span>
+              </div>
+              <textarea class="cs-textarea-lg" id="site-bio-input"></textarea>
+            </div>
+          </div>
+
+          <div class="cs-panel">
+            <h2 class="cs-meta-title">Tags/Categories</h2>
+
+            <div class="cs-meta-field">
+              <div class="cs-field-title-row">
+                <span class="cs-field-title" style="font-size:1.05rem;">Categories</span>
+                <button class="wiki-tags-tip-icon" id="category-tip-icon" type="button" aria-label="Category help">💡</button>
+                <div class="wiki-tags-tip-popover" id="category-tip-popover" hidden>
+                  <p>These definitions vary, and feel free to select the categories that suit your fic best :3</p>
+                  <p><strong>Gen</strong> — No romantic/sexual relationships, or not the main focus</p>
+                  <p><strong>M/F</strong> — Male/Female relationships</p>
+                  <p><strong>M/M</strong> — Male/Male relationships</p>
+                  <p><strong>F/F</strong> — Female/Female relationships</p>
+                  <p><strong>Multi</strong> — Multiple relationships, or a relationship with more than one partner</p>
+                  <p><strong>Other</strong> — Other relationships</p>
+                </div>
+              </div>
+              <div class="wiki-meta-check-row" id="category-checks"></div>
+            </div>
+
+            <div class="cs-meta-field">
+              <div class="cs-field-title-row">
+                <span class="cs-field-title" style="font-size:1.05rem;">Relationships</span>
+                <button class="wiki-tags-tip-icon" id="relationships-tip-icon" type="button" aria-label="Relationships help">💡</button>
+                <div class="wiki-tags-tip-popover" id="relationships-tip-popover" hidden>
+                  Tag the relationships in your work. This applies heavily for fanfiction, and should be used to group recognizable characters together (e.g. "Umbreon"/"Espeon") to help discoverability. If the characters don't appear as a selectable object, enter them with their full names, and use a "/" to denote individual characters. Please be advised, if your relationship includes several characters, consider shortening their names if needed to ensure that the tag stays under 150 characters!
+                </div>
+                <span class="cs-field-hint">e.g. "Umbreon"/"Espeon". Press Enter to add.</span>
+              </div>
+              <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="relationships-input-box">
+                <input type="text" class="wiki-tags-input" id="relationships-text-input" placeholder="Type a relationship and press Enter…" autocomplete="off" />
+                <div class="wiki-fandom-suggest" id="relationships-suggest" hidden></div>
+              </div>
+            </div>
+
+            <div class="cs-meta-field">
+              <div class="cs-field-title-row">
+                <span class="cs-field-title" style="font-size:1.05rem;">Fandom</span>
+                <button class="wiki-tags-tip-icon" id="fandom-tip-icon" type="button" aria-label="Fandom help">💡</button>
+                <div class="wiki-tags-tip-popover" id="fandom-tip-popover" hidden>
+                  Start typing and pick a match if one shows up! That keeps everyone's tagging consistent so stories in the same fandom can actually find each other. Don't see yours? Type it anyway; we'll add popular new ones to the official list over time.
+                </div>
+              </div>
+              <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="fandom-input-box">
+                <input type="text" class="wiki-tags-input" id="fandom-text-input" placeholder="Type a fandom and press Enter…" autocomplete="off" />
+                <div class="wiki-fandom-suggest" id="fandom-suggest" hidden></div>
+              </div>
+            </div>
+
+            <div class="cs-meta-field">
+              <div class="cs-field-title-row">
+                <span class="cs-field-title" style="font-size:1.05rem;">Additional Tags</span>
+                <button class="wiki-tags-tip-icon" id="tags-tip-icon" type="button" aria-label="Tag tips">💡</button>
+                <div class="wiki-tags-tip-popover" id="tags-tip-popover" hidden>
+                  Tag up to 100 simple, relevant, searchable tags to help your story be discovered! For example: Pokemon, Furry, Mystery, Love, Ships, Umbreon, Lucario, Sexual Intimacy... Enter tags one at a time. Duplicate tags will be auto-deleted for your convienency. No need to tag specific character names: your character names are tied inside of your story and will be searchable in meta-data by default. Still tag species or other relevant traits about them that you feel could attract readers.
+                </div>
+                <span class="wiki-tags-count" id="tags-count">0/100</span>
+              </div>
+              <div class="wiki-tags-editor" id="site-tags-editor">
+                <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="tags-input-box">
+                  <input type="text" class="wiki-tags-input" id="tags-text-input" placeholder="Type a tag and press Enter…" autocomplete="off" />
+                  <div class="wiki-fandom-suggest" id="tags-suggest" hidden></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="cs-panel">
+            <h2 class="cs-meta-title">Links</h2>
             <div id="site-links-editor"></div>
             <button class="mod-btn mod-btn--small" id="add-link-edit-row" type="button">+ Add Link</button>
           </div>
         </div>
-      </section>
-
-      <hr class="wiki-mega-divider" />
-
-      <!-- Tags/Categories -->
-      <section class="wiki-section">
-        <h2 class="wiki-meta-section-title">Tags/Categories</h2>
-
-        <div class="wiki-meta-field mod-editable-block">
-          <div class="mod-field-label-row">
-            <span class="mod-field-label">Rating</span>
-            <button class="wiki-tags-tip-icon" id="rating-tip-icon" type="button" aria-label="Rating help">💡</button>
-            <div class="wiki-tags-tip-popover" id="rating-tip-popover" hidden>
-              <p><strong>General Audiences</strong> — Suitable for everyone</p>
-              <p><strong>Teen And Up Audiences</strong> — May not be suitable for all audiences, but not expressly explicit. Light themes of violence, language, or other mature elements that don't teeter into adult.</p>
-              <p><strong>Mature (Adult!)</strong> — Porn, graphic violence, or explictly adult themes</p>
-            </div>
-          </div>
-          <select class="mod-input" id="rating-select">
-            <option value="General Audiences">General Audiences</option>
-            <option value="Teen & Up">Teen & Up</option>
-            <option value="Mature/Explicit (Adult)">Mature/Explicit (Adult)</option>
-          </select>
-        </div>
-
-        <div class="wiki-meta-field mod-editable-block">
-          <div class="mod-field-label-row">
-            <span class="mod-field-label">Categories</span>
-            <button class="wiki-tags-tip-icon" id="category-tip-icon" type="button" aria-label="Category help">💡</button>
-            <div class="wiki-tags-tip-popover" id="category-tip-popover" hidden>
-              <p>These definitions vary, and feel free to select the categories that suit your fic best :3</p>
-              <p><strong>Gen</strong> — No romantic/sexual relationships, or not the main focus</p>
-              <p><strong>M/F</strong> — Male/Female relationships</p>
-              <p><strong>M/M</strong> — Male/Male relationships</p>
-              <p><strong>F/F</strong> — Female/Female relationships</p>
-              <p><strong>Multi</strong> — Multiple relationships, or a relationship with more than one partner</p>
-              <p><strong>Other</strong> — Other relationships</p>
-            </div>
-          </div>
-          <div class="wiki-meta-check-row" id="category-checks"></div>
-        </div>
-
-        <div class="wiki-meta-field mod-editable-block">
-          <div class="mod-field-label-row">
-            <span class="mod-field-label">Relationships</span>
-            <span class="mod-field-hint"> (e.g. "Umbreon"/"Espeon". Press Enter to add.)</span>
-            <button class="wiki-tags-tip-icon" id="relationships-tip-icon" type="button" aria-label="Relationships help">💡</button>
-            <div class="wiki-tags-tip-popover" id="relationships-tip-popover" hidden>
-              Tag the relationships in your work. This applies heavily for fanfiction, and should be used to group recognizable characters together (e.g. "Umbreon"/"Espeon") to help discoverability. If the characters don't appear as a selectable object, enter them with their full names, and use a "/" to denote individual characters. Please be advised, if your relationship includes several characters, consider shortening their names if needed to ensure that the tag stays under 150 characters!
-            </div>
-          </div>
-          <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="relationships-input-box">
-            <input type="text" class="wiki-tags-input" id="relationships-text-input" placeholder="Type a relationship and press Enter…" autocomplete="off" />
-            <div class="wiki-fandom-suggest" id="relationships-suggest" hidden></div>
-          </div>
-        </div>
-
-        <div class="wiki-meta-field mod-editable-block">
-          <div class="mod-field-label-row">
-            <span class="mod-field-label">Fandom</span>
-            <button class="wiki-tags-tip-icon" id="fandom-tip-icon" type="button" aria-label="Fandom help">💡</button>
-            <div class="wiki-tags-tip-popover" id="fandom-tip-popover" hidden>
-              Start typing and pick a match if one shows up! That keeps everyone's tagging consistent so stories in the same fandom can actually find each other. Don't see yours? Type it anyway; we'll add popular new ones to the official list over time.
-            </div>
-          </div>
-          <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="fandom-input-box">
-            <input type="text" class="wiki-tags-input" id="fandom-text-input" placeholder="Type a fandom and press Enter…" autocomplete="off" />
-            <div class="wiki-fandom-suggest" id="fandom-suggest" hidden></div>
-          </div>
-        </div>
-
-        <div class="wiki-meta-field mod-editable-block">
-          <div class="mod-field-label-row">
-            <span class="mod-field-label">Additional Tags</span>
-            <button class="wiki-tags-tip-icon" id="tags-tip-icon" type="button" aria-label="Tag tips">💡</button>
-            <div class="wiki-tags-tip-popover" id="tags-tip-popover" hidden>
-              Tag up to 100 simple, relevant, searchable tags to help your story be discovered! For example: Pokemon, Furry, Mystery, Love, Ships, Umbreon, Lucario, Sexual Intimacy... Enter tags one at a time. Duplicate tags will be auto-deleted for your convienency. No need to tag specific character names: your character names are tied inside of your story and will be searchable in meta-data by default. Still tag species or other relevant traits about them that you feel could attract readers.
-            </div>
-            <span class="wiki-tags-count" id="tags-count">0/100</span>
-          </div>
-          <div class="wiki-tags-editor" id="site-tags-editor">
-            <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="tags-input-box">
-              <input type="text" class="wiki-tags-input" id="tags-text-input" placeholder="Type a tag and press Enter…" autocomplete="off" />
-              <div class="wiki-fandom-suggest" id="tags-suggest" hidden></div>
-            </div>
-          </div>
-        </div>
-      </section>
+      </div>
 
     </div>
 
@@ -1225,7 +1264,6 @@ function populateForm(s) {
   document.getElementById('site-bio-input').value = s.bio || '';
 
   const meetText = 'Notes From ' + (s.author_display_name || s.author_username || 'the Author');
-  document.getElementById('meet-heading').textContent = meetText;
   document.getElementById('bio-field-label').textContent = meetText;
 
   document.getElementById('rating-select').value = mapLegacyRating(s.rating);
@@ -1649,6 +1687,7 @@ function renderSeCharStack() {
           <button type="button" class="se-char-card-menu-btn" title="More options">•••</button>
           <div class="se-char-card-menu" hidden>
             <button type="button" class="se-char-card-menu-item" data-action="edit">Open Editor</button>
+            <button type="button" class="se-char-card-menu-item" data-action="read">View as Reader</button>
             <button type="button" class="se-char-card-menu-item se-char-card-menu-item--danger" data-action="unlink">Unlink Character</button>
           </div>
         </div>
@@ -1658,6 +1697,10 @@ function renderSeCharStack() {
       const menu = card.querySelector('.se-char-card-menu');
       menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
       menu.querySelector('[data-action="edit"]').addEventListener('click', (e) => { e.stopPropagation(); openOrBlockCharEditor(char); });
+      menu.querySelector('[data-action="read"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.open(`${STORY_BASE}/characters?char=${char.id}`, '_blank');
+      });
       menu.querySelector('[data-action="unlink"]').addEventListener('click', (e) => { e.stopPropagation(); unlinkSeCharacter(char); });
     }
     stack.appendChild(card);
@@ -2281,6 +2324,7 @@ function renderSeGalleryStack() {
           <button type="button" class="se-char-card-menu-btn" title="More options">•••</button>
           <div class="se-char-card-menu" hidden>
             <button type="button" class="se-char-card-menu-item" data-action="edit">Open Editor</button>
+            <button type="button" class="se-char-card-menu-item" data-action="read">View as Reader</button>
             <button type="button" class="se-char-card-menu-item se-char-card-menu-item--danger" data-action="unlink">Remove from Story</button>
           </div>
         </div>
@@ -2290,6 +2334,10 @@ function renderSeGalleryStack() {
       const menu = card.querySelector('.se-char-card-menu');
       menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
       menu.querySelector('[data-action="edit"]').addEventListener('click', (e) => { e.stopPropagation(); openGalleryEditor(item); });
+      menu.querySelector('[data-action="read"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.open(`${STORY_BASE}/gallery?post=${item.id}`, '_blank');
+      });
       menu.querySelector('[data-action="unlink"]').addEventListener('click', (e) => { e.stopPropagation(); unlinkSeGalleryItem(item); });
     }
     stack.appendChild(card);
