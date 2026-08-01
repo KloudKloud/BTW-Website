@@ -442,7 +442,10 @@ document.body.appendChild(themeBgFileInput);
 themeBgFileInput.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  applyTheme('custom', URL.createObjectURL(file)); // instant preview
+  // Wait for the real, saved URL before changing anything visually — an
+  // instant local preview here used to apply the new background right
+  // away regardless of whether the upload actually succeeded, so a failed
+  // upload (e.g. too large) still looked like it had worked.
   const fd = new FormData();
   fd.append('image', file);
   const res = await fetch('/api/moderator/site/theme-bg', { method: 'PUT', headers: authHeaders(), body: fd });
@@ -451,7 +454,7 @@ themeBgFileInput.addEventListener('change', async (e) => {
     siteData.site = site;
     applyTheme(site.theme, site.theme_bg_url);
   } else {
-    alert('Background upload failed. Please try again.');
+    alert('Background upload failed — the image may be too large (10MB max). Please try again.');
   }
 });
 

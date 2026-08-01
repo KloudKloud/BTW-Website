@@ -1446,6 +1446,7 @@ async function uploadCover(blob) {
 
 // ── Quick-nav card art (Characters/Chapters/Gallery) ────────────────────────
 const NAV_CARD_FIELD = { characters: 'characters_card_url', chapters: 'chapters_card_url', gallery: 'gallery_card_url' };
+const NAV_CARD_ORIGINAL_FIELD = { characters: 'characters_card_original_url', chapters: 'chapters_card_original_url', gallery: 'gallery_card_original_url' };
 const NAV_CARD_DEFAULT = {
   characters: '/images/characters/kloudreference.png',
   chapters: '/images/gallery/autumnleave_11.png',
@@ -1473,10 +1474,11 @@ const qnFileInput = document.getElementById('qn-file-input');
   document.getElementById(`qn-${kind}-recrop-btn`).addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const url = siteData.site && siteData.site[NAV_CARD_FIELD[kind]];
-    if (!url) return;
+    const site = siteData.site;
+    const src = site && (site[NAV_CARD_ORIGINAL_FIELD[kind]] || site[NAV_CARD_FIELD[kind]]);
+    if (!src) return;
     openCropModal({
-      title: `Crop ${NAV_CARD_LABEL[kind]} Card`, imageSrc: url, aspectRatio: 16 / 9, round: false,
+      title: `Crop ${NAV_CARD_LABEL[kind]} Card`, imageSrc: src, aspectRatio: 16 / 9, round: false,
       onSave: (blob) => uploadQnCard(kind, blob),
     });
   });
@@ -1490,14 +1492,18 @@ qnFileInput.addEventListener('change', (e) => {
   if (!file || !kind) return;
   openCropModal({
     title: `Crop ${NAV_CARD_LABEL[kind]} Card`, imageSrc: URL.createObjectURL(file), aspectRatio: 16 / 9, round: false,
-    onSave: (blob) => uploadQnCard(kind, blob),
+    onSave: (blob) => uploadQnCard(kind, blob, file),
   });
 });
 
-async function uploadQnCard(kind, blob) {
+// `originalFile` is only passed when a brand-new photo was just picked
+// (the file-input change handler above) — Recrop calls this with just the
+// cropped blob, leaving the story's existing original untouched server-side.
+async function uploadQnCard(kind, blob, originalFile) {
   const img = document.getElementById(`qn-${kind}-img`);
   const fd = new FormData();
   fd.append('image', blob, `${kind}.jpg`);
+  if (originalFile) fd.append('image_original', originalFile, originalFile.name || `${kind}-original.jpg`);
   const res = await fetch(`/api/moderator/site/nav-card/${kind}`, { method: 'PUT', headers: authHeaders(), body: fd });
   if (res.ok) {
     const { site } = await res.json();

@@ -293,6 +293,15 @@ async function initDb() {
     ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS gallery_card_position_y INTEGER NOT NULL DEFAULT 50;
   `).catch(e => console.error('moderator_sites nav-card migration:', e.message));
 
+  // Uncropped source behind each nav card, same fix as banner_original_url —
+  // *_card_url is always the baked-in crop, so Recrop had nothing but that
+  // already-cropped result to work from without this.
+  await pool.query(`
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS characters_card_original_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS chapters_card_original_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS gallery_card_original_url TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('moderator_sites nav-card original migration:', e.message));
+
   // Reference-image crop position for character cards
   await pool.query(`
     ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS ref_position_x INTEGER NOT NULL DEFAULT 50;
@@ -2854,7 +2863,10 @@ const uploadModImage = multer({
       cb(null, `${req.user.id}_${Date.now()}_${file.fieldname}${ext}`);
     },
   }),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  // Bumped from 10MB — modern phone camera photos routinely land in the
+  // 10-20MB range and were getting rejected outright, with no graceful
+  // error handling below this to explain why the request failed.
+  limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     cb(null, ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.mimetype));
   },
@@ -4258,19 +4270,30 @@ app.put('/api/moderator/site/theme-bg', requireAuth, requireModerator, uploadMod
 // home page). :kind is checked against a fixed whitelist before being used
 // in the column names, so this is safe from injection despite the interpolation.
 const NAV_CARD_COLUMNS = {
-  characters: { url: 'characters_card_url', x: 'characters_card_position_x', y: 'characters_card_position_y' },
-  chapters:   { url: 'chapters_card_url',   x: 'chapters_card_position_x',   y: 'chapters_card_position_y' },
-  gallery:    { url: 'gallery_card_url',    x: 'gallery_card_position_x',    y: 'gallery_card_position_y' },
+  characters: { url: 'characters_card_url', original: 'characters_card_original_url', x: 'characters_card_position_x', y: 'characters_card_position_y' },
+  chapters:   { url: 'chapters_card_url',   original: 'chapters_card_original_url',   x: 'chapters_card_position_x',   y: 'chapters_card_position_y' },
+  gallery:    { url: 'gallery_card_url',    original: 'gallery_card_original_url',    x: 'gallery_card_position_x',    y: 'gallery_card_position_y' },
 };
-app.put('/api/moderator/site/nav-card/:kind', requireAuth, requireModerator, uploadModImage.single('image'), async (req, res) => {
+// `image` (the baked-in crop actually shown) is always required.
+// `image_original` is only sent the first time a NEW source photo is
+// picked — Recrop re-sends just `image` from the existing original, so
+// *_card_original_url stays untouched. Same pattern as the banner fix.
+app.put('/api/moderator/site/nav-card/:kind', requireAuth, requireModerator, uploadModImage.fields([{ name: 'image', maxCount: 1 }, { name: 'image_original', maxCount: 1 }]), async (req, res) => {
   const cols = NAV_CARD_COLUMNS[req.params.kind];
   if (!cols) return res.status(400).json({ error: 'Invalid card.' });
-  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
-  const url = `/images/moderators/${req.file.filename}`;
-  const { rows: [site] } = await pool.query(
-    `UPDATE moderator_sites SET ${cols.url} = $1, ${cols.x} = 50, ${cols.y} = 50, updated_at = NOW() WHERE id = $2 RETURNING *`,
-    [url, req.modSite.id]
-  );
+  const imageFile = req.files && req.files.image && req.files.image[0];
+  if (!imageFile) return res.status(400).json({ error: 'Image is required.' });
+  const url = `/images/moderators/${imageFile.filename}`;
+  const originalFile = req.files.image_original && req.files.image_original[0];
+  const { rows: [site] } = originalFile
+    ? await pool.query(
+        `UPDATE moderator_sites SET ${cols.url} = $1, ${cols.original} = $2, ${cols.x} = 50, ${cols.y} = 50, updated_at = NOW() WHERE id = $3 RETURNING *`,
+        [url, `/images/moderators/${originalFile.filename}`, req.modSite.id]
+      )
+    : await pool.query(
+        `UPDATE moderator_sites SET ${cols.url} = $1, ${cols.x} = 50, ${cols.y} = 50, updated_at = NOW() WHERE id = $2 RETURNING *`,
+        [url, req.modSite.id]
+      );
   res.json({ site });
 });
 
@@ -7184,6 +7207,23 @@ app.get('/api/clubs-recommended', async (req, res) => {
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
     club: { slug: p.club_slug, name: p.club_name, icon_url: p.club_icon || null },
   })) });
+});
+
+// ── Error handler ────────────────────────────────────────────────────────────
+// Catches multer errors (oversized file, bad field, etc.) that would
+// otherwise bubble up to Express's default handler and come back as a
+// non-JSON response — every upload flow's frontend does `res.ok` + a
+// generic "upload failed" alert, so at minimum this keeps that response
+// actually parseable, and gives a real reason for the most common case.
+app.use((err, req, res, next) => {
+  if (err && err.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'That file is too large (25MB max).' });
+    }
+    return res.status(400).json({ error: `Upload error: ${err.message}` });
+  }
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Something went wrong. Please try again.' });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
