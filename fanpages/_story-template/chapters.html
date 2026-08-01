@@ -184,9 +184,22 @@ function closePdfView() {
 
 function truncateLabel(s, n) { return s.length > n ? s.slice(0, n).trimEnd() + '…' : s; }
 
+// Counts as a "read" once per chapter per browser session — opening the
+// same chapter again (or just refreshing the page on it) within the same
+// tab session doesn't re-count, so this can't be spammed by reloading.
+// Owner previews of their own story don't count either (handled server-side).
+function trackChapterView(ch) {
+  const key = `btw_viewed_ch_${ch.id}`;
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, '1');
+  const url = SLUG.includes('/') ? `/api/moderator-sites/by-path/${SLUG}/view` : `/api/moderator-sites/${SLUG}/view`;
+  fetch(url, { method: 'POST', headers: authHeaders() }).catch(() => {});
+}
+
 function openChapterDetail(ch, pushHistory) {
   currentDetailChapter = ch;
   closePdfView();
+  trackChapterView(ch);
 
   document.getElementById('chapter-detail-title').textContent = ch.title || 'Untitled Chapter';
   document.getElementById('chapter-detail-teaser').textContent = ch.teaser && ch.teaser.trim() ? ch.teaser : 'No description provided';
