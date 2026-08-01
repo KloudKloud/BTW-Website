@@ -17,17 +17,38 @@
        bubble-tag input as the author types, matching against the
        preloaded catalog. Same look as the Story Editor's own. ── */
     .wiki-suggest-input-wrap { position: relative; }
+    /* .cs-panel below uses backdrop-filter, which creates its own stacking
+       context — a nested z-index can never climb above a later sibling
+       panel no matter how high the number. So these dropdowns get moved to
+       be a direct child of <body> at render time (see renderSuggestDropdown)
+       and positioned with fixed coordinates — that's what the huge z-index
+       here is for, it only matters once they're out of the panel. */
     .wiki-fandom-suggest {
-      position: absolute; top: calc(100% + 0.4rem); left: 0; right: 0; z-index: 30;
-      background: #141018; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+      position: fixed; z-index: 3000;
+      background: #141018; border: 1px solid rgba(255,255,255,0.14); border-radius: 12px;
       box-shadow: 0 16px 40px rgba(0,0,0,0.55); overflow: hidden;
     }
     .wiki-fandom-suggest-item {
       display: block; width: 100%; text-align: left; background: none; border: none;
-      color: #f0f0f0; font-family: 'Inter', sans-serif; font-size: 0.85rem;
-      padding: 0.6rem 0.9rem; cursor: pointer;
+      color: #f0f0f0; font-family: 'Inter', sans-serif; font-size: 0.92rem;
+      padding: 0.75rem 1.05rem; cursor: pointer;
     }
     .wiki-fandom-suggest-item:hover, .wiki-fandom-suggest-item.active { background: rgba(127,168,217,0.15); }
+
+    /* Bigger bubble-tag boxes than the Story Editor's sidebar version — this
+       page's Tags/Categories panel has the room for it. */
+    .cs-panel .wiki-tags-input-box {
+      padding: 1.1rem 1.25rem; border-radius: 14px; min-height: 3.2rem;
+    }
+    .cs-panel .wiki-tags-input { font-size: 1rem; min-width: 220px; padding: 0.4em 0; }
+    .cs-panel .wiki-tag-bubble--editable { font-size: 0.92rem; padding: 0.5em 1em; }
+
+    /* The shared blurred-background classes are tuned subtle-on-purpose for
+       pages where content sits directly on top of them; here the .cs-panel
+       boxes already give text its own contrast, so this page can afford to
+       let the photo actually read as a photo. */
+    .mod-page-bg-img-static { opacity: 0.85; }
+    .mod-page-bg-overlay-static { background: rgba(10,10,10,0.48); }
 
     /* ── Sticky top bar — trumps the site's own nav entirely, same idea as
        .mod-edit-bar in the Story Editor. Fixed, always visible, glued to
@@ -407,9 +428,32 @@ function addWorkingRelationship(raw) {
   workingRelationships.push(clean);
   renderRelationshipsEditor();
 }
+// Suggestion dropdowns are moved to be a direct child of <body> the first
+// time they're shown, then positioned with fixed viewport coordinates —
+// escapes the .cs-panel's own stacking context (backdrop-filter creates
+// one) so the dropdown always renders above every panel, not just its own.
+function positionSuggestDropdown(wrap, anchorId) {
+  const anchor = document.getElementById(anchorId);
+  const rect = anchor.getBoundingClientRect();
+  wrap.style.top = `${rect.bottom + 6}px`;
+  wrap.style.left = `${rect.left}px`;
+  wrap.style.width = `${rect.width}px`;
+}
+function repositionOpenSuggestDropdowns() {
+  document.querySelectorAll('.wiki-fandom-suggest').forEach(wrap => {
+    if (!wrap.hidden && wrap.dataset.anchor) positionSuggestDropdown(wrap, wrap.dataset.anchor);
+  });
+}
+window.addEventListener('scroll', repositionOpenSuggestDropdowns, true);
+window.addEventListener('resize', repositionOpenSuggestDropdowns);
+
 function renderSuggestDropdown(wrapId, matches, onPick) {
   const wrap = document.getElementById(wrapId);
+  const anchorId = wrapId.replace('-suggest', '-input-box');
+  if (wrap.parentElement !== document.body) document.body.appendChild(wrap);
+  wrap.dataset.anchor = anchorId;
   if (!matches.length) { wrap.hidden = true; wrap.innerHTML = ''; return; }
+  positionSuggestDropdown(wrap, anchorId);
   wrap.innerHTML = matches.map(m => `<button type="button" class="wiki-fandom-suggest-item">${escapeHtml(m)}</button>`).join('');
   wrap.hidden = false;
   wrap.querySelectorAll('.wiki-fandom-suggest-item').forEach(btn => {
@@ -453,7 +497,10 @@ relationshipsTextInput.addEventListener('keydown', (e) => {
   }
 });
 document.addEventListener('click', (e) => {
-  if (!document.getElementById('relationships-input-box').contains(e.target)) renderSuggestDropdown('relationships-suggest', [], () => {});
+  const dropdown = document.getElementById('relationships-suggest');
+  if (!document.getElementById('relationships-input-box').contains(e.target) && !dropdown.contains(e.target)) {
+    renderSuggestDropdown('relationships-suggest', [], () => {});
+  }
 });
 
 // ── Fandom — bubble-tag input w/ typeahead ──────────────────────────────────
@@ -519,7 +566,10 @@ fandomTextInput.addEventListener('keydown', (e) => {
   }
 });
 document.addEventListener('click', (e) => {
-  if (!document.getElementById('fandom-input-box').contains(e.target)) renderSuggestDropdown('fandom-suggest', [], () => {});
+  const dropdown = document.getElementById('fandom-suggest');
+  if (!document.getElementById('fandom-input-box').contains(e.target) && !dropdown.contains(e.target)) {
+    renderSuggestDropdown('fandom-suggest', [], () => {});
+  }
 });
 
 // ── Additional Tags — e621/Wattpad-style bubble input ───────────────────────
@@ -586,7 +636,10 @@ tagsTextInput.addEventListener('keydown', (e) => {
   }
 });
 document.addEventListener('click', (e) => {
-  if (!document.getElementById('tags-input-box').contains(e.target)) renderSuggestDropdown('tags-suggest', [], () => {});
+  const dropdown = document.getElementById('tags-suggest');
+  if (!document.getElementById('tags-input-box').contains(e.target) && !dropdown.contains(e.target)) {
+    renderSuggestDropdown('tags-suggest', [], () => {});
+  }
 });
 renderTagsEditor();
 
