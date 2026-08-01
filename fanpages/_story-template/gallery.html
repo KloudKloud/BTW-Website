@@ -42,15 +42,11 @@
   <!-- Same 1300px cap as the story home page's .wiki-layout — the shared
        .mod-page-row class (also used by profile-template.html) defaults
        to 1340px, which read visibly wider than Home. -->
-  <main class="mod-page-row" style="padding: 0 3rem; margin-top: 3rem; max-width: 1300px;">
+  <main class="mod-page-row" style="padding: 0 3rem; max-width: 1300px;">
 
     <div class="mod-gallery-main" id="gallery-grid-view">
 
       <div class="chars-sidebar-col">
-        <aside class="chars-create-box" id="gallery-storyeditor-box" style="display:none;">
-          <button class="chars-create-btn chars-create-btn--edit" id="gallery-storyeditor-btn" type="button">Story Editor</button>
-        </aside>
-
         <aside class="chars-create-box">
           <p class="mod-gallery-sidebar-label">Browse</p>
           <button class="mod-gallery-cat active" id="cat-art" type="button">SFW</button>
@@ -60,8 +56,6 @@
       </div>
 
       <div class="mod-gallery-content">
-        <h1 class="wiki-title" style="margin-bottom: 0.5rem;" id="gallery-title-text">SFW</h1>
-        <div class="wiki-rule"></div>
         <div class="gallery-grid" id="gallery-grid"></div>
       </div>
 
@@ -71,7 +65,10 @@
     <div class="art-view-wrapper" id="gallery-detail-view" style="display:none; max-width:none; margin:0; padding:0;">
       <div class="art-view-back-row">
         <a class="art-view-back" href="#" id="gallery-detail-back">← Back to Gallery</a>
-        <button class="art-view-edit-btn" id="gallery-detail-edit-btn" type="button" style="display:none;">✏️ Story Editor</button>
+        <button class="art-view-edit-btn" id="gallery-detail-edit-btn" type="button" style="display:none; flex-direction:column; line-height:1.35; gap:0.1rem; text-align:center;">
+          <span id="gallery-detail-edit-btn-label">✏️ Edit</span>
+          <span style="font-size:0.72rem; opacity:0.8; font-weight:600;">(Story Editor)</span>
+        </button>
       </div>
 
       <div class="art-view-image-wrap">
@@ -152,7 +149,6 @@ let STORY_COVER_URL = '';
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
 const authHeaders = () => ({ Authorization: `Bearer ${token}`, 'X-Story-Path': SLUG });
 const grid    = document.getElementById('gallery-grid');
-const title   = document.getElementById('gallery-title-text');
 const catArt      = document.getElementById('cat-art');
 const catSketches = document.getElementById('cat-sketches');
 const catSpicy    = document.getElementById('cat-spicy');
@@ -211,21 +207,18 @@ function renderTiles(items, emptyMsg) {
 function renderArt() {
   activeCategory = 'sfw';
   setActiveTab(catArt);
-  title.textContent = 'SFW';
   renderTiles(GALLERY_ART, 'No art yet — check back soon.');
 }
 
 function renderSketches() {
   activeCategory = 'sketches';
   setActiveTab(catSketches);
-  title.textContent = 'Sketches';
   renderTiles(GALLERY_SKETCHES, 'No sketches yet — check back soon.');
 }
 
 function renderSpicy() {
   activeCategory = 'spicy';
   setActiveTab(catSpicy);
-  title.textContent = 'Spicy';
 
   if (SPICY_LOCK === 'login') {
     grid.innerHTML = `
@@ -392,6 +385,7 @@ function openPostDetail(item, pushHistory) {
   const editBtn = document.getElementById('gallery-detail-edit-btn');
   if (IS_SELF) {
     editBtn.style.display = '';
+    document.getElementById('gallery-detail-edit-btn-label').textContent = `✏️ Edit ${item.title || 'Untitled'}`;
     // Straight to the Gallery tab of the main Story Editor hub — editing a
     // gallery post no longer happens in place on this page at all.
     editBtn.onclick = () => { window.location.href = `${STORY_BASE}/edit#gallery`; };
@@ -690,12 +684,6 @@ window.addEventListener('popstate', () => {
 });
 
 
-// Straight to the Gallery tab of the main Story Editor hub — creating and
-// linking gallery posts no longer happens in place on this page at all.
-document.getElementById('gallery-storyeditor-btn').addEventListener('click', () => {
-  window.location.href = `${STORY_BASE}/edit#gallery`;
-});
-
 function hexToRgba(hex, alpha) {
   const n = parseInt(hex.replace('#', ''), 16);
   const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
@@ -800,10 +788,6 @@ function renderBookBox(site) {
   const pageTitleEl = document.getElementById('page-title-display');
   pageTitleEl.textContent = STORY_TITLE;
   pageTitleEl.classList.remove('mod-title-loading');
-
-  if (IS_SELF) {
-    document.getElementById('gallery-storyeditor-box').style.display = 'block';
-  }
 
   GALLERY_ART      = (data && data.gallery_sfw)      || [];
   GALLERY_SKETCHES = (data && data.gallery_sketches) || [];
