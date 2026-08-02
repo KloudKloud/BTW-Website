@@ -31,7 +31,7 @@
        right-hand panel instead. */
     .fp-layout {
       padding: 1.75rem 2.5rem 5rem;
-      display: grid; grid-template-columns: 1fr 340px; gap: 2.5rem; align-items: start;
+      display: grid; grid-template-columns: 1fr 380px; gap: 2.5rem; align-items: start;
     }
     .fp-results-col { min-width: 0; }
 
@@ -40,12 +40,11 @@
     .fp-search-sub strong { color: #fff; }
 
     /* ── Result rows — no card box, just a horizontal rule between each ── */
-    .fp-results-list { display: flex; flex-direction: column; }
+    .fp-results-list { display: flex; flex-direction: column; border-top: 1px solid rgba(255,255,255,0.14); }
     .fp-result {
       display: flex; gap: 1.75rem; padding: 1.85rem 0;
       border-bottom: 1px solid rgba(255,255,255,0.14);
     }
-    .fp-results-list > .fp-result:first-child { padding-top: 0; }
     .fp-result-cover-link { flex-shrink: 0; }
     .fp-result-cover {
       width: 130px; height: 195px; object-fit: cover; border-radius: 12px; display: block;
@@ -53,8 +52,10 @@
     }
     .fp-result-body { min-width: 0; flex: 1; display: flex; flex-direction: column; }
 
+    .fp-result-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
     .fp-result-title { font-size: 1.7rem; font-weight: 700; }
     .fp-result-title:hover { color: #7fa8d9; }
+    .fp-result-date { font-size: 0.8rem; color: #999; white-space: nowrap; flex-shrink: 0; }
 
     /* Author row — pfp + name, right under the title. */
     .fp-result-author {
@@ -109,7 +110,12 @@
       background: rgba(20,18,24,0.85); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
       border: 1px solid rgba(255,255,255,0.14); border-radius: 18px;
       padding: 1.5rem; max-height: calc(100vh - 112px); overflow-y: auto;
+      scrollbar-color: #444 #1a1a1e; /* Firefox */
     }
+    .fp-filter-panel::-webkit-scrollbar { width: 8px; }
+    .fp-filter-panel::-webkit-scrollbar-track { background: #1a1a1e; border-radius: 8px; }
+    .fp-filter-panel::-webkit-scrollbar-thumb { background: #444; border-radius: 8px; }
+    .fp-filter-panel::-webkit-scrollbar-thumb:hover { background: #555; }
     .fp-filter-title {
       text-align: center; font-size: 1.15rem; font-weight: 700; background: rgba(255,255,255,0.06);
       border-radius: 10px; padding: 0.6em; margin-bottom: 1.1rem;
@@ -158,11 +164,6 @@
       margin-top: 0.5rem;
     }
     .fp-filter-apply-btn:hover { background: #93b8e2; }
-    .fp-filter-clear-btn {
-      width: 100%; background: none; color: #999; border: 1px solid rgba(255,255,255,0.2); border-radius: 20px;
-      padding: 0.6em; font-family: inherit; font-size: 0.85rem; font-weight: 700; cursor: pointer; margin-top: 0.6rem;
-    }
-    .fp-filter-clear-btn:hover { border-color: #d97a72; color: #d97a72; }
 
     @media (max-width: 980px) {
       .fp-layout { grid-template-columns: 1fr; }
@@ -196,13 +197,15 @@
     <div class="fp-filter-query">Current search: <strong id="fp-filter-query-text">Everything</strong></div>
 
     <div class="fp-filter-section">
-      <p class="fp-filter-section-title">Sort</p>
-      <div class="fp-sort-pills" id="fp-sort-pills">
-        <button class="fp-sort-pill" data-sort="best_match" type="button">Best Match</button>
-        <button class="fp-sort-pill" data-sort="updated" type="button">Date Updated</button>
-        <button class="fp-sort-pill" data-sort="kudos" type="button">Likes</button>
-        <button class="fp-sort-pill" data-sort="hits" type="button">Reads</button>
-      </div>
+      <details class="fp-filter-details" id="fp-sort-details" open>
+        <summary>Sort: <span id="fp-sort-current">Best Match</span></summary>
+        <div class="fp-sort-pills" id="fp-sort-pills">
+          <button class="fp-sort-pill active" data-sort="best_match" data-label="Best Match" type="button">Best Match</button>
+          <button class="fp-sort-pill" data-sort="updated" data-label="Date Updated" type="button">Date Updated</button>
+          <button class="fp-sort-pill" data-sort="kudos" data-label="Likes" type="button">Likes</button>
+          <button class="fp-sort-pill" data-sort="hits" data-label="Reads" type="button">Reads</button>
+        </div>
+      </details>
     </div>
 
     <div class="fp-filter-section">
@@ -239,39 +242,42 @@
       </details>
       <details class="fp-filter-details">
         <summary>Additional Tags</summary>
-        <p class="fp-filter-freeform-label">e.g. Espeon, Fluff</p>
+        <input type="text" id="f-tags-include" placeholder="e.g. Espeon, Fluff" list="fp-tag-list" style="margin-top:0.7rem;" />
+        <datalist id="fp-tag-list"></datalist>
       </details>
-      <label class="fp-filter-freeform-label">Other tags to include</label>
-      <input type="text" id="f-tags-include" placeholder="Comma-separated" list="fp-tag-list" />
-      <datalist id="fp-tag-list"></datalist>
     </div>
 
     <div class="fp-filter-section">
       <p class="fp-filter-section-title">Exclude</p>
-      <label class="fp-filter-freeform-label">Other tags to exclude</label>
-      <input type="text" id="f-tags-exclude" placeholder="Comma-separated" list="fp-tag-list" />
+      <details class="fp-filter-details">
+        <summary>Additional Tags</summary>
+        <input type="text" id="f-tags-exclude" placeholder="Comma-separated" list="fp-tag-list" style="margin-top:0.7rem;" />
+      </details>
     </div>
 
     <div class="fp-filter-section">
-      <p class="fp-filter-section-title">Word Count</p>
-      <div class="fp-filter-word-row">
-        <input type="number" id="f-word-min" placeholder="Min" min="0" />
-        <span>–</span>
-        <input type="number" id="f-word-max" placeholder="Max" min="0" />
-      </div>
+      <details class="fp-filter-details">
+        <summary>Word Count</summary>
+        <div class="fp-filter-word-row" style="margin-top:0.7rem;">
+          <input type="number" id="f-word-min" placeholder="Min" min="0" />
+          <span>–</span>
+          <input type="number" id="f-word-max" placeholder="Max" min="0" />
+        </div>
+      </details>
     </div>
 
     <div class="fp-filter-section">
-      <p class="fp-filter-section-title">Completion Status</p>
-      <div class="fp-filter-options" id="f-completion">
-        <label><input type="radio" name="f-completion" value="all" checked /> All works</label>
-        <label><input type="radio" name="f-completion" value="complete" /> Complete only</label>
-        <label><input type="radio" name="f-completion" value="wip" /> Work in progress</label>
-      </div>
+      <details class="fp-filter-details">
+        <summary>Completion Status</summary>
+        <div class="fp-filter-options" id="f-completion">
+          <label><input type="radio" name="f-completion" value="all" checked /> All works</label>
+          <label><input type="radio" name="f-completion" value="complete" /> Complete only</label>
+          <label><input type="radio" name="f-completion" value="wip" /> Work in progress</label>
+        </div>
+      </details>
     </div>
 
-    <button class="fp-filter-apply-btn" id="fp-filter-apply" type="button">Update Search</button>
-    <button class="fp-filter-clear-btn" id="fp-filter-clear" type="button">Clear All Filters</button>
+    <button class="fp-filter-apply-btn" id="fp-filter-apply" type="button">Sort and Filter</button>
   </aside>
 </main>
 </div>
@@ -330,7 +336,10 @@ function resultCard(w) {
     <div class="fp-result">
       <a class="fp-result-cover-link" href="/fanpages/${escapeHtml(w.story_path)}">${coverHtml(w)}</a>
       <div class="fp-result-body">
-        <a class="fp-result-title" href="/fanpages/${escapeHtml(w.story_path)}">${escapeHtml(w.site_title || 'Untitled Story')}</a>
+        <div class="fp-result-title-row">
+          <a class="fp-result-title" href="/fanpages/${escapeHtml(w.story_path)}">${escapeHtml(w.site_title || 'Untitled Story')}</a>
+          ${w.created_at ? `<span class="fp-result-date">${formatDate(w.created_at)}</span>` : ''}
+        </div>
         ${authorRowHtml(w)}
         ${tagsRowHtml(w)}
         <p class="fp-result-synopsis">${escapeHtml(w.synopsis || 'No description yet.')}</p>
@@ -380,8 +389,11 @@ function readParamsFromUrl() {
 }
 
 function applyParamsToPanel(f) {
+  const activeSort = f.sort || 'best_match';
   document.querySelectorAll('.fp-sort-pill').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.sort === (f.sort || 'best_match'));
+    const isActive = btn.dataset.sort === activeSort;
+    btn.classList.toggle('active', isActive);
+    if (isActive) document.getElementById('fp-sort-current').textContent = btn.dataset.label;
   });
   document.getElementById('f-fandoms').value = f.fandoms;
   document.getElementById('f-relationships').value = f.relationships;
@@ -516,22 +528,19 @@ async function runSearch() {
   }
 }
 
+// Sort pills just update the panel's own state — nothing reloads until
+// "Sort and Filter" is pressed, same as every other filter in the panel.
 document.querySelectorAll('.fp-sort-pill').forEach(btn => {
   btn.addEventListener('click', () => {
-    const usp = new URLSearchParams(window.location.search);
-    usp.set('sort', btn.dataset.sort);
-    usp.delete('page');
-    window.location.search = usp.toString();
+    document.querySelectorAll('.fp-sort-pill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('fp-sort-current').textContent = btn.dataset.label;
   });
 });
 document.getElementById('fp-filter-apply').addEventListener('click', () => {
-  const activeSort = (document.querySelector('.fp-sort-pill.active') || {}).dataset && document.querySelector('.fp-sort-pill.active').dataset.sort;
-  const params = collectPanelParams(activeSort);
+  const activeBtn = document.querySelector('.fp-sort-pill.active');
+  const params = collectPanelParams(activeBtn ? activeBtn.dataset.sort : 'best_match');
   window.location.search = new URLSearchParams(params).toString();
-});
-document.getElementById('fp-filter-clear').addEventListener('click', () => {
-  const q = new URLSearchParams(window.location.search).get('q');
-  window.location.search = q ? new URLSearchParams({ q }).toString() : '';
 });
 
 loadCatalogsForAutocomplete();
