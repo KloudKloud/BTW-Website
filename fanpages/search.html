@@ -34,18 +34,36 @@
     .fp-bg-overlay { position: fixed; inset: 0; background: rgba(8,6,10,0.45); z-index: 0; }
     .fp-content-z { position: relative; z-index: 1; }
 
-    /* Results start immediately below the nav — no filter box up top,
-       no scroll needed to see the first story. Filter/sort lives in the
-       right-hand panel instead. */
+    /* ── Top tab row — Story / Posts / Profiles, centered, sitting flush
+       under the nav with its own horizontal rule. The result-count line
+       (previously a subheading above the list) now lives on the right end
+       of this same rule instead. This rule is the new "ceiling" both side
+       panels are pinned against, replacing the old plain topbar edge. ── */
+    .fp-tabs-row {
+      display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+      padding: 0 2.5rem; height: 64px;
+      border-bottom: 1px solid rgba(255,255,255,0.14);
+    }
+    .fp-tabs { grid-column: 2; display: flex; gap: 2.5rem; justify-self: center; }
+    .fp-tab {
+      font-size: 1.05rem; font-weight: 700; color: #999; text-decoration: none;
+      padding: 0.4em 0; border-bottom: 2px solid transparent;
+    }
+    .fp-tab:hover { color: #ddd; }
+    .fp-tab--active { color: #fff; border-bottom-color: #7fa8d9; }
+    .fp-tab--soon { cursor: default; }
+    .fp-search-sub { grid-column: 3; justify-self: end; color: #ccc; font-size: 0.95rem; margin: 0; }
+    .fp-search-sub strong { color: #fff; }
+
+    /* Topbar (76px) + tab row (64px) = 140px "ceiling" the side panels
+       stick to and are pulled flush against. */
     .fp-layout {
       padding: 1.75rem 2.5rem 5rem;
-      display: grid; grid-template-columns: 1fr 380px; gap: 2.5rem; align-items: stretch;
+      display: grid; grid-template-columns: 320px 1fr 340px; gap: 2rem; align-items: stretch;
     }
     .fp-results-col { min-width: 0; }
 
     .fp-search-heading { font-size: 1.9rem; font-weight: 700; margin-bottom: 0.3rem; }
-    .fp-search-sub { color: #ccc; font-size: 0.95rem; margin-bottom: 1.5rem; }
-    .fp-search-sub strong { color: #fff; }
 
     /* ── Result rows — no card box, just a horizontal rule between each ── */
     .fp-results-list { display: flex; flex-direction: column; border-top: 1px solid rgba(255,255,255,0.14); }
@@ -82,9 +100,9 @@
     .fp-result-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
     .fp-result-title {
       font-size: 1.7rem; font-weight: 700; color: #fff;
-      text-shadow: 0 0 14px rgba(255,255,255,0.35), 0 1px 3px rgba(0,0,0,0.4);
+      text-shadow: 0 0 7px rgba(255,255,255,0.2), 0 1px 3px rgba(0,0,0,0.4);
     }
-    .fp-result-title:hover { color: #fff; text-shadow: 0 0 22px rgba(255,255,255,0.6), 0 1px 3px rgba(0,0,0,0.4); }
+    .fp-result-title:hover { color: #fff; text-shadow: 0 0 12px rgba(255,255,255,0.4), 0 1px 3px rgba(0,0,0,0.4); }
     .fp-result-date { font-size: 0.8rem; color: #999; white-space: nowrap; flex-shrink: 0; }
 
     /* Author row — pfp + name, right under the title. */
@@ -140,27 +158,79 @@
     .fp-pagination button:hover:not(:disabled) { border-color: #7fa8d9; color: #7fa8d9; }
     .fp-pagination button:disabled { opacity: 0.4; cursor: default; }
 
+    /* ── Left-hand profile panel — pfp/username, a quick search, and a
+       "Your Library" teaser (bookmarks/tags/read-later). Fully transparent
+       so it reads as content sitting on the shared blurred wallpaper, same
+       as the results column, rather than a boxed widget like the filter
+       panel. Pinned against the same 140px ceiling as the right panel, and
+       flush with the page's left/bottom edges via the same negative-margin
+       trick. */
+    .fp-side-panel {
+      position: sticky; top: 140px;
+      margin-top: -1.75rem; margin-bottom: -5rem; margin-left: -2.5rem;
+      height: calc(100vh - 140px); max-height: calc(100vh - 140px);
+      display: flex; flex-direction: column; align-items: center;
+      padding: 2rem 1.75rem; overflow-y: auto;
+      scrollbar-color: #444 transparent; /* Firefox */
+    }
+    .fp-side-panel::-webkit-scrollbar { width: 8px; }
+    .fp-side-panel::-webkit-scrollbar-track { background: transparent; }
+    .fp-side-panel::-webkit-scrollbar-thumb { background: #444; border-radius: 8px; }
+    .fp-side-pfp {
+      width: 108px; height: 108px; border-radius: 50%; object-fit: cover;
+      border: 3px solid rgba(255,255,255,0.25); box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+    }
+    .fp-side-pfp-fallback {
+      width: 108px; height: 108px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 2.4rem;
+      border: 3px solid rgba(255,255,255,0.25); box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+    }
+    .fp-side-username {
+      margin-top: 0.9rem; font-size: 1.15rem; font-weight: 700; color: #fff; text-decoration: none; text-align: center;
+    }
+    .fp-side-username:hover { text-decoration: underline; }
+    .fp-side-username--guest { color: #aaa; font-weight: 600; font-size: 1rem; }
+    .fp-side-hr { width: 100%; border: none; border-top: 1px solid rgba(255,255,255,0.16); margin: 1.5rem 0; }
+    .fp-side-search { width: 100%; margin-bottom: 1.75rem; }
+    .fp-side-search input {
+      width: 100%; background: rgba(20,18,24,0.65); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px;
+      color: #f0f0f0; font-family: inherit; font-size: 0.92rem; padding: 0.6em 1em;
+    }
+    .fp-side-search input:focus { outline: none; border-color: #7fa8d9; }
+    .fp-side-niche { width: 100%; }
+    .fp-side-niche-title { font-size: 1.05rem; font-weight: 700; color: #ddd; margin-bottom: 0.8rem; }
+    .fp-side-niche-list { display: flex; flex-direction: column; gap: 0.6rem; }
+    .fp-side-niche-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+      padding: 0.65em 0.9em; font-size: 0.92rem; font-weight: 600; color: #ddd; text-decoration: none;
+    }
+    a.fp-side-niche-item:hover { border-color: rgba(127,168,217,0.5); color: #fff; }
+    .fp-side-niche-item--soon { opacity: 0.55; cursor: default; }
+    .fp-side-niche-item em { font-style: normal; font-size: 0.72rem; font-weight: 600; color: #999; white-space: nowrap; }
+
     /* ── Right-hand "Sort and Filter" panel — sticks to the page as you
        scroll the results. ── */
     /* height:100% (with .fp-layout's align-items:stretch) makes the panel's
        own box stretch to match the results column's full height instead of
        shrink-wrapping just its own content; still sticky + internally
        scrollable for whenever that's taller than one screen. */
-    /* Pulled flush against the 76px topbar and all the way down past
-       .fp-layout's own top/bottom padding (negative margins cancel that
-       padding out just for this element) so the box's edges literally
-       touch the nav banner above and the page bottom below, instead of
-       floating with a gap on either side. Height is pinned to the exact
-       viewport space below the banner rather than matched to the results
-       column, so it fills that full span even when there are few results. */
+    /* Pulled flush against the 140px ceiling (topbar + tab row) and all the
+       way down past .fp-layout's own top/bottom padding (negative margins
+       cancel that padding out just for this element) so the box's edges
+       literally touch the tab row's rule above and the page bottom below,
+       instead of floating with a gap on either side. Height is pinned to
+       the exact viewport space below the ceiling rather than matched to
+       the results column, so it fills that full span even when there are
+       few results. */
     .fp-filter-panel {
-      position: sticky; top: 76px;
+      position: sticky; top: 140px;
       margin-top: -1.75rem; margin-bottom: -5rem; margin-right: -2.5rem;
-      height: calc(100vh - 76px);
+      height: calc(100vh - 140px);
       display: flex; flex-direction: column;
       background: rgba(20,18,24,0.85); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
       border: 1px solid rgba(255,255,255,0.14); border-radius: 0;
-      padding: 1.5rem; max-height: calc(100vh - 76px); overflow-y: auto;
+      padding: 1.5rem; max-height: calc(100vh - 140px); overflow-y: auto;
       scrollbar-color: #444 #1a1a1e; /* Firefox */
       will-change: transform; /* keeps the blurred sticky panel on its own GPU layer so it doesn't stutter the instant scrolling starts */
     }
@@ -217,9 +287,16 @@
 
     @media (max-width: 980px) {
       .fp-layout { grid-template-columns: 1fr; }
+      .fp-tabs-row { grid-template-columns: 1fr; height: auto; padding: 1rem 1.25rem; row-gap: 0.6rem; }
+      .fp-tabs { grid-column: 1; }
+      .fp-search-sub { grid-column: 1; justify-self: start; }
       .fp-filter-panel {
         position: static; max-height: none; height: auto;
         margin-top: 0; margin-bottom: 0; margin-right: 0; border-radius: 18px;
+      }
+      .fp-side-panel {
+        position: static; max-height: none; height: auto;
+        margin-top: 0; margin-bottom: 0; margin-left: 0; align-items: flex-start; padding: 1.5rem 0;
       }
     }
     @media (max-width: 720px) {
@@ -236,10 +313,37 @@
 <div class="fp-content-z">
 <div id="fanpages-topbar-root"></div>
 
+<div class="fp-tabs-row">
+  <nav class="fp-tabs">
+    <a class="fp-tab fp-tab--active" href="/fanpages/search">Story</a>
+    <a class="fp-tab fp-tab--soon" href="#" title="Coming soon">Posts</a>
+    <a class="fp-tab fp-tab--soon" href="#" title="Coming soon">Profiles</a>
+  </nav>
+  <p class="fp-search-sub" id="fp-search-sub"></p>
+</div>
+
 <main class="fp-layout">
+  <aside class="fp-side-panel" id="fp-side-panel">
+    <a class="fp-side-pfp-link" id="fp-side-pfp-link" href="/fanpages/login">
+      <span id="fp-side-pfp-slot"><span class="fp-side-pfp-fallback">?</span></span>
+    </a>
+    <a class="fp-side-username fp-side-username--guest" id="fp-side-username" href="/fanpages/login">Log In / Register</a>
+    <hr class="fp-side-hr" />
+    <div class="fp-side-search">
+      <input type="search" id="fp-side-search-input" placeholder="🔍 Quick search…" />
+    </div>
+    <div class="fp-side-niche">
+      <p class="fp-side-niche-title">Your Library</p>
+      <div class="fp-side-niche-list">
+        <a class="fp-side-niche-item" href="/fanpages/search?sort=bookmarks_recent">📚 Bookmarks</a>
+        <span class="fp-side-niche-item fp-side-niche-item--soon">🏷️ Favorite Tags <em>Coming soon</em></span>
+        <span class="fp-side-niche-item fp-side-niche-item--soon">📖 Read Later <em>Coming soon</em></span>
+      </div>
+    </div>
+  </aside>
+
   <div class="fp-results-col">
     <h1 class="fp-search-heading" id="fp-search-heading">Search</h1>
-    <p class="fp-search-sub" id="fp-search-sub"></p>
 
     <div class="fp-results-list" id="fp-search-results"><p class="fp-search-empty">Loading…</p></div>
     <div class="fp-pagination" id="fp-pagination" hidden></div>
@@ -583,6 +687,40 @@ function applyFiltersAndSearch() {
 document.getElementById('fp-filter-apply-top').addEventListener('click', applyFiltersAndSearch);
 document.getElementById('fp-filter-apply').addEventListener('click', applyFiltersAndSearch);
 
+// Left panel: quick search box + logged-in pfp/username (same /api/auth/me
+// the shared topbar uses — fetched separately here since the topbar script
+// keeps its own user data private to its IIFE).
+function initSidePanel() {
+  const searchInput = document.getElementById('fp-side-search-input');
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const q = searchInput.value.trim();
+    window.location.href = q ? `/fanpages/search?q=${encodeURIComponent(q)}` : '/fanpages/search';
+  });
+
+  const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+  if (!token) return;
+  fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => (r.ok ? r.json() : null))
+    .then(data => {
+      if (!data || !data.user) return;
+      const u = data.user;
+      const name = u.display_name || u.username;
+      const initial = (name.charAt(0) || '?').toUpperCase();
+      document.getElementById('fp-side-pfp-slot').innerHTML = u.avatar
+        ? `<img class="fp-side-pfp" src="${escapeHtml(u.avatar)}" alt="" />`
+        : `<span class="fp-side-pfp-fallback">${escapeHtml(initial)}</span>`;
+      const profileHref = `/fanpages/${escapeHtml(u.username)}`;
+      document.getElementById('fp-side-pfp-link').href = profileHref;
+      const nameLink = document.getElementById('fp-side-username');
+      nameLink.href = profileHref;
+      nameLink.textContent = name;
+      nameLink.classList.remove('fp-side-username--guest');
+    })
+    .catch(() => {});
+}
+
+initSidePanel();
 loadCatalogsForAutocomplete();
 runSearch();
 </script>
