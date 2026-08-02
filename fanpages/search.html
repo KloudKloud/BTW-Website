@@ -31,7 +31,7 @@
        right-hand panel instead. */
     .fp-layout {
       padding: 1.75rem 2.5rem 5rem;
-      display: grid; grid-template-columns: 1fr 380px; gap: 2.5rem; align-items: start;
+      display: grid; grid-template-columns: 1fr 380px; gap: 2.5rem; align-items: stretch;
     }
     .fp-results-col { min-width: 0; }
 
@@ -105,8 +105,12 @@
 
     /* ── Right-hand "Sort and Filter" panel — sticks to the page as you
        scroll the results. ── */
+    /* height:100% (with .fp-layout's align-items:stretch) makes the panel's
+       own box stretch to match the results column's full height instead of
+       shrink-wrapping just its own content; still sticky + internally
+       scrollable for whenever that's taller than one screen. */
     .fp-filter-panel {
-      position: sticky; top: 92px;
+      position: sticky; top: 92px; height: 100%;
       background: rgba(20,18,24,0.85); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
       border: 1px solid rgba(255,255,255,0.14); border-radius: 18px;
       padding: 1.5rem; max-height: calc(100vh - 112px); overflow-y: auto;
@@ -116,10 +120,6 @@
     .fp-filter-panel::-webkit-scrollbar-track { background: #1a1a1e; border-radius: 8px; }
     .fp-filter-panel::-webkit-scrollbar-thumb { background: #444; border-radius: 8px; }
     .fp-filter-panel::-webkit-scrollbar-thumb:hover { background: #555; }
-    .fp-filter-title {
-      text-align: center; font-size: 1.15rem; font-weight: 700; background: rgba(255,255,255,0.06);
-      border-radius: 10px; padding: 0.6em; margin-bottom: 1.1rem;
-    }
     .fp-filter-query {
       font-size: 0.85rem; color: #bbb; background: rgba(127,168,217,0.1); border: 1px solid rgba(127,168,217,0.3);
       border-radius: 10px; padding: 0.6em 0.85em; margin-bottom: 1.25rem;
@@ -128,14 +128,12 @@
     .fp-filter-section { margin-bottom: 1.4rem; }
     .fp-filter-section-title { font-size: 1rem; font-weight: 700; color: #ddd; margin-bottom: 0.6rem; }
 
-    .fp-sort-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-    .fp-sort-pill {
-      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); color: #ccc;
-      border-radius: 20px; padding: 0.45em 1em; font-size: 0.85rem; font-weight: 700; cursor: pointer;
-      font-family: inherit; transition: background 0.15s, border-color 0.15s, color 0.15s;
+    .fp-sort-select {
+      width: 100%; background: #1a1a1e; border: 1px solid rgba(255,255,255,0.16); border-radius: 8px;
+      color: #f0f0f0; font-family: inherit; font-size: 0.92rem; font-weight: 600; padding: 0.6em 0.7em;
+      cursor: pointer;
     }
-    .fp-sort-pill:hover { border-color: #7fa8d9; color: #a8c6e8; }
-    .fp-sort-pill.active { background: #7fa8d9; border-color: #7fa8d9; color: #0d0d0d; }
+    .fp-sort-select:focus { outline: none; border-color: #7fa8d9; }
 
     .fp-filter-details { border-top: 1px solid rgba(255,255,255,0.1); padding: 0.6rem 0; }
     .fp-filter-details summary {
@@ -161,9 +159,10 @@
     .fp-filter-apply-btn {
       width: 100%; background: #7fa8d9; color: #0d0d0d; border: none; border-radius: 20px;
       padding: 0.7em; font-family: inherit; font-size: 0.95rem; font-weight: 700; cursor: pointer;
-      margin-top: 0.5rem;
     }
     .fp-filter-apply-btn:hover { background: #93b8e2; }
+    .fp-filter-apply-btn--top { margin-bottom: 1.1rem; }
+    .fp-filter-apply-btn--bottom { margin-top: 0.5rem; }
 
     @media (max-width: 980px) {
       .fp-layout { grid-template-columns: 1fr; }
@@ -193,19 +192,17 @@
   </div>
 
   <aside class="fp-filter-panel" id="fp-filter-panel">
-    <p class="fp-filter-title">Sort and Filter</p>
+    <button class="fp-filter-apply-btn fp-filter-apply-btn--top" id="fp-filter-apply-top" type="button">Sort and Filter</button>
     <div class="fp-filter-query">Current search: <strong id="fp-filter-query-text">Everything</strong></div>
 
     <div class="fp-filter-section">
-      <details class="fp-filter-details" id="fp-sort-details" open>
-        <summary>Sort: <span id="fp-sort-current">Best Match</span></summary>
-        <div class="fp-sort-pills" id="fp-sort-pills">
-          <button class="fp-sort-pill active" data-sort="best_match" data-label="Best Match" type="button">Best Match</button>
-          <button class="fp-sort-pill" data-sort="updated" data-label="Date Updated" type="button">Date Updated</button>
-          <button class="fp-sort-pill" data-sort="kudos" data-label="Likes" type="button">Likes</button>
-          <button class="fp-sort-pill" data-sort="hits" data-label="Reads" type="button">Reads</button>
-        </div>
-      </details>
+      <p class="fp-filter-section-title">Sort by</p>
+      <select id="f-sort" class="fp-sort-select">
+        <option value="best_match">Best Match</option>
+        <option value="updated">Date Updated</option>
+        <option value="kudos">Likes</option>
+        <option value="hits">Reads</option>
+      </select>
     </div>
 
     <div class="fp-filter-section">
@@ -245,17 +242,6 @@
         <input type="text" id="f-tags-include" placeholder="e.g. Espeon, Fluff" list="fp-tag-list" style="margin-top:0.7rem;" />
         <datalist id="fp-tag-list"></datalist>
       </details>
-    </div>
-
-    <div class="fp-filter-section">
-      <p class="fp-filter-section-title">Exclude</p>
-      <details class="fp-filter-details">
-        <summary>Additional Tags</summary>
-        <input type="text" id="f-tags-exclude" placeholder="Comma-separated" list="fp-tag-list" style="margin-top:0.7rem;" />
-      </details>
-    </div>
-
-    <div class="fp-filter-section">
       <details class="fp-filter-details">
         <summary>Word Count</summary>
         <div class="fp-filter-word-row" style="margin-top:0.7rem;">
@@ -264,9 +250,6 @@
           <input type="number" id="f-word-max" placeholder="Max" min="0" />
         </div>
       </details>
-    </div>
-
-    <div class="fp-filter-section">
       <details class="fp-filter-details">
         <summary>Completion Status</summary>
         <div class="fp-filter-options" id="f-completion">
@@ -277,7 +260,15 @@
       </details>
     </div>
 
-    <button class="fp-filter-apply-btn" id="fp-filter-apply" type="button">Sort and Filter</button>
+    <div class="fp-filter-section">
+      <p class="fp-filter-section-title">Exclude</p>
+      <details class="fp-filter-details">
+        <summary>Additional Tags</summary>
+        <input type="text" id="f-tags-exclude" placeholder="Comma-separated" list="fp-tag-list" style="margin-top:0.7rem;" />
+      </details>
+    </div>
+
+    <button class="fp-filter-apply-btn fp-filter-apply-btn--bottom" id="fp-filter-apply" type="button">Sort and Filter</button>
   </aside>
 </main>
 </div>
@@ -389,12 +380,7 @@ function readParamsFromUrl() {
 }
 
 function applyParamsToPanel(f) {
-  const activeSort = f.sort || 'best_match';
-  document.querySelectorAll('.fp-sort-pill').forEach(btn => {
-    const isActive = btn.dataset.sort === activeSort;
-    btn.classList.toggle('active', isActive);
-    if (isActive) document.getElementById('fp-sort-current').textContent = btn.dataset.label;
-  });
+  document.getElementById('f-sort').value = f.sort || 'best_match';
   document.getElementById('f-fandoms').value = f.fandoms;
   document.getElementById('f-relationships').value = f.relationships;
   document.getElementById('f-tags-include').value = f.tags_include;
@@ -414,10 +400,11 @@ function applyParamsToPanel(f) {
   document.getElementById('fp-filter-query-text').textContent = queryBits.length ? queryBits.join(', ') : 'Everything';
 }
 
-function collectPanelParams(currentSort) {
+function collectPanelParams() {
   const params = {};
   const q = new URLSearchParams(window.location.search).get('q');
   if (q) params.q = q;
+  params.sort = document.getElementById('f-sort').value;
   const fandoms = document.getElementById('f-fandoms').value.trim();
   if (fandoms) params.fandoms = fandoms;
   const relationships = document.getElementById('f-relationships').value.trim();
@@ -436,7 +423,6 @@ function collectPanelParams(currentSort) {
   if (wordMax) params.word_max = wordMax;
   const completion = document.querySelector('#f-completion input:checked').value;
   if (completion !== 'all') params.completion = completion;
-  if (currentSort) params.sort = currentSort;
   return params;
 }
 
@@ -528,20 +514,13 @@ async function runSearch() {
   }
 }
 
-// Sort pills just update the panel's own state — nothing reloads until
-// "Sort and Filter" is pressed, same as every other filter in the panel.
-document.querySelectorAll('.fp-sort-pill').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.fp-sort-pill').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('fp-sort-current').textContent = btn.dataset.label;
-  });
-});
-document.getElementById('fp-filter-apply').addEventListener('click', () => {
-  const activeBtn = document.querySelector('.fp-sort-pill.active');
-  const params = collectPanelParams(activeBtn ? activeBtn.dataset.sort : 'best_match');
-  window.location.search = new URLSearchParams(params).toString();
-});
+// Both "Sort and Filter" buttons (top and bottom of the panel) do the
+// same thing — apply everything currently set in the panel at once.
+function applyFiltersAndSearch() {
+  window.location.search = new URLSearchParams(collectPanelParams()).toString();
+}
+document.getElementById('fp-filter-apply-top').addEventListener('click', applyFiltersAndSearch);
+document.getElementById('fp-filter-apply').addEventListener('click', applyFiltersAndSearch);
 
 loadCatalogsForAutocomplete();
 runSearch();
