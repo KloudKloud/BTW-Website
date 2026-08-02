@@ -119,6 +119,12 @@
     .rd-author-avatar {
       width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(127,168,217,0.5);
     }
+    .rd-author-avatar-fallback {
+      width: 76px; height: 76px; border-radius: 50%; border: 2px solid rgba(127,168,217,0.5);
+      background: linear-gradient(135deg, #6b3fa0, #c2547a);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Inter', sans-serif; font-weight: 700; font-size: 1.7rem; color: #fff;
+    }
     .rd-author-card-name { font-family: 'Inter', sans-serif; font-size: 0.92rem; font-weight: 700; color: #ccc; text-align: center; text-decoration: none; }
     .rd-author-card-name:hover { color: #7fa8d9; }
     .rd-follow-btn {
@@ -174,7 +180,7 @@
     /* Left-aligned within its column (not self-centered) so it stays near
        the floating left panel instead of drifting toward the middle of a
        now much wider column. */
-    .rd-article { max-width: 1020px; width: 100%; }
+    .rd-article { max-width: 1220px; width: 100%; }
 
     .rd-meta-card {
       background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px;
@@ -1282,7 +1288,19 @@ window.addEventListener('resize', () => { if (!gifPickerWrap.hidden && gifActive
   const authorHref = SITE.author_username ? `/fanpages/${SITE.author_username}` : '#';
   document.getElementById('rd-author-card').href = authorHref;
   document.getElementById('rd-author-card').textContent = SITE.author_display_name || SITE.author_username || '';
-  document.getElementById('rd-author-avatar').src = SITE.author_avatar || '/images/noimage.png';
+  // No real avatar? A colored initial, same fallback used for comment
+  // avatars everywhere else — not the site's generic "no image" icon,
+  // which reads as a broken/missing state rather than a real person.
+  const avatarEl = document.getElementById('rd-author-avatar');
+  if (SITE.author_avatar) {
+    avatarEl.src = SITE.author_avatar;
+  } else {
+    const fallback = document.createElement('span');
+    fallback.className = 'rd-author-avatar-fallback';
+    fallback.id = 'rd-author-avatar';
+    fallback.textContent = ((SITE.author_display_name || SITE.author_username || '?')[0] || '?').toUpperCase();
+    avatarEl.replaceWith(fallback);
+  }
 
   renderBookmarkState();
   renderFollowState();

@@ -103,16 +103,28 @@
   wireDropdown('fpnav-browse-btn', 'fpnav-browse-dropdown');
   // Browse also opens on hover (not just click), unlike the Create/avatar
   // menus — it's pure navigation with no login-gating to worry about, so
-  // there's no downside to making it quicker to get to.
+  // there's no downside to making it quicker to get to. Closing is
+  // debounced on a short timer (cleared by re-entering either the button
+  // or the menu) so crossing the small visual gap between them on the way
+  // down doesn't get treated as "left the menu" and slam it shut.
   (() => {
     const wrap = document.getElementById('fpnav-browse-btn').closest('.fpnav-dropdown-wrap');
     const dd = document.getElementById('fpnav-browse-dropdown');
     if (!wrap || !dd) return;
-    wrap.addEventListener('mouseenter', () => {
+    let closeTimer = null;
+    const open = () => {
+      clearTimeout(closeTimer);
       document.querySelectorAll('.fpnav-dropdown').forEach(el => { if (el !== dd) el.hidden = true; });
       dd.hidden = false;
-    });
-    wrap.addEventListener('mouseleave', () => { dd.hidden = true; });
+    };
+    const scheduleClose = () => {
+      clearTimeout(closeTimer);
+      closeTimer = setTimeout(() => { dd.hidden = true; }, 150);
+    };
+    wrap.addEventListener('mouseenter', open);
+    wrap.addEventListener('mouseleave', scheduleClose);
+    dd.addEventListener('mouseenter', open);
+    dd.addEventListener('mouseleave', scheduleClose);
   })();
   document.addEventListener('click', () => {
     document.querySelectorAll('.fpnav-dropdown').forEach(el => { el.hidden = true; });
