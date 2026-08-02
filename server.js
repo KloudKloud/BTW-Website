@@ -3448,6 +3448,141 @@ app.delete('/api/admin/test-data', requireAuth, requireAdmin, async (req, res) =
   res.json({ deleted: rows.length, usernames: rows.map(r => r.username) });
 });
 
+// ── Personalized story recommendations — the Wattpad-style half of the
+// discovery plan (the search/tags system above is the AO3-style, purely
+// deterministic half). Not machine learning — a scored blend of three
+// explainable signals, each cheap enough to compute fresh per request at
+// this site's scale:
+//   1. Follows (heaviest weight) — stories by authors the viewer follows.
+//   2. Tag affinity — tags/fandoms that show up a lot across what the
+//      viewer has bookmarked.
+//   3. Similar readers — other people who bookmarked the same stories as
+//      the viewer, weighted by how much else they've bookmarked in common
+//      (a lightweight collaborative-filtering co-occurrence, not real ML).
+// A small recency-decayed trending score is always added as a tiebreaker,
+// and is the ONLY signal used for a logged-out viewer or one with no
+// bookmarks/follows yet, so the section is never empty. Each result
+// carries a `reason` string so it's visible *why* something was picked —
+// both for the reader's benefit and for us to sanity-check the scoring. ──
+function recTrendingScore(s) {
+  const ageDays = s.last_chapter_update ? (Date.now() - new Date(s.last_chapter_update).getTime()) / 86400000 : 999;
+  const engagement = (s.like_count || 0) * 2 + (s.bookmark_count || 0) * 3;
+  return engagement / Math.pow(ageDays + 2, 0.7);
+}
+// Caps how many picks come from the same author so one prolific followed
+// author doesn't crowd out everything else, same as the real thing would.
+function recDiversify(scored, limit, perAuthorCap) {
+  scored.sort((a, b) => b.score - a.score);
+  const picked = [];
+  const authorCounts = {};
+  for (const s of scored) {
+    if (picked.length >= limit) break;
+    const count = authorCounts[s.owner_user_id] || 0;
+    if (count >= perAuthorCap) continue;
+    authorCounts[s.owner_user_id] = count + 1;
+    picked.push(s);
+  }
+  if (picked.length < limit) {
+    for (const s of scored) {
+      if (picked.length >= limit) break;
+      if (picked.includes(s)) continue;
+      picked.push(s);
+    }
+  }
+  return picked.map(s => ({
+    slug: s.slug, story_path: s.story_path || s.slug, site_title: s.site_title, cover_url: s.cover_url,
+    synopsis: s.synopsis || '', tags: s.tags || [], author: s.display_name || s.username, author_username: s.username,
+    author_avatar: s.avatar || null, bookmarked: false, reason: s.reason,
+  }));
+}
+
+app.get('/api/recommendations/stories', async (req, res) => {
+  const limit = Math.min(30, Math.max(1, parseInt(req.query.limit, 10) || 10));
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+
+  const { rows: pool_stories } = await pool.query(`
+    SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.synopsis, ms.tags, ms.fandoms, ms.owner_user_id,
+           u.username, u.display_name, u.avatar,
+           COALESCE(lc.count, 0) AS like_count, COALESCE(bc.count, 0) AS bookmark_count,
+           pubchap.last_chapter_update
+    FROM moderator_sites ms
+    JOIN users u ON u.id = ms.owner_user_id
+    JOIN LATERAL (
+      SELECT COUNT(*)::int AS published_count, MAX(mc.updated_at) AS last_chapter_update
+      FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+    ) pubchap ON true
+    LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_site_likes WHERE site_id = ms.id) lc ON true
+    LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_bookmarks WHERE site_id = ms.id) bc ON true
+    WHERE pubchap.published_count > 0
+  `);
+
+  if (!viewerId) {
+    const scored = pool_stories.map(s => ({ ...s, score: recTrendingScore(s), reason: 'Trending now' }));
+    return res.json({ stories: recDiversify(scored, limit, 2) });
+  }
+
+  const [followedRows, myBookmarkRows, myOwnRows] = await Promise.all([
+    pool.query('SELECT followed_id FROM user_follows WHERE follower_id = $1', [viewerId]),
+    pool.query('SELECT site_id FROM moderator_bookmarks WHERE user_id = $1', [viewerId]),
+    pool.query('SELECT id FROM moderator_sites WHERE owner_user_id = $1', [viewerId]),
+  ]);
+  const followedIds = new Set(followedRows.rows.map(r => r.followed_id));
+  const myBookmarkedSiteIds = new Set(myBookmarkRows.rows.map(r => r.site_id));
+  const myOwnSiteIds = new Set(myOwnRows.rows.map(r => r.id));
+
+  const affinity = {};
+  pool_stories.filter(s => myBookmarkedSiteIds.has(s.id)).forEach(s => {
+    [...(s.tags || []), ...(s.fandoms || [])].forEach(t => { affinity[t] = (affinity[t] || 0) + 1; });
+  });
+
+  let cooccur = {};
+  if (myBookmarkedSiteIds.size) {
+    const { rows: similarUserRows } = await pool.query(
+      `SELECT DISTINCT mb2.user_id FROM moderator_bookmarks mb1
+       JOIN moderator_bookmarks mb2 ON mb1.site_id = mb2.site_id AND mb2.user_id != $1
+       WHERE mb1.user_id = $1`,
+      [viewerId]
+    );
+    const similarIds = similarUserRows.map(r => r.user_id);
+    if (similarIds.length) {
+      const { rows: coRows } = await pool.query(
+        `SELECT site_id, COUNT(*)::int AS c FROM moderator_bookmarks WHERE user_id = ANY($1::int[]) GROUP BY site_id`,
+        [similarIds]
+      );
+      coRows.forEach(r => { cooccur[r.site_id] = r.c; });
+    }
+  }
+
+  const scored = pool_stories
+    .filter(s => !myOwnSiteIds.has(s.id) && !myBookmarkedSiteIds.has(s.id))
+    .map(s => {
+      let score = 0;
+      let reason = null;
+      if (followedIds.has(s.owner_user_id)) {
+        score += 100;
+        reason = `Because you follow ${s.display_name || s.username}`;
+      }
+      const tagOverlap = [...(s.tags || []), ...(s.fandoms || [])].reduce((sum, t) => sum + (affinity[t] || 0), 0);
+      if (tagOverlap > 0) {
+        score += tagOverlap * 6;
+        if (!reason) reason = 'Because of tags you like';
+      }
+      const co = cooccur[s.id] || 0;
+      if (co > 0) {
+        score += co * 10;
+        if (!reason) reason = 'Readers like you also bookmarked this';
+      }
+      score += recTrendingScore(s);
+      return { ...s, score, reason: reason || 'Trending now' };
+    });
+
+  res.json({ stories: recDiversify(scored, limit, 3) });
+});
+
 // ── Recommended Followers — for the Fanpage Hub's "Recommended Followers"
 // row (and its "See More" expanded list). Recommends any registered user
 // — having an actual fanpage/story isn't required, since a brand new

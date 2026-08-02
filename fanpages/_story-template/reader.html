@@ -217,6 +217,7 @@
     .rd-rec-title { font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 700; color: #e8e8e8; margin: 0 0 0.2rem; line-height: 1.3; }
     .rd-rec-card:hover .rd-rec-title { color: #7fa8d9; }
     .rd-rec-teaser { font-size: 0.78rem; color: #999; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .rd-rec-reason { font-size: 0.7rem; color: #7fa8d9; font-style: italic; margin-top: 0.25rem; }
     .rd-recs-loading-more { text-align: center; color: #888; font-size: 0.8rem; padding: 1rem 0; }
 
     /* ── Inline paragraph comments ── */
@@ -817,6 +818,7 @@ function revealMoreRecs() {
       <span class="rd-rec-info">
         <p class="rd-rec-title">${escapeHtml(s.site_title || 'Untitled Story')}</p>
         <p class="rd-rec-teaser">${escapeHtml(s.synopsis || 'No description yet.')}</p>
+        ${s.reason ? `<p class="rd-rec-reason">${escapeHtml(s.reason)}</p>` : ''}
       </span>
     `;
     list.appendChild(a);
@@ -828,9 +830,9 @@ function revealMoreRecs() {
 async function renderRecs() {
   const list = document.getElementById('rd-recs-list');
   try {
-    const res = await fetch('/api/moderator-sites');
+    const res = await fetch('/api/recommendations/stories?limit=30', { headers: authHeaders() });
     const data = await res.json();
-    recsPool = (data.sites || []).filter(s => s.story_path !== SITE.story_path).sort(() => Math.random() - 0.5);
+    recsPool = (data.stories || []).filter(s => s.story_path !== SITE.story_path);
     recsRevealed = 0;
     list.innerHTML = '';
     if (!recsPool.length) { list.innerHTML = '<p style="color:#888; font-size:0.85rem;">Nothing else here yet.</p>'; return; }
