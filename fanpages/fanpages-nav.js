@@ -19,6 +19,15 @@
       <a class="fpnav-brand" href="/fanpages"><img class="fpnav-brand-logo" src="/images/fanpagelogo.png" alt="Fanpages" width="52" height="44" /></a>
       <a class="fpnav-link${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Clubs</a>
 
+      <div class="fpnav-dropdown-wrap">
+        <button class="fpnav-link fpnav-trigger-link${['/fanpages/search', '/fanpages/tags'].includes(here) ? ' active' : ''}" id="fpnav-browse-btn" type="button">Browse <span class="fpnav-caret">▾</span></button>
+        <div class="fpnav-dropdown" id="fpnav-browse-dropdown" hidden>
+          <a href="/fanpages/search">Works</a>
+          <a href="/fanpages/search?sort=bookmarks_recent">Bookmarks</a>
+          <a href="/fanpages/tags">Tags</a>
+        </div>
+      </div>
+
       <div class="fpnav-search"><input type="search" id="fpnav-search-input" placeholder="🔍 Search stories…" /></div>
       <div class="fpnav-right">
 
@@ -91,6 +100,7 @@
   }
   wireDropdown('fpnav-upload-btn', 'fpnav-upload-dropdown');
   wireDropdown('fpnav-avatar-btn', 'fpnav-avatar-dropdown');
+  wireDropdown('fpnav-browse-btn', 'fpnav-browse-dropdown');
   document.addEventListener('click', () => {
     document.querySelectorAll('.fpnav-dropdown').forEach(el => { el.hidden = true; });
   });

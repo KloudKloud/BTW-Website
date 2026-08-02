@@ -345,6 +345,19 @@ async function initDb() {
       name TEXT UNIQUE NOT NULL
     );
   `).catch(e => console.error('moderator_sites fandoms migration:', e.message));
+
+  // Completion status, for the advanced work search's "Complete works
+  // only / Works in progress only" filter — an explicit author-set flag
+  // rather than something inferred, since "no more chapters yet" and
+  // "finished on purpose" aren't distinguishable otherwise.
+  await pool.query(`ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS is_complete BOOLEAN NOT NULL DEFAULT false`)
+    .catch(e => console.error('moderator_sites is_complete migration:', e.message));
+
+  // Marks throwaway seed/demo accounts and their stories so they can be
+  // wiped in one shot (DELETE FROM users WHERE is_test_data, cascades to
+  // everything they own) without touching any real author's content.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_test_data BOOLEAN NOT NULL DEFAULT false`)
+    .catch(e => console.error('users is_test_data migration:', e.message));
   await pool.query(`
     INSERT INTO fandom_catalog (name) VALUES ('Pokemon'), ('Original Furry Characters'), ('Original Characters')
     ON CONFLICT (name) DO NOTHING;
@@ -3256,6 +3269,183 @@ app.get('/api/moderator-sites', async (req, res) => {
       bookmarked: bookmarkedIds.has(s.id),
     })),
   });
+});
+
+// ── Advanced work search — AO3-style faceted search over every publicly
+// discoverable story (same "has a published chapter with real text" rule
+// as /api/moderator-sites). Tag-ish params are comma-separated lists in the
+// query string; include filters require ALL listed values present
+// (jsonb ?& = "all of these array elements exist"), exclude filters reject
+// ANY listed value present (jsonb ?| = "any of these exist"). ─────────────
+function csvParam(raw) {
+  return String(raw || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+const SEARCH_SORTS = {
+  best_match: null, // handled specially — falls back to updated when there's no query text
+  updated:    'last_chapter_update DESC NULLS LAST',
+  published:  'ms.created_at DESC',
+  word_count: 'word_count DESC',
+  hits:       'ms.view_count DESC',
+  kudos:      'like_count DESC',
+  comments:   'comment_count DESC',
+  bookmarks:  'bookmark_count DESC',
+};
+
+app.get('/api/search/works', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  const fandoms      = csvParam(req.query.fandoms);
+  const tagsInclude   = csvParam(req.query.tags_include);
+  const tagsExclude   = csvParam(req.query.tags_exclude);
+  const categories    = csvParam(req.query.categories);
+  const relationships = csvParam(req.query.relationships);
+  const rating = RATING_OPTIONS.includes(req.query.rating) ? req.query.rating : '';
+  const wordMin = Number.isFinite(parseInt(req.query.word_min, 10)) ? parseInt(req.query.word_min, 10) : null;
+  const wordMax = Number.isFinite(parseInt(req.query.word_max, 10)) ? parseInt(req.query.word_max, 10) : null;
+  const completion = ['complete', 'wip'].includes(req.query.completion) ? req.query.completion : 'all';
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  const offset = (page - 1) * limit;
+
+  let sortKey = SEARCH_SORTS.hasOwnProperty(req.query.sort) ? req.query.sort : (q ? 'best_match' : 'updated');
+  if (sortKey === 'best_match' && !q) sortKey = 'updated';
+
+  const relevanceExpr = q
+    ? `(
+        (CASE WHEN ms.site_title ILIKE '%' || $1 || '%' THEN 10 ELSE 0 END) +
+        (CASE WHEN EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.tags) t WHERE t ILIKE $1) THEN 9 ELSE 0 END) +
+        (CASE WHEN EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.tags) t WHERE t ILIKE '%' || $1 || '%') THEN 5 ELSE 0 END) +
+        (CASE WHEN EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.fandoms) t WHERE t ILIKE '%' || $1 || '%') THEN 6 ELSE 0 END) +
+        (CASE WHEN EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.relationships) t WHERE t ILIKE '%' || $1 || '%') THEN 4 ELSE 0 END) +
+        (CASE WHEN u.username ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%' THEN 3 ELSE 0 END) +
+        (CASE WHEN ms.synopsis ILIKE '%' || $1 || '%' THEN 2 ELSE 0 END)
+      )`
+    : '0';
+
+  const orderBy = sortKey === 'best_match' ? `${relevanceExpr} DESC, last_chapter_update DESC NULLS LAST` : SEARCH_SORTS[sortKey];
+
+  const params = [
+    q, fandoms, tagsInclude, tagsExclude, categories, relationships,
+    rating, wordMin, wordMax, completion, limit, offset,
+  ];
+
+  const { rows } = await pool.query(`
+    SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.synopsis,
+           ms.tags, ms.fandoms, ms.categories, ms.relationships, ms.rating, ms.is_complete,
+           ms.created_at, ms.view_count,
+           u.username, u.display_name, u.avatar,
+           pubchap.published_count, pubchap.word_count, pubchap.last_chapter_update,
+           COALESCE(lc.count, 0) AS like_count,
+           COALESCE(cc.count, 0) AS comment_count,
+           COALESCE(bc.count, 0) AS bookmark_count,
+           ${relevanceExpr} AS relevance_score,
+           COUNT(*) OVER() AS total_count
+    FROM moderator_sites ms
+    JOIN users u ON u.id = ms.owner_user_id
+    JOIN LATERAL (
+      SELECT COUNT(*)::int AS published_count,
+             COALESCE(SUM(
+               GREATEST(1, array_length(regexp_split_to_array(trim(regexp_replace(mc.body, '<[^>]+>', ' ', 'g')), '\\s+'), 1))
+             ), 0) AS word_count,
+             MAX(mc.updated_at) AS last_chapter_update
+      FROM moderator_chapters mc
+      WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+    ) pubchap ON true
+    LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_site_likes WHERE site_id = ms.id) lc ON true
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS count FROM content_comments cc2
+      JOIN moderator_chapters mc2 ON mc2.id = cc2.target_id AND cc2.target_type = 'chapter'
+      WHERE mc2.site_id = ms.id
+    ) cc ON true
+    LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_bookmarks WHERE site_id = ms.id) bc ON true
+    WHERE pubchap.published_count > 0
+      AND ($1 = '' OR (
+        ms.site_title ILIKE '%' || $1 || '%' OR u.username ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%'
+        OR ms.synopsis ILIKE '%' || $1 || '%'
+        OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.tags) t WHERE t ILIKE '%' || $1 || '%')
+        OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.fandoms) t WHERE t ILIKE '%' || $1 || '%')
+        OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.relationships) t WHERE t ILIKE '%' || $1 || '%')
+      ))
+      AND (cardinality($2::text[]) = 0 OR ms.fandoms ?& $2)
+      AND (cardinality($3::text[]) = 0 OR ms.tags ?& $3)
+      AND (cardinality($4::text[]) = 0 OR NOT (ms.tags ?| $4))
+      AND (cardinality($5::text[]) = 0 OR ms.categories ?& $5)
+      AND (cardinality($6::text[]) = 0 OR ms.relationships ?& $6)
+      AND ($7 = '' OR ms.rating = $7)
+      AND ($8::int IS NULL OR pubchap.word_count >= $8)
+      AND ($9::int IS NULL OR pubchap.word_count <= $9)
+      AND ($10 = 'all' OR ($10 = 'complete' AND ms.is_complete) OR ($10 = 'wip' AND NOT ms.is_complete))
+    ORDER BY ${orderBy}
+    LIMIT $11 OFFSET $12
+  `, params);
+
+  res.json({
+    works: rows.map(r => ({
+      slug: r.slug, story_path: r.story_path || r.slug, site_title: r.site_title,
+      cover_url: r.cover_url, synopsis: r.synopsis || '',
+      tags: r.tags || [], fandoms: r.fandoms || [], categories: r.categories || [], relationships: r.relationships || [],
+      rating: r.rating, is_complete: r.is_complete,
+      author: r.display_name || r.username, author_username: r.username, author_avatar: r.avatar || null,
+      published_chapters: r.published_count, word_count: r.word_count,
+      updated_at: r.last_chapter_update, created_at: r.created_at,
+      hits: r.view_count || 0, kudos: Number(r.like_count), comments: Number(r.comment_count), bookmarks: Number(r.bookmark_count),
+    })),
+    total: rows.length ? Number(rows[0].total_count) : 0,
+    page, limit, sort: sortKey,
+  });
+});
+
+// Popular tags — powers the "Tags" browse page's tag cloud, sized by usage
+// frequency across every discoverable story (same publish-state rule).
+app.get('/api/search/popular-tags', async (req, res) => {
+  const limit = Math.min(300, Math.max(1, parseInt(req.query.limit, 10) || 150));
+  const { rows } = await pool.query(`
+    SELECT tag, COUNT(*)::int AS count
+    FROM moderator_sites ms, jsonb_array_elements_text(ms.tags) AS tag
+    WHERE EXISTS (
+      SELECT 1 FROM moderator_chapters mc
+      WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+    )
+    GROUP BY tag
+    ORDER BY count DESC, tag ASC
+    LIMIT $1
+  `, [limit]);
+  res.json({ tags: rows });
+});
+
+// Recently bookmarked — the Browse menu's "Bookmarks" entry, stories
+// ordered by their single most recent bookmark (not bookmark count).
+app.get('/api/search/recent-bookmarks', async (req, res) => {
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  const { rows } = await pool.query(`
+    SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.synopsis, ms.tags,
+           u.username, u.display_name, u.avatar,
+           mb.created_at AS bookmarked_at
+    FROM moderator_bookmarks mb
+    JOIN moderator_sites ms ON ms.id = mb.site_id
+    JOIN users u ON u.id = ms.owner_user_id
+    WHERE EXISTS (
+      SELECT 1 FROM moderator_chapters mc
+      WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+    )
+    ORDER BY mb.created_at DESC
+    LIMIT $1
+  `, [limit]);
+  res.json({
+    works: rows.map(r => ({
+      slug: r.slug, story_path: r.story_path || r.slug, site_title: r.site_title,
+      cover_url: r.cover_url, synopsis: r.synopsis || '', tags: r.tags || [],
+      author: r.display_name || r.username, author_username: r.username, author_avatar: r.avatar || null,
+      bookmarked_at: r.bookmarked_at,
+    })),
+  });
+});
+
+// Wipes every account flagged is_test_data (and everything they own, via
+// ON DELETE CASCADE) — the one-shot cleanup for search/algorithm demo seed
+// data. Admin-only; real accounts never carry this flag.
+app.delete('/api/admin/test-data', requireAuth, requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('DELETE FROM users WHERE is_test_data = true RETURNING username');
+  res.json({ deleted: rows.length, usernames: rows.map(r => r.username) });
 });
 
 // ── Recommended Followers — for the Fanpage Hub's "Recommended Followers"

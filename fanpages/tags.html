@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tags ✦ Fanpages</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; }
+    a { color: inherit; }
+
+    .fp-main { max-width: 1200px; margin: 0 auto; padding: 2.5rem 2rem 5rem; }
+    .fp-tags-heading { font-family: 'Cinzel', Georgia, serif; font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .fp-tags-sub { color: #999; font-size: 0.92rem; margin-bottom: 2.5rem; }
+
+    .fp-tag-cloud { line-height: 2.6; }
+    .fp-cloud-tag {
+      display: inline-block; text-decoration: none; color: #a8c6e8; font-weight: 600;
+      margin-right: 1.1rem; transition: color 0.15s;
+    }
+    .fp-cloud-tag:hover { color: #7fa8d9; text-decoration: underline; }
+    .fp-cloud-tag-count { font-size: 0.7em; color: #888; font-weight: 400; }
+
+    .fp-empty { color: #999; font-size: 0.95rem; padding: 2rem 0; }
+  </style>
+</head>
+<body>
+
+<div id="fanpages-topbar-root"></div>
+
+<main class="fp-main">
+  <h1 class="fp-tags-heading">Tags</h1>
+  <p class="fp-tags-sub">These are the most popular tags used across every story on the Archive. Bigger means more stories use it — click any tag to see them.</p>
+  <div class="fp-tag-cloud" id="fp-tag-cloud"><p class="fp-empty">Loading…</p></div>
+</main>
+
+<script src="/fanpages/fanpages-nav.js"></script>
+<script>
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // Log-scaled font size so one runaway-popular tag doesn't make everything
+  // else unreadably tiny by comparison — same idea as AO3's own tag cloud.
+  function sizeForCount(count, minCount, maxCount) {
+    if (maxCount === minCount) return 1.1;
+    const t = (Math.log(count - minCount + 1)) / (Math.log(maxCount - minCount + 1) || 1);
+    return 0.85 + t * 1.65; // 0.85rem .. 2.5rem
+  }
+
+  (async () => {
+    const cloudEl = document.getElementById('fp-tag-cloud');
+    try {
+      const res = await fetch('/api/search/popular-tags?limit=150');
+      const data = await res.json();
+      const tags = data.tags || [];
+      if (!tags.length) { cloudEl.innerHTML = '<p class="fp-empty">No tags yet — once stories publish with tags, they\'ll show up here.</p>'; return; }
+
+      const counts = tags.map(t => t.count);
+      const minCount = Math.min(...counts);
+      const maxCount = Math.max(...counts);
+      // Alphabetical reads far easier for a wall of tags than sorted-by-count.
+      const sorted = [...tags].sort((a, b) => a.tag.localeCompare(b.tag));
+
+      cloudEl.innerHTML = sorted.map(t => {
+        const size = sizeForCount(t.count, minCount, maxCount).toFixed(2);
+        return `<a class="fp-cloud-tag" style="font-size:${size}rem;" href="/fanpages/search?tags_include=${encodeURIComponent(t.tag)}&sort=updated&expand=1">${escapeHtml(t.tag)} <span class="fp-cloud-tag-count">(${t.count})</span></a>`;
+      }).join(' ');
+    } catch {
+      cloudEl.innerHTML = '<p class="fp-empty">Couldn\'t load tags right now.</p>';
+    }
+  })();
+</script>
+
+</body>
+</html>
