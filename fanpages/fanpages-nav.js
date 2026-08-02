@@ -101,6 +101,19 @@
   wireDropdown('fpnav-upload-btn', 'fpnav-upload-dropdown');
   wireDropdown('fpnav-avatar-btn', 'fpnav-avatar-dropdown');
   wireDropdown('fpnav-browse-btn', 'fpnav-browse-dropdown');
+  // Browse also opens on hover (not just click), unlike the Create/avatar
+  // menus — it's pure navigation with no login-gating to worry about, so
+  // there's no downside to making it quicker to get to.
+  (() => {
+    const wrap = document.getElementById('fpnav-browse-btn').closest('.fpnav-dropdown-wrap');
+    const dd = document.getElementById('fpnav-browse-dropdown');
+    if (!wrap || !dd) return;
+    wrap.addEventListener('mouseenter', () => {
+      document.querySelectorAll('.fpnav-dropdown').forEach(el => { if (el !== dd) el.hidden = true; });
+      dd.hidden = false;
+    });
+    wrap.addEventListener('mouseleave', () => { dd.hidden = true; });
+  })();
   document.addEventListener('click', () => {
     document.querySelectorAll('.fpnav-dropdown').forEach(el => { el.hidden = true; });
   });

@@ -174,7 +174,10 @@
     .fp-spotlight-img-wrap {
       width: 100%; aspect-ratio: 1; border-radius: 14px; overflow: hidden;
       margin-bottom: 0.85rem; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 8px 26px rgba(0,0,0,0.4);
-      background-color: rgba(255,255,255,0.05);
+      /* Same purple->rose gradient fallback as the generated-cover cards
+         below — a real cover image fully covers this either way, so it's
+         harmless there; a no-cover story just wasn't getting it before. */
+      background: linear-gradient(135deg, #6b3fa0, #c2547a);
     }
     .fp-spotlight-img { width: 100%; height: 100%; object-fit: cover; display: block; }
     /* NSFW character ref, viewer not allowed to see it — a blurred default
@@ -450,30 +453,6 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .rs-card-tip-author { display: block; font-size: 0.68rem; font-weight: 500; color: #d8cdf0; margin-top: 0.1rem; }
-    .rs-card--story {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 0.6rem; text-align: center; padding: 0 0.6rem; box-sizing: border-box;
-      background: linear-gradient(160deg, rgba(255,255,255,0.09), rgba(255,255,255,0.02));
-      border-color: rgba(255,255,255,0.12);
-    }
-    .rs-story-avatar {
-      width: 46px; height: 46px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
-      border: 1px solid rgba(255,255,255,0.2);
-    }
-    .rs-story-avatar-fallback {
-      width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
-      background: linear-gradient(135deg, #6b3fa0, #c2547a);
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 700; color: #fff; font-size: 1.05rem;
-      border: 1px solid rgba(255,255,255,0.2);
-    }
-    .rs-story-text { min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
-    .rs-story-headline { font-size: 0.78rem; font-weight: 700; color: #f0c060; }
-    .rs-story-sub {
-      font-size: 0.74rem; color: #ccc; max-width: 148px;
-      overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
-      -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-    }
 
     /* Disclaimer — same box used at the bottom of every user's profile page */
     .fp-disclaimer { max-width: 1200px; margin: 3rem auto 4rem; padding: 0 2rem; }
@@ -1351,30 +1330,8 @@
     }
   }
 
-  // ── Recent Submissions — newest stories/chapters/art/characters across
-  // every fanpage, mixed FurAffinity-style. Hover reveals the title/name. ──
-  function rsAuthorAvatar(it) {
-    const initial = escapeHtml((it.author || '?').charAt(0).toUpperCase());
-    return it.author_avatar
-      ? `<img class="rs-story-avatar" src="${it.author_avatar}" alt="" />`
-      : `<span class="rs-story-avatar-fallback">${initial}</span>`;
-  }
-
-  function rsStoryCard(it) {
-    const a = document.createElement('a');
-    a.className = 'rs-card rs-card--story';
-    a.href = `/fanpages/${it.story_path}`;
-    a.title = it.site_title || '';
-    a.innerHTML = `
-      ${rsAuthorAvatar(it)}
-      <span class="rs-story-text">
-        <span class="rs-story-headline">New story posted</span>
-        <span class="rs-story-sub">${escapeHtml(it.site_title || 'Untitled Story')}</span>
-      </span>
-    `;
-    return a;
-  }
-
+  // ── Recent Submissions — newest chapters/art/characters across every
+  // fanpage, mixed FurAffinity-style. Hover reveals the title/name. ──
   function rsCardTip(title, author) {
     return `
       <span class="rs-card-tip">
@@ -1424,10 +1381,9 @@
   }
 
   function activityCard(it) {
-    if (it.type === 'story') return rsStoryCard(it);
     if (it.type === 'art') return rsArtCard(it);
     if (it.type === 'chapter') {
-      return rsPortraitCard(it, '📖', it.title || 'Untitled Chapter', `/fanpages/${it.story_path}/chapters?ch=${it.id}`);
+      return rsPortraitCard(it, '📖', it.title || 'Untitled Chapter', `/fanpages/${it.story_path}/reader?ch=${it.id}`);
     }
     if (it.type === 'character') {
       const href = `/fanpages/${it.author_username}?char=${it.id}#characters`;

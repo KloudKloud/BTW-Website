@@ -3471,7 +3471,15 @@ function recTrendingScore(s) {
 }
 // Caps how many picks come from the same author so one prolific followed
 // author doesn't crowd out everything else, same as the real thing would.
+// Small per-request random jitter — without it, ties (very common: e.g.
+// every story sharing exactly one tag scores identically) resolve in the
+// same stable order every time, so a viewer with light/no signal saw the
+// exact same picks on every refresh. The jitter is small relative to real
+// signal gaps (follow = +100, one shared tag = +6) so it only reshuffles
+// genuine ties/near-ties, never buries a strongly-matched story under a
+// weakly-matched one.
 function recDiversify(scored, limit, perAuthorCap) {
+  scored.forEach(s => { s.score += Math.random() * 4; });
   scored.sort((a, b) => b.score - a.score);
   const picked = [];
   const authorCounts = {};
@@ -6215,26 +6223,21 @@ app.get('/api/activity-feed', async (req, res) => {
   // `limit` rows first could leave the feed short after filtering.
   const { rows } = await pool.query(
     `SELECT * FROM (
-       SELECT 'story' AS type, ms.id AS item_id, ms.created_at AS created_at,
-              ms.site_title AS title, ms.cover_url AS image,
+       -- Story creation itself isn't shown — a story with nothing published
+       -- yet isn't news to anyone. Only a chapter actually going live is,
+       -- and it's ordered/timestamped by updated_at (when it was published),
+       -- not created_at, so an old draft that gets published today shows up
+       -- as new today rather than back-dated to whenever the draft started.
+       SELECT 'chapter' AS type, mc.id AS item_id, mc.updated_at AS created_at,
+              mc.title, ms.cover_url AS image,
               ms.cover_position_x AS position_x, ms.cover_position_y AS position_y,
               ms.story_path, ms.site_title AS site_title,
               u.username, u.display_name, u.avatar,
               NULL::text AS category, false AS ref_is_nsfw
-       FROM moderator_sites ms
-       JOIN users u ON u.id = ms.owner_user_id
-
-       UNION ALL
-
-       SELECT 'chapter', mc.id, mc.created_at,
-              mc.title, ms.cover_url,
-              ms.cover_position_x, ms.cover_position_y,
-              ms.story_path, ms.site_title,
-              u.username, u.display_name, u.avatar,
-              NULL::text, false
        FROM moderator_chapters mc
        JOIN moderator_sites ms ON ms.id = mc.site_id
        JOIN users u ON u.id = ms.owner_user_id
+       WHERE mc.status = 'published' AND length(trim(mc.body)) > 0
 
        UNION ALL
 
