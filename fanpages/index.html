@@ -1380,11 +1380,33 @@
     return a;
   }
 
+  // A chapter card's "image" is really the story's own cover — when there
+  // isn't one, it should fall back to the same generated purple/rose book
+  // cover Story Spotlight uses, not the generic no-character silhouette
+  // .rs-card/rsPortraitCard falls back to for character/art posts.
+  function rsChapterCard(it) {
+    const a = document.createElement('a');
+    a.className = 'rs-card';
+    a.href = `/fanpages/${it.story_path}/reader?ch=${it.id}`;
+    const posX = it.position_x != null ? it.position_x : 50;
+    const posY = it.position_y != null ? it.position_y : 50;
+    if (it.image) {
+      a.innerHTML = `
+        <img src="${it.image}" alt="" style="object-position:${posX}% ${posY}%;" />
+        <span class="rs-card-badge">📖</span>
+        ${rsCardTip(it.title || 'Untitled Chapter', it.author)}
+      `;
+      return a;
+    }
+    a.innerHTML = `<span class="rs-card-badge">📖</span>${rsCardTip(it.title || 'Untitled Chapter', it.author)}`;
+    a.prepend(buildCoverEl({ site_title: it.site_title, author_avatar: it.author_avatar, cover_url: '' }));
+    a.querySelector('.fp-card-cover--generated').style.cssText += 'width:100%; height:100%;';
+    return a;
+  }
+
   function activityCard(it) {
     if (it.type === 'art') return rsArtCard(it);
-    if (it.type === 'chapter') {
-      return rsPortraitCard(it, '📖', it.title || 'Untitled Chapter', `/fanpages/${it.story_path}/reader?ch=${it.id}`);
-    }
+    if (it.type === 'chapter') return rsChapterCard(it);
     if (it.type === 'character') {
       const href = `/fanpages/${it.author_username}?char=${it.id}#characters`;
       return rsPortraitCard(it, '🧍', it.title || 'Unnamed', href);
