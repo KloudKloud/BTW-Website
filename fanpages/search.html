@@ -34,36 +34,38 @@
     .fp-bg-overlay { position: fixed; inset: 0; background: rgba(8,6,10,0.45); z-index: 0; }
     .fp-content-z { position: relative; z-index: 1; }
 
-    /* ── Top tab row — Story / Posts / Profiles, centered, sitting flush
-       under the nav with its own horizontal rule. The result-count line
-       (previously a subheading above the list) now lives on the right end
-       of this same rule instead. This rule is the new "ceiling" both side
-       panels are pinned against, replacing the old plain topbar edge. ── */
+    /* ── Top tab row — Story / Posts / Profiles, centered, pinned right
+       under the nav (sticky, same as the nav itself) with its own
+       horizontal rule. Tabs and the result-count line both sit ON TOP of
+       that rule (align-items:end + the active tab's own border-bottom
+       overlapping it by 1px) rather than floating in the middle of a
+       taller bar. This rule is the "ceiling" both side panels are pinned
+       against, replacing the old plain topbar edge. */
     .fp-tabs-row {
-      display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
-      padding: 0 2.5rem; height: 64px;
-      border-bottom: 1px solid rgba(255,255,255,0.14);
+      position: sticky; top: 76px; z-index: 5;
+      background: rgba(13,11,15,0.9); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      display: grid; grid-template-columns: 1fr auto 1fr; align-items: end;
+      padding: 0 2.5rem; height: 84px;
+      border-bottom: 1px solid rgba(255,255,255,0.18);
     }
-    .fp-tabs { grid-column: 2; display: flex; gap: 2.5rem; justify-self: center; }
+    .fp-tabs { grid-column: 2; display: flex; gap: 2.75rem; justify-self: center; }
     .fp-tab {
-      font-size: 1.05rem; font-weight: 700; color: #999; text-decoration: none;
-      padding: 0.4em 0; border-bottom: 2px solid transparent;
+      font-size: 1.3rem; font-weight: 800; color: #999; text-decoration: none;
+      padding-bottom: 0.85rem; border-bottom: 3px solid transparent; margin-bottom: -1px;
     }
     .fp-tab:hover { color: #ddd; }
     .fp-tab--active { color: #fff; border-bottom-color: #7fa8d9; }
     .fp-tab--soon { cursor: default; }
-    .fp-search-sub { grid-column: 3; justify-self: end; color: #ccc; font-size: 0.95rem; margin: 0; }
+    .fp-search-sub { grid-column: 3; justify-self: end; align-self: end; color: #ccc; font-size: 0.95rem; margin: 0; padding-bottom: 1.05rem; }
     .fp-search-sub strong { color: #fff; }
 
-    /* Topbar (76px) + tab row (64px) = 140px "ceiling" the side panels
+    /* Topbar (76px) + tab row (84px) = 160px "ceiling" the side panels
        stick to and are pulled flush against. */
     .fp-layout {
       padding: 1.75rem 2.5rem 5rem;
       display: grid; grid-template-columns: 320px 1fr 340px; gap: 2rem; align-items: stretch;
     }
     .fp-results-col { min-width: 0; }
-
-    .fp-search-heading { font-size: 1.9rem; font-weight: 700; margin-bottom: 0.3rem; }
 
     /* ── Result rows — no card box, just a horizontal rule between each ── */
     .fp-results-list { display: flex; flex-direction: column; border-top: 1px solid rgba(255,255,255,0.14); }
@@ -162,13 +164,13 @@
        "Your Library" teaser (bookmarks/tags/read-later). Fully transparent
        so it reads as content sitting on the shared blurred wallpaper, same
        as the results column, rather than a boxed widget like the filter
-       panel. Pinned against the same 140px ceiling as the right panel, and
+       panel. Pinned against the same 160px ceiling as the right panel, and
        flush with the page's left/bottom edges via the same negative-margin
        trick. */
     .fp-side-panel {
-      position: sticky; top: 140px;
+      position: sticky; top: 160px;
       margin-top: -1.75rem; margin-bottom: -5rem; margin-left: -2.5rem;
-      height: calc(100vh - 140px); max-height: calc(100vh - 140px);
+      height: calc(100vh - 160px); max-height: calc(100vh - 160px);
       display: flex; flex-direction: column; align-items: center;
       padding: 2rem 1.75rem; overflow-y: auto;
       scrollbar-color: #444 transparent; /* Firefox */
@@ -215,7 +217,7 @@
        own box stretch to match the results column's full height instead of
        shrink-wrapping just its own content; still sticky + internally
        scrollable for whenever that's taller than one screen. */
-    /* Pulled flush against the 140px ceiling (topbar + tab row) and all the
+    /* Pulled flush against the 160px ceiling (topbar + tab row) and all the
        way down past .fp-layout's own top/bottom padding (negative margins
        cancel that padding out just for this element) so the box's edges
        literally touch the tab row's rule above and the page bottom below,
@@ -224,13 +226,13 @@
        the results column, so it fills that full span even when there are
        few results. */
     .fp-filter-panel {
-      position: sticky; top: 140px;
+      position: sticky; top: 160px;
       margin-top: -1.75rem; margin-bottom: -5rem; margin-right: -2.5rem;
-      height: calc(100vh - 140px);
+      height: calc(100vh - 160px);
       display: flex; flex-direction: column;
       background: rgba(20,18,24,0.85); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
       border: 1px solid rgba(255,255,255,0.14); border-radius: 0;
-      padding: 1.5rem; max-height: calc(100vh - 140px); overflow-y: auto;
+      padding: 1.5rem; max-height: calc(100vh - 160px); overflow-y: auto;
       scrollbar-color: #444 #1a1a1e; /* Firefox */
       will-change: transform; /* keeps the blurred sticky panel on its own GPU layer so it doesn't stutter the instant scrolling starts */
     }
@@ -343,8 +345,6 @@
   </aside>
 
   <div class="fp-results-col">
-    <h1 class="fp-search-heading" id="fp-search-heading">Search</h1>
-
     <div class="fp-results-list" id="fp-search-results"><p class="fp-search-empty">Loading…</p></div>
     <div class="fp-pagination" id="fp-pagination" hidden></div>
   </div>
@@ -621,7 +621,6 @@ async function runSearch() {
   applyParamsToPanel(f);
 
   if (f.sort === 'bookmarks_recent') {
-    document.getElementById('fp-search-heading').textContent = 'Recently Bookmarked';
     subEl.textContent = 'Stories the community has bookmarked most recently.';
     try {
       const res = await fetch('/api/search/recent-bookmarks?limit=30');
@@ -633,8 +632,6 @@ async function runSearch() {
     }
     return;
   }
-
-  document.getElementById('fp-search-heading').textContent = f.q ? `Results for "${f.q}"` : 'Browse Works';
 
   const apiParams = new URLSearchParams();
   if (f.q) apiParams.set('q', f.q);
