@@ -53,8 +53,11 @@
     .fp-result-body { min-width: 0; flex: 1; display: flex; flex-direction: column; }
 
     .fp-result-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
-    .fp-result-title { font-size: 1.7rem; font-weight: 700; }
-    .fp-result-title:hover { color: #7fa8d9; }
+    .fp-result-title {
+      font-size: 1.7rem; font-weight: 700; color: #f0c060;
+      text-shadow: 0 0 16px rgba(240,192,96,0.55), 0 1px 3px rgba(0,0,0,0.4);
+    }
+    .fp-result-title:hover { color: #ffd97a; text-shadow: 0 0 22px rgba(240,192,96,0.8), 0 1px 3px rgba(0,0,0,0.4); }
     .fp-result-date { font-size: 0.8rem; color: #999; white-space: nowrap; flex-shrink: 0; }
 
     /* Author row — pfp + name, right under the title. */
@@ -87,7 +90,13 @@
     .fp-tag-pill--category { background: rgba(217,122,114,0.09); color: #cc9a94; }
     .fp-tag-pill--tag { background: rgba(127,168,217,0.16); color: #a8c6e8; }
 
-    .fp-result-synopsis { font-size: 0.98rem; color: #ddd; line-height: 1.6; margin-bottom: 0.9rem; }
+    /* Cut to a uniform length (in JS) so cards read as the same rough
+       height, plus a soft fade on the last line instead of a hard stop. */
+    .fp-result-synopsis {
+      font-size: 0.98rem; font-style: italic; color: #ccc; line-height: 1.6; margin-bottom: 0.9rem;
+      -webkit-mask-image: linear-gradient(to bottom, #000 82%, transparent 100%);
+      mask-image: linear-gradient(to bottom, #000 82%, transparent 100%);
+    }
 
     /* Plain small stat line at the bottom — word count, views, likes,
        comments — instead of the big icon columns. */
@@ -156,11 +165,14 @@
     .fp-filter-word-row input { flex: 1; min-width: 0; }
     .fp-filter-word-row span { color: #888; }
 
+    /* Same blue gradient + white Inter text as the story view's own
+       "Edit <character name>" button. */
     .fp-filter-apply-btn {
-      width: 100%; background: #7fa8d9; color: #0d0d0d; border: none; border-radius: 20px;
-      padding: 0.7em; font-family: inherit; font-size: 0.95rem; font-weight: 700; cursor: pointer;
+      width: 100%; background: linear-gradient(135deg, #3d6fa8, #7fa8d9); color: #fff; border: none; border-radius: 20px;
+      padding: 0.7em; font-family: 'Inter', sans-serif; font-size: 0.95rem; font-weight: 700; cursor: pointer;
+      box-shadow: 0 0 16px rgba(127,168,217,0.5); transition: box-shadow 0.15s, transform 0.15s;
     }
-    .fp-filter-apply-btn:hover { background: #93b8e2; }
+    .fp-filter-apply-btn:hover { box-shadow: 0 0 26px rgba(127,168,217,0.75); transform: translateY(-1px); }
     .fp-filter-apply-btn--top { margin-bottom: 1.1rem; }
     .fp-filter-apply-btn--bottom { margin-top: 0.5rem; }
 
@@ -176,7 +188,7 @@
 </head>
 <body>
 
-<img class="fp-bg-img" src="/images/gallery/pixiegarden_5.png" alt="" />
+<img class="fp-bg-img" src="/images/gallery/kloudsaphbedroom_1.png" alt="" />
 <div class="fp-bg-overlay"></div>
 
 <div class="fp-content-z">
@@ -278,6 +290,13 @@
 function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+// Every synopsis cuts at the same length so cards read as a uniform size —
+// the fade (see .fp-result-synopsis mask) softens the hard stop visually.
+function truncateSynopsis(s) {
+  const text = (s || '').trim();
+  if (!text) return 'No description yet.';
+  return text.length > 200 ? text.slice(0, 200).trim() + '…' : text;
+}
 function ratingClass(rating) {
   if (rating === 'Teen & Up') return 'fp-tag-pill--rating-teen';
   if (rating === 'Mature/Explicit (Adult)') return 'fp-tag-pill--rating-mature';
@@ -333,7 +352,7 @@ function resultCard(w) {
         </div>
         ${authorRowHtml(w)}
         ${tagsRowHtml(w)}
-        <p class="fp-result-synopsis">${escapeHtml(w.synopsis || 'No description yet.')}</p>
+        <p class="fp-result-synopsis">${escapeHtml(truncateSynopsis(w.synopsis))}</p>
         <div class="fp-result-stats">
           ${w.word_count != null ? `<span>Words: <strong>${w.word_count.toLocaleString()}</strong></span>` : ''}
           <span>Views: <strong>${(w.hits || 0).toLocaleString()}</strong></span>
@@ -352,7 +371,7 @@ function bookmarkCard(w) {
       <div class="fp-result-body">
         <a class="fp-result-title" href="/fanpages/${escapeHtml(w.story_path)}">${escapeHtml(w.site_title || 'Untitled Story')}</a>
         ${authorRowHtml(w)}
-        <p class="fp-result-synopsis">${escapeHtml(w.synopsis || 'No description yet.')}</p>
+        <p class="fp-result-synopsis">${escapeHtml(truncateSynopsis(w.synopsis))}</p>
         <div class="fp-result-stats"><span>Bookmarked <strong>${formatDate(w.bookmarked_at)}</strong></span></div>
       </div>
     </div>
