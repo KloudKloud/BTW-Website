@@ -60,6 +60,14 @@
           <div class="chars-nav" id="chars-nav"></div>
         </div>
       </aside>
+
+      <!-- Shown instead of the box above when the story has no characters
+           linked yet — a plain "browse an empty cast" list read as broken. -->
+      <aside class="chars-create-box" id="chars-empty-box" style="display:none; text-align:center;">
+        <span class="chars-sidebar-label">Add Characters</span>
+        <div class="wiki-rule" style="margin:0.85rem 0;"></div>
+        <button class="chars-create-btn chars-create-btn--edit" id="chars-empty-editor-btn" type="button" style="display:none;">Story Editor</button>
+      </aside>
     </div>
 
     <main class="chars-main">
@@ -106,6 +114,10 @@ document.getElementById('tab-home').href = STORY_BASE;
 document.getElementById('tab-chapters').href = STORY_BASE + '/chapters';
 document.getElementById('tab-characters').href = STORY_BASE + '/characters';
 document.getElementById('tab-gallery').href = STORY_BASE + '/gallery';
+
+document.getElementById('chars-empty-editor-btn').addEventListener('click', () => {
+  window.location.href = `${STORY_BASE}/edit#characters`;
+});
 
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
 const authHeaders = () => ({ Authorization: `Bearer ${token}`, 'X-Story-Path': SLUG });
@@ -608,10 +620,17 @@ function renderCharList(rows, preferId) {
     // ccInitSection() (which actually loads it) never runs without a char.
     document.getElementById('char-detail-comments').style.display = 'none';
     document.getElementById('char-detail-nav').style.display = 'none';
+    // "Explore the Cast" with an empty cast read as broken — swap it for
+    // an "Add Characters" prompt (owner-only Story Editor shortcut).
+    document.querySelector('.chars-sidebar').style.display = 'none';
+    document.getElementById('chars-empty-box').style.display = '';
+    document.getElementById('chars-empty-editor-btn').style.display = IS_SELF ? '' : 'none';
     return;
   }
   document.getElementById('char-detail-comments').style.display = '';
   document.getElementById('char-detail-nav').style.display = '';
+  document.querySelector('.chars-sidebar').style.display = '';
+  document.getElementById('chars-empty-box').style.display = 'none';
   buildNav();
   const activeChar = CHARACTERS.find(c => c.id === (preferId || getActiveId())) || CHARACTERS[0];
   if (preferId) history.pushState(null, '', `?char=${activeChar.id}`);

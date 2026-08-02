@@ -29,6 +29,7 @@
       background: #1a1a1a; border: 1px solid rgba(255,255,255,0.08); position: relative;
     }
     .ch-card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .ch-card-thumb .wiki-generated-cover { width: 100%; height: 100%; }
     .ch-card-thumb-play {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       font-size: 1.5rem; background: rgba(0,0,0,0.25); color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,0.6);
@@ -170,11 +171,16 @@ function extractYouTubeId(url) {
 }
 // Chapter art wins if it's set; otherwise a YouTube video's own thumbnail
 // (there's clearly a cover either way); otherwise the story's own cover.
+// Falls back chapter image -> YouTube thumbnail -> the story's own cover
+// -> (if the story has no cover either) the same generated purple/rose
+// book-cover treatment used everywhere else a cover is missing, instead of
+// a random stock placeholder image with no relation to this story.
 function chapterThumb(ch) {
-  if (ch.image_url) return { src: ch.image_url, isVideo: false };
+  if (ch.image_url) return { src: ch.image_url, isVideo: false, generated: false };
   const videoId = extractYouTubeId(ch.video_url);
-  if (videoId) return { src: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`, isVideo: true };
-  return { src: (SITE && SITE.cover_url) || '/images/gallery/pixernbath_13.png', isVideo: false };
+  if (videoId) return { src: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`, isVideo: true, generated: false };
+  if (SITE && SITE.cover_url) return { src: SITE.cover_url, isVideo: false, generated: false };
+  return { generated: true, isVideo: false };
 }
 function formatChapterDate(dateStr) {
   if (!dateStr) return '';
@@ -208,7 +214,9 @@ function renderChapterList() {
     card.href = `${STORY_BASE}/reader?ch=${ch.id}`;
     card.innerHTML = `
       <div class="ch-card-thumb">
-        <img src="${thumb.src}" alt="${escapeHtml(ch.title)} thumbnail" />
+        ${thumb.generated
+          ? window.wikiGeneratedCoverHtml(SITE || {}, { imgClass: '', small: true })
+          : `<img src="${thumb.src}" alt="${escapeHtml(ch.title)} thumbnail" />`}
         ${thumb.isVideo ? '<span class="ch-card-thumb-play">▶</span>' : ''}
       </div>
       <div class="ch-card-info">

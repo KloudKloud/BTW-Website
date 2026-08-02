@@ -47,11 +47,20 @@
     <div class="mod-gallery-main" id="gallery-grid-view">
 
       <div class="chars-sidebar-col">
-        <aside class="chars-create-box">
+        <aside class="chars-create-box" id="gallery-browse-box">
           <p class="mod-gallery-sidebar-label">Browse</p>
           <button class="mod-gallery-cat active" id="cat-art" type="button">SFW</button>
           <button class="mod-gallery-cat" id="cat-sketches" type="button">Sketches</button>
           <button class="mod-gallery-cat" id="cat-spicy" type="button">Spicy</button>
+        </aside>
+
+        <!-- Shown instead of the box above when the story has no gallery
+             posts linked yet at all — browsing empty categories read as
+             broken. -->
+        <aside class="chars-create-box" id="gallery-empty-box" style="display:none; text-align:center;">
+          <p class="mod-gallery-sidebar-label">Add Artwork</p>
+          <div class="wiki-rule" style="margin:0.85rem 0;"></div>
+          <button class="chars-create-btn chars-create-btn--edit" id="gallery-empty-editor-btn" type="button" style="display:none;">Story Editor</button>
         </aside>
       </div>
 
@@ -137,6 +146,10 @@ document.getElementById('tab-home').href = STORY_BASE;
 document.getElementById('tab-chapters').href = STORY_BASE + '/chapters';
 document.getElementById('tab-characters').href = STORY_BASE + '/characters';
 document.getElementById('tab-gallery').href = STORY_BASE + '/gallery';
+
+document.getElementById('gallery-empty-editor-btn').addEventListener('click', () => {
+  window.location.href = `${STORY_BASE}/edit#gallery`;
+});
 
 let GALLERY_ART      = [];
 let GALLERY_SKETCHES = [];
@@ -793,6 +806,15 @@ function renderBookBox(site) {
   GALLERY_SKETCHES = (data && data.gallery_sketches) || [];
   GALLERY_SPICY    = (data && data.gallery_spicy)    || [];
   SPICY_LOCK       = (data && data.spicy_lock) != null ? data.spicy_lock : null;
+
+  // Nothing posted at all yet (across every category, spicy included
+  // regardless of lock state) — swap the category-browse box for an
+  // "Add Artwork" prompt instead of letting people browse empty tabs.
+  if (!GALLERY_ART.length && !GALLERY_SKETCHES.length && !GALLERY_SPICY.length) {
+    document.getElementById('gallery-browse-box').style.display = 'none';
+    document.getElementById('gallery-empty-box').style.display = '';
+    document.getElementById('gallery-empty-editor-btn').style.display = IS_SELF ? '' : 'none';
+  }
 
   const deepLinkId = new URLSearchParams(window.location.search).get('post');
   const deepLinkItem = deepLinkId

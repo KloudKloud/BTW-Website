@@ -41,10 +41,15 @@
       display: flex; align-items: center; gap: 0.85rem; min-width: 0; position: relative;
       background: none; border: none; padding: 0 1.75rem 0 0; cursor: pointer; text-align: left; font: inherit; color: inherit;
     }
+    /* Same chevron used for the editor's back-arrow buttons, rotated to
+       point down (closed) / up (open) instead of a small text "▾". */
     .rd-topbar-book-arrow {
-      position: absolute; right: 0; top: 50%; transform: translateY(-50%);
-      font-size: 1.1rem; color: #999; transition: color 0.15s, transform 0.15s;
+      position: absolute; right: 0; top: 50%;
+      display: flex; align-items: center; justify-content: center;
+      transform: translateY(-50%) rotate(-90deg); color: #999;
+      transition: color 0.15s, transform 0.15s;
     }
+    .rd-topbar-book-arrow.open { transform: translateY(-50%) rotate(90deg); }
     .rd-topbar-book:hover .rd-topbar-book-arrow { color: #7fa8d9; }
     .rd-topbar-cover {
       width: 42px; height: 62px; object-fit: cover; border-radius: 4px; flex-shrink: 0;
@@ -57,8 +62,6 @@
     }
     .rd-topbar-by { font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #999; }
     .rd-topbar-by span { color: #ccc; font-weight: 600; }
-    .rd-topbar-book:hover .rd-topbar-by,
-    .rd-topbar-book:hover .rd-topbar-by span { color: #7fa8d9; }
     .rd-toc-dropdown {
       position: absolute; top: 100%; left: 2rem; margin-top: 0.4rem; z-index: 40;
       background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
@@ -110,11 +113,17 @@
        right rail (.rd-recs) so the article column between them reads
        centered instead of lopsided. Order: pfp -> author + Follow -> hr ->
        Theme -> Text Size. ── */
+    /* Fixed below the topbar stack (never centered over it, never hidden
+       behind it) and grows downward with its own content — a story with a
+       lot of links just makes the box taller, scrolling internally if it
+       would otherwise run past the bottom of the screen, rather than
+       overlapping the topbar or getting clipped invisibly. */
     .rd-side-panel {
-      position: fixed; left: 1.5rem; top: 50%; transform: translateY(-50%); z-index: 30;
+      position: fixed; left: 1.5rem; top: 178px; bottom: 1.5rem; z-index: 30;
       width: 200px; background: rgba(10,10,10,0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
       border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 1.5rem 1.1rem;
       display: flex; flex-direction: column; align-items: center; gap: 1.1rem;
+      overflow-y: auto;
     }
     .rd-author-avatar {
       width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(127,168,217,0.5);
@@ -391,7 +400,9 @@
           <span class="rd-topbar-title" id="rd-story-title">Loading…</span>
           <span class="rd-topbar-by">by <span id="rd-author-name"></span></span>
         </span>
-        <span class="rd-topbar-book-arrow" id="rd-toc-arrow">▾</span>
+        <span class="rd-topbar-book-arrow" id="rd-toc-arrow">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </span>
       </button>
       <span class="rd-topbar-divider"></span>
     </div>
@@ -636,11 +647,11 @@ document.getElementById('rd-toc-toggle').addEventListener('click', (e) => {
   e.stopPropagation();
   const dd = document.getElementById('rd-toc-dropdown');
   dd.hidden = !dd.hidden;
-  document.getElementById('rd-toc-arrow').style.transform = dd.hidden ? '' : 'translateY(-50%) rotate(180deg)';
+  document.getElementById('rd-toc-arrow').classList.toggle('open', !dd.hidden);
 });
 document.addEventListener('click', () => {
   document.getElementById('rd-toc-dropdown').hidden = true;
-  document.getElementById('rd-toc-arrow').style.transform = '';
+  document.getElementById('rd-toc-arrow').classList.remove('open');
 });
 
 function renderToc() {
