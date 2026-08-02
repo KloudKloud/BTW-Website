@@ -132,7 +132,6 @@
         <div class="wiki-hero-cover-col">
           <div class="mod-cover-wrap wiki-hero-cover" id="cover-wrap">
             <img id="cover-img" alt="Book cover" style="display:none;" draggable="false" />
-            <div class="mod-cover-placeholder" id="cover-placeholder">No cover yet</div>
 
             <button class="mod-cover-edit-btn" id="cover-edit-btn" type="button" style="display:none;">📷 Change Cover</button>
             <input type="file" id="cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
@@ -207,7 +206,6 @@
           <div class="wiki-desc-side" id="wiki-desc-side">
             <div class="wiki-desc-cover-wrap">
               <img id="desc-cover-img" alt="Book cover" style="display:none;" draggable="false" />
-              <div class="wiki-desc-cover-placeholder" id="desc-cover-placeholder">No cover yet</div>
             </div>
             <a class="wiki-desc-author-link" id="desc-author-link" href="#" style="display:none;" title="">
               <img class="wiki-desc-author-avatar" id="desc-author-avatar" alt="" style="display:none;" />
@@ -628,20 +626,17 @@ relationshipsTextInput.addEventListener('keydown', (e) => {
 
 // Keeps the big hero cover and the small floated one in the Description box
 // in sync — same cover_url, two places it renders now.
+// Every story has a cover — either the one it was assigned, or the
+// generated purple/rose "title over a gradient" default. The plain "No
+// cover yet" placeholder only ever belongs to the Story Editor's own cover
+// picker (you're actively choosing one there); everywhere a story is
+// actually being *displayed* — including the story's own home page here —
+// shows the real default cover like it's the real thing, same as search
+// results, spotlight, and the reader already do.
 function updateCoverPreviews(coverUrl) {
-  [['cover-img', 'cover-placeholder'], ['desc-cover-img', 'desc-cover-placeholder']].forEach(([imgId, placeholderId]) => {
-    const img = document.getElementById(imgId);
-    const placeholder = document.getElementById(placeholderId);
-    if (coverUrl) {
-      img.src = coverUrl;
-      img.style.objectPosition = 'center';
-      img.style.display = 'block';
-      placeholder.style.display = 'none';
-    } else {
-      img.style.display = 'none';
-      placeholder.style.display = 'flex';
-    }
-  });
+  const site = Object.assign({}, siteData.site, { cover_url: coverUrl || '' });
+  window.wikiSetCoverSlot(document.getElementById('cover-img'), site, { alt: `${site.site_title || 'Untitled Story'} cover` });
+  window.wikiSetCoverSlot(document.getElementById('desc-cover-img'), site, { alt: `${site.site_title || 'Untitled Story'} cover`, small: true });
 }
 
 function populateDisplay() {

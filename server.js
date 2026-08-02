@@ -3693,10 +3693,37 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
 
+  // Draft-only stories (nothing published with real text yet) are visible
+  // only to their own owner — everyone else gets the same "actually
+  // discoverable" rule used by search/browse/spotlight. The owner still
+  // sees them, flagged is_draft_only so the card can read as a draft
+  // instead of a real published story.
   const [{ rows: sites }, followerCount, followingCount, clubCount, isFollowing, featuredChars, featuredGallery] = await Promise.all([
     pool.query(
-      'SELECT id, slug, story_path, site_title, cover_url, banner_url, synopsis FROM moderator_sites WHERE owner_user_id = $1 ORDER BY created_at ASC',
-      [author.id]
+      `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.synopsis,
+              ms.tags, ms.fandoms, ms.view_count,
+              NOT EXISTS (
+                SELECT 1 FROM moderator_chapters mc
+                WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+              ) AS is_draft_only,
+              COALESCE(lc.count, 0) AS like_count,
+              COALESCE(bc.count, 0) AS bookmark_count,
+              COALESCE(cc.count, 0) AS comment_count
+       FROM moderator_sites ms
+       LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_site_likes WHERE site_id = ms.id) lc ON true
+       LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_bookmarks WHERE site_id = ms.id) bc ON true
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int AS count FROM content_comments cc2
+         JOIN moderator_chapters mc2 ON mc2.id = cc2.target_id AND cc2.target_type = 'chapter'
+         WHERE mc2.site_id = ms.id
+       ) cc ON true
+       WHERE ms.owner_user_id = $1
+         AND ($2::int = $1 OR EXISTS (
+           SELECT 1 FROM moderator_chapters mc3
+           WHERE mc3.site_id = ms.id AND mc3.status = 'published' AND length(trim(mc3.body)) > 0
+         ))
+       ORDER BY ms.created_at ASC`,
+      [author.id, viewerId]
     ),
     pool.query('SELECT COUNT(*)::int AS n FROM user_follows WHERE followed_id = $1', [author.id]),
     pool.query('SELECT COUNT(*)::int AS n FROM user_follows WHERE follower_id = $1', [author.id]),
@@ -3778,6 +3805,8 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     stories: sites.map(s => ({
       slug: s.slug, story_path: s.story_path || s.slug, site_title: s.site_title, cover_url: s.cover_url,
       synopsis: s.synopsis || '', characters: (charsBySite[s.id] || []).slice(0, 4),
+      tags: s.tags || [], fandoms: s.fandoms || [], is_draft_only: s.is_draft_only,
+      hits: s.view_count || 0, kudos: Number(s.like_count), comments: Number(s.comment_count), bookmarks: Number(s.bookmark_count),
     })),
     follower_count: followerCount.rows[0].n,
     following_count: followingCount.rows[0].n,

@@ -397,7 +397,8 @@
     /* Stories */
     .fp-stories-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.15rem; margin-bottom: 1rem; }
     .fp-story-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1.25rem; }
-    .fp-story-card { text-decoration: none; color: inherit; }
+    .fp-story-card { position: relative; text-decoration: none; color: inherit; }
+    .fp-story-card--draft .fp-story-cover { opacity: 0.7; }
     .fp-story-cover { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; display: block; background: #1e1e1e; border: 1px solid rgba(255,255,255,0.08); transition: transform 0.15s; }
     .fp-story-card:hover .fp-story-cover { transform: translateY(-4px); }
     .fp-story-cover--generated {
@@ -422,7 +423,7 @@
     /* Stories TAB — one big teaser card per row instead of a cover grid */
     .fp-story-teaser-list { display: flex; flex-direction: column; gap: 1.25rem; }
     .fp-story-teaser-card {
-      display: flex; gap: 1.5rem; text-decoration: none; color: inherit;
+      position: relative; display: flex; gap: 1.5rem; text-decoration: none; color: inherit;
       background: #161616; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
       padding: 1.1rem; transition: border-color 0.15s, background 0.15s;
     }
@@ -444,6 +445,27 @@
       border-radius: 20px; padding: 0.2rem 0.7rem 0.2rem 0.2rem; font-size: 0.78rem; color: #ddd; font-weight: 600;
     }
     .fp-story-teaser-char-chip img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+    /* Tags row + stat line — same visual language as the search results
+       cards, so a story reads the same whether you found it via search or
+       an author's own profile. */
+    .fp-story-teaser-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.7rem; }
+    .fp-story-teaser-tag {
+      font-size: 0.72rem; font-weight: 600; border-radius: 10px; padding: 0.15em 0.6em;
+      background: rgba(127,168,217,0.12); color: #a8c6e8;
+    }
+    .fp-story-teaser-tag--fandom { background: rgba(217,122,114,0.14); color: #e08880; }
+    .fp-story-teaser-stats { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; margin-top: 0.75rem; font-size: 0.78rem; color: #999; }
+    .fp-story-teaser-stats strong { color: #ddd; }
+    /* Draft-only story — owner-only visibility, styled distinctly so it
+       never reads as a real published story. */
+    .fp-story-teaser-card--draft { opacity: 0.7; border-style: dashed; }
+    .fp-story-teaser-card--draft:hover { opacity: 1; }
+    .fp-story-teaser-draft-badge {
+      position: absolute; top: 0.6rem; left: 0.6rem; z-index: 2;
+      background: rgba(240,192,96,0.92); color: #0d0d0d; font-family: 'Inter', sans-serif;
+      font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+      border-radius: 6px; padding: 0.2em 0.55em;
+    }
 
     /* Links box */
     .fp-share-btn {
@@ -1158,8 +1180,15 @@
 
   function storyCardEl(s) {
     const card = document.createElement('a');
-    card.className = 'fp-story-card';
+    card.className = 'fp-story-card' + (s.is_draft_only ? ' fp-story-card--draft' : '');
     card.href = `/fanpages/${s.story_path || s.slug}`;
+
+    if (s.is_draft_only) {
+      const badge = document.createElement('span');
+      badge.className = 'fp-story-teaser-draft-badge';
+      badge.textContent = 'Draft';
+      card.appendChild(badge);
+    }
 
     if (s.cover_url) {
       const img = document.createElement('img');
@@ -1204,8 +1233,15 @@
   // used for the Home tab's compact Stories panel. ──────────────────────
   function storyTeaserCardEl(s) {
     const card = document.createElement('a');
-    card.className = 'fp-story-teaser-card';
+    card.className = 'fp-story-teaser-card' + (s.is_draft_only ? ' fp-story-teaser-card--draft' : '');
     card.href = `/fanpages/${s.story_path || s.slug}`;
+
+    if (s.is_draft_only) {
+      const badge = document.createElement('span');
+      badge.className = 'fp-story-teaser-draft-badge';
+      badge.textContent = 'Draft';
+      card.appendChild(badge);
+    }
 
     if (s.cover_url) {
       const img = document.createElement('img');
@@ -1250,6 +1286,27 @@
         chipRow.appendChild(chip);
       });
       info.appendChild(chipRow);
+    }
+
+    const fandomTags = (s.fandoms || []).map(f => `<span class="fp-story-teaser-tag fp-story-teaser-tag--fandom">${escapeHtml(f)}</span>`);
+    const otherTags = (s.tags || []).slice(0, 6).map(t => `<span class="fp-story-teaser-tag">${escapeHtml(t)}</span>`);
+    if (fandomTags.length || otherTags.length) {
+      const tagRow = document.createElement('div');
+      tagRow.className = 'fp-story-teaser-tags';
+      tagRow.innerHTML = fandomTags.join('') + otherTags.join('');
+      info.appendChild(tagRow);
+    }
+
+    if (!s.is_draft_only) {
+      const stats = document.createElement('div');
+      stats.className = 'fp-story-teaser-stats';
+      stats.innerHTML = `
+        <span>👁 <strong>${s.hits || 0}</strong></span>
+        <span>⭐ <strong>${s.kudos || 0}</strong></span>
+        <span>💬 <strong>${s.comments || 0}</strong></span>
+        <span>🔖 <strong>${s.bookmarks || 0}</strong></span>
+      `;
+      info.appendChild(stats);
     }
 
     card.appendChild(info);
