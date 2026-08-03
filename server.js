@@ -3394,6 +3394,7 @@ app.get('/api/search/works', async (req, res) => {
            COALESCE(lc.count, 0) AS like_count,
            COALESCE(cc.count, 0) AS comment_count,
            COALESCE(bc.count, 0) AS bookmark_count,
+           charsj.chars AS characters,
            ${relevanceExpr} AS relevance_score,
            COUNT(*) OVER() AS total_count
     FROM moderator_sites ms
@@ -3414,6 +3415,13 @@ app.get('/api/search/works', async (req, res) => {
       WHERE mc2.site_id = ms.id
     ) cc ON true
     LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_bookmarks WHERE site_id = ms.id) bc ON true
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb) AS chars FROM (
+        SELECT mc3.name, mc3.ref_image
+        FROM character_story_links csl JOIN moderator_characters mc3 ON mc3.id = csl.character_id
+        WHERE csl.site_id = ms.id ORDER BY csl.sort_order LIMIT 4
+      ) t
+    ) charsj ON true
     WHERE pubchap.published_count > 0
       AND ($1 = '' OR (
         ms.site_title ILIKE '%' || $1 || '%' OR u.username ILIKE '%' || $1 || '%' OR u.display_name ILIKE '%' || $1 || '%'
@@ -3445,6 +3453,7 @@ app.get('/api/search/works', async (req, res) => {
       published_chapters: r.published_count, word_count: r.word_count,
       updated_at: r.last_chapter_update, created_at: r.created_at,
       hits: r.view_count || 0, kudos: Number(r.like_count), comments: Number(r.comment_count), bookmarks: Number(r.bookmark_count),
+      characters: r.characters || [],
     })),
     total: rows.length ? Number(rows[0].total_count) : 0,
     page, limit, sort: sortKey,
@@ -3663,15 +3672,31 @@ app.get('/api/recommended-followers', async (req, res) => {
   }
   const limit = Math.min(parseInt(req.query.limit, 10) || 5, 100);
 
+  // A real ranking instead of a coin flip: follower count (established
+  // presence) weighted heaviest, story count (there's something to
+  // actually read) next, with a flat bonus for anyone who's updated a
+  // chapter in the last 30 days (still active). Random only breaks ties
+  // among otherwise-equal accounts, not the whole ordering.
   const { rows } = await pool.query(`
-    SELECT u.id, u.username, u.display_name, u.avatar
+    SELECT u.id, u.username, u.display_name, u.avatar, s.score
     FROM users u
+    JOIN LATERAL (
+      SELECT
+        (SELECT COUNT(*)::int FROM user_follows f WHERE f.followed_id = u.id) AS follower_count,
+        (SELECT COUNT(*)::int FROM moderator_sites ms WHERE ms.owner_user_id = u.id) AS story_count,
+        (SELECT MAX(mc.updated_at) FROM moderator_chapters mc JOIN moderator_sites ms ON ms.id = mc.site_id
+         WHERE ms.owner_user_id = u.id AND mc.status = 'published') AS last_chapter_at
+    ) raw ON true
+    JOIN LATERAL (
+      SELECT raw.follower_count * 4 + raw.story_count * 2
+           + (CASE WHEN raw.last_chapter_at >= NOW() - INTERVAL '30 days' THEN 6 ELSE 0 END) AS score
+    ) s ON true
     WHERE u.username NOT IN ('btwteam', 'holly_allen', 'holly_chan')
       AND ($1::int IS NULL OR u.id != $1)
       AND NOT EXISTS (
         SELECT 1 FROM user_follows f WHERE f.follower_id = $1 AND f.followed_id = u.id
       )
-    ORDER BY (u.username = 'veekitpaws') DESC, random()
+    ORDER BY (u.username = 'veekitpaws') DESC, s.score DESC, random()
     LIMIT $2
   `, [userId, limit]);
 
@@ -5045,6 +5070,27 @@ app.get('/api/tag-catalog', async (req, res) => {
 app.get('/api/relationship-catalog', async (req, res) => {
   const { rows } = await pool.query('SELECT name FROM relationship_catalog ORDER BY name ASC');
   res.json({ relationships: rows.map(r => r.name) });
+});
+
+// How many posts (stories + gallery submissions, combined) carry each of
+// the given tags -- powers the e621-style "tag: count" rows on a gallery
+// post's stats box.
+app.get('/api/tag-usage', async (req, res) => {
+  const tags = String(req.query.tags || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 50);
+  if (!tags.length) return res.json({ counts: {} });
+  const { rows } = await pool.query(`
+    SELECT t AS tag, count(*)::int AS count FROM (
+      SELECT jsonb_array_elements_text(tags) AS t FROM moderator_sites
+      UNION ALL
+      SELECT jsonb_array_elements_text(tags) AS t FROM moderator_gallery
+    ) all_tags
+    WHERE t = ANY($1::text[])
+    GROUP BY t
+  `, [tags]);
+  const counts = {};
+  tags.forEach(t => { counts[t] = 0; });
+  rows.forEach(r => { counts[r.tag] = r.count; });
+  res.json({ counts });
 });
 
 // DELETE /api/admin/{fandom,tag,relationship}-catalog/:name — lets the
@@ -6650,20 +6696,32 @@ app.get('/api/search/profiles', async (req, res) => {
     });
   }
 
+  // Same score as /api/recommended-followers -- follower count weighted
+  // heaviest, story count next, a flat bonus for anyone active in the
+  // last 30 days -- so "everyone" search ordering matches what gets
+  // recommended on the hub instead of the two drifting apart.
   const { rows } = await pool.query(
     `SELECT u.id, u.username, u.display_name, u.avatar,
-            (SELECT COUNT(*)::int FROM moderator_sites ms WHERE ms.owner_user_id = u.id) AS story_count,
-            (SELECT COUNT(*)::int FROM moderator_bookmarks mb WHERE mb.user_id = u.id) AS reading_list_count,
-            (SELECT COUNT(*)::int FROM user_follows uf WHERE uf.followed_id = u.id) AS follower_count,
+            raw.story_count, raw.reading_list_count, raw.follower_count,
+            (raw.follower_count * 4 + raw.story_count * 2
+             + (CASE WHEN raw.last_chapter_at >= NOW() - INTERVAL '30 days' THEN 6 ELSE 0 END)) AS score,
             COUNT(*) OVER() AS total_count
      FROM users u
+     JOIN LATERAL (
+       SELECT
+         (SELECT COUNT(*)::int FROM moderator_sites ms WHERE ms.owner_user_id = u.id) AS story_count,
+         (SELECT COUNT(*)::int FROM moderator_bookmarks mb WHERE mb.user_id = u.id) AS reading_list_count,
+         (SELECT COUNT(*)::int FROM user_follows uf WHERE uf.followed_id = u.id) AS follower_count,
+         (SELECT MAX(mc.updated_at) FROM moderator_chapters mc JOIN moderator_sites ms ON ms.id = mc.site_id
+          WHERE ms.owner_user_id = u.id AND mc.status = 'published') AS last_chapter_at
+     ) raw ON true
      WHERE (cardinality($1::text[]) = 0 OR (
          SELECT bool_and(u.username ILIKE '%' || w || '%' OR COALESCE(u.display_name, '') ILIKE '%' || w || '%')
          FROM unnest($1::text[]) AS w
        ))
-     ORDER BY follower_count DESC, u.username ASC
+     ORDER BY score DESC, u.username ASC
      LIMIT $2 OFFSET $3`,
-    [words, limit, offset]
+    [words, Math.min(limit, 100), offset]
   );
 
   const { viewerId } = await getViewerNsfwAccess(req);
@@ -6676,6 +6734,7 @@ app.get('/api/search/profiles', async (req, res) => {
     alreadyFollowing = new Set(fRows.map(r => r.followed_id));
   }
 
+  const rawTotal = rows.length ? Number(rows[0].total_count) : 0;
   res.json({
     type,
     items: rows.map(r => ({
@@ -6683,7 +6742,9 @@ app.get('/api/search/profiles', async (req, res) => {
       story_count: r.story_count, reading_list_count: r.reading_list_count, follower_count: r.follower_count,
       is_self: viewerId === r.id, is_following: alreadyFollowing.has(r.id),
     })),
-    total: rows.length ? Number(rows[0].total_count) : 0, page, limit,
+    // Capped at 100 -- both the reported total and how far pagination can
+    // go -- since accounts search has no real use case past that depth.
+    total: Math.min(rawTotal, 100), total_capped: rawTotal > 100, page, limit,
   });
 });
 

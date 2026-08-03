@@ -311,13 +311,10 @@
        lines up with the "Character Spotlights" box on the Characters tab
        instead of sitting slightly further left. */
     .fp-gallery-page-row { max-width: 1240px; margin: 0 auto; padding: 0 2rem; }
-    .fp-gallery-page-row .mod-gallery-main { grid-template-columns: 240px 1fr; gap: 2rem; }
-    /* Sits right under the profile's own tab bar now -- it used to have a
-       1.75rem nudge down, which read as floating too far below the tabs. */
-    .fp-gallery-page-row .chars-create-box {
-      margin-top: 0.25rem;
-      background: rgba(22,22,22,0.45); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    }
+    /* Tucked right under the profile's own tab bar -- .mod-gallery-main's
+       base 4rem top padding used to leave it floating well below (plus a
+       stray rule line above the grid from the now-removed eyebrow row). */
+    .fp-gallery-page-row .mod-gallery-main { padding-top: 0.15rem; }
     /* "<name>'s Gallery Page" eyebrow removed -- the profile's own tab bar
        already says whose gallery this is. */
     #fp-gallery-eyebrow { display: none; }
@@ -962,7 +959,6 @@
   <div class="mod-gallery-main mod-gallery-main--no-sidebar" id="fp-gallery-grid-view">
     <div class="mod-gallery-content">
       <p class="mod-gallery-eyebrow" id="fp-gallery-eyebrow">Fan Art &amp; Illustrations</p>
-      <div class="wiki-rule"></div>
       <div class="gallery-grid gallery-grid--4up" id="fp-gallery-grid"></div>
       <div class="mod-gallery-empty-state" id="fp-gallery-empty-msg" style="display:none;">
         <p class="mod-gallery-sidebar-label">No artwork yet~</p>
@@ -1191,6 +1187,15 @@
     title.textContent = s.site_title || 'Untitled Story';
     info.appendChild(title);
 
+    const fandomTags = (s.fandoms || []).map(f => `<span class="fp-story-teaser-tag fp-story-teaser-tag--fandom">${escapeHtml(f)}</span>`);
+    const otherTags = (s.tags || []).slice(0, 6).map(t => `<span class="fp-story-teaser-tag">${escapeHtml(t)}</span>`);
+    if (fandomTags.length || otherTags.length) {
+      const tagRow = document.createElement('div');
+      tagRow.className = 'fp-story-teaser-tags';
+      tagRow.innerHTML = fandomTags.join('') + otherTags.join('');
+      info.appendChild(tagRow);
+    }
+
     const synopsis = document.createElement('p');
     synopsis.className = 'fp-story-teaser-synopsis';
     synopsis.textContent = s.synopsis ? truncate(s.synopsis, 220) : 'No synopsis yet — click in to read more!';
@@ -1206,15 +1211,6 @@
         chipRow.appendChild(chip);
       });
       info.appendChild(chipRow);
-    }
-
-    const fandomTags = (s.fandoms || []).map(f => `<span class="fp-story-teaser-tag fp-story-teaser-tag--fandom">${escapeHtml(f)}</span>`);
-    const otherTags = (s.tags || []).slice(0, 6).map(t => `<span class="fp-story-teaser-tag">${escapeHtml(t)}</span>`);
-    if (fandomTags.length || otherTags.length) {
-      const tagRow = document.createElement('div');
-      tagRow.className = 'fp-story-teaser-tags';
-      tagRow.innerHTML = fandomTags.join('') + otherTags.join('');
-      info.appendChild(tagRow);
     }
 
     if (!s.is_draft_only) {

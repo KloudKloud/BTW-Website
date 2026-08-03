@@ -43,6 +43,8 @@
       </div>
       <div class="fpnav-right">
 
+        <a class="fpnav-link fpnav-link--clubs${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Clubs</a>
+
         <div class="fpnav-dropdown-wrap">
           <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
           <div class="fpnav-dropdown" id="fpnav-upload-dropdown" hidden>
@@ -53,8 +55,6 @@
             <a href="/fanpages/create-gallery" data-gate="/fanpages/create-gallery"><span class="fpnav-plus-badge">+</span> Gallery</a>
           </div>
         </div>
-
-        <a class="fpnav-link fpnav-link--clubs${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Clubs</a>
 
         <a class="fpnav-login-btn" id="fpnav-login-btn" href="/fanpages/login?from=${encodeURIComponent(here)}">Log In / Register</a>
 

@@ -35,33 +35,58 @@
       box-shadow: 0 0 22px rgba(127,168,217,0.55);
     }
 
-    /* Image section -- a FIXED-size box (82vh tall, full column width),
-       with the image scaled UP OR DOWN to fill as much of it as possible
-       (object-fit:contain preserves aspect ratio, letterboxing only where
-       it actually has to). A small source image used to render at its
-       native pixel size instead of being scaled up to use the space it
-       had -- max-height/max-width alone only ever shrinks, never grows.
-       No border/shadow/rounded corners/distinct background either -- it's
+    /* Image section -- back to natural sizing (width-capped by the
+       column, height auto), same as every other gallery view on the
+       site. No border/shadow/rounded corners/distinct background --
        transparent so it blends into the page instead of reading as its
        own box. */
     #fp-gallery-detail-view .art-view-image-wrap {
-      display: flex; align-items: center; justify-content: center;
-      height: 82vh; background: transparent; border: none; box-shadow: none; border-radius: 0;
+      background: transparent; border: none; box-shadow: none; border-radius: 0; text-align: center;
     }
     #fp-gallery-detail-view .art-view-image-wrap img {
-      width: 100%; height: 100%; object-fit: contain;
+      max-width: 100%; height: auto; display: block; margin: 0 auto;
     }
 
-    /* Stats box -- a hair wider, bigger text, same bubbly Fredoka font
-       "Clubs" and the rest of the nav use. */
-    #fp-gallery-detail-view .art-view-detail-grid { grid-template-columns: 1fr 320px; }
+    /* Stats box -- a hair wider still, bigger text, same bubbly Fredoka
+       font "Clubs" and the rest of the nav use. */
+    #fp-gallery-detail-view .art-view-detail-grid { grid-template-columns: 1fr 340px; }
     #fp-gallery-detail-view .art-view-stats-box,
     #fp-gallery-detail-view .art-view-stats-box * {
       font-family: 'Fredoka', 'Lato', Arial, sans-serif;
     }
-    #fp-gallery-detail-view .art-view-stats-title { font-size: 1.05rem; }
-    #fp-gallery-detail-view .art-view-stat-row { font-size: 0.95rem; }
-    #fp-gallery-detail-view .art-view-stats-tag-pill { font-size: 0.85rem; }
+    #fp-gallery-detail-view .art-view-stats-title { font-size: 1.08rem; }
+    #fp-gallery-detail-view .art-view-stat-row { font-size: 0.97rem; }
+
+    /* e621-style tag list -- one per row, name on the left, a site-wide
+       usage count on the right, instead of wrapped pills. */
+    #fp-gallery-detail-view .art-view-stats-tags { display: flex; flex-direction: column; gap: 0.15rem; }
+    #fp-gallery-detail-view .art-view-stats-tag-row {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem;
+      padding: 0.3em 0.2em; border-radius: 6px; text-decoration: none;
+      color: #cdd; transition: background 0.12s, color 0.12s;
+    }
+    #fp-gallery-detail-view .art-view-stats-tag-row:hover { background: rgba(127,168,217,0.12); color: #fff; }
+    #fp-gallery-detail-view .art-view-stats-tag-name { font-size: 0.9rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #fp-gallery-detail-view .art-view-stats-tag-count { font-size: 0.78rem; color: #888; flex-shrink: 0; }
+
+    /* Description/tags box -- transparent, no visible border/card, so it
+       reads as part of the page instead of a boxed-off section. */
+    #fp-gallery-detail-view .art-view-desc {
+      background: transparent; border: none; box-shadow: none; padding: 0 0 0.25rem;
+    }
+    /* Empty-state text ("No tagged characters"/"No tagged stories") --
+       more room around it instead of sitting cramped right under the
+       label. */
+    #fp-gallery-detail-view .art-view-tags-empty { margin: 0 0 1.75rem; padding: 0.2rem 0; }
+    #fp-gallery-detail-view .art-view-tags-label { margin-bottom: 1rem; }
+
+    /* Comments -- the thread itself still spans the full width, but the
+       compose box is centered and a bit thicker to compensate for not
+       being full-width anymore. FurAffinity-style. */
+    #fp-gallery-detail-comments .cc-compose {
+      max-width: 700px; margin-left: auto; margin-right: auto;
+    }
+    #fp-gallery-detail-comments .cc-compose textarea { min-height: 68px; }
 
     @media (max-width: 900px) {
       .fp-gallery-detail-row { padding: 0 1.25rem; }
@@ -175,7 +200,24 @@ function renderStatsBox(item) {
     tagsWrap.innerHTML = '<p class="art-view-stats-tags-empty">No tags yet.</p>';
     return;
   }
-  tagsWrap.innerHTML = tags.map(t => `<a class="art-view-stats-tag-pill" href="/fanpages/search?view=submissions&browse=1&q=${encodeURIComponent(t)}">${escapeHtml(t)}</a>`).join('');
+  // Site-wide usage count per tag (stories + gallery posts combined),
+  // e621-style -- shown once counts come back, tags render immediately
+  // with no count so the list isn't blank while that request is in flight.
+  tagsWrap.innerHTML = tags.map(t => `
+    <a class="art-view-stats-tag-row" href="/fanpages/search?view=submissions&browse=1&q=${encodeURIComponent(t)}">
+      <span class="art-view-stats-tag-name">${escapeHtml(t)}</span>
+      <span class="art-view-stats-tag-count" data-tag="${escapeHtml(t)}"></span>
+    </a>
+  `).join('');
+  fetch(`/api/tag-usage?tags=${encodeURIComponent(tags.join(','))}`)
+    .then(r => r.ok ? r.json() : { counts: {} })
+    .then(data => {
+      const counts = data.counts || {};
+      tagsWrap.querySelectorAll('[data-tag]').forEach(el => {
+        el.textContent = (counts[el.dataset.tag] || 0).toLocaleString();
+      });
+    })
+    .catch(() => {});
 }
 
 function updateLikeUI() {

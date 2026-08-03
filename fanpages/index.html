@@ -431,24 +431,25 @@
     }
     .rs-card:hover { transform: translateY(-4px); box-shadow: 0 10px 26px rgba(0,0,0,0.45); z-index: 3; }
     .rs-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    /* Just the emoji, bigger, bottom-right of the tile -- no circular
+       backing plate. */
     .rs-card-badge {
-      position: absolute; top: 7px; left: 7px; width: 22px; height: 22px; border-radius: 50%;
-      background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
-      font-size: 0.75rem; z-index: 2;
+      position: absolute; bottom: 6px; right: 7px; z-index: 2;
+      font-size: 1.35rem; line-height: 1; text-shadow: 0 1px 5px rgba(0,0,0,0.85);
     }
     .rs-card .fp-spotlight-locked-msg--card { z-index: 2; font-size: 0.66rem; padding: 0 0.5rem; }
-    .rs-card-tip {
-      position: absolute; left: 0; right: 0; bottom: 0; z-index: 1;
-      padding: 1.6rem 0.6rem 0.5rem; background: linear-gradient(to top, rgba(0,0,0,0.92), transparent);
-      line-height: 1.3;
-      opacity: 0; transform: translateY(4px); transition: opacity 0.18s, transform 0.18s;
-    }
-    .rs-card:hover .rs-card-tip { opacity: 1; transform: translateY(0); }
-    .rs-card-tip-title {
-      display: block; font-size: 0.76rem; font-weight: 700; color: #fff;
+    .rs-tile { display: flex; flex-direction: column; min-width: 0; }
+    /* Always-visible caption under the tile (title + "by <author>"),
+       FurAffinity-style, instead of a hover-only overlay. */
+    .rs-card-caption { padding: 0.4rem 0.05rem 0; min-width: 0; }
+    .rs-card-caption-title {
+      display: block; font-size: 0.8rem; font-weight: 700; color: #fff; text-decoration: none;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .rs-card-tip-author { display: block; font-size: 0.68rem; font-weight: 500; color: #d8cdf0; margin-top: 0.1rem; }
+    .rs-card-caption-title:hover { color: #7fa8d9; }
+    .rs-card-caption-author { display: block; font-size: 0.72rem; color: #999; margin-top: 0.1rem; }
+    .rs-card-caption-author a { color: #a8c6e8; text-decoration: none; }
+    .rs-card-caption-author a:hover { text-decoration: underline; }
 
     /* Disclaimer — same box used at the bottom of every user's profile page */
     .fp-disclaimer { max-width: 1200px; margin: 3rem auto 4rem; padding: 0 2rem; }
@@ -1328,16 +1329,18 @@
 
   // ── Recent Submissions — newest chapters/art/characters across every
   // fanpage, mixed FurAffinity-style. Hover reveals the title/name. ──
-  function rsCardTip(title, author) {
+  function rsCaptionHtml(title, authorUsername, author) {
     return `
-      <span class="rs-card-tip">
-        <span class="rs-card-tip-title">${escapeHtml(title)}</span>
-        <span class="rs-card-tip-author">By ${escapeHtml(author || 'Unknown')}</span>
-      </span>
+      <div class="rs-card-caption">
+        <span class="rs-card-caption-title">${escapeHtml(title)}</span>
+        <span class="rs-card-caption-author">by ${authorUsername ? `<a href="/fanpages/${encodeURIComponent(authorUsername)}">${escapeHtml(author || authorUsername)}</a>` : escapeHtml(author || 'Unknown')}</span>
+      </div>
     `;
   }
 
   function rsArtCard(it) {
+    const tile = document.createElement('div');
+    tile.className = 'rs-tile';
     const a = document.createElement('a');
     a.className = 'rs-card';
     a.href = `/fanpages/gallery-post?id=${it.id}`;
@@ -1346,12 +1349,15 @@
     a.innerHTML = `
       <img src="${it.image}" alt="" style="object-position:${posX}% ${posY}%;" />
       <span class="rs-card-badge">🎨</span>
-      ${rsCardTip(it.title || 'Untitled', it.author)}
     `;
-    return a;
+    tile.appendChild(a);
+    tile.insertAdjacentHTML('beforeend', rsCaptionHtml(it.title || 'Untitled', it.author_username, it.author));
+    return tile;
   }
 
   function rsPortraitCard(it, icon, tipTitle, href) {
+    const tile = document.createElement('div');
+    tile.className = 'rs-tile';
     const a = document.createElement('a');
     a.className = 'rs-card';
     a.href = href;
@@ -1364,16 +1370,16 @@
         <img class="fp-spotlight-img--blurred" src="/images/defaultchar.jpg" alt="" />
         <span class="rs-card-badge">${icon}</span>
         <span class="fp-spotlight-locked-msg fp-spotlight-locked-msg--card">${escapeHtml(lockMsg)}</span>
-        ${rsCardTip(tipTitle, it.author)}
       `;
-      return a;
+    } else {
+      a.innerHTML = `
+        <img src="${imgSrc}" alt="" style="object-position:${posX}% ${posY}%;" />
+        <span class="rs-card-badge">${icon}</span>
+      `;
     }
-    a.innerHTML = `
-      <img src="${imgSrc}" alt="" style="object-position:${posX}% ${posY}%;" />
-      <span class="rs-card-badge">${icon}</span>
-      ${rsCardTip(tipTitle, it.author)}
-    `;
-    return a;
+    tile.appendChild(a);
+    tile.insertAdjacentHTML('beforeend', rsCaptionHtml(tipTitle, it.author_username, it.author));
+    return tile;
   }
 
   // A chapter card's "image" is really the story's own cover — when there
@@ -1381,6 +1387,8 @@
   // cover Story Spotlight uses, not the generic no-character silhouette
   // .rs-card/rsPortraitCard falls back to for character/art posts.
   function rsChapterCard(it) {
+    const tile = document.createElement('div');
+    tile.className = 'rs-tile';
     const a = document.createElement('a');
     a.className = 'rs-card';
     a.href = `/fanpages/${it.story_path}/reader?ch=${it.id}`;
@@ -1390,14 +1398,16 @@
       a.innerHTML = `
         <img src="${it.image}" alt="" style="object-position:${posX}% ${posY}%;" />
         <span class="rs-card-badge">📖</span>
-        ${rsCardTip(it.title || 'Untitled Chapter', it.author)}
       `;
-      return a;
+    } else {
+      a.innerHTML = `<span class="rs-card-badge">📖</span>`;
+      a.prepend(buildCoverEl({ site_title: it.site_title, author_avatar: it.author_avatar, cover_url: '' }));
+      const genCover = a.querySelector('.fp-card-cover--generated');
+      if (genCover) genCover.style.cssText += 'width:100%; height:100%;';
     }
-    a.innerHTML = `<span class="rs-card-badge">📖</span>${rsCardTip(it.title || 'Untitled Chapter', it.author)}`;
-    a.prepend(buildCoverEl({ site_title: it.site_title, author_avatar: it.author_avatar, cover_url: '' }));
-    a.querySelector('.fp-card-cover--generated').style.cssText += 'width:100%; height:100%;';
-    return a;
+    tile.appendChild(a);
+    tile.insertAdjacentHTML('beforeend', rsCaptionHtml(it.title || 'Untitled Chapter', it.author_username, it.author));
+    return tile;
   }
 
   function activityCard(it) {
