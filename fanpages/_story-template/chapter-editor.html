@@ -340,6 +340,13 @@
     .ce-save-indicator { font-weight: 700; }
     .ce-save-indicator--unsaved { color: #d97a72; }
     .ce-save-indicator--saved { color: #7fa8d9; }
+    .ce-save-indicator--saving { color: #f0c060; display: inline-flex; align-items: center; gap: 0.35em; }
+    .ce-save-spinner {
+      display: inline-block; width: 0.8em; height: 0.8em; border-radius: 50%;
+      border: 2px solid rgba(240,192,96,0.3); border-top-color: #f0c060;
+      animation: ce-save-spin 0.7s linear infinite;
+    }
+    @keyframes ce-save-spin { to { transform: rotate(360deg); } }
     .ce-btn--save { background: none; border: 1px solid rgba(127,168,217,0.5); color: #7fa8d9; }
     .ce-btn--save:hover { border-color: #7fa8d9; background: rgba(127,168,217,0.1); }
     .ce-btn--save:disabled { opacity: 0.45; cursor: default; }
@@ -412,6 +419,7 @@
     <button class="ce-btn ce-btn--publish" id="ce-publish-btn" type="button" disabled>Publish</button>
     <button class="ce-btn ce-btn--save" id="ce-save-draft-btn" type="button" disabled>💾 Save</button>
     <button class="ce-btn ce-btn--cancel" id="ce-cancel-btn" type="button" hidden>Cancel</button>
+    <button class="ce-btn ce-btn--cancel" id="ce-preview-btn" type="button" hidden>Preview</button>
     <input type="file" id="ce-docx-file-input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none;" />
   </div>
 </div>
@@ -562,9 +570,14 @@ const editor = document.getElementById('ce-editor');
 // makes sense there and a separate Save button doesn't.
 function updateButtonsForStatus() {
   const isDraft = !currentChapter || currentChapter.status === 'draft';
-  document.getElementById('ce-publish-btn').textContent = isDraft ? 'Publish' : 'Save Changes';
+  document.getElementById('ce-publish-btn').textContent = isDraft ? 'Publish' : 'Save';
   document.getElementById('ce-save-draft-btn').hidden = !isDraft;
   document.getElementById('ce-cancel-btn').hidden = isDraft;
+  // Preview (view this chapter as a reader would, drafts included since
+  // the reader shows an owner their own unpublished content) only makes
+  // sense before it's live -- once published, "Preview" and the real
+  // page are the same thing.
+  document.getElementById('ce-preview-btn').hidden = !isDraft;
 }
 function markDirty() {
   dirty = true;
@@ -572,12 +585,15 @@ function markDirty() {
   document.getElementById('ce-save-draft-btn').disabled = false;
   updateStatusLine();
 }
+let autosaving = false;
 function updateStatusLine() {
   const words = editor.textContent.trim() ? editor.textContent.trim().split(/\s+/).length : 0;
   const status = currentChapter ? currentChapter.status : 'draft';
-  const indicator = dirty
-    ? '<span class="ce-save-indicator ce-save-indicator--unsaved">Unsaved changes</span>'
-    : '<span class="ce-save-indicator ce-save-indicator--saved">All Changes Saved</span>';
+  const indicator = autosaving
+    ? '<span class="ce-save-indicator ce-save-indicator--saving"><span class="ce-save-spinner"></span>Saving</span>'
+    : dirty
+      ? '<span class="ce-save-indicator ce-save-indicator--unsaved">Unsaved changes</span>'
+      : '<span class="ce-save-indicator ce-save-indicator--saved">All Changes Saved</span>';
   document.getElementById('ce-topbar-status').innerHTML =
     `<span class="ce-topbar-status-word">${status === 'draft' ? 'Draft' : 'Published'}</span> (${words} Word${words === 1 ? '' : 's'}) — ${indicator}`;
 }
@@ -645,6 +661,14 @@ document.getElementById('ce-cancel-btn').addEventListener('click', async () => {
   if (result === 'stay') return;
   window.location.href = `${STORY_BASE}/edit#chapters`;
 });
+// Opens the real reader on this chapter in a new tab -- the reader
+// already shows an owner their own unpublished drafts (same as "View as
+// Reader" elsewhere), so this needs no separate preview mode of its own.
+// Saves first if there are unsaved edits, so what you see is current.
+document.getElementById('ce-preview-btn').addEventListener('click', async () => {
+  if (dirty) await saveChapterBody();
+  window.open(`${STORY_BASE}/reader?ch=${CHAPTER_ID}`, '_blank');
+});
 document.getElementById('ce-topbar-cover-link').addEventListener('click', async (e) => {
   e.preventDefault();
   const result = await confirmExitWithUnsavedChanges();
@@ -660,11 +684,22 @@ document.getElementById('ce-save-draft-btn').addEventListener('click', async () 
   if (!ok) alert('Something went wrong saving. Please try again.');
   setTimeout(() => { btn.textContent = '💾 Save'; btn.disabled = !dirty; }, ok ? 1200 : 0);
 });
-// Autosave — drafts only. Published chapters only ever save when the
-// author explicitly clicks Save Changes.
-setInterval(() => {
-  if (currentChapter && currentChapter.status === 'draft' && dirty) saveChapterBody();
-}, 20000);
+// Autosave — Wattpad-style, every 20s while there's something unsaved.
+// Covers drafts and published chapters alike (saveChapterBody only ever
+// touches title/body, never the published/draft status itself, so
+// there's nothing extra it could accidentally make public). A plain
+// timer rather than a per-keystroke debounce on purpose, to keep this
+// cheap -- at most one extra request every 20 seconds, not one per
+// character typed.
+async function autosaveNow() {
+  if (autosaving || !dirty) return;
+  autosaving = true;
+  updateStatusLine();
+  await saveChapterBody(); // sets dirty=false and calls updateStatusLine() again on success
+  autosaving = false;
+  updateStatusLine();
+}
+setInterval(autosaveNow, 20000);
 document.getElementById('ce-big-title-input').addEventListener('input', (e) => {
   document.getElementById('ce-title-display').textContent = e.target.value.trim() || 'Untitled Part';
   markDirty();
@@ -1326,11 +1361,11 @@ document.getElementById('ce-publish-btn').addEventListener('click', async () => 
       window.location.href = `${STORY_BASE}/edit#chapters`;
       return;
     }
-    setTimeout(() => { btn.textContent = wasDraft ? 'Save Changes' : (currentChapter.status === 'draft' ? 'Publish' : 'Save Changes'); btn.disabled = true; }, 1200);
+    setTimeout(() => { btn.textContent = wasDraft ? 'Save' : (currentChapter.status === 'draft' ? 'Publish' : 'Save'); btn.disabled = true; }, 1200);
   } catch {
     alert('Something went wrong saving. Please try again.');
     btn.disabled = false;
-    btn.textContent = wasDraft ? 'Publish' : 'Save Changes';
+    btn.textContent = wasDraft ? 'Publish' : 'Save';
   }
 });
 

@@ -20,7 +20,7 @@
       <a class="fpnav-link fpnav-link--clubs${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Clubs</a>
 
       <div class="fpnav-search">
-        <svg class="fpnav-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <svg class="fpnav-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
         <input type="search" id="fpnav-search-input" placeholder="Search" />
       </div>
       <div class="fpnav-right">
