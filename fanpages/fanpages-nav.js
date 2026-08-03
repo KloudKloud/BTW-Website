@@ -27,6 +27,14 @@ window.fpFixLinks = function (container) {
   });
 };
 
+// btwfics.net gets its own favicon so the browser tab visually distinguishes
+// it from btwfanfic.net, even though every page's static <link rel="icon">
+// markup still points at the shared default (same file serves both domains).
+if (!window.FP_BASE) {
+  const favicon = document.querySelector('link[rel="icon"]');
+  if (favicon) favicon.href = '/images/gallery/soluscheese_12.png';
+}
+
 // ── Shared persistent top bar for every /fanpages/* page ────────────────────
 // Injects into <div id="fanpages-topbar-root">. Handles: Fanpages/Social
 // links, search bar (visual only for now), the Upload dropdown (Create
