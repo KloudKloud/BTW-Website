@@ -43,10 +43,17 @@
     .fp-layout {
       padding: 0 2.5rem 5rem;
       display: grid; grid-template-columns: 290px 1fr 340px; column-gap: 2rem; align-items: stretch;
-      transition: grid-template-columns 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+      transition: grid-template-columns 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+      will-change: grid-template-columns;
     }
-    .fp-layout--filters-collapsed { grid-template-columns: 320px 1fr 0px; }
-    .fp-results-col { grid-column: 2; min-width: 0; }
+    /* Left column (290px) matches the base state exactly -- it used to
+       jump to 320px here, so the left panel visibly shifted too every
+       time the right panel collapsed/expanded instead of only the right
+       column moving. contain:layout on both side panels scopes their
+       reflow cost during the animation instead of the whole page
+       recalculating layout every frame, which is what read as "jittery". */
+    .fp-layout--filters-collapsed { grid-template-columns: 290px 1fr 0px; }
+    .fp-results-col { grid-column: 2; min-width: 0; contain: layout; }
 
     /* ── Submissions view — the filter panel/fab/left-panel filter box
        don't apply here (no story filters for a gallery+chapter feed), so
@@ -317,6 +324,7 @@
          the top/bottom of this panel's own scroll -- hovering anywhere
          over it only ever scrolls the panel, never the page underneath. */
       overscroll-behavior: contain;
+      contain: layout;
     }
     .fp-filter-panel::-webkit-scrollbar { width: 8px; }
     .fp-filter-panel::-webkit-scrollbar-track { background: #1a1a1e; border-radius: 8px; }
