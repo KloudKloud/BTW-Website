@@ -336,6 +336,21 @@ async function initDb() {
     ) WHERE categories::text LIKE '%F/M%';
   `).catch(e => console.error('moderator_sites rating/category remap:', e.message));
 
+  // Rating switched again -- General Audiences/Teen & Up/Mature-Explicit
+  // (Adult) collapsed down to the exact same 3-tier scale the gallery
+  // already uses (sfw/mature/explicit), so a chapter's rating (inherited
+  // from its story, see /api/search/submissions) can be checked against the
+  // Posts ratings filter with the same values/logic as gallery posts
+  // instead of a second incompatible scale. "Teen & Up" -> mature since it
+  // sat above General but below the old Mature/Explicit tier.
+  await pool.query(`
+    ALTER TABLE moderator_sites ALTER COLUMN rating SET DEFAULT 'sfw';
+    UPDATE moderator_sites SET rating = 'sfw' WHERE rating = 'General Audiences';
+    UPDATE moderator_sites SET rating = 'mature' WHERE rating = 'Teen & Up';
+    UPDATE moderator_sites SET rating = 'explicit' WHERE rating = 'Mature/Explicit (Adult)';
+    UPDATE moderator_sites SET rating = 'mature' WHERE rating NOT IN ('sfw', 'mature', 'explicit');
+  `).catch(e => console.error('moderator_sites rating 3-tier remap:', e.message));
+
   // Fandom — freeform, autocompleted against a shared catalog (AO3-style
   // tag wrangling, but seeded small and grown by hand over time).
   await pool.query(`
@@ -4789,8 +4804,8 @@ async function sendSiteLookup(query, params, req, res) {
       author_display_name: site.author_display_name, author_username: site.author_username,
       author_avatar: site.author_avatar || null, author_bio: site.author_bio || '',
       tags: site.tags || [],
-      rating: site.rating || 'General Audiences', categories: site.categories || [], relationships: site.relationships || [],
-      fandoms: site.fandoms || [],
+      rating: site.rating || 'sfw', categories: site.categories || [], relationships: site.relationships || [],
+      fandoms: site.fandoms || [], is_complete: !!site.is_complete,
       is_self: viewerId === site.owner_user_id,
       is_following: isFollowing.rows.length > 0,
       is_bookmarked: isBookmarked.rows.length > 0,
@@ -4987,7 +5002,11 @@ async function sanitizeTags(raw) {
   return snapToCatalogCasing('tag_catalog', raw, 40, 100);
 }
 
-const RATING_OPTIONS = ['General Audiences', 'Teen & Up', 'Mature/Explicit (Adult)'];
+// Story ratings now match the gallery's own three tiers exactly (was a
+// separate General Audiences/Teen & Up/Mature-Explicit scale) -- same
+// values, same "sfw visible to everyone, mature/explicit need NSFW" gating
+// logic reused as-is for the Posts ratings filter (see /api/search/submissions).
+const RATING_OPTIONS = ['sfw', 'mature', 'explicit'];
 // Gallery post rating tiers -- "sfw" is visible to everyone; "mature" and
 // "explicit" both require a logged-in viewer with NSFW enabled (no
 // separate gate between them, same as the old single "spicy" tier).
@@ -5048,6 +5067,7 @@ app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) =
   const categories = req.body.categories !== undefined ? sanitizeCategories(req.body.categories) : undefined;
   const relationships = req.body.relationships !== undefined ? sanitizeRelationships(req.body.relationships) : undefined;
   const fandoms = req.body.fandoms !== undefined ? await sanitizeFandoms(req.body.fandoms) : undefined;
+  const isComplete = typeof req.body.is_complete === 'boolean' ? req.body.is_complete : undefined;
   const { rows: [site] } = await pool.query(
     `UPDATE moderator_sites SET
        site_title    = COALESCE($1, site_title),
@@ -5060,6 +5080,7 @@ app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) =
        categories    = COALESCE($8, categories),
        relationships = COALESCE($9, relationships),
        fandoms       = COALESCE($10, fandoms),
+       is_complete   = COALESCE($12, is_complete),
        updated_at    = NOW()
      WHERE id = $11 RETURNING *`,
     [site_title, synopsis, bio, links !== undefined ? JSON.stringify(links) : null, theme,
@@ -5067,7 +5088,7 @@ app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) =
      categories !== undefined ? JSON.stringify(categories) : null,
      relationships !== undefined ? JSON.stringify(relationships) : null,
      fandoms !== undefined ? JSON.stringify(fandoms) : null,
-     req.modSite.id]
+     req.modSite.id, isComplete]
   );
 
   res.json({ site });
@@ -6656,7 +6677,7 @@ app.get('/api/search/submissions', async (req, res) => {
               ms.cover_position_x AS position_x, ms.cover_position_y AS position_y,
               ms.story_path, ms.site_title AS site_title,
               u.username, u.display_name, u.avatar,
-              NULL::text AS category, '[]'::jsonb AS tags,
+              ms.rating AS category, '[]'::jsonb AS tags,
               COALESCE(mc.view_count, 0) AS view_count,
               (SELECT COUNT(*)::int FROM chapter_likes WHERE chapter_id = mc.id) AS like_count
        FROM moderator_chapters mc
@@ -6702,7 +6723,7 @@ app.get('/api/search/submissions', async (req, res) => {
   // fetched as a second lightweight query instead.
   const { rows: [{ count }] } = await pool.query(
     `SELECT count(*) FROM (
-       SELECT mc.id, mc.title, ms.site_title, u.username, u.display_name, NULL::text AS category, '[]'::jsonb AS tags
+       SELECT mc.id, mc.title, ms.site_title, u.username, u.display_name, ms.rating AS category, '[]'::jsonb AS tags
        FROM moderator_chapters mc
        JOIN moderator_sites ms ON ms.id = mc.site_id
        JOIN users u ON u.id = ms.owner_user_id

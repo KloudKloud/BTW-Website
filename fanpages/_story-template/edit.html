@@ -90,6 +90,14 @@
       font-family: 'Baloo 2', 'Georgia', serif; font-size: 1.3rem; font-weight: 700; color: #f0f0f0;
     }
     .cs-field-hint { font-family: 'Inter', sans-serif; font-size: 0.82rem; color: #999; }
+    .cs-complete-toggle { display: flex; gap: 0.6rem; }
+    .cs-complete-btn {
+      background: #17171a; border: 1px solid rgba(255,255,255,0.14); border-radius: 20px;
+      color: #ccc; font-family: 'Inter', sans-serif; font-size: 0.92rem; font-weight: 700;
+      padding: 0.55em 1.4em; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .cs-complete-btn:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
+    .cs-complete-btn.active { background: rgba(90,180,110,0.2); border-color: rgba(90,180,110,0.55); color: #8fe0ac; }
     /* Same bubbly Baloo 2 as the field titles above them, not plain Inter —
        typed text reads noticeably nicer this way. */
     .cs-input-lg, .cs-textarea-lg, .cs-select-lg {
@@ -657,15 +665,15 @@
                 <span class="cs-field-title">Rating</span>
                 <button class="wiki-tags-tip-icon" id="rating-tip-icon" type="button" aria-label="Rating help">💡</button>
                 <div class="wiki-tags-tip-popover" id="rating-tip-popover" hidden>
-                  <p><strong>General Audiences</strong> — Suitable for everyone</p>
-                  <p><strong>Teen And Up Audiences</strong> — May not be suitable for all audiences, but not expressly explicit. Light themes of violence, language, or other mature elements that don't teeter into adult.</p>
-                  <p><strong>Mature (Adult!)</strong> — Porn, graphic violence, or explictly adult themes</p>
+                  <p><strong>General</strong> — Suitable for everyone</p>
+                  <p><strong>Mature</strong> — Light themes of violence, language, or other mature elements that don't teeter into explicit.</p>
+                  <p><strong>Explicit</strong> — Porn, graphic violence, or explicitly adult themes</p>
                 </div>
               </div>
               <select class="cs-select-lg" id="rating-select">
-                <option value="General Audiences">General Audiences</option>
-                <option value="Teen & Up">Teen & Up</option>
-                <option value="Mature/Explicit (Adult)">Mature/Explicit (Adult)</option>
+                <option value="sfw">General</option>
+                <option value="mature">Mature</option>
+                <option value="explicit">Explicit</option>
               </select>
             </div>
 
@@ -675,6 +683,17 @@
                 <span class="cs-field-hint">Use *text* for italics, **text** for bold.</span>
               </div>
               <textarea class="cs-textarea-lg" id="site-bio-input"></textarea>
+            </div>
+
+            <div class="cs-field-block">
+              <div class="cs-field-title-row">
+                <span class="cs-field-title">Complete?</span>
+              </div>
+              <span class="cs-field-hint" style="display:block; margin-bottom:0.6rem;">Is your story completed?</span>
+              <div class="cs-complete-toggle" id="cs-complete-toggle">
+                <button type="button" class="cs-complete-btn active" data-value="no">No</button>
+                <button type="button" class="cs-complete-btn" data-value="yes">Yes</button>
+              </div>
             </div>
           </div>
 
@@ -914,7 +933,7 @@
           <div class="gallery-cat-row" id="se-gallery-editor-cat-row">
             <label class="gallery-cat-option">
               <input type="radio" name="se-gallery-editor-category" value="sfw" checked />
-              <span>SFW</span>
+              <span>General</span>
             </label>
             <label class="gallery-cat-option gallery-cat-option--spicy">
               <input type="radio" name="se-gallery-editor-category" value="mature" />
@@ -1071,14 +1090,28 @@ const CATEGORY_OPTIONS = ['Gen', 'M/F', 'M/M', 'F/F', 'Multi', 'Other'];
 // naming — remap those onto the current options so the form never shows a
 // blank/unselected field for content saved before this rewrite.
 function mapLegacyRating(rating) {
-  if (['General Audiences', 'Teen & Up', 'Mature/Explicit (Adult)'].includes(rating)) return rating;
-  if (rating === 'Teen And Up Audiences') return 'Teen & Up';
-  if (rating === 'Mature' || rating === 'Explicit') return 'Mature/Explicit (Adult)';
-  return 'General Audiences';
+  if (['sfw', 'mature', 'explicit'].includes(rating)) return rating;
+  // Old text-label ratings, in case any story hasn't been through the
+  // server-side remap yet.
+  if (rating === 'General Audiences') return 'sfw';
+  if (rating === 'Teen & Up' || rating === 'Teen And Up Audiences') return 'mature';
+  if (rating === 'Mature/Explicit (Adult)' || rating === 'Mature' || rating === 'Explicit') return 'explicit';
+  return 'sfw';
 }
 function mapLegacyCategory(cat) {
   return cat === 'F/M' ? 'M/F' : cat;
 }
+
+function setCompleteToggle(isComplete) {
+  document.querySelectorAll('#cs-complete-toggle .cs-complete-btn').forEach(b => {
+    b.classList.toggle('active', (b.dataset.value === 'yes') === isComplete);
+  });
+}
+document.querySelectorAll('#cs-complete-toggle .cs-complete-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#cs-complete-toggle .cs-complete-btn').forEach(b => b.classList.toggle('active', b === btn));
+  });
+});
 
 function buildCategoryChecks(selected) {
   const wrap = document.getElementById('category-checks');
@@ -1494,6 +1527,7 @@ function populateForm(s) {
   document.getElementById('bio-field-label').textContent = meetText;
 
   document.getElementById('rating-select').value = mapLegacyRating(s.rating);
+  setCompleteToggle(!!s.is_complete);
   buildCategoryChecks((s.categories || []).map(mapLegacyCategory));
   workingRelationships = (s.relationships || []).slice();
   renderRelationshipsEditor();
@@ -1616,6 +1650,7 @@ document.getElementById('save-edit-btn').addEventListener('click', async () => {
     categories,
     relationships: workingRelationships,
     fandoms: workingFandoms,
+    is_complete: document.querySelector('#cs-complete-toggle .cs-complete-btn.active').dataset.value === 'yes',
   };
 
   const saveBtn = document.getElementById('save-edit-btn');

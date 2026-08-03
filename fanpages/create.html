@@ -149,6 +149,14 @@
       padding: 0.1rem; line-height: 1; opacity: 0.85; flex-shrink: 0;
     }
     .cs-lightbulb:hover { opacity: 1; }
+    .cs-complete-toggle { display: flex; gap: 0.6rem; }
+    .cs-complete-btn {
+      background: #17171a; border: 1px solid rgba(255,255,255,0.14); border-radius: 20px;
+      color: #ccc; font-family: 'Inter', sans-serif; font-size: 0.92rem; font-weight: 700;
+      padding: 0.55em 1.4em; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .cs-complete-btn:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
+    .cs-complete-btn.active { background: rgba(90,180,110,0.2); border-color: rgba(90,180,110,0.55); color: #8fe0ac; }
 
     /* Prettier divider — a soft fade instead of a flat solid rule. */
     .cs-divider {
@@ -245,16 +253,16 @@
           <label class="cs-field-title" for="cs-rating-select">Rating<span class="cs-required-dot" title="Required"></span></label>
           <button class="cs-lightbulb" id="rating-tip-icon" type="button" aria-label="Rating help">💡</button>
           <div class="wiki-tags-tip-popover" id="rating-tip-popover" hidden>
-            <p><strong>General Audiences</strong> — Suitable for everyone</p>
-            <p><strong>Teen And Up Audiences</strong> — May not be suitable for all audiences, but not expressly explicit. Light themes of violence, language, or other mature elements that don't teeter into adult.</p>
-            <p><strong>Mature (Adult!)</strong> — Porn, graphic violence, or explictly adult themes</p>
+            <p><strong>General</strong> — Suitable for everyone</p>
+            <p><strong>Mature</strong> — Light themes of violence, language, or other mature elements that don't teeter into explicit.</p>
+            <p><strong>Explicit</strong> — Porn, graphic violence, or explicitly adult themes</p>
           </div>
         </div>
         <select class="cs-select-lg" id="cs-rating-select">
           <option value="" selected disabled>Choose a rating…</option>
-          <option value="General Audiences">General Audiences</option>
-          <option value="Teen & Up">Teen &amp; Up</option>
-          <option value="Mature/Explicit (Adult)">Mature/Explicit (Adult)</option>
+          <option value="sfw">General</option>
+          <option value="mature">Mature</option>
+          <option value="explicit">Explicit</option>
         </select>
       </div>
 
@@ -267,6 +275,17 @@
           </div>
         </div>
         <textarea class="cs-textarea-lg" id="cs-bio-input"></textarea>
+      </div>
+
+      <div class="cs-field-block mod-editable-block">
+        <div class="cs-field-title-row">
+          <label class="cs-field-title">Complete?</label>
+        </div>
+        <p class="cs-field-hint" style="margin-bottom:0.6rem;">Is your story completed?</p>
+        <div class="cs-complete-toggle" id="cs-complete-toggle">
+          <button type="button" class="cs-complete-btn active" data-value="no">No</button>
+          <button type="button" class="cs-complete-btn" data-value="yes">Yes</button>
+        </div>
       </div>
       </div>
 
@@ -721,6 +740,12 @@ document.getElementById('cover-file-input').addEventListener('change', (e) => {
   e.target.value = '';
 });
 
+document.querySelectorAll('#cs-complete-toggle .cs-complete-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#cs-complete-toggle .cs-complete-btn').forEach(b => b.classList.toggle('active', b === btn));
+  });
+});
+
 // ── Save and Continue ────────────────────────────────────────────────────
 document.getElementById('cs-submit-btn').addEventListener('click', async () => {
   const title = document.getElementById('cs-title-input').value.trim();
@@ -742,6 +767,7 @@ document.getElementById('cs-submit-btn').addEventListener('click', async () => {
     url:   row.querySelector('.link-url').value.trim(),
   })).filter(l => l.label && l.url);
   const bio = document.getElementById('cs-bio-input').value.trim();
+  const isComplete = document.querySelector('#cs-complete-toggle .cs-complete-btn.active').dataset.value === 'yes';
 
   const btn = document.getElementById('cs-submit-btn');
   btn.disabled = true;
@@ -772,7 +798,7 @@ document.getElementById('cs-submit-btn').addEventListener('click', async () => {
     await fetch('/api/moderator/site', {
       method: 'PUT',
       headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bio, tags: workingTags, categories, relationships: workingRelationships, fandoms: workingFandoms, links }),
+      body: JSON.stringify({ bio, tags: workingTags, categories, relationships: workingRelationships, fandoms: workingFandoms, links, is_complete: isComplete }),
     }).catch(() => {});
 
     if (pendingBannerBlob) {
