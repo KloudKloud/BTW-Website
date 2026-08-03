@@ -64,6 +64,22 @@
     .fp-layout--submissions .fp-filter-fab,
     .fp-layout--submissions .fp-side-bottom { display: none; }
 
+    /* ── Browse mode (?browse=1, reached via the nav's Browse dropdown
+       instead of the left Story/Submissions/Profiles panel) — no left
+       panel at all; the right filter panel + collapse arrow work exactly
+       the same as the normal Story tab. Combined with .fp-layout--
+       submissions this drops down to a single centered-nothing column
+       (submissions already hides the filter panel/fab, so there's
+       nothing left in column 3 to reserve room for). ── */
+    .fp-layout--no-side { grid-template-columns: 1fr 340px; }
+    .fp-layout--no-side .fp-side-panel { display: none; }
+    .fp-layout--no-side.fp-layout--filters-collapsed { grid-template-columns: 1fr 0px; }
+    .fp-layout--no-side.fp-layout--submissions { grid-template-columns: 1fr; }
+    .fp-browse-heading {
+      font-family: 'Cinzel', Georgia, serif; font-size: 1.7rem; font-weight: 700; color: #fff;
+      margin: 1.75rem 0 0.5rem;
+    }
+
     /* Justified photo-wall grid — ported from the Fanpage Hub's "Recent
        Submissions" box (fanpages/index.html: rs-grid/rs-row/rs-card),
        same card look/hover-reveal-title behavior, just not capped to 3
@@ -410,7 +426,7 @@
     @media (max-width: 980px) {
       /* Collapse doesn't make sense once everything's stacked in one
          column -- the panel always shows and the floating arrow hides. */
-      .fp-layout, .fp-layout--filters-collapsed, .fp-layout--submissions, .fp-layout--profiles { grid-template-columns: 1fr; row-gap: 1.5rem; }
+      .fp-layout, .fp-layout--filters-collapsed, .fp-layout--submissions, .fp-layout--profiles, .fp-layout--no-side { grid-template-columns: 1fr; row-gap: 1.5rem; }
       .fp-layout--profiles .fp-results-col { max-width: none; }
       .fp-results-col { grid-column: 1; }
       .fp-filter-panel, .fp-layout--filters-collapsed .fp-filter-panel {
@@ -472,6 +488,7 @@
   </aside>
 
   <div class="fp-results-col">
+    <h1 class="fp-browse-heading" id="fp-browse-heading" hidden></h1>
     <p class="fp-search-sub" id="fp-search-sub"></p>
     <div class="fp-results-list" id="fp-search-results"><p class="fp-search-empty">Loading…</p></div>
     <div class="fp-pagination" id="fp-pagination" hidden></div>
@@ -1197,6 +1214,18 @@ async function refreshInactiveMenuCounts(activeView) {
 // gone), and render into the same #fp-search-results element the Story
 // tab uses. ───────────────────────────────────────────────────────────
 const currentView = new URLSearchParams(window.location.search).get('view');
+// ?browse=1 — reached via the nav's Browse dropdown instead of the left
+// panel: no left panel at all, a plain "Recent Stories"/"Recent
+// Submissions" heading up top, everything else (right filter panel,
+// collapse arrow, the actual result-fetching) identical to the normal tab.
+const isBrowseMode = new URLSearchParams(window.location.search).get('browse') === '1';
+if (isBrowseMode) {
+  fpLayoutEl.classList.add('fp-layout--no-side');
+  const headingEl = document.getElementById('fp-browse-heading');
+  headingEl.textContent = currentView === 'submissions' ? 'Recent Submissions' : 'Recent Stories';
+  headingEl.hidden = false;
+  document.getElementById('fp-search-sub').style.marginTop = '0';
+}
 if (currentView === 'submissions' || currentView === 'profiles') {
   fpLayoutEl.classList.add(currentView === 'submissions' ? 'fp-layout--submissions' : 'fp-layout--profiles');
   document.getElementById('fp-side-menu-story').classList.remove('fp-side-menu-item--active');
@@ -1207,7 +1236,7 @@ if (currentView === 'submissions' || currentView === 'profiles') {
   loadCatalogsForAutocomplete();
   runSearch();
 }
-refreshInactiveMenuCounts(currentView === 'submissions' || currentView === 'profiles' ? currentView : 'story');
+if (!isBrowseMode) refreshInactiveMenuCounts(currentView === 'submissions' || currentView === 'profiles' ? currentView : 'story');
 </script>
 
 </body>

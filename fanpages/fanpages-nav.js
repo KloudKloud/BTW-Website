@@ -17,13 +17,32 @@
   root.innerHTML = `
     <div class="fpnav-bar">
       <a class="fpnav-brand" href="/fanpages"><img class="fpnav-brand-logo" src="/images/fanpagelogo.png" alt="Fanpages" width="52" height="44" /></a>
-      <a class="fpnav-link fpnav-link--clubs${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Clubs</a>
+
+      <div class="fpnav-dropdown-wrap fpnav-left-dropdown-wrap">
+        <button class="fpnav-link fpnav-trigger-link" id="fpnav-community-btn" type="button">Community <span class="fpnav-caret">▾</span></button>
+        <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
+          <a href="https://discord.gg/my4bPf2XUm" target="_blank" rel="noopener">Discord</a>
+          <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donations</a>
+          <a href="#">BTW TOS</a>
+        </div>
+      </div>
+
+      <div class="fpnav-dropdown-wrap fpnav-left-dropdown-wrap">
+        <button class="fpnav-link fpnav-trigger-link${['/fanpages/search', '/fanpages/characters'].includes(here) ? ' active' : ''}" id="fpnav-browse-btn" type="button">Browse <span class="fpnav-caret">▾</span></button>
+        <div class="fpnav-dropdown" id="fpnav-browse-dropdown" hidden>
+          <a href="/fanpages/search?sort=updated&browse=1">Stories</a>
+          <a href="/fanpages/search?view=submissions&browse=1">Submissions</a>
+          <a href="/fanpages/characters">Characters</a>
+        </div>
+      </div>
 
       <div class="fpnav-search">
         <svg class="fpnav-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
         <input type="search" id="fpnav-search-input" placeholder="Search" />
       </div>
       <div class="fpnav-right">
+
+        <a class="fpnav-link fpnav-link--clubs${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Clubs</a>
 
         <div class="fpnav-dropdown-wrap">
           <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
@@ -94,6 +113,36 @@
   }
   wireDropdown('fpnav-upload-btn', 'fpnav-upload-dropdown');
   wireDropdown('fpnav-avatar-btn', 'fpnav-avatar-dropdown');
+  wireDropdown('fpnav-browse-btn', 'fpnav-browse-dropdown');
+  wireDropdown('fpnav-community-btn', 'fpnav-community-dropdown');
+  // Community and Browse also open on hover (not just click), unlike the
+  // Create/avatar menus — they're pure navigation with no login-gating to
+  // worry about, so there's no downside to making them quicker to get to.
+  // Closing is debounced on a short timer (cleared by re-entering either
+  // the button or the menu) so crossing the small visual gap between them
+  // on the way down doesn't get treated as "left the menu" and slam it shut.
+  function wireHoverDropdown(btnId, dropdownId) {
+    const btn = document.getElementById(btnId);
+    const wrap = btn && btn.closest('.fpnav-dropdown-wrap');
+    const dd = document.getElementById(dropdownId);
+    if (!wrap || !dd) return;
+    let closeTimer = null;
+    const open = () => {
+      clearTimeout(closeTimer);
+      document.querySelectorAll('.fpnav-dropdown').forEach(el => { if (el !== dd) el.hidden = true; });
+      dd.hidden = false;
+    };
+    const scheduleClose = () => {
+      clearTimeout(closeTimer);
+      closeTimer = setTimeout(() => { dd.hidden = true; }, 150);
+    };
+    wrap.addEventListener('mouseenter', open);
+    wrap.addEventListener('mouseleave', scheduleClose);
+    dd.addEventListener('mouseenter', open);
+    dd.addEventListener('mouseleave', scheduleClose);
+  }
+  wireHoverDropdown('fpnav-browse-btn', 'fpnav-browse-dropdown');
+  wireHoverDropdown('fpnav-community-btn', 'fpnav-community-dropdown');
   document.addEventListener('click', () => {
     document.querySelectorAll('.fpnav-dropdown').forEach(el => { el.hidden = true; });
   });
