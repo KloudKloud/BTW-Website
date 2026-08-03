@@ -321,14 +321,6 @@
     /* "<name>'s Gallery Page" eyebrow removed -- the profile's own tab bar
        already says whose gallery this is. */
     #fp-gallery-eyebrow { display: none; }
-    .fp-gallery-page-row .mod-gallery-sidebar-label {
-      font-size: 1.15rem; letter-spacing: 0.04em; margin-bottom: 1.1rem;
-    }
-    /* SFW / Sketches / Spicy heading (below the "<name>'s Gallery Page"
-       eyebrow, NOT the Browse box buttons) — blue glow. */
-    #fp-gallery-grid-view #fp-gallery-title-text {
-      color: #7fa8d9; text-shadow: 0 0 20px rgba(127,168,217,0.55);
-    }
     /* "All Newspapers" back link — bigger, green glow so it reads clearly
        as the way out of the full-post view. */
     #fp-newspaper-detail-wrap .art-view-back {
@@ -961,27 +953,20 @@
   </div>
 </div>
 
-<!-- Gallery tab — same layout as a story's Gallery page: a Browse sidebar
-     (category filter, spicy included) next to the tile grid, with a
-     click-through detail view. Spicy is gated client-side behind a login
-     wall exactly like a story's own gallery — the API includes it, the
-     page just won't render it for a logged-out visitor. -->
+<!-- Gallery tab — every rating (SFW/Mature/Explicit) shows together in one
+     grid now, no more Browse/category sidebar. Mature/Explicit posts are
+     filtered out entirely server-side for a viewer without NSFW access,
+     same as a story's own gallery. -->
 <div class="fp-tab-view" id="fp-gallery-view" hidden>
   <div class="fp-gallery-page-row" id="fp-gallery-grid-row">
-  <div class="mod-gallery-main" id="fp-gallery-grid-view">
-    <div class="chars-sidebar-col">
-      <aside class="chars-create-box">
-        <p class="mod-gallery-sidebar-label">Browse</p>
-        <button class="mod-gallery-cat active" id="fp-cat-art" type="button">SFW</button>
-        <button class="mod-gallery-cat" id="fp-cat-sketches" type="button">Sketches</button>
-        <button class="mod-gallery-cat" id="fp-cat-spicy" type="button">Spicy</button>
-      </aside>
-    </div>
+  <div class="mod-gallery-main mod-gallery-main--no-sidebar" id="fp-gallery-grid-view">
     <div class="mod-gallery-content">
       <p class="mod-gallery-eyebrow" id="fp-gallery-eyebrow">Fan Art &amp; Illustrations</p>
-      <h1 class="wiki-title" id="fp-gallery-title-text">SFW</h1>
       <div class="wiki-rule"></div>
-      <div class="gallery-grid" id="fp-gallery-grid"></div>
+      <div class="gallery-grid gallery-grid--4up" id="fp-gallery-grid"></div>
+      <div class="mod-gallery-empty-state" id="fp-gallery-empty-msg" style="display:none;">
+        <p class="mod-gallery-sidebar-label">No artwork yet~</p>
+      </div>
     </div>
   </div>
   </div>
@@ -1785,30 +1770,27 @@
     return fpCharactersPromise;
   }
 
-  // ── Gallery tab — same layout as a story's Gallery page: a Browse sidebar
-  // (category filter, spicy included) next to the tile grid, with a
-  // click-through detail view. Spicy is gated client-side behind a login
-  // wall exactly like a story's own gallery feed. ──────────────────────────
-  let FP_GALLERY_ART = [];
-  let FP_GALLERY_SKETCHES = [];
-  let FP_GALLERY_SPICY = [];
-  let FP_SPICY_LOCK = null; // null = unlocked; 'login' or 'sfw_mode' otherwise
+  // ── Gallery tab — every rating (SFW/Mature/Explicit) in one tile grid,
+  // no more Browse/category sidebar. Mature/Explicit posts are filtered
+  // out server-side entirely for a viewer without NSFW access. ──────────
+  let FP_GALLERY_ITEMS = [];
   let fpGalleryLoaded = false;
 
-  function fpSiblingsForCategory(cat) {
-    if (cat === 'sketches') return FP_GALLERY_SKETCHES;
-    if (cat === 'spicy') return FP_GALLERY_SPICY;
-    return FP_GALLERY_ART;
-  }
-
-  function renderFpGalleryTiles(items, emptyMsg) {
+  // Every rating shows together now -- SFW/Mature/Explicit are no longer
+  // split across Browse tabs. A viewer without NSFW access simply never
+  // receives the Mature/Explicit rows at all (filtered server-side).
+  function renderFpGalleryTiles() {
     const grid = document.getElementById('fp-gallery-grid');
-    if (!items.length) {
-      grid.innerHTML = `<p class="gallery-empty-msg">${emptyMsg}</p>`;
+    const emptyEl = document.getElementById('fp-gallery-empty-msg');
+    if (!FP_GALLERY_ITEMS.length) {
+      grid.hidden = true;
+      emptyEl.style.display = '';
       return;
     }
+    grid.hidden = false;
+    emptyEl.style.display = 'none';
     grid.innerHTML = '';
-    items.forEach(g => {
+    FP_GALLERY_ITEMS.forEach(g => {
       const a = document.createElement('a');
       a.className = 'gallery-tile';
       // Real navigation to the standalone gallery post page now, not an
@@ -1822,48 +1804,6 @@
       grid.appendChild(a);
     });
   }
-
-  function setFpGalleryCategory(cat) {
-    document.getElementById('fp-cat-art').classList.toggle('active', cat === 'sfw');
-    document.getElementById('fp-cat-sketches').classList.toggle('active', cat === 'sketches');
-    document.getElementById('fp-cat-spicy').classList.toggle('active', cat === 'spicy');
-
-    if (cat === 'spicy') {
-      document.getElementById('fp-gallery-title-text').textContent = 'Spicy';
-      const grid = document.getElementById('fp-gallery-grid');
-      if (FP_SPICY_LOCK === 'login') {
-        grid.innerHTML = `
-          <div class="mod-gallery-locked">
-            <div class="mod-gallery-locked-icon">🔒</div>
-            <p class="mod-gallery-locked-title">Members Only</p>
-            <p class="mod-gallery-locked-text">
-              This section contains mature content intended for adults.<br />
-              You must be <strong>18 or older</strong> and logged in to view it.
-            </p>
-            <a href="/fanpages/login?from=${encodeURIComponent(window.location.pathname)}" class="mod-gallery-locked-btn">Log In / Register →</a>
-          </div>`;
-        return;
-      }
-      if (FP_SPICY_LOCK === 'sfw_mode') {
-        grid.innerHTML = `
-          <div class="mod-gallery-locked">
-            <div class="mod-gallery-locked-icon">🔒</div>
-            <p class="mod-gallery-locked-title">This content is NSFW</p>
-            <p class="mod-gallery-locked-text">To enable NSFW content, change your Account Settings.</p>
-            <a href="/fanpages/account-settings?from=${encodeURIComponent(window.location.pathname)}" class="mod-gallery-locked-btn">Account Settings →</a>
-          </div>`;
-        return;
-      }
-      renderFpGalleryTiles(FP_GALLERY_SPICY, 'Nothing here yet — check back soon.');
-      return;
-    }
-
-    document.getElementById('fp-gallery-title-text').textContent = cat === 'sketches' ? 'Sketches' : 'SFW';
-    renderFpGalleryTiles(fpSiblingsForCategory(cat), cat === 'sketches' ? 'No sketches yet — check back soon.' : 'No art yet — check back soon.');
-  }
-  document.getElementById('fp-cat-art').addEventListener('click', () => setFpGalleryCategory('sfw'));
-  document.getElementById('fp-cat-sketches').addEventListener('click', () => setFpGalleryCategory('sketches'));
-  document.getElementById('fp-cat-spicy').addEventListener('click', () => setFpGalleryCategory('spicy'));
 
   // ── Universal comments (target_type/target_id) — one level of replies,
   // "@username" prefix, avatar-card layout. Same system as the
@@ -2019,13 +1959,9 @@
       try {
         const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-gallery`, { headers: authHeaders() });
         const data = await res.json();
-        const items = data.gallery || [];
-        FP_GALLERY_ART = items.filter(g => g.category === 'sfw');
-        FP_GALLERY_SKETCHES = items.filter(g => g.category === 'sketches');
-        FP_GALLERY_SPICY = items.filter(g => g.category === 'spicy');
-        FP_SPICY_LOCK = data.spicy_lock != null ? data.spicy_lock : null;
+        FP_GALLERY_ITEMS = data.gallery || [];
         fpGalleryLoaded = true;
-        setFpGalleryCategory('sfw');
+        renderFpGalleryTiles();
       } catch {
         grid.innerHTML = '<p class="fp-tab-view-empty">Couldn\'t load gallery art right now.</p>';
       }

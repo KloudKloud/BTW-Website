@@ -45,30 +45,17 @@
        is bumped by the same +100px to keep the two contexts matched. -->
   <main class="mod-page-row" style="padding: 0 3rem; max-width: 1400px;">
 
-    <div class="mod-gallery-main" id="gallery-grid-view">
-
-      <div class="chars-sidebar-col">
-        <aside class="chars-create-box" id="gallery-browse-box">
-          <p class="mod-gallery-sidebar-label">Browse</p>
-          <button class="mod-gallery-cat active" id="cat-art" type="button">SFW</button>
-          <button class="mod-gallery-cat" id="cat-sketches" type="button">Sketches</button>
-          <button class="mod-gallery-cat" id="cat-spicy" type="button">Spicy</button>
-        </aside>
-
-        <!-- Shown instead of the box above when the story has no gallery
-             posts linked yet at all — browsing empty categories read as
-             broken. -->
-        <aside class="chars-create-box" id="gallery-empty-box" style="display:none; text-align:center;">
-          <p class="mod-gallery-sidebar-label">Add Artwork</p>
-          <div class="wiki-rule" style="margin:0.85rem 0;"></div>
-          <button class="chars-create-btn chars-create-btn--edit" id="gallery-empty-editor-btn" type="button" style="display:none;">Story Editor</button>
-        </aside>
-      </div>
-
+    <div class="mod-gallery-main mod-gallery-main--no-sidebar" id="gallery-grid-view">
       <div class="mod-gallery-content">
-        <div class="gallery-grid" id="gallery-grid"></div>
-      </div>
+        <div class="gallery-grid gallery-grid--4up" id="gallery-grid"></div>
 
+        <!-- Shown instead of the grid when the story has no gallery posts
+             linked yet at all. -->
+        <div class="mod-gallery-empty-state" id="gallery-empty-box" style="display:none;">
+          <p class="mod-gallery-sidebar-label">No artwork yet~</p>
+          <button class="chars-create-btn chars-create-btn--edit" id="gallery-empty-editor-btn" type="button" style="display:none;">Story Editor</button>
+        </div>
+      </div>
     </div>
 
     <!-- Detail "page" for a single post — swapped in for #gallery-grid-view -->
@@ -164,10 +151,7 @@ document.getElementById('gallery-empty-editor-btn').addEventListener('click', ()
   window.location.href = `${STORY_BASE}/edit#gallery`;
 });
 
-let GALLERY_ART      = [];
-let GALLERY_SKETCHES = [];
-let GALLERY_SPICY    = [];
-let SPICY_LOCK = null; // null = unlocked; 'login' or 'sfw_mode' otherwise
+let GALLERY_ITEMS = [];
 let IS_SELF = false;
 let STORY_TITLE = 'this story';
 let STORY_COVER_URL = '';
@@ -176,17 +160,7 @@ let STORY_AUTHOR_DISPLAY = '';
 
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
 const authHeaders = () => ({ Authorization: `Bearer ${token}`, 'X-Story-Path': SLUG });
-const grid    = document.getElementById('gallery-grid');
-const catArt      = document.getElementById('cat-art');
-const catSketches = document.getElementById('cat-sketches');
-const catSpicy    = document.getElementById('cat-spicy');
-
-let activeCategory = 'sfw';
-
-function setActiveTab(btn) {
-  [catArt, catSketches, catSpicy].forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-}
+const grid = document.getElementById('gallery-grid');
 
 // ── Safe rich text: escape everything, then *italic*/**bold**, then the
 // [Artist Name]<url> credit syntax as a real link. ──────────────────────────
@@ -232,52 +206,13 @@ function renderTiles(items, emptyMsg) {
   });
 }
 
-function renderArt() {
-  activeCategory = 'sfw';
-  setActiveTab(catArt);
-  renderTiles(GALLERY_ART, 'No art yet — check back soon.');
+// Every rating shows together now -- SFW/Mature/Explicit are no longer
+// split across tabs. A viewer without NSFW access simply never receives
+// the Mature/Explicit rows at all (filtered server-side), so there's
+// nothing left to gate client-side either.
+function renderGallery() {
+  renderTiles(GALLERY_ITEMS, 'No artwork posted yet — check back soon.');
 }
-
-function renderSketches() {
-  activeCategory = 'sketches';
-  setActiveTab(catSketches);
-  renderTiles(GALLERY_SKETCHES, 'No sketches yet — check back soon.');
-}
-
-function renderSpicy() {
-  activeCategory = 'spicy';
-  setActiveTab(catSpicy);
-
-  if (SPICY_LOCK === 'login') {
-    grid.innerHTML = `
-      <div class="mod-gallery-locked">
-        <div class="mod-gallery-locked-icon">🔒</div>
-        <p class="mod-gallery-locked-title">Members Only</p>
-        <p class="mod-gallery-locked-text">
-          This section contains mature content intended for adults.<br />
-          You must be <strong>18 or older</strong> and logged in to view it.
-        </p>
-        <a href="/fanpages/login" class="mod-gallery-locked-btn">Log In / Register →</a>
-      </div>`;
-    return;
-  }
-  if (SPICY_LOCK === 'sfw_mode') {
-    grid.innerHTML = `
-      <div class="mod-gallery-locked">
-        <div class="mod-gallery-locked-icon">🔒</div>
-        <p class="mod-gallery-locked-title">This content is NSFW</p>
-        <p class="mod-gallery-locked-text">To enable NSFW content, change your Account Settings.</p>
-        <a href="/fanpages/account-settings" class="mod-gallery-locked-btn">Account Settings →</a>
-      </div>`;
-    return;
-  }
-
-  renderTiles(GALLERY_SPICY, 'Nothing here yet — check back soon.');
-}
-
-catArt.addEventListener('click', () => { if (currentDetailItem) closePostDetail(true); renderArt(); });
-catSketches.addEventListener('click', () => { if (currentDetailItem) closePostDetail(true); renderSketches(); });
-catSpicy.addEventListener('click', () => { if (currentDetailItem) closePostDetail(true); renderSpicy(); });
 
 // ── Post detail "page" ──────────────────────────────────────────────────
 // Not a modal — swaps the grid out for a big image + title + description
@@ -285,15 +220,9 @@ catSpicy.addEventListener('click', () => { if (currentDetailItem) closePostDetai
 // pushState so it feels like a real page (back button, deep-linkable).
 let currentDetailItem = null;
 
-function backLabelFor(cat) {
-  if (cat === 'sketches') return '← Back to Sketches';
-  if (cat === 'spicy') return '← Back to Spicy';
-  return '← Back to Gallery';
-}
-
 function ratingLabelFor(cat) {
-  if (cat === 'sketches') return 'Sketches';
-  if (cat === 'spicy') return 'Spicy';
+  if (cat === 'mature') return 'Mature';
+  if (cat === 'explicit') return 'Explicit';
   return 'SFW';
 }
 
@@ -330,14 +259,8 @@ let navNextItem = null;
 
 function truncateLabel(s, n) { return s.length > n ? s.slice(0, n).trimEnd() + '…' : s; }
 
-function siblingsForCategory(cat) {
-  if (cat === 'sketches') return GALLERY_SKETCHES;
-  if (cat === 'spicy') return GALLERY_SPICY;
-  return GALLERY_ART;
-}
-
 function renderDetailNav(item) {
-  const siblings = siblingsForCategory(item.category);
+  const siblings = GALLERY_ITEMS;
   const idx = siblings.findIndex(g => String(g.id) === String(item.id));
   navPrevItem = idx > 0 ? siblings[idx - 1] : null;
   navNextItem = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : null;
@@ -431,7 +354,6 @@ function openPostDetail(item, pushHistory) {
   document.getElementById('gallery-detail-img').alt = item.title || '';
   document.getElementById('gallery-detail-title').textContent = item.title || 'No title provided';
   document.getElementById('gallery-detail-desc').innerHTML = renderGalleryText(item.description);
-  document.getElementById('gallery-detail-back').textContent = backLabelFor(item.category);
   renderDetailNav(item);
   updateLikeUI(item);
   updateBookmarkUI(item);
@@ -741,8 +663,7 @@ document.getElementById('cc-compose-btn').addEventListener('click', async () => 
 window.addEventListener('popstate', () => {
   const id = new URLSearchParams(window.location.search).get('post');
   if (!id) { closePostDetail(false); return; }
-  const all = [...GALLERY_ART, ...GALLERY_SKETCHES, ...GALLERY_SPICY];
-  const item = all.find(g => String(g.id) === String(id));
+  const item = GALLERY_ITEMS.find(g => String(g.id) === String(id));
   if (item) openPostDetail(item, false);
 });
 
@@ -854,33 +775,21 @@ function renderBookBox(site) {
   pageTitleEl.textContent = STORY_TITLE;
   pageTitleEl.classList.remove('mod-title-loading');
 
-  GALLERY_ART      = (data && data.gallery_sfw)      || [];
-  GALLERY_SKETCHES = (data && data.gallery_sketches) || [];
-  GALLERY_SPICY    = (data && data.gallery_spicy)    || [];
-  SPICY_LOCK       = (data && data.spicy_lock) != null ? data.spicy_lock : null;
+  GALLERY_ITEMS = (data && data.gallery) || [];
 
-  // Nothing posted at all yet (across every category, spicy included
-  // regardless of lock state) — swap the category-browse box for an
-  // "Add Artwork" prompt instead of letting people browse empty tabs.
-  if (!GALLERY_ART.length && !GALLERY_SKETCHES.length && !GALLERY_SPICY.length) {
-    document.getElementById('gallery-browse-box').style.display = 'none';
+  // Nothing posted at all yet (or nothing this viewer can see) — swap the
+  // grid for an "Add Artwork" prompt instead of showing an empty grid.
+  if (!GALLERY_ITEMS.length) {
+    document.getElementById('gallery-grid').style.display = 'none';
     document.getElementById('gallery-empty-box').style.display = '';
     document.getElementById('gallery-empty-editor-btn').style.display = IS_SELF ? '' : 'none';
   }
 
   const deepLinkId = new URLSearchParams(window.location.search).get('post');
-  const deepLinkItem = deepLinkId
-    ? [...GALLERY_ART, ...GALLERY_SKETCHES, ...GALLERY_SPICY].find(g => String(g.id) === String(deepLinkId))
-    : null;
+  const deepLinkItem = deepLinkId ? GALLERY_ITEMS.find(g => String(g.id) === String(deepLinkId)) : null;
 
-  if (deepLinkItem) {
-    if (deepLinkItem.category === 'spicy') renderSpicy();
-    else if (deepLinkItem.category === 'sketches') renderSketches();
-    else renderArt();
-    openPostDetail(deepLinkItem, false);
-  } else {
-    renderArt();
-  }
+  renderGallery();
+  if (deepLinkItem) openPostDetail(deepLinkItem, false);
 })();
 </script>
 

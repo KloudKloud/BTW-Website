@@ -87,13 +87,11 @@
        Submissions" box (fanpages/index.html: rs-grid/rs-row/rs-card),
        same card look/hover-reveal-title behavior, just not capped to 3
        rows here since this is the real full listing, not a teaser. */
-    .rs-row { display: flex; gap: 14px; margin-bottom: 14px; }
-    .rs-row:last-child { margin-bottom: 0; }
     .rs-card {
       position: relative; display: block; text-decoration: none; color: inherit;
       border-radius: 8px; overflow: hidden; background: #1a1a1a;
       border: 1px solid rgba(255,255,255,0.08); transition: transform 0.15s, box-shadow 0.15s;
-      flex-shrink: 0;
+      aspect-ratio: 6 / 7;
     }
     .rs-card:hover { transform: translateY(-4px); box-shadow: 0 10px 26px rgba(0,0,0,0.45); z-index: 3; }
     .rs-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -168,6 +166,10 @@
 
     /* ── Result rows — no card box, just a horizontal rule between each ── */
     .fp-results-list { display: flex; flex-direction: column; }
+    /* Submissions view -- fixed-size tiles (the exact crop the uploader
+       picked in the editor), not a variable-size justified photo wall.
+       Bigger than the old justified-grid target height, e621-style. */
+    .fp-results-list--grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
     .fp-result {
       display: flex; gap: 1.75rem; padding: 1.85rem 0;
       border-bottom: 1px solid rgba(255,255,255,0.14);
@@ -749,58 +751,6 @@ function submissionCard(it) {
   }
   return a;
 }
-function activityImageUrl(it) {
-  return it.image || null;
-}
-function loadImageRatio(url) {
-  return new Promise(resolve => {
-    if (!url) { resolve(200 / 168); return; }
-    const img = new Image();
-    img.onload = () => resolve((img.naturalWidth || 1) / (img.naturalHeight || 1));
-    img.onerror = () => resolve(1);
-    img.src = url;
-  });
-}
-// Same row-packing math as the hub's teaser box, just without a maxRows
-// cap — every loaded entry gets placed instead of stopping after 3 rows.
-function buildJustifiedGrid(container, entries, targetHeight, gap, maxRows) {
-  container.innerHTML = '';
-  const containerWidth = container.clientWidth || 900;
-  let row = [];
-  let naturalWidth = 0;
-  let rows = 0;
-
-  function commitRow(stretch) {
-    if (!row.length) return;
-    const gapsTotal = gap * (row.length - 1);
-    let rowHeight = targetHeight;
-    if (stretch) {
-      const availableForImages = containerWidth - gapsTotal;
-      rowHeight = availableForImages / (naturalWidth / targetHeight);
-      rowHeight = Math.max(110, Math.min(rowHeight, 320));
-    }
-    const rowEl = document.createElement('div');
-    rowEl.className = 'rs-row';
-    row.forEach(({ el, ratio }) => {
-      el.style.height = rowHeight + 'px';
-      el.style.width = (rowHeight * ratio) + 'px';
-      rowEl.appendChild(el);
-    });
-    container.appendChild(rowEl);
-    rows++;
-    row = [];
-    naturalWidth = 0;
-  }
-
-  for (const entry of entries) {
-    if (rows >= maxRows) break;
-    row.push(entry);
-    naturalWidth += entry.ratio * targetHeight;
-    const gapsTotal = gap * (row.length - 1);
-    if (naturalWidth + gapsTotal >= containerWidth) commitRow(true);
-  }
-  if (rows < maxRows && row.length) commitRow(false);
-}
 
 // e621-style numbered pager, shared by Submissions (top and bottom). Always
 // renders even with a single page -- prev/next just end up disabled -- so
@@ -850,16 +800,14 @@ async function runSubmissionsSearch() {
     subEl.innerHTML = `<strong>${data.total || 0}</strong> submission${data.total === 1 ? '' : 's'} found${q ? ` for "${escapeHtml(q)}"` : ''}.`;
     setSubmissionsMenuCount(`${data.total || 0} submission${(data.total || 0) === 1 ? '' : 's'}${q ? ` for "${q}"` : ''}`);
 
+    resultsEl.classList.add('fp-results-list--grid');
     if (!items.length) {
       resultsEl.innerHTML = '<p class="fp-search-empty">No submissions match that search.</p>';
       return;
     }
 
-    const entries = await Promise.all(items.map(async it => {
-      const ratio = await loadImageRatio(activityImageUrl(it));
-      return { el: submissionCard(it), ratio: Math.max(0.5, Math.min(ratio, 2.2)) };
-    }));
-    buildJustifiedGrid(resultsEl, entries, 190, 14, Infinity);
+    resultsEl.innerHTML = '';
+    items.forEach(it => resultsEl.appendChild(submissionCard(it)));
 
     const totalPages = Math.max(1, Math.ceil((data.total || 0) / limit));
     const pagHtml = paginationHtml(page, totalPages);

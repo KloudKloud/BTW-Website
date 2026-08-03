@@ -250,7 +250,7 @@ async function initDb() {
     CREATE TABLE IF NOT EXISTS moderator_gallery (
       id         SERIAL      PRIMARY KEY,
       site_id    INTEGER     NOT NULL REFERENCES moderator_sites(id) ON DELETE CASCADE,
-      category   TEXT        NOT NULL CHECK (category IN ('sfw','sketches','spicy')),
+      category   TEXT        NOT NULL CHECK (category IN ('sfw','mature','explicit')),
       image_url  TEXT        NOT NULL,
       title      TEXT        NOT NULL DEFAULT '',
       sort_order INTEGER     NOT NULL DEFAULT 0,
@@ -571,9 +571,9 @@ RULES
 
 1. All media you post to this story's "gallery" section MUST be yours. That means you drew it, you commissioned it, or it was a gift made specifically for your book. The gallery section is meant to be original art ONLY. Don't just take art from online and label it as art belonging to your story.
 2. Media you post for your "character" cards may be references from other places, but if it is artwork belonging to a specific person that is not yourself, please try and credit them and ensure it is free use. You can also specify in the builder that the character ref is "not" official. I know some stories have dozens of characters, and getting handmade art for each and every one takes a while. So feel free to use free, credited refs online if needed. (Alternatively, you could just use the default image as a placeholder until you get art for a specified character).
-3. NSFW MEDIA IS FINE, BUT IT MUST BE LABELED AS "Spicy" for the gallery, or marked NSFW on the character cards! Non-logged in users will not be able to see NSFW posts until they make an account.
+3. NSFW MEDIA IS FINE, BUT IT MUST BE LABELED AS "Mature" or "Explicit" for the gallery, or marked NSFW on the character cards! Non-logged in users will not be able to see NSFW posts until they make an account.
 
-Overall, NSFW and spicy media is acceptable here! But please, label it correctly. Your gallery image may be removed if it is not labeled correctly.
+Overall, NSFW media is acceptable here! But please, label it correctly. Your gallery image may be removed if it is not labeled correctly.
 
 I can't wait to browse your stories! Please read the terms above, and if you agree with them, click the box below and get to making!`
   ]).catch(e => console.error('tos_blobs seed:', e.message));
@@ -779,11 +779,16 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     );
   `).catch(e => console.error('user_featured_items migration:', e.message));
 
-  // Widen the gallery category constraint to include "sketches" (added after the original CHECK)
-  await pool.query(`
-    ALTER TABLE moderator_gallery DROP CONSTRAINT IF EXISTS moderator_gallery_category_check;
-    ALTER TABLE moderator_gallery ADD CONSTRAINT moderator_gallery_category_check CHECK (category IN ('sfw','sketches','spicy'));
-  `).catch(e => console.error('moderator_gallery category migration:', e.message));
+  // Rating overhaul -- "Sketches" is gone and "Spicy" is renamed "Explicit",
+  // with a new "Mature" tier added in between. Every existing non-SFW post
+  // (sketches or spicy, both) becomes "explicit" for now -- Blue/VeekitPaws
+  // can manually re-tier anything that should actually be "mature" later.
+  await pool.query(`ALTER TABLE moderator_gallery DROP CONSTRAINT IF EXISTS moderator_gallery_category_check;`)
+    .catch(e => console.error('moderator_gallery category constraint drop:', e.message));
+  await pool.query(`UPDATE moderator_gallery SET category = 'explicit' WHERE category NOT IN ('sfw')`)
+    .catch(e => console.error('moderator_gallery category remap:', e.message));
+  await pool.query(`ALTER TABLE moderator_gallery ADD CONSTRAINT moderator_gallery_category_check CHECK (category IN ('sfw','mature','explicit'));`)
+    .catch(e => console.error('moderator_gallery category migration:', e.message));
 
   await pool.query(`
     ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
@@ -4109,7 +4114,7 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
   const viewerNsfwEnabled = loggedIn
     ? (await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId])).rows[0]?.nsfw_enabled
     : false;
-  const spicyLock = !loggedIn ? 'login' : (!viewerNsfwEnabled ? 'sfw_mode' : null);
+  const nsfwLock = !loggedIn ? 'login' : (!viewerNsfwEnabled ? 'sfw_mode' : null);
 
   const { rows } = await pool.query(
     `SELECT mg.id, mg.image_url, mg.title, mg.description, mg.category, mg.position_x, mg.position_y,
@@ -4124,9 +4129,9 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
        SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1
      ) gsl ON true
      LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
-     WHERE mg.owner_user_id = $1 AND (mg.category != 'spicy' OR $3 = false)
+     WHERE mg.owner_user_id = $1 AND (mg.category = 'sfw' OR $3 = false)
      ORDER BY mg.created_at DESC`,
-    [author.id, viewerId || 0, !!spicyLock]
+    [author.id, viewerId || 0, !!nsfwLock]
   );
   res.json({
     gallery: rows.map(r => ({
@@ -4135,7 +4140,7 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
       like_count: r.like_count, comment_count: r.comment_count, liked: r.liked, bookmarked: r.bookmarked,
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
     })),
-    spicy_lock: spicyLock,
+    nsfw_lock: nsfwLock,
   });
 });
 
@@ -4532,7 +4537,7 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
        ) gsl ON true
        LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
        JOIN users u ON u.id = mg.owner_user_id
-       WHERE mg.category != 'spicy' AND mg.title ILIKE $1 AND mg.owner_user_id ${ownerFilter} $2 ORDER BY mg.title LIMIT 30`,
+       WHERE mg.category = 'sfw' AND mg.title ILIKE $1 AND mg.owner_user_id ${ownerFilter} $2 ORDER BY mg.title LIMIT 30`,
       [q, req.user.id]
     ));
   }
@@ -4583,8 +4588,8 @@ app.put('/api/account/featured', requireAuth, async (req, res) => {
 });
 
 // GET /api/moderator-sites/:slug — public read, powers the static moderator pages.
-// Spicy gallery items are only included when the request carries a valid token,
-// mirroring how BTW's own /spicy page gates content. Kept for callers with only
+// Mature/Explicit gallery items are only included when the request carries a
+// valid token with NSFW enabled. Kept for callers with only
 // a single-segment identity (an author's one-and-only story, or legacy links);
 // authors with multiple stories are looked up by the more specific story_path
 // route below instead, since slug (their identity) is no longer unique.
@@ -4651,7 +4656,7 @@ async function sendSiteLookup(query, params, req, res) {
   // Three states: logged out -> must log in; logged in but opted into SFW
   // Mode -> content stays NSFW-locked with a different message; logged in
   // + NSFW mode -> full access.
-  const spicyLock = !loggedIn ? 'login' : (!viewerNsfwEnabled ? 'sfw_mode' : null);
+  const nsfwLock = !loggedIn ? 'login' : (!viewerNsfwEnabled ? 'sfw_mode' : null);
 
   const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds, bookmarkedGalleryIds, siteLikeCount, siteCommentCount, siteBookmarkCount] = await Promise.all([
     // Drafts only ever show to the story's own owner (previewing via "View
@@ -4748,10 +4753,11 @@ async function sendSiteLookup(query, params, req, res) {
     },
     chapters,
     characters,
-    gallery_sfw:      gallery.filter(g => g.category === 'sfw'),
-    gallery_sketches: gallery.filter(g => g.category === 'sketches'),
-    gallery_spicy:    !spicyLock ? gallery.filter(g => g.category === 'spicy') : [],
-    spicy_lock: spicyLock,
+    // Single unified gallery list now -- no more SFW/Mature/Explicit tabs
+    // to split it across. Non-SFW posts are filtered out server-side
+    // entirely for a locked-out viewer rather than sent-but-hidden.
+    gallery: nsfwLock ? gallery.filter(g => g.category === 'sfw') : gallery,
+    nsfw_lock: nsfwLock,
   });
 }
 
@@ -4934,6 +4940,10 @@ async function sanitizeTags(raw) {
 }
 
 const RATING_OPTIONS = ['General Audiences', 'Teen & Up', 'Mature/Explicit (Adult)'];
+// Gallery post rating tiers -- "sfw" is visible to everyone; "mature" and
+// "explicit" both require a logged-in viewer with NSFW enabled (no
+// separate gate between them, same as the old single "spicy" tier).
+const GALLERY_CATEGORIES = ['sfw', 'mature', 'explicit'];
 const CATEGORY_OPTIONS = ['Gen', 'M/F', 'M/M', 'F/F', 'Multi', 'Other'];
 
 function sanitizeCategories(raw) {
@@ -5643,7 +5653,7 @@ app.delete('/api/characters/:id', requireAuth, async (req, res) => {
   res.json({ message: 'Deleted.' });
 });
 
-// ── Gallery (SFW + Spicy) ──────────────────────────────────────────────────────
+// ── Gallery (SFW / Mature / Explicit) ───────────────────────────────────────────
 // A story's Gallery roster — many-to-many via gallery_story_links, same
 // pattern as characters (lists what's linked to THIS story).
 app.get('/api/moderator/gallery', requireAuth, requireModerator, async (req, res) => {
@@ -5680,7 +5690,7 @@ async function parseGalleryTags(raw) {
 app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
   const { category, title, description } = req.body;
-  if (!['sfw', 'sketches', 'spicy'].includes(category)) return res.status(400).json({ error: 'Category must be sfw, sketches, or spicy.' });
+  if (!GALLERY_CATEGORIES.includes(category)) return res.status(400).json({ error: 'Category must be sfw, mature, or explicit.' });
 
   const imageUrl = `/images/moderators/${req.file.filename}`;
   const positionX = clampPosition(req.body.position_x);
@@ -5733,7 +5743,7 @@ app.put('/api/moderator/gallery/:id', requireAuth, uploadModImage.single('image'
   if (!existing) return res.status(404).json({ error: 'Not found.' });
 
   const { category, title, description } = req.body;
-  if (category && !['sfw', 'sketches', 'spicy'].includes(category)) return res.status(400).json({ error: 'Category must be sfw, sketches, or spicy.' });
+  if (category && !GALLERY_CATEGORIES.includes(category)) return res.status(400).json({ error: 'Category must be sfw, mature, or explicit.' });
 
   let imageUrl = existing.image_url;
   if (req.file) {
@@ -5908,7 +5918,7 @@ app.delete('/api/gallery/:id/link-character/:characterId', requireAuth, async (r
 app.post('/api/gallery', requireAuth, uploadModImage.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
   const { category, title, description } = req.body;
-  if (!['sfw', 'sketches', 'spicy'].includes(category)) return res.status(400).json({ error: 'Category must be sfw, sketches, or spicy.' });
+  if (!GALLERY_CATEGORIES.includes(category)) return res.status(400).json({ error: 'Category must be sfw, mature, or explicit.' });
   const imageUrl = `/images/moderators/${req.file.filename}`;
   const positionX = clampPosition(req.body.position_x);
   const positionY = clampPosition(req.body.position_y);
@@ -6363,9 +6373,10 @@ app.get('/api/spotlight/characters', async (req, res) => {
 app.get('/api/spotlight/gallery', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 12, 100);
   const { nsfwAllowed } = await getViewerNsfwAccess(req);
-  // Spicy is IN the rotation now — but only ever queried for viewers allowed
-  // to see it; excluded entirely (not blurred) for everyone else.
-  const categories = nsfwAllowed ? ['sfw', 'sketches', 'spicy'] : ['sfw', 'sketches'];
+  // Mature/Explicit are IN the rotation now — but only ever queried for
+  // viewers allowed to see them; excluded entirely (not blurred) for
+  // everyone else.
+  const categories = nsfwAllowed ? GALLERY_CATEGORIES : ['sfw'];
   const { rows } = await pool.query(
     `SELECT mg.id, mg.image_url, mg.title, mg.position_x, mg.position_y,
             ms.story_path, ms.slug, ms.site_title, u.username AS owner_username, u.display_name AS owner_display_name
@@ -6414,13 +6425,14 @@ app.get('/api/spotlight/stories', async (req, res) => {
 });
 
 // ── Recent Submissions feed — newest stories/chapters/art/characters across
-// every fanpage, newest first. Gallery is filtered to sfw+sketches only. ────
+// every fanpage, newest first. Gallery is filtered to SFW only for viewers
+// without NSFW access. ──────────────────────────────────────────────────
 app.get('/api/activity-feed', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 24, 40);
   const { nsfwAllowed } = await getViewerNsfwAccess(req);
-  // Over-fetch before filtering — spicy/NSFW rows get dropped (art) or
-  // image-blanked (character) in JS below, so asking the DB for exactly
-  // `limit` rows first could leave the feed short after filtering.
+  // Over-fetch before filtering — Mature/Explicit/NSFW rows get dropped
+  // (art) or image-blanked (character) in JS below, so asking the DB for
+  // exactly `limit` rows first could leave the feed short after filtering.
   const { rows } = await pool.query(
     `SELECT * FROM (
        -- Story creation itself isn't shown — a story with nothing published
@@ -6474,9 +6486,10 @@ app.get('/api/activity-feed', async (req, res) => {
     [limit * 2]
   );
   const items = rows
-    // Spicy gallery posts are excluded entirely for viewers who can't see
-    // NSFW — never sent to the client at all, unlike NSFW character refs.
-    .filter(r => !(r.type === 'art' && r.category === 'spicy' && !nsfwAllowed))
+    // Mature/Explicit gallery posts are excluded entirely for viewers who
+    // can't see NSFW — never sent to the client at all, unlike NSFW
+    // character refs.
+    .filter(r => !(r.type === 'art' && r.category !== 'sfw' && !nsfwAllowed))
     .slice(0, limit)
     .map(r => {
       const charLocked = r.type === 'character' && r.ref_is_nsfw && !nsfwAllowed;
@@ -6538,7 +6551,7 @@ app.get('/api/search/submissions', async (req, res) => {
        LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
        JOIN users u ON u.id = mg.owner_user_id
      ) feed
-     WHERE (category IS DISTINCT FROM 'spicy' OR $1)
+     WHERE (category = 'sfw' OR $1)
        AND ($2 = '' OR (
          title ILIKE '%' || $2 || '%' OR site_title ILIKE '%' || $2 || '%'
          OR username ILIKE '%' || $2 || '%' OR display_name ILIKE '%' || $2 || '%'
@@ -6566,7 +6579,7 @@ app.get('/api/search/submissions', async (req, res) => {
        LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
        JOIN users u ON u.id = mg.owner_user_id
      ) feed
-     WHERE (category IS DISTINCT FROM 'spicy' OR $1)
+     WHERE (category = 'sfw' OR $1)
        AND ($2 = '' OR (
          title ILIKE '%' || $2 || '%' OR site_title ILIKE '%' || $2 || '%'
          OR username ILIKE '%' || $2 || '%' OR display_name ILIKE '%' || $2 || '%'

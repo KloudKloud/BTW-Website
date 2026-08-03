@@ -892,22 +892,22 @@
         </div>
 
         <div class="gallery-cat-field">
-          <p class="gallery-cat-label">Category</p>
+          <p class="gallery-cat-label">Rating</p>
           <div class="gallery-cat-row" id="se-gallery-editor-cat-row">
             <label class="gallery-cat-option">
               <input type="radio" name="se-gallery-editor-category" value="sfw" checked />
               <span>SFW</span>
             </label>
-            <label class="gallery-cat-option">
-              <input type="radio" name="se-gallery-editor-category" value="sketches" />
-              <span>Sketch</span>
+            <label class="gallery-cat-option gallery-cat-option--spicy">
+              <input type="radio" name="se-gallery-editor-category" value="mature" />
+              <span>Mature</span>
             </label>
             <label class="gallery-cat-option gallery-cat-option--spicy">
-              <input type="radio" name="se-gallery-editor-category" value="spicy" />
-              <span>Spicy</span>
+              <input type="radio" name="se-gallery-editor-category" value="explicit" />
+              <span>Explicit</span>
             </label>
           </div>
-          <p class="char-editor-facts-hint">All NSFW artwork MUST be labeled as Spicy. Ensure this is selected if your piece is heavily suggestive or NSFW (18+).</p>
+          <p class="char-editor-facts-hint">All NSFW (18+) artwork must be labeled as Mature/Explicit. Visit our <a href="/fanpages/tos#ratings-and-tags" target="_blank" style="color:#7fa8d9;">ratings and tags</a> to learn more if needed~</p>
         </div>
 
         <div class="mod-field">
@@ -2474,16 +2474,13 @@ document.getElementById('char-editor-save').addEventListener('click', async () =
 // Every gallery post linked to a story is always owned by the story owner
 // (unlike characters, gallery has no cross-owner "borrowed" linking), so
 // there's no ownership guard needed here — every card is always editable.
-const GALLERY_CAT_LABEL = { sfw: 'SFW', sketches: 'Sketch', spicy: 'Spicy' };
+const GALLERY_CAT_LABEL = { sfw: 'SFW', mature: 'Mature', explicit: 'Explicit' };
 let SE_GALLERY = [];
 async function loadSeGallery() {
   const stack = document.getElementById('se-gallery-stack');
   stack.innerHTML = '<p class="se-char-empty">Loading…</p>';
   const fresh = await ModeratorSite.load(SLUG);
-  // Merged across all three categories — this is the editor, so unlike the
-  // public Gallery page it should never hide the viewer's own Spicy posts
-  // just because their own account happens to have SFW Mode on.
-  SE_GALLERY = fresh ? [...(fresh.gallery_sfw || []), ...(fresh.gallery_sketches || []), ...(fresh.gallery_spicy || [])] : [];
+  SE_GALLERY = fresh ? (fresh.gallery || []) : [];
   renderSeGalleryStack();
 }
 let seGalleryReorderActive = false;

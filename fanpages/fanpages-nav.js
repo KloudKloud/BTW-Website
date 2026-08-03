@@ -23,7 +23,7 @@
         <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
           <a href="https://discord.gg/my4bPf2XUm" target="_blank" rel="noopener">Discord</a>
           <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donations</a>
-          <a href="#">BTW TOS</a>
+          <a href="/fanpages/tos">BTW TOS</a>
         </div>
       </div>
 

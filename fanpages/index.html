@@ -419,19 +419,15 @@
     }
     .rs-box-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.2rem; font-weight: 700; color: #f0c060; }
     .rs-box-body { padding: 1.5rem; }
-    /* Justified-gallery layout (Flickr/FurAffinity-style): JS groups items
-       into rows and scales each row's shared height so the row's cards
-       fill the container width exactly — no fixed square/uniform sizing,
-       and no dead space hanging off the end of a row. Each .rs-row is one
-       computed row; card width/height are set inline per-item by JS. */
-    .rs-grid { display: block; }
-    .rs-row { display: flex; gap: 0.85rem; margin-bottom: 0.85rem; }
-    .rs-row:last-child { margin-bottom: 0; }
+    /* Fixed-size tiles -- the exact crop the uploader picked in the editor
+       (or a chapter's story cover), not a variable-size justified photo
+       wall. Bigger than the old justified-grid target height, e621-style. */
+    .rs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.85rem; }
     .rs-card {
       position: relative; display: block; text-decoration: none; color: inherit;
       border-radius: 8px; overflow: hidden; background: #1a1a1a;
       border: 1px solid rgba(255,255,255,0.08); transition: transform 0.15s, box-shadow 0.15s;
-      flex-shrink: 0;
+      aspect-ratio: 6 / 7;
     }
     .rs-card:hover { transform: translateY(-4px); box-shadow: 0 10px 26px rgba(0,0,0,0.45); z-index: 3; }
     .rs-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -1416,77 +1412,16 @@
 
   // ── Justified gallery layout (Flickr/FurAffinity-style) — instead of a
   // fixed size per tile, each row's shared height is scaled so the row's
-  // tiles fill the container's width exactly (no dead space at the end of
-  // a row), while every tile keeps its own natural aspect ratio for width.
-  // Story cards aren't real images, but get a fixed "design" ratio so they
-  // participate in the same row-fill math as everything else. ────────────
-  function activityImageUrl(it) {
-    if (it.type === 'art') return it.image;
-    if (it.type === 'chapter' || it.type === 'character') return it.image || '/images/defaultchar.jpg';
-    return null;
-  }
-  function loadImageRatio(url) {
-    return new Promise(resolve => {
-      if (!url) { resolve(200 / 168); return; }
-      const img = new Image();
-      img.onload = () => resolve((img.naturalWidth || 1) / (img.naturalHeight || 1));
-      img.onerror = () => resolve(1);
-      img.src = url;
-    });
-  }
-  function buildJustifiedGrid(container, entries, targetHeight, gap, maxRows) {
-    container.innerHTML = '';
-    const containerWidth = container.clientWidth || 900;
-    let row = [];
-    let naturalWidth = 0;
-    let rows = 0;
-
-    function commitRow(stretch) {
-      if (!row.length) return;
-      const gapsTotal = gap * (row.length - 1);
-      let rowHeight = targetHeight;
-      if (stretch) {
-        const availableForImages = containerWidth - gapsTotal;
-        rowHeight = availableForImages / (naturalWidth / targetHeight);
-        rowHeight = Math.max(90, Math.min(rowHeight, 260));
-      }
-      const rowEl = document.createElement('div');
-      rowEl.className = 'rs-row';
-      row.forEach(({ el, ratio }) => {
-        el.style.height = rowHeight + 'px';
-        el.style.width = (rowHeight * ratio) + 'px';
-        rowEl.appendChild(el);
-      });
-      container.appendChild(rowEl);
-      rows++;
-      row = [];
-      naturalWidth = 0;
-    }
-
-    for (const entry of entries) {
-      if (rows >= maxRows) break;
-      row.push(entry);
-      naturalWidth += entry.ratio * targetHeight;
-      const gapsTotal = gap * (row.length - 1);
-      if (naturalWidth + gapsTotal >= containerWidth) commitRow(true);
-    }
-    if (rows < maxRows && row.length) commitRow(false);
-  }
-
   async function loadActivityFeed() {
     const wrap = document.getElementById('fp-recent-submissions');
     try {
-      const res = await fetch('/api/activity-feed?limit=40', { headers: authHeaders() });
+      const res = await fetch('/api/activity-feed?limit=20', { headers: authHeaders() });
       const data = await res.json();
       const items = data.items || [];
       if (!items.length) { wrap.innerHTML = '<p class="fp-row-empty">No recent activity yet — check back soon!</p>'; return; }
 
-      const entries = await Promise.all(items.map(async it => {
-        const ratio = await loadImageRatio(activityImageUrl(it));
-        return { el: activityCard(it), ratio: Math.max(0.5, Math.min(ratio, 2.2)) };
-      }));
-
-      buildJustifiedGrid(wrap, entries, 168, 14, 3);
+      wrap.innerHTML = '';
+      items.forEach(it => wrap.appendChild(activityCard(it)));
     } catch {
       wrap.innerHTML = '<p class="fp-row-empty">Couldn\'t load recent activity right now.</p>';
     }
