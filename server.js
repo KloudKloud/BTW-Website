@@ -3360,7 +3360,7 @@ app.get('/api/search/works', async (req, res) => {
     LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_site_likes WHERE site_id = ms.id) lc ON true
     LEFT JOIN LATERAL (
       SELECT COUNT(*)::int AS count FROM content_comments cc2
-      JOIN moderator_chapters mc2 ON mc2.id = cc2.target_id AND cc2.target_type = 'chapter'
+      JOIN moderator_chapters mc2 ON mc2.id = cc2.target_id AND cc2.target_type = 'chapter_paragraph'
       WHERE mc2.site_id = ms.id
     ) cc ON true
     LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_bookmarks WHERE site_id = ms.id) bc ON true
@@ -3721,7 +3721,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
        LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_bookmarks WHERE site_id = ms.id) bc ON true
        LEFT JOIN LATERAL (
          SELECT COUNT(*)::int AS count FROM content_comments cc2
-         JOIN moderator_chapters mc2 ON mc2.id = cc2.target_id AND cc2.target_type = 'chapter'
+         JOIN moderator_chapters mc2 ON mc2.id = cc2.target_id AND cc2.target_type = 'chapter_paragraph'
          WHERE mc2.site_id = ms.id
        ) cc ON true
        WHERE ms.owner_user_id = $1
@@ -4602,7 +4602,7 @@ async function sendSiteLookup(query, params, req, res) {
     pool.query(
       `SELECT mc.id, mc.title, mc.teaser, mc.links, mc.image_url, mc.video_url, mc.file_url, mc.file_name,
               mc.status, mc.body, mc.view_count, mc.created_at, mc.updated_at,
-              (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'chapter' AND target_id = mc.id) AS comment_count,
+              (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'chapter_paragraph' AND target_id = mc.id) AS comment_count,
               (SELECT COUNT(*)::int FROM chapter_likes WHERE chapter_id = mc.id) AS like_count,
               EXISTS(SELECT 1 FROM chapter_likes WHERE chapter_id = mc.id AND user_id = $2) AS liked
        FROM moderator_chapters mc
@@ -4639,7 +4639,7 @@ async function sendSiteLookup(query, params, req, res) {
     pool.query('SELECT count(*) FROM moderator_site_likes WHERE site_id = $1', [site.id]),
     pool.query(
       `SELECT COUNT(*)::int AS count FROM content_comments cc
-       JOIN moderator_chapters mc ON mc.id = cc.target_id AND cc.target_type = 'chapter'
+       JOIN moderator_chapters mc ON mc.id = cc.target_id AND cc.target_type = 'chapter_paragraph'
        WHERE mc.site_id = $1`,
       [site.id]
     ),
@@ -4712,7 +4712,7 @@ app.get('/api/moderator/my-sites', requireAuth, async (req, res) => {
        (SELECT COUNT(*)::int FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0) AS published_chapter_count,
        (SELECT COUNT(*)::int FROM moderator_chapters mc WHERE mc.site_id = ms.id AND (mc.status = 'draft' OR length(trim(mc.body)) = 0)) AS draft_chapter_count,
        (SELECT COUNT(*)::int FROM moderator_site_likes WHERE site_id = ms.id) AS like_count,
-       (SELECT COUNT(*)::int FROM content_comments cc JOIN moderator_chapters mc ON mc.id = cc.target_id AND cc.target_type = 'chapter' WHERE mc.site_id = ms.id) AS comment_count
+       (SELECT COUNT(*)::int FROM content_comments cc JOIN moderator_chapters mc ON mc.id = cc.target_id AND cc.target_type = 'chapter_paragraph' WHERE mc.site_id = ms.id) AS comment_count
      FROM moderator_sites ms JOIN users u ON u.id = ms.owner_user_id
      WHERE ms.owner_user_id = $1 ORDER BY ms.created_at ASC`,
     [req.user.id]
@@ -5017,7 +5017,7 @@ app.put('/api/moderator/site/unpublish', requireAuth, requireModerator, async (r
 app.get('/api/moderator/chapters', requireAuth, requireModerator, async (req, res) => {
   const { rows } = await pool.query(
     `SELECT mc.*,
-       (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'chapter' AND target_id = mc.id) AS comment_count,
+       (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'chapter_paragraph' AND target_id = mc.id) AS comment_count,
        (SELECT COUNT(*)::int FROM chapter_likes WHERE chapter_id = mc.id) AS like_count
      FROM moderator_chapters mc WHERE site_id = $1 ORDER BY sort_order, id`,
     [req.modSite.id]

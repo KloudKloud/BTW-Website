@@ -1158,6 +1158,39 @@ function syncSideMenuLinks() {
 }
 syncSideMenuLinks();
 
+// Whichever tab is active fetches its own full results and sets its own
+// menu count as a side effect of that (setStoryMenuCount/etc, already
+// wired into runSearch/runSubmissionsSearch/runProfilesSearch). The other
+// two tabs never run, so without this their menu preview stayed stuck on
+// the static "Gallery posts & chapters" text even with a query typed --
+// this fires a cheap limit:1 request per inactive tab (just for its
+// total) so all three previews stay in sync with the same query no
+// matter which one you're looking at.
+async function refreshInactiveMenuCounts(activeView) {
+  const q = new URLSearchParams(window.location.search).get('q') || '';
+  const qs = q ? `&q=${encodeURIComponent(q)}` : '';
+  const suffix = q ? ` for "${q}"` : '';
+  if (activeView !== 'story') {
+    fetch(`/api/search/works?limit=1${qs}`).then(r => r.json()).then(data => {
+      setStoryMenuCount(`${data.total || 0} stor${(data.total || 0) === 1 ? 'y' : 'ies'}${suffix}`);
+    }).catch(() => {});
+  }
+  if (activeView !== 'submissions') {
+    fetch(`/api/search/submissions?limit=1${qs}`, { headers: authHeaders() }).then(r => r.json()).then(data => {
+      setSubmissionsMenuCount(`${data.total || 0} submission${(data.total || 0) === 1 ? '' : 's'}${suffix}`);
+    }).catch(() => {});
+  }
+  if (activeView !== 'profiles') {
+    Promise.all([
+      fetch(`/api/search/profiles?type=accounts&limit=1${qs}`, { headers: authHeaders() }).then(r => r.json()),
+      fetch(`/api/search/profiles?type=characters&limit=1${qs}`, { headers: authHeaders() }).then(r => r.json()),
+    ]).then(([acc, chars]) => {
+      const total = (acc.total || 0) + (chars.total || 0);
+      setProfilesMenuCount(`${total} profile${total === 1 ? '' : 's'}${suffix}`);
+    }).catch(() => {});
+  }
+}
+
 // ── View dispatch — Story (default) vs Submissions vs Profiles. All three
 // are served by this same page/template; Submissions/Profiles just swap
 // the active left-panel link, drop the filter panel/fab (grid-column 3 ->
@@ -1174,6 +1207,7 @@ if (currentView === 'submissions' || currentView === 'profiles') {
   loadCatalogsForAutocomplete();
   runSearch();
 }
+refreshInactiveMenuCounts(currentView === 'submissions' || currentView === 'profiles' ? currentView : 'story');
 </script>
 
 </body>

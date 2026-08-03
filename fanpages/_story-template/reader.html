@@ -314,6 +314,12 @@
     }
     .rd-cp-textarea:focus { outline: none; border-color: #7fa8d9; }
     .rd-cp-compose-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 0.5rem; }
+    .rd-cp-compose-actions-right { display: flex; align-items: center; gap: 0.5rem; }
+    .rd-cp-cancel-btn {
+      background: none; color: #ccc; border: 1px solid rgba(255,255,255,0.2); border-radius: 16px; padding: 0.45rem 1.1rem;
+      font-weight: 700; font-size: 0.82rem; cursor: pointer; font-family: 'Inter', sans-serif;
+    }
+    .rd-cp-cancel-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
     .rd-cp-send-btn {
       background: #f0c060; color: #0d0d0d; border: none; border-radius: 16px; padding: 0.45rem 1.1rem;
       font-weight: 700; font-size: 0.82rem; cursor: pointer; font-family: 'Inter', sans-serif;
@@ -691,9 +697,9 @@ function renderMetaCard() {
       <span>Updated: <strong>${formatChapterDate(CURRENT.updated_at || CURRENT.created_at)}</strong></span>
       <span>Chapters: <strong>${idx + 1}/${CHAPTERS.length}</strong></span>
       <span>Comments: <strong>${CURRENT.comment_count || 0}</strong></span>
-      <span>Kudos: <strong>${CURRENT.like_count || 0}</strong></span>
+      <span>Likes: <strong>${CURRENT.like_count || 0}</strong></span>
       <span>Bookmarks: <strong>${s.bookmark_count || 0}</strong></span>
-      <span>Hits: <strong>${CURRENT.view_count || 0}</strong></span>
+      <span>Reads: <strong>${CURRENT.view_count || 0}</strong></span>
     </div>
   `]);
 
@@ -1026,7 +1032,10 @@ function renderCommentItem(c, prefix, collapsible) {
           </div>
           <div class="rd-cp-compose-actions">
             <button type="button" class="dm-gif-btn rd-cp-reply-gif-btn" data-target-id="${c.id}" data-prefix="${prefix}">GIF</button>
-            <button type="button" class="rd-cp-send-btn rd-cp-reply-send" data-parent-id="${rootId}" data-target-id="${c.id}" data-prefix="${prefix}" data-para="${c.paragraph_index != null ? c.paragraph_index : ''}">Reply</button>
+            <div class="rd-cp-compose-actions-right">
+              <button type="button" class="rd-cp-cancel-btn rd-cp-reply-cancel" data-comment-id="${c.id}" data-prefix="${prefix}">Cancel</button>
+              <button type="button" class="rd-cp-send-btn rd-cp-reply-send" data-parent-id="${rootId}" data-target-id="${c.id}" data-prefix="${prefix}" data-para="${c.paragraph_index != null ? c.paragraph_index : ''}">Reply</button>
+            </div>
           </div>
         </div>
         ${repliesBlock}
@@ -1083,6 +1092,16 @@ function wireCommentThreadEvents(prefix, collapsible) {
       const paragraphIndex = btn.dataset.para !== '' ? parseInt(btn.dataset.para, 10) : null;
       await submitComment(p, btn.dataset.parentId, text, gifUrl, paragraphIndex, collapsible);
       delete pendingGif[p][targetId];
+    });
+  });
+  scope.querySelectorAll('.rd-cp-reply-cancel').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = document.getElementById(`${btn.dataset.prefix}-reply-form-${btn.dataset.commentId}`);
+      form.classList.remove('open');
+      form.querySelector('textarea').value = '';
+      delete pendingGif[btn.dataset.prefix][btn.dataset.commentId];
+      const gifWrap = document.getElementById(`${btn.dataset.prefix}-reply-gif-preview-${btn.dataset.commentId}`);
+      if (gifWrap) gifWrap.hidden = true;
     });
   });
   scope.querySelectorAll('.rd-cp-reply-gif-btn').forEach(btn => {
