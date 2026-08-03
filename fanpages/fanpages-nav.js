@@ -28,11 +28,12 @@
       </div>
 
       <div class="fpnav-dropdown-wrap fpnav-left-dropdown-wrap">
-        <button class="fpnav-link fpnav-trigger-link${['/fanpages/search', '/fanpages/characters'].includes(here) ? ' active' : ''}" id="fpnav-browse-btn" type="button">Browse <span class="fpnav-caret">▾</span></button>
+        <button class="fpnav-link fpnav-trigger-link${['/fanpages/search', '/fanpages/characters', '/fanpages/fandoms'].includes(here) ? ' active' : ''}" id="fpnav-browse-btn" type="button">Browse <span class="fpnav-caret">▾</span></button>
         <div class="fpnav-dropdown" id="fpnav-browse-dropdown" hidden>
           <a href="/fanpages/search?sort=updated&browse=1">Stories</a>
           <a href="/fanpages/search?view=submissions&browse=1">Submissions</a>
           <a href="/fanpages/characters">Characters</a>
+          <a href="/fanpages/fandoms">Fandoms</a>
         </div>
       </div>
 
@@ -41,8 +42,6 @@
         <input type="search" id="fpnav-search-input" placeholder="Search" />
       </div>
       <div class="fpnav-right">
-
-        <a class="fpnav-link fpnav-link--clubs${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Clubs</a>
 
         <div class="fpnav-dropdown-wrap">
           <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
@@ -54,6 +53,8 @@
             <a href="/fanpages/create-gallery" data-gate="/fanpages/create-gallery"><span class="fpnav-plus-badge">+</span> Gallery</a>
           </div>
         </div>
+
+        <a class="fpnav-link fpnav-link--clubs${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Clubs</a>
 
         <a class="fpnav-login-btn" id="fpnav-login-btn" href="/fanpages/login?from=${encodeURIComponent(here)}">Log In / Register</a>
 

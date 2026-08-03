@@ -66,15 +66,18 @@
 
     /* ── Browse mode (?browse=1, reached via the nav's Browse dropdown
        instead of the left Story/Submissions/Profiles panel) — no left
-       panel at all; the right filter panel + collapse arrow work exactly
-       the same as the normal Story tab. Combined with .fp-layout--
-       submissions this drops down to a single centered-nothing column
-       (submissions already hides the filter panel/fab, so there's
-       nothing left in column 3 to reserve room for). ── */
-    .fp-layout--no-side { grid-template-columns: 1fr 340px; }
-    .fp-layout--no-side .fp-side-panel { display: none; }
-    .fp-layout--no-side.fp-layout--filters-collapsed { grid-template-columns: 1fr 0px; }
-    .fp-layout--no-side.fp-layout--submissions { grid-template-columns: 1fr; }
+       panel, no right filter panel either; just a plain full-width
+       "Recent Stories"/"Recent Submissions" feed, AO3-style. ── */
+    /* AO3-style "Recent Works" feed — no left panel, no right filter panel,
+       just the results filling the full width. (Story-browse used to keep
+       the right filter panel/collapse-arrow here; that's gone now per a
+       later revision — browse is a plain full-width recent feed, not a
+       filterable one.) */
+    .fp-layout--no-side { grid-template-columns: 1fr; }
+    .fp-layout--no-side .fp-side-panel,
+    .fp-layout--no-side .fp-filter-panel,
+    .fp-layout--no-side .fp-filter-fab { display: none; }
+    .fp-layout--no-side .fp-results-col { grid-column: 1; }
     .fp-browse-heading {
       font-family: 'Cinzel', Georgia, serif; font-size: 1.7rem; font-weight: 700; color: #fff;
       margin: 1.75rem 0 0.5rem;
@@ -1089,12 +1092,19 @@ async function runSearch() {
   if (f.completion !== 'all') apiParams.set('completion', f.completion);
   if (f.sort) apiParams.set('sort', f.sort);
   apiParams.set('page', f.page);
+  // Browse mode is a plain "recent updates" feed, AO3-style — latest 30,
+  // no pagination, no "X works found" line.
+  if (isBrowseMode) apiParams.set('limit', '30');
 
   try {
     const res = await fetch(`/api/search/works?${apiParams.toString()}`);
     const data = await res.json();
     const works = data.works || [];
-    subEl.innerHTML = `<strong>${data.total || 0}</strong> work${data.total === 1 ? '' : 's'} found — sorted by ${escapeHtml(SORT_LABELS[data.sort] || 'Best Match')}.`;
+    if (isBrowseMode) {
+      subEl.innerHTML = `These are some of the latest stories updated in our community. To find more stories, <a href="/fanpages/fandoms">choose a fandom</a> or enter a specific tag into the search bar above.`;
+    } else {
+      subEl.innerHTML = `<strong>${data.total || 0}</strong> work${data.total === 1 ? '' : 's'} found — sorted by ${escapeHtml(SORT_LABELS[data.sort] || 'Best Match')}.`;
+    }
     setStoryMenuCount(`${data.total || 0} stor${(data.total || 0) === 1 ? 'y' : 'ies'}${f.q ? ` for "${f.q}"` : ''}`);
 
     if (!works.length) {
@@ -1102,6 +1112,8 @@ async function runSearch() {
       return;
     }
     resultsEl.innerHTML = works.map(resultCard).join('');
+
+    if (isBrowseMode) return;
 
     const totalPages = Math.max(1, Math.ceil((data.total || 0) / (data.limit || 20)));
     if (totalPages > 1) {
