@@ -76,7 +76,7 @@
         </button>
         <div class="nav-user-dropdown" id="nav-user-dropdown" hidden>
           <a href="/profile?from=${encodeURIComponent(here)}" id="nav-profile">Account Settings</a>
-          <a href="/fanpages/admin?ctx=main" id="nav-admin-link" style="display:none;">Admin</a>
+          <a href="https://btwfics.net/admin?ctx=main" id="nav-admin-link" style="display:none;">Admin</a>
           <a href="#" id="nav-logout">Logout</a>
         </div>
       </div>

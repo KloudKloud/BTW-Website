@@ -738,6 +738,7 @@ function escapeHtml(s) {
 }
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
 const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
+window.fpFixLinks();
 
 // Story result cards are clickable anywhere on their (transparent) area,
 // not just the cover/title -- but a click on the cover, title, an author
@@ -787,7 +788,7 @@ function formatDate(d) {
 function tagSearchUrl(params) {
   const usp = new URLSearchParams(params);
   usp.set('sort', 'updated');
-  return `/fanpages/search?${usp.toString()}`;
+  return window.fpUrl(`/search?${usp.toString()}`);
 }
 
 function coverHtml(site) {
@@ -801,7 +802,7 @@ function authorRowHtml(w) {
     ? `<img class="fp-result-author-avatar" src="${escapeHtml(w.author_avatar)}" alt="" />`
     : `<span class="fp-result-author-avatar-fallback">${escapeHtml(((w.author || '?')[0] || '?').toUpperCase())}</span>`;
   return `
-    <a class="fp-result-author" href="/fanpages/${escapeHtml(w.author_username || '')}">
+    <a class="fp-result-author" href="${window.fpUrl(`/${escapeHtml(w.author_username || '')}`)}">
       ${avatar}
       <span class="fp-result-author-name">by ${escapeHtml(w.author || 'Unknown')}</span>
     </a>
@@ -824,18 +825,18 @@ function charsRowHtml(w) {
   if (!chars.length) return '';
   return `
     <div class="fp-result-chars">
-      ${chars.map(c => `<a class="fp-result-char-chip" href="/fanpages/${encodeURIComponent(c.owner_username)}?char=${c.id}#characters"><img src="${escapeHtml(c.ref_image || '/images/defaultchar.jpg')}" alt="" />${escapeHtml(c.name)}</a>`).join('')}
+      ${chars.map(c => `<a class="fp-result-char-chip" href="${window.fpUrl(`/${encodeURIComponent(c.owner_username)}?char=${c.id}#characters`)}"><img src="${escapeHtml(c.ref_image || '/images/defaultchar.jpg')}" alt="" />${escapeHtml(c.name)}</a>`).join('')}
     </div>
   `;
 }
 
 function resultCard(w) {
   return `
-    <div class="fp-result" data-href="/fanpages/${escapeHtml(w.story_path)}">
-      <a class="fp-result-cover-link" href="/fanpages/${escapeHtml(w.story_path)}">${coverHtml(w)}</a>
+    <div class="fp-result" data-href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">
+      <a class="fp-result-cover-link" href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">${coverHtml(w)}</a>
       <div class="fp-result-body">
         <div class="fp-result-title-row">
-          <a class="fp-result-title" href="/fanpages/${escapeHtml(w.story_path)}">${escapeHtml(w.site_title || 'Untitled Story')}</a>
+          <a class="fp-result-title" href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">${escapeHtml(w.site_title || 'Untitled Story')}</a>
           ${w.created_at ? `<span class="fp-result-date">${formatDate(w.created_at)}</span>` : ''}
         </div>
         ${authorRowHtml(w)}
@@ -857,9 +858,9 @@ function resultCard(w) {
 function bookmarkCard(w) {
   return `
     <div class="fp-result">
-      <a class="fp-result-cover-link" href="/fanpages/${escapeHtml(w.story_path)}">${coverHtml(w)}</a>
+      <a class="fp-result-cover-link" href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">${coverHtml(w)}</a>
       <div class="fp-result-body">
-        <a class="fp-result-title" href="/fanpages/${escapeHtml(w.story_path)}">${escapeHtml(w.site_title || 'Untitled Story')}</a>
+        <a class="fp-result-title" href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">${escapeHtml(w.site_title || 'Untitled Story')}</a>
         ${authorRowHtml(w)}
         <p class="fp-result-synopsis">${escapeHtml(truncateSynopsis(w.synopsis))}</p>
         <div class="fp-result-stats"><span>Bookmarked <strong>${formatDate(w.bookmarked_at)}</strong></span></div>
@@ -876,7 +877,7 @@ function rsCaptionHtml(href, title, authorUsername, author) {
   return `
     <div class="rs-card-caption">
       <a class="rs-card-caption-title" href="${href}">${escapeHtml(title)}</a>
-      <span class="rs-card-caption-author">by ${authorUsername ? `<a href="/fanpages/${encodeURIComponent(authorUsername)}">${escapeHtml(author || authorUsername)}</a>` : escapeHtml(author || 'Unknown')}</span>
+      <span class="rs-card-caption-author">by ${authorUsername ? `<a href="${window.fpUrl(`/${encodeURIComponent(authorUsername)}`)}">${escapeHtml(author || authorUsername)}</a>` : escapeHtml(author || 'Unknown')}</span>
     </div>
   `;
 }
@@ -888,7 +889,7 @@ function submissionCard(it) {
   const posX = it.position_x != null ? it.position_x : 50;
   const posY = it.position_y != null ? it.position_y : 50;
   if (it.type === 'art') {
-    a.href = `/fanpages/gallery-post?id=${it.id}`;
+    a.href = window.fpUrl(`/gallery-post?id=${it.id}`);
     a.innerHTML = `
       <img src="${escapeHtml(it.image)}" alt="" style="object-position:${posX}% ${posY}%;" />
       <span class="rs-card-badge">🎨</span>
@@ -900,7 +901,7 @@ function submissionCard(it) {
   // Chapter — a chapter card's "image" is really the story's own cover;
   // when there isn't one, fall back to the same generated purple/rose
   // book cover the Story tab's results already use.
-  a.href = `/fanpages/${escapeHtml(it.story_path)}/reader?ch=${it.id}`;
+  a.href = window.fpUrl(`/${escapeHtml(it.story_path)}/reader?ch=${it.id}`);
   if (it.image) {
     a.innerHTML = `
       <img src="${escapeHtml(it.image)}" alt="" style="object-position:${posX}% ${posY}%;" />
@@ -1050,9 +1051,9 @@ function accountCardHtml(u) {
   `;
   return `
     <div class="fp-profile-card">
-      <a href="/fanpages/${escapeHtml(u.username)}">${avatar}</a>
+      <a href="${window.fpUrl(`/${escapeHtml(u.username)}`)}">${avatar}</a>
       <div class="fp-profile-info">
-        <a class="fp-profile-name" href="/fanpages/${escapeHtml(u.username)}">${escapeHtml(u.display_name)}</a>
+        <a class="fp-profile-name" href="${window.fpUrl(`/${escapeHtml(u.username)}`)}">${escapeHtml(u.display_name)}</a>
         <p class="fp-profile-handle">@${escapeHtml(u.username)}</p>
         <div class="fp-profile-stats">
           <span><strong>${(u.story_count || 0).toLocaleString()}</strong> Stories</span>
@@ -1068,7 +1069,7 @@ function accountCardHtml(u) {
 function wireFollowButtons() {
   document.querySelectorAll('.fp-profile-follow-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+      if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
       const username = btn.dataset.username;
       const following = btn.dataset.following === '1';
       btn.disabled = true;
@@ -1269,7 +1270,7 @@ async function runSearch() {
     const data = await res.json();
     const works = data.works || [];
     if (isBrowseMode) {
-      subEl.innerHTML = `These are some of the latest stories updated in our community. To find more stories, <a href="/fanpages/fandoms">choose a fandom</a> or enter a specific tag into the search bar above.`;
+      subEl.innerHTML = `These are some of the latest stories updated in our community. To find more stories, <a href="${window.fpUrl('/fandoms')}">choose a fandom</a> or enter a specific tag into the search bar above.`;
     } else {
       subEl.innerHTML = `<strong>${data.total || 0}</strong> work${data.total === 1 ? '' : 's'} found — sorted by ${escapeHtml(SORT_LABELS[data.sort] || 'Best Match')}.`;
     }
@@ -1346,7 +1347,7 @@ function syncSideMenuLinks() {
     const parts = [];
     if (view) parts.push(`view=${view}`);
     if (qParam) parts.push(qParam);
-    return parts.length ? `/fanpages/search?${parts.join('&')}` : '/fanpages/search';
+    return window.fpUrl(parts.length ? `/search?${parts.join('&')}` : '/search');
   };
   document.getElementById('fp-side-menu-story').href = join(null);
   document.getElementById('fp-side-menu-submissions').href = join('submissions');

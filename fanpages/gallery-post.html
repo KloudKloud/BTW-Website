@@ -192,7 +192,7 @@ function renderStatsBox(item) {
     <div class="art-view-stat-row"><span>Likes</span><span>${item.like_count || 0}</span></div>
     <div class="art-view-stat-row"><span>Comments</span><span>${item.comment_count || 0}</span></div>
     <div class="art-view-stat-row"><span>Rating</span><span>${ratingLabelFor(item.category)}</span></div>
-    <div class="art-view-stat-row"><span>Uploaded by</span><span><a href="/fanpages/${encodeURIComponent(item.owner_username)}">${escapeHtml(item.owner_display_name || item.owner_username)}</a></span></div>
+    <div class="art-view-stat-row"><span>Uploaded by</span><span><a href="${window.fpUrl(`/${encodeURIComponent(item.owner_username)}`)}">${escapeHtml(item.owner_display_name || item.owner_username)}</a></span></div>
   `;
   const tagsWrap = document.getElementById('fp-gallery-detail-stats-tags');
   const tags = Array.isArray(item.tags) ? item.tags : [];
@@ -204,7 +204,7 @@ function renderStatsBox(item) {
   // e621-style -- shown once counts come back, tags render immediately
   // with no count so the list isn't blank while that request is in flight.
   tagsWrap.innerHTML = tags.map(t => `
-    <a class="art-view-stats-tag-row" href="/fanpages/search?view=submissions&browse=1&q=${encodeURIComponent(t)}">
+    <a class="art-view-stats-tag-row" href="${window.fpUrl(`/search?view=submissions&browse=1&q=${encodeURIComponent(t)}`)}">
       <span class="art-view-stats-tag-name">${escapeHtml(t)}</span>
       <span class="art-view-stats-tag-count" data-tag="${escapeHtml(t)}"></span>
     </a>
@@ -232,7 +232,7 @@ function updateBookmarkUI() {
 function galleryCharTagCard(c) {
   const a = document.createElement('a');
   a.className = 'art-view-tag-card';
-  a.href = `/fanpages/${c.owner_username}?char=${c.id}#characters`;
+  a.href = window.fpUrl(`/${c.owner_username}?char=${c.id}#characters`);
   if (c.nsfw_locked) {
     const lockMsg = token ? 'NSFW content must be enabled in Account Settings' : 'Only logged-in users can see this content';
     a.innerHTML = `
@@ -258,7 +258,7 @@ function galleryCharTagCard(c) {
 function galleryStoryTagCard(s) {
   const a = document.createElement('a');
   a.className = 'art-view-tag-card';
-  a.href = `/fanpages/${s.story_path}`;
+  a.href = window.fpUrl(`/${s.story_path}`);
   a.innerHTML = `
     <div class="art-view-tag-card-imgwrap art-view-tag-card-imgwrap--story">${window.wikiGeneratedCoverHtml(s, { small: true })}</div>
     <div class="art-view-tag-card-info">
@@ -336,7 +336,7 @@ function ccCommentEl(c, isReply) {
   body.className = 'cc-body-wrap';
   body.innerHTML = `
     <div class="cc-bubble">
-      <span class="cc-name"><a href="/fanpages/${encodeURIComponent(c.username)}">${escapeHtml(c.display_name || c.username)}</a></span>
+      <span class="cc-name"><a href="${window.fpUrl(`/${encodeURIComponent(c.username)}`)}">${escapeHtml(c.display_name || c.username)}</a></span>
       <span class="cc-time">${ccTimeAgo(c.created_at)}</span>
       <p class="cc-text">${c.reply_to_username ? `<span class="cc-mention">@${escapeHtml(c.reply_to_username)}</span> ` : ''}${escapeHtml(c.body)}</p>
     </div>
@@ -425,12 +425,12 @@ document.getElementById('fp-cc-compose-btn').addEventListener('click', async () 
 document.getElementById('fp-gallery-detail-back').addEventListener('click', (e) => {
   e.preventDefault();
   if (history.length > 1) history.back();
-  else if (currentItem) window.location.href = `/fanpages/${currentItem.owner_username}#gallery`;
-  else window.location.href = '/fanpages';
+  else if (currentItem) window.location.href = window.fpUrl(`/${currentItem.owner_username}#gallery`);
+  else window.location.href = window.fpUrl('/');
 });
 
 document.getElementById('fp-gallery-detail-like').addEventListener('click', async () => {
-  if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+  if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
   const btn = document.getElementById('fp-gallery-detail-like');
   if (btn.disabled) return;
   btn.disabled = true;
@@ -448,7 +448,7 @@ document.getElementById('fp-gallery-detail-like').addEventListener('click', asyn
 });
 
 document.getElementById('fp-gallery-detail-bookmark').addEventListener('click', async () => {
-  if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+  if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
   const btn = document.getElementById('fp-gallery-detail-bookmark');
   if (btn.disabled) return;
   btn.disabled = true;

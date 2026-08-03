@@ -107,8 +107,9 @@
 <script src="/fanpages/fanpages-site.js"></script>
 <script>
 const PATH_PARTS = window.location.pathname.split('/').filter(Boolean);
-const SLUG = PATH_PARTS.slice(1, 3).join('/');
-const STORY_BASE = '/' + PATH_PARTS.slice(0, 3).join('/');
+const OFFSET = window.FP_BASE ? 1 : 0;
+const SLUG = PATH_PARTS.slice(OFFSET, OFFSET + 2).join('/');
+const STORY_BASE = (window.FP_BASE || '') + '/' + PATH_PARTS.slice(OFFSET, OFFSET + 2).join('/');
 
 document.getElementById('tab-home').href = STORY_BASE;
 document.getElementById('tab-chapters').href = STORY_BASE + '/chapters';
@@ -396,7 +397,7 @@ function renderProfile(char) {
       storiesRow.style.cssText = 'display:flex; flex-wrap:wrap; gap:0.6rem;';
       stories.forEach(s => {
         const a = document.createElement('a');
-        a.href = `/fanpages/${s.story_path}`;
+        a.href = window.fpUrl(`/${s.story_path}`);
         a.style.cssText = 'display:flex; align-items:center; gap:0.5rem; text-decoration:none; background:#1a1a1a; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:0.35rem 0.6rem 0.35rem 0.35rem; max-width:180px;';
         a.innerHTML = `
           ${window.wikiGeneratedCoverHtml(s, { small: true, style: 'width:28px; height:38px; object-fit:cover; border-radius:4px; flex-shrink:0; background:#222;' })}
@@ -473,7 +474,7 @@ function renderProfile(char) {
   likeBtn.setAttribute('aria-label', 'Like this character');
   likeBtn.innerHTML = `<span class="char-like-icon">${char.liked ? '♥' : '♡'}</span> <span class="char-like-count">${char.likeCount}</span>`;
   likeBtn.addEventListener('click', async () => {
-    if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+    if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
     likeBtn.disabled = true;
     try {
       const res = await fetch(`/api/moderator/character/${char.id}/like`, { method: char.liked ? 'DELETE' : 'POST', headers: authHeaders() });
@@ -493,7 +494,7 @@ function renderProfile(char) {
   bookmarkBtn.setAttribute('aria-label', 'Bookmark this character');
   bookmarkBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>';
   bookmarkBtn.addEventListener('click', async () => {
-    if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+    if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
     bookmarkBtn.disabled = true;
     try {
       const res = await fetch(`/api/moderator/character/${char.id}/bookmark`, { method: char.bookmarked ? 'DELETE' : 'POST', headers: authHeaders() });
@@ -711,7 +712,7 @@ function renderBookBox(site) {
 
   const authorLink = document.createElement('a');
   authorLink.className = 'mod-book-box-author-link';
-  authorLink.href = `/fanpages/${site.author_username}`;
+  authorLink.href = window.fpUrl(`/${site.author_username}`);
   if (site.author_avatar) {
     const img = document.createElement('img');
     img.className = 'mod-book-box-author-avatar';
@@ -735,7 +736,7 @@ function renderBookBox(site) {
   if (!token) {
     const loginLink = document.createElement('a');
     loginLink.className = 'mod-book-box-follow-btn';
-    loginLink.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname)}`;
+    loginLink.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname)}`);
     loginLink.textContent = 'Log In to Follow';
     authorRow.appendChild(loginLink);
     return;
@@ -796,7 +797,7 @@ function ccCommentEl(c, isReply) {
   body.className = 'cc-body-wrap';
   body.innerHTML = `
     <div class="cc-bubble">
-      <span class="cc-name"><a href="/fanpages/${encodeURIComponent(c.username)}">${escapeHtml(c.display_name || c.username)}</a></span>
+      <span class="cc-name"><a href="${window.fpUrl(`/${encodeURIComponent(c.username)}`)}">${escapeHtml(c.display_name || c.username)}</a></span>
       <span class="cc-time">${ccTimeAgo(c.created_at)}</span>
       <p class="cc-text">${c.reply_to_username ? `<span class="cc-mention">@${escapeHtml(c.reply_to_username)}</span> ` : ''}${escapeHtml(c.body)}</p>
     </div>

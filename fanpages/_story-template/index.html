@@ -341,8 +341,9 @@
 // so this is what disambiguates which one, both for the public GET and for
 // every write call below (via the X-Story-Path header).
 const PATH_PARTS = window.location.pathname.split('/').filter(Boolean);
-const SLUG = PATH_PARTS.slice(1, 3).join('/');
-const STORY_BASE = '/' + PATH_PARTS.slice(0, 3).join('/');
+const OFFSET = window.FP_BASE ? 1 : 0;
+const SLUG = PATH_PARTS.slice(OFFSET, OFFSET + 2).join('/');
+const STORY_BASE = (window.FP_BASE || '') + '/' + PATH_PARTS.slice(OFFSET, OFFSET + 2).join('/');
 
 document.getElementById('tab-home').href = STORY_BASE;
 document.getElementById('tab-chapters').href = STORY_BASE + '/chapters';
@@ -528,7 +529,7 @@ let heroTagCloudExpanded = false;
 function renderHeroTagCloud(s) {
   const cloud = document.getElementById('wiki-hero-tagcloud');
   const redItem = (text) => `<span class="wiki-meta-badge-list-item">${escapeHtml(text)}</span>`;
-  const tagItem = (t) => `<a class="wiki-tag-bubble" href="/fanpages/search?q=${encodeURIComponent(t)}">${escapeHtml(t)}</a>`;
+  const tagItem = (t) => `<a class="wiki-tag-bubble" href="${window.fpUrl(`/search?q=${encodeURIComponent(t)}`)}">${escapeHtml(t)}</a>`;
 
   const parts = [];
   parts.push(redItem((RATING_META[s.rating] || RATING_META['sfw']).label));
@@ -860,7 +861,7 @@ document.getElementById('delete-story-btn').addEventListener('click', async () =
   try {
     const res = await fetch('/api/moderator/site', { method: 'DELETE', headers: authHeaders() });
     if (!res.ok) throw new Error();
-    window.location.href = '/fanpages/my-stories';
+    window.location.href = window.fpUrl('/my-stories');
   } catch {
     alert('Something went wrong deleting this story. Please try again.');
     btn.disabled = false;
@@ -1075,7 +1076,7 @@ function renderWrittenBy(s) {
   const wrap = document.getElementById('written-by');
   if (!s.author_username) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'flex';
-  wrap.href = `/fanpages/${s.author_username}`;
+  wrap.href = window.fpUrl(`/${s.author_username}`);
   document.getElementById('written-by-name').textContent = s.author_display_name || s.author_username;
   avatarInto(
     document.getElementById('written-by-avatar'),
@@ -1091,7 +1092,7 @@ function renderDescAuthorAvatar(s) {
   const link = document.getElementById('desc-author-link');
   if (!s.author_username) { link.style.display = 'none'; return; }
   link.style.display = 'flex';
-  link.href = `/fanpages/${s.author_username}`;
+  link.href = window.fpUrl(`/${s.author_username}`);
   link.title = s.author_display_name || s.author_username;
   document.getElementById('desc-author-name').textContent = s.author_display_name || s.author_username;
   avatarInto(
@@ -1111,7 +1112,7 @@ function renderBookmarkBtn(s) {
   };
   paint();
   btn.onclick = async () => {
-    if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname)}`; return; }
+    if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname)}`); return; }
     btn.disabled = true;
     try {
       await fetch(`/api/bookmarks/by-path/${SLUG}`, { method: bookmarked ? 'DELETE' : 'POST', headers: authHeaders() });
@@ -1129,7 +1130,7 @@ function renderAuthorTeaserCard(s) {
   const card = document.getElementById('wiki-author-teaser-card');
   if (!s.author_username) { card.style.display = 'none'; return; }
   card.style.display = 'flex';
-  card.href = `/fanpages/${s.author_username}`;
+  card.href = window.fpUrl(`/${s.author_username}`);
   document.getElementById('wiki-author-teaser-name').textContent = s.author_display_name || s.author_username;
   avatarInto(
     document.getElementById('wiki-author-teaser-avatar'),

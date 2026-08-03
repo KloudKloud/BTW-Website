@@ -1,3 +1,32 @@
+// ── Cross-domain URL base ────────────────────────────────────────────────
+// The Fanpage system now also serves directly from btwfics.net's own root
+// (no prefix), while btwfanfic.net keeps it under /fanpages/ during the
+// transition period. FP_BASE is computed here, at the top of the file
+// (NOT inside the topbar IIFE below), so it's set on every page that loads
+// this script even if that page has no #fanpages-topbar-root div (e.g.
+// hub-builder.html, join.html, _story-template/chapter-editor.html) —
+// those pages still have their own /fanpages/-prefixed redirects that need
+// it. fpUrl() prepends it to an absolute path; fpFixLinks() retroactively
+// rewrites any remaining prefixed links in a given container (call again
+// after inserting AJAX-rendered content that contains /fanpages/ links).
+window.FP_BASE = /^(www\.)?btwfics\.net$/.test(location.hostname) ? '' : '/fanpages';
+window.fpUrl = function (path) {
+  return window.FP_BASE + (path || '/');
+};
+window.fpFixLinks = function (container) {
+  container = container || document;
+  if (!window.FP_BASE) return; // btwfanfic.net keeps the /fanpages/ prefix as-is
+  container.querySelectorAll('a[href^="/fanpages/"]').forEach(a => {
+    a.setAttribute('href', a.getAttribute('href').replace(/^\/fanpages\//, '/'));
+  });
+  container.querySelectorAll('link[rel="canonical"][href^="/fanpages/"]').forEach(l => {
+    l.setAttribute('href', l.getAttribute('href').replace(/^\/fanpages\//, '/'));
+  });
+  container.querySelectorAll('meta[property="og:url"][content^="/fanpages/"]').forEach(m => {
+    m.setAttribute('content', m.getAttribute('content').replace(/^\/fanpages\//, '/'));
+  });
+};
+
 // ── Shared persistent top bar for every /fanpages/* page ────────────────────
 // Injects into <div id="fanpages-topbar-root">. Handles: Fanpages/Social
 // links, search bar (visual only for now), the Upload dropdown (Create
@@ -7,35 +36,37 @@
   const root = document.getElementById('fanpages-topbar-root');
   if (!root) return;
 
+  const FP_BASE = window.FP_BASE;
+  const fpUrl = window.fpUrl;
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
   const here = window.location.pathname;
   // Already on the "you're leaving Fanpages" confirm screen — send straight
   // through instead of looping back to another confirm screen.
-  const homeHref = here === '/fanpages/leaving' ? '/' : `/fanpages/leaving?from=${encodeURIComponent(here)}`;
+  const homeHref = here === fpUrl('/leaving') ? '/' : fpUrl(`/leaving?from=${encodeURIComponent(here)}`);
 
   root.innerHTML = `
     <div class="fpnav-bar">
-      <a class="fpnav-brand" href="/fanpages"><img class="fpnav-brand-logo" src="/images/fanpagelogo.png" alt="Fanpages" width="52" height="44" /></a>
+      <a class="fpnav-brand" href="${FP_BASE || '/'}"><img class="fpnav-brand-logo" src="/images/fanpagelogo.png" alt="Fanpages" width="52" height="44" /></a>
 
       <div class="fpnav-dropdown-wrap">
         <button class="fpnav-link fpnav-trigger-link" id="fpnav-community-btn" type="button">Community <span class="fpnav-caret">▾</span></button>
         <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
           <a href="https://discord.gg/my4bPf2XUm" target="_blank" rel="noopener">Discord</a>
           <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donations</a>
-          <a href="/fanpages/tos">BTW TOS</a>
+          <a href="${fpUrl('/tos')}">BTW TOS</a>
         </div>
       </div>
 
-      <a class="fpnav-link fpnav-trigger-link${here === '/fanpages/characters' ? ' active' : ''}" href="/fanpages/characters">Characters</a>
+      <a class="fpnav-link fpnav-trigger-link${here === fpUrl('/characters') ? ' active' : ''}" href="${fpUrl('/characters')}">Characters</a>
 
       <div class="fpnav-dropdown-wrap fpnav-left-dropdown-wrap">
-        <button class="fpnav-link fpnav-trigger-link${['/fanpages/search', '/fanpages/characters', '/fanpages/fandoms'].includes(here) ? ' active' : ''}" id="fpnav-browse-btn" type="button">Browse <span class="fpnav-caret">▾</span></button>
+        <button class="fpnav-link fpnav-trigger-link${[fpUrl('/search'), fpUrl('/characters'), fpUrl('/fandoms')].includes(here) ? ' active' : ''}" id="fpnav-browse-btn" type="button">Browse <span class="fpnav-caret">▾</span></button>
         <div class="fpnav-dropdown" id="fpnav-browse-dropdown" hidden>
-          <a href="/fanpages/search?sort=updated&browse=1">Stories</a>
-          <a href="/fanpages/search?view=submissions&browse=1">Posts</a>
-          <a href="/fanpages/characters">Characters</a>
-          <a href="/fanpages/fandoms">Fandoms</a>
+          <a href="${fpUrl('/search?sort=updated&browse=1')}">Stories</a>
+          <a href="${fpUrl('/search?view=submissions&browse=1')}">Posts</a>
+          <a href="${fpUrl('/characters')}">Characters</a>
+          <a href="${fpUrl('/fandoms')}">Fandoms</a>
         </div>
       </div>
 
@@ -45,20 +76,20 @@
       </div>
       <div class="fpnav-right">
 
-        <a class="fpnav-link fpnav-link--clubs${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Clubs</a>
+        <a class="fpnav-link fpnav-link--clubs${here === fpUrl('/social') ? ' active' : ''}" href="${fpUrl('/social')}">Clubs</a>
 
         <div class="fpnav-dropdown-wrap">
           <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
           <div class="fpnav-dropdown" id="fpnav-upload-dropdown" hidden>
-            <a href="/fanpages/editor" data-gate="/fanpages/editor">Creator Hub</a>
+            <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
             <div class="fpnav-dropdown-divider"></div>
-            <a href="/fanpages/create" data-gate="/fanpages/create"><span class="fpnav-plus-badge">+</span> Story</a>
-            <a href="/fanpages/create-character" data-gate="/fanpages/create-character"><span class="fpnav-plus-badge">+</span> Character</a>
-            <a href="/fanpages/create-gallery" data-gate="/fanpages/create-gallery"><span class="fpnav-plus-badge">+</span> Gallery</a>
+            <a href="${fpUrl('/create')}" data-gate="${fpUrl('/create')}"><span class="fpnav-plus-badge">+</span> Story</a>
+            <a href="${fpUrl('/create-character')}" data-gate="${fpUrl('/create-character')}"><span class="fpnav-plus-badge">+</span> Character</a>
+            <a href="${fpUrl('/create-gallery')}" data-gate="${fpUrl('/create-gallery')}"><span class="fpnav-plus-badge">+</span> Gallery</a>
           </div>
         </div>
 
-        <a class="fpnav-login-btn" id="fpnav-login-btn" href="/fanpages/login?from=${encodeURIComponent(here)}">Log In / Register</a>
+        <a class="fpnav-login-btn" id="fpnav-login-btn" href="${fpUrl(`/login?from=${encodeURIComponent(here)}`)}">Log In / Register</a>
 
         <div class="fpnav-dropdown-wrap" id="fpnav-avatar-wrap" style="display:none;">
           <button class="fpnav-avatar-btn" id="fpnav-avatar-btn" type="button">
@@ -68,13 +99,13 @@
           <div class="fpnav-dropdown" id="fpnav-avatar-dropdown" hidden>
             <a href="#" id="fpnav-my-profile-link">My Profile</a>
             <div class="fpnav-dropdown-divider"></div>
-            <a href="/fanpages/library" id="fpnav-library-link">Bookmarks</a>
-            <a href="/fanpages/notifications" id="fpnav-notif-link">Updates <span class="fpnav-notif-badge" id="fpnav-notif-badge" hidden></span></a>
-            <a href="/fanpages/notifications#inbox" id="fpnav-updates-link">Inbox</a>
+            <a href="${fpUrl('/library')}" id="fpnav-library-link">Bookmarks</a>
+            <a href="${fpUrl('/notifications')}" id="fpnav-notif-link">Updates <span class="fpnav-notif-badge" id="fpnav-notif-badge" hidden></span></a>
+            <a href="${fpUrl('/notifications#inbox')}" id="fpnav-updates-link">Inbox</a>
             <div class="fpnav-dropdown-divider"></div>
             <a href="${homeHref}">BTW Homepage</a>
             <a href="#" id="fpnav-edit-profile-link">Account Settings</a>
-            <a href="/fanpages/admin" id="fpnav-admin-link" style="display:none;">Admin</a>
+            <a href="${fpUrl('/admin')}" id="fpnav-admin-link" style="display:none;">Admin</a>
             <a href="#" id="fpnav-logout-link">Logout</a>
           </div>
         </div>
@@ -87,7 +118,7 @@
         <button class="fpnav-modal-close" id="fpnav-modal-close" type="button">✕</button>
         <p class="fpnav-modal-title">Log in to continue</p>
         <p class="fpnav-modal-text">You'll need a free Between Two Worlds account to create or manage stories on Fanpages.</p>
-        <a class="fpnav-modal-cta" id="fpnav-modal-cta" href="/fanpages/login">Log In / Register</a>
+        <a class="fpnav-modal-cta" id="fpnav-modal-cta" href="${fpUrl('/login')}">Log In / Register</a>
       </div>
     </div>
   `;
@@ -95,11 +126,11 @@
   // ── Search ───────────────────────────────────────────────────────────────
   const searchInput = document.getElementById('fpnav-search-input');
   const currentQ = new URLSearchParams(window.location.search).get('q');
-  if (here === '/fanpages/search' && currentQ) searchInput.value = currentQ;
+  if (here === fpUrl('/search') && currentQ) searchInput.value = currentQ;
   searchInput.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     const q = searchInput.value.trim();
-    window.location.href = q ? `/fanpages/search?q=${encodeURIComponent(q)}` : '/fanpages/search';
+    window.location.href = q ? fpUrl(`/search?q=${encodeURIComponent(q)}`) : fpUrl('/search');
   });
 
   // ── Dropdown toggling ────────────────────────────────────────────────────
@@ -157,7 +188,7 @@
     localStorage.removeItem('btw_user');
     sessionStorage.removeItem('btw_token');
     sessionStorage.removeItem('btw_user');
-    window.location.href = '/fanpages';
+    window.location.href = FP_BASE || '/';
   });
 
   // ── Login-gated links (Create Story / My Stories) ───────────────────────
@@ -165,7 +196,7 @@
   const modalCta      = document.getElementById('fpnav-modal-cta');
 
   function openGateModal(dest) {
-    modalCta.href = `/fanpages/login?from=${encodeURIComponent(dest)}`;
+    modalCta.href = fpUrl(`/login?from=${encodeURIComponent(dest)}`);
     modalOverlay.hidden = false;
   }
   document.getElementById('fpnav-modal-close').addEventListener('click', () => { modalOverlay.hidden = true; });
@@ -217,8 +248,8 @@
         : `<span class="fpnav-avatar-fallback">${initial}</span>`;
       document.getElementById('fpnav-avatar-name').textContent = name;
 
-      document.getElementById('fpnav-my-profile-link').href = `/fanpages/${u.username}`;
-      document.getElementById('fpnav-edit-profile-link').href = `/fanpages/account-settings?from=${encodeURIComponent(here)}`;
+      document.getElementById('fpnav-my-profile-link').href = fpUrl(`/${u.username}`);
+      document.getElementById('fpnav-edit-profile-link').href = fpUrl(`/account-settings?from=${encodeURIComponent(here)}`);
 
       // Admin link — tucked into the avatar dropdown above Logout, admins only.
       if (u.is_admin) {

@@ -326,6 +326,7 @@
 const API = '/api';
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
 const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
+window.fpFixLinks();
 let currentUser = null;
 try {
   const raw = localStorage.getItem('btw_user') || sessionStorage.getItem('btw_user');
@@ -350,8 +351,8 @@ if (token && currentUser) {
       </button>
       <div class="soc-sidebar-user-menu" id="soc-sidebar-user-menu" hidden>
         <p class="soc-sidebar-user-menu-status-text" id="soc-sidebar-nsfw-label"></p>
-        <a class="soc-sidebar-user-menu-item" href="/fanpages/${encodeURIComponent(currentUser.username)}">View Profile</a>
-        <a class="soc-sidebar-user-menu-item" href="/fanpages/account-settings">Account Settings</a>
+        <a class="soc-sidebar-user-menu-item" href="${window.fpUrl(`/${encodeURIComponent(currentUser.username)}`)}">View Profile</a>
+        <a class="soc-sidebar-user-menu-item" href="${window.fpUrl('/account-settings')}">Account Settings</a>
       </div>
     </div>
   `;
@@ -363,7 +364,7 @@ if (token && currentUser) {
     if (!menu.hidden && !e.target.closest('.soc-sidebar-user-wrap')) menu.hidden = true;
   });
 } else {
-  sidebarUserSlot.innerHTML = `<a class="soc-sidebar-login" href="/fanpages/login?from=${encodeURIComponent('/fanpages/clubs-explore')}">Log In / Register</a>`;
+  sidebarUserSlot.innerHTML = `<a class="soc-sidebar-login" href="${window.fpUrl(`/login?from=${encodeURIComponent(window.fpUrl('/clubs-explore'))}`)}">Log In / Register</a>`;
 }
 function setSidebarNsfwState(enabled) {
   const label = document.getElementById('soc-sidebar-nsfw-label');
@@ -412,14 +413,14 @@ async function loadSidebarClubs() {
 function sidebarClubLink(c, showOwnerRose) {
   const a = document.createElement('a');
   a.className = 'soc-sidebar-club-link';
-  a.href = `/fanpages/club?slug=${encodeURIComponent(c.slug)}`;
+  a.href = window.fpUrl(`/club?slug=${encodeURIComponent(c.slug)}`);
   a.innerHTML = `${clubIconHtml(c, 'soc-sidebar-club-icon')}<span class="soc-sidebar-club-name">${escapeHtml(c.name)}</span>${showOwnerRose ? '<span class="soc-sidebar-club-owner-rose" title="You own this club">🌹</span>' : ''}`;
   return a;
 }
 function sidebarModClubLink(c) {
   const a = document.createElement('a');
   a.className = 'soc-sidebar-club-link';
-  a.href = `/fanpages/club?slug=${encodeURIComponent(c.slug)}`;
+  a.href = window.fpUrl(`/club?slug=${encodeURIComponent(c.slug)}`);
   a.innerHTML = `${clubIconHtml(c, 'soc-sidebar-club-icon')}<span class="soc-sidebar-club-name">${escapeHtml(c.name)}</span><span class="soc-sidebar-club-role-badge">${c.viewer_role}</span>`;
   return a;
 }
@@ -482,7 +483,7 @@ function buildTypeChecks(selected) {
   });
 }
 document.getElementById('soc-create-club-btn').addEventListener('click', async () => {
-  if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent('/fanpages/clubs-explore')}`; return; }
+  if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.fpUrl('/clubs-explore'))}`); return; }
   document.getElementById('soc-create-name').value = '';
   document.getElementById('soc-create-nsfw-toggle').checked = false;
   document.getElementById('soc-create-nsfw-label').textContent = 'SFW';
@@ -523,7 +524,7 @@ document.getElementById('soc-create-save').addEventListener('click', async () =>
       msgEl.textContent = data.error || 'Something went wrong. Please try again.';
       return;
     }
-    window.location.href = `/fanpages/club?slug=${encodeURIComponent(data.club.slug)}`;
+    window.location.href = window.fpUrl(`/club?slug=${encodeURIComponent(data.club.slug)}`);
   } catch {
     msgEl.className = 'mod-panel-msg mod-panel-msg--error';
     msgEl.textContent = 'Network error. Please try again.';
@@ -539,7 +540,7 @@ loadSidebarClubs();
 function clubCard(c) {
   const a = document.createElement('a');
   a.className = 'ce-club-card';
-  a.href = `/fanpages/club?slug=${encodeURIComponent(c.slug)}`;
+  a.href = window.fpUrl(`/club?slug=${encodeURIComponent(c.slug)}`);
   const typesHtml = (c.club_types || []).slice(0, 3)
     .map(t => `<span class="ce-club-card-type-tag">${escapeHtml(t)}</span>`).join('');
   a.innerHTML = `
@@ -562,7 +563,7 @@ function clubCard(c) {
   joinBtn.textContent = '+ Join';
   joinBtn.addEventListener('click', async (e) => {
     e.preventDefault(); e.stopPropagation();
-    if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent('/fanpages/clubs-explore')}`; return; }
+    if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.fpUrl('/clubs-explore'))}`); return; }
     joinBtn.disabled = true;
     try {
       const res = await fetch(`${API}/clubs/${encodeURIComponent(c.slug)}/join`, { method: 'POST', headers: authHeaders() });

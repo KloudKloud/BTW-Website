@@ -39,6 +39,18 @@ app.use((req, res, next) => {
   next();
 });
 
+// The Fanpage system now also serves from btwfics.net (sharing this same
+// backend/DB), so email/redirect links built from a request must resolve to
+// whichever domain the user is actually on rather than one static env value —
+// otherwise a btwfics.net user's verification/reset/inbox links would always
+// point at btwfanfic.net. Falls back to SITE_HOST for contexts with no request
+// (e.g. none currently, but keeps behavior identical if one is ever added).
+const ALLOWED_HOSTS = ['btwfanfic.net', 'www.btwfanfic.net', 'btwfics.net', 'www.btwfics.net'];
+function siteHost(req) {
+  const host = req && req.get('host');
+  return host && ALLOWED_HOSTS.includes(host) ? host : process.env.SITE_HOST;
+}
+
 // ── Database ──────────────────────────────────────────────────────────────────
 const pool = new Pool({
   host:     'localhost',
@@ -1502,7 +1514,7 @@ app.post('/api/auth/register', async (req, res) => {
       ).catch(e => console.error('BTWClub auto-join insert:', e.message));
     }
 
-    const verifyUrl = `https://${process.env.SITE_HOST}/api/auth/verify?token=${verify_token}`
+    const verifyUrl = `https://${siteHost(req)}/api/auth/verify?token=${verify_token}`
       + (from ? `&from=${encodeURIComponent(from)}` : '');
 
     await resend.emails.send({
@@ -1524,7 +1536,7 @@ app.post('/api/auth/register', async (req, res) => {
 // GET /api/auth/verify?token=xxx — shows confirmation page (safe for email scanners)
 app.get('/api/auth/verify', async (req, res) => {
   const { token, from } = req.query;
-  if (!token) return res.redirect(`https://${process.env.SITE_HOST}/login`);
+  if (!token) return res.redirect(`https://${siteHost(req)}/login`);
 
   // Check token exists but do NOT consume it — scanner-safe
   const { rows: [user] } = await pool.query('SELECT id FROM users WHERE verify_token = $1', [token]);
@@ -1535,7 +1547,7 @@ app.get('/api/auth/verify', async (req, res) => {
 h2{color:#e55;}a{color:#7ca0ff;}</style></head>
 <body><h2>Invalid or expired link</h2>
 <p>This activation link has already been used or is invalid.</p>
-<a href="https://${process.env.SITE_HOST}/login">Back to login →</a></body></html>`);
+<a href="https://${siteHost(req)}/login">Back to login →</a></body></html>`);
   }
 
   // Show a button — only a POST actually activates (scanners don't submit forms)
@@ -1590,7 +1602,7 @@ app.post('/api/auth/verify', async (req, res) => {
   await pool.query('UPDATE users SET verified = true, verify_token = NULL WHERE id = $1', [user.id]);
 
   const autoToken = signToken(user.id);
-  const loginUrl  = `https://${process.env.SITE_HOST}/login?autotoken=${autoToken}`
+  const loginUrl  = `https://${siteHost(req)}/login?autotoken=${autoToken}`
     + (fromPath ? `&from=${encodeURIComponent(fromPath)}` : '');
 
   try {
@@ -1779,7 +1791,7 @@ app.put('/api/auth/profile', requireAuth, async (req, res) => {
         [encryptEmail(email.toLowerCase()), changeToken, user.id]
       );
 
-      const confirmUrl = `https://${process.env.SITE_HOST}/api/auth/confirm-email?token=${changeToken}`;
+      const confirmUrl = `https://${siteHost(req)}/api/auth/confirm-email?token=${changeToken}`;
       try {
         await resend.emails.send({
           from:      'Between Two Worlds <hello@btwfanfic.net>',
@@ -1860,7 +1872,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
   const toEmail  = decryptEmail(user.email);
   const toName   = user.display_name || user.username;
-  const resetUrl = `https://btwfanfic.net/login?reset=${token}`;
+  const resetUrl = `https://${siteHost(req)}/login?reset=${token}`;
   resend.emails.send({
     from: 'Between Two Worlds <noreply@btwfanfic.net>',
     to: toEmail,
@@ -1963,7 +1975,7 @@ app.get('/api/auth/confirm-email', async (req, res) => {
       <html><body style="background:#f5f5f5;color:#1a1a2e;font-family:Arial;text-align:center;padding:60px 20px;">
         <h2 style="color:#c0392b;">Invalid or expired link</h2>
         <p>This email confirmation link has already been used or is invalid.</p>
-        <a href="https://${process.env.SITE_HOST}/profile" style="color:#1565c0;">Back to profile</a>
+        <a href="https://${siteHost(req)}/profile" style="color:#1565c0;">Back to profile</a>
       </body></html>
     `);
   }
@@ -1971,7 +1983,7 @@ app.get('/api/auth/confirm-email', async (req, res) => {
     'UPDATE users SET email = $1, email_hash = $2, pending_email = NULL, email_change_token = NULL WHERE id = $3',
     [user.pending_email, hashEmail(decryptEmail(user.pending_email)), user.id]
   );
-  res.redirect(`https://${process.env.SITE_HOST}/profile?email_verified=1`);
+  res.redirect(`https://${siteHost(req)}/profile?email_verified=1`);
 });
 
 app.get('/api/auth/profile', requireAuth, async (req, res) => {
@@ -2095,7 +2107,7 @@ app.post('/api/inbox/send', requireAuth, uploadInbox.array('attachments', 4), as
   const { rows: [sender] } = await pool.query('SELECT username, display_name FROM users WHERE id = $1', [req.user.id]);
   const senderName = (sender && (sender.display_name || sender.username)) || 'Someone';
   const attachHtml = attachments.length
-    ? attachments.map(a => `<p style="margin:8px 0 0;font-size:0.85rem;color:#555;">Attachment: <a href="https://btwfanfic.net${a.url}">${a.name}</a></p>`).join('')
+    ? attachments.map(a => `<p style="margin:8px 0 0;font-size:0.85rem;color:#555;">Attachment: <a href="https://${siteHost(req)}${a.url}">${a.name}</a></p>`).join('')
     : '';
   resend.emails.send({
     from: 'BTW Inbox <noreply@btwfanfic.net>',
@@ -2154,7 +2166,7 @@ app.post('/api/inbox/thread/:id/reply', requireAuth, uploadInbox.array('attachme
           <div style="background:#f5f5f5;border-left:3px solid #7b5ea7;padding:12px 16px;border-radius:4px;margin:12px 0;">
             <p style="color:#212121;font-size:0.95rem;margin:0;white-space:pre-wrap;">${body}</p>
           </div>
-          <p style="margin-top:16px;"><a href="https://btwfanfic.net/inbox" style="color:#c2547a;">View in your inbox →</a></p>
+          <p style="margin-top:16px;"><a href="https://${siteHost(req)}/inbox" style="color:#c2547a;">View in your inbox →</a></p>
         `),
       }).catch(console.error);
     }
@@ -2823,7 +2835,7 @@ app.post('/api/admin/newsletter', requireAuth, uploadInbox.array('attachments', 
 
   const attachHtml = attachments
     .filter(a => /\.(jpe?g|png|webp|gif|avif)$/i.test(a.url))
-    .map(a => `<div style="margin-top:12px;"><img src="https://${process.env.SITE_HOST}${a.url}" alt="${a.name}" style="max-width:100%;border-radius:8px;" /></div>`)
+    .map(a => `<div style="margin-top:12px;"><img src="https://${siteHost(req)}${a.url}" alt="${a.name}" style="max-width:100%;border-radius:8px;" /></div>`)
     .join('');
 
   // Actual email — opted-in + verified only.
@@ -2837,8 +2849,8 @@ app.post('/api/admin/newsletter', requireAuth, uploadInbox.array('attachments', 
         reply_to:   'hello@btwfanfic.net',
         to,
         subject:    subject.trim(),
-        html:       emailShell(`<div style="font-size:0.95rem;color:#424242;line-height:1.7;">${escaped}</div>${attachHtml}<p style="font-size:0.78rem;color:#999;margin-top:24px;">You're receiving this because you opted in to BTW newsletters. You can turn this off any time in your <a href="https://${process.env.SITE_HOST}/profile">profile settings</a>.</p>`),
-        text:       body.trim() + '\n\n---\nYou can unsubscribe at any time via your profile settings at https://' + process.env.SITE_HOST + '/profile',
+        html:       emailShell(`<div style="font-size:0.95rem;color:#424242;line-height:1.7;">${escaped}</div>${attachHtml}<p style="font-size:0.78rem;color:#999;margin-top:24px;">You're receiving this because you opted in to BTW newsletters. You can turn this off any time in your <a href="https://${siteHost(req)}/profile">profile settings</a>.</p>`),
+        text:       body.trim() + '\n\n---\nYou can unsubscribe at any time via your profile settings at https://' + siteHost(req) + '/profile',
       });
       sent++;
     } catch (err) { console.error('Newsletter send error to', to, err.message); }
@@ -4610,8 +4622,8 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
       title: r.title || 'Untitled',
       image_url: r.image_url || '',
       link_url: r.story_path || r.slug
-        ? `/fanpages/${r.story_path || r.slug}${kind === 'character' ? '/characters' : '/gallery'}`
-        : `/fanpages/${r.owner_username}`,
+        ? `/${r.story_path || r.slug}${kind === 'character' ? '/characters' : '/gallery'}`
+        : `/${r.owner_username}`,
       mine: r.owner_user_id === req.user.id,
       owner_username: r.owner_username,
     }))
@@ -6184,7 +6196,7 @@ async function commentTargetInfo(targetType, targetId) {
       [targetId]
     );
     if (!g) return null;
-    return { title: g.title || 'Untitled', link: `/fanpages/${g.owner_username}?gallery=${targetId}#gallery` };
+    return { title: g.title || 'Untitled', link: `/${g.owner_username}?gallery=${targetId}#gallery` };
   }
   if (targetType === 'character') {
     const { rows: [c] } = await pool.query(
@@ -6194,7 +6206,7 @@ async function commentTargetInfo(targetType, targetId) {
       [targetId]
     );
     if (!c) return null;
-    return { title: c.name || 'Unnamed', link: `/fanpages/${c.owner_username}?char=${targetId}#characters` };
+    return { title: c.name || 'Unnamed', link: `/${c.owner_username}?char=${targetId}#characters` };
   }
   if (targetType === 'chapter_paragraph') {
     const { rows: [c] } = await pool.query(
@@ -6204,7 +6216,7 @@ async function commentTargetInfo(targetType, targetId) {
       [targetId]
     );
     if (!c) return null;
-    return { title: c.title || 'Untitled Chapter', link: `/fanpages/${c.story_path}/reader?ch=${targetId}` };
+    return { title: c.title || 'Untitled Chapter', link: `/${c.story_path}/reader?ch=${targetId}` };
   }
   if (targetType === 'club_post') {
     const { rows: [p] } = await pool.query(
@@ -6214,7 +6226,7 @@ async function commentTargetInfo(targetType, targetId) {
       [targetId]
     );
     if (!p) return null;
-    return { title: p.title || 'Untitled', link: `/fanpages/club?slug=${encodeURIComponent(p.slug)}&post=${targetId}` };
+    return { title: p.title || 'Untitled', link: `/club?slug=${encodeURIComponent(p.slug)}&post=${targetId}` };
   }
   if (targetType === 'club_gallery_image') {
     const { rows: [g] } = await pool.query(
@@ -6227,7 +6239,7 @@ async function commentTargetInfo(targetType, targetId) {
     if (!g) return null;
     // Not independently deep-linkable (the detail view is an in-page swap,
     // not a routed URL) — link back to the gallery page itself instead.
-    return { title: g.title || 'Untitled', link: `/fanpages/club?slug=${encodeURIComponent(g.club_slug)}&page=${encodeURIComponent(g.page_slug)}` };
+    return { title: g.title || 'Untitled', link: `/club?slug=${encodeURIComponent(g.club_slug)}&page=${encodeURIComponent(g.page_slug)}` };
   }
   return null;
 }

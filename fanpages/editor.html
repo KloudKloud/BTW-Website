@@ -266,9 +266,11 @@
 
 <script src="/fanpages/fanpages-nav.js"></script>
 <script>
+  window.fpFixLinks(); // static /fanpages/-prefixed anchors in this page's own markup (e.g. the Create Story button)
+
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
-  if (!token) window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname)}`;
+  if (!token) window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname)}`);
 
   function escapeHtml(s) {
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -276,9 +278,9 @@
 
   const TABS = ['stories', 'characters', 'gallery'];
   const CREATE_CONFIG = {
-    stories:    { href: '/fanpages/create',          label: 'Create Story' },
-    characters: { href: '/fanpages/create-character', label: 'Create Character' },
-    gallery:    { href: '/fanpages/create-gallery',   label: 'Create Gallery' },
+    stories:    { href: window.fpUrl('/create'),          label: 'Create Story' },
+    characters: { href: window.fpUrl('/create-character'), label: 'Create Character' },
+    gallery:    { href: window.fpUrl('/create-gallery'),   label: 'Create Gallery' },
   };
   const SEARCH_FIELD = { stories: 'site_title', characters: 'name', gallery: 'title' };
   const SEARCH_PLACEHOLDER = {
@@ -383,7 +385,7 @@
       ? '<span class="ed-status-published">Published</span>'
       : '<span class="ed-status-draft">Draft</span>';
     const date = ch.updated_at ? new Date(ch.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-    return `<a class="ed-continue-item" href="/fanpages/${storyPath}/chapter-editor?id=${ch.id}">
+    return `<a class="ed-continue-item" href="${window.fpUrl(`/${storyPath}/chapter-editor?id=${ch.id}`)}">
       <p class="ed-continue-item-title">${escapeHtml(ch.title || 'Untitled Part')}</p>
       <p class="ed-continue-item-sub">${statusHtml}${date ? ` - ${date}` : ''}</p>
     </a>`;
@@ -416,7 +418,7 @@
         const res = await fetch('/api/moderator/chapters', { method: 'POST', headers: { ...authHeaders(), 'X-Story-Path': storyPath } });
         const data = await res.json();
         if (!data.chapter) throw new Error();
-        window.location.href = `/fanpages/${storyPath}/chapter-editor?id=${data.chapter.id}`;
+        window.location.href = window.fpUrl(`/${storyPath}/chapter-editor?id=${data.chapter.id}`);
       } catch {
         alert('Could not create a new part — please try again.');
         newBtn.disabled = false;
@@ -474,7 +476,7 @@
     wrap.appendChild(menu);
     menu.querySelector('[data-action="read"]').addEventListener('click', (e) => {
       e.stopPropagation();
-      window.open(`/fanpages/${storyPath}`, '_blank');
+      window.open(window.fpUrl(`/${storyPath}`), '_blank');
       closeAllMoreMenus();
     });
     menu.querySelector('[data-action="unpublish"]').addEventListener('click', async (e) => {
@@ -510,7 +512,7 @@
     const row = document.createElement('div');
     row.className = 'ed-story-row';
     row.innerHTML = `
-      <a class="ed-story-link" href="/fanpages/${storyPath}/edit?from=hub">
+      <a class="ed-story-link" href="${window.fpUrl(`/${storyPath}/edit?from=hub`)}">
         ${window.wikiGeneratedCoverHtml(s, { imgClass: 'ed-card-img ed-card-img--story', small: true })}
         <div class="ed-card-info">
           <p class="ed-card-title">${escapeHtml(s.site_title)}</p>
@@ -602,13 +604,13 @@
       items.forEach(s => list.appendChild(edStoryCard(s)));
     } else if (tab === 'characters') {
       items.forEach(c => list.appendChild(edCard(
-        `/fanpages/create-character?id=${c.id}`,
+        window.fpUrl(`/create-character?id=${c.id}`),
         `<img class="ed-card-img" src="${c.ref_image || '/images/defaultchar.jpg'}" alt="" />`,
         c.name, 'Click to edit or delete'
       )));
     } else {
       items.forEach(g => list.appendChild(edCard(
-        `/fanpages/create-gallery?id=${g.id}`,
+        window.fpUrl(`/create-gallery?id=${g.id}`),
         `<img class="ed-card-img" src="${g.image}" alt="" />`,
         g.title || 'Untitled', `${(g.category || 'sfw').toUpperCase()} — Click to edit or delete`
       )));

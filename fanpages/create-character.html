@@ -189,7 +189,7 @@
 <script>
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
-  if (!token) window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname)}`;
+  if (!token) window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname)}`);
 
   function escapeHtml(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -735,11 +735,11 @@
       }
 
       if (editingCharacterId) {
-        window.location.href = '/fanpages/editor#characters';
+        window.location.href = window.fpUrl('/editor#characters');
         return;
       }
       const me = await fetch('/api/auth/me', { headers: authHeaders() }).then(r => r.json()).catch(() => null);
-      window.location.href = me && me.user ? `/fanpages/${me.user.username}#characters` : '/fanpages';
+      window.location.href = me && me.user ? window.fpUrl(`/${me.user.username}#characters`) : window.fpUrl('/');
     } catch {
       msgEl.className = 'mod-panel-msg mod-panel-msg--error';
       msgEl.textContent = 'Network error. Please try again.';
@@ -758,7 +758,7 @@
     btn.textContent = 'Deleting…';
     try {
       await fetch(`/api/characters/${editingCharacterId}`, { method: 'DELETE', headers: authHeaders() });
-      window.location.href = '/fanpages/editor#characters';
+      window.location.href = window.fpUrl('/editor#characters');
     } catch {
       btn.disabled = false;
       btn.textContent = 'Delete';

@@ -193,7 +193,8 @@
 <script>
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
-  if (!token) window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname)}`;
+  if (!token) window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname)}`);
+  window.fpFixLinks();
 
   // Cancel returns to whatever page you were actually on when you clicked
   // "+ Gallery", instead of always dumping you at the Fanpage Hub.
@@ -679,11 +680,11 @@
       }
 
       if (editingGalleryId) {
-        window.location.href = '/fanpages/editor#gallery';
+        window.location.href = window.fpUrl('/editor#gallery');
         return;
       }
       const me = await fetch('/api/auth/me', { headers: authHeaders() }).then(r => r.json()).catch(() => null);
-      window.location.href = me && me.user ? `/fanpages/${me.user.username}#gallery` : '/fanpages';
+      window.location.href = me && me.user ? window.fpUrl(`/${me.user.username}#gallery`) : window.fpUrl('/');
     } catch {
       msgEl.className = 'mod-panel-msg mod-panel-msg--error';
       msgEl.textContent = 'Network error. Please try again.';
@@ -702,7 +703,7 @@
     btn.textContent = 'Deleting…';
     try {
       await fetch(`/api/gallery/${editingGalleryId}`, { method: 'DELETE', headers: authHeaders() });
-      window.location.href = '/fanpages/editor#gallery';
+      window.location.href = window.fpUrl('/editor#gallery');
     } catch {
       btn.disabled = false;
       btn.textContent = 'Delete';

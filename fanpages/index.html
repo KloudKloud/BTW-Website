@@ -597,7 +597,7 @@
   <div class="fp-disclaimer-box">
     <img class="fp-disclaimer-img" src="/images/gallery/kloudsaphbedroom_1.png" alt="" />
     <p>
-      <span class="fp-disclaimer-highlight">btwfanfic.net</span> is a website made by <a href="/fanpages/veekitpaws">VeekitPaws</a>, the author of <strong>Between Two Worlds</strong>.
+      <span class="fp-disclaimer-highlight" id="fp-disclaimer-domain">this site</span> is a website made by <a href="/fanpages/veekitpaws">VeekitPaws</a>, the author of <strong>Between Two Worlds</strong>.
       Consider supporting our website and the original book by <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donating Here</a>.
       Donations are completely optional, and they help support this site + keep this little 'vee nice and fed! I appreciate you all for hanging out! &lt;3
     </p>
@@ -607,6 +607,9 @@
 
 <script src="/fanpages/fanpages-nav.js"></script>
 <script>
+  document.getElementById('fp-disclaimer-domain').textContent = location.hostname.replace(/^www\./, '');
+  window.fpFixLinks();
+
   // ── Billboard — slides come from the DB now (managed via Hub Image Builder) ──
   let billboardSlides = [];
   let billboardIndex = 0;
@@ -873,7 +876,7 @@
   function storyCard(site, { showBookmark }) {
     const a = document.createElement('a');
     a.className = 'fp-card';
-    a.href = `/fanpages/${site.story_path || site.slug}`;
+    a.href = window.fpUrl(`/${site.story_path || site.slug}`);
     a.innerHTML = `
       <p class="fp-card-title">${site.site_title}</p>
       <p class="fp-card-author">by <span class="fp-card-author-link">${site.author}</span></p>
@@ -886,7 +889,7 @@
       authorLink.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        window.location.href = `/fanpages/${site.author_username}`;
+        window.location.href = window.fpUrl(`/${site.author_username}`);
       });
     }
     if (showBookmark && token) {
@@ -977,7 +980,7 @@
 
     const link = document.createElement('a');
     link.className = 'fp-follower-link';
-    link.href = `/fanpages/${u.username}`;
+    link.href = window.fpUrl(`/${u.username}`);
     link.innerHTML = `
       ${followerAvatarHtml(u, 'fp-follower-avatar', 'fp-follower-avatar-fallback')}
       <span class="fp-follower-name">${escapeHtml(u.display_name)}</span>
@@ -1039,7 +1042,7 @@
         const row = document.createElement('div');
         row.className = 'fp-followers-modal-row';
         const link = document.createElement('a');
-        link.href = `/fanpages/${u.username}`;
+        link.href = window.fpUrl(`/${u.username}`);
         link.style.cssText = 'display:flex;align-items:center;gap:0.85rem;flex:1;min-width:0;text-decoration:none;color:inherit;';
         link.innerHTML = `
           ${followerAvatarHtml(u, 'fp-followers-modal-avatar', 'fp-followers-modal-avatar-fallback')}
@@ -1233,9 +1236,9 @@
     // links to a story.
     return spotlightItem(
       c.image, c.position_x, c.position_y, c.name,
-      `/fanpages/${c.owner_username}?char=${c.id}#characters`,
+      window.fpUrl(`/${c.owner_username}?char=${c.id}#characters`),
       'from', c.owner_display_name,
-      `/fanpages/${c.owner_username}`,
+      window.fpUrl(`/${c.owner_username}`),
       c.nsfw_locked
     );
   }
@@ -1257,9 +1260,9 @@
   function renderGallerySpotlightItem(g) {
     return spotlightItem(
       g.image, g.position_x, g.position_y, g.title || 'Untitled',
-      `/fanpages/gallery-post?id=${g.id}`,
+      window.fpUrl(`/gallery-post?id=${g.id}`),
       'from', g.owner_display_name,
-      `/fanpages/${g.owner_username}`
+      window.fpUrl(`/${g.owner_username}`)
     );
   }
   async function loadGallerySpotlight() {
@@ -1275,7 +1278,7 @@
   function storySpotlightItem(s) {
     const a = document.createElement('a');
     a.className = 'fp-spotlight-item';
-    a.href = `/fanpages/${s.story_path}`;
+    a.href = window.fpUrl(`/${s.story_path}`);
     const imgWrap = document.createElement('div');
     imgWrap.className = 'fp-spotlight-img-wrap';
     if (s.cover_url) {
@@ -1304,7 +1307,7 @@
     from.querySelector('.fp-spotlight-from-link').addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      window.location.href = `/fanpages/${s.author_username}`;
+      window.location.href = window.fpUrl(`/${s.author_username}`);
     });
     a.appendChild(imgWrap);
     a.appendChild(name);
@@ -1333,7 +1336,7 @@
     return `
       <div class="rs-card-caption">
         <a class="rs-card-caption-title" href="${href}">${escapeHtml(title)}</a>
-        <span class="rs-card-caption-author">by ${authorUsername ? `<a href="/fanpages/${encodeURIComponent(authorUsername)}">${escapeHtml(author || authorUsername)}</a>` : escapeHtml(author || 'Unknown')}</span>
+        <span class="rs-card-caption-author">by ${authorUsername ? `<a href="${window.fpUrl(`/${encodeURIComponent(authorUsername)}`)}">${escapeHtml(author || authorUsername)}</a>` : escapeHtml(author || 'Unknown')}</span>
       </div>
     `;
   }
@@ -1343,7 +1346,7 @@
     tile.className = 'rs-tile';
     const a = document.createElement('a');
     a.className = 'rs-card';
-    a.href = `/fanpages/gallery-post?id=${it.id}`;
+    a.href = window.fpUrl(`/gallery-post?id=${it.id}`);
     const posX = it.position_x != null ? it.position_x : 50;
     const posY = it.position_y != null ? it.position_y : 50;
     a.innerHTML = `
@@ -1391,7 +1394,7 @@
     tile.className = 'rs-tile';
     const a = document.createElement('a');
     a.className = 'rs-card';
-    a.href = `/fanpages/${it.story_path}/reader?ch=${it.id}`;
+    a.href = window.fpUrl(`/${it.story_path}/reader?ch=${it.id}`);
     const posX = it.position_x != null ? it.position_x : 50;
     const posY = it.position_y != null ? it.position_y : 50;
     if (it.image) {
@@ -1414,7 +1417,7 @@
     if (it.type === 'art') return rsArtCard(it);
     if (it.type === 'chapter') return rsChapterCard(it);
     if (it.type === 'character') {
-      const href = `/fanpages/${it.author_username}?char=${it.id}#characters`;
+      const href = window.fpUrl(`/${it.author_username}?char=${it.id}#characters`);
       return rsPortraitCard(it, '🧍', it.title || 'Unnamed', href);
     }
     return document.createElement('span');

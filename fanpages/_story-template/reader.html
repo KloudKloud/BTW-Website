@@ -547,8 +547,9 @@
 <script src="/fanpages/fanpages-site.js"></script>
 <script>
 const PATH_PARTS = window.location.pathname.split('/').filter(Boolean);
-const SLUG = PATH_PARTS.slice(1, 3).join('/');
-const STORY_BASE = '/' + PATH_PARTS.slice(0, 3).join('/');
+const OFFSET = window.FP_BASE ? 1 : 0;
+const SLUG = PATH_PARTS.slice(OFFSET, OFFSET + 2).join('/');
+const STORY_BASE = (window.FP_BASE || '') + '/' + PATH_PARTS.slice(OFFSET, OFFSET + 2).join('/');
 
 document.getElementById('tab-home') && (document.getElementById('tab-home').href = STORY_BASE);
 
@@ -865,7 +866,7 @@ async function renderRecs() {
     const recs = (data.stories || []).filter(s => s.story_path !== SITE.story_path);
     if (!recs.length) { list.innerHTML = '<p style="color:#888; font-size:0.85rem;">Nothing else here yet.</p>'; return; }
     list.innerHTML = recs.map(s => `
-      <a class="rd-rec-card" href="/fanpages/${escapeHtml(s.story_path)}">
+      <a class="rd-rec-card" href="${window.fpUrl(`/${s.story_path}`)}">
         <img class="rd-rec-cover" src="${s.cover_url || '/images/gallery/pixernbath_13.png'}" alt="" />
         <span class="rd-rec-info">
           <p class="rd-rec-title">${escapeHtml(s.site_title || 'Untitled Story')}</p>
@@ -1026,7 +1027,7 @@ function renderCommentItem(c, prefix, collapsible) {
       <div class="cc-body-wrap">
         <div class="cc-bubble">
           ${collapsible && c.paragraph_index != null ? `<span class="rd-cp-para-tag">💬 inline comment</span><br>` : ''}
-          <span class="cc-name"><a href="/fanpages/${escapeHtml(c.username)}">${escapeHtml(c.display_name || c.username)}</a></span>
+          <span class="cc-name"><a href="${window.fpUrl(`/${escapeHtml(c.username)}`)}">${escapeHtml(c.display_name || c.username)}</a></span>
           <span class="cc-time">${formatRelativeTime(c.created_at)}</span>
           ${c.reply_to_username ? `<div class="cc-mention">@${escapeHtml(c.reply_to_username)}</div>` : ''}
           ${c.body ? `<p class="cc-text">${escapeHtml(c.body)}</p>` : ''}
@@ -1332,7 +1333,7 @@ window.addEventListener('resize', () => { if (!gifPickerWrap.hidden && gifActive
   document.getElementById('rd-story-title').textContent = SITE.site_title || 'Fanpages';
   document.getElementById('rd-author-name').textContent = SITE.author_display_name || SITE.author_username || '';
 
-  const authorHref = SITE.author_username ? `/fanpages/${SITE.author_username}` : '#';
+  const authorHref = SITE.author_username ? window.fpUrl(`/${SITE.author_username}`) : '#';
   document.getElementById('rd-author-card').href = authorHref;
   document.getElementById('rd-author-card').textContent = SITE.author_display_name || SITE.author_username || '';
   // No real avatar? A colored initial, same fallback used for comment

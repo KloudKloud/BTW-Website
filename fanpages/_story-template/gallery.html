@@ -139,8 +139,9 @@
 <script src="/fanpages/fanpages-site.js"></script>
 <script>
 const PATH_PARTS = window.location.pathname.split('/').filter(Boolean);
-const SLUG = PATH_PARTS.slice(1, 3).join('/');
-const STORY_BASE = '/' + PATH_PARTS.slice(0, 3).join('/');
+const OFFSET = window.FP_BASE ? 1 : 0;
+const SLUG = PATH_PARTS.slice(OFFSET, OFFSET + 2).join('/');
+const STORY_BASE = (window.FP_BASE || '') + '/' + PATH_PARTS.slice(OFFSET, OFFSET + 2).join('/');
 
 document.getElementById('tab-home').href = STORY_BASE;
 document.getElementById('tab-chapters').href = STORY_BASE + '/chapters';
@@ -237,7 +238,7 @@ function renderStatsBox(item) {
     <div class="art-view-stat-row"><span>Likes</span><span>${item.like_count || 0}</span></div>
     <div class="art-view-stat-row"><span>Comments</span><span>${item.comment_count || 0}</span></div>
     <div class="art-view-stat-row"><span>Rating</span><span>${ratingLabelFor(item.category)}</span></div>
-    <div class="art-view-stat-row"><span>Uploaded by</span><span><a href="/fanpages/${encodeURIComponent(STORY_AUTHOR_USERNAME)}">${escapeHtml(STORY_AUTHOR_DISPLAY)}</a></span></div>
+    <div class="art-view-stat-row"><span>Uploaded by</span><span><a href="${window.fpUrl(`/${encodeURIComponent(STORY_AUTHOR_USERNAME)}`)}">${escapeHtml(STORY_AUTHOR_DISPLAY)}</a></span></div>
   `;
 
   const tagsWrap = document.getElementById('gallery-detail-stats-tags');
@@ -246,7 +247,7 @@ function renderStatsBox(item) {
     tagsWrap.innerHTML = '<p class="art-view-stats-tags-empty">No tags yet.</p>';
     return;
   }
-  tagsWrap.innerHTML = tags.map(t => `<a class="art-view-stats-tag-pill" href="/fanpages/search?view=submissions&browse=1&q=${encodeURIComponent(t)}">${escapeHtml(t)}</a>`).join('');
+  tagsWrap.innerHTML = tags.map(t => `<a class="art-view-stats-tag-pill" href="${window.fpUrl(`/search?view=submissions&browse=1&q=${encodeURIComponent(t)}`)}">${escapeHtml(t)}</a>`).join('');
 }
 
 function bumpGalleryViewCount(id) {
@@ -401,7 +402,7 @@ function updateLikeUI(item) {
 }
 
 document.getElementById('gallery-detail-like').addEventListener('click', async (e) => {
-  if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+  if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
   if (!currentDetailItem) return;
   const btn = e.currentTarget;
   if (btn.disabled) return; // in-flight guard — stops rapid double-clicks racing each other
@@ -411,7 +412,7 @@ document.getElementById('gallery-detail-like').addEventListener('click', async (
   try {
     const res = await fetch(`/api/moderator/gallery/${item.id}/like`, { method, headers: authHeaders() });
     if (!res.ok) {
-      if (res.status === 401) window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      if (res.status === 401) window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`);
       return;
     }
     const data = await res.json();
@@ -426,7 +427,7 @@ function updateBookmarkUI(item) {
   document.getElementById('gallery-detail-bookmark').classList.toggle('bookmarked', !!item.bookmarked);
 }
 document.getElementById('gallery-detail-bookmark').addEventListener('click', async (e) => {
-  if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+  if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
   if (!currentDetailItem) return;
   const btn = e.currentTarget;
   if (btn.disabled) return;
@@ -436,7 +437,7 @@ document.getElementById('gallery-detail-bookmark').addEventListener('click', asy
   try {
     const res = await fetch(`/api/moderator/gallery/${item.id}/bookmark`, { method, headers: authHeaders() });
     if (!res.ok) {
-      if (res.status === 401) window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      if (res.status === 401) window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`);
       return;
     }
     const data = await res.json();
@@ -491,7 +492,7 @@ async function loadGalleryTagsSection(item) {
 function galleryCharTagCard(c) {
   const a = document.createElement('a');
   a.className = 'art-view-tag-card';
-  a.href = `/fanpages/${c.owner_username}?char=${c.id}#characters`;
+  a.href = window.fpUrl(`/${c.owner_username}?char=${c.id}#characters`);
   if (c.nsfw_locked) {
     const lockMsg = token ? 'NSFW content must be enabled in Account Settings' : 'Only logged-in users can see this content';
     a.innerHTML = `
@@ -517,7 +518,7 @@ function galleryCharTagCard(c) {
 function galleryStoryTagCard(s) {
   const a = document.createElement('a');
   a.className = 'art-view-tag-card';
-  a.href = `/fanpages/${s.story_path}`;
+  a.href = window.fpUrl(`/${s.story_path}`);
   a.innerHTML = `
     <div class="art-view-tag-card-imgwrap art-view-tag-card-imgwrap--story">${window.wikiGeneratedCoverHtml(s, { small: true })}</div>
     <div class="art-view-tag-card-info">
@@ -564,7 +565,7 @@ function ccCommentEl(c, isReply) {
   body.className = 'cc-body-wrap';
   body.innerHTML = `
     <div class="cc-bubble">
-      <span class="cc-name"><a href="/fanpages/${encodeURIComponent(c.username)}">${escapeHtml(c.display_name || c.username)}</a></span>
+      <span class="cc-name"><a href="${window.fpUrl(`/${encodeURIComponent(c.username)}`)}">${escapeHtml(c.display_name || c.username)}</a></span>
       <span class="cc-time">${ccTimeAgo(c.created_at)}</span>
       <p class="cc-text">${c.reply_to_username ? `<span class="cc-mention">@${escapeHtml(c.reply_to_username)}</span> ` : ''}${escapeHtml(c.body)}</p>
     </div>
@@ -709,7 +710,7 @@ function renderBookBox(site) {
 
   const authorLink = document.createElement('a');
   authorLink.className = 'mod-book-box-author-link';
-  authorLink.href = `/fanpages/${site.author_username}`;
+  authorLink.href = window.fpUrl(`/${site.author_username}`);
   if (site.author_avatar) {
     const img = document.createElement('img');
     img.className = 'mod-book-box-author-avatar';
@@ -733,7 +734,7 @@ function renderBookBox(site) {
   if (!token) {
     const loginLink = document.createElement('a');
     loginLink.className = 'mod-book-box-follow-btn';
-    loginLink.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname)}`;
+    loginLink.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname)}`);
     loginLink.textContent = 'Log In to Follow';
     authorRow.appendChild(loginLink);
     return;

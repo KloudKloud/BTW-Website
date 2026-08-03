@@ -935,7 +935,7 @@
     <div class="fp-disclaimer-box">
       <img class="fp-disclaimer-img" src="/images/gallery/kloudsaphbedroom_1.png" alt="" />
       <p>
-        <span class="fp-disclaimer-highlight">btwfanfic.net</span> is a website made by <a href="/fanpages/veekitpaws">VeekitPaws</a>, the author of <strong>Between Two Worlds</strong>.
+        <span class="fp-disclaimer-highlight" id="fp-disclaimer-domain">this site</span> is a website made by <a href="/fanpages/veekitpaws">VeekitPaws</a>, the author of <strong>Between Two Worlds</strong>.
         Consider supporting our website and the original book by <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donating Here</a>.
         Donations are completely optional, and they help support this site + keep this little 'vee nice and fed! I appreciate you all for hanging out! &lt;3
       </p>
@@ -1081,6 +1081,8 @@
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
   const here = window.location.pathname;
+  document.getElementById('fp-disclaimer-domain').textContent = location.hostname.replace(/^www\./, '');
+  window.fpFixLinks();
 
   // Story teaser cards (Stories tab) are clickable anywhere on their
   // (transparent) area -- but a click on a tag pill or character chip
@@ -1133,7 +1135,7 @@
   function storyCardEl(s) {
     const card = document.createElement('a');
     card.className = 'fp-story-card' + (s.is_draft_only ? ' fp-story-card--draft' : '');
-    card.href = `/fanpages/${s.story_path || s.slug}`;
+    card.href = window.fpUrl(`/${s.story_path || s.slug}`);
 
     if (s.is_draft_only) {
       const badge = document.createElement('span');
@@ -1190,7 +1192,7 @@
     // navigates to the story via the delegated handler below.
     const card = document.createElement('div');
     card.className = 'fp-story-teaser-card' + (s.is_draft_only ? ' fp-story-teaser-card--draft' : '');
-    card.dataset.href = `/fanpages/${s.story_path || s.slug}`;
+    card.dataset.href = window.fpUrl(`/${s.story_path || s.slug}`);
 
     if (s.is_draft_only) {
       const badge = document.createElement('span');
@@ -1252,7 +1254,7 @@
       s.characters.forEach(c => {
         const chip = document.createElement('a');
         chip.className = 'fp-story-teaser-char-chip';
-        chip.href = `/fanpages/${encodeURIComponent(c.owner_username || USERNAME)}?char=${c.id}#characters`;
+        chip.href = window.fpUrl(`/${encodeURIComponent(c.owner_username || USERNAME)}?char=${c.id}#characters`);
         chip.innerHTML = `<img src="${c.ref_image || '/images/defaultchar.jpg'}" alt="" />${escapeHtml(c.name)}`;
         chipRow.appendChild(chip);
       });
@@ -1486,7 +1488,7 @@
     shareBtn.title = 'Share this character';
     shareBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>';
     shareBtn.addEventListener('click', (e) => {
-      fpShare(e.currentTarget, `${window.location.origin}/fanpages/${USERNAME}?char=${char.id}#characters`);
+      fpShare(e.currentTarget, `${window.location.origin}${window.fpUrl(`/${USERNAME}?char=${char.id}#characters`)}`);
     });
     nameRow.appendChild(shareBtn);
     bio.appendChild(nameRow);
@@ -1565,14 +1567,14 @@
           const known = FP_CHARACTERS.find(c => c.id === String(rel.character_id));
           if (known) {
             if (known.ref) avatar.src = known.ref;
-            nameLink.href = `/fanpages/${USERNAME}?char=${rel.character_id}#characters`;
+            nameLink.href = window.fpUrl(`/${USERNAME}?char=${rel.character_id}#characters`);
           } else {
             fetch(`/api/characters/${rel.character_id}`)
               .then(r => r.ok ? r.json() : null)
               .then(d => {
                 if (d && d.character) {
                   if (d.character.ref_image) avatar.src = d.character.ref_image;
-                  nameLink.href = `/fanpages/${d.character.owner_username}?char=${rel.character_id}#characters`;
+                  nameLink.href = window.fpUrl(`/${d.character.owner_username}?char=${rel.character_id}#characters`);
                 } else {
                   avatar.remove();
                 }
@@ -1654,7 +1656,7 @@
         storiesRow.style.cssText = 'display:flex; flex-wrap:wrap; gap:0.6rem;';
         stories.forEach(s => {
           const a = document.createElement('a');
-          a.href = `/fanpages/${s.story_path}`;
+          a.href = window.fpUrl(`/${s.story_path}`);
           a.style.cssText = 'display:flex; align-items:center; gap:0.5rem; text-decoration:none; background:#1a1a1a; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:0.35rem 0.6rem 0.35rem 0.35rem; max-width:180px;';
           a.innerHTML = `
             ${window.wikiGeneratedCoverHtml(s, { small: true, style: 'width:28px; height:38px; object-fit:cover; border-radius:4px; flex-shrink:0; background:#222;' })}
@@ -1724,7 +1726,7 @@
     likeBtn.setAttribute('aria-label', 'Like this character');
     likeBtn.innerHTML = `<span class="char-like-icon">${char.liked ? '♥' : '♡'}</span> <span class="char-like-count">${char.likeCount}</span>`;
     likeBtn.addEventListener('click', async () => {
-      if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+      if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
       likeBtn.disabled = true;
       try {
         const res = await fetch(`/api/moderator/character/${char.id}/like`, { method: char.liked ? 'DELETE' : 'POST', headers: authHeaders() });
@@ -1744,7 +1746,7 @@
     bookmarkBtn.setAttribute('aria-label', 'Bookmark this character');
     bookmarkBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>';
     bookmarkBtn.addEventListener('click', async () => {
-      if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+      if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
       bookmarkBtn.disabled = true;
       try {
         const res = await fetch(`/api/moderator/character/${char.id}/bookmark`, { method: char.bookmarked ? 'DELETE' : 'POST', headers: authHeaders() });
@@ -1773,7 +1775,7 @@
     if (prev) {
       const a = document.createElement('a');
       a.className = 'art-nav-btn art-nav-prev';
-      a.href = `/fanpages/${USERNAME}?char=${prev.id}#characters`;
+      a.href = window.fpUrl(`/${USERNAME}?char=${prev.id}#characters`);
       a.innerHTML = `← <span class="art-nav-label">${escapeHtml(prev.name)}</span>`;
       a.addEventListener('click', (e) => { e.preventDefault(); selectFpCharacter(prev.id); });
       navEl.appendChild(a);
@@ -1781,7 +1783,7 @@
     if (next) {
       const a = document.createElement('a');
       a.className = 'art-nav-btn art-nav-next';
-      a.href = `/fanpages/${USERNAME}?char=${next.id}#characters`;
+      a.href = window.fpUrl(`/${USERNAME}?char=${next.id}#characters`);
       a.innerHTML = `<span class="art-nav-label">${escapeHtml(next.name)}</span> →`;
       a.addEventListener('click', (e) => { e.preventDefault(); selectFpCharacter(next.id); });
       navEl.appendChild(a);
@@ -1956,7 +1958,7 @@
       // in-page swap -- opening a post is independent of the profile
       // system entirely, so it gets its own full page instead of hiding
       // this grid behind a detail view stapled onto the same URL.
-      a.href = `/fanpages/gallery-post?id=${g.id}`;
+      a.href = window.fpUrl(`/gallery-post?id=${g.id}`);
       const posX = g.position_x != null ? g.position_x : 50;
       const posY = g.position_y != null ? g.position_y : 50;
       a.innerHTML = `<img src="${g.image}" alt="${g.title || 'Gallery image'}" loading="lazy" draggable="false" style="object-position: ${posX}% ${posY}%;" />`;
@@ -1967,7 +1969,7 @@
       wrap.insertAdjacentHTML('beforeend', `
         <div class="gallery-tile-caption">
           <a class="gallery-tile-caption-title" href="${a.href}">${escapeHtml(g.title || 'Untitled')}</a>
-          <span class="gallery-tile-caption-author">by <a href="/fanpages/${encodeURIComponent(USERNAME)}">${escapeHtml(uploaderName)}</a></span>
+          <span class="gallery-tile-caption-author">by <a href="${window.fpUrl(`/${encodeURIComponent(USERNAME)}`)}">${escapeHtml(uploaderName)}</a></span>
         </div>
       `);
       grid.appendChild(wrap);
@@ -2010,7 +2012,7 @@
     body.className = 'cc-body-wrap';
     body.innerHTML = `
       <div class="cc-bubble">
-        <span class="cc-name"><a href="/fanpages/${encodeURIComponent(c.username)}">${escapeHtml(c.display_name || c.username)}</a></span>
+        <span class="cc-name"><a href="${window.fpUrl(`/${encodeURIComponent(c.username)}`)}">${escapeHtml(c.display_name || c.username)}</a></span>
         <span class="cc-time">${ccTimeAgo(c.created_at)}</span>
         <p class="cc-text">${c.reply_to_username ? `<span class="cc-mention">@${escapeHtml(c.reply_to_username)}</span> ` : ''}${escapeHtml(c.body)}</p>
       </div>
@@ -2148,7 +2150,7 @@
     row.className = 'fp-follow-row';
 
     const avatarWrap = document.createElement('a');
-    avatarWrap.href = `/fanpages/${u.username}`;
+    avatarWrap.href = window.fpUrl(`/${u.username}`);
     if (u.avatar) {
       const img = document.createElement('img');
       img.className = 'fp-follow-avatar';
@@ -2169,7 +2171,7 @@
     nameRow.className = 'fp-follow-name-row';
     const nameLink = document.createElement('a');
     nameLink.className = 'fp-follow-name';
-    nameLink.href = `/fanpages/${u.username}`;
+    nameLink.href = window.fpUrl(`/${u.username}`);
     nameLink.textContent = u.display_name;
     const handle = document.createElement('span');
     handle.className = 'fp-follow-handle';
@@ -2238,7 +2240,7 @@
   function fpClubRow(c) {
     const row = document.createElement('a');
     row.className = 'fp-follow-row';
-    row.href = `/fanpages/club?slug=${encodeURIComponent(c.slug)}`;
+    row.href = window.fpUrl(`/club?slug=${encodeURIComponent(c.slug)}`);
     row.style.textDecoration = 'none';
     row.style.color = 'inherit';
 
@@ -2316,8 +2318,8 @@
       const card = document.createElement('a');
       card.className = 'fp-featured-card';
       card.href = kind === 'character'
-        ? `/fanpages/${USERNAME}?char=${encodeURIComponent(item.ref_id)}#characters`
-        : `/fanpages/gallery-post?id=${encodeURIComponent(item.ref_id)}`;
+        ? window.fpUrl(`/${USERNAME}?char=${encodeURIComponent(item.ref_id)}#characters`)
+        : window.fpUrl(`/gallery-post?id=${encodeURIComponent(item.ref_id)}`);
       card.innerHTML = `
         <img class="fp-featured-card-img" src="${item.image_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="${item.title}" />
         <p class="fp-featured-card-title">${item.title}</p>
@@ -2342,7 +2344,7 @@
       shareBtn.title = 'Share this profile';
       shareBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>';
       shareBtn.addEventListener('click', (e) => {
-        fpShare(e.currentTarget, window.location.origin + `/fanpages/${USERNAME}`);
+        fpShare(e.currentTarget, window.location.origin + window.fpUrl(`/${USERNAME}`));
       });
       wrap.appendChild(shareBtn);
     }
@@ -2362,9 +2364,9 @@
         return;
       }
       const HUB_CONFIG = {
-        characters: { icon: '🗂️', label: 'Character Editor', href: '/fanpages/editor#characters' },
-        gallery:    { icon: '🖼️', label: 'Gallery Editor',    href: '/fanpages/editor#gallery' },
-        stories:    { icon: '📚', label: 'Stories Editor',    href: '/fanpages/editor#stories' },
+        characters: { icon: '🗂️', label: 'Character Editor', href: window.fpUrl('/editor#characters') },
+        gallery:    { icon: '🖼️', label: 'Gallery Editor',    href: window.fpUrl('/editor#gallery') },
+        stories:    { icon: '📚', label: 'Stories Editor',    href: window.fpUrl('/editor#stories') },
       };
       const hub = HUB_CONFIG[activeTabName];
       if (hub) {
@@ -2387,7 +2389,7 @@
     if (!token) {
       const a = document.createElement('a');
       a.className = 'fp-action-btn fp-action-btn--login';
-      a.href = `/fanpages/login?from=${encodeURIComponent(here)}`;
+      a.href = window.fpUrl(`/login?from=${encodeURIComponent(here)}`);
       a.textContent = 'Log In to Follow';
       wrap.appendChild(a);
       return;
@@ -2398,7 +2400,7 @@
     // Notifications' Inbox rather than a message-this-person button.
     const msgBtn = document.createElement('a');
     msgBtn.className = 'fp-profile-msg-btn';
-    msgBtn.href = '/fanpages/notifications#inbox';
+    msgBtn.href = window.fpUrl('/notifications#inbox');
     msgBtn.title = 'Inbox';
     msgBtn.setAttribute('aria-label', 'Inbox');
     msgBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5l9 6.5 9-6.5"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg>';
@@ -2426,7 +2428,7 @@
   }
 
   document.getElementById('fp-share-btn').addEventListener('click', async () => {
-    const url = window.location.origin + `/fanpages/${USERNAME}`;
+    const url = window.location.origin + window.fpUrl(`/${USERNAME}`);
     try {
       await navigator.clipboard.writeText(url);
       const btn = document.getElementById('fp-share-btn');
@@ -2853,7 +2855,7 @@
   function newspaperCardEl(post) {
     const card = document.createElement('a');
     card.className = 'fp-newspaper-card';
-    card.href = `/fanpages/${USERNAME}?news=${post.id}#newspaper`;
+    card.href = window.fpUrl(`/${USERNAME}?news=${post.id}#newspaper`);
     card.addEventListener('click', (e) => {
       e.preventDefault();
       switchTab('newspaper');
@@ -3018,7 +3020,7 @@
       } else {
         const loginNote = document.createElement('p');
         loginNote.className = 'fp-tab-view-empty';
-        loginNote.innerHTML = `<a href="/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}" style="color:#7fa8d9;">Log in</a> to join the conversation.`;
+        loginNote.innerHTML = `<a href="${window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`)}" style="color:#7fa8d9;">Log in</a> to join the conversation.`;
         wrap.appendChild(loginNote);
       }
       const list = document.createElement('div');
@@ -3415,7 +3417,7 @@
   const deepCharId = deepParams.get('char');
   const deepGalleryId = deepParams.get('gallery');
   if (deepGalleryId) {
-    window.location.replace(`/fanpages/gallery-post?id=${encodeURIComponent(deepGalleryId)}`);
+    window.location.replace(window.fpUrl(`/gallery-post?id=${encodeURIComponent(deepGalleryId)}`));
   } else if (initialTab === 'characters' && deepCharId) {
     loadCharactersTab().then(() => selectFpCharacter(deepCharId, true));
   }
