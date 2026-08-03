@@ -6504,8 +6504,7 @@ app.get('/api/search/profiles', async (req, res) => {
             (SELECT COUNT(*)::int FROM user_follows uf WHERE uf.followed_id = u.id) AS follower_count,
             COUNT(*) OVER() AS total_count
      FROM users u
-     WHERE u.is_test_data = false
-       AND (cardinality($1::text[]) = 0 OR (
+     WHERE (cardinality($1::text[]) = 0 OR (
          SELECT bool_and(u.username ILIKE '%' || w || '%' OR COALESCE(u.display_name, '') ILIKE '%' || w || '%')
          FROM unnest($1::text[]) AS w
        ))
