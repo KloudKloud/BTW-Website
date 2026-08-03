@@ -32,7 +32,7 @@ window.fpFixLinks = function (container) {
 // markup still points at the shared default (same file serves both domains).
 if (!window.FP_BASE) {
   const favicon = document.querySelector('link[rel="icon"]');
-  if (favicon) favicon.href = '/images/gallery/soluscheese_12.png';
+  if (favicon) favicon.href = '/images/gallery/infernoselfie_8.png';
 }
 
 // ── Shared persistent top bar for every /fanpages/* page ────────────────────
@@ -69,7 +69,7 @@ if (!window.FP_BASE) {
       <a class="fpnav-link fpnav-trigger-link${here === fpUrl('/characters') ? ' active' : ''}" href="${fpUrl('/characters')}">Characters</a>
 
       <div class="fpnav-dropdown-wrap fpnav-left-dropdown-wrap">
-        <button class="fpnav-link fpnav-trigger-link${[fpUrl('/search'), fpUrl('/characters'), fpUrl('/fandoms')].includes(here) ? ' active' : ''}" id="fpnav-browse-btn" type="button">Browse <span class="fpnav-caret">▾</span></button>
+        <button class="fpnav-link fpnav-trigger-link${[fpUrl('/search'), fpUrl('/fandoms')].includes(here) ? ' active' : ''}" id="fpnav-browse-btn" type="button">Browse <span class="fpnav-caret">▾</span></button>
         <div class="fpnav-dropdown" id="fpnav-browse-dropdown" hidden>
           <a href="${fpUrl('/search?sort=updated&browse=1')}">Stories</a>
           <a href="${fpUrl('/search?view=submissions&browse=1')}">Posts</a>
