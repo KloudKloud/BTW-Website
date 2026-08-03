@@ -34,50 +34,19 @@
     .fp-bg-overlay { position: fixed; inset: 0; background: rgba(8,6,10,0.45); z-index: 0; }
     .fp-content-z { position: relative; z-index: 1; }
 
-    /* ── Header row above the results/filter columns — result count on the
-       left, the "Filter Search" toggle on the right (aligned with the
-       filter panel's column below it). Its own border-bottom is the one
-       permanent line the page always shows, sitting right above the
-       first result and doubling as the ceiling the filter panel now
-       measures its sticky offset against (76px topbar + 64px this row
-       = 140px). ── */
-    .fp-content-header {
-      grid-column: 2 / 4; grid-row: 1;
-      display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem;
-      height: 64px;
-      border-bottom: 1px solid rgba(255,255,255,0.14);
-    }
-    .fp-search-sub { color: #ccc; font-size: 0.95rem; margin: 0 0 0.85rem; }
+    .fp-search-sub { color: #ccc; font-size: 0.95rem; margin: 1.75rem 0 0.85rem; }
     .fp-search-sub strong { color: #fff; }
 
-    /* Same box treatment as the filter panel below it, so it visually
-       reads as that panel's own header/handle. box-shadow only appears
-       in the --open state (panel visible) per spec -- no glow when
-       collapsed. */
-    .fp-filter-toggle-btn {
-      display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;
-      background: rgba(20,18,24,0.85); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px;
-      color: #ddd; font-family: inherit; font-weight: 700; font-size: 0.9rem;
-      padding: 0.55em 1.2em; margin-bottom: 0.85rem; cursor: pointer;
-      transition: box-shadow 0.15s, border-color 0.15s, color 0.15s;
-    }
-    .fp-filter-toggle-btn:hover { color: #fff; }
-    .fp-filter-toggle-btn--open { color: #fff; border-color: rgba(127,168,217,0.65); box-shadow: 0 0 16px rgba(127,168,217,0.55); }
-
-    /* Row1 (header, 64px) + row2 (everything else) instead of a single
-       row -- the side panel spans both (grid-row:1/3) so it still runs
-       flush from the topbar down, unaffected by the new header row. The
-       third column's width is what the collapse toggle animates between
-       340px (open) and 56px (collapsed rail), pushing/pulling the rest
-       of the page as it does. */
+    /* The collapse toggle animates the third column's width between
+       340px (open) and 0 (fully collapsed) -- pushing/pulling the rest
+       of the page as it goes. */
     .fp-layout {
       padding: 0 2.5rem 5rem;
-      display: grid; grid-template-columns: 320px 1fr 340px; grid-template-rows: 64px 1fr;
-      column-gap: 2rem; row-gap: 0; align-items: stretch;
+      display: grid; grid-template-columns: 320px 1fr 340px; column-gap: 2rem; align-items: stretch;
       transition: grid-template-columns 0.25s ease;
     }
-    .fp-layout--filters-collapsed { grid-template-columns: 320px 1fr 56px; }
-    .fp-results-col { grid-column: 2; grid-row: 2; min-width: 0; }
+    .fp-layout--filters-collapsed { grid-template-columns: 320px 1fr 0px; }
+    .fp-results-col { grid-column: 2; min-width: 0; }
 
     /* ── Result rows — no card box, just a horizontal rule between each ── */
     .fp-results-list { display: flex; flex-direction: column; }
@@ -177,20 +146,21 @@
     .fp-pagination button:disabled { opacity: 0.4; cursor: default; }
 
     /* ── Left-hand panel — three big section links (Story / Submissions /
-       Profiles). Fully transparent so it reads as content sitting on the
-       shared blurred wallpaper, same as the results column, but with its
-       own right-hand border acting as a vertical divider marking where
-       the panel ends and the results column begins. Pinned flush against
-       the topbar and the page's left/bottom edges via the negative-margin
-       trick. */
+       Profiles) near the top, then a "Current search" indicator + the
+       "Filter Search" toggle pinned to the bottom (margin-top:auto on
+       that wrapper). Fully transparent so it reads as content sitting on
+       the shared blurred wallpaper, same as the results column, but with
+       a clearly visible right-hand border marking where it ends. Pinned
+       flush against the topbar and the page's left/bottom edges via the
+       negative-margin trick. */
     .fp-side-panel {
-      grid-column: 1; grid-row: 1 / 3;
+      grid-column: 1;
       position: sticky; top: 76px;
       margin-bottom: -5rem; margin-left: -2.5rem;
       height: calc(100vh - 76px); max-height: calc(100vh - 76px);
-      display: flex; flex-direction: column; justify-content: center;
-      border-right: 1px solid rgba(255,255,255,0.14);
-      padding: 2rem 1.75rem; overflow-y: auto;
+      display: flex; flex-direction: column; align-items: center;
+      border-right: 2px solid rgba(255,255,255,0.4);
+      padding: 2.5rem 1.75rem 2rem; overflow-y: auto;
       scrollbar-color: #444 transparent; /* Firefox */
     }
     .fp-side-panel::-webkit-scrollbar { width: 8px; }
@@ -219,50 +189,63 @@
     }
     .fp-side-menu-item:hover .fp-side-menu-count, .fp-side-menu-item--active .fp-side-menu-count { color: #a8c6e8; }
 
-    /* ── Right-hand "Sort and Filter" panel — sticks to the page as you
-       scroll, flush against the header row's ceiling (140px = 76px
-       topbar + 64px header) above and the page bottom/right edge below
-       (negative margins cancel .fp-layout's own padding on those sides).
-       Collapses to a 56px rail (.fp-layout--filters-collapsed shrinks
-       the grid column; the inner content just hides) instead of
-       disappearing entirely. ── */
+    /* Current-search indicator + "Filter Search" toggle, pinned to the
+       bottom of the left panel. */
+    .fp-side-bottom { width: 100%; margin-top: auto; }
+    .fp-filter-toggle-btn {
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%;
+      background: rgba(20,18,24,0.85); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px;
+      color: #ddd; font-family: inherit; font-weight: 700; font-size: 1.05rem;
+      padding: 0.75em 1.2em; cursor: pointer;
+      transition: box-shadow 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .fp-filter-toggle-btn:hover { color: #fff; }
+    /* box-shadow only appears in the --open state (panel visible) --
+       no glow when collapsed. */
+    .fp-filter-toggle-btn--open { color: #fff; border-color: rgba(127,168,217,0.65); box-shadow: 0 0 16px rgba(127,168,217,0.55); }
+
+    /* ── Right-hand "Sort and Filter" panel — sticks to the page,
+       flush against the topbar above and the page bottom/right edge
+       below (negative margins cancel .fp-layout's own padding on those
+       sides). Collapses fully out of view (.fp-layout--filters-collapsed
+       shrinks the grid column to 0) -- the floating .fp-filter-fab arrow
+       (outside this element, so it survives the collapse) is the only
+       thing left on screen to bring it back. ── */
     .fp-filter-panel {
-      grid-column: 3; grid-row: 2;
-      position: sticky; top: 140px;
+      grid-column: 3;
+      position: sticky; top: 76px;
       margin-bottom: -5rem; margin-right: -2.5rem;
-      height: calc(100vh - 140px);
+      height: calc(100vh - 76px);
       display: flex; flex-direction: column;
       background: #14121a;
       border: 1px solid rgba(255,255,255,0.14);
-      padding: 1.5rem; max-height: calc(100vh - 140px); overflow-y: hidden auto;
+      padding: 1.5rem; max-height: calc(100vh - 76px); overflow-y: auto;
       scrollbar-color: #444 #1a1a1e; /* Firefox */
-      transition: padding 0.2s ease;
     }
     .fp-filter-panel::-webkit-scrollbar { width: 8px; }
     .fp-filter-panel::-webkit-scrollbar-track { background: #1a1a1e; border-radius: 8px; }
     .fp-filter-panel::-webkit-scrollbar-thumb { background: #444; border-radius: 8px; }
     .fp-filter-panel::-webkit-scrollbar-thumb:hover { background: #555; }
-    .fp-layout--filters-collapsed .fp-filter-panel { padding: 1.4rem 0.6rem; }
-    /* The reused chapter-editor "back" chevron, repurposed as the
-       collapse/expand handle -- always visible even when the panel is
-       just a 56px rail, which is the "always take up a little room"
-       shorthand toggle. Points right while open (push-to-collapse) and
-       flips to point left when collapsed (pull-to-expand). */
-    .fp-filter-rail-toggle {
-      align-self: flex-end; margin-bottom: 0.6rem; flex-shrink: 0;
-      background: none; border: none; color: #999; cursor: pointer;
-      padding: 0.2rem 0.4rem; line-height: 1;
-      display: inline-flex; align-items: center; justify-content: center;
-      transform: rotate(180deg); transition: transform 0.25s ease, color 0.15s;
+    .fp-layout--filters-collapsed .fp-filter-panel { display: none; }
+    /* Floating round toggle, fixed to the viewport (not the panel) so it
+       stays put and visible in both states. Vertically centered on
+       screen; overlaps into the panel's left edge a bit while open, and
+       tucks against the screen's right edge once collapsed. Reuses the
+       chapter-editor's back chevron, just much bigger, rotating to show
+       which way it'll move next. */
+    .fp-filter-fab {
+      position: fixed; top: 50%; right: 322px; transform: translateY(-50%);
+      width: 56px; height: 56px; border-radius: 50%; z-index: 20;
+      background: #14121a; border: 1px solid rgba(255,255,255,0.28);
+      color: #ccc; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 22px rgba(0,0,0,0.55);
+      transition: right 0.25s ease, color 0.15s, border-color 0.15s, box-shadow 0.15s;
     }
-    .fp-filter-rail-toggle:hover { color: #fff; }
-    .fp-layout--filters-collapsed .fp-filter-rail-toggle { transform: rotate(0deg); }
-    /* flex column itself (not just a plain div) so the bottom "Sort and
-       Filter" button's margin-top:auto still pushes to the bottom of the
-       available space, same as before the rail-toggle button and this
-       wrapper were added as extra flex siblings/parents. */
-    .fp-filter-panel-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-    .fp-layout--filters-collapsed .fp-filter-panel-content { display: none; }
+    .fp-filter-fab svg { transition: transform 0.25s ease; transform: rotate(180deg); }
+    .fp-filter-fab:hover { color: #fff; border-color: rgba(127,168,217,0.6); box-shadow: 0 4px 26px rgba(127,168,217,0.4); }
+    .fp-filter-fab--collapsed { right: 18px; }
+    .fp-filter-fab--collapsed svg { transform: rotate(0deg); }
     .fp-filter-query {
       font-size: 0.85rem; color: #bbb; background: rgba(127,168,217,0.1); border: 1px solid rgba(127,168,217,0.3);
       border-radius: 10px; padding: 0.6em 0.85em; margin-bottom: 1.25rem;
@@ -311,19 +294,20 @@
     .fp-filter-apply-btn--bottom { margin-top: auto; }
 
     @media (max-width: 980px) {
-      .fp-layout, .fp-layout--filters-collapsed { grid-template-columns: 1fr; grid-template-rows: auto; row-gap: 1.5rem; }
-      .fp-content-header { grid-column: 1; grid-row: auto; height: auto; flex-wrap: wrap; padding-bottom: 0.9rem; }
-      .fp-results-col { grid-column: 1; grid-row: auto; }
-      .fp-filter-panel {
-        grid-column: 1; grid-row: auto;
+      /* Collapse doesn't make sense once everything's stacked in one
+         column -- the panel always shows and the floating arrow hides. */
+      .fp-layout, .fp-layout--filters-collapsed { grid-template-columns: 1fr; row-gap: 1.5rem; }
+      .fp-results-col { grid-column: 1; }
+      .fp-filter-panel, .fp-layout--filters-collapsed .fp-filter-panel {
+        grid-column: 1; display: flex;
         position: static; max-height: none; height: auto;
         margin-bottom: 0; margin-right: 0; border-radius: 18px;
       }
+      .fp-filter-fab { display: none; }
       .fp-side-panel {
-        grid-row: auto;
         position: static; max-height: none; height: auto;
         margin-bottom: 0; margin-left: 0;
-        padding: 1.5rem 0;
+        padding: 1.5rem 0; border-right: none; border-bottom: 2px solid rgba(255,255,255,0.4);
       }
     }
     @media (max-width: 720px) {
@@ -365,23 +349,24 @@
         </span>
       </a>
     </nav>
+
+    <div class="fp-side-bottom">
+      <div class="fp-filter-query">Current search: <strong id="fp-filter-query-text-side">Everything</strong></div>
+      <button class="fp-filter-toggle-btn fp-filter-toggle-btn--open" id="fp-filter-toggle-btn" type="button" aria-pressed="true" title="Hide filters">Filter Search</button>
+    </div>
   </aside>
 
-  <div class="fp-content-header">
-    <p class="fp-search-sub" id="fp-search-sub"></p>
-    <button class="fp-filter-toggle-btn fp-filter-toggle-btn--open" id="fp-filter-toggle-btn" type="button" aria-pressed="true" title="Hide filters">Filter Search</button>
-  </div>
-
   <div class="fp-results-col">
+    <p class="fp-search-sub" id="fp-search-sub"></p>
     <div class="fp-results-list" id="fp-search-results"><p class="fp-search-empty">Loading…</p></div>
     <div class="fp-pagination" id="fp-pagination" hidden></div>
   </div>
 
+  <button class="fp-filter-fab" id="fp-filter-rail-toggle" type="button" title="Hide filters" aria-label="Hide filters">
+    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>
+
   <aside class="fp-filter-panel" id="fp-filter-panel">
-    <button class="fp-filter-rail-toggle" id="fp-filter-rail-toggle" type="button" title="Hide filters" aria-label="Hide filters">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-    </button>
-    <div class="fp-filter-panel-content" id="fp-filter-panel-content">
     <button class="fp-filter-apply-btn fp-filter-apply-btn--top" id="fp-filter-apply-top" type="button">Sort and Filter</button>
     <div class="fp-filter-query">Current search: <strong id="fp-filter-query-text">Everything</strong></div>
 
@@ -459,7 +444,6 @@
     </div>
 
     <button class="fp-filter-apply-btn fp-filter-apply-btn--bottom" id="fp-filter-apply" type="button">Sort and Filter</button>
-    </div>
   </aside>
 </main>
 </div>
@@ -602,7 +586,9 @@ function applyParamsToPanel(f) {
   if (f.q) queryBits.push(`"${f.q}"`);
   if (f.fandoms) queryBits.push(f.fandoms);
   if (f.tags_include) queryBits.push(f.tags_include);
-  document.getElementById('fp-filter-query-text').textContent = queryBits.length ? queryBits.join(', ') : 'Everything';
+  const queryText = queryBits.length ? queryBits.join(', ') : 'Everything';
+  document.getElementById('fp-filter-query-text').textContent = queryText;
+  document.getElementById('fp-filter-query-text-side').textContent = queryText;
 }
 
 function collectPanelParams() {
@@ -726,17 +712,19 @@ function applyFiltersAndSearch() {
 document.getElementById('fp-filter-apply-top').addEventListener('click', applyFiltersAndSearch);
 document.getElementById('fp-filter-apply').addEventListener('click', applyFiltersAndSearch);
 
-// Filter panel collapse/expand — the "Filter Search" box in the header
-// row and the little arrow rail-toggle on the panel itself both drive the
-// same state. Collapsing shrinks .fp-layout's third grid column down to a
-// 56px rail (pushing/pulling the rest of the page) instead of hiding the
-// panel outright, and the glow on the header button only shows while the
-// panel is open.
+// Filter panel collapse/expand — the "Filter Search" button (bottom of
+// the left panel) and the floating arrow fab both drive the same state.
+// Collapsing shrinks .fp-layout's third grid column to 0 (pushing/pulling
+// the results column as it goes) and fully hides the panel; the fab is a
+// position:fixed sibling, not a child of the panel, so it stays on screen
+// either way. The glow on "Filter Search" only shows while the panel is
+// open.
 const fpLayoutEl = document.querySelector('.fp-layout');
 const filterToggleBtn = document.getElementById('fp-filter-toggle-btn');
 const filterRailToggle = document.getElementById('fp-filter-rail-toggle');
 function setFiltersCollapsed(collapsed) {
   fpLayoutEl.classList.toggle('fp-layout--filters-collapsed', collapsed);
+  filterRailToggle.classList.toggle('fp-filter-fab--collapsed', collapsed);
   filterToggleBtn.classList.toggle('fp-filter-toggle-btn--open', !collapsed);
   filterToggleBtn.setAttribute('aria-pressed', String(!collapsed));
   const label = collapsed ? 'Show filters' : 'Hide filters';
