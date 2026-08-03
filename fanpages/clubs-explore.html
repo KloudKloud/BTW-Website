@@ -138,10 +138,27 @@
 
     /* ── Topics row -- horizontally scrollable pill strip, "All" always
        first and always present. ── */
-    .ce-topics-row {
-      display: flex; gap: 0.6rem; overflow-x: auto; padding-bottom: 0.85rem; margin-bottom: 1.5rem;
-      border-bottom: 1px solid rgba(255,255,255,0.1); scrollbar-width: thin;
+    .ce-topics-wrap {
+      display: flex; align-items: center; gap: 0.5rem; padding-bottom: 0.85rem; margin-bottom: 1.5rem;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
     }
+    .ce-topics-row {
+      display: flex; gap: 0.6rem; overflow-x: auto; min-width: 0; scroll-behavior: smooth;
+      /* Arrow buttons replace the scrollbar as the way to page through this
+         row -- the underlying mechanism is still a native scroll (just
+         driven by button clicks instead of a visible scrollbar/dragging),
+         so the bar itself stays hidden in both engines. */
+      scrollbar-width: none;
+    }
+    .ce-topics-row::-webkit-scrollbar { display: none; }
+    .ce-topics-arrow {
+      flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2); color: #ddd;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s, color 0.15s, opacity 0.15s;
+    }
+    .ce-topics-arrow:hover:not(:disabled) { background: rgba(255,255,255,0.14); color: #fff; }
+    .ce-topics-arrow:disabled { opacity: 0.3; cursor: default; }
     .ce-topic-pill {
       flex-shrink: 0; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); color: #ccc;
       border-radius: 20px; padding: 0.5em 1.1em; font-family: inherit; font-size: 0.88rem; font-weight: 700;
@@ -245,7 +262,15 @@
 
   <main class="soc-main">
     <p class="ce-heading">Explore Clubs</p>
-    <div class="ce-topics-row" id="ce-topics-row"></div>
+    <div class="ce-topics-wrap">
+      <button class="ce-topics-arrow" id="ce-topics-prev" type="button" aria-label="Previous topics" disabled>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="ce-topics-row" id="ce-topics-row"></div>
+      <button class="ce-topics-arrow" id="ce-topics-next" type="button" aria-label="Next topics">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </div>
     <div id="ce-content">
       <p class="ce-empty">Loading…</p>
     </div>
@@ -628,6 +653,28 @@ async function initTopicsRow() {
     });
     row.appendChild(btn);
   });
+  wireTopicsArrows();
+}
+
+// Left/right arrows page through the topics row instead of a visible
+// scrollbar -- each click scrolls by ~90% of the visible width (so the
+// next click's leading pill overlaps slightly with what was last visible,
+// same "paged" feel as Reddit's own topic row). The left arrow starts
+// disabled since there's nothing before "All", and re-disables any time
+// we scroll back to the start; same idea in reverse at the far end.
+function wireTopicsArrows() {
+  const row = document.getElementById('ce-topics-row');
+  const prevBtn = document.getElementById('ce-topics-prev');
+  const nextBtn = document.getElementById('ce-topics-next');
+  function updateArrows() {
+    prevBtn.disabled = row.scrollLeft <= 4;
+    nextBtn.disabled = row.scrollLeft >= row.scrollWidth - row.clientWidth - 4;
+  }
+  prevBtn.onclick = () => row.scrollBy({ left: -row.clientWidth * 0.9, behavior: 'smooth' });
+  nextBtn.onclick = () => row.scrollBy({ left: row.clientWidth * 0.9, behavior: 'smooth' });
+  row.addEventListener('scroll', updateArrows);
+  window.addEventListener('resize', updateArrows);
+  updateArrows();
 }
 
 initTopicsRow();
