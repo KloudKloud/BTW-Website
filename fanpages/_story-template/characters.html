@@ -214,25 +214,6 @@ function renderProfile(char) {
   nameEl.className = 'char-name';
   nameEl.textContent = char.name;
   nameRow.appendChild(nameEl);
-  const likeBtn = document.createElement('button');
-  likeBtn.className = 'art-view-like' + (char.liked ? ' liked' : '');
-  likeBtn.type = 'button';
-  likeBtn.setAttribute('aria-label', 'Like this character');
-  likeBtn.innerHTML = `<span class="char-like-icon">${char.liked ? '♥' : '♡'}</span> <span class="char-like-count">${char.likeCount}</span>`;
-  likeBtn.addEventListener('click', async () => {
-    if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
-    likeBtn.disabled = true;
-    try {
-      const res = await fetch(`/api/moderator/character/${char.id}/like`, { method: char.liked ? 'DELETE' : 'POST', headers: authHeaders() });
-      const data = await res.json();
-      char.liked = data.liked; char.likeCount = data.like_count;
-      likeBtn.classList.toggle('liked', data.liked);
-      likeBtn.querySelector('.char-like-icon').textContent = data.liked ? '♥' : '♡';
-      likeBtn.querySelector('.char-like-count').textContent = data.like_count;
-    } catch {}
-    likeBtn.disabled = false;
-  });
-  nameRow.appendChild(likeBtn);
   const shareBtn = document.createElement('button');
   shareBtn.className = 'fp-share-icon-btn';
   shareBtn.type = 'button';
@@ -476,6 +457,57 @@ function renderProfile(char) {
   loreBox.appendChild(spoiler);
   profile.appendChild(loreBox);
 
+  // Views/Like/Bookmark footer — sits at the very bottom of the card, under
+  // Lore and before the slideshow nav (a sibling element, not appended here).
+  const footer = document.createElement('div');
+  footer.className = 'char-detail-footer';
+
+  const viewsEl = document.createElement('span');
+  viewsEl.className = 'char-detail-views';
+  viewsEl.innerHTML = `👁 <span class="char-detail-views-count">${char.viewCount}</span>`;
+  footer.appendChild(viewsEl);
+
+  const likeBtn = document.createElement('button');
+  likeBtn.className = 'art-view-like' + (char.liked ? ' liked' : '');
+  likeBtn.type = 'button';
+  likeBtn.setAttribute('aria-label', 'Like this character');
+  likeBtn.innerHTML = `<span class="char-like-icon">${char.liked ? '♥' : '♡'}</span> <span class="char-like-count">${char.likeCount}</span>`;
+  likeBtn.addEventListener('click', async () => {
+    if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+    likeBtn.disabled = true;
+    try {
+      const res = await fetch(`/api/moderator/character/${char.id}/like`, { method: char.liked ? 'DELETE' : 'POST', headers: authHeaders() });
+      const data = await res.json();
+      char.liked = data.liked; char.likeCount = data.like_count;
+      likeBtn.classList.toggle('liked', data.liked);
+      likeBtn.querySelector('.char-like-icon').textContent = data.liked ? '♥' : '♡';
+      likeBtn.querySelector('.char-like-count').textContent = data.like_count;
+    } catch {}
+    likeBtn.disabled = false;
+  });
+  footer.appendChild(likeBtn);
+
+  const bookmarkBtn = document.createElement('button');
+  bookmarkBtn.className = 'art-view-bookmark-btn' + (char.bookmarked ? ' bookmarked' : '');
+  bookmarkBtn.type = 'button';
+  bookmarkBtn.setAttribute('aria-label', 'Bookmark this character');
+  bookmarkBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>';
+  bookmarkBtn.addEventListener('click', async () => {
+    if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+    bookmarkBtn.disabled = true;
+    try {
+      const res = await fetch(`/api/moderator/character/${char.id}/bookmark`, { method: char.bookmarked ? 'DELETE' : 'POST', headers: authHeaders() });
+      const data = await res.json();
+      char.bookmarked = data.bookmarked;
+      bookmarkBtn.classList.toggle('bookmarked', data.bookmarked);
+    } catch {}
+    bookmarkBtn.disabled = false;
+  });
+  footer.appendChild(bookmarkBtn);
+
+  profile.appendChild(footer);
+  fetch(`/api/character/${char.id}/view`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+
   // Edit box under Navigate — story owner only, for whichever character is
   // showing. A character linked onto the story by its actual owner (e.g. a
   // friend's character tagged in via "Link Existing") isn't yours to edit —
@@ -562,6 +594,8 @@ function normalizeChar(r) {
     refIsNsfw: !!r.ref_is_nsfw,
     liked: !!r.liked,
     likeCount: r.like_count || 0,
+    bookmarked: !!r.bookmarked,
+    viewCount: r.view_count || 0,
   };
 }
 

@@ -389,11 +389,11 @@
     /* Stories TAB — one big teaser card per row instead of a cover grid */
     .fp-story-teaser-list { display: flex; flex-direction: column; gap: 1.25rem; }
     .fp-story-teaser-card {
-      position: relative; display: flex; gap: 1.5rem; text-decoration: none; color: inherit;
-      background: #161616; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+      position: relative; display: flex; gap: 1.5rem; text-decoration: none; color: inherit; cursor: pointer;
+      background: transparent; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
       padding: 1.1rem; transition: border-color 0.15s, background 0.15s;
     }
-    .fp-story-teaser-card:hover { border-color: rgba(240,192,96,0.4); background: #1a1a1a; }
+    .fp-story-teaser-card:hover { border-color: rgba(240,192,96,0.4); background: rgba(255,255,255,0.03); }
     .fp-story-teaser-cover {
       width: 130px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; flex-shrink: 0;
       display: block; background: #1e1e1e; border: 1px solid rgba(255,255,255,0.08);
@@ -409,7 +409,9 @@
     .fp-story-teaser-char-chip {
       display: flex; align-items: center; gap: 0.4rem; background: #1e1e1e; border: 1px solid rgba(255,255,255,0.1);
       border-radius: 20px; padding: 0.2rem 0.7rem 0.2rem 0.2rem; font-size: 0.78rem; color: #ddd; font-weight: 600;
+      text-decoration: none; transition: border-color 0.15s, color 0.15s;
     }
+    .fp-story-teaser-char-chip:hover { border-color: #7fa8d9; color: #fff; }
     .fp-story-teaser-char-chip img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
     /* Tags row + stat line — same visual language as the search results
        cards, so a story reads the same whether you found it via search or
@@ -417,8 +419,9 @@
     .fp-story-teaser-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.7rem; }
     .fp-story-teaser-tag {
       font-size: 0.72rem; font-weight: 600; border-radius: 10px; padding: 0.15em 0.6em;
-      background: rgba(127,168,217,0.12); color: #a8c6e8;
+      background: rgba(127,168,217,0.12); color: #a8c6e8; text-decoration: none; transition: filter 0.15s;
     }
+    .fp-story-teaser-tag:hover { filter: brightness(1.3); }
     .fp-story-teaser-tag--fandom { background: rgba(217,122,114,0.14); color: #e08880; }
     .fp-story-teaser-stats { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; margin-top: 0.75rem; font-size: 0.78rem; color: #999; }
     .fp-story-teaser-stats strong { color: #ddd; }
@@ -1055,6 +1058,15 @@
   const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
   const here = window.location.pathname;
 
+  // Story teaser cards (Stories tab) are clickable anywhere on their
+  // (transparent) area -- but a click on a tag pill or character chip
+  // still goes to THAT destination instead, since those are real <a>s.
+  document.addEventListener('click', (e) => {
+    const card = e.target.closest('.fp-story-teaser-card[data-href]');
+    if (!card || e.target.closest('a')) return;
+    window.location.href = card.dataset.href;
+  });
+
   // Pan + zoom via background-image/background-size — same technique as the
   // Fanpage hub billboard/Hub Image Builder. object-fit + transform:scale()
   // doesn't compose the way position sliders need (the scale happens after
@@ -1147,10 +1159,20 @@
   // ── Stories tab — one big teaser card per row (cover + synopsis excerpt +
   // a few tagged-character chips), instead of the small cover-only grid
   // used for the Home tab's compact Stories panel. ──────────────────────
+  function fpTagSearchUrl(params) {
+    const usp = new URLSearchParams(params);
+    usp.set('sort', 'updated');
+    return `/fanpages/search?${usp.toString()}`;
+  }
+
   function storyTeaserCardEl(s) {
-    const card = document.createElement('a');
+    // A transparent, clickable-anywhere card now -- but a click on the
+    // cover/title, a tag pill, or a character chip still goes to THAT
+    // destination instead (delegated click handler below skips anything
+    // inside a real <a>).
+    const card = document.createElement('div');
     card.className = 'fp-story-teaser-card' + (s.is_draft_only ? ' fp-story-teaser-card--draft' : '');
-    card.href = `/fanpages/${s.story_path || s.slug}`;
+    card.dataset.href = `/fanpages/${s.story_path || s.slug}`;
 
     if (s.is_draft_only) {
       const badge = document.createElement('span');
@@ -1187,8 +1209,8 @@
     title.textContent = s.site_title || 'Untitled Story';
     info.appendChild(title);
 
-    const fandomTags = (s.fandoms || []).map(f => `<span class="fp-story-teaser-tag fp-story-teaser-tag--fandom">${escapeHtml(f)}</span>`);
-    const otherTags = (s.tags || []).slice(0, 6).map(t => `<span class="fp-story-teaser-tag">${escapeHtml(t)}</span>`);
+    const fandomTags = (s.fandoms || []).map(f => `<a class="fp-story-teaser-tag fp-story-teaser-tag--fandom" href="${fpTagSearchUrl({ fandoms: f })}">${escapeHtml(f)}</a>`);
+    const otherTags = (s.tags || []).slice(0, 6).map(t => `<a class="fp-story-teaser-tag" href="${fpTagSearchUrl({ tags_include: t })}">${escapeHtml(t)}</a>`);
     if (fandomTags.length || otherTags.length) {
       const tagRow = document.createElement('div');
       tagRow.className = 'fp-story-teaser-tags';
@@ -1205,8 +1227,9 @@
       const chipRow = document.createElement('div');
       chipRow.className = 'fp-story-teaser-chars';
       s.characters.forEach(c => {
-        const chip = document.createElement('span');
+        const chip = document.createElement('a');
         chip.className = 'fp-story-teaser-char-chip';
+        chip.href = `/fanpages/${encodeURIComponent(c.owner_username || USERNAME)}?char=${c.id}#characters`;
         chip.innerHTML = `<img src="${c.ref_image || '/images/defaultchar.jpg'}" alt="" />${escapeHtml(c.name)}`;
         chipRow.appendChild(chip);
       });
@@ -1404,6 +1427,8 @@
       relationships: r.relationships || [],
       liked: !!r.liked,
       likeCount: r.like_count || 0,
+      bookmarked: !!r.bookmarked,
+      viewCount: r.view_count || 0,
     };
   }
 
@@ -1432,25 +1457,6 @@
     nameEl.className = 'char-name';
     nameEl.textContent = char.name;
     nameRow.appendChild(nameEl);
-    const likeBtn = document.createElement('button');
-    likeBtn.className = 'art-view-like' + (char.liked ? ' liked' : '');
-    likeBtn.type = 'button';
-    likeBtn.setAttribute('aria-label', 'Like this character');
-    likeBtn.innerHTML = `<span class="char-like-icon">${char.liked ? '♥' : '♡'}</span> <span class="char-like-count">${char.likeCount}</span>`;
-    likeBtn.addEventListener('click', async () => {
-      if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
-      likeBtn.disabled = true;
-      try {
-        const res = await fetch(`/api/moderator/character/${char.id}/like`, { method: char.liked ? 'DELETE' : 'POST', headers: authHeaders() });
-        const data = await res.json();
-        char.liked = data.liked; char.likeCount = data.like_count;
-        likeBtn.classList.toggle('liked', data.liked);
-        likeBtn.querySelector('.char-like-icon').textContent = data.liked ? '♥' : '♡';
-        likeBtn.querySelector('.char-like-count').textContent = data.like_count;
-      } catch {}
-      likeBtn.disabled = false;
-    });
-    nameRow.appendChild(likeBtn);
     const shareBtn = document.createElement('button');
     shareBtn.className = 'fp-share-icon-btn';
     shareBtn.type = 'button';
@@ -1679,6 +1685,57 @@
     loreBox.appendChild(spoiler);
     profile.appendChild(loreBox);
 
+    // Views/Like/Bookmark footer — bottom of the card, after Lore and
+    // before the slideshow nav (a sibling element, not appended here).
+    const footer = document.createElement('div');
+    footer.className = 'char-detail-footer';
+
+    const viewsEl = document.createElement('span');
+    viewsEl.className = 'char-detail-views';
+    viewsEl.innerHTML = `👁 <span class="char-detail-views-count">${char.viewCount}</span>`;
+    footer.appendChild(viewsEl);
+
+    const likeBtn = document.createElement('button');
+    likeBtn.className = 'art-view-like' + (char.liked ? ' liked' : '');
+    likeBtn.type = 'button';
+    likeBtn.setAttribute('aria-label', 'Like this character');
+    likeBtn.innerHTML = `<span class="char-like-icon">${char.liked ? '♥' : '♡'}</span> <span class="char-like-count">${char.likeCount}</span>`;
+    likeBtn.addEventListener('click', async () => {
+      if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+      likeBtn.disabled = true;
+      try {
+        const res = await fetch(`/api/moderator/character/${char.id}/like`, { method: char.liked ? 'DELETE' : 'POST', headers: authHeaders() });
+        const data = await res.json();
+        char.liked = data.liked; char.likeCount = data.like_count;
+        likeBtn.classList.toggle('liked', data.liked);
+        likeBtn.querySelector('.char-like-icon').textContent = data.liked ? '♥' : '♡';
+        likeBtn.querySelector('.char-like-count').textContent = data.like_count;
+      } catch {}
+      likeBtn.disabled = false;
+    });
+    footer.appendChild(likeBtn);
+
+    const bookmarkBtn = document.createElement('button');
+    bookmarkBtn.className = 'art-view-bookmark-btn' + (char.bookmarked ? ' bookmarked' : '');
+    bookmarkBtn.type = 'button';
+    bookmarkBtn.setAttribute('aria-label', 'Bookmark this character');
+    bookmarkBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>';
+    bookmarkBtn.addEventListener('click', async () => {
+      if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+      bookmarkBtn.disabled = true;
+      try {
+        const res = await fetch(`/api/moderator/character/${char.id}/bookmark`, { method: char.bookmarked ? 'DELETE' : 'POST', headers: authHeaders() });
+        const data = await res.json();
+        char.bookmarked = data.bookmarked;
+        bookmarkBtn.classList.toggle('bookmarked', data.bookmarked);
+      } catch {}
+      bookmarkBtn.disabled = false;
+    });
+    footer.appendChild(bookmarkBtn);
+
+    profile.appendChild(footer);
+    fetch(`/api/character/${char.id}/view`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+
     renderFpCharNav(char);
     ccInitSection('character', char.id);
   }
@@ -1786,7 +1843,10 @@
     grid.hidden = false;
     emptyEl.style.display = 'none';
     grid.innerHTML = '';
+    const uploaderName = (currentAuthor && (currentAuthor.display_name || currentAuthor.username)) || USERNAME;
     FP_GALLERY_ITEMS.forEach(g => {
+      const wrap = document.createElement('div');
+      wrap.className = 'gallery-tile-card';
       const a = document.createElement('a');
       a.className = 'gallery-tile';
       // Real navigation to the standalone gallery post page now, not an
@@ -1797,7 +1857,17 @@
       const posX = g.position_x != null ? g.position_x : 50;
       const posY = g.position_y != null ? g.position_y : 50;
       a.innerHTML = `<img src="${g.image}" alt="${g.title || 'Gallery image'}" loading="lazy" draggable="false" style="object-position: ${posX}% ${posY}%;" />`;
-      grid.appendChild(a);
+      wrap.appendChild(a);
+      // No emoji badge here (unlike the search/browse submission tiles) --
+      // every tile on a profile's own Gallery tab is already art, no need
+      // to distinguish it from chapters the way the mixed feed does.
+      wrap.insertAdjacentHTML('beforeend', `
+        <div class="gallery-tile-caption">
+          <a class="gallery-tile-caption-title" href="${a.href}">${escapeHtml(g.title || 'Untitled')}</a>
+          <span class="gallery-tile-caption-author">by <a href="/fanpages/${encodeURIComponent(USERNAME)}">${escapeHtml(uploaderName)}</a></span>
+        </div>
+      `);
+      grid.appendChild(wrap);
     });
   }
 

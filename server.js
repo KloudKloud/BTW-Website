@@ -438,6 +438,24 @@ async function initDb() {
     ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
   `).catch(e => console.error('moderator_characters updated_at migration:', e.message));
 
+  // Same naive per-load view counter as stories/gallery -- and its own
+  // Bookmarks table, deliberately separate from moderator_character_likes:
+  // "Like" is the quick heart-toggle scattered across every card; "Bookmark"
+  // is the deliberate "save this for later" action that's the only thing
+  // the Library page's Characters tab shows.
+  await pool.query(`
+    ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0;
+  `).catch(e => console.error('moderator_characters view_count migration:', e.message));
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS moderator_character_bookmarks (
+      id           SERIAL      PRIMARY KEY,
+      user_id      INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      character_id INTEGER     NOT NULL REFERENCES moderator_characters(id) ON DELETE CASCADE,
+      created_at   TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, character_id)
+    );
+  `).catch(e => console.error('moderator_character_bookmarks migration:', e.message));
+
   // Bookmarks — lets any logged-in user save a fanpage to their hub profile
   await pool.query(`
     CREATE TABLE IF NOT EXISTS moderator_bookmarks (
@@ -3417,8 +3435,10 @@ app.get('/api/search/works', async (req, res) => {
     LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_bookmarks WHERE site_id = ms.id) bc ON true
     LEFT JOIN LATERAL (
       SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb) AS chars FROM (
-        SELECT mc3.name, mc3.ref_image
-        FROM character_story_links csl JOIN moderator_characters mc3 ON mc3.id = csl.character_id
+        SELECT mc3.id, mc3.name, mc3.ref_image, u3.username AS owner_username
+        FROM character_story_links csl
+        JOIN moderator_characters mc3 ON mc3.id = csl.character_id
+        JOIN users u3 ON u3.id = mc3.owner_user_id
         WHERE csl.site_id = ms.id ORDER BY csl.sort_order LIMIT 4
       ) t
     ) charsj ON true
@@ -3847,13 +3867,14 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
   const charsBySite = {};
   if (siteIds.length) {
     const { rows: siteChars } = await pool.query(
-      `SELECT csl.site_id, mc.id, mc.name, mc.ref_image FROM character_story_links csl
+      `SELECT csl.site_id, mc.id, mc.name, mc.ref_image, u.username AS owner_username FROM character_story_links csl
        JOIN moderator_characters mc ON mc.id = csl.character_id
+       JOIN users u ON u.id = mc.owner_user_id
        WHERE csl.site_id = ANY($1::int[]) ORDER BY csl.sort_order LIMIT 200`,
       [siteIds]
     );
     siteChars.forEach(c => {
-      (charsBySite[c.site_id] = charsBySite[c.site_id] || []).push({ id: c.id, name: c.name, ref_image: c.ref_image });
+      (charsBySite[c.site_id] = charsBySite[c.site_id] || []).push({ id: c.id, name: c.name, ref_image: c.ref_image, owner_username: c.owner_username });
     });
   }
 
@@ -4095,11 +4116,12 @@ app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
   }
 
   const { rows } = await pool.query(
-    `SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y,
+    `SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.view_count,
             mc.description, mc.stats, mc.facts, mc.lore, mc.relationships,
             ms.story_path, ms.slug, ms.site_title,
             (SELECT COUNT(*)::int FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id) AS like_count,
-            EXISTS(SELECT 1 FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id AND mcl.user_id = $2) AS liked
+            EXISTS(SELECT 1 FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id AND mcl.user_id = $2) AS liked,
+            EXISTS(SELECT 1 FROM moderator_character_bookmarks mcb WHERE mcb.character_id = mc.id AND mcb.user_id = $2) AS bookmarked
      FROM moderator_characters mc
      LEFT JOIN LATERAL (
        SELECT site_id FROM character_story_links WHERE character_id = mc.id ORDER BY site_id LIMIT 1
@@ -4119,7 +4141,7 @@ app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
       description: r.description, stats: r.stats || {}, facts: r.facts || [],
       lore: r.lore || [], relationships: r.relationships || [],
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
-      like_count: r.like_count, liked: r.liked,
+      like_count: r.like_count, liked: r.liked, bookmarked: r.bookmarked, view_count: r.view_count || 0,
     })),
   });
 });
@@ -4698,10 +4720,11 @@ async function sendSiteLookup(query, params, req, res) {
       [site.id, viewerId]
     ),
     pool.query(`
-      SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.description, mc.stats, mc.facts, mc.lore, mc.relationships, mc.owner_user_id, mc.ref_is_nsfw,
+      SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.description, mc.stats, mc.facts, mc.lore, mc.relationships, mc.owner_user_id, mc.ref_is_nsfw, mc.view_count,
              ou.display_name AS owner_display_name, ou.username AS owner_username,
              (SELECT COUNT(*)::int FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id) AS like_count,
-             EXISTS(SELECT 1 FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id AND mcl.user_id = $2) AS liked
+             EXISTS(SELECT 1 FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id AND mcl.user_id = $2) AS liked,
+             EXISTS(SELECT 1 FROM moderator_character_bookmarks mcb WHERE mcb.character_id = mc.id AND mcb.user_id = $2) AS bookmarked
       FROM character_story_links csl
       JOIN moderator_characters mc ON mc.id = csl.character_id
       JOIN users ou ON ou.id = mc.owner_user_id
@@ -5600,19 +5623,22 @@ app.post('/api/moderator/characters/:id/link', requireAuth, requireModerator, as
 // a relationship-linked character who isn't part of the current story's
 // cast (or the current profile's roster) without navigating away.
 app.get('/api/characters/:id', async (req, res) => {
-  const { rows: [character] } = await pool.query(
-    `SELECT mc.*, u.username AS owner_username, u.display_name AS owner_display_name
-     FROM moderator_characters mc
-     JOIN users u ON u.id = mc.owner_user_id
-     WHERE mc.id = $1`,
-    [req.params.id]
-  );
-  if (!character) return res.status(404).json({ error: 'Not found.' });
   let viewerId = null;
   const auth = req.headers.authorization;
   if (auth && auth.startsWith('Bearer ')) {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
+  const { rows: [character] } = await pool.query(
+    `SELECT mc.*, u.username AS owner_username, u.display_name AS owner_display_name,
+            (SELECT COUNT(*)::int FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id) AS like_count,
+            EXISTS(SELECT 1 FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id AND mcl.user_id = $2) AS liked,
+            EXISTS(SELECT 1 FROM moderator_character_bookmarks mcb WHERE mcb.character_id = mc.id AND mcb.user_id = $2) AS bookmarked
+     FROM moderator_characters mc
+     JOIN users u ON u.id = mc.owner_user_id
+     WHERE mc.id = $1`,
+    [req.params.id, viewerId || 0]
+  );
+  if (!character) return res.status(404).json({ error: 'Not found.' });
   character.is_mine = viewerId !== null && viewerId === character.owner_user_id;
   res.json({ character });
 });
@@ -6071,6 +6097,37 @@ app.delete('/api/moderator/character/:id/like', requireAuth, async (req, res) =>
   res.json({ liked: false, like_count: Number(count) });
 });
 
+app.post('/api/moderator/character/:id/bookmark', requireAuth, async (req, res) => {
+  const { rows: [item] } = await pool.query('SELECT id FROM moderator_characters WHERE id = $1', [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  await pool.query(
+    'INSERT INTO moderator_character_bookmarks (user_id, character_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [req.user.id, item.id]
+  );
+  res.json({ bookmarked: true });
+});
+
+app.delete('/api/moderator/character/:id/bookmark', requireAuth, async (req, res) => {
+  await pool.query('DELETE FROM moderator_character_bookmarks WHERE user_id = $1 AND character_id = $2', [req.user.id, req.params.id]);
+  res.json({ bookmarked: false });
+});
+
+// Same naive per-load counter as the story/gallery view bumps -- owner's
+// own views excluded.
+app.post('/api/character/:id/view', async (req, res) => {
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+  const { rows: [item] } = await pool.query('SELECT id, owner_user_id FROM moderator_characters WHERE id = $1', [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  if (viewerId !== item.owner_user_id) {
+    await pool.query('UPDATE moderator_characters SET view_count = view_count + 1 WHERE id = $1', [item.id]);
+  }
+  res.json({ ok: true });
+});
+
 // ── Chapter likes — any logged-in user can like any story's chapter, from
 // the Reader view ──────────────────────────────────────────────────────────
 app.post('/api/chapters/:id/like', requireAuth, async (req, res) => {
@@ -6287,7 +6344,7 @@ app.delete('/api/content-comments/:id', requireAuth, async (req, res) => {
 // GET /api/library — bookmarked stories + liked gallery art, across every
 // story, for the avatar dropdown's "Library" page.
 app.get('/api/library', requireAuth, async (req, res) => {
-  const [{ rows: stories }, { rows: gallery }, { rows: bookmarkedGallery }, { rows: likedCharacters }] = await Promise.all([
+  const [{ rows: stories }, { rows: gallery }, { rows: bookmarkedGallery }, { rows: bookmarkedCharacters }] = await Promise.all([
     pool.query(`
       SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.username, u.display_name, u.avatar
       FROM moderator_bookmarks mb
@@ -6326,11 +6383,11 @@ app.get('/api/library', requireAuth, async (req, res) => {
       SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y,
         trim(mc.stats->>'Species') AS species,
         u.username AS owner_username, u.display_name AS owner_display_name
-      FROM moderator_character_likes mcl
-      JOIN moderator_characters mc ON mc.id = mcl.character_id
+      FROM moderator_character_bookmarks mcb
+      JOIN moderator_characters mc ON mc.id = mcb.character_id
       JOIN users u ON u.id = mc.owner_user_id
-      WHERE mcl.user_id = $1
-      ORDER BY mcl.created_at DESC
+      WHERE mcb.user_id = $1
+      ORDER BY mcb.created_at DESC
     `, [req.user.id]),
   ]);
   res.json({
@@ -6348,7 +6405,7 @@ app.get('/api/library', requireAuth, async (req, res) => {
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
       owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
     })),
-    characters: likedCharacters.map(r => ({
+    characters: bookmarkedCharacters.map(r => ({
       id: r.id, name: r.name, image: r.ref_image || null,
       position_x: r.ref_position_x, position_y: r.ref_position_y, species: r.species || '',
       owner_username: r.owner_username, owner: r.owner_display_name || r.owner_username,
@@ -6702,7 +6759,7 @@ app.get('/api/search/profiles', async (req, res) => {
   // recommended on the hub instead of the two drifting apart.
   const { rows } = await pool.query(
     `SELECT u.id, u.username, u.display_name, u.avatar,
-            raw.story_count, raw.reading_list_count, raw.follower_count,
+            raw.story_count, raw.reading_list_count, raw.follower_count, raw.following_count, raw.club_count,
             (raw.follower_count * 4 + raw.story_count * 2
              + (CASE WHEN raw.last_chapter_at >= NOW() - INTERVAL '30 days' THEN 6 ELSE 0 END)) AS score,
             COUNT(*) OVER() AS total_count
@@ -6712,6 +6769,8 @@ app.get('/api/search/profiles', async (req, res) => {
          (SELECT COUNT(*)::int FROM moderator_sites ms WHERE ms.owner_user_id = u.id) AS story_count,
          (SELECT COUNT(*)::int FROM moderator_bookmarks mb WHERE mb.user_id = u.id) AS reading_list_count,
          (SELECT COUNT(*)::int FROM user_follows uf WHERE uf.followed_id = u.id) AS follower_count,
+         (SELECT COUNT(*)::int FROM user_follows uf2 WHERE uf2.follower_id = u.id) AS following_count,
+         (SELECT COUNT(*)::int FROM club_members cm JOIN clubs c ON c.id = cm.club_id WHERE cm.user_id = u.id) AS club_count,
          (SELECT MAX(mc.updated_at) FROM moderator_chapters mc JOIN moderator_sites ms ON ms.id = mc.site_id
           WHERE ms.owner_user_id = u.id AND mc.status = 'published') AS last_chapter_at
      ) raw ON true
@@ -6740,6 +6799,7 @@ app.get('/api/search/profiles', async (req, res) => {
     items: rows.map(r => ({
       username: r.username, display_name: r.display_name || r.username, avatar: r.avatar || null,
       story_count: r.story_count, reading_list_count: r.reading_list_count, follower_count: r.follower_count,
+      following_count: r.following_count, club_count: r.club_count,
       is_self: viewerId === r.id, is_following: alreadyFollowing.has(r.id),
     })),
     // Capped at 100 -- both the reported total and how far pagination can
