@@ -252,7 +252,7 @@
       position: absolute; top: 0.5rem; right: 0.5rem; display: flex; gap: 0.3rem;
       opacity: 0; transition: opacity 0.15s;
     }
-    .ce-img-block:hover .ce-img-controls { opacity: 1; }
+    .ce-img-block:hover .ce-img-controls, .ce-hr-block:hover .ce-img-controls { opacity: 1; }
     .ce-img-controls button {
       width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer;
       background: rgba(0,0,0,0.65); color: #fff; font-size: 0.85rem; line-height: 1;
@@ -260,6 +260,13 @@
     .ce-img-controls button:hover { background: rgba(0,0,0,0.85); }
     .ce-img-controls [data-dir="drag"] { cursor: grab; font-size: 1rem; }
     .ce-img-controls [data-dir="drag"]:active { cursor: grabbing; }
+
+    /* AO3-style horizontal-line divider — same movable-block treatment
+       (drag handle + remove, reusing .ce-img-controls) as images/videos. */
+    .ce-hr-block { position: relative; margin: 1.6em 0; padding: 0.6em 0; transition: opacity 0.15s, box-shadow 0.15s; }
+    .ce-hr-block hr { border: none; border-top: 1px solid rgba(255,255,255,0.35); margin: 0; }
+    .ce-hr-block.ce-dragging { opacity: 0.4; }
+    .ce-hr-block.ce-drop-target { box-shadow: 0 0 0 2px rgba(240,192,96,0.7); }
 
     /* ── Floating selection toolbar — Bold/Italic/Underline + alignment,
        appears above whatever text you've highlighted. ── */
@@ -470,6 +477,8 @@
 <div class="ce-inline-media-btns" id="ce-inline-media-btns" hidden>
   <button type="button" data-action="image" title="Insert Image">🖼️</button>
   <button type="button" data-action="video" title="Insert YouTube Video">🎥</button>
+  <span class="ce-sel-toolbar-divider"></span>
+  <button type="button" data-action="hr" title="Insert Horizontal Line">—</button>
 </div>
 <div class="ce-inline-video-entry" id="ce-inline-video-entry" hidden>
   <div class="ce-inline-video-entry-row">
@@ -1097,6 +1106,31 @@ function insertImageBlock(url) {
   insertBlockAtAnchor(buildImageBlock(url));
 }
 
+// ── Horizontal line divider — same movable-block treatment as images. ──
+function wireHrBlock(block) {
+  wireBlockDrag(block);
+  block.querySelector('[data-dir="remove"]').addEventListener('click', () => {
+    if (confirm('Remove this line?')) { block.remove(); markDirty(); }
+  });
+}
+function buildHrBlock() {
+  const block = document.createElement('div');
+  block.className = 'ce-hr-block';
+  block.contentEditable = 'false';
+  block.innerHTML = `
+    <hr />
+    <div class="ce-img-controls">
+      <button type="button" data-dir="drag" title="Drag to reorder">⠿</button>
+      <button type="button" data-dir="remove" title="Remove">✕</button>
+    </div>
+  `;
+  wireHrBlock(block);
+  return block;
+}
+function insertHrBlock() {
+  insertBlockAtAnchor(buildHrBlock());
+}
+
 // ── Inline YouTube video embeds — same movable-block treatment as images. ──
 function extractYouTubeId(url) {
   const m = String(url || '').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{6,})/);
@@ -1181,6 +1215,11 @@ inlineBtns.querySelector('[data-action="image"]').addEventListener('click', () =
   pendingInlineAnchor = activeEmptyPara;
   document.getElementById('ce-image-file-input').dataset.target = 'inline';
   document.getElementById('ce-image-file-input').click();
+});
+inlineBtns.querySelector('[data-action="hr"]').addEventListener('click', () => {
+  if (!activeEmptyPara) return;
+  insertHrBlock();
+  hideInlineUi();
 });
 inlineBtns.querySelector('[data-action="video"]').addEventListener('click', () => {
   if (!activeEmptyPara) return;
@@ -1308,6 +1347,7 @@ window.addEventListener('beforeunload', (e) => {
   editor.innerHTML = chapter.body && chapter.body.trim() ? chapter.body : '<p><br></p>';
   updateEditorEmptyPlaceholder();
   editor.querySelectorAll('.ce-img-block').forEach(wireImageBlock);
+  editor.querySelectorAll('.ce-hr-block').forEach(wireHrBlock);
   editor.querySelectorAll('.ce-video-block').forEach(block => {
     wireVideoBlock(block);
     // The thumbnail's click-to-play/click-to-YouTube listeners aren't part
