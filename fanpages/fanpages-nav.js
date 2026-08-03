@@ -17,16 +17,7 @@
   root.innerHTML = `
     <div class="fpnav-bar">
       <a class="fpnav-brand" href="/fanpages"><img class="fpnav-brand-logo" src="/images/fanpagelogo.png" alt="Fanpages" width="52" height="44" /></a>
-      <a class="fpnav-link${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Clubs</a>
-
-      <div class="fpnav-dropdown-wrap">
-        <button class="fpnav-link fpnav-trigger-link${['/fanpages/search', '/fanpages/tags'].includes(here) ? ' active' : ''}" id="fpnav-browse-btn" type="button">Browse <span class="fpnav-caret">▾</span></button>
-        <div class="fpnav-dropdown" id="fpnav-browse-dropdown" hidden>
-          <a href="/fanpages/search">Works</a>
-          <a href="/fanpages/search?sort=bookmarks_recent">Bookmarks</a>
-          <a href="/fanpages/tags">Tags</a>
-        </div>
-      </div>
+      <a class="fpnav-link fpnav-link--clubs${here === '/fanpages/social' ? ' active' : ''}" href="/fanpages/social">Clubs</a>
 
       <div class="fpnav-search"><input type="search" id="fpnav-search-input" placeholder="🔍 Search stories…" /></div>
       <div class="fpnav-right">
@@ -100,32 +91,6 @@
   }
   wireDropdown('fpnav-upload-btn', 'fpnav-upload-dropdown');
   wireDropdown('fpnav-avatar-btn', 'fpnav-avatar-dropdown');
-  wireDropdown('fpnav-browse-btn', 'fpnav-browse-dropdown');
-  // Browse also opens on hover (not just click), unlike the Create/avatar
-  // menus — it's pure navigation with no login-gating to worry about, so
-  // there's no downside to making it quicker to get to. Closing is
-  // debounced on a short timer (cleared by re-entering either the button
-  // or the menu) so crossing the small visual gap between them on the way
-  // down doesn't get treated as "left the menu" and slam it shut.
-  (() => {
-    const wrap = document.getElementById('fpnav-browse-btn').closest('.fpnav-dropdown-wrap');
-    const dd = document.getElementById('fpnav-browse-dropdown');
-    if (!wrap || !dd) return;
-    let closeTimer = null;
-    const open = () => {
-      clearTimeout(closeTimer);
-      document.querySelectorAll('.fpnav-dropdown').forEach(el => { if (el !== dd) el.hidden = true; });
-      dd.hidden = false;
-    };
-    const scheduleClose = () => {
-      clearTimeout(closeTimer);
-      closeTimer = setTimeout(() => { dd.hidden = true; }, 150);
-    };
-    wrap.addEventListener('mouseenter', open);
-    wrap.addEventListener('mouseleave', scheduleClose);
-    dd.addEventListener('mouseenter', open);
-    dd.addEventListener('mouseleave', scheduleClose);
-  })();
   document.addEventListener('click', () => {
     document.querySelectorAll('.fpnav-dropdown').forEach(el => { el.hidden = true; });
   });
