@@ -757,6 +757,12 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]';
   `).catch(e => console.error('moderator_gallery tags migration:', e.message));
 
+  // Same naive per-load view counter as moderator_sites.view_count -- the
+  // detail-view stats box needs a real number to show.
+  await pool.query(`
+    ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0;
+  `).catch(e => console.error('moderator_gallery view_count migration:', e.message));
+
   // Gallery tile crop position — same H/V reposition pattern used for
   // banners/covers/character refs/avatars, so the small grid preview can be
   // cropped independently of the full-size image shown on the detail page.
@@ -4058,8 +4064,10 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
 
   const { rows } = await pool.query(
     `SELECT mg.id, mg.image_url, mg.title, mg.description, mg.category, mg.position_x, mg.position_y,
+            mg.tags, mg.view_count,
             ms.story_path, ms.slug, ms.site_title,
             (SELECT COUNT(*)::int FROM moderator_gallery_likes WHERE gallery_id = mg.id) AS like_count,
+            (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'gallery' AND target_id = mg.id) AS comment_count,
             EXISTS(SELECT 1 FROM moderator_gallery_likes WHERE gallery_id = mg.id AND user_id = $2) AS liked,
             EXISTS(SELECT 1 FROM moderator_gallery_bookmarks WHERE gallery_id = mg.id AND user_id = $2) AS bookmarked
      FROM moderator_gallery mg
@@ -4074,8 +4082,8 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
   res.json({
     gallery: rows.map(r => ({
       id: r.id, image: r.image_url, title: r.title, description: r.description, category: r.category,
-      position_x: r.position_x, position_y: r.position_y,
-      like_count: r.like_count, liked: r.liked, bookmarked: r.bookmarked,
+      position_x: r.position_x, position_y: r.position_y, tags: r.tags || [], view_count: r.view_count || 0,
+      like_count: r.like_count, comment_count: r.comment_count, liked: r.liked, bookmarked: r.bookmarked,
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
     })),
     spicy_lock: spicyLock,
@@ -4620,7 +4628,9 @@ async function sendSiteLookup(query, params, req, res) {
     `, [site.id]),
     pool.query(`
       SELECT mg.id, mg.category, mg.image_url, mg.title, mg.description, mg.position_x, mg.position_y,
-             (SELECT count(*) FROM moderator_gallery_likes WHERE gallery_id = mg.id) AS like_count
+             mg.tags, mg.view_count,
+             (SELECT count(*) FROM moderator_gallery_likes WHERE gallery_id = mg.id) AS like_count,
+             (SELECT count(*)::int FROM content_comments WHERE target_type = 'gallery' AND target_id = mg.id) AS comment_count
       FROM gallery_story_links gsl JOIN moderator_gallery mg ON mg.id = gsl.gallery_id
       WHERE gsl.site_id = $1 ORDER BY gsl.sort_order, mg.id
     `, [site.id]),
@@ -5733,6 +5743,23 @@ app.get('/api/gallery/:id', async (req, res) => {
   const { rows: [item] } = await pool.query('SELECT * FROM moderator_gallery WHERE id = $1', [req.params.id]);
   if (!item) return res.status(404).json({ error: 'Not found.' });
   res.json({ item });
+});
+
+// Same naive per-load counter as the story-view bump -- fired once per
+// detail-view open, owner's own views excluded so an author checking
+// their own post doesn't inflate it.
+app.post('/api/gallery/:id/view', async (req, res) => {
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+  const { rows: [item] } = await pool.query('SELECT id, owner_user_id FROM moderator_gallery WHERE id = $1', [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  if (viewerId !== item.owner_user_id) {
+    await pool.query('UPDATE moderator_gallery SET view_count = view_count + 1 WHERE id = $1', [item.id]);
+  }
+  res.json({ ok: true });
 });
 
 // Every story and character a gallery post is linked to — pre-fills the
