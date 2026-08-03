@@ -39,10 +39,11 @@
     <a href="#" id="tab-gallery" class="wiki-story-tab active">Gallery</a>
   </nav>
 
-  <!-- Same 1300px cap as the story home page's .wiki-layout — the shared
-       .mod-page-row class (also used by profile-template.html) defaults
-       to 1340px, which read visibly wider than Home. -->
-  <main class="mod-page-row" style="padding: 0 3rem; max-width: 1300px;">
+  <!-- 100px wider than the story home page's 1300px .wiki-layout cap —
+       the gallery detail view now carries a right-hand stats box, so it
+       needs the extra room. .fp-gallery-detail-row (profile-template.html)
+       is bumped by the same +100px to keep the two contexts matched. -->
+  <main class="mod-page-row" style="padding: 0 3rem; max-width: 1400px;">
 
     <div class="mod-gallery-main" id="gallery-grid-view">
 
@@ -80,31 +81,43 @@
         </button>
       </div>
 
-      <div class="art-view-image-wrap">
-        <img id="gallery-detail-img" src="" alt="" />
-      </div>
+      <div class="art-view-detail-grid">
+        <div class="art-view-main-col">
+          <div class="art-view-image-wrap">
+            <img id="gallery-detail-img" src="" alt="" />
+          </div>
 
-      <div class="art-view-info">
-        <h1 class="art-view-title" id="gallery-detail-title"></h1>
-        <div class="art-view-actions">
-          <button class="art-view-like art-view-like--big" id="gallery-detail-like" type="button" aria-label="Like">
-            <span id="gallery-detail-like-icon">♡</span> <span id="gallery-detail-like-count">0</span>
-          </button>
-          <button class="art-view-bookmark-btn" id="gallery-detail-bookmark" type="button" aria-label="Bookmark">
-            <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
-          </button>
-          <button class="fp-share-icon-btn" id="gallery-detail-share" type="button" title="Share this post">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
-          </button>
+          <div class="art-view-info">
+            <h1 class="art-view-title" id="gallery-detail-title"></h1>
+            <div class="art-view-actions">
+              <button class="art-view-like art-view-like--big" id="gallery-detail-like" type="button" aria-label="Like">
+                <span id="gallery-detail-like-icon">♡</span> <span id="gallery-detail-like-count">0</span>
+              </button>
+              <button class="art-view-bookmark-btn" id="gallery-detail-bookmark" type="button" aria-label="Bookmark">
+                <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
+              </button>
+              <button class="fp-share-icon-btn" id="gallery-detail-share" type="button" title="Share this post">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="art-view-desc" id="gallery-detail-desc-box">
+            <div id="gallery-detail-desc"></div>
+            <div class="art-view-tags-section" id="gallery-detail-tags"></div>
+          </div>
+
+          <div id="gallery-detail-nav" class="art-nav"></div>
         </div>
-      </div>
 
-      <div class="art-view-desc" id="gallery-detail-desc-box">
-        <div id="gallery-detail-desc"></div>
-        <div class="art-view-tags-section" id="gallery-detail-tags"></div>
+        <aside class="art-view-stats-box" id="gallery-detail-stats">
+          <p class="art-view-stats-title">Stats</p>
+          <div class="art-view-stats-rows" id="gallery-detail-stats-rows"></div>
+          <hr class="art-view-stats-hr" />
+          <p class="art-view-stats-title">Tags</p>
+          <div class="art-view-stats-tags" id="gallery-detail-stats-tags"></div>
+        </aside>
       </div>
-
-      <div id="gallery-detail-nav" class="art-nav"></div>
 
       <div class="cc-section" id="gallery-detail-comments">
         <p class="cc-title">💬 Comments</p>
@@ -158,6 +171,8 @@ let SPICY_LOCK = null; // null = unlocked; 'login' or 'sfw_mode' otherwise
 let IS_SELF = false;
 let STORY_TITLE = 'this story';
 let STORY_COVER_URL = '';
+let STORY_AUTHOR_USERNAME = '';
+let STORY_AUTHOR_DISPLAY = '';
 
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
 const authHeaders = () => ({ Authorization: `Bearer ${token}`, 'X-Story-Path': SLUG });
@@ -276,6 +291,39 @@ function backLabelFor(cat) {
   return '← Back to Gallery';
 }
 
+function ratingLabelFor(cat) {
+  if (cat === 'sketches') return 'Sketches';
+  if (cat === 'spicy') return 'Spicy';
+  return 'SFW';
+}
+
+// Right-hand stats box — Views/Likes/Comments/Rating/Uploader plus the
+// freeform tag pills (separate concept from "Characters/Stories Featured",
+// which stays inside the description box). Tag pills reuse the Submissions
+// search machinery so clicking one behaves exactly like a story tag pill.
+function renderStatsBox(item) {
+  const rows = document.getElementById('gallery-detail-stats-rows');
+  rows.innerHTML = `
+    <div class="art-view-stat-row"><span>Views</span><span>${item.view_count || 0}</span></div>
+    <div class="art-view-stat-row"><span>Likes</span><span>${item.like_count || 0}</span></div>
+    <div class="art-view-stat-row"><span>Comments</span><span>${item.comment_count || 0}</span></div>
+    <div class="art-view-stat-row"><span>Rating</span><span>${ratingLabelFor(item.category)}</span></div>
+    <div class="art-view-stat-row"><span>Uploaded by</span><span><a href="/fanpages/${encodeURIComponent(STORY_AUTHOR_USERNAME)}">${escapeHtml(STORY_AUTHOR_DISPLAY)}</a></span></div>
+  `;
+
+  const tagsWrap = document.getElementById('gallery-detail-stats-tags');
+  const tags = Array.isArray(item.tags) ? item.tags : [];
+  if (!tags.length) {
+    tagsWrap.innerHTML = '<p class="art-view-stats-tags-empty">No tags yet.</p>';
+    return;
+  }
+  tagsWrap.innerHTML = tags.map(t => `<a class="art-view-stats-tag-pill" href="/fanpages/search?view=submissions&browse=1&q=${encodeURIComponent(t)}">${escapeHtml(t)}</a>`).join('');
+}
+
+function bumpGalleryViewCount(id) {
+  fetch(`/api/gallery/${id}/view`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+}
+
 // ── Slideshow prev/next nav (mirrors the main site's art-view slideshow) ──
 let navPrevItem = null;
 let navNextItem = null;
@@ -388,7 +436,9 @@ function openPostDetail(item, pushHistory) {
   updateLikeUI(item);
   updateBookmarkUI(item);
   loadGalleryTagsSection(item);
+  renderStatsBox(item);
   ccInitSection('gallery', item.id);
+  bumpGalleryViewCount(item.id);
 
   document.getElementById('gallery-grid-view').style.display = 'none';
   document.getElementById('gallery-detail-view').style.display = 'block';
@@ -797,6 +847,8 @@ function renderBookBox(site) {
   if (data && data.site && data.site.site_title) document.title = `Gallery ✦ ${data.site.site_title}`;
   STORY_TITLE = (data && data.site && data.site.site_title) || 'this story';
   STORY_COVER_URL = (data && data.site && data.site.cover_url) || '';
+  STORY_AUTHOR_USERNAME = (data && data.site && data.site.author_username) || '';
+  STORY_AUTHOR_DISPLAY = (data && data.site && data.site.author_display_name) || STORY_AUTHOR_USERNAME;
   IS_SELF = !!(data && data.site && data.site.is_self);
   const pageTitleEl = document.getElementById('page-title-display');
   pageTitleEl.textContent = STORY_TITLE;

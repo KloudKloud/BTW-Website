@@ -331,7 +331,7 @@
        exact same width as the story-context version; a visible Navigate
        box isn't needed for that, just the reserved track. */
     .fp-gallery-detail-row {
-      max-width: 1340px; margin: 3rem auto 0; padding: 0 3rem;
+      max-width: 1440px; margin: 3rem auto 0; padding: 0 3rem;
       display: grid; grid-template-columns: 1fr 220px; gap: 2rem; align-items: start;
     }
     /* #fp-gallery-detail-view otherwise keeps the base .art-view-wrapper's
@@ -1021,28 +1021,42 @@
   <div class="fp-gallery-detail-row" id="fp-gallery-detail-row" style="display:none;">
     <div class="art-view-wrapper" id="fp-gallery-detail-view">
       <a class="art-view-back" href="#" id="fp-gallery-detail-back">← Full Gallery</a>
-      <div class="art-view-image-wrap">
-        <img id="fp-gallery-detail-img" src="" alt="" />
-      </div>
-      <div class="art-view-info">
-        <h1 class="art-view-title" id="fp-gallery-detail-title"></h1>
-        <div class="art-view-actions">
-          <button class="art-view-like art-view-like--big" id="fp-gallery-detail-like" type="button" aria-label="Like">
-            <span id="fp-gallery-detail-like-icon">♡</span> <span id="fp-gallery-detail-like-count">0</span>
-          </button>
-          <button class="art-view-bookmark-btn" id="fp-gallery-detail-bookmark" type="button" aria-label="Bookmark">
-            <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
-          </button>
-          <button class="fp-share-icon-btn" id="fp-gallery-detail-share" type="button" title="Share this post">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
-          </button>
+
+      <div class="art-view-detail-grid">
+        <div class="art-view-main-col">
+          <div class="art-view-image-wrap">
+            <img id="fp-gallery-detail-img" src="" alt="" />
+          </div>
+          <div class="art-view-info">
+            <h1 class="art-view-title" id="fp-gallery-detail-title"></h1>
+            <div class="art-view-actions">
+              <button class="art-view-like art-view-like--big" id="fp-gallery-detail-like" type="button" aria-label="Like">
+                <span id="fp-gallery-detail-like-icon">♡</span> <span id="fp-gallery-detail-like-count">0</span>
+              </button>
+              <button class="art-view-bookmark-btn" id="fp-gallery-detail-bookmark" type="button" aria-label="Bookmark">
+                <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
+              </button>
+              <button class="fp-share-icon-btn" id="fp-gallery-detail-share" type="button" title="Share this post">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="art-view-desc" id="fp-gallery-detail-desc-box">
+            <div id="fp-gallery-detail-desc"></div>
+            <div class="art-view-tags-section" id="fp-gallery-detail-tags"></div>
+          </div>
+          <div id="fp-gallery-detail-nav" class="art-nav"></div>
         </div>
+
+        <aside class="art-view-stats-box" id="fp-gallery-detail-stats">
+          <p class="art-view-stats-title">Stats</p>
+          <div class="art-view-stats-rows" id="fp-gallery-detail-stats-rows"></div>
+          <hr class="art-view-stats-hr" />
+          <p class="art-view-stats-title">Tags</p>
+          <div class="art-view-stats-tags" id="fp-gallery-detail-stats-tags"></div>
+        </aside>
       </div>
-      <div class="art-view-desc" id="fp-gallery-detail-desc-box">
-        <div id="fp-gallery-detail-desc"></div>
-        <div class="art-view-tags-section" id="fp-gallery-detail-tags"></div>
-      </div>
-      <div id="fp-gallery-detail-nav" class="art-nav"></div>
+
       <div class="cc-section" id="fp-gallery-detail-comments">
         <p class="cc-title">💬 Comments</p>
         <div class="cc-compose" id="fp-cc-compose" style="display:none;">
@@ -1951,6 +1965,39 @@
     document.getElementById('fp-gallery-detail-like').classList.toggle('liked', !!item.liked);
   }
 
+  function fpRatingLabelFor(cat) {
+    if (cat === 'sketches') return 'Sketches';
+    if (cat === 'spicy') return 'Spicy';
+    return 'SFW';
+  }
+
+  // Right-hand stats box — same shape/behavior as the story-context gallery
+  // page's version, just sourced from currentAuthor (this profile's own
+  // owner) instead of a story's author fields.
+  function renderFpGalleryStatsBox(item) {
+    const uploaderName = (currentAuthor && (currentAuthor.display_name || currentAuthor.username)) || USERNAME;
+    const rows = document.getElementById('fp-gallery-detail-stats-rows');
+    rows.innerHTML = `
+      <div class="art-view-stat-row"><span>Views</span><span>${item.view_count || 0}</span></div>
+      <div class="art-view-stat-row"><span>Likes</span><span>${item.like_count || 0}</span></div>
+      <div class="art-view-stat-row"><span>Comments</span><span>${item.comment_count || 0}</span></div>
+      <div class="art-view-stat-row"><span>Rating</span><span>${fpRatingLabelFor(item.category)}</span></div>
+      <div class="art-view-stat-row"><span>Uploaded by</span><span><a href="/fanpages/${encodeURIComponent(USERNAME)}">${escapeHtml(uploaderName)}</a></span></div>
+    `;
+
+    const tagsWrap = document.getElementById('fp-gallery-detail-stats-tags');
+    const tags = Array.isArray(item.tags) ? item.tags : [];
+    if (!tags.length) {
+      tagsWrap.innerHTML = '<p class="art-view-stats-tags-empty">No tags yet.</p>';
+      return;
+    }
+    tagsWrap.innerHTML = tags.map(t => `<a class="art-view-stats-tag-pill" href="/fanpages/search?view=submissions&browse=1&q=${encodeURIComponent(t)}">${escapeHtml(t)}</a>`).join('');
+  }
+
+  function bumpFpGalleryViewCount(id) {
+    fetch(`/api/gallery/${id}/view`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+  }
+
   // pushHistory (default true) puts ?gallery=<id> in the URL so a refresh
   // (or the browser back/forward buttons, via the popstate listener below)
   // lands back on the same piece instead of resetting to the grid — same
@@ -1966,7 +2013,9 @@
     updateFpGalleryLikeUI(item);
     updateFpGalleryBookmarkUI(item);
     loadFpGalleryTagsSection(item);
+    renderFpGalleryStatsBox(item);
     ccInitSection('gallery', item.id);
+    bumpFpGalleryViewCount(item.id);
     document.getElementById('fp-gallery-grid-row').style.display = 'none';
     document.getElementById('fp-gallery-detail-row').style.display = 'grid';
     if (pushHistory !== false) {
