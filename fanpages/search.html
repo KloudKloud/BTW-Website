@@ -1136,6 +1136,28 @@ filterToggleBtn.addEventListener('click', () => setFiltersCollapsed(!fpLayoutEl.
 filterRailToggle.addEventListener('click', () => setFiltersCollapsed(!fpLayoutEl.classList.contains('fp-layout--filters-collapsed')));
 setFiltersCollapsed(localStorage.getItem('fp_filters_collapsed') === '1');
 
+// Keeps the current query attached to all three left-panel tab links, so
+// clicking Story -> Submissions -> Profiles carries whatever you searched
+// across every switch instead of resetting to "Everything" each time.
+// Each tab's own search function (runSearch/runSubmissionsSearch/
+// runProfilesSearch) already reads q from the URL and passes it to its
+// backend route -- this is just what keeps that q attached to the link
+// you'd click next.
+function syncSideMenuLinks() {
+  const q = new URLSearchParams(window.location.search).get('q') || '';
+  const qParam = q ? `q=${encodeURIComponent(q)}` : '';
+  const join = (view) => {
+    const parts = [];
+    if (view) parts.push(`view=${view}`);
+    if (qParam) parts.push(qParam);
+    return parts.length ? `/fanpages/search?${parts.join('&')}` : '/fanpages/search';
+  };
+  document.getElementById('fp-side-menu-story').href = join(null);
+  document.getElementById('fp-side-menu-submissions').href = join('submissions');
+  document.getElementById('fp-side-menu-profiles').href = join('profiles');
+}
+syncSideMenuLinks();
+
 // ── View dispatch — Story (default) vs Submissions vs Profiles. All three
 // are served by this same page/template; Submissions/Profiles just swap
 // the active left-panel link, drop the filter panel/fab (grid-column 3 ->
