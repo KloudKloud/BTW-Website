@@ -750,6 +750,13 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('moderator_gallery description migration:', e.message));
 
+  // Same e621/Wattpad-style discovery tags as moderator_sites.tags, so
+  // gallery posts (Submissions) can be tagged and searched the same way
+  // stories are.
+  await pool.query(`
+    ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]';
+  `).catch(e => console.error('moderator_gallery tags migration:', e.message));
+
   // Gallery tile crop position — same H/V reposition pattern used for
   // banners/covers/character refs/avatars, so the small grid preview can be
   // cropped independently of the full-size image shown on the detail page.
@@ -5573,6 +5580,26 @@ function clampPosition(v) {
   return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 50;
 }
 
+// Gallery routes are multipart/form-data (image upload), so tags arrive as
+// a JSON-encoded string field rather than a real array — same cleanup rules
+// as the story editor's client-side addWorkingTag (lowercase, collapsed
+// whitespace, 40 chars, 100 tags, de-duped) applied again here since this
+// is the actual trust boundary.
+function parseGalleryTags(raw) {
+  if (raw === undefined) return undefined;
+  let arr;
+  try { arr = JSON.parse(raw); } catch { return []; }
+  if (!Array.isArray(arr)) return [];
+  const seen = new Set();
+  for (const t of arr) {
+    if (typeof t !== 'string') continue;
+    const clean = t.trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 40);
+    if (clean) seen.add(clean);
+    if (seen.size >= 100) break;
+  }
+  return [...seen];
+}
+
 // Instant "create + attach to this story" — mirrors the character flow.
 app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
@@ -5582,10 +5609,11 @@ app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage
   const imageUrl = `/images/moderators/${req.file.filename}`;
   const positionX = clampPosition(req.body.position_x);
   const positionY = clampPosition(req.body.position_y);
+  const tags = parseGalleryTags(req.body.tags) || [];
   const { rows: [item] } = await pool.query(
-    `INSERT INTO moderator_gallery (owner_user_id, category, image_url, title, description, position_x, position_y)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [req.user.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY]
+    `INSERT INTO moderator_gallery (owner_user_id, category, image_url, title, description, position_x, position_y, tags)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [req.user.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY, JSON.stringify(tags)]
   );
   const { rows: [{ maxOrder }] } = await pool.query(
     'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM gallery_story_links WHERE site_id = $1', [req.modSite.id]
@@ -5642,6 +5670,7 @@ app.put('/api/moderator/gallery/:id', requireAuth, uploadModImage.single('image'
   }
   const positionX = req.body.position_x !== undefined ? clampPosition(req.body.position_x) : existing.position_x;
   const positionY = req.body.position_y !== undefined ? clampPosition(req.body.position_y) : existing.position_y;
+  const tags = parseGalleryTags(req.body.tags);
 
   const { rows: [item] } = await pool.query(
     `UPDATE moderator_gallery SET
@@ -5650,9 +5679,10 @@ app.put('/api/moderator/gallery/:id', requireAuth, uploadModImage.single('image'
        description = COALESCE($3, description),
        image_url   = $4,
        position_x  = $5,
-       position_y  = $6
-     WHERE id = $7 RETURNING *`,
-    [category || null, title != null ? title.trim() : null, description != null ? description.trim() : null, imageUrl, positionX, positionY, existing.id]
+       position_y  = $6,
+       tags        = COALESCE($7, tags)
+     WHERE id = $8 RETURNING *`,
+    [category || null, title != null ? title.trim() : null, description != null ? description.trim() : null, imageUrl, positionX, positionY, tags !== undefined ? JSON.stringify(tags) : null, existing.id]
   );
   res.json({ item });
 });
@@ -5774,10 +5804,11 @@ app.post('/api/gallery', requireAuth, uploadModImage.single('image'), async (req
   const imageUrl = `/images/moderators/${req.file.filename}`;
   const positionX = clampPosition(req.body.position_x);
   const positionY = clampPosition(req.body.position_y);
+  const tags = parseGalleryTags(req.body.tags) || [];
   const { rows: [item] } = await pool.query(
-    `INSERT INTO moderator_gallery (owner_user_id, category, image_url, title, description, position_x, position_y)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [req.user.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY]
+    `INSERT INTO moderator_gallery (owner_user_id, category, image_url, title, description, position_x, position_y, tags)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [req.user.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY, JSON.stringify(tags)]
   );
   res.json({ item });
 });

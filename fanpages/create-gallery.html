@@ -23,6 +23,22 @@
        overlay use-case — here the page itself scrolls, so the box should
        just grow to fit its content instead of being capped mid-form. */
     .char-editor-modal { margin: 0 auto; max-height: none; overflow-y: visible; }
+
+    /* Tag suggestion dropdown -- same convention as the story editor's
+       fandom/tags autocomplete (fanpages/_story-template/edit.html), which
+       keeps this CSS page-local there too rather than in fanpages.css. */
+    .wiki-suggest-input-wrap { position: relative; }
+    .wiki-fandom-suggest {
+      position: absolute; top: calc(100% + 0.4rem); left: 0; right: 0; z-index: 30;
+      background: #141018; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.55); overflow: hidden;
+    }
+    .wiki-fandom-suggest-item {
+      display: block; width: 100%; text-align: left; background: none; border: none;
+      color: #f0f0f0; font-family: 'Inter', sans-serif; font-size: 0.85rem;
+      padding: 0.6rem 0.9rem; cursor: pointer;
+    }
+    .wiki-fandom-suggest-item:hover, .wiki-fandom-suggest-item.active { background: rgba(127,168,217,0.15); }
   </style>
 </head>
 <body>
@@ -90,6 +106,17 @@
       <label for="gallery-editor-desc">Description <span style="font-weight:400;color:#888;">(use *word* for italics, **word** for bold)</span></label>
       <textarea class="mod-textarea" id="gallery-editor-desc" placeholder="No description provided"></textarea>
       <p class="mod-tip-box">💡 To credit an artist, write it like this: [Artist Name]&lt;https://link-to-artist&gt;</p>
+    </div>
+
+    <div class="mod-field">
+      <label for="gallery-tags-text-input">Tags <span class="wiki-tags-count" id="gallery-tags-count" style="margin-left:0.4em;">0/100</span></label>
+      <div class="wiki-tags-editor" id="gallery-tags-editor">
+        <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="gallery-tags-input-box">
+          <input type="text" class="wiki-tags-input" id="gallery-tags-text-input" placeholder="Type a tag and press Enter…" autocomplete="off" />
+          <div class="wiki-fandom-suggest" id="gallery-tags-suggest" hidden></div>
+        </div>
+      </div>
+      <p class="mod-tip-box">💡 Tag what's in the piece — characters, species, themes — to help people find it.</p>
     </div>
 
     <div class="mod-field gallery-linkto-box">
@@ -176,6 +203,94 @@
 
   let selectedFile = null;
   let galleryPos = { x: 50, y: 50 };
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ── Tags — same e621/Wattpad-style bubble input as the story editor's
+  // Additional Tags field (fanpages/_story-template/edit.html), reusing the
+  // same shared /api/tag-catalog and the same .wiki-tag-bubble/.wiki-tags-*
+  // CSS from fanpages.css. ──────────────────────────────────────────────────
+  let workingGalleryTags = [];
+  let galleryTagsCatalog = [];
+
+  function renderSuggestDropdown(wrapId, matches, onPick) {
+    const wrap = document.getElementById(wrapId);
+    if (!matches.length) { wrap.hidden = true; wrap.innerHTML = ''; return; }
+    wrap.innerHTML = matches.map(m => `<button type="button" class="wiki-fandom-suggest-item">${escapeHtml(m)}</button>`).join('');
+    wrap.hidden = false;
+    wrap.querySelectorAll('.wiki-fandom-suggest-item').forEach(btn => {
+      btn.addEventListener('mousedown', (e) => { e.preventDefault(); onPick(btn.textContent); });
+    });
+  }
+
+  function renderGalleryTagsEditor() {
+    const box = document.getElementById('gallery-tags-input-box');
+    const input = document.getElementById('gallery-tags-text-input');
+    box.querySelectorAll('.wiki-tag-bubble--editable').forEach(b => b.remove());
+    workingGalleryTags.forEach(t => {
+      const bubble = document.createElement('span');
+      bubble.className = 'wiki-tag-bubble wiki-tag-bubble--editable';
+      bubble.innerHTML = `${escapeHtml(t)} <button class="wiki-tag-bubble-remove" type="button" aria-label="Remove tag">✕</button>`;
+      bubble.querySelector('.wiki-tag-bubble-remove').addEventListener('click', () => {
+        workingGalleryTags = workingGalleryTags.filter(x => x !== t);
+        renderGalleryTagsEditor();
+      });
+      box.insertBefore(bubble, input);
+    });
+    document.getElementById('gallery-tags-count').textContent = `${workingGalleryTags.length}/100`;
+  }
+
+  function addWorkingGalleryTag(raw) {
+    const clean = raw.trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 40);
+    if (!clean) return;
+    if (workingGalleryTags.includes(clean)) return;
+    if (workingGalleryTags.length >= 100) return;
+    workingGalleryTags.push(clean);
+    renderGalleryTagsEditor();
+  }
+
+  const galleryTagsTextInput = document.getElementById('gallery-tags-text-input');
+  let galleryTagsSuggestIndex = -1;
+  galleryTagsTextInput.addEventListener('input', () => {
+    const q = galleryTagsTextInput.value.trim().toLowerCase();
+    if (!q) { renderSuggestDropdown('gallery-tags-suggest', [], () => {}); return; }
+    const matches = galleryTagsCatalog.filter(t => t.toLowerCase().includes(q) && !workingGalleryTags.includes(t.toLowerCase())).slice(0, 6);
+    galleryTagsSuggestIndex = -1;
+    renderSuggestDropdown('gallery-tags-suggest', matches, (val) => {
+      addWorkingGalleryTag(val);
+      galleryTagsTextInput.value = '';
+      renderSuggestDropdown('gallery-tags-suggest', [], () => {});
+    });
+  });
+  galleryTagsTextInput.addEventListener('keydown', (e) => {
+    const items = document.querySelectorAll('#gallery-tags-suggest .wiki-fandom-suggest-item');
+    if (e.key === 'ArrowDown' && items.length) {
+      e.preventDefault();
+      galleryTagsSuggestIndex = Math.min(galleryTagsSuggestIndex + 1, items.length - 1);
+      items.forEach((el, i) => el.classList.toggle('active', i === galleryTagsSuggestIndex));
+    } else if (e.key === 'ArrowUp' && items.length) {
+      e.preventDefault();
+      galleryTagsSuggestIndex = Math.max(galleryTagsSuggestIndex - 1, 0);
+      items.forEach((el, i) => el.classList.toggle('active', i === galleryTagsSuggestIndex));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const picked = galleryTagsSuggestIndex >= 0 && items[galleryTagsSuggestIndex] ? items[galleryTagsSuggestIndex].textContent : galleryTagsTextInput.value;
+      addWorkingGalleryTag(picked);
+      galleryTagsTextInput.value = '';
+      renderSuggestDropdown('gallery-tags-suggest', [], () => {});
+    } else if (e.key === 'Backspace' && !galleryTagsTextInput.value && workingGalleryTags.length) {
+      workingGalleryTags.pop();
+      renderGalleryTagsEditor();
+    } else if (e.key === 'Escape') {
+      renderSuggestDropdown('gallery-tags-suggest', [], () => {});
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById('gallery-tags-input-box').contains(e.target)) renderSuggestDropdown('gallery-tags-suggest', [], () => {});
+  });
+  fetch('/api/tag-catalog').then(r => r.ok ? r.json() : { tags: [] }).then(d => { galleryTagsCatalog = d.tags || []; }).catch(() => {});
 
   // Live drag-to-pan Cropper.js crop box (6:7, matching the gallery tile
   // shape), fixed size/non-resizable since there's no zoom concept here —
@@ -518,6 +633,11 @@
       return;
     }
 
+    if (document.getElementById('gallery-tags-text-input').value.trim()) {
+      addWorkingGalleryTag(document.getElementById('gallery-tags-text-input').value);
+      document.getElementById('gallery-tags-text-input').value = '';
+    }
+
     const fd = new FormData();
     if (selectedFile) fd.append('image', selectedFile);
     fd.append('category', getSelectedCategory());
@@ -525,6 +645,7 @@
     fd.append('description', document.getElementById('gallery-editor-desc').value.trim());
     fd.append('position_x', galleryPos.x);
     fd.append('position_y', galleryPos.y);
+    fd.append('tags', JSON.stringify(workingGalleryTags));
 
     const saveBtn = document.getElementById('gallery-editor-save');
     saveBtn.disabled = true;
@@ -621,6 +742,9 @@
       existingLinkedStories = linksData.stories || [];
       existingLinkedCharacters = (linksData.characters || []).map(c => ({ id: c.id, name: c.name, ref_image: c.image }));
       renderLinkToCards();
+
+      workingGalleryTags = (item.tags || []).slice();
+      renderGalleryTagsEditor();
     } catch {}
   })();
 </script>
