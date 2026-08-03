@@ -6358,6 +6358,102 @@ app.get('/api/activity-feed', async (req, res) => {
   res.json({ items });
 });
 
+// Full paginated/searchable version of the union query above, for the
+// Submissions tab's full-page feed -- /api/activity-feed stays a small
+// fixed-size (40 max, no offset) teaser for the hub's homepage box, this
+// is the real listing. Deliberately excludes 'character' -- Submissions is
+// gallery posts + chapter postings only, not the character-ref feed.
+app.get('/api/search/submissions', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(60, Math.max(1, parseInt(req.query.limit, 10) || 40));
+  const offset = (page - 1) * limit;
+  const { nsfwAllowed } = await getViewerNsfwAccess(req);
+
+  const { rows } = await pool.query(
+    `SELECT * FROM (
+       SELECT 'chapter' AS type, mc.id AS item_id, mc.updated_at AS created_at,
+              mc.title, ms.cover_url AS image,
+              ms.cover_position_x AS position_x, ms.cover_position_y AS position_y,
+              ms.story_path, ms.site_title AS site_title,
+              u.username, u.display_name, u.avatar,
+              NULL::text AS category, '[]'::jsonb AS tags
+       FROM moderator_chapters mc
+       JOIN moderator_sites ms ON ms.id = mc.site_id
+       JOIN users u ON u.id = ms.owner_user_id
+       WHERE mc.status = 'published' AND length(trim(mc.body)) > 0
+
+       UNION ALL
+
+       SELECT 'art', mg.id, mg.created_at,
+              mg.title, mg.image_url,
+              mg.position_x, mg.position_y,
+              ms.story_path, ms.site_title,
+              u.username, u.display_name, u.avatar,
+              mg.category, mg.tags
+       FROM moderator_gallery mg
+       LEFT JOIN LATERAL (
+         SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1
+       ) gsl ON true
+       LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
+       JOIN users u ON u.id = mg.owner_user_id
+     ) feed
+     WHERE (category IS DISTINCT FROM 'spicy' OR $1)
+       AND ($2 = '' OR (
+         title ILIKE '%' || $2 || '%' OR site_title ILIKE '%' || $2 || '%'
+         OR username ILIKE '%' || $2 || '%' OR display_name ILIKE '%' || $2 || '%'
+         OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) t WHERE t ILIKE '%' || $2 || '%')
+       ))
+     ORDER BY created_at DESC
+     LIMIT $3 OFFSET $4`,
+    [nsfwAllowed, q, limit, offset]
+  );
+  // total_count via COUNT(*) OVER() would double-count across the UNION
+  // ALL branches' own window once category/q filtering is applied inline
+  // above rather than in the outer WHERE of a single SELECT, so total is
+  // fetched as a second lightweight query instead.
+  const { rows: [{ count }] } = await pool.query(
+    `SELECT count(*) FROM (
+       SELECT mc.id, mc.title, ms.site_title, u.username, u.display_name, NULL::text AS category, '[]'::jsonb AS tags
+       FROM moderator_chapters mc
+       JOIN moderator_sites ms ON ms.id = mc.site_id
+       JOIN users u ON u.id = ms.owner_user_id
+       WHERE mc.status = 'published' AND length(trim(mc.body)) > 0
+       UNION ALL
+       SELECT mg.id, mg.title, ms.site_title, u.username, u.display_name, mg.category, mg.tags
+       FROM moderator_gallery mg
+       LEFT JOIN LATERAL (SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1) gsl ON true
+       LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
+       JOIN users u ON u.id = mg.owner_user_id
+     ) feed
+     WHERE (category IS DISTINCT FROM 'spicy' OR $1)
+       AND ($2 = '' OR (
+         title ILIKE '%' || $2 || '%' OR site_title ILIKE '%' || $2 || '%'
+         OR username ILIKE '%' || $2 || '%' OR display_name ILIKE '%' || $2 || '%'
+         OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) t WHERE t ILIKE '%' || $2 || '%')
+       ))`,
+    [nsfwAllowed, q]
+  );
+
+  res.json({
+    items: rows.map(r => ({
+      type: r.type,
+      id: r.item_id,
+      created_at: r.created_at,
+      title: r.title,
+      image: r.image || null,
+      position_x: r.position_x, position_y: r.position_y,
+      story_path: r.story_path,
+      site_title: r.site_title,
+      author: r.display_name || r.username,
+      author_username: r.username,
+      author_avatar: r.avatar || null,
+      tags: r.tags || [],
+    })),
+    total: Number(count), page, limit,
+  });
+});
+
 // ── Clubs — the Social page's forum/club system ─────────────────────────────
 function slugifyClubName(name) {
   const base = String(name || '').toLowerCase().trim()
