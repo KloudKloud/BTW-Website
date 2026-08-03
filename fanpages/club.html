@@ -434,8 +434,18 @@
       flex-direction: column; margin: 0 0 0.85rem; padding: 0; border: 1px solid rgba(255,255,255,0.1);
       border-bottom: 1px solid rgba(255,255,255,0.1); border-radius: 14px; overflow: hidden;
     }
+    /* padding-top aspect-ratio trick instead of the `aspect-ratio` property
+       directly on the <img> -- combined with max-height and object-fit that
+       property was leaving the image at its own intrinsic size in some
+       cases (unfilled space showing the wrap's background as bars down the
+       sides) instead of actually filling/cropping to the box. A sized
+       wrapper with the image absolutely positioned inside it is the old,
+       bulletproof way to guarantee a fixed-ratio crop regardless. */
+    .cl-admin-post--card .cl-admin-post-thumb-wrap {
+      position: relative; width: 100%; padding-top: 56.25%; background: #161616; overflow: hidden;
+    }
     .cl-admin-post--card .cl-admin-post-thumb {
-      width: 100%; height: auto; max-height: 460px; aspect-ratio: 16 / 9; border-radius: 0; object-fit: cover;
+      position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 0; object-fit: cover;
     }
     .cl-admin-post--card .cl-admin-post-body { padding: 1rem 1.1rem 1.1rem; }
     .cl-admin-post--card .cl-admin-post-title { font-size: 1.15rem; -webkit-line-clamp: 3; }
@@ -2566,8 +2576,8 @@ function adminPostRow(post, mode) {
   const previewX = post.preview_position_x != null ? post.preview_position_x : 50;
   const previewY = post.preview_position_y != null ? post.preview_position_y : 50;
   const hasImage = !!post.image_url;
-  const thumbHtml = (isCard && !hasImage) ? '' :
-    `<img class="cl-admin-post-thumb" src="${post.image_url || '/images/noimage.png'}" alt="" style="object-position:${previewX}% ${previewY}%;" />`;
+  const thumbImg = `<img class="cl-admin-post-thumb" src="${post.image_url || '/images/noimage.png'}" alt="" style="object-position:${previewX}% ${previewY}%;" />`;
+  const thumbHtml = (isCard && !hasImage) ? '' : (isCard ? `<div class="cl-admin-post-thumb-wrap">${thumbImg}</div>` : thumbImg);
   const showPreview = isCard && !hasImage && post.title && post.body;
   const previewHtml = showPreview ? `<p class="cl-admin-post-preview">${escapeHtml(truncateText(post.body, 220))}</p>` : '';
   row.innerHTML = `
