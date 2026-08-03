@@ -1510,6 +1510,8 @@
       facts: (r.facts && r.facts.length) ? r.facts : [NA],
       lore: r.lore || [],
       relationships: r.relationships || [],
+      liked: !!r.liked,
+      likeCount: r.like_count || 0,
     };
   }
 
@@ -1538,6 +1540,25 @@
     nameEl.className = 'char-name';
     nameEl.textContent = char.name;
     nameRow.appendChild(nameEl);
+    const likeBtn = document.createElement('button');
+    likeBtn.className = 'art-view-like' + (char.liked ? ' liked' : '');
+    likeBtn.type = 'button';
+    likeBtn.setAttribute('aria-label', 'Like this character');
+    likeBtn.innerHTML = `<span class="char-like-icon">${char.liked ? '♥' : '♡'}</span> <span class="char-like-count">${char.likeCount}</span>`;
+    likeBtn.addEventListener('click', async () => {
+      if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+      likeBtn.disabled = true;
+      try {
+        const res = await fetch(`/api/moderator/character/${char.id}/like`, { method: char.liked ? 'DELETE' : 'POST', headers: authHeaders() });
+        const data = await res.json();
+        char.liked = data.liked; char.likeCount = data.like_count;
+        likeBtn.classList.toggle('liked', data.liked);
+        likeBtn.querySelector('.char-like-icon').textContent = data.liked ? '♥' : '♡';
+        likeBtn.querySelector('.char-like-count').textContent = data.like_count;
+      } catch {}
+      likeBtn.disabled = false;
+    });
+    nameRow.appendChild(likeBtn);
     const shareBtn = document.createElement('button');
     shareBtn.className = 'fp-share-icon-btn';
     shareBtn.type = 'button';

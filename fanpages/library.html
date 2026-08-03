@@ -105,6 +105,7 @@
       <p class="mod-gallery-sidebar-label">Browse</p>
       <button class="mod-gallery-cat active" id="lib-tab-stories" type="button">Stories</button>
       <button class="mod-gallery-cat" id="lib-tab-gallery" type="button">Galleries</button>
+      <button class="mod-gallery-cat" id="lib-tab-characters" type="button">Characters</button>
     </aside>
 
     <div>
@@ -116,6 +117,11 @@
       <section id="lib-gallery-section" style="display:none;">
         <p class="lib-section-title">Bookmarked Art</p>
         <div id="lib-gallery-grid"><p class="lib-empty">Loading…</p></div>
+      </section>
+
+      <section id="lib-characters-section" style="display:none;">
+        <p class="lib-section-title">Liked Characters</p>
+        <div id="lib-characters-grid"><p class="lib-empty">Loading…</p></div>
       </section>
     </div>
   </div>
@@ -200,9 +206,35 @@
     return wrap;
   }
 
+  function characterCard(c) {
+    const href = `/fanpages/${encodeURIComponent(c.owner_username)}?char=${c.id}#characters`;
+    const posX = c.position_x != null ? c.position_x : 50;
+    const posY = c.position_y != null ? c.position_y : 50;
+    const wrap = document.createElement('div');
+    wrap.className = 'lib-gallery-card';
+    const link = document.createElement('a');
+    link.href = href;
+    link.style.display = 'block';
+    const imgHtml = c.image
+      ? `<img src="${escapeHtml(c.image)}" alt="${escapeHtml(c.name)}" style="object-position:${posX}% ${posY}%;" loading="lazy" />`
+      : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#6b3fa0,#c2547a);color:#fff;font-weight:700;font-size:1.6rem;">${escapeHtml((c.name[0] || '?').toUpperCase())}</div>`;
+    link.innerHTML = `<div class="lib-gallery-img-wrap">${imgHtml}</div>`;
+    wrap.appendChild(link);
+    const titleP = document.createElement('p');
+    titleP.className = 'lib-card-title';
+    titleP.textContent = c.name;
+    wrap.appendChild(titleP);
+    const ownerP = document.createElement('p');
+    ownerP.className = 'lib-gallery-story';
+    ownerP.innerHTML = `by <a class="lib-author-link" href="/fanpages/${encodeURIComponent(c.owner_username)}">${escapeHtml(c.owner)}</a>`;
+    wrap.appendChild(ownerP);
+    return wrap;
+  }
+
   const tabs = {
     stories: { btn: document.getElementById('lib-tab-stories'), section: document.getElementById('lib-stories-section') },
     gallery: { btn: document.getElementById('lib-tab-gallery'), section: document.getElementById('lib-gallery-section') },
+    characters: { btn: document.getElementById('lib-tab-characters'), section: document.getElementById('lib-characters-section') },
   };
   function switchLibTab(name) {
     Object.entries(tabs).forEach(([key, t]) => {
@@ -212,6 +244,7 @@
   }
   tabs.stories.btn.addEventListener('click', () => switchLibTab('stories'));
   tabs.gallery.btn.addEventListener('click', () => switchLibTab('gallery'));
+  tabs.characters.btn.addEventListener('click', () => switchLibTab('characters'));
 
   function renderGalleryGrid(elId, items, emptyMsg) {
     const el = document.getElementById(elId);
@@ -228,6 +261,7 @@
       const loginMsg = `<p class="lib-empty"><a href="/fanpages/login?from=${encodeURIComponent('/fanpages/library')}" style="color:#7fa8d9;">Log in</a> to see this.</p>`;
       document.getElementById('lib-stories-grid').innerHTML = loginMsg;
       document.getElementById('lib-gallery-grid').innerHTML = loginMsg;
+      document.getElementById('lib-characters-grid').innerHTML = loginMsg;
       return;
     }
     try {
@@ -247,9 +281,22 @@
       }
 
       renderGalleryGrid('lib-gallery-grid', data.bookmarked_gallery || [], 'You haven\'t bookmarked any art yet — hit the bookmark icon on a gallery piece to save it here.');
+
+      const charactersGrid = document.getElementById('lib-characters-grid');
+      const characters = data.characters || [];
+      if (!characters.length) {
+        charactersGrid.innerHTML = '<p class="lib-empty">You haven\'t liked any characters yet — hit the ♡ on a character to save it here.</p>';
+      } else {
+        const grid = document.createElement('div');
+        grid.className = 'lib-gallery-grid';
+        characters.forEach(c => grid.appendChild(characterCard(c)));
+        charactersGrid.innerHTML = '';
+        charactersGrid.appendChild(grid);
+      }
     } catch {
       document.getElementById('lib-stories-grid').innerHTML = '<p class="lib-empty">Couldn\'t load your bookmarks right now.</p>';
       document.getElementById('lib-gallery-grid').innerHTML = '<p class="lib-empty">Couldn\'t load your bookmarks right now.</p>';
+      document.getElementById('lib-characters-grid').innerHTML = '<p class="lib-empty">Couldn\'t load your bookmarks right now.</p>';
     }
   })();
 </script>
