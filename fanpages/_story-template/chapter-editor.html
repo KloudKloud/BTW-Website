@@ -87,6 +87,16 @@
       display: flex; justify-content: center; gap: 0.9rem; padding: 1.25rem 1.75rem 1.5rem; flex-shrink: 0;
       border-top: 1px solid rgba(255,255,255,0.08);
     }
+    /* Small "are you sure" step before the file picker even opens -- the
+       Import button used to go straight to the OS file dialog with zero
+       context on what it does. */
+    .ce-import-confirm-modal {
+      background: #161616; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+      max-width: 420px; width: 100%; padding: 1.75rem; box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+      text-align: center;
+    }
+    .ce-import-confirm-modal .ce-import-sub { margin: 0.5rem 0 1.5rem; }
+    .ce-import-confirm-modal .ce-import-actions { padding: 0; border-top: none; }
 
     /* ── Chapter cover — a light gray box. Two big buttons by default (no
        toggle state); clicking Image opens the file picker (or drop a file
@@ -414,6 +424,17 @@
       <button class="ce-exit-btn ce-exit-btn--save" id="ce-exit-save-btn" type="button">Save & Exit</button>
       <button class="ce-exit-btn ce-exit-btn--discard" id="ce-exit-discard-btn" type="button">Exit Without Saving</button>
       <button class="ce-exit-btn ce-exit-btn--stay" id="ce-exit-stay-btn" type="button">Keep Editing</button>
+    </div>
+  </div>
+</div>
+
+<div class="ce-import-overlay" id="ce-import-confirm-overlay" hidden>
+  <div class="ce-import-confirm-modal">
+    <p class="ce-import-title">Import .docx file?</p>
+    <p class="ce-import-sub">Pick a .docx file from your device — you'll get to preview the extracted text and choose whether to add it before anything changes in this chapter.</p>
+    <div class="ce-import-actions">
+      <button class="ce-btn ce-btn--cancel" id="ce-import-confirm-back" type="button">Back</button>
+      <button class="ce-btn ce-btn--publish" id="ce-import-confirm-yes" type="button">Yes</button>
     </div>
   </div>
 </div>
@@ -912,7 +933,15 @@ editor.addEventListener('paste', (e) => {
 // same way, previewed, and only touches the editor once the author
 // confirms with Upload. ──────────────────────────────────────────────────
 const docxFileInput = document.getElementById('ce-docx-file-input');
+const importConfirmOverlay = document.getElementById('ce-import-confirm-overlay');
 document.getElementById('ce-import-docx-btn').addEventListener('click', () => {
+  importConfirmOverlay.hidden = false;
+});
+document.getElementById('ce-import-confirm-back').addEventListener('click', () => {
+  importConfirmOverlay.hidden = true;
+});
+document.getElementById('ce-import-confirm-yes').addEventListener('click', () => {
+  importConfirmOverlay.hidden = true;
   docxFileInput.click();
 });
 
@@ -998,16 +1027,18 @@ selToolbar.querySelectorAll('[data-cmd]').forEach(btn => {
   btn.addEventListener('mousedown', (e) => e.preventDefault()); // keep the text selection alive
   btn.addEventListener('click', () => { document.execCommand(btn.dataset.cmd); markDirty(); });
 });
+// execCommand's justify* commands (not a manual block.style.textAlign
+// mutation) are what plug alignment into the browser's own contenteditable
+// undo history -- a direct style write is invisible to it, which is why
+// Ctrl+Z used to reverse typed text/Bold/Italic fine but skipped right
+// over an alignment change.
+const ALIGN_COMMANDS = { left: 'justifyLeft', center: 'justifyCenter', right: 'justifyRight' };
 selToolbar.querySelectorAll('[data-align]').forEach(btn => {
   btn.addEventListener('mousedown', (e) => e.preventDefault());
   btn.addEventListener('click', () => {
     const sel = window.getSelection();
     if (!sel.rangeCount) return;
-    let node = sel.getRangeAt(0).commonAncestorContainer;
-    if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
-    const block = node.closest('p, div, li, h1, h2, h3, h4') || editor;
-    if (block === editor) return;
-    block.style.textAlign = btn.dataset.align === 'left' ? '' : btn.dataset.align;
+    document.execCommand(ALIGN_COMMANDS[btn.dataset.align]);
     markDirty();
   });
 });
