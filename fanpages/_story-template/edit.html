@@ -25,11 +25,19 @@
     .wiki-meta-field { margin-bottom: 1.85rem; }
     .wiki-meta-field:last-child { margin-bottom: 0; }
 
-    /* Fandom — AO3-style typeahead: suggestions drop below the bubble-tag
-       input as the author types, matching against the preloaded catalog. */
+    /* Fandom/Relationships/Tags/Species — AO3-style typeahead: suggestions
+       drop below the bubble-tag input as the author types, matching against
+       the preloaded catalog. Fixed positioning + moved to a direct child of
+       <body> at render time (see positionSuggestDropdown/renderSuggestDropdown)
+       so it always renders as one big dropdown right under the input no
+       matter what stacking/overflow context the input itself sits in --
+       the old position:absolute version rendered inside whatever ancestor
+       box it lived in, which inside the (scrolling, narrower) Character
+       Editor modal squeezed the Species dropdown into a cramped strip
+       along the right edge instead of a clean dropdown below the field. */
     .wiki-suggest-input-wrap { position: relative; }
     .wiki-fandom-suggest {
-      position: absolute; top: calc(100% + 0.4rem); left: 0; right: 0; z-index: 30;
+      position: fixed; z-index: 3000;
       background: #141018; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
       box-shadow: 0 16px 40px rgba(0,0,0,0.55); overflow: hidden;
     }
@@ -434,10 +442,13 @@
     <input type="file" id="char-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
 
     <div class="mod-field char-editor-nsfw-field" id="char-editor-nsfw-field" style="display:none;">
-      <label class="profile-checkbox-label">
-        <input type="checkbox" id="char-editor-nsfw-toggle" />
-        <span>NSFW?</span>
-      </label>
+      <div class="nsfw-toggle-row">
+        <label class="nsfw-toggle-switch">
+          <input type="checkbox" id="char-editor-nsfw-toggle" />
+          <span class="nsfw-toggle-slider"></span>
+        </label>
+        <span class="nsfw-toggle-label nsfw-toggle-label--sfw" id="char-editor-nsfw-toggle-label">Safe For Work</span>
+      </div>
       <p class="mod-tip-box" style="margin-top:0.5rem;">Is your character reference image NSFW? If so, please label it above! :3</p>
     </div>
 
@@ -1216,10 +1227,34 @@ function addWorkingFandom(raw) {
   renderFandomsEditor();
 }
 
+// Suggestion dropdowns get moved to be a direct child of <body> the first
+// time they're shown, then positioned with fixed viewport coordinates —
+// this escapes whatever stacking/overflow context the input happens to sit
+// in (a frosted .cs-panel, the scrolling Character Editor modal, etc.) so
+// the dropdown always renders as one clean box right under the field.
+function positionSuggestDropdown(wrap, anchorId) {
+  const anchor = document.getElementById(anchorId);
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  wrap.style.top = `${rect.bottom + 6}px`;
+  wrap.style.left = `${rect.left}px`;
+  wrap.style.width = `${rect.width}px`;
+}
+function repositionOpenSuggestDropdowns() {
+  document.querySelectorAll('.wiki-fandom-suggest').forEach(wrap => {
+    if (!wrap.hidden && wrap.dataset.anchor) positionSuggestDropdown(wrap, wrap.dataset.anchor);
+  });
+}
+window.addEventListener('scroll', repositionOpenSuggestDropdowns, true);
+window.addEventListener('resize', repositionOpenSuggestDropdowns);
+
 function renderFandomSuggest(matches) {
   const wrap = document.getElementById('fandom-suggest');
   fandomSuggestIndex = -1;
+  if (wrap.parentElement !== document.body) document.body.appendChild(wrap);
+  wrap.dataset.anchor = 'fandom-input-box';
   if (!matches.length) { wrap.hidden = true; wrap.innerHTML = ''; return; }
+  positionSuggestDropdown(wrap, 'fandom-input-box');
   wrap.innerHTML = matches.map(m => `<button type="button" class="wiki-fandom-suggest-item">${escapeHtml(m)}</button>`).join('');
   wrap.hidden = false;
   wrap.querySelectorAll('.wiki-fandom-suggest-item').forEach(btn => {
@@ -1266,12 +1301,19 @@ document.addEventListener('click', (e) => {
   if (!document.getElementById('fandom-input-box').contains(e.target)) renderFandomSuggest([]);
 });
 
-// Shared render/click-wiring for the Additional Tags and Relationships
-// typeahead dropdowns below — same visual/behavior as Fandom's above, just
-// generic enough to reuse for both instead of tripling the same block.
+// Shared render/click-wiring for the Relationships/Additional Tags/Species
+// typeahead dropdowns — same visual/behavior as Fandom's above, just generic
+// enough to reuse for all three instead of tripling the same block. Their
+// anchor boxes follow two different id conventions ("-input-box" for
+// Relationships/Tags, plain "-box" for Species), so both are tried.
 function renderSuggestDropdown(wrapId, matches, onPick) {
   const wrap = document.getElementById(wrapId);
+  const anchorId = [wrapId.replace('-suggest', '-input-box'), wrapId.replace('-suggest', '-box')]
+    .find(id => document.getElementById(id));
+  if (wrap.parentElement !== document.body) document.body.appendChild(wrap);
+  wrap.dataset.anchor = anchorId;
   if (!matches.length) { wrap.hidden = true; wrap.innerHTML = ''; return; }
+  positionSuggestDropdown(wrap, anchorId);
   wrap.innerHTML = matches.map(m => `<button type="button" class="wiki-fandom-suggest-item">${escapeHtml(m)}</button>`).join('');
   wrap.hidden = false;
   wrap.querySelectorAll('.wiki-fandom-suggest-item').forEach(btn => {
@@ -2277,6 +2319,7 @@ function openCharEditor(char) {
   recropBtn.style.display = isCustomRef ? 'block' : 'none';
   nsfwField.style.display = isCustomRef ? 'block' : 'none';
   nsfwToggle.checked = isCustomRef && char ? !!char.refIsNsfw : false;
+  setCharNsfwToggleLabel(nsfwToggle.checked);
 
   document.getElementById('char-editor-name').value = char ? char.name : '';
   document.getElementById('char-editor-desc').value = char ? char.desc.join('\n\n') : '';
@@ -2309,6 +2352,15 @@ function closeCharEditor() {
   document.getElementById('char-editor-overlay').hidden = true;
 }
 document.getElementById('char-editor-cancel').addEventListener('click', closeCharEditor);
+
+function setCharNsfwToggleLabel(isNsfw) {
+  const label = document.getElementById('char-editor-nsfw-toggle-label');
+  label.textContent = isNsfw ? 'NSFW' : 'Safe For Work';
+  label.classList.toggle('nsfw-toggle-label--sfw', !isNsfw);
+}
+document.getElementById('char-editor-nsfw-toggle').addEventListener('change', function () {
+  setCharNsfwToggleLabel(this.checked);
+});
 
 document.getElementById('char-editor-delete-forever').addEventListener('click', async () => {
   if (!editingCharId) return;

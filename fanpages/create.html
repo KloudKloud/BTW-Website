@@ -533,8 +533,10 @@ function renderFandomsEditor() {
   });
 }
 function addWorkingFandom(raw) {
-  const clean = raw.trim().slice(0, 100);
-  if (!clean) return;
+  const collapsed = raw.trim().slice(0, 100);
+  if (!collapsed) return;
+  const catalogMatch = fandomCatalog.find(f => f.toLowerCase() === collapsed.toLowerCase());
+  const clean = catalogMatch || collapsed;
   if (workingFandoms.some(f => f.toLowerCase() === clean.toLowerCase())) return;
   if (workingFandoms.length >= 10) return;
   workingFandoms.push(clean);
@@ -602,9 +604,15 @@ function renderTagsEditor() {
   document.getElementById('tags-count').textContent = `${workingTags.length}/100`;
 }
 function addWorkingTag(raw) {
-  const clean = raw.trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 40);
-  if (!clean) return;
-  if (workingTags.includes(clean)) return;
+  const collapsed = raw.trim().replace(/\s+/g, ' ').slice(0, 40);
+  if (!collapsed) return;
+  // Snap to the catalog's own canonical casing when this matches an
+  // existing tag except for case (typing "romance" and hitting Enter
+  // should save as "Romance", not fork into a lowercase near-duplicate
+  // that reads as a totally different tag everywhere it's displayed).
+  const catalogMatch = tagsCatalog.find(t => t.toLowerCase() === collapsed.toLowerCase());
+  const clean = catalogMatch || collapsed;
+  if (workingTags.some(t => t.toLowerCase() === clean.toLowerCase())) return;
   if (workingTags.length >= 100) return;
   workingTags.push(clean);
   renderTagsEditor();
@@ -614,7 +622,7 @@ let tagsSuggestIndex = -1;
 tagsTextInput.addEventListener('input', () => {
   const q = tagsTextInput.value.trim().toLowerCase();
   if (!q) { renderSuggestDropdown('tags-suggest', [], () => {}); return; }
-  const matches = tagsCatalog.filter(t => t.toLowerCase().includes(q) && !workingTags.includes(t.toLowerCase())).slice(0, 6);
+  const matches = tagsCatalog.filter(t => t.toLowerCase().includes(q) && !workingTags.some(w => w.toLowerCase() === t.toLowerCase())).slice(0, 6);
   tagsSuggestIndex = -1;
   renderSuggestDropdown('tags-suggest', matches, (val) => {
     addWorkingTag(val);

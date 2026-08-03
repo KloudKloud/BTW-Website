@@ -57,10 +57,13 @@
     <input type="file" id="char-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
 
     <div class="mod-field char-editor-nsfw-field" id="char-editor-nsfw-field" style="display:none;">
-      <label class="profile-checkbox-label">
-        <input type="checkbox" id="char-editor-nsfw-toggle" />
-        <span>NSFW?</span>
-      </label>
+      <div class="nsfw-toggle-row">
+        <label class="nsfw-toggle-switch">
+          <input type="checkbox" id="char-editor-nsfw-toggle" />
+          <span class="nsfw-toggle-slider"></span>
+        </label>
+        <span class="nsfw-toggle-label nsfw-toggle-label--sfw" id="char-editor-nsfw-toggle-label">Safe For Work</span>
+      </div>
       <p class="mod-tip-box" style="margin-top:0.5rem;">Is your character reference image NSFW? If so, please label it above! :3</p>
     </div>
 
@@ -283,6 +286,15 @@
   if (document.referrer && document.referrer.startsWith(window.location.origin)) {
     document.getElementById('char-editor-cancel').href = document.referrer;
   }
+
+  function setCharNsfwToggleLabel(isNsfw) {
+    const label = document.getElementById('char-editor-nsfw-toggle-label');
+    label.textContent = isNsfw ? 'NSFW' : 'Safe For Work';
+    label.classList.toggle('nsfw-toggle-label--sfw', !isNsfw);
+  }
+  document.getElementById('char-editor-nsfw-toggle').addEventListener('change', function () {
+    setCharNsfwToggleLabel(this.checked);
+  });
 
   const NA = 'N/A';
   function isBlank(v) { return !v || !v.trim() || v.trim() === NA; }
@@ -797,6 +809,7 @@
           document.getElementById('char-editor-ref-recrop-btn').style.display = 'block';
           document.getElementById('char-editor-nsfw-field').style.display = 'block';
           document.getElementById('char-editor-nsfw-toggle').checked = !!character.ref_is_nsfw;
+          setCharNsfwToggleLabel(!!character.ref_is_nsfw);
         }
       }
 
