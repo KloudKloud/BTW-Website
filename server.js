@@ -4840,19 +4840,36 @@ app.put('/api/moderator/site/nav-card/:kind/position', requireAuth, requireModer
 // Wattpad/e621-style tags: lowercased, whitespace collapsed to underscores,
 // deduped, capped at 100. Bad input silently gets cleaned up rather than
 // rejected — this is discovery metadata, not user-facing prose.
-function sanitizeTags(raw) {
-  if (!Array.isArray(raw)) return null;
+// Snaps each submitted value to its catalog entry's exact casing when one
+// matches case-insensitively (typing "umbreon" saves as the catalog's own
+// "Umbreon" instead of forking into a lowercase near-duplicate that reads
+// as a different tag everywhere it's displayed), falling back to the
+// submitted value as-is for anything genuinely new. This is the real
+// trust boundary — the client-side tag inputs already do this snap for a
+// good UX, but a hand-crafted request could still send anything, so it
+// has to be enforced again here.
+async function snapToCatalogCasing(tableName, values, maxLen, maxCount) {
+  const { rows } = await pool.query(`SELECT name FROM ${tableName}`);
+  const catalogMap = new Map(rows.map(r => [r.name.toLowerCase(), r.name]));
   const seen = new Set();
   const out = [];
-  for (const t of raw) {
-    if (typeof t !== 'string') continue;
-    const clean = t.trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 40);
-    if (!clean || seen.has(clean)) continue;
-    seen.add(clean);
+  for (const v of values) {
+    if (typeof v !== 'string') continue;
+    const collapsed = v.trim().replace(/\s+/g, ' ').slice(0, maxLen);
+    if (!collapsed) continue;
+    const clean = catalogMap.get(collapsed.toLowerCase()) || collapsed;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
     out.push(clean);
-    if (out.length >= 100) break;
+    if (out.length >= maxCount) break;
   }
   return out;
+}
+
+async function sanitizeTags(raw) {
+  if (!Array.isArray(raw)) return null;
+  return snapToCatalogCasing('tag_catalog', raw, 40, 100);
 }
 
 const RATING_OPTIONS = ['General Audiences', 'Teen & Up', 'Mature/Explicit (Adult)'];
@@ -4888,29 +4905,18 @@ function sanitizeRelationships(raw) {
 // Fandom is freeform (like a tag) rather than locked to a fixed option list —
 // the catalog only powers autocomplete suggestions; anything typed still
 // saves, and popular freeform entries get promoted into the catalog by hand.
-function sanitizeFandoms(raw) {
+async function sanitizeFandoms(raw) {
   if (!Array.isArray(raw)) return null;
-  const seen = new Set();
-  const out = [];
-  for (const f of raw) {
-    if (typeof f !== 'string') continue;
-    const clean = f.trim().slice(0, 100);
-    const key = clean.toLowerCase();
-    if (!clean || seen.has(key)) continue;
-    seen.add(key);
-    out.push(clean);
-    if (out.length >= 10) break;
-  }
-  return out;
+  return snapToCatalogCasing('fandom_catalog', raw, 100, 10);
 }
 
 app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) => {
   const { site_title, synopsis, bio, links, theme } = req.body;
-  const tags = req.body.tags !== undefined ? sanitizeTags(req.body.tags) : undefined;
+  const tags = req.body.tags !== undefined ? await sanitizeTags(req.body.tags) : undefined;
   const rating = req.body.rating !== undefined && RATING_OPTIONS.includes(req.body.rating) ? req.body.rating : undefined;
   const categories = req.body.categories !== undefined ? sanitizeCategories(req.body.categories) : undefined;
   const relationships = req.body.relationships !== undefined ? sanitizeRelationships(req.body.relationships) : undefined;
-  const fandoms = req.body.fandoms !== undefined ? sanitizeFandoms(req.body.fandoms) : undefined;
+  const fandoms = req.body.fandoms !== undefined ? await sanitizeFandoms(req.body.fandoms) : undefined;
   const { rows: [site] } = await pool.query(
     `UPDATE moderator_sites SET
        site_title    = COALESCE($1, site_title),
@@ -5585,19 +5591,12 @@ function clampPosition(v) {
 // as the story editor's client-side addWorkingTag (lowercase, collapsed
 // whitespace, 40 chars, 100 tags, de-duped) applied again here since this
 // is the actual trust boundary.
-function parseGalleryTags(raw) {
+async function parseGalleryTags(raw) {
   if (raw === undefined) return undefined;
   let arr;
   try { arr = JSON.parse(raw); } catch { return []; }
   if (!Array.isArray(arr)) return [];
-  const seen = new Set();
-  for (const t of arr) {
-    if (typeof t !== 'string') continue;
-    const clean = t.trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 40);
-    if (clean) seen.add(clean);
-    if (seen.size >= 100) break;
-  }
-  return [...seen];
+  return snapToCatalogCasing('tag_catalog', arr, 40, 100);
 }
 
 // Instant "create + attach to this story" — mirrors the character flow.
@@ -5609,7 +5608,7 @@ app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage
   const imageUrl = `/images/moderators/${req.file.filename}`;
   const positionX = clampPosition(req.body.position_x);
   const positionY = clampPosition(req.body.position_y);
-  const tags = parseGalleryTags(req.body.tags) || [];
+  const tags = (await parseGalleryTags(req.body.tags)) || [];
   const { rows: [item] } = await pool.query(
     `INSERT INTO moderator_gallery (owner_user_id, category, image_url, title, description, position_x, position_y, tags)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
@@ -5670,7 +5669,7 @@ app.put('/api/moderator/gallery/:id', requireAuth, uploadModImage.single('image'
   }
   const positionX = req.body.position_x !== undefined ? clampPosition(req.body.position_x) : existing.position_x;
   const positionY = req.body.position_y !== undefined ? clampPosition(req.body.position_y) : existing.position_y;
-  const tags = parseGalleryTags(req.body.tags);
+  const tags = await parseGalleryTags(req.body.tags);
 
   const { rows: [item] } = await pool.query(
     `UPDATE moderator_gallery SET
@@ -5804,7 +5803,7 @@ app.post('/api/gallery', requireAuth, uploadModImage.single('image'), async (req
   const imageUrl = `/images/moderators/${req.file.filename}`;
   const positionX = clampPosition(req.body.position_x);
   const positionY = clampPosition(req.body.position_y);
-  const tags = parseGalleryTags(req.body.tags) || [];
+  const tags = (await parseGalleryTags(req.body.tags)) || [];
   const { rows: [item] } = await pool.query(
     `INSERT INTO moderator_gallery (owner_user_id, category, image_url, title, description, position_x, position_y, tags)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,

@@ -243,9 +243,15 @@
   }
 
   function addWorkingGalleryTag(raw) {
-    const clean = raw.trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 40);
-    if (!clean) return;
-    if (workingGalleryTags.includes(clean)) return;
+    const collapsed = raw.trim().replace(/\s+/g, ' ').slice(0, 40);
+    if (!collapsed) return;
+    // Snap to the catalog's canonical casing on a case-insensitive match,
+    // same fix as the story editor's own tag input -- typing "umbreon"
+    // used to always save lowercase even when picking the suggested
+    // "Umbreon" straight out of the dropdown.
+    const catalogMatch = galleryTagsCatalog.find(t => t.toLowerCase() === collapsed.toLowerCase());
+    const clean = catalogMatch || collapsed;
+    if (workingGalleryTags.some(t => t.toLowerCase() === clean.toLowerCase())) return;
     if (workingGalleryTags.length >= 100) return;
     workingGalleryTags.push(clean);
     renderGalleryTagsEditor();
@@ -256,7 +262,7 @@
   galleryTagsTextInput.addEventListener('input', () => {
     const q = galleryTagsTextInput.value.trim().toLowerCase();
     if (!q) { renderSuggestDropdown('gallery-tags-suggest', [], () => {}); return; }
-    const matches = galleryTagsCatalog.filter(t => t.toLowerCase().includes(q) && !workingGalleryTags.includes(t.toLowerCase())).slice(0, 6);
+    const matches = galleryTagsCatalog.filter(t => t.toLowerCase().includes(q) && !workingGalleryTags.some(w => w.toLowerCase() === t.toLowerCase())).slice(0, 6);
     galleryTagsSuggestIndex = -1;
     renderSuggestDropdown('gallery-tags-suggest', matches, (val) => {
       addWorkingGalleryTag(val);
