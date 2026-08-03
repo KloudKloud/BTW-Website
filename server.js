@@ -399,6 +399,25 @@ async function initDb() {
     DELETE FROM tag_catalog WHERE lower(name) IN ('racism', 'nazis', 'nazi germany', 'world war ii', 'period-typical racism', 'torture');
   `).catch(e => console.error('tag_catalog trim:', e.message));
 
+  // Species dictionary — same tag-wrangling idea as tag_catalog, but its own
+  // separate vocabulary (a story tag catalog full of "Knotting"/"Rough Sex"
+  // has nothing to do with what species a character is). Seeded from every
+  // distinct species already typed in across existing characters, so
+  // whatever Blue and VeekitPaws already used becomes the day-one dictionary
+  // instead of starting empty.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS character_species_catalog (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL
+    );
+  `).catch(e => console.error('character_species_catalog migration:', e.message));
+  await pool.query(`
+    INSERT INTO character_species_catalog (name)
+    SELECT DISTINCT trim(stats->>'Species') FROM moderator_characters
+    WHERE stats ? 'Species' AND trim(COALESCE(stats->>'Species', '')) <> ''
+    ON CONFLICT (name) DO NOTHING
+  `).catch(e => console.error('character_species_catalog seed:', e.message));
+
   // Structured relationships — replaces the old free-text stats.Relationships
   // string. Each entry is { name, type, character_id }, where character_id
   // (nullable) lets one character's relationship list link straight to
@@ -412,6 +431,12 @@ async function initDb() {
   await pool.query(`
     ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS ref_is_nsfw BOOLEAN NOT NULL DEFAULT false;
   `).catch(e => console.error('moderator_characters ref_is_nsfw migration:', e.message));
+
+  // Backs the Characters browse page's "Date Updated" sort -- created_at
+  // alone would never move once a character's been edited.
+  await pool.query(`
+    ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+  `).catch(e => console.error('moderator_characters updated_at migration:', e.message));
 
   // Bookmarks — lets any logged-in user save a fanpage to their hub profile
   await pool.query(`
@@ -4946,6 +4971,18 @@ async function sanitizeFandoms(raw) {
   return snapToCatalogCasing('fandom_catalog', raw, 100, 10);
 }
 
+// Species lives inside the character's freeform `stats` blob (stats.Species)
+// rather than its own column -- this snaps just that one key to the
+// species dictionary's canonical casing, same "type it or click the
+// suggestion, either way it links to the real dictionary entry" rule as
+// tags/fandoms. Everything else in stats passes through untouched.
+async function sanitizeCharacterStats(stats) {
+  if (!stats || typeof stats !== 'object' || Array.isArray(stats)) return stats;
+  if (typeof stats.Species !== 'string' || !stats.Species.trim()) return stats;
+  const [clean] = await snapToCatalogCasing('character_species_catalog', [stats.Species], 60, 1);
+  return { ...stats, Species: clean || stats.Species.trim() };
+}
+
 app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) => {
   const { site_title, synopsis, bio, links, theme } = req.body;
   const tags = req.body.tags !== undefined ? await sanitizeTags(req.body.tags) : undefined;
@@ -5321,11 +5358,12 @@ app.put('/api/moderator/characters/reorder', requireAuth, requireModerator, asyn
 app.post('/api/moderator/characters', requireAuth, requireModerator, async (req, res) => {
   const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
+  const cleanStats = await sanitizeCharacterStats(stats || {});
   const { rows: [character] } = await pool.query(
     `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
-     JSON.stringify(stats || {}), JSON.stringify(facts || []), JSON.stringify(lore || []),
+     JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
      JSON.stringify(relationships || []), !!ref_is_nsfw]
   );
   const { rows: [{ maxOrder }] } = await pool.query(
@@ -5346,6 +5384,7 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
   );
   if (!existing) return res.status(404).json({ error: 'Not found.' });
   const { name, ref_image, description, stats, facts, lore, relationships, sort_order, ref_is_nsfw } = req.body;
+  const cleanStats = stats !== undefined ? await sanitizeCharacterStats(stats) : undefined;
   const { rows: [character] } = await pool.query(
     `UPDATE moderator_characters SET
        name          = COALESCE($1, name),
@@ -5356,10 +5395,11 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
        lore          = COALESCE($6, lore),
        relationships = COALESCE($7, relationships),
        sort_order    = COALESCE($8, sort_order),
-       ref_is_nsfw   = COALESCE($9, ref_is_nsfw)
+       ref_is_nsfw   = COALESCE($9, ref_is_nsfw),
+       updated_at    = NOW()
      WHERE id = $10 RETURNING *`,
     [name, ref_image, description,
-     stats !== undefined ? JSON.stringify(stats) : null,
+     cleanStats !== undefined ? JSON.stringify(cleanStats) : null,
      facts !== undefined ? JSON.stringify(facts) : null,
      lore !== undefined ? JSON.stringify(lore) : null,
      relationships !== undefined ? JSON.stringify(relationships) : null,
@@ -5560,11 +5600,12 @@ app.delete('/api/characters/:id/link/:siteId', requireAuth, async (req, res) => 
 app.post('/api/characters', requireAuth, async (req, res) => {
   const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
+  const cleanStats = await sanitizeCharacterStats(stats || {});
   const { rows: [character] } = await pool.query(
     `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
-     JSON.stringify(stats || {}), JSON.stringify(facts || []), JSON.stringify(lore || []),
+     JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
      JSON.stringify(relationships || []), !!ref_is_nsfw]
   );
   res.json({ character });
@@ -6624,13 +6665,8 @@ app.get('/api/search/profiles', async (req, res) => {
 // as a searchable/filterable list instead of sitting invisibly inside
 // each character's own stats box). Backs the Characters page's sidebar.
 app.get('/api/character-species-catalog', async (req, res) => {
-  const { rows } = await pool.query(`
-    SELECT DISTINCT trim(stats->>'Species') AS species
-    FROM moderator_characters
-    WHERE stats ? 'Species' AND trim(COALESCE(stats->>'Species', '')) <> ''
-    ORDER BY species ASC
-  `);
-  res.json({ species: rows.map(r => r.species) });
+  const { rows } = await pool.query('SELECT name FROM character_species_catalog ORDER BY name ASC');
+  res.json({ species: rows.map(r => r.name) });
 });
 
 // Characters page — every character site-wide. "Search Keywords" matches
@@ -6639,9 +6675,12 @@ app.get('/api/character-species-catalog', async (req, res) => {
 // liked narrows to the viewer's own/followed/liked characters -- those
 // three require a logged-in viewer, and just return empty if there isn't
 // one rather than erroring.
+const CHARACTER_SORTS = ['best_match', 'updated', 'popular'];
+
 app.get('/api/search/characters', async (req, res) => {
   const q = String(req.query.q || '').trim();
   const filter = String(req.query.filter || '').trim();
+  const sortKey = CHARACTER_SORTS.includes(req.query.sort) ? req.query.sort : 'best_match';
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(60, Math.max(1, parseInt(req.query.limit, 10) || 30));
   const offset = (page - 1) * limit;
@@ -6654,13 +6693,29 @@ app.get('/api/search/characters', async (req, res) => {
   }
 
   if (['mine', 'followed', 'liked'].includes(filter) && !viewerId) {
-    return res.json({ items: [], total: 0, page, limit });
+    return res.json({ items: [], total: 0, page, limit, sort: sortKey });
   }
 
   let filterClause = '';
   if (filter === 'mine') filterClause = 'AND mch.owner_user_id = $4';
   else if (filter === 'followed') filterClause = 'AND mch.owner_user_id IN (SELECT followed_id FROM user_follows WHERE follower_id = $4)';
   else if (filter === 'liked') filterClause = 'AND mch.id IN (SELECT character_id FROM moderator_character_likes WHERE user_id = $4)';
+
+  // "Best Match" isn't just query relevance -- with no query typed (the
+  // common case when just browsing) it still needs to produce a sensible
+  // trending order, so it's relevance (when there's a query) PLUS a like
+  // count weighting PLUS a recency boost that decays to 0 after 30 days.
+  const bestMatchExpr = `(
+    ${q ? `(CASE WHEN mch.name ILIKE $1 THEN 50 ELSE 0 END) +
+    (CASE WHEN mch.name ILIKE '%' || $1 || '%' THEN 20 ELSE 0 END) +
+    (CASE WHEN trim(mch.stats->>'Species') ILIKE '%' || $1 || '%' THEN 15 ELSE 0 END) +
+    (CASE WHEN mch.description ILIKE '%' || $1 || '%' THEN 5 ELSE 0 END) +` : ''}
+    (SELECT COUNT(*)::int FROM moderator_character_likes mcl3 WHERE mcl3.character_id = mch.id) * 4 +
+    GREATEST(0, 30 - EXTRACT(DAY FROM (NOW() - mch.created_at)))
+  )`;
+  const orderBy = sortKey === 'popular' ? 'like_count DESC, mch.created_at DESC'
+    : sortKey === 'updated' ? 'mch.updated_at DESC NULLS LAST, mch.created_at DESC'
+    : `${bestMatchExpr} DESC, mch.created_at DESC`;
 
   const { rows } = await pool.query(
     `SELECT mch.id, mch.name, mch.ref_image, mch.ref_position_x, mch.ref_position_y, mch.ref_is_nsfw,
@@ -6676,7 +6731,7 @@ app.get('/api/search/characters', async (req, res) => {
             OR trim(mch.stats->>'Species') ILIKE '%' || $1 || '%'
             OR mch.description ILIKE '%' || $1 || '%')
        ${filterClause}
-     ORDER BY mch.created_at DESC
+     ORDER BY ${orderBy}
      LIMIT $2 OFFSET $3`,
     viewerId ? [q, limit, offset, viewerId] : [q, limit, offset]
   );
@@ -6691,7 +6746,7 @@ app.get('/api/search/characters', async (req, res) => {
       owner_username: r.owner_username, owner: r.owner_display_name || r.owner_username,
       story_count: r.story_count, like_count: r.like_count, liked: !!r.liked,
     })),
-    total: rows.length ? Number(rows[0].total_count) : 0, page, limit,
+    total: rows.length ? Number(rows[0].total_count) : 0, page, limit, sort: sortKey,
   });
 });
 

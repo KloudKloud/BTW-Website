@@ -452,8 +452,13 @@
     </div>
 
     <div class="mod-field">
-      <label for="char-editor-species">Species</label>
-      <input class="mod-input" id="char-editor-species" placeholder="e.g. Umbreon, Espeon, Human, Kobald..." />
+      <label for="char-editor-species-input">Species</label>
+      <div class="wiki-tags-editor" id="char-editor-species-editor">
+        <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="char-editor-species-box">
+          <input type="text" class="wiki-tags-input" id="char-editor-species-input" placeholder="e.g. Umbreon, Espeon, Human, Kobold..." autocomplete="off" />
+          <div class="wiki-fandom-suggest" id="char-editor-species-suggest" hidden></div>
+        </div>
+      </div>
     </div>
 
     <div class="mod-field">
@@ -1268,6 +1273,77 @@ function renderSuggestDropdown(wrapId, matches, onPick) {
     btn.addEventListener('mousedown', (e) => { e.preventDefault(); onPick(btn.textContent); });
   });
 }
+
+// ── Character Species — same tag-wrangling bubble input as Additional Tags
+// below, but its own separate dictionary (character_species_catalog) and
+// capped at one value, since a character only has a single species. ──────
+let workingSpecies = '';
+let speciesCatalog = [];
+
+function renderSpeciesEditor() {
+  const box = document.getElementById('char-editor-species-box');
+  const input = document.getElementById('char-editor-species-input');
+  box.querySelectorAll('.wiki-tag-bubble--editable').forEach(b => b.remove());
+  if (workingSpecies) {
+    const bubble = document.createElement('span');
+    bubble.className = 'wiki-tag-bubble wiki-tag-bubble--editable';
+    bubble.innerHTML = `${escapeHtml(workingSpecies)} <button class="wiki-tag-bubble-remove" type="button" aria-label="Remove species">✕</button>`;
+    bubble.querySelector('.wiki-tag-bubble-remove').addEventListener('click', () => {
+      workingSpecies = '';
+      renderSpeciesEditor();
+    });
+    box.insertBefore(bubble, input);
+    input.style.display = 'none';
+  } else {
+    input.style.display = '';
+  }
+}
+
+function setWorkingSpecies(raw) {
+  const collapsed = raw.trim().replace(/\s+/g, ' ').slice(0, 60);
+  if (!collapsed) return;
+  const catalogMatch = speciesCatalog.find(s => s.toLowerCase() === collapsed.toLowerCase());
+  workingSpecies = catalogMatch || collapsed;
+  renderSpeciesEditor();
+}
+
+const speciesInput = document.getElementById('char-editor-species-input');
+let speciesSuggestIndex = -1;
+speciesInput.addEventListener('input', () => {
+  const q = speciesInput.value.trim().toLowerCase();
+  if (!q) { renderSuggestDropdown('char-editor-species-suggest', [], () => {}); return; }
+  const matches = speciesCatalog.filter(s => s.toLowerCase().includes(q)).slice(0, 6);
+  speciesSuggestIndex = -1;
+  renderSuggestDropdown('char-editor-species-suggest', matches, (val) => {
+    setWorkingSpecies(val);
+    speciesInput.value = '';
+    renderSuggestDropdown('char-editor-species-suggest', [], () => {});
+  });
+});
+speciesInput.addEventListener('keydown', (e) => {
+  const items = document.querySelectorAll('#char-editor-species-suggest .wiki-fandom-suggest-item');
+  if (e.key === 'ArrowDown' && items.length) {
+    e.preventDefault();
+    speciesSuggestIndex = Math.min(speciesSuggestIndex + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('active', i === speciesSuggestIndex));
+  } else if (e.key === 'ArrowUp' && items.length) {
+    e.preventDefault();
+    speciesSuggestIndex = Math.max(speciesSuggestIndex - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('active', i === speciesSuggestIndex));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const picked = speciesSuggestIndex >= 0 && items[speciesSuggestIndex] ? items[speciesSuggestIndex].textContent : speciesInput.value;
+    setWorkingSpecies(picked);
+    speciesInput.value = '';
+    renderSuggestDropdown('char-editor-species-suggest', [], () => {});
+  } else if (e.key === 'Escape') {
+    renderSuggestDropdown('char-editor-species-suggest', [], () => {});
+  }
+});
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('char-editor-species-box').contains(e.target)) renderSuggestDropdown('char-editor-species-suggest', [], () => {});
+});
+fetch('/api/character-species-catalog').then(r => r.ok ? r.json() : { species: [] }).then(d => { speciesCatalog = d.species || []; }).catch(() => {});
 
 // ── Additional Tags — e621/Wattpad-style bubble input ───────────────────────
 let workingTags = [];
@@ -2202,7 +2278,8 @@ function openCharEditor(char) {
 
   const stats = char ? (char.stats || {}) : {};
   document.getElementById('char-editor-age').value = !isBlank(stats['Age']) ? stats['Age'] : '';
-  document.getElementById('char-editor-species').value = !isBlank(stats['Species']) ? stats['Species'] : '';
+  workingSpecies = !isBlank(stats['Species']) ? stats['Species'] : '';
+  renderSpeciesEditor();
   document.getElementById('char-editor-interests').value = !isBlank(stats['Interests']) ? stats['Interests'] : '';
   document.getElementById('char-editor-theme-song').value = !isBlank(stats['Theme Song']) ? stats['Theme Song'] : '';
 
@@ -2330,9 +2407,14 @@ document.getElementById('char-editor-save').addEventListener('click', async () =
     return;
   }
 
+  if (document.getElementById('char-editor-species-input').value.trim()) {
+    setWorkingSpecies(document.getElementById('char-editor-species-input').value);
+    document.getElementById('char-editor-species-input').value = '';
+  }
+
   const stats = {
     Age: document.getElementById('char-editor-age').value.trim() || NA,
-    Species: document.getElementById('char-editor-species').value.trim() || NA,
+    Species: workingSpecies || NA,
     Interests: document.getElementById('char-editor-interests').value.trim() || NA,
     'Theme Song': document.getElementById('char-editor-theme-song').value.trim() || NA,
   };

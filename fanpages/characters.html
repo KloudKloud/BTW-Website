@@ -82,6 +82,17 @@
     }
     .fp-char-search-wrap input:focus { outline: none; border-color: #7fa8d9; }
 
+    .fp-char-sort-wrap { margin-bottom: 1.5rem; }
+    .fp-char-sort-wrap label {
+      display: block; font-size: 0.78rem; font-weight: 700; color: #999; text-transform: uppercase;
+      letter-spacing: 0.05em; margin-bottom: 0.4rem;
+    }
+    .fp-char-sort-wrap select {
+      width: 100%; background: #1a1a1e; border: 1px solid rgba(255,255,255,0.16); border-radius: 10px;
+      color: #f0f0f0; font-family: inherit; font-size: 0.9rem; font-weight: 600; padding: 0.55em 0.7em;
+    }
+    .fp-char-sort-wrap select:focus { outline: none; border-color: #7fa8d9; }
+
     .fp-char-filter-menu { display: flex; flex-direction: column; gap: 0.4rem; }
     .fp-char-filter-item {
       display: flex; align-items: center; gap: 0.6rem;
@@ -150,13 +161,17 @@
     .fp-char-like-btn .fp-char-like-icon { font-size: 0.9rem; }
 
     .fp-char-empty { color: #ddd; font-size: 1rem; padding: 2rem 0; grid-column: 1 / -1; }
-    .fp-pagination { display: flex; justify-content: center; gap: 0.6rem; margin-top: 2.5rem; }
-    .fp-pagination button {
-      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.25); color: #ddd; border-radius: 10px;
-      padding: 0.55em 1.2em; cursor: pointer; font-family: inherit; font-size: 0.9rem;
+
+    /* e621-style numbered pagination -- shown above AND below the grid. */
+    .fp-pagination { display: flex; justify-content: center; align-items: center; gap: 0.35rem; margin: 1.25rem 0; flex-wrap: wrap; }
+    .fp-page-btn {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: #ccc; border-radius: 8px;
+      min-width: 2.2rem; height: 2.2rem; padding: 0 0.5em; cursor: pointer; font-family: inherit; font-size: 0.9rem; font-weight: 600;
     }
-    .fp-pagination button:hover:not(:disabled) { border-color: #7fa8d9; color: #7fa8d9; }
-    .fp-pagination button:disabled { opacity: 0.4; cursor: default; }
+    .fp-page-btn:hover:not(:disabled):not(.fp-page-btn--active) { border-color: #7fa8d9; color: #7fa8d9; }
+    .fp-page-btn:disabled { opacity: 0.35; cursor: default; }
+    .fp-page-btn--active { background: #f0c060; border-color: #f0c060; color: #14121a; }
+    .fp-page-ellipsis { color: #777; padding: 0 0.2rem; font-size: 0.9rem; }
 
     @media (max-width: 1100px) {
       .fp-char-grid { grid-template-columns: repeat(3, 1fr); }
@@ -191,6 +206,15 @@
       <input type="search" id="fp-char-search-input" placeholder="Search Keywords…" />
     </div>
 
+    <div class="fp-char-sort-wrap">
+      <label for="fp-char-sort-select">Sort</label>
+      <select id="fp-char-sort-select">
+        <option value="best_match">Best Match</option>
+        <option value="updated">Date Updated</option>
+        <option value="popular">Popular</option>
+      </select>
+    </div>
+
     <nav class="fp-char-filter-menu" id="fp-char-filter-menu">
       <button type="button" class="fp-char-filter-item" data-filter="">
         <span class="fp-char-filter-icon">🐾</span> All Characters
@@ -210,8 +234,9 @@
   <div>
     <h1 class="fp-char-main-heading">Characters</h1>
     <p class="fp-char-main-sub" id="fp-char-main-sub"></p>
+    <div class="fp-pagination" id="fp-pagination-top" hidden></div>
     <div class="fp-char-grid" id="fp-char-grid"><p class="fp-char-empty">Loading…</p></div>
-    <div class="fp-pagination" id="fp-pagination" hidden></div>
+    <div class="fp-pagination" id="fp-pagination-bottom" hidden></div>
   </div>
 </main>
 </div>
@@ -229,14 +254,47 @@ const FILTER_LABELS = {
   '': 'All Characters', mine: 'Your Characters', followed: 'Followed Characters', liked: 'Liked Characters',
 };
 
+const SORT_OPTIONS = ['best_match', 'updated', 'popular'];
+
 function readParams() {
   const p = new URLSearchParams(window.location.search);
   const filter = p.get('filter') || '';
+  const sort = p.get('sort') || '';
   return {
     q: p.get('q') || '',
     filter: ['mine', 'followed', 'liked'].includes(filter) ? filter : '',
+    sort: SORT_OPTIONS.includes(sort) ? sort : 'best_match',
     page: Math.max(1, parseInt(p.get('page'), 10) || 1),
   };
+}
+
+function goToParams(mutate) {
+  const usp = new URLSearchParams(window.location.search);
+  mutate(usp);
+  window.location.search = usp.toString();
+}
+
+function paginationHtml(page, totalPages) {
+  if (totalPages <= 1) return '';
+  const pageSet = new Set([1, totalPages, page]);
+  for (let i = page - 2; i <= page + 2; i++) if (i >= 1 && i <= totalPages) pageSet.add(i);
+  const sorted = [...pageSet].sort((a, b) => a - b);
+  let html = `<button type="button" class="fp-page-btn" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''} aria-label="Previous page">‹</button>`;
+  let prev = 0;
+  sorted.forEach(p => {
+    if (p - prev > 1) html += '<span class="fp-page-ellipsis">…</span>';
+    html += `<button type="button" class="fp-page-btn${p === page ? ' fp-page-btn--active' : ''}" data-page="${p}">${p}</button>`;
+    prev = p;
+  });
+  html += `<button type="button" class="fp-page-btn" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''} aria-label="Next page">›</button>`;
+  return html;
+}
+
+function wirePagination(el) {
+  el.querySelectorAll('.fp-page-btn').forEach(btn => {
+    if (btn.disabled) return;
+    btn.addEventListener('click', () => goToParams(usp => usp.set('page', btn.dataset.page)));
+  });
 }
 
 async function loadViewerBox() {
@@ -314,11 +372,15 @@ document.getElementById('fp-char-search-input').addEventListener('input', (e) =>
   clearTimeout(searchDebounce);
   const val = e.target.value;
   searchDebounce = setTimeout(() => {
-    const usp = new URLSearchParams(window.location.search);
-    if (val.trim()) usp.set('q', val.trim()); else usp.delete('q');
-    usp.delete('page');
-    window.location.search = usp.toString();
+    goToParams(usp => {
+      if (val.trim()) usp.set('q', val.trim()); else usp.delete('q');
+      usp.delete('page');
+    });
   }, 400);
+});
+
+document.getElementById('fp-char-sort-select').addEventListener('change', (e) => {
+  goToParams(usp => { usp.set('sort', e.target.value); usp.delete('page'); });
 });
 
 function wireFilterMenu() {
@@ -326,27 +388,32 @@ function wireFilterMenu() {
   document.querySelectorAll('.fp-char-filter-item').forEach(btn => {
     btn.classList.toggle('fp-char-filter-item--active', btn.dataset.filter === activeFilter);
     btn.addEventListener('click', () => {
-      const usp = new URLSearchParams(window.location.search);
-      if (btn.dataset.filter) usp.set('filter', btn.dataset.filter); else usp.delete('filter');
-      usp.delete('page');
-      window.location.search = usp.toString();
+      goToParams(usp => {
+        if (btn.dataset.filter) usp.set('filter', btn.dataset.filter); else usp.delete('filter');
+        usp.delete('page');
+      });
     });
   });
 }
 
+const SORT_LABELS = { best_match: 'Best Match', updated: 'Date Updated', popular: 'Popular' };
+
 async function runCharacterSearch() {
   const gridEl = document.getElementById('fp-char-grid');
   const subEl = document.getElementById('fp-char-main-sub');
-  const paginationEl = document.getElementById('fp-pagination');
+  const topEl = document.getElementById('fp-pagination-top');
+  const bottomEl = document.getElementById('fp-pagination-bottom');
   gridEl.innerHTML = '<p class="fp-char-empty">Loading…</p>';
-  paginationEl.hidden = true;
+  topEl.hidden = true; bottomEl.hidden = true;
 
-  const { q, filter, page } = readParams();
+  const { q, filter, sort, page } = readParams();
   document.getElementById('fp-char-search-input').value = q;
-  const limit = 32;
+  document.getElementById('fp-char-sort-select').value = sort;
+  const limit = 40;
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (filter) params.set('filter', filter);
+  params.set('sort', sort);
   params.set('page', page);
   params.set('limit', limit);
 
@@ -363,7 +430,7 @@ async function runCharacterSearch() {
     const bits = [];
     if (filter) bits.push(FILTER_LABELS[filter].toLowerCase());
     if (q) bits.push(`"${q}"`);
-    subEl.innerHTML = `<strong>${data.total || 0}</strong> character${data.total === 1 ? '' : 's'} found${bits.length ? ` for ${escapeHtml(bits.join(', '))}` : ''}.`;
+    subEl.innerHTML = `<strong>${data.total || 0}</strong> character${data.total === 1 ? '' : 's'} found${bits.length ? ` for ${escapeHtml(bits.join(', '))}` : ''} — sorted by ${escapeHtml(SORT_LABELS[data.sort] || 'Best Match')}.`;
 
     if (!items.length) {
       gridEl.innerHTML = '<p class="fp-char-empty">No characters match that search.</p>';
@@ -373,16 +440,10 @@ async function runCharacterSearch() {
     wireLikeButtons(gridEl);
 
     const totalPages = Math.max(1, Math.ceil((data.total || 0) / limit));
-    if (totalPages > 1) {
-      paginationEl.hidden = false;
-      paginationEl.innerHTML = `
-        <button id="fp-page-prev" ${page <= 1 ? 'disabled' : ''}>← Previous</button>
-        <span style="align-self:center; color:#ddd; font-size:0.88rem;">Page ${page} of ${totalPages}</span>
-        <button id="fp-page-next" ${page >= totalPages ? 'disabled' : ''}>Next →</button>
-      `;
-      const goPage = (p) => { const usp = new URLSearchParams(window.location.search); usp.set('page', p); window.location.search = usp.toString(); };
-      if (page > 1) document.getElementById('fp-page-prev').addEventListener('click', () => goPage(page - 1));
-      if (page < totalPages) document.getElementById('fp-page-next').addEventListener('click', () => goPage(page + 1));
+    const pagHtml = paginationHtml(page, totalPages);
+    if (pagHtml) {
+      topEl.hidden = false; topEl.innerHTML = pagHtml; wirePagination(topEl);
+      bottomEl.hidden = false; bottomEl.innerHTML = pagHtml; wirePagination(bottomEl);
     }
   } catch {
     gridEl.innerHTML = '<p class="fp-char-empty">Couldn\'t load characters right now.</p>';
