@@ -263,6 +263,17 @@
     .fp-pagination button:hover:not(:disabled) { border-color: #7fa8d9; color: #7fa8d9; }
     .fp-pagination button:disabled { opacity: 0.4; cursor: default; }
 
+    /* Numbered e621-style pager (Submissions) -- Story keeps the plain
+       Previous/Next buttons above, styled by the generic rule. */
+    .fp-page-btn {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: #ccc; border-radius: 8px;
+      min-width: 2.2rem; height: 2.2rem; padding: 0 0.5em; cursor: pointer; font-family: inherit; font-size: 0.9rem; font-weight: 600;
+    }
+    .fp-page-btn:hover:not(:disabled):not(.fp-page-btn--active) { border-color: #7fa8d9; color: #7fa8d9; }
+    .fp-page-btn:disabled { opacity: 0.35; cursor: default; }
+    .fp-page-btn--active { background: #f0c060; border-color: #f0c060; color: #14121a; }
+    .fp-page-ellipsis { color: #777; padding: 0 0.2rem; font-size: 0.9rem; }
+
     /* ── Left-hand panel — three big section links (Story / Submissions /
        Profiles) near the top, then a "Current search" indicator + the
        "Filter Search" toggle pinned to the bottom (margin-top:auto on
@@ -493,6 +504,7 @@
   <div class="fp-results-col">
     <h1 class="fp-browse-heading" id="fp-browse-heading" hidden></h1>
     <p class="fp-search-sub" id="fp-search-sub"></p>
+    <div class="fp-pagination" id="fp-pagination-top" hidden></div>
     <div class="fp-results-list" id="fp-search-results"><p class="fp-search-empty">Loading…</p></div>
     <div class="fp-pagination" id="fp-pagination" hidden></div>
   </div>
@@ -711,7 +723,7 @@ function submissionCard(it) {
   const posX = it.position_x != null ? it.position_x : 50;
   const posY = it.position_y != null ? it.position_y : 50;
   if (it.type === 'art') {
-    a.href = `/fanpages/${escapeHtml(it.author_username)}?gallery=${it.id}#gallery`;
+    a.href = `/fanpages/gallery-post?id=${it.id}`;
     a.innerHTML = `
       <img src="${escapeHtml(it.image)}" alt="" style="object-position:${posX}% ${posY}%;" />
       <span class="rs-card-badge">🎨</span>
@@ -790,17 +802,46 @@ function buildJustifiedGrid(container, entries, targetHeight, gap, maxRows) {
   if (rows < maxRows && row.length) commitRow(false);
 }
 
+// e621-style numbered pager, shared by Submissions (top and bottom). Always
+// renders even with a single page -- prev/next just end up disabled -- so
+// the page-number UI stays put instead of popping in and out.
+function paginationHtml(page, totalPages) {
+  const pageSet = new Set([1, totalPages, page]);
+  for (let i = page - 2; i <= page + 2; i++) if (i >= 1 && i <= totalPages) pageSet.add(i);
+  const sorted = [...pageSet].sort((a, b) => a - b);
+  let html = `<button type="button" class="fp-page-btn" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''} aria-label="Previous page">‹</button>`;
+  let prev = 0;
+  sorted.forEach(p => {
+    if (p - prev > 1) html += '<span class="fp-page-ellipsis">…</span>';
+    html += `<button type="button" class="fp-page-btn${p === page ? ' fp-page-btn--active' : ''}" data-page="${p}">${p}</button>`;
+    prev = p;
+  });
+  html += `<button type="button" class="fp-page-btn" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''} aria-label="Next page">›</button>`;
+  return html;
+}
+function wirePagination(el) {
+  el.querySelectorAll('.fp-page-btn').forEach(btn => {
+    if (btn.disabled) return;
+    btn.addEventListener('click', () => {
+      const usp = new URLSearchParams(window.location.search);
+      usp.set('page', btn.dataset.page);
+      window.location.search = usp.toString();
+    });
+  });
+}
+
 async function runSubmissionsSearch() {
   const resultsEl = document.getElementById('fp-search-results');
   const subEl = document.getElementById('fp-search-sub');
-  const paginationEl = document.getElementById('fp-pagination');
+  const topEl = document.getElementById('fp-pagination-top');
+  const bottomEl = document.getElementById('fp-pagination');
   resultsEl.innerHTML = '<p class="fp-search-empty">Loading…</p>';
-  paginationEl.hidden = true;
+  topEl.hidden = true; bottomEl.hidden = true;
 
   const p = new URLSearchParams(window.location.search);
   const q = p.get('q') || '';
   const page = Math.max(1, parseInt(p.get('page'), 10) || 1);
-  const limit = 40;
+  const limit = 50;
 
   try {
     const res = await fetch(`/api/search/submissions?q=${encodeURIComponent(q)}&page=${page}&limit=${limit}`, { headers: authHeaders() });
@@ -821,17 +862,9 @@ async function runSubmissionsSearch() {
     buildJustifiedGrid(resultsEl, entries, 190, 14, Infinity);
 
     const totalPages = Math.max(1, Math.ceil((data.total || 0) / limit));
-    if (totalPages > 1) {
-      paginationEl.hidden = false;
-      paginationEl.innerHTML = `
-        <button id="fp-page-prev" ${page <= 1 ? 'disabled' : ''}>← Previous</button>
-        <span style="align-self:center; color:#ddd; font-size:0.88rem;">Page ${page} of ${totalPages}</span>
-        <button id="fp-page-next" ${page >= totalPages ? 'disabled' : ''}>Next →</button>
-      `;
-      const goPage = (pp) => { const usp = new URLSearchParams(window.location.search); usp.set('page', pp); window.location.search = usp.toString(); };
-      if (page > 1) document.getElementById('fp-page-prev').addEventListener('click', () => goPage(page - 1));
-      if (page < totalPages) document.getElementById('fp-page-next').addEventListener('click', () => goPage(page + 1));
-    }
+    const pagHtml = paginationHtml(page, totalPages);
+    topEl.hidden = false; topEl.innerHTML = pagHtml; wirePagination(topEl);
+    bottomEl.hidden = false; bottomEl.innerHTML = pagHtml; wirePagination(bottomEl);
   } catch {
     resultsEl.innerHTML = '<p class="fp-search-empty">Couldn\'t load submissions right now.</p>';
   }
@@ -1001,10 +1034,15 @@ function applyParamsToPanel(f) {
   document.querySelectorAll('#f-categories input').forEach(cb => { cb.checked = cats.includes(cb.value); });
   document.querySelectorAll('#f-completion input').forEach(r => { r.checked = r.value === f.completion; });
 
+  // Exact-tag filters (fandoms/tags/relationships/categories/rating) get a
+  // "<tag> @X" marker so it's obvious this is a narrowed exact-match search,
+  // not the fuzzy keyword search a plain "X" would imply.
   const queryBits = [];
   if (f.q) queryBits.push(`"${f.q}"`);
-  if (f.fandoms) queryBits.push(f.fandoms);
-  if (f.tags_include) queryBits.push(f.tags_include);
+  ['fandoms', 'tags_include', 'relationships', 'categories'].forEach(key => {
+    if (f[key]) f[key].split(',').filter(Boolean).forEach(v => queryBits.push(`<tag> @${v}`));
+  });
+  if (f.rating) queryBits.push(`<tag> @${f.rating}`);
   const queryText = queryBits.length ? queryBits.join(', ') : 'Everything';
   document.getElementById('fp-filter-query-text').textContent = queryText;
   document.getElementById('fp-filter-query-text-side').textContent = queryText;

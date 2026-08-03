@@ -5807,7 +5807,22 @@ app.post('/api/moderator/gallery/:id/link', requireAuth, requireModerator, async
 // Gallery tab. Plain requireAuth, same reasoning as standalone characters.
 // Public, unscoped gallery-post lookup — backs the standalone edit page.
 app.get('/api/gallery/:id', async (req, res) => {
-  const { rows: [item] } = await pool.query('SELECT * FROM moderator_gallery WHERE id = $1', [req.params.id]);
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+  const { rows: [item] } = await pool.query(
+    `SELECT mg.*, u.username AS owner_username, u.display_name AS owner_display_name, u.avatar AS owner_avatar,
+            (SELECT COUNT(*)::int FROM moderator_gallery_likes WHERE gallery_id = mg.id) AS like_count,
+            (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'gallery' AND target_id = mg.id) AS comment_count,
+            EXISTS(SELECT 1 FROM moderator_gallery_likes WHERE gallery_id = mg.id AND user_id = $2) AS liked,
+            EXISTS(SELECT 1 FROM moderator_gallery_bookmarks WHERE gallery_id = mg.id AND user_id = $2) AS bookmarked
+     FROM moderator_gallery mg
+     JOIN users u ON u.id = mg.owner_user_id
+     WHERE mg.id = $1`,
+    [req.params.id, viewerId || 0]
+  );
   if (!item) return res.status(404).json({ error: 'Not found.' });
   res.json({ item });
 });

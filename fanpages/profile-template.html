@@ -324,29 +324,6 @@
     .fp-gallery-page-row .mod-gallery-sidebar-label {
       font-size: 1.15rem; letter-spacing: 0.04em; margin-bottom: 1.1rem;
     }
-    /* Detail view's own row — deliberately UNCAPPED (unlike the
-       story-context page's .mod-page-row), so a gallery post opened
-       anywhere except a story's own gallery page (profile tab, search/
-       browse results, a tag click) uses the entire screen width. */
-    .fp-gallery-detail-row {
-      max-width: none; margin: 3rem 0 0; padding: 0 3rem;
-    }
-    /* #fp-gallery-detail-view otherwise keeps the base .art-view-wrapper's
-       own max-width:920px;margin:0 auto sizing, which would center it
-       *inside* the 1fr column instead of filling it — same fix
-       gallery.html applies inline on its own #gallery-detail-view. */
-    #fp-gallery-detail-view { max-width: none; margin: 0; padding-left: 0; padding-right: 0; padding-bottom: 0; }
-    /* "Back" button — bigger, green pill (matches the story-context
-       gallery's back button), nudged down so it isn't touching the tab
-       row's underline above it. */
-    #fp-gallery-detail-view .art-view-back {
-      color: #fff; border-color: #2fbf5f; background: #2fbf5f;
-      font-size: 1rem; font-weight: 700; padding: 0.78em 1.7em;
-      margin-top: 1.75rem; margin-bottom: 2.5rem;
-    }
-    #fp-gallery-detail-view .art-view-back:hover {
-      color: #fff; border-color: #29a852; background: #29a852;
-    }
     /* SFW / Sketches / Spicy heading (below the "<name>'s Gallery Page"
        eyebrow, NOT the Browse box buttons) — blue glow. */
     #fp-gallery-grid-view #fp-gallery-title-text {
@@ -1008,62 +985,6 @@
     </div>
   </div>
   </div>
-
-  <!-- Detail view sits in its own row, sized to match the story-context
-       .mod-page-row exactly (same max-width/padding/grid-template-columns/
-       gap), with a static (non-clickable) Navigate box standing in for the
-       real one so the two columns compute to the exact same widths —
-       instead of hand-copying a magic pixel number that'd drift out of
-       sync the moment either page's spacing changes. -->
-  <div class="fp-gallery-detail-row" id="fp-gallery-detail-row" style="display:none;">
-    <div class="art-view-wrapper" id="fp-gallery-detail-view">
-      <a class="art-view-back" href="#" id="fp-gallery-detail-back">← Back</a>
-
-      <div class="art-view-detail-grid">
-        <div class="art-view-main-col">
-          <div class="art-view-image-wrap">
-            <img id="fp-gallery-detail-img" src="" alt="" />
-          </div>
-          <div class="art-view-info">
-            <h1 class="art-view-title" id="fp-gallery-detail-title"></h1>
-            <div class="art-view-actions">
-              <button class="art-view-like art-view-like--big" id="fp-gallery-detail-like" type="button" aria-label="Like">
-                <span id="fp-gallery-detail-like-icon">♡</span> <span id="fp-gallery-detail-like-count">0</span>
-              </button>
-              <button class="art-view-bookmark-btn" id="fp-gallery-detail-bookmark" type="button" aria-label="Bookmark">
-                <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
-              </button>
-              <button class="fp-share-icon-btn" id="fp-gallery-detail-share" type="button" title="Share this post">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
-              </button>
-            </div>
-          </div>
-          <div class="art-view-desc" id="fp-gallery-detail-desc-box">
-            <div id="fp-gallery-detail-desc"></div>
-            <div class="art-view-tags-section" id="fp-gallery-detail-tags"></div>
-          </div>
-          <div id="fp-gallery-detail-nav" class="art-nav"></div>
-        </div>
-
-        <aside class="art-view-stats-box" id="fp-gallery-detail-stats">
-          <p class="art-view-stats-title">Stats</p>
-          <div class="art-view-stats-rows" id="fp-gallery-detail-stats-rows"></div>
-          <hr class="art-view-stats-hr" />
-          <p class="art-view-stats-title">Tags</p>
-          <div class="art-view-stats-tags" id="fp-gallery-detail-stats-tags"></div>
-        </aside>
-      </div>
-
-      <div class="cc-section" id="fp-gallery-detail-comments">
-        <p class="cc-title">💬 Comments</p>
-        <div class="cc-compose" id="fp-cc-compose" style="display:none;">
-          <textarea id="fp-cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
-          <button class="cc-compose-btn" id="fp-cc-compose-btn" type="button">Post</button>
-        </div>
-        <div class="cc-list" id="fp-cc-list"><p class="cc-empty">Loading…</p></div>
-      </div>
-    </div>
-  </div>
 </div>
 
 <div class="fp-tab-view" id="fp-stories-view" hidden>
@@ -1429,13 +1350,6 @@
   TAB_NAMES.forEach(t => document.getElementById(`fp-tab-${t}`).addEventListener('click', () => switchTab(t)));
 
   function switchTab(tab) {
-    // Navigating away from Gallery while a picture is open (e.g. deep-linked
-    // in from Recent Submissions) should reset it back to the default grid
-    // view — otherwise coming back to the Gallery tab later reopens whatever
-    // picture was last viewed instead of showing the gallery itself.
-    if (tab !== 'gallery' && document.getElementById('fp-gallery-detail-row').style.display === 'grid') {
-      closeFpGalleryDetail(false); // switchTab's own replaceState below owns the URL here
-    }
     activeTabName = tab;
     TAB_NAMES.forEach(t => {
       document.getElementById(`fp-tab-${t}`).classList.toggle('active', t === tab);
@@ -1880,16 +1794,12 @@
   let FP_GALLERY_SPICY = [];
   let FP_SPICY_LOCK = null; // null = unlocked; 'login' or 'sfw_mode' otherwise
   let fpGalleryLoaded = false;
-  let fpGalleryCurrentDetailItem = null;
-  let fpGalleryNavPrev = null;
-  let fpGalleryNavNext = null;
 
   function fpSiblingsForCategory(cat) {
     if (cat === 'sketches') return FP_GALLERY_SKETCHES;
     if (cat === 'spicy') return FP_GALLERY_SPICY;
     return FP_GALLERY_ART;
   }
-  function fpTruncateLabel(s, n) { return s.length > n ? s.slice(0, n).trimEnd() + '…' : s; }
 
   function renderFpGalleryTiles(items, emptyMsg) {
     const grid = document.getElementById('fp-gallery-grid');
@@ -1901,11 +1811,14 @@
     items.forEach(g => {
       const a = document.createElement('a');
       a.className = 'gallery-tile';
-      a.href = '#';
+      // Real navigation to the standalone gallery post page now, not an
+      // in-page swap -- opening a post is independent of the profile
+      // system entirely, so it gets its own full page instead of hiding
+      // this grid behind a detail view stapled onto the same URL.
+      a.href = `/fanpages/gallery-post?id=${g.id}`;
       const posX = g.position_x != null ? g.position_x : 50;
       const posY = g.position_y != null ? g.position_y : 50;
       a.innerHTML = `<img src="${g.image}" alt="${g.title || 'Gallery image'}" loading="lazy" draggable="false" style="object-position: ${posX}% ${posY}%;" />`;
-      a.addEventListener('click', (e) => { e.preventDefault(); openFpGalleryDetail(g); });
       grid.appendChild(a);
     });
   }
@@ -1948,256 +1861,9 @@
     document.getElementById('fp-gallery-title-text').textContent = cat === 'sketches' ? 'Sketches' : 'SFW';
     renderFpGalleryTiles(fpSiblingsForCategory(cat), cat === 'sketches' ? 'No sketches yet — check back soon.' : 'No art yet — check back soon.');
   }
-  document.getElementById('fp-cat-art').addEventListener('click', () => { closeFpGalleryDetail(); setFpGalleryCategory('sfw'); });
-  document.getElementById('fp-cat-sketches').addEventListener('click', () => { closeFpGalleryDetail(); setFpGalleryCategory('sketches'); });
-  document.getElementById('fp-cat-spicy').addEventListener('click', () => { closeFpGalleryDetail(); setFpGalleryCategory('spicy'); });
-
-  function renderFpGalleryDetailNav(item) {
-    const siblings = fpSiblingsForCategory(item.category);
-    const idx = siblings.findIndex(g => String(g.id) === String(item.id));
-    fpGalleryNavPrev = idx > 0 ? siblings[idx - 1] : null;
-    fpGalleryNavNext = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : null;
-    const navEl = document.getElementById('fp-gallery-detail-nav');
-    navEl.innerHTML = '';
-    if (fpGalleryNavPrev) {
-      const a = document.createElement('a');
-      a.className = 'art-nav-btn art-nav-prev';
-      a.href = '#';
-      a.innerHTML = `← <span class="art-nav-label">${escapeHtml(fpTruncateLabel(fpGalleryNavPrev.title || 'Previous', 28))}</span>`;
-      a.addEventListener('click', (e) => { e.preventDefault(); openFpGalleryDetail(fpGalleryNavPrev); });
-      navEl.appendChild(a);
-    }
-    if (fpGalleryNavNext) {
-      const a = document.createElement('a');
-      a.className = 'art-nav-btn art-nav-next';
-      a.href = '#';
-      a.innerHTML = `<span class="art-nav-label">${escapeHtml(fpTruncateLabel(fpGalleryNavNext.title || 'Next', 28))}</span> →`;
-      a.addEventListener('click', (e) => { e.preventDefault(); openFpGalleryDetail(fpGalleryNavNext); });
-      navEl.appendChild(a);
-    }
-  }
-
-  function updateFpGalleryLikeUI(item) {
-    document.getElementById('fp-gallery-detail-like-icon').textContent = item.liked ? '♥' : '♡';
-    document.getElementById('fp-gallery-detail-like-count').textContent = item.like_count || 0;
-    document.getElementById('fp-gallery-detail-like').classList.toggle('liked', !!item.liked);
-  }
-
-  function fpRatingLabelFor(cat) {
-    if (cat === 'sketches') return 'Sketches';
-    if (cat === 'spicy') return 'Spicy';
-    return 'SFW';
-  }
-
-  // Right-hand stats box — same shape/behavior as the story-context gallery
-  // page's version, just sourced from currentAuthor (this profile's own
-  // owner) instead of a story's author fields.
-  function renderFpGalleryStatsBox(item) {
-    const uploaderName = (currentAuthor && (currentAuthor.display_name || currentAuthor.username)) || USERNAME;
-    const rows = document.getElementById('fp-gallery-detail-stats-rows');
-    rows.innerHTML = `
-      <div class="art-view-stat-row"><span>Views</span><span>${item.view_count || 0}</span></div>
-      <div class="art-view-stat-row"><span>Likes</span><span>${item.like_count || 0}</span></div>
-      <div class="art-view-stat-row"><span>Comments</span><span>${item.comment_count || 0}</span></div>
-      <div class="art-view-stat-row"><span>Rating</span><span>${fpRatingLabelFor(item.category)}</span></div>
-      <div class="art-view-stat-row"><span>Uploaded by</span><span><a href="/fanpages/${encodeURIComponent(USERNAME)}">${escapeHtml(uploaderName)}</a></span></div>
-    `;
-
-    const tagsWrap = document.getElementById('fp-gallery-detail-stats-tags');
-    const tags = Array.isArray(item.tags) ? item.tags : [];
-    if (!tags.length) {
-      tagsWrap.innerHTML = '<p class="art-view-stats-tags-empty">No tags yet.</p>';
-      return;
-    }
-    tagsWrap.innerHTML = tags.map(t => `<a class="art-view-stats-tag-pill" href="/fanpages/search?view=submissions&browse=1&q=${encodeURIComponent(t)}">${escapeHtml(t)}</a>`).join('');
-  }
-
-  function bumpFpGalleryViewCount(id) {
-    fetch(`/api/gallery/${id}/view`, { method: 'POST', headers: authHeaders() }).catch(() => {});
-  }
-
-  // pushHistory (default true) puts ?gallery=<id> in the URL so a refresh
-  // (or the browser back/forward buttons, via the popstate listener below)
-  // lands back on the same piece instead of resetting to the grid — same
-  // pattern the story-context gallery uses. Pass false when responding to
-  // popstate itself, so it doesn't push yet another entry on top.
-  function openFpGalleryDetail(item, scroll, pushHistory) {
-    fpGalleryCurrentDetailItem = item;
-    document.getElementById('fp-gallery-detail-img').src = item.image;
-    document.getElementById('fp-gallery-detail-img').alt = item.title || '';
-    document.getElementById('fp-gallery-detail-title').textContent = item.title || 'No title provided';
-    document.getElementById('fp-gallery-detail-desc').innerHTML = renderGalleryText(item.description);
-    renderFpGalleryDetailNav(item);
-    updateFpGalleryLikeUI(item);
-    updateFpGalleryBookmarkUI(item);
-    loadFpGalleryTagsSection(item);
-    renderFpGalleryStatsBox(item);
-    ccInitSection('gallery', item.id);
-    bumpFpGalleryViewCount(item.id);
-    document.getElementById('fp-gallery-grid-row').style.display = 'none';
-    document.getElementById('fp-gallery-detail-row').style.display = 'grid';
-    if (pushHistory !== false) {
-      history.pushState({ fpGallery: item.id }, '', `${location.pathname}?gallery=${item.id}#gallery`);
-    }
-    if (scroll) {
-      const target = document.querySelector('#fp-gallery-detail-view .art-view-image-wrap') || document.getElementById('fp-gallery-view');
-      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }
-  function closeFpGalleryDetail(pushHistory) {
-    fpGalleryCurrentDetailItem = null;
-    document.getElementById('fp-gallery-detail-row').style.display = 'none';
-    document.getElementById('fp-gallery-grid-row').style.display = '';
-    if (pushHistory !== false) {
-      history.pushState({}, '', `${location.pathname}#gallery`);
-    }
-  }
-  // Real browser back, not just an in-page toggle -- when this post was
-  // reached from search/browse/a tag click (a genuine page navigation to
-  // this profile URL), that correctly returns to the results page you
-  // came from instead of always landing on this profile's own gallery
-  // grid. Falls back to the in-page toggle only when there's nowhere to
-  // actually go back to (e.g. a freshly opened tab on a shared link).
-  document.getElementById('fp-gallery-detail-back').addEventListener('click', (e) => {
-    e.preventDefault();
-    if (history.length > 1) history.back();
-    else closeFpGalleryDetail();
-  });
-  window.addEventListener('popstate', () => {
-    if (activeTabName !== 'gallery') return;
-    const id = new URLSearchParams(window.location.search).get('gallery');
-    if (!id) { closeFpGalleryDetail(false); return; }
-    const all = [...FP_GALLERY_ART, ...FP_GALLERY_SKETCHES, ...FP_GALLERY_SPICY];
-    const item = all.find(g => String(g.id) === String(id));
-    if (item) openFpGalleryDetail(item, false, false);
-  });
-
-  document.getElementById('fp-gallery-detail-like').addEventListener('click', async (e) => {
-    if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname)}`; return; }
-    if (!fpGalleryCurrentDetailItem) return;
-    const btn = e.currentTarget;
-    if (btn.disabled) return;
-    const item = fpGalleryCurrentDetailItem;
-    const method = item.liked ? 'DELETE' : 'POST';
-    btn.disabled = true;
-    try {
-      const res = await fetch(`/api/moderator/gallery/${item.id}/like`, { method, headers: authHeaders() });
-      if (!res.ok) {
-        if (res.status === 401) window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname)}`;
-        return;
-      }
-      const data = await res.json();
-      item.liked = data.liked;
-      item.like_count = data.like_count;
-      updateFpGalleryLikeUI(item);
-    } catch {} finally { btn.disabled = false; }
-  });
-
-  // ── Gallery post bookmarks ───────────────────────────────────────────────
-  function updateFpGalleryBookmarkUI(item) {
-    document.getElementById('fp-gallery-detail-bookmark').classList.toggle('bookmarked', !!item.bookmarked);
-  }
-  document.getElementById('fp-gallery-detail-bookmark').addEventListener('click', async (e) => {
-    if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname)}`; return; }
-    if (!fpGalleryCurrentDetailItem) return;
-    const btn = e.currentTarget;
-    if (btn.disabled) return;
-    const item = fpGalleryCurrentDetailItem;
-    const method = item.bookmarked ? 'DELETE' : 'POST';
-    btn.disabled = true;
-    try {
-      const res = await fetch(`/api/moderator/gallery/${item.id}/bookmark`, { method, headers: authHeaders() });
-      if (!res.ok) {
-        if (res.status === 401) window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname)}`;
-        return;
-      }
-      const data = await res.json();
-      item.bookmarked = data.bookmarked;
-      updateFpGalleryBookmarkUI(item);
-    } catch {} finally { btn.disabled = false; }
-  });
-
-  document.getElementById('fp-gallery-detail-share').addEventListener('click', (e) => {
-    const item = fpGalleryCurrentDetailItem;
-    if (!item) return;
-    fpShare(e.currentTarget, `${window.location.origin}/fanpages/${USERNAME}?gallery=${item.id}#gallery`);
-  });
-
-  // ── Characters Featured / Relevant Stories — tagged content under the
-  // description. Same rules as the story-context gallery page. ────────────
-  async function loadFpGalleryTagsSection(item) {
-    const wrap = document.getElementById('fp-gallery-detail-tags');
-    wrap.innerHTML = '<hr class="art-view-tags-hr" />';
-    try {
-      const res = await fetch(`/api/gallery/${item.id}/links`, { headers: authHeaders() });
-      const data = await res.json();
-      const chars = data.characters || [];
-      const stories = data.stories || [];
-
-      const charsBlock = document.createElement('div');
-      charsBlock.innerHTML = '<p class="art-view-tags-label">Characters Featured:</p>';
-      if (!chars.length) {
-        charsBlock.innerHTML += '<p class="art-view-tags-empty">No tagged characters</p>';
-      } else {
-        const row = document.createElement('div');
-        row.className = 'art-view-tags-row';
-        chars.forEach(c => row.appendChild(fpGalleryCharTagCard(c)));
-        charsBlock.appendChild(row);
-      }
-      wrap.appendChild(charsBlock);
-
-      if (stories.length) {
-        const storiesBlock = document.createElement('div');
-        storiesBlock.innerHTML = '<p class="art-view-tags-label">Relevant Stories</p>';
-        const row = document.createElement('div');
-        row.className = 'art-view-tags-row';
-        stories.forEach(s => row.appendChild(fpGalleryStoryTagCard(s)));
-        storiesBlock.appendChild(row);
-        wrap.appendChild(storiesBlock);
-      }
-    } catch {
-      wrap.innerHTML += '<p class="art-view-tags-empty">Couldn\'t load tagged content right now.</p>';
-    }
-  }
-  function fpGalleryCharTagCard(c) {
-    const a = document.createElement('a');
-    a.className = 'art-view-tag-card';
-    a.href = `/fanpages/${c.owner_username}?char=${c.id}#characters`;
-    if (c.nsfw_locked) {
-      const lockMsg = token ? 'NSFW content must be enabled in Account Settings' : 'Only logged-in users can see this content';
-      a.innerHTML = `
-        <div class="art-view-tag-card-imgwrap">
-          <img class="art-view-tag-card-img--blurred" src="/images/defaultchar.jpg" alt="" />
-          <span class="art-view-tag-card-lock-msg">${escapeHtml(lockMsg)}</span>
-        </div>
-        <div class="art-view-tag-card-info">
-          <span class="art-view-tag-card-name">${escapeHtml(c.name)}</span>
-        </div>
-      `;
-    } else {
-      a.innerHTML = `
-        <div class="art-view-tag-card-imgwrap"><img src="${c.image || '/images/defaultchar.jpg'}" alt="" /></div>
-        <div class="art-view-tag-card-info">
-          <span class="art-view-tag-card-name">${escapeHtml(c.name)}</span>
-          ${c.species ? `<span class="art-view-tag-card-sub">${escapeHtml(c.species)}</span>` : ''}
-        </div>
-      `;
-    }
-    return a;
-  }
-  function fpGalleryStoryTagCard(s) {
-    const a = document.createElement('a');
-    a.className = 'art-view-tag-card';
-    a.href = `/fanpages/${s.story_path}`;
-    a.innerHTML = `
-      <div class="art-view-tag-card-imgwrap art-view-tag-card-imgwrap--story">${window.wikiGeneratedCoverHtml(s, { small: true })}</div>
-      <div class="art-view-tag-card-info">
-        <span class="art-view-tag-card-name">${escapeHtml(s.site_title || 'Untitled')}</span>
-        ${s.synopsis ? `<span class="art-view-tag-card-sub">${escapeHtml(truncate(s.synopsis, 90))}</span>` : ''}
-      </div>
-    `;
-    return a;
-  }
+  document.getElementById('fp-cat-art').addEventListener('click', () => setFpGalleryCategory('sfw'));
+  document.getElementById('fp-cat-sketches').addEventListener('click', () => setFpGalleryCategory('sketches'));
+  document.getElementById('fp-cat-spicy').addEventListener('click', () => setFpGalleryCategory('spicy'));
 
   // ── Universal comments (target_type/target_id) — one level of replies,
   // "@username" prefix, avatar-card layout. Same system as the
@@ -2296,15 +1962,13 @@
     } catch {}
   }
 
-  // Gallery and Characters each have their own physical comment box (they
-  // can both be present in the DOM at once, just on hidden tabs), so the
-  // shared cc- functions look up which element ids to use by target type
-  // instead of assuming one fixed set.
+  // Gallery posts now live entirely on their own standalone page
+  // (gallery-post.html) with their own copy of this comment system --
+  // Characters is the only target type left that needs comments here.
   const CC_IDS = {
-    gallery:   { list: 'fp-cc-list',      compose: 'fp-cc-compose',      input: 'fp-cc-compose-input',      btn: 'fp-cc-compose-btn' },
     character: { list: 'fp-char-cc-list', compose: 'fp-char-cc-compose', input: 'fp-char-cc-compose-input', btn: 'fp-char-cc-compose-btn' },
   };
-  function ccIds() { return CC_IDS[ccTargetType] || CC_IDS.gallery; }
+  function ccIds() { return CC_IDS[ccTargetType] || CC_IDS.character; }
 
   async function ccLoadComments() {
     const list = document.getElementById(ccIds().list);
@@ -2341,7 +2005,6 @@
       if (res.ok) { input.value = ''; await ccLoadComments(); }
     } finally { btn.disabled = false; }
   }
-  document.getElementById('fp-cc-compose-btn').addEventListener('click', ccHandleCompose);
   document.getElementById('fp-char-cc-compose-btn').addEventListener('click', ccHandleCompose);
 
   // Same shared-promise memoization as loadCharactersTab, for the same
@@ -2549,7 +2212,7 @@
       card.className = 'fp-featured-card';
       card.href = kind === 'character'
         ? `/fanpages/${USERNAME}?char=${encodeURIComponent(item.ref_id)}#characters`
-        : `/fanpages/${USERNAME}?gallery=${encodeURIComponent(item.ref_id)}#gallery`;
+        : `/fanpages/gallery-post?id=${encodeURIComponent(item.ref_id)}`;
       card.innerHTML = `
         <img class="fp-featured-card-img" src="${item.image_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="${item.title}" />
         <p class="fp-featured-card-title">${item.title}</p>
@@ -3628,19 +3291,17 @@
   const initialTab = ['characters', 'gallery', 'stories'].includes(location.hash.slice(1)) ? location.hash.slice(1) : null;
   if (initialTab) switchTab(initialTab);
 
-  // Deep-link straight to a specific Featured Character/Gallery entry
-  // (?char=/gallery=) once its tab's data has loaded.
+  // Deep-link straight to a specific Featured Character entry (?char=)
+  // once its tab's data has loaded. Old-style ?gallery= links (from before
+  // gallery posts got their own standalone page) redirect straight there
+  // instead of trying to open an in-page view that no longer exists.
   const deepParams = new URLSearchParams(window.location.search);
   const deepCharId = deepParams.get('char');
   const deepGalleryId = deepParams.get('gallery');
-  if (initialTab === 'characters' && deepCharId) {
+  if (deepGalleryId) {
+    window.location.replace(`/fanpages/gallery-post?id=${encodeURIComponent(deepGalleryId)}`);
+  } else if (initialTab === 'characters' && deepCharId) {
     loadCharactersTab().then(() => selectFpCharacter(deepCharId, true));
-  } else if (initialTab === 'gallery' && deepGalleryId) {
-    loadGalleryTab().then(() => {
-      const all = [...FP_GALLERY_ART, ...FP_GALLERY_SKETCHES, ...FP_GALLERY_SPICY];
-      const item = all.find(g => String(g.id) === String(deepGalleryId));
-      if (item) { setFpGalleryCategory(item.category); openFpGalleryDetail(item, true, false); }
-    });
   }
 </script>
 

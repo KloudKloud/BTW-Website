@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gallery ✦ Fanpages</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <style>
+    /* Independent of the profile system entirely -- no banner, no tabs,
+       just the nav bar and the post itself, full width. Same width rule
+       profile-template.html uses for its (now-removed) in-page version. */
+    .fp-gallery-detail-row {
+      max-width: none; margin: 3rem 0 0; padding: 0 3rem;
+    }
+    #fp-gallery-detail-view { max-width: none; margin: 0; padding-left: 0; padding-right: 0; padding-bottom: 0; }
+    #fp-gallery-detail-view .art-view-back {
+      color: #fff; border-color: #2fbf5f; background: #2fbf5f;
+      font-size: 1rem; font-weight: 700; padding: 0.78em 1.7em;
+      margin-top: 1.75rem; margin-bottom: 2.5rem;
+    }
+    #fp-gallery-detail-view .art-view-back:hover {
+      color: #fff; border-color: #29a852; background: #29a852;
+    }
+    @media (max-width: 900px) {
+      .fp-gallery-detail-row { padding: 0 1.25rem; }
+    }
+  </style>
+</head>
+<body class="mod-theme">
+
+<div id="fanpages-topbar-root"></div>
+<script src="/fanpages/fanpages-nav.js"></script>
+
+<div class="fp-gallery-detail-row">
+  <div class="art-view-wrapper" id="fp-gallery-detail-view">
+    <a class="art-view-back" href="#" id="fp-gallery-detail-back">← Back</a>
+    <div class="art-view-detail-grid">
+      <div class="art-view-main-col">
+        <div class="art-view-image-wrap">
+          <img id="fp-gallery-detail-img" src="" alt="" />
+        </div>
+        <div class="art-view-info">
+          <h1 class="art-view-title" id="fp-gallery-detail-title"></h1>
+          <div class="art-view-actions">
+            <button class="art-view-like art-view-like--big" id="fp-gallery-detail-like" type="button" aria-label="Like">
+              <span id="fp-gallery-detail-like-icon">♡</span> <span id="fp-gallery-detail-like-count">0</span>
+            </button>
+            <button class="art-view-bookmark-btn" id="fp-gallery-detail-bookmark" type="button" aria-label="Bookmark">
+              <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
+            </button>
+            <button class="fp-share-icon-btn" id="fp-gallery-detail-share" type="button" title="Share this post">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="art-view-desc" id="fp-gallery-detail-desc-box">
+          <div id="fp-gallery-detail-desc"></div>
+          <div class="art-view-tags-section" id="fp-gallery-detail-tags"></div>
+        </div>
+      </div>
+
+      <aside class="art-view-stats-box" id="fp-gallery-detail-stats">
+        <p class="art-view-stats-title">Stats</p>
+        <div class="art-view-stats-rows" id="fp-gallery-detail-stats-rows"></div>
+        <hr class="art-view-stats-hr" />
+        <p class="art-view-stats-title">Tags</p>
+        <div class="art-view-stats-tags" id="fp-gallery-detail-stats-tags"></div>
+      </aside>
+    </div>
+
+    <div class="cc-section" id="fp-gallery-detail-comments">
+      <p class="cc-title">💬 Comments</p>
+      <div class="cc-compose" id="fp-cc-compose" style="display:none;">
+        <textarea id="fp-cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
+        <button class="cc-compose-btn" id="fp-cc-compose-btn" type="button">Post</button>
+      </div>
+      <div class="cc-list" id="fp-cc-list"><p class="cc-empty">Loading…</p></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function truncate(str, max) {
+  return str.length > max ? str.slice(0, max) + '…' : str;
+}
+function richText(s) {
+  let out = escapeHtml(s || '');
+  out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  out = out.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  return out;
+}
+function renderGalleryText(s) {
+  if (!s) return '<span style="color:#888;">No description provided</span>';
+  const tokens = [];
+  const working = String(s).replace(/\[([^\]]+)\]<([^>]+)>/g, (m, label, url) => {
+    const safeUrl = /^https?:\/\//i.test(url.trim()) ? url.trim() : '#';
+    tokens.push({ label, url: safeUrl });
+    return ` TOKEN${tokens.length - 1} `;
+  });
+  let out = richText(working);
+  tokens.forEach((t, i) => {
+    out = out.replace(` TOKEN${i} `, `<a href="${t.url}" target="_blank" rel="noopener" style="color:#7fa8d9;">${escapeHtml(t.label)}</a>`);
+  });
+  return out;
+}
+function ratingLabelFor(cat) {
+  if (cat === 'sketches') return 'Sketches';
+  if (cat === 'spicy') return 'Spicy';
+  return 'SFW';
+}
+
+const GALLERY_ID = new URLSearchParams(window.location.search).get('id');
+let currentItem = null;
+
+function renderStatsBox(item) {
+  const rows = document.getElementById('fp-gallery-detail-stats-rows');
+  rows.innerHTML = `
+    <div class="art-view-stat-row"><span>Views</span><span>${item.view_count || 0}</span></div>
+    <div class="art-view-stat-row"><span>Likes</span><span>${item.like_count || 0}</span></div>
+    <div class="art-view-stat-row"><span>Comments</span><span>${item.comment_count || 0}</span></div>
+    <div class="art-view-stat-row"><span>Rating</span><span>${ratingLabelFor(item.category)}</span></div>
+    <div class="art-view-stat-row"><span>Uploaded by</span><span><a href="/fanpages/${encodeURIComponent(item.owner_username)}">${escapeHtml(item.owner_display_name || item.owner_username)}</a></span></div>
+  `;
+  const tagsWrap = document.getElementById('fp-gallery-detail-stats-tags');
+  const tags = Array.isArray(item.tags) ? item.tags : [];
+  if (!tags.length) {
+    tagsWrap.innerHTML = '<p class="art-view-stats-tags-empty">No tags yet.</p>';
+    return;
+  }
+  tagsWrap.innerHTML = tags.map(t => `<a class="art-view-stats-tag-pill" href="/fanpages/search?view=submissions&browse=1&q=${encodeURIComponent(t)}">${escapeHtml(t)}</a>`).join('');
+}
+
+function updateLikeUI() {
+  document.getElementById('fp-gallery-detail-like-icon').textContent = currentItem.liked ? '♥' : '♡';
+  document.getElementById('fp-gallery-detail-like-count').textContent = currentItem.like_count || 0;
+  document.getElementById('fp-gallery-detail-like').classList.toggle('liked', !!currentItem.liked);
+}
+function updateBookmarkUI() {
+  document.getElementById('fp-gallery-detail-bookmark').classList.toggle('bookmarked', !!currentItem.bookmarked);
+}
+
+function galleryCharTagCard(c) {
+  const a = document.createElement('a');
+  a.className = 'art-view-tag-card';
+  a.href = `/fanpages/${c.owner_username}?char=${c.id}#characters`;
+  if (c.nsfw_locked) {
+    const lockMsg = token ? 'NSFW content must be enabled in Account Settings' : 'Only logged-in users can see this content';
+    a.innerHTML = `
+      <div class="art-view-tag-card-imgwrap">
+        <img class="art-view-tag-card-img--blurred" src="/images/defaultchar.jpg" alt="" />
+        <span class="art-view-tag-card-lock-msg">${escapeHtml(lockMsg)}</span>
+      </div>
+      <div class="art-view-tag-card-info">
+        <span class="art-view-tag-card-name">${escapeHtml(c.name)}</span>
+      </div>
+    `;
+  } else {
+    a.innerHTML = `
+      <div class="art-view-tag-card-imgwrap"><img src="${c.image || '/images/defaultchar.jpg'}" alt="" /></div>
+      <div class="art-view-tag-card-info">
+        <span class="art-view-tag-card-name">${escapeHtml(c.name)}</span>
+        ${c.species ? `<span class="art-view-tag-card-sub">${escapeHtml(c.species)}</span>` : ''}
+      </div>
+    `;
+  }
+  return a;
+}
+function galleryStoryTagCard(s) {
+  const a = document.createElement('a');
+  a.className = 'art-view-tag-card';
+  a.href = `/fanpages/${s.story_path}`;
+  a.innerHTML = `
+    <div class="art-view-tag-card-imgwrap art-view-tag-card-imgwrap--story">${window.wikiGeneratedCoverHtml(s, { small: true })}</div>
+    <div class="art-view-tag-card-info">
+      <span class="art-view-tag-card-name">${escapeHtml(s.site_title || 'Untitled')}</span>
+      ${s.synopsis ? `<span class="art-view-tag-card-sub">${escapeHtml(truncate(s.synopsis, 90))}</span>` : ''}
+    </div>
+  `;
+  return a;
+}
+async function loadTagsSection(item) {
+  const wrap = document.getElementById('fp-gallery-detail-tags');
+  wrap.innerHTML = '<hr class="art-view-tags-hr" />';
+  try {
+    const res = await fetch(`/api/gallery/${item.id}/links`, { headers: authHeaders() });
+    const data = await res.json();
+    const chars = data.characters || [];
+    const stories = data.stories || [];
+
+    const charsBlock = document.createElement('div');
+    charsBlock.innerHTML = '<p class="art-view-tags-label">Characters Featured:</p>';
+    if (!chars.length) {
+      charsBlock.innerHTML += '<p class="art-view-tags-empty">No tagged characters</p>';
+    } else {
+      const row = document.createElement('div');
+      row.className = 'art-view-tags-row';
+      chars.forEach(c => row.appendChild(galleryCharTagCard(c)));
+      charsBlock.appendChild(row);
+    }
+    wrap.appendChild(charsBlock);
+
+    if (stories.length) {
+      const storiesBlock = document.createElement('div');
+      storiesBlock.innerHTML = '<p class="art-view-tags-label">Relevant Stories</p>';
+      const row = document.createElement('div');
+      row.className = 'art-view-tags-row';
+      stories.forEach(s => row.appendChild(galleryStoryTagCard(s)));
+      storiesBlock.appendChild(row);
+      wrap.appendChild(storiesBlock);
+    }
+  } catch {
+    wrap.innerHTML += '<p class="art-view-tags-empty">Couldn\'t load tagged content right now.</p>';
+  }
+}
+
+function bumpViewCount(id) {
+  fetch(`/api/gallery/${id}/view`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+}
+
+// ── Comments (target_type='gallery') — same shared system used everywhere
+// else a gallery post can be opened. ────────────────────────────────────
+const CURRENT_USER = (() => {
+  try { return JSON.parse(localStorage.getItem('btw_user') || sessionStorage.getItem('btw_user') || 'null'); } catch { return null; }
+})();
+function ccAvatarHtml(c) {
+  const name = c.display_name || c.username || '?';
+  const initial = escapeHtml(name.charAt(0).toUpperCase());
+  return c.avatar ? `<img class="cc-avatar" src="${c.avatar}" alt="" />` : `<span class="cc-avatar-fallback">${initial}</span>`;
+}
+function ccTimeAgo(iso) {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 2592000) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+function ccIsMine(c) { return CURRENT_USER && CURRENT_USER.id === c.user_id; }
+function ccCommentEl(c, isReply) {
+  const wrap = document.createElement('div');
+  wrap.className = 'cc-item';
+  const avatarHolder = document.createElement('div');
+  avatarHolder.innerHTML = ccAvatarHtml(c);
+  wrap.appendChild(avatarHolder.firstElementChild);
+  const body = document.createElement('div');
+  body.className = 'cc-body-wrap';
+  body.innerHTML = `
+    <div class="cc-bubble">
+      <span class="cc-name"><a href="/fanpages/${encodeURIComponent(c.username)}">${escapeHtml(c.display_name || c.username)}</a></span>
+      <span class="cc-time">${ccTimeAgo(c.created_at)}</span>
+      <p class="cc-text">${c.reply_to_username ? `<span class="cc-mention">@${escapeHtml(c.reply_to_username)}</span> ` : ''}${escapeHtml(c.body)}</p>
+    </div>
+    <div class="cc-actions">
+      ${token && !isReply ? '<button class="cc-action-btn" data-action="reply">Reply</button>' : ''}
+      ${ccIsMine(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : ''}
+    </div>
+  `;
+  wrap.appendChild(body);
+  const replyBtn = body.querySelector('[data-action="reply"]');
+  if (replyBtn) replyBtn.addEventListener('click', () => ccOpenReplyBox(body, c));
+  const deleteBtn = body.querySelector('[data-action="delete"]');
+  if (deleteBtn) deleteBtn.addEventListener('click', () => ccDeleteComment(c.id));
+  if (!isReply && (c.replies || []).length) {
+    const repliesWrap = document.createElement('div');
+    repliesWrap.className = 'cc-replies';
+    c.replies.forEach(r => repliesWrap.appendChild(ccCommentEl(r, true)));
+    body.appendChild(repliesWrap);
+  }
+  return wrap;
+}
+function ccOpenReplyBox(bodyEl, parentComment) {
+  const existing = bodyEl.querySelector('.cc-reply-box');
+  if (existing) { existing.querySelector('textarea').focus(); return; }
+  const box = document.createElement('div');
+  box.className = 'cc-reply-box';
+  box.innerHTML = `
+    <textarea placeholder="Reply to ${escapeHtml(parentComment.display_name || parentComment.username)}…" maxlength="2000"></textarea>
+    <button class="cc-compose-btn" type="button">Reply</button>
+  `;
+  const textarea = box.querySelector('textarea');
+  box.querySelector('button').addEventListener('click', async () => {
+    const text = textarea.value.trim();
+    if (!text) return;
+    const btn = box.querySelector('button');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/content-comments', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ target_type: 'gallery', target_id: GALLERY_ID, body: text, parent_id: parentComment.id }),
+      });
+      if (res.ok) await ccLoadComments();
+    } finally { btn.disabled = false; }
+  });
+  const repliesWrap = bodyEl.querySelector('.cc-replies');
+  bodyEl.insertBefore(box, repliesWrap || null);
+  textarea.focus();
+}
+async function ccDeleteComment(id) {
+  if (!confirm('Delete this comment?')) return;
+  try {
+    await fetch(`/api/content-comments/${id}`, { method: 'DELETE', headers: authHeaders() });
+    ccLoadComments();
+  } catch {}
+}
+async function ccLoadComments() {
+  const list = document.getElementById('fp-cc-list');
+  try {
+    const res = await fetch(`/api/content-comments?target_type=gallery&target_id=${GALLERY_ID}`);
+    const data = await res.json();
+    const comments = data.comments || [];
+    list.innerHTML = '';
+    if (!comments.length) { list.innerHTML = '<p class="cc-empty">No comments yet — be the first!</p>'; return; }
+    comments.forEach(c => list.appendChild(ccCommentEl(c, false)));
+  } catch { list.innerHTML = '<p class="cc-empty">Couldn\'t load comments right now.</p>'; }
+}
+document.getElementById('fp-cc-compose-btn').addEventListener('click', async () => {
+  const input = document.getElementById('fp-cc-compose-input');
+  const text = input.value.trim();
+  if (!text) return;
+  const btn = document.getElementById('fp-cc-compose-btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/content-comments', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ target_type: 'gallery', target_id: GALLERY_ID, body: text }),
+    });
+    if (res.ok) { input.value = ''; await ccLoadComments(); }
+  } finally { btn.disabled = false; }
+});
+
+// Real browser back -- returns to whatever results page (search, browse, a
+// tag click, or a profile's Gallery tab) this post was opened from. Falls
+// back to the owner's profile only when there's nowhere to actually go
+// back to (a freshly opened tab on a shared link).
+document.getElementById('fp-gallery-detail-back').addEventListener('click', (e) => {
+  e.preventDefault();
+  if (history.length > 1) history.back();
+  else if (currentItem) window.location.href = `/fanpages/${currentItem.owner_username}#gallery`;
+  else window.location.href = '/fanpages';
+});
+
+document.getElementById('fp-gallery-detail-like').addEventListener('click', async () => {
+  if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+  const btn = document.getElementById('fp-gallery-detail-like');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try {
+    const method = currentItem.liked ? 'DELETE' : 'POST';
+    const res = await fetch(`/api/moderator/gallery/${currentItem.id}/like`, { method, headers: authHeaders() });
+    if (res.ok) {
+      const data = await res.json();
+      currentItem.liked = data.liked;
+      currentItem.like_count = data.like_count;
+      updateLikeUI();
+    }
+  } catch {}
+  btn.disabled = false;
+});
+
+document.getElementById('fp-gallery-detail-bookmark').addEventListener('click', async () => {
+  if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+  const btn = document.getElementById('fp-gallery-detail-bookmark');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try {
+    const method = currentItem.bookmarked ? 'DELETE' : 'POST';
+    const res = await fetch(`/api/moderator/gallery/${currentItem.id}/bookmark`, { method, headers: authHeaders() });
+    if (res.ok) {
+      const data = await res.json();
+      currentItem.bookmarked = data.bookmarked;
+      updateBookmarkUI();
+    }
+  } catch {}
+  btn.disabled = false;
+});
+
+document.getElementById('fp-gallery-detail-share').addEventListener('click', (e) => {
+  fpShare(e.currentTarget, window.location.href);
+});
+
+(async () => {
+  if (!GALLERY_ID) {
+    document.getElementById('fp-gallery-detail-view').innerHTML = '<p style="padding:3rem 0; text-align:center; color:#999;">No gallery post specified.</p>';
+    return;
+  }
+  try {
+    const res = await fetch(`/api/gallery/${GALLERY_ID}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error();
+    const { item } = await res.json();
+    currentItem = item;
+
+    document.getElementById('fp-gallery-detail-img').src = item.image_url;
+    document.getElementById('fp-gallery-detail-img').alt = item.title || '';
+    document.getElementById('fp-gallery-detail-title').textContent = item.title || 'No title provided';
+    document.getElementById('fp-gallery-detail-desc').innerHTML = renderGalleryText(item.description);
+    document.title = `${item.title || 'Gallery'} ✦ Fanpages`;
+    updateLikeUI();
+    updateBookmarkUI();
+    loadTagsSection(item);
+    renderStatsBox(item);
+    bumpViewCount(item.id);
+
+    document.getElementById('fp-cc-compose').style.display = token ? 'flex' : 'none';
+    ccLoadComments();
+  } catch {
+    document.getElementById('fp-gallery-detail-view').innerHTML = '<p style="padding:3rem 0; text-align:center; color:#999;">Couldn\'t load this gallery post.</p>';
+  }
+})();
+</script>
+
+</body>
+</html>
