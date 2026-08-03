@@ -15,6 +15,11 @@
   <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* overflow-anchor: none -- without this, the browser's scroll anchoring
+       fights our deep-link scroll-to-character logic below: if anything
+       reflows above the viewport a moment after we scroll, the browser
+       "corrects" the scroll position back toward the top on its own. */
+    html { overflow-anchor: none; }
     body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; }
     a { color: inherit; }
 
@@ -438,6 +443,8 @@
     }
     .fp-story-teaser-tag:hover { filter: brightness(1.3); }
     .fp-story-teaser-tag--fandom { background: rgba(217,122,114,0.14); color: #e08880; }
+    .fp-story-teaser-tag--overflow { background: rgba(255,255,255,0.08); color: #999; cursor: default; }
+    .fp-story-teaser-tag--overflow:hover { filter: none; }
     .fp-story-teaser-stats { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; margin-top: 0.75rem; font-size: 0.78rem; color: #999; }
     .fp-story-teaser-stats strong { color: #ddd; }
     /* Draft-only story — owner-only visibility, styled distinctly so it
@@ -1221,11 +1228,16 @@
     info.appendChild(title);
 
     const fandomTags = (s.fandoms || []).map(f => `<span class="fp-story-teaser-tag fp-story-teaser-tag--fandom">${escapeHtml(f)}</span>`);
-    const otherTags = (s.tags || []).slice(0, 6).map(t => `<span class="fp-story-teaser-tag">${escapeHtml(t)}</span>`);
+    const allTags = s.tags || [];
+    const otherTags = allTags.slice(0, 6).map(t => `<span class="fp-story-teaser-tag">${escapeHtml(t)}</span>`);
+    const hiddenTagCount = allTags.length - 6;
+    const overflowTag = hiddenTagCount > 0
+      ? `<span class="fp-story-teaser-tag fp-story-teaser-tag--overflow" title="${hiddenTagCount} more tag${hiddenTagCount === 1 ? '' : 's'}">+${hiddenTagCount}</span>`
+      : '';
     if (fandomTags.length || otherTags.length) {
       const tagRow = document.createElement('div');
       tagRow.className = 'fp-story-teaser-tags';
-      tagRow.innerHTML = fandomTags.join('') + otherTags.join('');
+      tagRow.innerHTML = fandomTags.join('') + otherTags.join('') + overflowTag;
       info.appendChild(tagRow);
     }
 
@@ -1798,15 +1810,43 @@
     buildFpCharsNav();
     if (scroll) {
       // On a fresh page load (deep-linked from a story's character chip),
-      // the banner/theme background and reference image are often still
-      // loading and growing the page's layout at this exact instant --
-      // scrolling immediately landed short (or at the very top) because
-      // the target's final position hadn't settled yet. Two animation
-      // frames give layout a beat to catch up first.
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        const target = document.querySelector('#fp-char-profile .char-ref-wrap') || document.getElementById('fp-characters-view');
-        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }));
+      // web fonts (Cinzel/Georgia) and other async content are still
+      // settling and reflowing the page at this exact instant. A fixed
+      // two-frame delay wasn't reliably enough -- whenever the font swap or
+      // a late reflow landed AFTER the scroll fired, the browser's scroll
+      // anchoring "corrected" our scroll back toward the top, which is why
+      // this only worked part of the time. Now we wait for fonts to be
+      // ready, then poll until the target's position holds steady across
+      // consecutive frames before scrolling, and re-assert the scroll once
+      // more shortly after as a safety net against anything that still
+      // shifts late.
+      const settleThenScroll = () => {
+        let lastTop = null;
+        let stableFrames = 0;
+        const check = () => {
+          const target = document.querySelector('#fp-char-profile .char-ref-wrap') || document.getElementById('fp-characters-view');
+          if (!target) return;
+          const top = target.getBoundingClientRect().top;
+          if (lastTop !== null && Math.abs(top - lastTop) < 1) {
+            stableFrames++;
+          } else {
+            stableFrames = 0;
+          }
+          lastTop = top;
+          if (stableFrames >= 3) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 500);
+          } else {
+            requestAnimationFrame(check);
+          }
+        };
+        requestAnimationFrame(check);
+      };
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(settleThenScroll);
+      } else {
+        settleThenScroll();
+      }
     }
   }
 

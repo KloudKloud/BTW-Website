@@ -18,8 +18,6 @@
     <div class="fpnav-bar">
       <a class="fpnav-brand" href="/fanpages"><img class="fpnav-brand-logo" src="/images/fanpagelogo.png" alt="Fanpages" width="52" height="44" /></a>
 
-      <a class="fpnav-link fpnav-trigger-link${here === '/fanpages/characters' ? ' active' : ''}" href="/fanpages/characters">Characters</a>
-
       <div class="fpnav-dropdown-wrap fpnav-left-dropdown-wrap">
         <button class="fpnav-link fpnav-trigger-link" id="fpnav-community-btn" type="button">Community <span class="fpnav-caret">▾</span></button>
         <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
@@ -28,6 +26,8 @@
           <a href="/fanpages/tos">BTW TOS</a>
         </div>
       </div>
+
+      <a class="fpnav-link fpnav-trigger-link${here === '/fanpages/characters' ? ' active' : ''}" href="/fanpages/characters">Characters</a>
 
       <div class="fpnav-dropdown-wrap fpnav-left-dropdown-wrap">
         <button class="fpnav-link fpnav-trigger-link${['/fanpages/search', '/fanpages/characters', '/fanpages/fandoms'].includes(here) ? ' active' : ''}" id="fpnav-browse-btn" type="button">Browse <span class="fpnav-caret">▾</span></button>
