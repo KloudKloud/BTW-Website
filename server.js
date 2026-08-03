@@ -470,6 +470,20 @@ async function initDb() {
     );
   `).catch(e => console.error('moderator_gallery_bookmarks migration:', e.message));
 
+  // Single "Like" on a character — one action that both marks the card
+  // liked everywhere it renders AND feeds the Library's "Characters" tab
+  // (unlike gallery posts, characters don't need a separate like/bookmark
+  // distinction).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS moderator_character_likes (
+      id           SERIAL      PRIMARY KEY,
+      user_id      INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      character_id INTEGER     NOT NULL REFERENCES moderator_characters(id) ON DELETE CASCADE,
+      created_at   TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, character_id)
+    );
+  `).catch(e => console.error('moderator_character_likes migration:', e.message));
+
   // Universal comments — target_type/target_id makes this reusable for
   // gallery posts now, and Newspaper/Social posts later, without a new
   // table each time. Replies are exactly one level deep: a reply's
@@ -4018,10 +4032,19 @@ app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
     'SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]
   );
   if (!author) return res.status(404).json({ error: 'Not found.' });
+
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+
   const { rows } = await pool.query(
     `SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y,
             mc.description, mc.stats, mc.facts, mc.lore, mc.relationships,
-            ms.story_path, ms.slug, ms.site_title
+            ms.story_path, ms.slug, ms.site_title,
+            (SELECT COUNT(*)::int FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id) AS like_count,
+            EXISTS(SELECT 1 FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id AND mcl.user_id = $2) AS liked
      FROM moderator_characters mc
      LEFT JOIN LATERAL (
        SELECT site_id FROM character_story_links WHERE character_id = mc.id ORDER BY site_id LIMIT 1
@@ -4029,7 +4052,7 @@ app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
      LEFT JOIN moderator_sites ms ON ms.id = csl.site_id
      WHERE mc.owner_user_id = $1
      ORDER BY mc.created_at DESC`,
-    [author.id]
+    [author.id, viewerId || 0]
   );
   res.json({
     characters: rows.map(r => ({
@@ -4041,6 +4064,7 @@ app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
       description: r.description, stats: r.stats || {}, facts: r.facts || [],
       lore: r.lore || [], relationships: r.relationships || [],
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
+      like_count: r.like_count, liked: r.liked,
     })),
   });
 });
@@ -4620,12 +4644,14 @@ async function sendSiteLookup(query, params, req, res) {
     ),
     pool.query(`
       SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.description, mc.stats, mc.facts, mc.lore, mc.relationships, mc.owner_user_id, mc.ref_is_nsfw,
-             ou.display_name AS owner_display_name, ou.username AS owner_username
+             ou.display_name AS owner_display_name, ou.username AS owner_username,
+             (SELECT COUNT(*)::int FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id) AS like_count,
+             EXISTS(SELECT 1 FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id AND mcl.user_id = $2) AS liked
       FROM character_story_links csl
       JOIN moderator_characters mc ON mc.id = csl.character_id
       JOIN users ou ON ou.id = mc.owner_user_id
       WHERE csl.site_id = $1 ORDER BY csl.sort_order, mc.id
-    `, [site.id]),
+    `, [site.id, viewerId]),
     pool.query(`
       SELECT mg.id, mg.category, mg.image_url, mg.title, mg.description, mg.position_x, mg.position_y,
              mg.tags, mg.view_count,
@@ -5916,6 +5942,23 @@ app.delete('/api/moderator/gallery/:id/bookmark', requireAuth, async (req, res) 
   res.json({ bookmarked: false });
 });
 
+app.post('/api/moderator/character/:id/like', requireAuth, async (req, res) => {
+  const { rows: [item] } = await pool.query('SELECT id FROM moderator_characters WHERE id = $1', [req.params.id]);
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  await pool.query(
+    'INSERT INTO moderator_character_likes (user_id, character_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [req.user.id, item.id]
+  );
+  const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM moderator_character_likes WHERE character_id = $1', [item.id]);
+  res.json({ liked: true, like_count: Number(count) });
+});
+
+app.delete('/api/moderator/character/:id/like', requireAuth, async (req, res) => {
+  await pool.query('DELETE FROM moderator_character_likes WHERE user_id = $1 AND character_id = $2', [req.user.id, req.params.id]);
+  const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM moderator_character_likes WHERE character_id = $1', [req.params.id]);
+  res.json({ liked: false, like_count: Number(count) });
+});
+
 // ── Chapter likes — any logged-in user can like any story's chapter, from
 // the Reader view ──────────────────────────────────────────────────────────
 app.post('/api/chapters/:id/like', requireAuth, async (req, res) => {
@@ -6132,7 +6175,7 @@ app.delete('/api/content-comments/:id', requireAuth, async (req, res) => {
 // GET /api/library — bookmarked stories + liked gallery art, across every
 // story, for the avatar dropdown's "Library" page.
 app.get('/api/library', requireAuth, async (req, res) => {
-  const [{ rows: stories }, { rows: gallery }, { rows: bookmarkedGallery }] = await Promise.all([
+  const [{ rows: stories }, { rows: gallery }, { rows: bookmarkedGallery }, { rows: likedCharacters }] = await Promise.all([
     pool.query(`
       SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.username, u.display_name, u.avatar
       FROM moderator_bookmarks mb
@@ -6167,6 +6210,16 @@ app.get('/api/library', requireAuth, async (req, res) => {
       WHERE mgb.user_id = $1
       ORDER BY mgb.created_at DESC
     `, [req.user.id]),
+    pool.query(`
+      SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y,
+        trim(mc.stats->>'Species') AS species,
+        u.username AS owner_username, u.display_name AS owner_display_name
+      FROM moderator_character_likes mcl
+      JOIN moderator_characters mc ON mc.id = mcl.character_id
+      JOIN users u ON u.id = mc.owner_user_id
+      WHERE mcl.user_id = $1
+      ORDER BY mcl.created_at DESC
+    `, [req.user.id]),
   ]);
   res.json({
     stories: stories.map(r => ({
@@ -6182,6 +6235,11 @@ app.get('/api/library', requireAuth, async (req, res) => {
       id: r.id, image_url: r.image_url, title: r.title, category: r.category,
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
       owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
+    })),
+    characters: likedCharacters.map(r => ({
+      id: r.id, name: r.name, image: r.ref_image || null,
+      position_x: r.ref_position_x, position_y: r.ref_position_y, species: r.species || '',
+      owner_username: r.owner_username, owner: r.owner_display_name || r.owner_username,
     })),
   });
 });
@@ -6575,31 +6633,52 @@ app.get('/api/character-species-catalog', async (req, res) => {
   res.json({ species: rows.map(r => r.species) });
 });
 
-// Characters page — every character site-wide, name search + exact
-// species filter (species is matched exactly against the catalog above,
-// not ILIKE-partial, so picking "Umbreon" doesn't also pull in an
-// "Umbreon Trainer" or similar near-miss).
+// Characters page — every character site-wide. "Search Keywords" matches
+// name, species, and description all at once (species is now folded into
+// the keyword search instead of its own picker list). filter=mine/followed/
+// liked narrows to the viewer's own/followed/liked characters -- those
+// three require a logged-in viewer, and just return empty if there isn't
+// one rather than erroring.
 app.get('/api/search/characters', async (req, res) => {
   const q = String(req.query.q || '').trim();
-  const species = String(req.query.species || '').trim();
+  const filter = String(req.query.filter || '').trim();
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(60, Math.max(1, parseInt(req.query.limit, 10) || 30));
   const offset = (page - 1) * limit;
   const { nsfwAllowed } = await getViewerNsfwAccess(req);
+
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+
+  if (['mine', 'followed', 'liked'].includes(filter) && !viewerId) {
+    return res.json({ items: [], total: 0, page, limit });
+  }
+
+  let filterClause = '';
+  if (filter === 'mine') filterClause = 'AND mch.owner_user_id = $4';
+  else if (filter === 'followed') filterClause = 'AND mch.owner_user_id IN (SELECT followed_id FROM user_follows WHERE follower_id = $4)';
+  else if (filter === 'liked') filterClause = 'AND mch.id IN (SELECT character_id FROM moderator_character_likes WHERE user_id = $4)';
 
   const { rows } = await pool.query(
     `SELECT mch.id, mch.name, mch.ref_image, mch.ref_position_x, mch.ref_position_y, mch.ref_is_nsfw,
             trim(mch.stats->>'Species') AS species,
             u.username AS owner_username, u.display_name AS owner_display_name,
             (SELECT COUNT(*)::int FROM character_story_links csl WHERE csl.character_id = mch.id) AS story_count,
+            (SELECT COUNT(*)::int FROM moderator_character_likes mcl WHERE mcl.character_id = mch.id) AS like_count,
+            ${viewerId ? 'EXISTS(SELECT 1 FROM moderator_character_likes mcl2 WHERE mcl2.character_id = mch.id AND mcl2.user_id = $4)' : 'false'} AS liked,
             COUNT(*) OVER() AS total_count
      FROM moderator_characters mch
      JOIN users u ON u.id = mch.owner_user_id
-     WHERE ($1 = '' OR mch.name ILIKE '%' || $1 || '%')
-       AND ($2 = '' OR trim(mch.stats->>'Species') ILIKE $2)
+     WHERE ($1 = '' OR mch.name ILIKE '%' || $1 || '%'
+            OR trim(mch.stats->>'Species') ILIKE '%' || $1 || '%'
+            OR mch.description ILIKE '%' || $1 || '%')
+       ${filterClause}
      ORDER BY mch.created_at DESC
-     LIMIT $3 OFFSET $4`,
-    [q, species, limit, offset]
+     LIMIT $2 OFFSET $3`,
+    viewerId ? [q, limit, offset, viewerId] : [q, limit, offset]
   );
 
   res.json({
@@ -6610,7 +6689,7 @@ app.get('/api/search/characters', async (req, res) => {
       position_x: r.ref_position_x, position_y: r.ref_position_y,
       species: r.species || '',
       owner_username: r.owner_username, owner: r.owner_display_name || r.owner_username,
-      story_count: r.story_count,
+      story_count: r.story_count, like_count: r.like_count, liked: !!r.liked,
     })),
     total: rows.length ? Number(rows[0].total_count) : 0, page, limit,
   });

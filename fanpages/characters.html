@@ -27,11 +27,11 @@
 
     .fp-layout {
       padding: 0 2.5rem 5rem;
-      display: grid; grid-template-columns: 300px 1fr; column-gap: 2rem; align-items: stretch;
+      display: grid; grid-template-columns: 280px 1fr; column-gap: 2rem; align-items: stretch;
     }
 
-    /* ── Left sidebar — mini search + species filter list, same dark-box
-       treatment as search.html's filter panel. ── */
+    /* ── Left sidebar — pfp/username, keyword search, and the browse
+       filter menu (All/Your/Followed/Liked). ── */
     .fp-char-sidebar {
       position: sticky; top: 76px;
       margin-bottom: -5rem; margin-left: -2.5rem;
@@ -46,7 +46,31 @@
     .fp-char-sidebar::-webkit-scrollbar-track { background: #1a1a1e; border-radius: 8px; }
     .fp-char-sidebar::-webkit-scrollbar-thumb { background: #444; border-radius: 8px; }
     .fp-char-sidebar::-webkit-scrollbar-thumb:hover { background: #555; }
-    .fp-char-sidebar-title { font-size: 1.3rem; font-weight: 700; color: #fff; margin-bottom: 1rem; }
+
+    /* Signed-in viewer's own pfp + username, big and up top -- gives the
+       sidebar a "this is your space" feel instead of a plain filter box. */
+    .fp-char-viewer-box {
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+      gap: 0.6rem; margin-bottom: 1.5rem; padding-bottom: 1.5rem;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .fp-char-viewer-avatar-wrap {
+      width: 72px; height: 72px; border-radius: 50%; overflow: hidden;
+      border: 2px solid rgba(240,192,96,0.55); box-shadow: 0 0 22px rgba(240,192,96,0.25);
+    }
+    .fp-char-viewer-avatar-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fp-char-viewer-avatar-fallback {
+      width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 1.7rem;
+    }
+    .fp-char-viewer-name { font-size: 1.15rem; font-weight: 700; color: #fff; }
+    .fp-char-viewer-login {
+      display: block; text-decoration: none; color: #7fa8d9; font-size: 0.9rem; font-weight: 600;
+      margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1);
+      text-align: center;
+    }
+    .fp-char-viewer-login:hover { color: #a8c6e8; }
+
     .fp-char-search-wrap { position: relative; margin-bottom: 1.5rem; }
     .fp-char-search-icon {
       position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
@@ -57,29 +81,22 @@
       color: #f0f0f0; font-family: inherit; font-size: 0.95rem; padding: 0.6em 0.9em 0.6em 2.4rem;
     }
     .fp-char-search-wrap input:focus { outline: none; border-color: #7fa8d9; }
-    .fp-char-species-title {
-      font-size: 1.05rem; font-weight: 700; color: #ddd; margin-bottom: 0.7rem;
-      display: flex; align-items: center; justify-content: space-between;
-    }
-    .fp-char-species-clear {
-      font-size: 0.75rem; font-weight: 600; color: #7fa8d9; background: none; border: none; cursor: pointer;
-    }
-    .fp-char-species-clear:hover { color: #a8c6e8; }
-    .fp-char-species-list { display: flex; flex-direction: column; gap: 0.4rem; }
-    .fp-char-species-item {
-      display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+
+    .fp-char-filter-menu { display: flex; flex-direction: column; gap: 0.4rem; }
+    .fp-char-filter-item {
+      display: flex; align-items: center; gap: 0.6rem;
       background: rgba(255,255,255,0.04); border: 1px solid transparent; border-radius: 10px;
-      padding: 0.5em 0.8em; font-size: 0.88rem; font-weight: 600; color: #ccc; cursor: pointer;
-      text-align: left; width: 100%; font-family: inherit;
+      padding: 0.6em 0.85em; font-size: 0.9rem; font-weight: 600; color: #ccc; cursor: pointer;
+      text-align: left; width: 100%; font-family: inherit; text-decoration: none;
     }
-    .fp-char-species-item:hover { background: rgba(127,168,217,0.12); color: #fff; }
-    .fp-char-species-item--active {
+    .fp-char-filter-item:hover { background: rgba(127,168,217,0.12); color: #fff; }
+    .fp-char-filter-item--active {
       background: rgba(127,168,217,0.18); border-color: rgba(127,168,217,0.55); color: #fff;
     }
-    .fp-char-species-count { font-size: 0.74rem; color: #888; }
-    .fp-char-species-item--active .fp-char-species-count { color: #a8c6e8; }
+    .fp-char-filter-icon { font-size: 1rem; }
 
-    /* ── Main content — heading + 3-per-row card grid ── */
+    /* ── Main content — heading + card grid, 4-per-row and noticeably
+       smaller than the old 3-per-row layout. ── */
     .fp-char-main-heading {
       font-family: 'Cinzel', Georgia, serif; font-size: 1.7rem; font-weight: 700; color: #fff;
       margin: 1.75rem 0 0.4rem;
@@ -87,15 +104,16 @@
     .fp-char-main-sub { color: #ccc; font-size: 0.95rem; margin-bottom: 1.5rem; }
     .fp-char-main-sub strong { color: #fff; }
     .fp-char-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.1rem;
     }
     .fp-char-card {
+      position: relative;
       display: block; text-decoration: none; color: inherit;
-      background: #161616; border: 1px solid rgba(255,255,255,0.1); border-radius: 14px;
+      background: #161616; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
       overflow: hidden; transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
     }
     .fp-char-card:hover {
-      transform: translateY(-4px); box-shadow: 0 12px 28px rgba(0,0,0,0.45); border-color: rgba(240,192,96,0.4);
+      transform: translateY(-3px); box-shadow: 0 10px 22px rgba(0,0,0,0.45); border-color: rgba(240,192,96,0.4);
     }
     .fp-char-card-img-wrap {
       position: relative; width: 100%; aspect-ratio: 3 / 4; background: #1e1e1e; overflow: hidden;
@@ -103,19 +121,34 @@
     .fp-char-card-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .fp-char-card-locked {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-      background: rgba(0,0,0,0.6); font-size: 2rem;
+      background: rgba(0,0,0,0.6); font-size: 1.6rem;
     }
     .fp-char-card-fallback {
       width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 2.4rem;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 2rem;
     }
-    .fp-char-card-body { padding: 1rem 1.1rem 1.15rem; }
-    .fp-char-card-name { font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 0.35rem; }
+    .fp-char-card-body { padding: 0.7rem 0.8rem 0.85rem; }
+    .fp-char-card-name { font-size: 0.95rem; font-weight: 700; color: #fff; margin-bottom: 0.3rem; }
     .fp-char-card-species {
       display: inline-block; background: rgba(127,168,217,0.16); color: #a8c6e8; border-radius: 20px;
-      padding: 0.22em 0.75em; font-size: 0.76rem; font-weight: 700; margin-bottom: 0.5rem;
+      padding: 0.2em 0.65em; font-size: 0.68rem; font-weight: 700; margin-bottom: 0.4rem;
     }
-    .fp-char-card-owner { font-size: 0.85rem; color: #999; }
+    .fp-char-card-owner { font-size: 0.76rem; color: #999; }
+
+    /* Like button — floats over the top-right corner of the image, same
+       heart-toggle pattern used on gallery posts. */
+    .fp-char-like-btn {
+      position: absolute; top: 0.5rem; right: 0.5rem; z-index: 2;
+      display: flex; align-items: center; gap: 0.3rem;
+      background: rgba(10,10,10,0.65); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      border: 1px solid rgba(255,255,255,0.2); border-radius: 20px;
+      padding: 0.28em 0.6em; font-size: 0.78rem; font-weight: 700; color: #fff; cursor: pointer;
+      line-height: 1; transition: color 0.15s, border-color 0.15s, transform 0.1s;
+    }
+    .fp-char-like-btn:hover { border-color: rgba(240,192,96,0.6); transform: scale(1.05); }
+    .fp-char-like-btn.liked { color: #f0708a; }
+    .fp-char-like-btn .fp-char-like-icon { font-size: 0.9rem; }
+
     .fp-char-empty { color: #ddd; font-size: 1rem; padding: 2rem 0; grid-column: 1 / -1; }
     .fp-pagination { display: flex; justify-content: center; gap: 0.6rem; margin-top: 2.5rem; }
     .fp-pagination button {
@@ -125,6 +158,9 @@
     .fp-pagination button:hover:not(:disabled) { border-color: #7fa8d9; color: #7fa8d9; }
     .fp-pagination button:disabled { opacity: 0.4; cursor: default; }
 
+    @media (max-width: 1100px) {
+      .fp-char-grid { grid-template-columns: repeat(3, 1fr); }
+    }
     @media (max-width: 900px) {
       .fp-layout { grid-template-columns: 1fr; }
       .fp-char-sidebar {
@@ -148,16 +184,27 @@
 
 <main class="fp-layout">
   <aside class="fp-char-sidebar">
-    <p class="fp-char-sidebar-title">Filter Characters</p>
+    <div id="fp-char-viewer-slot"></div>
+
     <div class="fp-char-search-wrap">
       <svg class="fp-char-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-      <input type="search" id="fp-char-search-input" placeholder="Search by name…" />
+      <input type="search" id="fp-char-search-input" placeholder="Search Keywords…" />
     </div>
-    <p class="fp-char-species-title">
-      Species
-      <button class="fp-char-species-clear" id="fp-char-species-clear" type="button" hidden>Clear</button>
-    </p>
-    <div class="fp-char-species-list" id="fp-char-species-list"><p class="fp-char-empty" style="padding:0;">Loading…</p></div>
+
+    <nav class="fp-char-filter-menu" id="fp-char-filter-menu">
+      <button type="button" class="fp-char-filter-item" data-filter="">
+        <span class="fp-char-filter-icon">🐾</span> All Characters
+      </button>
+      <button type="button" class="fp-char-filter-item" data-filter="mine">
+        <span class="fp-char-filter-icon">✨</span> Your Characters
+      </button>
+      <button type="button" class="fp-char-filter-item" data-filter="followed">
+        <span class="fp-char-filter-icon">💫</span> Followed Characters
+      </button>
+      <button type="button" class="fp-char-filter-item" data-filter="liked">
+        <span class="fp-char-filter-icon">💖</span> Liked Characters
+      </button>
+    </nav>
   </aside>
 
   <div>
@@ -175,41 +222,44 @@ function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
+
+const FILTER_LABELS = {
+  '': 'All Characters', mine: 'Your Characters', followed: 'Followed Characters', liked: 'Liked Characters',
+};
+
 function readParams() {
   const p = new URLSearchParams(window.location.search);
-  return { q: p.get('q') || '', species: p.get('species') || '', page: Math.max(1, parseInt(p.get('page'), 10) || 1) };
+  const filter = p.get('filter') || '';
+  return {
+    q: p.get('q') || '',
+    filter: ['mine', 'followed', 'liked'].includes(filter) ? filter : '',
+    page: Math.max(1, parseInt(p.get('page'), 10) || 1),
+  };
 }
 
-async function loadSpeciesList() {
-  const listEl = document.getElementById('fp-char-species-list');
-  const clearBtn = document.getElementById('fp-char-species-clear');
-  const { species: activeSpecies } = readParams();
+async function loadViewerBox() {
+  const slot = document.getElementById('fp-char-viewer-slot');
+  if (!token) {
+    slot.innerHTML = `<a class="fp-char-viewer-login" href="/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}">Log in to like &amp; track your own characters →</a>`;
+    return;
+  }
   try {
-    const res = await fetch('/api/character-species-catalog');
-    const data = await res.json();
-    const species = data.species || [];
-    if (!species.length) { listEl.innerHTML = '<p class="fp-char-empty" style="padding:0;">No species tagged yet.</p>'; return; }
-    listEl.innerHTML = species.map(s => `
-      <button type="button" class="fp-char-species-item${s.toLowerCase() === activeSpecies.toLowerCase() ? ' fp-char-species-item--active' : ''}" data-species="${escapeHtml(s)}">
-        ${escapeHtml(s)}
-      </button>
-    `).join('');
-    listEl.querySelectorAll('.fp-char-species-item').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const usp = new URLSearchParams(window.location.search);
-        usp.set('species', btn.dataset.species);
-        usp.delete('page');
-        window.location.search = usp.toString();
-      });
-    });
-    clearBtn.hidden = !activeSpecies;
-    clearBtn.addEventListener('click', () => {
-      const usp = new URLSearchParams(window.location.search);
-      usp.delete('species'); usp.delete('page');
-      window.location.search = usp.toString();
-    });
+    const res = await fetch('/api/auth/me', { headers: authHeaders() });
+    if (!res.ok) throw new Error();
+    const { user } = await res.json();
+    const avatarHtml = user.avatar
+      ? `<img src="${escapeHtml(user.avatar)}" alt="" style="object-position:${user.avatar_position_x != null ? user.avatar_position_x : 50}% ${user.avatar_position_y != null ? user.avatar_position_y : 50}%;" />`
+      : `<div class="fp-char-viewer-avatar-fallback">${escapeHtml((user.display_name || user.username || '?').charAt(0).toUpperCase())}</div>`;
+    slot.innerHTML = `
+      <div class="fp-char-viewer-box">
+        <a class="fp-char-viewer-avatar-wrap" href="/fanpages/${encodeURIComponent(user.username)}">${avatarHtml}</a>
+        <a class="fp-char-viewer-name" href="/fanpages/${encodeURIComponent(user.username)}" style="text-decoration:none;">${escapeHtml(user.display_name || user.username)}</a>
+      </div>
+    `;
   } catch {
-    listEl.innerHTML = '<p class="fp-char-empty" style="padding:0;">Couldn\'t load species right now.</p>';
+    slot.innerHTML = '';
   }
 }
 
@@ -223,15 +273,40 @@ function charCardHtml(c) {
       ? `<img src="${escapeHtml(c.image)}" alt="" style="object-position:${posX}% ${posY}%;" />`
       : `<div class="fp-char-card-fallback">${escapeHtml((c.name[0] || '?').toUpperCase())}</div>`;
   return `
-    <a class="fp-char-card" href="${href}">
-      <div class="fp-char-card-img-wrap">${imgHtml}</div>
-      <div class="fp-char-card-body">
-        <p class="fp-char-card-name">${escapeHtml(c.name)}</p>
-        ${c.species ? `<span class="fp-char-card-species">${escapeHtml(c.species)}</span><br>` : ''}
-        <p class="fp-char-card-owner">by ${escapeHtml(c.owner)}</p>
-      </div>
-    </a>
+    <div class="fp-char-card">
+      <a href="${href}">
+        <div class="fp-char-card-img-wrap">${imgHtml}</div>
+        <div class="fp-char-card-body">
+          <p class="fp-char-card-name">${escapeHtml(c.name)}</p>
+          ${c.species ? `<span class="fp-char-card-species">${escapeHtml(c.species)}</span><br>` : ''}
+          <p class="fp-char-card-owner">by ${escapeHtml(c.owner)}</p>
+        </div>
+      </a>
+      <button type="button" class="fp-char-like-btn${c.liked ? ' liked' : ''}" data-char-id="${c.id}" aria-label="Like this character">
+        <span class="fp-char-like-icon">${c.liked ? '♥' : '♡'}</span><span class="fp-char-like-count">${c.like_count || 0}</span>
+      </button>
+    </div>
   `;
+}
+
+function wireLikeButtons(root) {
+  root.querySelectorAll('.fp-char-like-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+      const id = btn.dataset.charId;
+      const liked = btn.classList.contains('liked');
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/moderator/character/${id}/like`, { method: liked ? 'DELETE' : 'POST', headers: authHeaders() });
+        const data = await res.json();
+        btn.classList.toggle('liked', data.liked);
+        btn.querySelector('.fp-char-like-icon').textContent = data.liked ? '♥' : '♡';
+        btn.querySelector('.fp-char-like-count').textContent = data.like_count;
+      } catch {}
+      btn.disabled = false;
+    });
+  });
 }
 
 let searchDebounce = null;
@@ -246,6 +321,19 @@ document.getElementById('fp-char-search-input').addEventListener('input', (e) =>
   }, 400);
 });
 
+function wireFilterMenu() {
+  const { filter: activeFilter } = readParams();
+  document.querySelectorAll('.fp-char-filter-item').forEach(btn => {
+    btn.classList.toggle('fp-char-filter-item--active', btn.dataset.filter === activeFilter);
+    btn.addEventListener('click', () => {
+      const usp = new URLSearchParams(window.location.search);
+      if (btn.dataset.filter) usp.set('filter', btn.dataset.filter); else usp.delete('filter');
+      usp.delete('page');
+      window.location.search = usp.toString();
+    });
+  });
+}
+
 async function runCharacterSearch() {
   const gridEl = document.getElementById('fp-char-grid');
   const subEl = document.getElementById('fp-char-main-sub');
@@ -253,21 +341,27 @@ async function runCharacterSearch() {
   gridEl.innerHTML = '<p class="fp-char-empty">Loading…</p>';
   paginationEl.hidden = true;
 
-  const { q, species, page } = readParams();
+  const { q, filter, page } = readParams();
   document.getElementById('fp-char-search-input').value = q;
-  const limit = 30;
+  const limit = 32;
   const params = new URLSearchParams();
   if (q) params.set('q', q);
-  if (species) params.set('species', species);
+  if (filter) params.set('filter', filter);
   params.set('page', page);
   params.set('limit', limit);
 
+  if (['mine', 'followed', 'liked'].includes(filter) && !token) {
+    gridEl.innerHTML = `<p class="fp-char-empty">Log in to see ${escapeHtml(FILTER_LABELS[filter])}.</p>`;
+    subEl.textContent = '';
+    return;
+  }
+
   try {
-    const res = await fetch(`/api/search/characters?${params.toString()}`);
+    const res = await fetch(`/api/search/characters?${params.toString()}`, { headers: authHeaders() });
     const data = await res.json();
     const items = data.items || [];
     const bits = [];
-    if (species) bits.push(`species "${species}"`);
+    if (filter) bits.push(FILTER_LABELS[filter].toLowerCase());
     if (q) bits.push(`"${q}"`);
     subEl.innerHTML = `<strong>${data.total || 0}</strong> character${data.total === 1 ? '' : 's'} found${bits.length ? ` for ${escapeHtml(bits.join(', '))}` : ''}.`;
 
@@ -276,6 +370,7 @@ async function runCharacterSearch() {
       return;
     }
     gridEl.innerHTML = items.map(charCardHtml).join('');
+    wireLikeButtons(gridEl);
 
     const totalPages = Math.max(1, Math.ceil((data.total || 0) / limit));
     if (totalPages > 1) {
@@ -294,7 +389,8 @@ async function runCharacterSearch() {
   }
 }
 
-loadSpeciesList();
+loadViewerBox();
+wireFilterMenu();
 runCharacterSearch();
 </script>
 
