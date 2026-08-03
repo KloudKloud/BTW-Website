@@ -147,40 +147,39 @@
        the shared stylesheet reset the whole `padding` shorthand (not just
        padding-top), and this needs to win regardless of viewport width. */
     body.mod-editing-active .wiki-layout { padding-top: calc(84px + 2rem) !important; }
-    /* The banner itself does NOT go full-width along with the rest of
-       Story Details — it's a preview of how the banner will actually look
-       on the real page, and the real page caps at 1300px (minus its own
-       3rem/side padding). Letting it stretch edge-to-edge here made
-       object-fit:cover scale the image up to fill the extra width at the
-       same fixed 460px height, cropping (zooming into) far more of it
-       than the real page ever shows — this keeps the preview honest. */
+    /* Banner now lives inside the black .mod-editor-form-box card, flush
+       against its top edge and corners -- negative margins cancel out the
+       card's own padding (1.85rem top/2rem sides) so the banner reaches
+       the card's actual boundary instead of floating inset from it, and
+       the matching top-only border-radius keeps the card's rounded
+       corners looking continuous instead of getting cut across by a
+       square banner edge. */
     body.mod-editing-active.se-section-details #wiki-cover {
-      max-width: calc(1300px - 6rem); margin-left: auto; margin-right: auto;
-      /* Now sits below the tabs/heading inside .wiki-layout, which already
-         clears the fixed edit bar via its own padding-top -- the shared
-         "sits directly under the bar" margin-top:84px (for when this was a
-         bare top-of-page sibling) would double that gap here. */
-      margin-top: 1.75rem;
+      margin: -1.85rem -2rem 2rem;
+      width: calc(100% + 4rem);
+      max-width: none;
+      border-radius: 16px 16px 0 0;
+    }
+    @media (max-width: 820px) {
+      /* fanpages.css has its own `margin-top: 0 !important` reset for
+         .wiki-cover at this same breakpoint (for when the banner sits bare
+         on the page, not nested in a card) -- this ID selector's higher
+         specificity is what lets !important here win over that instead of
+         the other way around. */
+      body.mod-editing-active.se-section-details #wiki-cover {
+        margin: -1.4rem -1.25rem 1.5rem !important;
+        width: calc(100% + 2.5rem);
+      }
     }
     .se-edit-main { min-width: 0; }
 
-    /* Same disclaimer box as the fanpages hub and every profile page —
-       sits at the bottom regardless of which of the four tabs is active,
-       since this is all one page underneath. */
-    .fp-disclaimer { max-width: 1200px; margin: 3rem auto 4rem; padding: 0 2rem; }
-    .fp-disclaimer-box {
-      border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1.5rem;
-      font-size: 0.85rem; line-height: 1.8; color: #999; text-align: center; font-style: italic;
-    }
-    .fp-disclaimer-box strong { color: #ccc; font-weight: 700; }
-    .fp-disclaimer-img {
-      display: block; width: 100%; height: 420px; object-fit: cover;
-      border-radius: 12px; margin: 0 auto 1.25rem; opacity: 0.85;
-    }
-    .fp-disclaimer-box a { color: #7fa8d9; text-decoration: underline; }
-    .fp-disclaimer-box .fp-disclaimer-highlight { color: #f0c060; }
-    .fp-disclaimer-box p { margin-bottom: 0.75rem; }
-    .fp-disclaimer-sig { display: block; margin-top: 0.75rem; color: #ccc; }
+    /* Filler disclaimer box removed -- the Chapters/Characters/Gallery tabs
+       used to look sparse with few entries, so a big signed blurb + image
+       got added at the bottom to fill the space. Replaced by actually
+       making the page itself fill the viewport (see .wiki-layout
+       min-height below) so tabs with little content still read as a full
+       page instead of needing filler to look right. */
+    body.mod-editing-active .wiki-layout { min-height: calc(100vh - 84px); }
 
     /* Any gallery-tab modal open — the story's own banner "Change Banner
        Image" control sits behind these overlays but was still reachable
@@ -575,19 +574,22 @@
       <a href="#" id="se-tab-gallery" class="wiki-story-tab">Gallery</a>
     </nav>
 
-    <!-- Banner -->
-    <div class="wiki-cover mod-editing-banner" id="wiki-cover">
-      <img alt="Story banner" id="banner-img" class="mod-banner-loading" draggable="false" />
-      <button class="fp-recrop-btn" id="banner-recrop-btn" type="button" style="display:none; position:absolute; right:1.5rem; top:1.25rem; z-index:5;">✏️ Recrop</button>
-      <div class="mod-banner-edit-wrap" id="banner-edit-wrap" style="display:flex;">
-        <button class="mod-banner-edit-btn" id="banner-edit-btn" type="button">📷 Change Banner Image</button>
-        <span class="mod-banner-edit-hint">Recommended size: 1600 × 560px</span>
-      </div>
-      <input type="file" id="banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-    </div>
-
     <div class="se-edit-main">
     <div class="mod-editor-form-box" id="editor-form-box">
+
+      <!-- Banner — lives inside the same black card as the rest of Story
+           Details now (flush with its top corners via negative margins,
+           see #wiki-cover's rule below), instead of sitting outside the
+           card on the bare page background. -->
+      <div class="wiki-cover mod-editing-banner" id="wiki-cover">
+        <img alt="Story banner" id="banner-img" class="mod-banner-loading" draggable="false" />
+        <button class="fp-recrop-btn" id="banner-recrop-btn" type="button" style="display:none; position:absolute; right:1.5rem; top:1.25rem; z-index:5;">✏️ Recrop</button>
+        <div class="mod-banner-edit-wrap" id="banner-edit-wrap" style="display:flex;">
+          <button class="mod-banner-edit-btn" id="banner-edit-btn" type="button">📷 Change Banner Image</button>
+          <span class="mod-banner-edit-hint">Recommended size: 1600 × 560px</span>
+        </div>
+        <input type="file" id="banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+      </div>
 
       <div class="se-details-row">
         <!-- Cover + quick-nav cards — glued to the left, sticky as the page
@@ -955,18 +957,6 @@
 
   </div>
 </main>
-</div>
-
-<div class="fp-disclaimer">
-  <div class="fp-disclaimer-box">
-    <img class="fp-disclaimer-img" src="/images/gallery/kloudsaphbedroom_1.png" alt="" />
-    <p>
-      <span class="fp-disclaimer-highlight">btwfanfic.net</span> is a website made by <a href="/fanpages/veekitpaws">VeekitPaws</a>, the author of <strong>Between Two Worlds</strong>.
-      Consider supporting our website and the original book by <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donating Here</a>.
-      Donations are completely optional, and they help support this site + keep this little 'vee nice and fed! I appreciate you all for hanging out! &lt;3
-    </p>
-    <span class="fp-disclaimer-sig">— VeekitPaws</span>
-  </div>
 </div>
 
 <footer>

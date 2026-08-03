@@ -972,10 +972,12 @@
   <div class="mod-gallery-main mod-gallery-main--no-sidebar" id="fp-gallery-grid-view">
     <div class="mod-gallery-content">
       <p class="mod-gallery-eyebrow" id="fp-gallery-eyebrow">Fan Art &amp; Illustrations</p>
+      <div class="fp-pagination" id="fp-gallery-pagination-top" hidden></div>
       <div class="gallery-grid gallery-grid--4up" id="fp-gallery-grid"></div>
       <div class="mod-gallery-empty-state" id="fp-gallery-empty-msg" style="display:none;">
         <p class="mod-gallery-sidebar-label">No artwork yet~</p>
       </div>
+      <div class="fp-pagination" id="fp-gallery-pagination-bottom" hidden></div>
     </div>
   </div>
   </div>
@@ -1840,6 +1842,36 @@
   // out server-side entirely for a viewer without NSFW access. ──────────
   let FP_GALLERY_ITEMS = [];
   let fpGalleryLoaded = false;
+  let fpGalleryPage = 1;
+  const FP_GALLERY_PAGE_SIZE = 42;
+
+  // e621-style numbered pager, same look/markup as Submissions search's own
+  // (see search.html's paginationHtml) -- reused here since a profile's
+  // Gallery tab can run just as long and never had any paging at all.
+  function fpGalleryPaginationHtml(page, totalPages) {
+    const pageSet = new Set([1, totalPages, page]);
+    for (let i = page - 2; i <= page + 2; i++) if (i >= 1 && i <= totalPages) pageSet.add(i);
+    const sorted = [...pageSet].sort((a, b) => a - b);
+    let html = `<button type="button" class="fp-page-btn" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''} aria-label="Previous page">‹</button>`;
+    let prev = 0;
+    sorted.forEach(p => {
+      if (p - prev > 1) html += '<span class="fp-page-ellipsis">…</span>';
+      html += `<button type="button" class="fp-page-btn${p === page ? ' fp-page-btn--active' : ''}" data-page="${p}">${p}</button>`;
+      prev = p;
+    });
+    html += `<button type="button" class="fp-page-btn" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''} aria-label="Next page">›</button>`;
+    return html;
+  }
+  function wireFpGalleryPagination(el) {
+    el.querySelectorAll('.fp-page-btn').forEach(btn => {
+      if (btn.disabled) return;
+      btn.addEventListener('click', () => {
+        fpGalleryPage = parseInt(btn.dataset.page, 10);
+        renderFpGalleryTiles();
+        document.getElementById('fp-gallery-grid-row').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  }
 
   // Every rating shows together now -- SFW/Mature/Explicit are no longer
   // split across Browse tabs. A viewer without NSFW access simply never
@@ -1847,16 +1879,30 @@
   function renderFpGalleryTiles() {
     const grid = document.getElementById('fp-gallery-grid');
     const emptyEl = document.getElementById('fp-gallery-empty-msg');
+    const topPag = document.getElementById('fp-gallery-pagination-top');
+    const bottomPag = document.getElementById('fp-gallery-pagination-bottom');
     if (!FP_GALLERY_ITEMS.length) {
       grid.hidden = true;
       emptyEl.style.display = '';
+      topPag.hidden = true;
+      bottomPag.hidden = true;
       return;
     }
     grid.hidden = false;
     emptyEl.style.display = 'none';
     grid.innerHTML = '';
+
+    const totalPages = Math.max(1, Math.ceil(FP_GALLERY_ITEMS.length / FP_GALLERY_PAGE_SIZE));
+    fpGalleryPage = Math.min(Math.max(1, fpGalleryPage), totalPages);
+    const start = (fpGalleryPage - 1) * FP_GALLERY_PAGE_SIZE;
+    const pageItems = FP_GALLERY_ITEMS.slice(start, start + FP_GALLERY_PAGE_SIZE);
+
+    const pagHtml = fpGalleryPaginationHtml(fpGalleryPage, totalPages);
+    topPag.hidden = false; topPag.innerHTML = pagHtml; wireFpGalleryPagination(topPag);
+    bottomPag.hidden = false; bottomPag.innerHTML = pagHtml; wireFpGalleryPagination(bottomPag);
+
     const uploaderName = (currentAuthor && (currentAuthor.display_name || currentAuthor.username)) || USERNAME;
-    FP_GALLERY_ITEMS.forEach(g => {
+    pageItems.forEach(g => {
       const wrap = document.createElement('div');
       wrap.className = 'gallery-tile-card';
       const a = document.createElement('a');
