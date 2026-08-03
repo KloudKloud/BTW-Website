@@ -7045,6 +7045,9 @@ app.get('/api/clubs', async (req, res) => {
   const q = `%${String(req.query.q || '').slice(0, 60)}%`;
   const mineOnly = req.query.mine === '1' && viewerId;
   const limit = Math.min(parseInt(req.query.limit, 10) || 30, 100);
+  // Explore page's topic row -- "All" sends no ?type at all, any other
+  // click filters to clubs whose club_types array contains that one topic.
+  const type = CLUB_TYPES.includes(req.query.type) ? req.query.type : null;
 
   // Same "logged out or SFW Mode" gate used for spicy gallery/character
   // content — NSFW clubs drop out of public browse for those viewers.
@@ -7066,10 +7069,11 @@ app.get('/api/clubs', async (req, res) => {
      WHERE c.name ILIKE $2
        ${mineOnly ? 'AND EXISTS (SELECT 1 FROM club_members m2 WHERE m2.club_id = c.id AND m2.user_id = $1)' : ''}
        ${hideNsfw ? 'AND c.is_nsfw = FALSE' : ''}
+       ${type ? 'AND c.club_types @> $4::jsonb' : ''}
      GROUP BY c.id
      ORDER BY member_count DESC, c.created_at DESC
      LIMIT $3`,
-    [viewerId, q, limit]
+    type ? [viewerId, q, limit, JSON.stringify([type])] : [viewerId, q, limit]
   );
   res.json({ clubs: rows.map(r => clubPublicShape(r, r.viewer_role)) });
 });
@@ -8439,6 +8443,115 @@ app.get('/api/clubs-recommended', async (req, res) => {
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
     club: { slug: p.club_slug, name: p.club_name, icon_url: p.club_icon || null },
   })) });
+});
+
+// GET /api/clubs-explore — the Explore page's "Recommended for you" row plus
+// a handful of "More like <club>" rows, Reddit-Explore-style.
+//
+// Recommended: ranked by how many club_types a candidate club shares with
+// the *set* of every club the viewer belongs to (their whole topic
+// footprint at once), tie-broken by member_count so popular clubs edge out
+// quiet ones on an even topic match. Logged-out viewers (or members of
+// zero clubs) just get the site's most-populated clubs -- there's no
+// affinity signal to build from yet.
+//
+// "More like X": one row per club the viewer belongs to (their most
+// recently joined, capped at 3 so the page doesn't run on forever), ranked
+// by *shared members* with that specific club -- how many people who are in
+// X are also in the candidate -- rather than topic overlap, since that's a
+// real behavioral signal (people who joined both) instead of a metadata
+// coincidence. Falls back to a couple of popularity-based rows when the
+// viewer isn't in any club.
+app.get('/api/clubs-explore', async (req, res) => {
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+  let nsfwAllowed = false;
+  if (viewerId) {
+    const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
+    nsfwAllowed = !!(row && row.nsfw_enabled);
+  }
+  const nsfwClause = nsfwAllowed ? '' : 'AND c.is_nsfw = FALSE';
+
+  const { rows: myClubs } = viewerId
+    ? await pool.query(
+        `SELECT c.id, c.slug, c.name FROM club_members cm JOIN clubs c ON c.id = cm.club_id
+         WHERE cm.user_id = $1 ORDER BY cm.joined_at DESC LIMIT 3`,
+        [viewerId]
+      )
+    : { rows: [] };
+
+  let recommended;
+  if (myClubs.length) {
+    const { rows } = await pool.query(
+      `WITH my_types AS (
+         SELECT DISTINCT jsonb_array_elements_text(club_types) AS t FROM clubs WHERE id = ANY($1::int[])
+       )
+       SELECT c.*, COUNT(DISTINCT cm.id)::int AS member_count,
+              (SELECT COUNT(*)::int FROM my_types mt WHERE c.club_types ? mt.t) AS shared_types
+       FROM clubs c
+       LEFT JOIN club_members cm ON cm.club_id = c.id
+       WHERE c.id != ALL($1::int[])
+         AND NOT EXISTS (SELECT 1 FROM club_members m2 WHERE m2.club_id = c.id AND m2.user_id = $2)
+         ${nsfwClause}
+       GROUP BY c.id
+       HAVING (SELECT COUNT(*)::int FROM my_types mt WHERE c.club_types ? mt.t) > 0
+       ORDER BY shared_types DESC, member_count DESC
+       LIMIT 12`,
+      [myClubs.map(c => c.id), viewerId || 0]
+    );
+    recommended = rows;
+  } else {
+    const { rows } = await pool.query(
+      `SELECT c.*, COUNT(cm.id)::int AS member_count
+       FROM clubs c LEFT JOIN club_members cm ON cm.club_id = c.id
+       WHERE 1=1 ${nsfwClause}
+       GROUP BY c.id ORDER BY member_count DESC, c.created_at DESC LIMIT 12`,
+      []
+    );
+    recommended = rows;
+  }
+
+  const sections = [];
+  for (const mine of myClubs) {
+    const { rows } = await pool.query(
+      `SELECT c.*, COUNT(DISTINCT cm.id)::int AS member_count,
+              COUNT(DISTINCT shared.user_id)::int AS shared_members
+       FROM clubs c
+       LEFT JOIN club_members cm ON cm.club_id = c.id
+       LEFT JOIN club_members shared ON shared.club_id = c.id
+         AND shared.user_id IN (SELECT user_id FROM club_members WHERE club_id = $1)
+       WHERE c.id != $1
+         AND NOT EXISTS (SELECT 1 FROM club_members m2 WHERE m2.club_id = c.id AND m2.user_id = $2)
+         ${nsfwClause}
+       GROUP BY c.id
+       ORDER BY shared_members DESC, member_count DESC
+       LIMIT 8`,
+      [mine.id, viewerId || 0]
+    );
+    if (rows.some(r => r.shared_members > 0)) {
+      sections.push({ title: `More like ${mine.name}`, clubs: rows.map(r => clubPublicShape(r, null)) });
+    }
+  }
+  // Logged out, or none of their clubs had any real overlap signal yet --
+  // give the page something to show instead of an empty Explore.
+  if (!sections.length) {
+    const { rows } = await pool.query(
+      `SELECT c.*, COUNT(cm.id)::int AS member_count
+       FROM clubs c LEFT JOIN club_members cm ON cm.club_id = c.id
+       WHERE 1=1 ${nsfwClause}
+       GROUP BY c.id ORDER BY c.created_at DESC LIMIT 8`,
+      []
+    );
+    if (rows.length) sections.push({ title: 'New Clubs', clubs: rows.map(r => clubPublicShape(r, null)) });
+  }
+
+  res.json({
+    recommended: recommended.map(r => clubPublicShape(r, null)),
+    sections,
+  });
 });
 
 // ── Error handler ────────────────────────────────────────────────────────────
