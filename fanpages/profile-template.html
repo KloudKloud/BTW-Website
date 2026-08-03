@@ -189,6 +189,14 @@
     .fp-action-btn--following:hover { background: #d97a72; }
     .fp-action-btn--following .fp-follow-check { font-weight: 700; }
     .fp-action-btn--login { background: #7fa8d9; color: #0a0a0a; }
+    .fp-profile-msg-btn {
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+      width: 48px; height: 48px; border-radius: 50%;
+      background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #f0f0f0;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .fp-profile-msg-btn:hover { border-color: #7fa8d9; color: #7fa8d9; }
+    .fp-profile-msg-btn svg { width: 22px; height: 22px; }
 
     .fp-name-row { display: flex; align-items: center; justify-content: center; margin-top: 0.75rem; }
     .fp-name {
@@ -311,10 +319,12 @@
        lines up with the "Character Spotlights" box on the Characters tab
        instead of sitting slightly further left. */
     .fp-gallery-page-row { max-width: 1240px; margin: 0 auto; padding: 0 2rem; }
-    /* Tucked right under the profile's own tab bar -- .mod-gallery-main's
-       base 4rem top padding used to leave it floating well below (plus a
-       stray rule line above the grid from the now-removed eyebrow row). */
-    .fp-gallery-page-row .mod-gallery-main { padding-top: 0.15rem; }
+    /* Tucked under the profile's own tab bar, with a little breathing
+       room -- .mod-gallery-main's base 4rem top padding used to leave it
+       floating well below (plus a stray rule line above the grid from
+       the now-removed eyebrow row); 0.15rem then read as hugging the
+       tabs with no room at all. */
+    .fp-gallery-page-row .mod-gallery-main { padding-top: 1rem; }
     /* "<name>'s Gallery Page" eyebrow removed -- the profile's own tab bar
        already says whose gallery this is. */
     #fp-gallery-eyebrow { display: none; }
@@ -390,10 +400,10 @@
     .fp-story-teaser-list { display: flex; flex-direction: column; gap: 1.25rem; }
     .fp-story-teaser-card {
       position: relative; display: flex; gap: 1.5rem; text-decoration: none; color: inherit; cursor: pointer;
-      background: transparent; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+      background: #161616; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
       padding: 1.1rem; transition: border-color 0.15s, background 0.15s;
     }
-    .fp-story-teaser-card:hover { border-color: rgba(240,192,96,0.4); background: rgba(255,255,255,0.03); }
+    .fp-story-teaser-card:hover { border-color: rgba(240,192,96,0.4); background: #1a1a1a; }
     .fp-story-teaser-cover {
       width: 130px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; flex-shrink: 0;
       display: block; background: #1e1e1e; border: 1px solid rgba(255,255,255,0.08);
@@ -1159,17 +1169,11 @@
   // ── Stories tab — one big teaser card per row (cover + synopsis excerpt +
   // a few tagged-character chips), instead of the small cover-only grid
   // used for the Home tab's compact Stories panel. ──────────────────────
-  function fpTagSearchUrl(params) {
-    const usp = new URLSearchParams(params);
-    usp.set('sort', 'updated');
-    return `/fanpages/search?${usp.toString()}`;
-  }
-
   function storyTeaserCardEl(s) {
-    // A transparent, clickable-anywhere card now -- but a click on the
-    // cover/title, a tag pill, or a character chip still goes to THAT
-    // destination instead (delegated click handler below skips anything
-    // inside a real <a>).
+    // A div, not a real <a>, so the character chips below can be genuine
+    // clickable links to their own destination (nested <a>s inside an <a>
+    // aren't valid HTML) -- clicking anywhere else on the card still
+    // navigates to the story via the delegated handler below.
     const card = document.createElement('div');
     card.className = 'fp-story-teaser-card' + (s.is_draft_only ? ' fp-story-teaser-card--draft' : '');
     card.dataset.href = `/fanpages/${s.story_path || s.slug}`;
@@ -1209,8 +1213,8 @@
     title.textContent = s.site_title || 'Untitled Story';
     info.appendChild(title);
 
-    const fandomTags = (s.fandoms || []).map(f => `<a class="fp-story-teaser-tag fp-story-teaser-tag--fandom" href="${fpTagSearchUrl({ fandoms: f })}">${escapeHtml(f)}</a>`);
-    const otherTags = (s.tags || []).slice(0, 6).map(t => `<a class="fp-story-teaser-tag" href="${fpTagSearchUrl({ tags_include: t })}">${escapeHtml(t)}</a>`);
+    const fandomTags = (s.fandoms || []).map(f => `<span class="fp-story-teaser-tag fp-story-teaser-tag--fandom">${escapeHtml(f)}</span>`);
+    const otherTags = (s.tags || []).slice(0, 6).map(t => `<span class="fp-story-teaser-tag">${escapeHtml(t)}</span>`);
     if (fandomTags.length || otherTags.length) {
       const tagRow = document.createElement('div');
       tagRow.className = 'fp-story-teaser-tags';
@@ -1696,7 +1700,7 @@
     footer.appendChild(viewsEl);
 
     const likeBtn = document.createElement('button');
-    likeBtn.className = 'art-view-like' + (char.liked ? ' liked' : '');
+    likeBtn.className = 'art-view-like art-view-like--big' + (char.liked ? ' liked' : '');
     likeBtn.type = 'button';
     likeBtn.setAttribute('aria-label', 'Like this character');
     likeBtn.innerHTML = `<span class="char-like-icon">${char.liked ? '♥' : '♡'}</span> <span class="char-like-count">${char.likeCount}</span>`;
@@ -1786,8 +1790,16 @@
     renderFpCharProfile(char);
     buildFpCharsNav();
     if (scroll) {
-      const target = document.querySelector('#fp-char-profile .char-ref-wrap') || document.getElementById('fp-characters-view');
-      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // On a fresh page load (deep-linked from a story's character chip),
+      // the banner/theme background and reference image are often still
+      // loading and growing the page's layout at this exact instant --
+      // scrolling immediately landed short (or at the very top) because
+      // the target's final position hadn't settled yet. Two animation
+      // frames give layout a beat to catch up first.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const target = document.querySelector('#fp-char-profile .char-ref-wrap') || document.getElementById('fp-characters-view');
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }));
     }
   }
 
@@ -2289,6 +2301,17 @@
       wrap.appendChild(a);
       return;
     }
+
+    // Quick shortcut to your own inbox, sitting right next to Follow --
+    // this site doesn't have per-user DMs, so it's a fast track to
+    // Notifications' Inbox rather than a message-this-person button.
+    const msgBtn = document.createElement('a');
+    msgBtn.className = 'fp-profile-msg-btn';
+    msgBtn.href = '/fanpages/notifications#inbox';
+    msgBtn.title = 'Inbox';
+    msgBtn.setAttribute('aria-label', 'Inbox');
+    msgBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5l9 6.5 9-6.5"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg>';
+    wrap.appendChild(msgBtn);
 
     const btn = document.createElement('button');
     btn.type = 'button';
