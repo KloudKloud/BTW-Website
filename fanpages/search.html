@@ -87,6 +87,59 @@
     .rs-card-tip-title { display: block; font-size: 0.76rem; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .rs-card-tip-author { display: block; font-size: 0.68rem; font-weight: 500; color: #d8cdf0; margin-top: 0.1rem; }
 
+    /* ── Profiles view — same "no filter panel" idea as Submissions, but
+       results are condensed to a centered column instead of stretching
+       full width (a wall of skinny profile rows edge-to-edge would be
+       much harder to scan than a photo grid is). ── */
+    .fp-layout--profiles { grid-template-columns: 290px 1fr; }
+    .fp-layout--profiles .fp-filter-panel,
+    .fp-layout--profiles .fp-filter-fab,
+    .fp-layout--profiles .fp-side-bottom { display: none; }
+    .fp-layout--profiles .fp-results-col { max-width: 680px; margin: 0 auto; }
+
+    .fp-profile-tabs { display: flex; gap: 2rem; border-bottom: 1px solid rgba(255,255,255,0.14); margin-bottom: 1.5rem; }
+    .fp-profile-tab {
+      background: none; border: none; cursor: pointer;
+      font-family: inherit; font-size: 1.1rem; font-weight: 800; color: #999;
+      padding: 0 0 0.7rem; border-bottom: 3px solid transparent; margin-bottom: -1px;
+    }
+    .fp-profile-tab:hover { color: #ddd; }
+    .fp-profile-tab--active { color: #fff; border-bottom-color: #7fa8d9; }
+
+    .fp-profile-card {
+      display: flex; align-items: center; gap: 1.1rem; padding: 1.25rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.14);
+    }
+    .fp-profile-avatar, .fp-profile-avatar-fallback {
+      width: 62px; height: 62px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    }
+    .fp-profile-avatar-fallback {
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 1.4rem;
+    }
+    .fp-profile-char-ref, .fp-profile-char-ref-fallback {
+      width: 62px; height: 78px; border-radius: 10px; object-fit: cover; flex-shrink: 0;
+    }
+    .fp-profile-char-ref-fallback {
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 1.4rem;
+    }
+    .fp-profile-info { min-width: 0; flex: 1; }
+    .fp-profile-name { font-size: 1.15rem; font-weight: 700; color: #fff; text-decoration: none; }
+    .fp-profile-name:hover { text-decoration: underline; }
+    .fp-profile-handle { font-size: 0.88rem; color: #999; margin-top: 0.1rem; }
+    .fp-profile-stats { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; margin-top: 0.5rem; font-size: 0.82rem; color: #999; }
+    .fp-profile-stats strong { color: #eee; }
+    .fp-profile-follow-btn {
+      flex-shrink: 0; display: flex; align-items: center; gap: 0.4rem;
+      background: linear-gradient(135deg, #3d6fa8, #7fa8d9); color: #fff; border: none; border-radius: 20px;
+      padding: 0.55em 1.1em; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 700; cursor: pointer;
+      box-shadow: 0 0 12px rgba(127,168,217,0.4); transition: box-shadow 0.15s, transform 0.15s, background 0.15s;
+    }
+    .fp-profile-follow-btn:hover { box-shadow: 0 0 20px rgba(127,168,217,0.65); transform: translateY(-1px); }
+    .fp-profile-follow-btn--following { background: rgba(255,255,255,0.08); box-shadow: none; }
+    .fp-profile-follow-btn--following:hover { background: rgba(217,122,114,0.2); color: #e69a92; box-shadow: none; }
+
     /* ── Result rows — no card box, just a horizontal rule between each ── */
     .fp-results-list { display: flex; flex-direction: column; }
     .fp-result {
@@ -344,7 +397,8 @@
     @media (max-width: 980px) {
       /* Collapse doesn't make sense once everything's stacked in one
          column -- the panel always shows and the floating arrow hides. */
-      .fp-layout, .fp-layout--filters-collapsed, .fp-layout--submissions { grid-template-columns: 1fr; row-gap: 1.5rem; }
+      .fp-layout, .fp-layout--filters-collapsed, .fp-layout--submissions, .fp-layout--profiles { grid-template-columns: 1fr; row-gap: 1.5rem; }
+      .fp-layout--profiles .fp-results-col { max-width: none; }
       .fp-results-col { grid-column: 1; }
       .fp-filter-panel, .fp-layout--filters-collapsed .fp-filter-panel {
         grid-column: 1; display: flex;
@@ -389,11 +443,11 @@
           <span class="fp-side-menu-count" id="fp-side-menu-count-submissions">Gallery posts &amp; chapters</span>
         </span>
       </a>
-      <a class="fp-side-menu-item" href="#">
+      <a class="fp-side-menu-item" href="/fanpages/search?view=profiles" id="fp-side-menu-profiles">
         <span class="fp-side-menu-icon">👤</span>
         <span class="fp-side-menu-text">
           <span class="fp-side-menu-label">Profiles</span>
-          <span class="fp-side-menu-count">Accounts &amp; characters</span>
+          <span class="fp-side-menu-count" id="fp-side-menu-count-profiles">Accounts &amp; characters</span>
         </span>
       </a>
     </nav>
@@ -512,6 +566,10 @@ function setStoryMenuCount(text) {
 }
 function setSubmissionsMenuCount(text) {
   const el = document.getElementById('fp-side-menu-count-submissions');
+  if (el) el.textContent = text;
+}
+function setProfilesMenuCount(text) {
+  const el = document.getElementById('fp-side-menu-count-profiles');
   if (el) el.textContent = text;
 }
 // Every synopsis cuts at the same length so cards read as a uniform size —
@@ -746,6 +804,136 @@ async function runSubmissionsSearch() {
   }
 }
 
+// ── Profiles view — accounts + characters, tabbed, matching every
+// space-separated keyword in the query (AND, not OR — enforced server-side
+// via bool_and() over the unnested word list). Condensed to a centered
+// column instead of the full-width layouts Story/Submissions use. ────────
+function accountCardHtml(u) {
+  const avatar = u.avatar
+    ? `<img class="fp-profile-avatar" src="${escapeHtml(u.avatar)}" alt="" />`
+    : `<span class="fp-profile-avatar-fallback">${escapeHtml((u.display_name[0] || '?').toUpperCase())}</span>`;
+  const followBtn = u.is_self ? '' : `
+    <button class="fp-profile-follow-btn${u.is_following ? ' fp-profile-follow-btn--following' : ''}"
+            data-username="${escapeHtml(u.username)}" data-following="${u.is_following ? '1' : '0'}" type="button">
+      ${u.is_following ? '✓ Following' : '+ Follow'}
+    </button>
+  `;
+  return `
+    <div class="fp-profile-card">
+      <a href="/fanpages/${escapeHtml(u.username)}">${avatar}</a>
+      <div class="fp-profile-info">
+        <a class="fp-profile-name" href="/fanpages/${escapeHtml(u.username)}">${escapeHtml(u.display_name)}</a>
+        <p class="fp-profile-handle">@${escapeHtml(u.username)}</p>
+        <div class="fp-profile-stats">
+          <span><strong>${(u.story_count || 0).toLocaleString()}</strong> Stories</span>
+          <span><strong>${(u.reading_list_count || 0).toLocaleString()}</strong> Reading Lists</span>
+          <span><strong>${(u.follower_count || 0).toLocaleString()}</strong> Followers</span>
+        </div>
+      </div>
+      ${followBtn}
+    </div>
+  `;
+}
+function characterCardHtml(c) {
+  const ref = c.nsfw_locked
+    ? `<span class="fp-profile-char-ref-fallback">🔒</span>`
+    : c.image
+      ? `<img class="fp-profile-char-ref" src="${escapeHtml(c.image)}" alt="" style="object-position:${c.position_x ?? 50}% ${c.position_y ?? 50}%;" />`
+      : `<span class="fp-profile-char-ref-fallback">${escapeHtml((c.name[0] || '?').toUpperCase())}</span>`;
+  const href = `/fanpages/${escapeHtml(c.owner_username)}?char=${c.id}#characters`;
+  return `
+    <div class="fp-profile-card">
+      <a href="${href}">${ref}</a>
+      <div class="fp-profile-info">
+        <a class="fp-profile-name" href="${href}">${escapeHtml(c.name)}</a>
+        <p class="fp-profile-handle">by ${escapeHtml(c.owner)}</p>
+        <div class="fp-profile-stats">
+          <span><strong>${(c.story_count || 0).toLocaleString()}</strong> Stor${c.story_count === 1 ? 'y' : 'ies'}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function wireFollowButtons() {
+  document.querySelectorAll('.fp-profile-follow-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!token) { window.location.href = `/fanpages/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`; return; }
+      const username = btn.dataset.username;
+      const following = btn.dataset.following === '1';
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/follows/${encodeURIComponent(username)}`, { method: following ? 'DELETE' : 'POST', headers: authHeaders() });
+        if (res.ok) {
+          btn.dataset.following = following ? '0' : '1';
+          btn.classList.toggle('fp-profile-follow-btn--following', !following);
+          btn.textContent = following ? '+ Follow' : '✓ Following';
+        }
+      } catch {}
+      btn.disabled = false;
+    });
+  });
+}
+function profileTabsHtml(activeType) {
+  return `
+    <nav class="fp-profile-tabs">
+      <button class="fp-profile-tab${activeType === 'accounts' ? ' fp-profile-tab--active' : ''}" data-type="accounts" type="button">Accounts</button>
+      <button class="fp-profile-tab${activeType === 'characters' ? ' fp-profile-tab--active' : ''}" data-type="characters" type="button">Characters</button>
+    </nav>
+  `;
+}
+async function runProfilesSearch() {
+  const resultsEl = document.getElementById('fp-search-results');
+  const subEl = document.getElementById('fp-search-sub');
+  const paginationEl = document.getElementById('fp-pagination');
+  paginationEl.hidden = true;
+
+  const p = new URLSearchParams(window.location.search);
+  const q = p.get('q') || '';
+  const type = p.get('type') === 'characters' ? 'characters' : 'accounts';
+  const page = Math.max(1, parseInt(p.get('page'), 10) || 1);
+  const limit = 30;
+
+  resultsEl.innerHTML = profileTabsHtml(type) + '<p class="fp-search-empty">Loading…</p>';
+
+  try {
+    const res = await fetch(`/api/search/profiles?q=${encodeURIComponent(q)}&type=${type}&page=${page}&limit=${limit}`, { headers: authHeaders() });
+    const data = await res.json();
+    const items = data.items || [];
+    const noun = type === 'characters' ? 'character' : 'account';
+    subEl.innerHTML = `<strong>${data.total || 0}</strong> ${noun}${data.total === 1 ? '' : 's'} found${q ? ` for "${escapeHtml(q)}"` : ''}.`;
+    setProfilesMenuCount(`${data.total || 0} ${noun}${(data.total || 0) === 1 ? '' : 's'}${q ? ` for "${q}"` : ''}`);
+
+    const cardsHtml = !items.length
+      ? `<p class="fp-search-empty">No ${noun}s match that search.</p>`
+      : items.map(type === 'characters' ? characterCardHtml : accountCardHtml).join('');
+    resultsEl.innerHTML = profileTabsHtml(type) + cardsHtml;
+    document.querySelectorAll('.fp-profile-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const usp = new URLSearchParams(window.location.search);
+        usp.set('type', btn.dataset.type);
+        usp.delete('page');
+        window.location.search = usp.toString();
+      });
+    });
+    if (type === 'accounts') wireFollowButtons();
+
+    const totalPages = Math.max(1, Math.ceil((data.total || 0) / limit));
+    if (totalPages > 1) {
+      paginationEl.hidden = false;
+      paginationEl.innerHTML = `
+        <button id="fp-page-prev" ${page <= 1 ? 'disabled' : ''}>← Previous</button>
+        <span style="align-self:center; color:#ddd; font-size:0.88rem;">Page ${page} of ${totalPages}</span>
+        <button id="fp-page-next" ${page >= totalPages ? 'disabled' : ''}>Next →</button>
+      `;
+      const goPage = (pp) => { const usp = new URLSearchParams(window.location.search); usp.set('page', pp); window.location.search = usp.toString(); };
+      if (page > 1) document.getElementById('fp-page-prev').addEventListener('click', () => goPage(page - 1));
+      if (page < totalPages) document.getElementById('fp-page-next').addEventListener('click', () => goPage(page + 1));
+    }
+  } catch {
+    resultsEl.innerHTML = profileTabsHtml(type) + '<p class="fp-search-empty">Couldn\'t load profiles right now.</p>';
+  }
+}
+
 const SORT_LABELS = { best_match: 'Best Match', updated: 'Date Updated', kudos: 'Likes', hits: 'Reads' };
 
 function readParamsFromUrl() {
@@ -935,17 +1123,18 @@ filterToggleBtn.addEventListener('click', () => setFiltersCollapsed(!fpLayoutEl.
 filterRailToggle.addEventListener('click', () => setFiltersCollapsed(!fpLayoutEl.classList.contains('fp-layout--filters-collapsed')));
 setFiltersCollapsed(localStorage.getItem('fp_filters_collapsed') === '1');
 
-// ── View dispatch — Story (default) vs Submissions. Both are served by
-// this same page/template; Submissions just swaps the active left-panel
-// link, drops the filter panel/fab (grid-column 3 -> gone, .fp-layout
-// gets 2 tracks instead of 3), and renders the justified gallery+chapter
-// feed into the same #fp-search-results element the Story tab uses. ────
-const isSubmissionsView = new URLSearchParams(window.location.search).get('view') === 'submissions';
-if (isSubmissionsView) {
-  fpLayoutEl.classList.add('fp-layout--submissions');
+// ── View dispatch — Story (default) vs Submissions vs Profiles. All three
+// are served by this same page/template; Submissions/Profiles just swap
+// the active left-panel link, drop the filter panel/fab (grid-column 3 ->
+// gone), and render into the same #fp-search-results element the Story
+// tab uses. ───────────────────────────────────────────────────────────
+const currentView = new URLSearchParams(window.location.search).get('view');
+if (currentView === 'submissions' || currentView === 'profiles') {
+  fpLayoutEl.classList.add(currentView === 'submissions' ? 'fp-layout--submissions' : 'fp-layout--profiles');
   document.getElementById('fp-side-menu-story').classList.remove('fp-side-menu-item--active');
-  document.getElementById('fp-side-menu-submissions').classList.add('fp-side-menu-item--active');
-  runSubmissionsSearch();
+  document.getElementById(`fp-side-menu-${currentView}`).classList.add('fp-side-menu-item--active');
+  if (currentView === 'submissions') runSubmissionsSearch();
+  else runProfilesSearch();
 } else {
   loadCatalogsForAutocomplete();
   runSearch();

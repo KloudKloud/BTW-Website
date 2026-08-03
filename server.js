@@ -6454,6 +6454,87 @@ app.get('/api/search/submissions', async (req, res) => {
   });
 });
 
+// Profiles tab (accounts + characters). "Matches every keyword" means AND,
+// not OR -- each space-separated word in q must independently match
+// somewhere (username/display name, or character name) for a row to
+// qualify, via bool_and() over the unnested word array rather than one
+// big ILIKE per word bolted together with a fixed-size query.
+app.get('/api/search/profiles', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  const words = q.split(/\s+/).filter(Boolean).slice(0, 12);
+  const type = req.query.type === 'characters' ? 'characters' : 'accounts';
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(60, Math.max(1, parseInt(req.query.limit, 10) || 30));
+  const offset = (page - 1) * limit;
+  const { nsfwAllowed } = await getViewerNsfwAccess(req);
+
+  if (type === 'characters') {
+    const { rows } = await pool.query(
+      `SELECT mch.id, mch.name, mch.ref_image, mch.ref_position_x, mch.ref_position_y, mch.ref_is_nsfw,
+              u.username AS owner_username, u.display_name AS owner_display_name,
+              (SELECT COUNT(*)::int FROM character_story_links csl WHERE csl.character_id = mch.id) AS story_count,
+              COUNT(*) OVER() AS total_count
+       FROM moderator_characters mch
+       JOIN users u ON u.id = mch.owner_user_id
+       WHERE (cardinality($1::text[]) = 0 OR (
+         SELECT bool_and(mch.name ILIKE '%' || w || '%') FROM unnest($1::text[]) AS w
+       ))
+       ORDER BY mch.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [words, limit, offset]
+    );
+    return res.json({
+      type,
+      items: rows.map(r => ({
+        id: r.id, name: r.name,
+        image: (r.ref_is_nsfw && !nsfwAllowed) ? null : (r.ref_image || null),
+        nsfw_locked: !!(r.ref_is_nsfw && !nsfwAllowed),
+        position_x: r.ref_position_x, position_y: r.ref_position_y,
+        owner_username: r.owner_username, owner: r.owner_display_name || r.owner_username,
+        story_count: r.story_count,
+      })),
+      total: rows.length ? Number(rows[0].total_count) : 0, page, limit,
+    });
+  }
+
+  const { rows } = await pool.query(
+    `SELECT u.id, u.username, u.display_name, u.avatar,
+            (SELECT COUNT(*)::int FROM moderator_sites ms WHERE ms.owner_user_id = u.id) AS story_count,
+            (SELECT COUNT(*)::int FROM moderator_bookmarks mb WHERE mb.user_id = u.id) AS reading_list_count,
+            (SELECT COUNT(*)::int FROM user_follows uf WHERE uf.followed_id = u.id) AS follower_count,
+            COUNT(*) OVER() AS total_count
+     FROM users u
+     WHERE u.is_test_data = false
+       AND (cardinality($1::text[]) = 0 OR (
+         SELECT bool_and(u.username ILIKE '%' || w || '%' OR COALESCE(u.display_name, '') ILIKE '%' || w || '%')
+         FROM unnest($1::text[]) AS w
+       ))
+     ORDER BY follower_count DESC, u.username ASC
+     LIMIT $2 OFFSET $3`,
+    [words, limit, offset]
+  );
+
+  const { viewerId } = await getViewerNsfwAccess(req);
+  let alreadyFollowing = new Set();
+  if (viewerId && rows.length) {
+    const { rows: fRows } = await pool.query(
+      'SELECT followed_id FROM user_follows WHERE follower_id = $1 AND followed_id = ANY($2::int[])',
+      [viewerId, rows.map(r => r.id)]
+    );
+    alreadyFollowing = new Set(fRows.map(r => r.followed_id));
+  }
+
+  res.json({
+    type,
+    items: rows.map(r => ({
+      username: r.username, display_name: r.display_name || r.username, avatar: r.avatar || null,
+      story_count: r.story_count, reading_list_count: r.reading_list_count, follower_count: r.follower_count,
+      is_self: viewerId === r.id, is_following: alreadyFollowing.has(r.id),
+    })),
+    total: rows.length ? Number(rows[0].total_count) : 0, page, limit,
+  });
+});
+
 // ── Clubs — the Social page's forum/club system ─────────────────────────────
 function slugifyClubName(name) {
   const base = String(name || '').toLowerCase().trim()
