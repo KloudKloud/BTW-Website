@@ -6534,6 +6534,62 @@ app.get('/api/search/profiles', async (req, res) => {
   });
 });
 
+// Distinct species across every character, straight out of the free-text
+// stats->>'Species' field the character editor already saves (no new
+// column/migration needed — this is the exact same data, just surfaced
+// as a searchable/filterable list instead of sitting invisibly inside
+// each character's own stats box). Backs the Characters page's sidebar.
+app.get('/api/character-species-catalog', async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT DISTINCT trim(stats->>'Species') AS species
+    FROM moderator_characters
+    WHERE stats ? 'Species' AND trim(COALESCE(stats->>'Species', '')) <> ''
+    ORDER BY species ASC
+  `);
+  res.json({ species: rows.map(r => r.species) });
+});
+
+// Characters page — every character site-wide, name search + exact
+// species filter (species is matched exactly against the catalog above,
+// not ILIKE-partial, so picking "Umbreon" doesn't also pull in an
+// "Umbreon Trainer" or similar near-miss).
+app.get('/api/search/characters', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  const species = String(req.query.species || '').trim();
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(60, Math.max(1, parseInt(req.query.limit, 10) || 30));
+  const offset = (page - 1) * limit;
+  const { nsfwAllowed } = await getViewerNsfwAccess(req);
+
+  const { rows } = await pool.query(
+    `SELECT mch.id, mch.name, mch.ref_image, mch.ref_position_x, mch.ref_position_y, mch.ref_is_nsfw,
+            trim(mch.stats->>'Species') AS species,
+            u.username AS owner_username, u.display_name AS owner_display_name,
+            (SELECT COUNT(*)::int FROM character_story_links csl WHERE csl.character_id = mch.id) AS story_count,
+            COUNT(*) OVER() AS total_count
+     FROM moderator_characters mch
+     JOIN users u ON u.id = mch.owner_user_id
+     WHERE ($1 = '' OR mch.name ILIKE '%' || $1 || '%')
+       AND ($2 = '' OR trim(mch.stats->>'Species') ILIKE $2)
+     ORDER BY mch.created_at DESC
+     LIMIT $3 OFFSET $4`,
+    [q, species, limit, offset]
+  );
+
+  res.json({
+    items: rows.map(r => ({
+      id: r.id, name: r.name,
+      image: (r.ref_is_nsfw && !nsfwAllowed) ? null : (r.ref_image || null),
+      nsfw_locked: !!(r.ref_is_nsfw && !nsfwAllowed),
+      position_x: r.ref_position_x, position_y: r.ref_position_y,
+      species: r.species || '',
+      owner_username: r.owner_username, owner: r.owner_display_name || r.owner_username,
+      story_count: r.story_count,
+    })),
+    total: rows.length ? Number(rows[0].total_count) : 0, page, limit,
+  });
+});
+
 // ── Clubs — the Social page's forum/club system ─────────────────────────────
 function slugifyClubName(name) {
   const base = String(name || '').toLowerCase().trim()

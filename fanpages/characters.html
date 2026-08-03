@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Characters ✦ Fanpages</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scrollbar-gutter: stable; }
+    body {
+      background: #0d0d0d; color: #f0f0f0;
+      font-family: 'Baloo 2', 'Fredoka', 'Lato', Arial, sans-serif;
+      min-height: 100vh;
+    }
+    a { color: inherit; }
+
+    /* Same blurred-wallpaper convention every other custom-background
+       page on the site uses. */
+    .fp-bg-img {
+      position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover;
+      filter: blur(18px) brightness(0.55); z-index: 0;
+    }
+    .fp-bg-overlay { position: fixed; inset: 0; background: rgba(8,6,10,0.45); z-index: 0; }
+    .fp-content-z { position: relative; z-index: 1; }
+
+    .fp-layout {
+      padding: 0 2.5rem 5rem;
+      display: grid; grid-template-columns: 300px 1fr; column-gap: 2rem; align-items: stretch;
+    }
+
+    /* ── Left sidebar — mini search + species filter list, same dark-box
+       treatment as search.html's filter panel. ── */
+    .fp-char-sidebar {
+      position: sticky; top: 76px;
+      margin-bottom: -5rem; margin-left: -2.5rem;
+      height: calc(100vh - 76px); max-height: calc(100vh - 76px);
+      display: flex; flex-direction: column;
+      background: #14121a; border: 1px solid rgba(255,255,255,0.14);
+      padding: 1.5rem; overflow-y: auto;
+      scrollbar-color: #444 #1a1a1e;
+      overscroll-behavior: contain;
+    }
+    .fp-char-sidebar::-webkit-scrollbar { width: 8px; }
+    .fp-char-sidebar::-webkit-scrollbar-track { background: #1a1a1e; border-radius: 8px; }
+    .fp-char-sidebar::-webkit-scrollbar-thumb { background: #444; border-radius: 8px; }
+    .fp-char-sidebar::-webkit-scrollbar-thumb:hover { background: #555; }
+    .fp-char-sidebar-title { font-size: 1.3rem; font-weight: 700; color: #fff; margin-bottom: 1rem; }
+    .fp-char-search-wrap { position: relative; margin-bottom: 1.5rem; }
+    .fp-char-search-icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      width: 18px; height: 18px; color: #888; pointer-events: none;
+    }
+    .fp-char-search-wrap input {
+      width: 100%; background: #1a1a1e; border: 1px solid rgba(255,255,255,0.16); border-radius: 20px;
+      color: #f0f0f0; font-family: inherit; font-size: 0.95rem; padding: 0.6em 0.9em 0.6em 2.4rem;
+    }
+    .fp-char-search-wrap input:focus { outline: none; border-color: #7fa8d9; }
+    .fp-char-species-title {
+      font-size: 1.05rem; font-weight: 700; color: #ddd; margin-bottom: 0.7rem;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .fp-char-species-clear {
+      font-size: 0.75rem; font-weight: 600; color: #7fa8d9; background: none; border: none; cursor: pointer;
+    }
+    .fp-char-species-clear:hover { color: #a8c6e8; }
+    .fp-char-species-list { display: flex; flex-direction: column; gap: 0.4rem; }
+    .fp-char-species-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+      background: rgba(255,255,255,0.04); border: 1px solid transparent; border-radius: 10px;
+      padding: 0.5em 0.8em; font-size: 0.88rem; font-weight: 600; color: #ccc; cursor: pointer;
+      text-align: left; width: 100%; font-family: inherit;
+    }
+    .fp-char-species-item:hover { background: rgba(127,168,217,0.12); color: #fff; }
+    .fp-char-species-item--active {
+      background: rgba(127,168,217,0.18); border-color: rgba(127,168,217,0.55); color: #fff;
+    }
+    .fp-char-species-count { font-size: 0.74rem; color: #888; }
+    .fp-char-species-item--active .fp-char-species-count { color: #a8c6e8; }
+
+    /* ── Main content — heading + 3-per-row card grid ── */
+    .fp-char-main-heading {
+      font-family: 'Cinzel', Georgia, serif; font-size: 1.7rem; font-weight: 700; color: #fff;
+      margin: 1.75rem 0 0.4rem;
+    }
+    .fp-char-main-sub { color: #ccc; font-size: 0.95rem; margin-bottom: 1.5rem; }
+    .fp-char-main-sub strong { color: #fff; }
+    .fp-char-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;
+    }
+    .fp-char-card {
+      display: block; text-decoration: none; color: inherit;
+      background: #161616; border: 1px solid rgba(255,255,255,0.1); border-radius: 14px;
+      overflow: hidden; transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+    }
+    .fp-char-card:hover {
+      transform: translateY(-4px); box-shadow: 0 12px 28px rgba(0,0,0,0.45); border-color: rgba(240,192,96,0.4);
+    }
+    .fp-char-card-img-wrap {
+      position: relative; width: 100%; aspect-ratio: 3 / 4; background: #1e1e1e; overflow: hidden;
+    }
+    .fp-char-card-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fp-char-card-locked {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.6); font-size: 2rem;
+    }
+    .fp-char-card-fallback {
+      width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 2.4rem;
+    }
+    .fp-char-card-body { padding: 1rem 1.1rem 1.15rem; }
+    .fp-char-card-name { font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 0.35rem; }
+    .fp-char-card-species {
+      display: inline-block; background: rgba(127,168,217,0.16); color: #a8c6e8; border-radius: 20px;
+      padding: 0.22em 0.75em; font-size: 0.76rem; font-weight: 700; margin-bottom: 0.5rem;
+    }
+    .fp-char-card-owner { font-size: 0.85rem; color: #999; }
+    .fp-char-empty { color: #ddd; font-size: 1rem; padding: 2rem 0; grid-column: 1 / -1; }
+    .fp-pagination { display: flex; justify-content: center; gap: 0.6rem; margin-top: 2.5rem; }
+    .fp-pagination button {
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.25); color: #ddd; border-radius: 10px;
+      padding: 0.55em 1.2em; cursor: pointer; font-family: inherit; font-size: 0.9rem;
+    }
+    .fp-pagination button:hover:not(:disabled) { border-color: #7fa8d9; color: #7fa8d9; }
+    .fp-pagination button:disabled { opacity: 0.4; cursor: default; }
+
+    @media (max-width: 900px) {
+      .fp-layout { grid-template-columns: 1fr; }
+      .fp-char-sidebar {
+        position: static; max-height: none; height: auto;
+        margin-bottom: 0; margin-left: 0; border-radius: 18px;
+      }
+      .fp-char-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 560px) {
+      .fp-char-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<img class="fp-bg-img" src="/images/gallery/kloudsaphbedroom_1.png" alt="" />
+<div class="fp-bg-overlay"></div>
+
+<div class="fp-content-z">
+<div id="fanpages-topbar-root"></div>
+
+<main class="fp-layout">
+  <aside class="fp-char-sidebar">
+    <p class="fp-char-sidebar-title">Filter Characters</p>
+    <div class="fp-char-search-wrap">
+      <svg class="fp-char-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input type="search" id="fp-char-search-input" placeholder="Search by name…" />
+    </div>
+    <p class="fp-char-species-title">
+      Species
+      <button class="fp-char-species-clear" id="fp-char-species-clear" type="button" hidden>Clear</button>
+    </p>
+    <div class="fp-char-species-list" id="fp-char-species-list"><p class="fp-char-empty" style="padding:0;">Loading…</p></div>
+  </aside>
+
+  <div>
+    <h1 class="fp-char-main-heading">Characters</h1>
+    <p class="fp-char-main-sub" id="fp-char-main-sub"></p>
+    <div class="fp-char-grid" id="fp-char-grid"><p class="fp-char-empty">Loading…</p></div>
+    <div class="fp-pagination" id="fp-pagination" hidden></div>
+  </div>
+</main>
+</div>
+
+<script src="/fanpages/fanpages-nav.js"></script>
+<script>
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function readParams() {
+  const p = new URLSearchParams(window.location.search);
+  return { q: p.get('q') || '', species: p.get('species') || '', page: Math.max(1, parseInt(p.get('page'), 10) || 1) };
+}
+
+async function loadSpeciesList() {
+  const listEl = document.getElementById('fp-char-species-list');
+  const clearBtn = document.getElementById('fp-char-species-clear');
+  const { species: activeSpecies } = readParams();
+  try {
+    const res = await fetch('/api/character-species-catalog');
+    const data = await res.json();
+    const species = data.species || [];
+    if (!species.length) { listEl.innerHTML = '<p class="fp-char-empty" style="padding:0;">No species tagged yet.</p>'; return; }
+    listEl.innerHTML = species.map(s => `
+      <button type="button" class="fp-char-species-item${s.toLowerCase() === activeSpecies.toLowerCase() ? ' fp-char-species-item--active' : ''}" data-species="${escapeHtml(s)}">
+        ${escapeHtml(s)}
+      </button>
+    `).join('');
+    listEl.querySelectorAll('.fp-char-species-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const usp = new URLSearchParams(window.location.search);
+        usp.set('species', btn.dataset.species);
+        usp.delete('page');
+        window.location.search = usp.toString();
+      });
+    });
+    clearBtn.hidden = !activeSpecies;
+    clearBtn.addEventListener('click', () => {
+      const usp = new URLSearchParams(window.location.search);
+      usp.delete('species'); usp.delete('page');
+      window.location.search = usp.toString();
+    });
+  } catch {
+    listEl.innerHTML = '<p class="fp-char-empty" style="padding:0;">Couldn\'t load species right now.</p>';
+  }
+}
+
+function charCardHtml(c) {
+  const href = `/fanpages/${escapeHtml(c.owner_username)}?char=${c.id}#characters`;
+  const posX = c.position_x != null ? c.position_x : 50;
+  const posY = c.position_y != null ? c.position_y : 50;
+  const imgHtml = c.nsfw_locked
+    ? `<div class="fp-char-card-locked">🔒</div>`
+    : c.image
+      ? `<img src="${escapeHtml(c.image)}" alt="" style="object-position:${posX}% ${posY}%;" />`
+      : `<div class="fp-char-card-fallback">${escapeHtml((c.name[0] || '?').toUpperCase())}</div>`;
+  return `
+    <a class="fp-char-card" href="${href}">
+      <div class="fp-char-card-img-wrap">${imgHtml}</div>
+      <div class="fp-char-card-body">
+        <p class="fp-char-card-name">${escapeHtml(c.name)}</p>
+        ${c.species ? `<span class="fp-char-card-species">${escapeHtml(c.species)}</span><br>` : ''}
+        <p class="fp-char-card-owner">by ${escapeHtml(c.owner)}</p>
+      </div>
+    </a>
+  `;
+}
+
+let searchDebounce = null;
+document.getElementById('fp-char-search-input').addEventListener('input', (e) => {
+  clearTimeout(searchDebounce);
+  const val = e.target.value;
+  searchDebounce = setTimeout(() => {
+    const usp = new URLSearchParams(window.location.search);
+    if (val.trim()) usp.set('q', val.trim()); else usp.delete('q');
+    usp.delete('page');
+    window.location.search = usp.toString();
+  }, 400);
+});
+
+async function runCharacterSearch() {
+  const gridEl = document.getElementById('fp-char-grid');
+  const subEl = document.getElementById('fp-char-main-sub');
+  const paginationEl = document.getElementById('fp-pagination');
+  gridEl.innerHTML = '<p class="fp-char-empty">Loading…</p>';
+  paginationEl.hidden = true;
+
+  const { q, species, page } = readParams();
+  document.getElementById('fp-char-search-input').value = q;
+  const limit = 30;
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (species) params.set('species', species);
+  params.set('page', page);
+  params.set('limit', limit);
+
+  try {
+    const res = await fetch(`/api/search/characters?${params.toString()}`);
+    const data = await res.json();
+    const items = data.items || [];
+    const bits = [];
+    if (species) bits.push(`species "${species}"`);
+    if (q) bits.push(`"${q}"`);
+    subEl.innerHTML = `<strong>${data.total || 0}</strong> character${data.total === 1 ? '' : 's'} found${bits.length ? ` for ${escapeHtml(bits.join(', '))}` : ''}.`;
+
+    if (!items.length) {
+      gridEl.innerHTML = '<p class="fp-char-empty">No characters match that search.</p>';
+      return;
+    }
+    gridEl.innerHTML = items.map(charCardHtml).join('');
+
+    const totalPages = Math.max(1, Math.ceil((data.total || 0) / limit));
+    if (totalPages > 1) {
+      paginationEl.hidden = false;
+      paginationEl.innerHTML = `
+        <button id="fp-page-prev" ${page <= 1 ? 'disabled' : ''}>← Previous</button>
+        <span style="align-self:center; color:#ddd; font-size:0.88rem;">Page ${page} of ${totalPages}</span>
+        <button id="fp-page-next" ${page >= totalPages ? 'disabled' : ''}>Next →</button>
+      `;
+      const goPage = (p) => { const usp = new URLSearchParams(window.location.search); usp.set('page', p); window.location.search = usp.toString(); };
+      if (page > 1) document.getElementById('fp-page-prev').addEventListener('click', () => goPage(page - 1));
+      if (page < totalPages) document.getElementById('fp-page-next').addEventListener('click', () => goPage(page + 1));
+    }
+  } catch {
+    gridEl.innerHTML = '<p class="fp-char-empty">Couldn\'t load characters right now.</p>';
+  }
+}
+
+loadSpeciesList();
+runCharacterSearch();
+</script>
+
+</body>
+</html>
