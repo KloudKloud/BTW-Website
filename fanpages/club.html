@@ -426,6 +426,51 @@
       -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     }
 
+    /* ── Card view -- Social tab only (Club News stays compact regardless,
+       it's a small sidebar list). Image opens up full-width instead of a
+       small square thumbnail; text-only posts drop the thumbnail entirely
+       and get a body preview instead. ── */
+    .cl-admin-post--card {
+      flex-direction: column; margin: 0 0 0.85rem; padding: 0; border: 1px solid rgba(255,255,255,0.1);
+      border-bottom: 1px solid rgba(255,255,255,0.1); border-radius: 14px; overflow: hidden;
+    }
+    .cl-admin-post--card .cl-admin-post-thumb {
+      width: 100%; height: auto; max-height: 460px; aspect-ratio: 16 / 9; border-radius: 0; object-fit: cover;
+    }
+    .cl-admin-post--card .cl-admin-post-body { padding: 1rem 1.1rem 1.1rem; }
+    .cl-admin-post--card .cl-admin-post-title { font-size: 1.15rem; -webkit-line-clamp: 3; }
+    .cl-admin-post-preview {
+      font-size: 0.88rem; color: #bbb; line-height: 1.6; margin: 0.5rem 0 0;
+      overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
+    }
+
+    /* ── Card/Compact view toggle -- small square icon button, dropdown
+       with the two options, Compact selected by default. Same component
+       as the Home/Recent pages, same shared localStorage key. ── */
+    .view-toggle-wrap { position: relative; }
+    .view-toggle-btn {
+      width: 38px; height: 34px; border-radius: 8px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); color: #ccc;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s, color 0.15s;
+    }
+    .view-toggle-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+    .view-toggle-menu {
+      position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 20; min-width: 140px;
+      background: #141018; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.55); overflow: hidden; padding: 0.4rem 0;
+    }
+    .view-toggle-menu-label {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #888;
+      padding: 0.4rem 0.9rem;
+    }
+    .view-toggle-menu-item {
+      display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left; background: none; border: none;
+      color: #ccc; font-family: 'Inter', sans-serif; font-size: 0.88rem; font-weight: 600;
+      padding: 0.55rem 0.9rem; cursor: pointer;
+    }
+    .view-toggle-menu-item:hover { background: rgba(127,168,217,0.12); color: #fff; }
+    .view-toggle-menu-item.active { color: #f0c060; }
+
     @media (max-width: 900px) {
       .cl-split-row { flex-direction: column; }
       .cl-admin-posts { width: auto; }
@@ -1160,12 +1205,24 @@
              team, styled the same as the Club News rows. -->
         <div id="cl-social-tab-content" hidden>
           <div class="cl-social-filter-bar">
-            <div class="cl-social-sort-wrap" id="cl-social-sort-wrap">
-              <button class="cl-social-filter-btn" id="cl-social-sort-btn" type="button">Recent <span class="cl-social-filter-caret">▾</span></button>
-              <div class="cl-social-sort-menu" id="cl-social-sort-menu" hidden>
-                <button type="button" class="cl-social-sort-item" data-sort="best">Best</button>
-                <button type="button" class="cl-social-sort-item active" data-sort="new">Recent</button>
-                <button type="button" class="cl-social-sort-item" data-sort="top">Top</button>
+            <div style="display:flex; align-items:center; gap:0.6rem;">
+              <div class="cl-social-sort-wrap" id="cl-social-sort-wrap">
+                <button class="cl-social-filter-btn" id="cl-social-sort-btn" type="button">Recent <span class="cl-social-filter-caret">▾</span></button>
+                <div class="cl-social-sort-menu" id="cl-social-sort-menu" hidden>
+                  <button type="button" class="cl-social-sort-item" data-sort="best">Best</button>
+                  <button type="button" class="cl-social-sort-item active" data-sort="new">Recent</button>
+                  <button type="button" class="cl-social-sort-item" data-sort="top">Top</button>
+                </div>
+              </div>
+              <div class="view-toggle-wrap" id="cl-view-toggle-wrap">
+                <button class="view-toggle-btn" id="cl-view-toggle-btn" type="button" title="Change view" aria-label="Change view">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="3" rx="1"/><rect x="3" y="19" width="18" height="3" rx="1"/></svg>
+                </button>
+                <div class="view-toggle-menu" id="cl-view-toggle-menu" hidden>
+                  <p class="view-toggle-menu-label">View</p>
+                  <button type="button" class="view-toggle-menu-item" data-mode="card">Card</button>
+                  <button type="button" class="view-toggle-menu-item active" data-mode="compact">Compact</button>
+                </div>
               </div>
             </div>
             <button class="cl-create-post-btn" id="cl-create-social-post-btn" type="button">+ Create Post</button>
@@ -2452,6 +2509,29 @@ document.querySelectorAll('.cl-social-sort-item').forEach(btn => {
     loadSocialPosts();
   });
 });
+// ── Card/Compact view toggle -- Social tab only (Club News stays compact
+// regardless). Shared localStorage key with the Home/Recent feeds. ────────
+let viewMode = localStorage.getItem('btw_feed_view_mode') || 'compact';
+function setViewMode(mode) {
+  viewMode = mode;
+  localStorage.setItem('btw_feed_view_mode', mode);
+  document.querySelectorAll('.view-toggle-menu-item').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  renderSocialPosts();
+}
+function wireViewToggle() {
+  const btn = document.getElementById('cl-view-toggle-btn');
+  const menu = document.getElementById('cl-view-toggle-menu');
+  btn.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+  document.addEventListener('click', (e) => {
+    if (!menu.hidden && !e.target.closest('#cl-view-toggle-wrap')) menu.hidden = true;
+  });
+  document.querySelectorAll('.view-toggle-menu-item').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === viewMode);
+    b.addEventListener('click', () => { setViewMode(b.dataset.mode); menu.hidden = true; });
+  });
+}
+wireViewToggle();
+
 function renderSocialPosts() {
   const list = document.getElementById('cl-social-posts-list');
   if (!socialPostsCache || !socialPostsCache.length) {
@@ -2459,13 +2539,22 @@ function renderSocialPosts() {
     return;
   }
   list.innerHTML = '';
-  socialPostsCache.forEach(p => list.appendChild(adminPostRow(p)));
+  socialPostsCache.forEach(p => list.appendChild(adminPostRow(p, viewMode)));
 }
 
-function adminPostRow(post) {
+function truncateText(s, n) {
+  return s.length > n ? s.slice(0, n).trim() + '…' : s;
+}
+// Card mode opens images up full-width instead of a small square
+// thumbnail, and drops the thumbnail entirely for text-only posts in
+// favor of a bigger title + a body preview. Club News (loadAdminPosts)
+// never passes a mode, so it always defaults to compact regardless of
+// what the Social tab's toggle is set to.
+function adminPostRow(post, mode) {
+  const isCard = mode === 'card';
   const a = post.author;
   const row = document.createElement('a');
-  row.className = 'cl-admin-post';
+  row.className = 'cl-admin-post' + (isCard ? ' cl-admin-post--card' : '');
   row.href = buildClubUrl({ post: post.id });
   row.addEventListener('click', (e) => { e.preventDefault(); navigateTo({ post: post.id }); });
 
@@ -2476,8 +2565,13 @@ function adminPostRow(post) {
 
   const previewX = post.preview_position_x != null ? post.preview_position_x : 50;
   const previewY = post.preview_position_y != null ? post.preview_position_y : 50;
+  const hasImage = !!post.image_url;
+  const thumbHtml = (isCard && !hasImage) ? '' :
+    `<img class="cl-admin-post-thumb" src="${post.image_url || '/images/noimage.png'}" alt="" style="object-position:${previewX}% ${previewY}%;" />`;
+  const showPreview = isCard && !hasImage && post.title && post.body;
+  const previewHtml = showPreview ? `<p class="cl-admin-post-preview">${escapeHtml(truncateText(post.body, 220))}</p>` : '';
   row.innerHTML = `
-    <img class="cl-admin-post-thumb" src="${post.image_url || '/images/noimage.png'}" alt="" style="object-position:${previewX}% ${previewY}%;" />
+    ${thumbHtml}
     <div class="cl-admin-post-body">
       <div class="cl-admin-post-meta">
         <span class="cl-admin-post-author">${escapeHtml(a.username)}</span>
@@ -2485,6 +2579,7 @@ function adminPostRow(post) {
         <span>${timeAgo(post.created_at)}</span>
       </div>
       <p class="cl-admin-post-title">${escapeHtml(titleText)}</p>
+      ${previewHtml}
       <div class="cl-admin-post-teaser">
         <span>🤍 ${post.like_count || 0}</span>
         <span>💬 ${post.comment_count || 0}</span>
