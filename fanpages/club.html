@@ -447,7 +447,8 @@
     .cl-admin-post--card .cl-admin-post-thumb {
       position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 0; object-fit: cover;
     }
-    .cl-admin-post--card .cl-admin-post-body { padding: 1rem 1.1rem 1.1rem; }
+    .cl-admin-post-header { padding: 1rem 1.1rem 0.75rem; }
+    .cl-admin-post--card .cl-admin-post-body { padding: 0.85rem 1.1rem 1.1rem; }
     .cl-admin-post--card .cl-admin-post-title { font-size: 1.15rem; -webkit-line-clamp: 3; }
     .cl-admin-post-preview {
       font-size: 0.88rem; color: #bbb; line-height: 1.6; margin: 0.5rem 0 0;
@@ -2580,20 +2581,36 @@ function adminPostRow(post, mode) {
   const thumbHtml = (isCard && !hasImage) ? '' : (isCard ? `<div class="cl-admin-post-thumb-wrap">${thumbImg}</div>` : thumbImg);
   const showPreview = isCard && !hasImage && post.title && post.body;
   const previewHtml = showPreview ? `<p class="cl-admin-post-preview">${escapeHtml(truncateText(post.body, 220))}</p>` : '';
-  row.innerHTML = `
+  const metaHtml = `
+    <div class="cl-admin-post-meta">
+      <span class="cl-admin-post-author">${escapeHtml(a.username)}</span>
+      <span>·</span>
+      <span>${timeAgo(post.created_at)}</span>
+    </div>`;
+  const teaserHtml = `
+    <div class="cl-admin-post-teaser">
+      <span>🤍 ${post.like_count || 0}</span>
+      <span>💬 ${post.comment_count || 0}</span>
+    </div>`;
+  // Card mode reads top-to-bottom like Reddit's own card view -- author/
+  // title sit above the image, not below it, with the image opening up
+  // full-width in between and the like/comment row underneath.
+  row.innerHTML = isCard ? `
+    <div class="cl-admin-post-header">
+      ${metaHtml}
+      <p class="cl-admin-post-title">${escapeHtml(titleText)}</p>
+    </div>
     ${thumbHtml}
     <div class="cl-admin-post-body">
-      <div class="cl-admin-post-meta">
-        <span class="cl-admin-post-author">${escapeHtml(a.username)}</span>
-        <span>·</span>
-        <span>${timeAgo(post.created_at)}</span>
-      </div>
-      <p class="cl-admin-post-title">${escapeHtml(titleText)}</p>
       ${previewHtml}
-      <div class="cl-admin-post-teaser">
-        <span>🤍 ${post.like_count || 0}</span>
-        <span>💬 ${post.comment_count || 0}</span>
-      </div>
+      ${teaserHtml}
+    </div>
+  ` : `
+    ${thumbHtml}
+    <div class="cl-admin-post-body">
+      ${metaHtml}
+      <p class="cl-admin-post-title">${escapeHtml(titleText)}</p>
+      ${teaserHtml}
     </div>
   `;
   return row;

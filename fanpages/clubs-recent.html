@@ -185,7 +185,8 @@
     .soc-feed-card--card .soc-feed-card-thumb {
       position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 0; object-fit: cover;
     }
-    .soc-feed-card--card .soc-feed-card-body { padding: 1rem 1.1rem 1.1rem; }
+    .soc-feed-card-header { padding: 1rem 1.1rem 0.75rem; }
+    .soc-feed-card--card .soc-feed-card-body { padding: 0.85rem 1.1rem 1.1rem; }
     .soc-feed-card--card .soc-feed-card-title { font-size: 1.15rem; -webkit-line-clamp: 3; }
     .soc-feed-card-preview {
       font-size: 0.88rem; color: #bbb; line-height: 1.6; margin: 0.5rem 0 0;
@@ -606,21 +607,37 @@ function feedCard(p, mode) {
   const thumbHtml = (isCard && !hasImage) ? '' : (isCard ? `<div class="soc-feed-card-thumb-wrap">${thumbImg}</div>` : thumbImg);
   const showPreview = isCard && !hasImage && p.title && p.body;
   const previewHtml = showPreview ? `<p class="soc-feed-card-preview">${escapeHtml(truncateText(p.body, 220))}</p>` : '';
-  a.innerHTML = `
+  const clubRowHtml = `
+    <div class="soc-feed-card-club">
+      ${clubIconHtmlFor(p.club)}
+      <span>${escapeHtml(p.club.name)}</span>
+      <span class="soc-feed-card-club-dot">·</span>
+      <span class="soc-feed-card-meta">${escapeHtml(p.author.display_name)} · ${timeAgo(p.created_at)}</span>
+    </div>`;
+  const statsHtml = `
+    <div class="soc-feed-card-stats">
+      <span class="${p.user_liked ? 'soc-feed-card-stat--liked' : ''}">🤍 ${p.like_count}</span>
+      <span>💬 ${p.comment_count}</span>
+    </div>`;
+  // Card mode reads top-to-bottom like Reddit's own card view -- club/
+  // author/title sit above the image, not below it, with the image
+  // opening up full-width in between and the stats row underneath.
+  a.innerHTML = isCard ? `
+    <div class="soc-feed-card-header">
+      ${clubRowHtml}
+      <p class="soc-feed-card-title">${escapeHtml(titleText)}</p>
+    </div>
     ${thumbHtml}
     <div class="soc-feed-card-body">
-      <div class="soc-feed-card-club">
-        ${clubIconHtmlFor(p.club)}
-        <span>${escapeHtml(p.club.name)}</span>
-        <span class="soc-feed-card-club-dot">·</span>
-        <span class="soc-feed-card-meta">${escapeHtml(p.author.display_name)} · ${timeAgo(p.created_at)}</span>
-      </div>
-      <p class="soc-feed-card-title">${escapeHtml(titleText)}</p>
       ${previewHtml}
-      <div class="soc-feed-card-stats">
-        <span class="${p.user_liked ? 'soc-feed-card-stat--liked' : ''}">🤍 ${p.like_count}</span>
-        <span>💬 ${p.comment_count}</span>
-      </div>
+      ${statsHtml}
+    </div>
+  ` : `
+    ${thumbHtml}
+    <div class="soc-feed-card-body">
+      ${clubRowHtml}
+      <p class="soc-feed-card-title">${escapeHtml(titleText)}</p>
+      ${statsHtml}
     </div>
   `;
   return a;
