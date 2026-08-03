@@ -31,11 +31,13 @@
         <button class="fpnav-link fpnav-trigger-link${['/fanpages/search', '/fanpages/characters', '/fanpages/fandoms'].includes(here) ? ' active' : ''}" id="fpnav-browse-btn" type="button">Browse <span class="fpnav-caret">▾</span></button>
         <div class="fpnav-dropdown" id="fpnav-browse-dropdown" hidden>
           <a href="/fanpages/search?sort=updated&browse=1">Stories</a>
-          <a href="/fanpages/search?view=submissions&browse=1">Submissions</a>
+          <a href="/fanpages/search?view=submissions&browse=1">Posts</a>
           <a href="/fanpages/characters">Characters</a>
           <a href="/fanpages/fandoms">Fandoms</a>
         </div>
       </div>
+
+      <a class="fpnav-link fpnav-trigger-link${here === '/fanpages/characters' ? ' active' : ''}" href="/fanpages/characters">Characters</a>
 
       <div class="fpnav-search">
         <svg class="fpnav-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
