@@ -18,7 +18,7 @@
     <div class="fpnav-bar">
       <a class="fpnav-brand" href="/fanpages"><img class="fpnav-brand-logo" src="/images/fanpagelogo.png" alt="Fanpages" width="52" height="44" /></a>
 
-      <div class="fpnav-dropdown-wrap fpnav-left-dropdown-wrap">
+      <div class="fpnav-dropdown-wrap">
         <button class="fpnav-link fpnav-trigger-link" id="fpnav-community-btn" type="button">Community <span class="fpnav-caret">▾</span></button>
         <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
           <a href="https://discord.gg/my4bPf2XUm" target="_blank" rel="noopener">Discord</a>
