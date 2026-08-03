@@ -55,14 +55,19 @@
     .fp-layout--filters-collapsed { grid-template-columns: 290px 1fr 0px; }
     .fp-results-col { grid-column: 2; min-width: 0; contain: layout; }
 
-    /* ── Submissions view — the filter panel/fab/left-panel filter box
-       don't apply here (no story filters for a gallery+chapter feed), so
-       they're hidden entirely and the results column reclaims that space
-       (2 columns instead of 3) rather than leaving it as dead space. ── */
-    .fp-layout--submissions { grid-template-columns: 290px 1fr; }
+    /* ── Posts view — the Story tab's filter panel/collapse-fab don't apply
+       here (no story filters for a gallery+chapter feed); its own
+       .fp-posts-panel takes column 3 instead, a bit thinner than the
+       Story filter panel since it needs far fewer fields. ── */
+    .fp-layout--submissions { grid-template-columns: 290px 1fr 260px; }
     .fp-layout--submissions .fp-filter-panel,
-    .fp-layout--submissions .fp-filter-fab,
-    .fp-layout--submissions .fp-side-bottom { display: none; }
+    .fp-layout--submissions .fp-filter-fab { display: none; }
+    /* Hidden everywhere except the Posts view -- default .fp-layout has no
+       3rd-column content of its own to give this room, so it only ever
+       renders where .fp-layout--submissions has already made column 3
+       260px wide. */
+    .fp-posts-panel { display: none; }
+    .fp-layout--submissions .fp-posts-panel { display: flex; }
 
     /* ── Browse mode (?browse=1, reached via the nav's Browse dropdown
        instead of the left Story/Submissions/Profiles panel) — no left
@@ -123,8 +128,7 @@
        much harder to scan than a photo grid is). ── */
     .fp-layout--profiles { grid-template-columns: 290px 1fr; }
     .fp-layout--profiles .fp-filter-panel,
-    .fp-layout--profiles .fp-filter-fab,
-    .fp-layout--profiles .fp-side-bottom { display: none; }
+    .fp-layout--profiles .fp-filter-fab { display: none; }
     .fp-layout--profiles .fp-results-col { max-width: 680px; margin: 0 auto; }
 
     .fp-profile-tabs { display: flex; gap: 2rem; border-bottom: 1px solid rgba(255,255,255,0.14); margin-bottom: 1.5rem; }
@@ -304,20 +308,24 @@
     #fp-pagination-top { margin-bottom: 1.75rem; }
     #fp-pagination-top:not([hidden]) { margin-top: 0.5rem; }
 
-    /* ── Left-hand panel — three big section links (Story / Submissions /
-       Profiles) near the top, then a "Current search" indicator + the
-       "Filter Search" toggle pinned to the bottom (margin-top:auto on
-       that wrapper). Fully transparent so it reads as content sitting on
-       the shared blurred wallpaper, same as the results column, but with
-       a clearly visible right-hand border marking where it ends. Pinned
-       flush against the topbar and the page's left/bottom edges via the
-       negative-margin trick. */
+    /* ── Left-hand panel — just the three big section links (Story / Posts /
+       Profiles) now -- the old "Current search" indicator + "Filter
+       Search" toggle that used to sit pinned to the bottom moved out
+       entirely (Quick Search relocated into the new Posts-view right-hand
+       panel; the rest just isn't shown anywhere left-side anymore).
+       Vertically centered in the sidebar's height instead of sitting at
+       the top with a lot of empty space below, now that there's nothing
+       left to pin to the bottom. Fully transparent so it reads as content
+       sitting on the shared blurred wallpaper, same as the results
+       column, but with a clearly visible right-hand border marking where
+       it ends. Pinned flush against the topbar and the page's left/bottom
+       edges via the negative-margin trick. */
     .fp-side-panel {
       grid-column: 1;
       position: sticky; top: 76px;
       margin-bottom: -5rem; margin-left: -2.5rem;
       height: calc(100vh - 76px); max-height: calc(100vh - 76px);
-      display: flex; flex-direction: column; align-items: center;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
       background: #14121a; border-right: 1px solid rgba(255,255,255,0.14);
       padding: 2rem 1.5rem 3.5rem; overflow-y: auto;
       scrollbar-color: #444 transparent; /* Firefox */
@@ -349,9 +357,8 @@
     }
     .fp-side-menu-item:hover .fp-side-menu-count, .fp-side-menu-item--active .fp-side-menu-count { color: #a8c6e8; }
 
-    /* Current-search indicator + "Filter Search" toggle, pinned to the
-       bottom of the left panel. */
-    .fp-side-bottom { width: 100%; margin-top: auto; }
+    /* Quick-search box -- was the left panel's own, now reused by the
+       Posts-view right-hand panel below instead. */
     .fp-side-search-wrap { position: relative; width: 100%; margin-bottom: 1rem; }
     .fp-side-search-wrap svg {
       position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
@@ -362,17 +369,6 @@
       color: #f0f0f0; font-family: inherit; font-size: 0.92rem; padding: 0.6em 0.9em 0.6em 2.4rem;
     }
     .fp-side-search-wrap input:focus { outline: none; border-color: #7fa8d9; }
-    .fp-filter-toggle-btn {
-      display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%;
-      background: rgba(20,18,24,0.85); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px;
-      color: #ddd; font-family: inherit; font-weight: 700; font-size: 1.05rem;
-      padding: 0.75em 1.2em; cursor: pointer;
-      transition: box-shadow 0.15s, border-color 0.15s, color 0.15s;
-    }
-    .fp-filter-toggle-btn:hover { color: #fff; }
-    /* box-shadow only appears in the --open state (panel visible) --
-       no glow when collapsed. */
-    .fp-filter-toggle-btn--open { color: #fff; border-color: rgba(127,168,217,0.65); box-shadow: 0 0 16px rgba(127,168,217,0.55); }
 
     /* ── Right-hand "Sort and Filter" panel — sticks to the page,
        flush against the topbar above and the page bottom/right edge
@@ -431,6 +427,28 @@
     .fp-filter-section { margin-bottom: 1.4rem; }
     .fp-filter-section-title { font-size: 1.3rem; font-weight: 700; color: #ddd; margin-bottom: 0.7rem; }
 
+    /* ── Posts view's right panel — same sticky/flush treatment as
+       .fp-filter-panel, just a bit thinner (no collapse fab -- there's
+       nowhere near enough here to be worth hiding). ── */
+    .fp-posts-panel {
+      grid-column: 3;
+      position: sticky; top: 76px;
+      margin-bottom: -5rem; margin-right: -2.5rem;
+      height: calc(100vh - 76px);
+      flex-direction: column;
+      background: #14121a;
+      border: 1px solid rgba(255,255,255,0.14);
+      padding: 1.5rem; max-height: calc(100vh - 76px); overflow-y: auto;
+      scrollbar-color: #444 #1a1a1e; /* Firefox */
+      overscroll-behavior: contain;
+      contain: layout;
+    }
+    .fp-posts-panel::-webkit-scrollbar { width: 8px; }
+    .fp-posts-panel::-webkit-scrollbar-track { background: #1a1a1e; border-radius: 8px; }
+    .fp-posts-panel::-webkit-scrollbar-thumb { background: #444; border-radius: 8px; }
+    .fp-posts-count { font-size: 0.95rem; color: #ddd; margin-bottom: 1.25rem; }
+    .fp-posts-count strong { color: #fff; }
+
     .fp-sort-select {
       width: 100%; background: transparent; border: 1px solid rgba(255,255,255,0.16); border-radius: 8px;
       color: #f0f0f0; font-family: inherit; font-size: 1.05rem; font-weight: 600; padding: 0.7em 0.8em;
@@ -487,6 +505,11 @@
         margin-bottom: 0; margin-right: 0; border-radius: 18px;
       }
       .fp-filter-fab { display: none; }
+      .fp-layout--submissions .fp-posts-panel {
+        grid-column: 1;
+        position: static; max-height: none; height: auto;
+        margin-bottom: 0; margin-right: 0; border-radius: 18px;
+      }
       .fp-side-panel {
         position: static; max-height: none; height: auto;
         margin-bottom: 0; margin-left: 0;
@@ -518,9 +541,9 @@
         </span>
       </a>
       <a class="fp-side-menu-item" href="/fanpages/search?view=submissions" id="fp-side-menu-submissions">
-        <span class="fp-side-menu-icon">🖼️</span>
+        <span class="fp-side-menu-icon">📌</span>
         <span class="fp-side-menu-text">
-          <span class="fp-side-menu-label">All Submissions</span>
+          <span class="fp-side-menu-label">Posts</span>
           <span class="fp-side-menu-count" id="fp-side-menu-count-submissions">Gallery posts &amp; chapters</span>
         </span>
       </a>
@@ -532,15 +555,6 @@
         </span>
       </a>
     </nav>
-
-    <div class="fp-side-bottom">
-      <div class="fp-side-search-wrap">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-        <input type="search" id="fp-side-search-input" placeholder="Quick search…" />
-      </div>
-      <div class="fp-filter-query">Current search: <strong id="fp-filter-query-text-side">Everything</strong></div>
-      <button class="fp-filter-toggle-btn fp-filter-toggle-btn--open" id="fp-filter-toggle-btn" type="button" aria-pressed="true" title="Hide filters">Filter Search</button>
-    </div>
   </aside>
 
   <div class="fp-results-col">
@@ -633,6 +647,41 @@
     </div>
 
     <button class="fp-filter-apply-btn fp-filter-apply-btn--bottom" id="fp-filter-apply" type="button">Sort and Filter</button>
+  </aside>
+
+  <!-- Posts view only -- results count, quick search, sort, and a ratings
+       checklist, replacing the plain "no filter panel at all" the
+       Submissions view used to have. Permanent (no collapse fab) since
+       there's nowhere near the amount of fields the Story filter panel
+       has to justify one. -->
+  <aside class="fp-posts-panel" id="fp-posts-panel">
+    <p class="fp-posts-count" id="fp-posts-count"></p>
+
+    <div class="fp-side-search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input type="search" id="fp-posts-search-input" placeholder="Quick search…" />
+    </div>
+    <div class="fp-filter-query">Current search: <strong id="fp-posts-query-text">Everything</strong></div>
+
+    <div class="fp-filter-section">
+      <p class="fp-filter-section-title">Sort by</p>
+      <select id="fp-posts-sort" class="fp-sort-select">
+        <option value="best_match">Best Match</option>
+        <option value="updated">Date Updated</option>
+        <option value="likes">Most Likes</option>
+        <option value="views">Most Views</option>
+        <option value="popular">Popular</option>
+      </select>
+    </div>
+
+    <div class="fp-filter-section">
+      <p class="fp-filter-section-title">Ratings</p>
+      <div class="fp-filter-options" id="fp-posts-ratings">
+        <label><input type="checkbox" value="sfw" checked /> SFW</label>
+        <label><input type="checkbox" value="mature" checked /> Mature</label>
+        <label><input type="checkbox" value="explicit" checked /> Explicit</label>
+      </div>
+    </div>
   </aside>
 </main>
 </div>
@@ -846,29 +895,82 @@ function wirePagination(el) {
   });
 }
 
+const POSTS_RATING_VALUES = ['sfw', 'mature', 'explicit'];
+
+// Posts view's right panel -- results count, quick search (prefilled),
+// current-search reminder, sort, and the ratings checklist. Every control
+// here drives a full navigation (same pattern the Story filter panel's own
+// controls use) rather than an in-place refetch, so the URL always reflects
+// exactly what's on screen.
+function wirePostsPanel(q, sort, ratings) {
+  document.getElementById('fp-posts-query-text').textContent = q ? `"${q}"` : 'Everything';
+
+  const searchInput = document.getElementById('fp-posts-search-input');
+  searchInput.value = q;
+  searchInput.onkeydown = (e) => {
+    if (e.key !== 'Enter') return;
+    const usp = new URLSearchParams(window.location.search);
+    if (searchInput.value.trim()) usp.set('q', searchInput.value.trim()); else usp.delete('q');
+    usp.delete('page');
+    window.location.search = usp.toString();
+  };
+
+  const sortSelect = document.getElementById('fp-posts-sort');
+  sortSelect.value = sort;
+  sortSelect.onchange = () => {
+    const usp = new URLSearchParams(window.location.search);
+    usp.set('sort', sortSelect.value);
+    usp.delete('page');
+    window.location.search = usp.toString();
+  };
+
+  document.querySelectorAll('#fp-posts-ratings input').forEach(cb => {
+    cb.checked = ratings.includes(cb.value);
+    cb.onchange = () => {
+      const checked = Array.from(document.querySelectorAll('#fp-posts-ratings input:checked')).map(c => c.value);
+      const usp = new URLSearchParams(window.location.search);
+      // All three checked reads the same as no filter at all -- drop the
+      // param entirely instead of writing out the full list every time.
+      if (checked.length === POSTS_RATING_VALUES.length) usp.delete('ratings');
+      else usp.set('ratings', checked.join(','));
+      usp.delete('page');
+      window.location.search = usp.toString();
+    };
+  });
+}
+
 async function runSubmissionsSearch() {
   const resultsEl = document.getElementById('fp-search-results');
   const subEl = document.getElementById('fp-search-sub');
+  const countEl = document.getElementById('fp-posts-count');
   const topEl = document.getElementById('fp-pagination-top');
   const bottomEl = document.getElementById('fp-pagination');
   resultsEl.innerHTML = '<p class="fp-search-empty">Loading…</p>';
+  subEl.hidden = true;
   topEl.hidden = true; bottomEl.hidden = true;
 
   const p = new URLSearchParams(window.location.search);
   const q = p.get('q') || '';
   const page = Math.max(1, parseInt(p.get('page'), 10) || 1);
+  const sort = p.get('sort') || 'best_match';
+  const ratingsParam = p.get('ratings');
+  const ratings = ratingsParam ? ratingsParam.split(',').filter(r => POSTS_RATING_VALUES.includes(r)) : POSTS_RATING_VALUES.slice();
   const limit = 42;
 
+  wirePostsPanel(q, sort, ratings);
+
   try {
-    const res = await fetch(`/api/search/submissions?q=${encodeURIComponent(q)}&page=${page}&limit=${limit}`, { headers: authHeaders() });
+    const apiParams = new URLSearchParams({ q, page, limit, sort });
+    if (ratingsParam) apiParams.set('ratings', ratings.join(','));
+    const res = await fetch(`/api/search/submissions?${apiParams.toString()}`, { headers: authHeaders() });
     const data = await res.json();
     const items = data.items || [];
-    subEl.innerHTML = `<strong>${data.total || 0}</strong> submission${data.total === 1 ? '' : 's'} found${q ? ` for "${escapeHtml(q)}"` : ''}.`;
-    setSubmissionsMenuCount(`${data.total || 0} submission${(data.total || 0) === 1 ? '' : 's'}${q ? ` for "${q}"` : ''}`);
+    countEl.innerHTML = `<strong>${data.total || 0}</strong> post${data.total === 1 ? '' : 's'} found${q ? ` for "${escapeHtml(q)}"` : ''}.`;
+    setSubmissionsMenuCount(`${data.total || 0} post${(data.total || 0) === 1 ? '' : 's'}${q ? ` for "${q}"` : ''}`);
 
     resultsEl.classList.add('fp-results-list--grid');
     if (!items.length) {
-      resultsEl.innerHTML = '<p class="fp-search-empty">No submissions match that search.</p>';
+      resultsEl.innerHTML = '<p class="fp-search-empty">No posts match that search.</p>';
       return;
     }
 
@@ -880,7 +982,7 @@ async function runSubmissionsSearch() {
     topEl.hidden = false; topEl.innerHTML = pagHtml; wirePagination(topEl);
     bottomEl.hidden = false; bottomEl.innerHTML = pagHtml; wirePagination(bottomEl);
   } catch {
-    resultsEl.innerHTML = '<p class="fp-search-empty">Couldn\'t load submissions right now.</p>';
+    resultsEl.innerHTML = '<p class="fp-search-empty">Couldn\'t load posts right now.</p>';
   }
 }
 
@@ -1025,7 +1127,6 @@ function applyParamsToPanel(f) {
   if (f.rating) queryBits.push(`<tag> @${f.rating}`);
   const queryText = queryBits.length ? queryBits.join(', ') : 'Everything';
   document.getElementById('fp-filter-query-text').textContent = queryText;
-  document.getElementById('fp-filter-query-text-side').textContent = queryText;
 }
 
 function collectPanelParams() {
@@ -1158,27 +1259,22 @@ function applyFiltersAndSearch() {
 document.getElementById('fp-filter-apply-top').addEventListener('click', applyFiltersAndSearch);
 document.getElementById('fp-filter-apply').addEventListener('click', applyFiltersAndSearch);
 
-// Filter panel collapse/expand — the "Filter Search" button (bottom of
-// the left panel) and the floating arrow fab both drive the same state.
+// Filter panel collapse/expand — the floating arrow fab (right edge of the
+// screen) drives this now; the left panel's own "Filter Search" toggle
+// button was removed along with the rest of its bottom section.
 // Collapsing shrinks .fp-layout's third grid column to 0 (pushing/pulling
 // the results column as it goes) and fully hides the panel; the fab is a
 // position:fixed sibling, not a child of the panel, so it stays on screen
-// either way. The glow on "Filter Search" only shows while the panel is
-// open.
+// either way.
 const fpLayoutEl = document.querySelector('.fp-layout');
-const filterToggleBtn = document.getElementById('fp-filter-toggle-btn');
 const filterRailToggle = document.getElementById('fp-filter-rail-toggle');
 function setFiltersCollapsed(collapsed) {
   fpLayoutEl.classList.toggle('fp-layout--filters-collapsed', collapsed);
   filterRailToggle.classList.toggle('fp-filter-fab--collapsed', collapsed);
-  filterToggleBtn.classList.toggle('fp-filter-toggle-btn--open', !collapsed);
-  filterToggleBtn.setAttribute('aria-pressed', String(!collapsed));
   const label = collapsed ? 'Show filters' : 'Hide filters';
-  filterToggleBtn.title = label;
   filterRailToggle.title = label;
   filterRailToggle.setAttribute('aria-label', label);
 }
-filterToggleBtn.addEventListener('click', () => setFiltersCollapsed(!fpLayoutEl.classList.contains('fp-layout--filters-collapsed')));
 filterRailToggle.addEventListener('click', () => setFiltersCollapsed(!fpLayoutEl.classList.contains('fp-layout--filters-collapsed')));
 // Every fresh page load starts with the filter panel expanded -- no
 // remembering last session's collapsed state.
@@ -1205,21 +1301,6 @@ function syncSideMenuLinks() {
   document.getElementById('fp-side-menu-profiles').href = join('profiles');
 }
 syncSideMenuLinks();
-
-// Quick search box above "Current search" -- searches within whichever
-// view (Stories/Submissions/Profiles) is currently active.
-(() => {
-  const input = document.getElementById('fp-side-search-input');
-  const p = new URLSearchParams(window.location.search);
-  input.value = p.get('q') || '';
-  input.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter') return;
-    const usp = new URLSearchParams(window.location.search);
-    if (input.value.trim()) usp.set('q', input.value.trim()); else usp.delete('q');
-    usp.delete('page');
-    window.location.search = usp.toString();
-  });
-})();
 
 // Whichever tab is active fetches its own full results and sets its own
 // menu count as a side effect of that (setStoryMenuCount/etc, already

@@ -1420,6 +1420,26 @@
     return document.createElement('span');
   }
 
+  // Hard-caps a rendered auto-fill grid to N visible rows by measuring each
+  // child's actual offsetTop after layout (rather than guessing the column
+  // count from viewport width, which shifts at every breakpoint) and
+  // hiding anything belonging to a row past the Nth. Re-run on resize since
+  // the column count -- and therefore how many items fit N rows -- changes
+  // with it.
+  function capGridToRows(wrap, maxRows) {
+    const tiles = Array.from(wrap.children);
+    tiles.forEach(t => { t.style.display = ''; });
+    if (!tiles.length) return;
+    const rowTops = [];
+    let cutoffIndex = tiles.length;
+    for (let i = 0; i < tiles.length; i++) {
+      const top = tiles[i].offsetTop;
+      if (!rowTops.length || top > rowTops[rowTops.length - 1] + 1) rowTops.push(top);
+      if (rowTops.length > maxRows) { cutoffIndex = i; break; }
+    }
+    for (let i = cutoffIndex; i < tiles.length; i++) tiles[i].style.display = 'none';
+  }
+
   // ── Justified gallery layout (Flickr/FurAffinity-style) — instead of a
   // fixed size per tile, each row's shared height is scaled so the row's
   async function loadActivityFeed() {
@@ -1432,6 +1452,12 @@
 
       wrap.innerHTML = '';
       items.forEach(it => wrap.appendChild(activityCard(it)));
+      capGridToRows(wrap, 3);
+      let resizeTimer = null;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => capGridToRows(wrap, 3), 150);
+      });
     } catch {
       wrap.innerHTML = '<p class="fp-row-empty">Couldn\'t load recent activity right now.</p>';
     }

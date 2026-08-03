@@ -6619,12 +6619,34 @@ app.get('/api/activity-feed', async (req, res) => {
 // fixed-size (40 max, no offset) teaser for the hub's homepage box, this
 // is the real listing. Deliberately excludes 'character' -- Submissions is
 // gallery posts + chapter postings only, not the character-ref feed.
+const SUBMISSIONS_RATING_OPTIONS = ['sfw', 'mature', 'explicit'];
+// Values here are fixed literal SQL fragments, never user input directly --
+// req.query.sort only ever indexes into this object (falling back to
+// 'best_match' on anything unrecognized), so interpolating the looked-up
+// string below can't become an injection vector.
+const SUBMISSIONS_SORT_ORDER_BY = {
+  best_match: 'created_at DESC',
+  updated:    'created_at DESC',
+  likes:      'like_count DESC, created_at DESC',
+  views:      'view_count DESC, created_at DESC',
+  popular:    '(view_count + like_count * 3) DESC, created_at DESC',
+};
 app.get('/api/search/submissions', async (req, res) => {
   const q = String(req.query.q || '').trim();
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(60, Math.max(1, parseInt(req.query.limit, 10) || 40));
   const offset = (page - 1) * limit;
   const { nsfwAllowed } = await getViewerNsfwAccess(req);
+  const sort = SUBMISSIONS_SORT_ORDER_BY[req.query.sort] ? req.query.sort : 'best_match';
+  const orderBy = SUBMISSIONS_SORT_ORDER_BY[sort];
+  const ratings = String(req.query.ratings || '').split(',').map(s => s.trim()).filter(s => SUBMISSIONS_RATING_OPTIONS.includes(s));
+  // Empty/all-unchecked reads as "show nothing" client-side (that's what
+  // unchecking every box means), not "no filter" -- an empty array here
+  // would make `category = ANY($ratings)` match nothing, which is exactly
+  // that. A blank ratings param (no filter UI on this request) instead
+  // means "don't filter", which is what an empty JS array on the SQL side
+  // would NOT do, so that case passes NULL to skip the clause entirely.
+  const ratingsFilter = req.query.ratings === undefined ? null : ratings;
 
   const { rows } = await pool.query(
     `SELECT * FROM (
@@ -6633,7 +6655,9 @@ app.get('/api/search/submissions', async (req, res) => {
               ms.cover_position_x AS position_x, ms.cover_position_y AS position_y,
               ms.story_path, ms.site_title AS site_title,
               u.username, u.display_name, u.avatar,
-              NULL::text AS category, '[]'::jsonb AS tags
+              NULL::text AS category, '[]'::jsonb AS tags,
+              COALESCE(mc.view_count, 0) AS view_count,
+              (SELECT COUNT(*)::int FROM chapter_likes WHERE chapter_id = mc.id) AS like_count
        FROM moderator_chapters mc
        JOIN moderator_sites ms ON ms.id = mc.site_id
        JOIN users u ON u.id = ms.owner_user_id
@@ -6646,7 +6670,9 @@ app.get('/api/search/submissions', async (req, res) => {
               mg.position_x, mg.position_y,
               ms.story_path, ms.site_title,
               u.username, u.display_name, u.avatar,
-              mg.category, mg.tags
+              mg.category, mg.tags,
+              COALESCE(mg.view_count, 0),
+              (SELECT COUNT(*)::int FROM moderator_gallery_likes WHERE gallery_id = mg.id)
        FROM moderator_gallery mg
        LEFT JOIN LATERAL (
          SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1
@@ -6655,14 +6681,15 @@ app.get('/api/search/submissions', async (req, res) => {
        JOIN users u ON u.id = mg.owner_user_id
      ) feed
      WHERE (category = 'sfw' OR $1)
+       AND ($5::text[] IS NULL OR category IS NULL OR category = ANY($5::text[]))
        AND ($2 = '' OR (
          title ILIKE '%' || $2 || '%' OR site_title ILIKE '%' || $2 || '%'
          OR username ILIKE '%' || $2 || '%' OR display_name ILIKE '%' || $2 || '%'
          OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) t WHERE t ILIKE '%' || $2 || '%')
        ))
-     ORDER BY created_at DESC
+     ORDER BY ${orderBy}
      LIMIT $3 OFFSET $4`,
-    [nsfwAllowed, q, limit, offset]
+    [nsfwAllowed, q, limit, offset, ratingsFilter]
   );
   // total_count via COUNT(*) OVER() would double-count across the UNION
   // ALL branches' own window once category/q filtering is applied inline
@@ -6683,12 +6710,13 @@ app.get('/api/search/submissions', async (req, res) => {
        JOIN users u ON u.id = mg.owner_user_id
      ) feed
      WHERE (category = 'sfw' OR $1)
+       AND ($3::text[] IS NULL OR category IS NULL OR category = ANY($3::text[]))
        AND ($2 = '' OR (
          title ILIKE '%' || $2 || '%' OR site_title ILIKE '%' || $2 || '%'
          OR username ILIKE '%' || $2 || '%' OR display_name ILIKE '%' || $2 || '%'
          OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) t WHERE t ILIKE '%' || $2 || '%')
        ))`,
-    [nsfwAllowed, q]
+    [nsfwAllowed, q, ratingsFilter]
   );
 
   res.json({
@@ -6706,7 +6734,7 @@ app.get('/api/search/submissions', async (req, res) => {
       author_avatar: r.avatar || null,
       tags: r.tags || [],
     })),
-    total: Number(count), page, limit,
+    total: Number(count), page, limit, sort,
   });
 });
 
