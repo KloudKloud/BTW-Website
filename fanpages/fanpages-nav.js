@@ -18,6 +18,8 @@
     <div class="fpnav-bar">
       <a class="fpnav-brand" href="/fanpages"><img class="fpnav-brand-logo" src="/images/fanpagelogo.png" alt="Fanpages" width="52" height="44" /></a>
 
+      <a class="fpnav-link fpnav-trigger-link${here === '/fanpages/characters' ? ' active' : ''}" href="/fanpages/characters">Characters</a>
+
       <div class="fpnav-dropdown-wrap fpnav-left-dropdown-wrap">
         <button class="fpnav-link fpnav-trigger-link" id="fpnav-community-btn" type="button">Community <span class="fpnav-caret">▾</span></button>
         <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
@@ -36,8 +38,6 @@
           <a href="/fanpages/fandoms">Fandoms</a>
         </div>
       </div>
-
-      <a class="fpnav-link fpnav-trigger-link${here === '/fanpages/characters' ? ' active' : ''}" href="/fanpages/characters">Characters</a>
 
       <div class="fpnav-search">
         <svg class="fpnav-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
