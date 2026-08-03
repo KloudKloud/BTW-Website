@@ -35,8 +35,8 @@
     .fp-content-z { position: relative; z-index: 1; }
 
     .fp-search-sub {
-      color: #ccc; font-size: 0.95rem; margin: 1.75rem 0 0.85rem;
-      padding-bottom: 0.85rem; border-bottom: 1px solid rgba(255,255,255,0.14);
+      color: #ccc; font-size: 0.95rem; margin: 1.75rem 0 0.2rem;
+      padding-bottom: 0.85rem; border-bottom: 1px solid rgba(255,255,255,0.1);
     }
     .fp-search-sub strong { color: #fff; }
 
@@ -178,20 +178,22 @@
     .fp-profile-follow-btn--following:hover { background: rgba(217,122,114,0.2); color: #e69a92; box-shadow: none; }
 
     /* ── Result rows — no card box, just a horizontal rule between each ── */
-    .fp-results-list { display: flex; flex-direction: column; }
+    .fp-results-list { display: flex; flex-direction: column; gap: 1.1rem; }
     /* Submissions view -- fixed-size tiles (the exact crop the uploader
        picked in the editor), not a variable-size justified photo wall.
        Bigger than the old justified-grid target height, e621-style. */
     .fp-results-list--grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
-    /* Reverted back to plain divider-separated list rows -- the boxed
-       .fp-story-teaser-card treatment (profile-template.html's own Stories
-       tab) turned out to be meant to stay there, not spread to the search
-       queue's Story results too. */
+    /* Transparent-but-bordered card -- no fill color (unlike the earlier
+       opaque #161616 boxed treatment, which turned out to be meant to stay
+       on profile-template.html's own Stories tab instead), just enough of
+       an outline that each story reads as its own card instead of having
+       no visible boundary at all. */
     .fp-result {
-      display: flex; gap: 1.75rem; padding: 1.85rem 0; cursor: pointer;
-      border-bottom: 1px solid rgba(0,0,0,0.55); transition: background 0.12s;
+      display: flex; gap: 1.75rem; padding: 1.5rem; cursor: pointer;
+      background: transparent; border: 1px solid rgba(255,255,255,0.1); border-radius: 14px;
+      transition: background 0.12s, border-color 0.15s;
     }
-    .fp-result:hover { background: rgba(255,255,255,0.02); }
+    .fp-result:hover { background: rgba(255,255,255,0.02); border-color: rgba(240,192,96,0.35); }
     /* display:flex + align-items:center here (this wrapper gets stretched
        to the full row height by .fp-result's default align-items:stretch)
        centers the fixed-size cover vertically against the card whenever
@@ -349,14 +351,23 @@
        more spread out than before -- with the old bottom section (Filter
        Search/Current Search/Quick Search) gone, these three are the
        entire sidebar now and should actually fill the middle of it. */
+    /* Always carries a soft blue glow on its outer shell now, not just on
+       hover -- hover brightens it a bit further, and the active/selected
+       item gets the strongest version so it unmistakably reads as "you are
+       here" rather than just "hovered". */
     .fp-side-menu-item {
       display: flex; align-items: center; gap: 1.1rem; width: 100%;
-      color: #999; text-decoration: none; border-radius: 14px; border: 1px solid transparent;
+      color: #999; text-decoration: none; border-radius: 14px;
+      border: 1px solid rgba(127,168,217,0.25); box-shadow: 0 0 10px rgba(127,168,217,0.15);
       padding: 1.05em 1.15em; transition: color 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
     }
-    .fp-side-menu-item:hover, .fp-side-menu-item--active {
-      color: #fff; background: rgba(127,168,217,0.14); border-color: rgba(127,168,217,0.4);
-      box-shadow: 0 0 14px rgba(127,168,217,0.3);
+    .fp-side-menu-item:hover {
+      color: #fff; background: rgba(127,168,217,0.14); border-color: rgba(127,168,217,0.45);
+      box-shadow: 0 0 16px rgba(127,168,217,0.35);
+    }
+    .fp-side-menu-item--active {
+      color: #fff; background: rgba(127,168,217,0.2); border-color: rgba(127,168,217,0.7);
+      box-shadow: 0 0 22px rgba(127,168,217,0.55);
     }
     .fp-side-menu-icon { font-size: 1.75rem; line-height: 1; flex-shrink: 0; }
     .fp-side-menu-text { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
@@ -587,6 +598,10 @@
   <aside class="fp-filter-panel" id="fp-filter-panel">
     <button class="fp-filter-apply-btn fp-filter-apply-btn--top" id="fp-filter-apply-top" type="button">Sort and Filter</button>
     <div class="fp-filter-query">Current search: <strong id="fp-filter-query-text">Everything</strong></div>
+    <div class="fp-side-search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input type="search" id="fp-story-search-input" placeholder="Quick search…" />
+    </div>
 
     <div class="fp-filter-section">
       <p class="fp-filter-section-title">Sort by</p>
@@ -1123,6 +1138,7 @@ function readParamsFromUrl() {
 }
 
 function applyParamsToPanel(f) {
+  document.getElementById('fp-story-search-input').value = f.q || '';
   document.getElementById('f-sort').value = f.sort || 'best_match';
   document.getElementById('f-fandoms').value = f.fandoms;
   document.getElementById('f-relationships').value = f.relationships;
@@ -1151,7 +1167,7 @@ function applyParamsToPanel(f) {
 
 function collectPanelParams() {
   const params = {};
-  const q = new URLSearchParams(window.location.search).get('q');
+  const q = document.getElementById('fp-story-search-input').value.trim();
   if (q) params.q = q;
   params.sort = document.getElementById('f-sort').value;
   const fandoms = document.getElementById('f-fandoms').value.trim();
@@ -1278,6 +1294,9 @@ function applyFiltersAndSearch() {
 }
 document.getElementById('fp-filter-apply-top').addEventListener('click', applyFiltersAndSearch);
 document.getElementById('fp-filter-apply').addEventListener('click', applyFiltersAndSearch);
+document.getElementById('fp-story-search-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') applyFiltersAndSearch();
+});
 
 // Filter panel collapse/expand — the floating arrow fab (right edge of the
 // screen) drives this now; the left panel's own "Filter Search" toggle
