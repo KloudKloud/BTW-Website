@@ -140,36 +140,47 @@
     .fp-pagination button:hover:not(:disabled) { border-color: #7fa8d9; color: #7fa8d9; }
     .fp-pagination button:disabled { opacity: 0.4; cursor: default; }
 
-    /* ── Left-hand panel — just the three big section links now (Story /
-       Gallery Posts / Profiles). Fully transparent so it reads as content
-       sitting on the shared blurred wallpaper, same as the results
-       column. Pinned flush against the topbar and the page's left/bottom
-       edges via the negative-margin trick. */
+    /* ── Left-hand panel — three big section links (Story / Submissions /
+       Profiles). Fully transparent so it reads as content sitting on the
+       shared blurred wallpaper, same as the results column, but with its
+       own right-hand border acting as a vertical divider marking where
+       the panel ends and the results column begins. Pinned flush against
+       the topbar and the page's left/bottom edges via the negative-margin
+       trick. */
     .fp-side-panel {
       position: sticky; top: 76px;
       margin-bottom: -5rem; margin-left: -2.5rem;
       height: calc(100vh - 76px); max-height: calc(100vh - 76px);
       display: flex; flex-direction: column; justify-content: center;
+      border-right: 1px solid rgba(255,255,255,0.14);
       padding: 2rem 1.75rem; overflow-y: auto;
       scrollbar-color: #444 transparent; /* Firefox */
     }
     .fp-side-panel::-webkit-scrollbar { width: 8px; }
     .fp-side-panel::-webkit-scrollbar-track { background: transparent; }
     .fp-side-panel::-webkit-scrollbar-thumb { background: #444; border-radius: 8px; }
-    .fp-side-menu { display: flex; flex-direction: column; gap: 0.6rem; width: 100%; }
+    .fp-side-menu { display: flex; flex-direction: column; gap: 1.4rem; width: 100%; }
     /* Story starts already looking hovered/selected (it's the current
        section) via .fp-side-menu-item--active sharing the :hover rule.
-       Gallery Posts / Profiles get the same blue glow treatment the
+       Submissions / Profiles get the same blue glow treatment the
        instant you hover them, and are real clickable links. */
     .fp-side-menu-item {
-      display: block; width: 100%; text-align: left; font-size: 1.55rem; font-weight: 800;
-      color: #999; text-decoration: none; border-radius: 14px; border: 1px solid transparent;
-      padding: 0.85em 1em; transition: color 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
+      display: flex; align-items: center; gap: 1rem; width: 100%;
+      color: #999; text-decoration: none; border-radius: 16px; border: 1px solid transparent;
+      padding: 0.9em 1em; transition: color 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
     }
     .fp-side-menu-item:hover, .fp-side-menu-item--active {
       color: #fff; background: rgba(127,168,217,0.14); border-color: rgba(127,168,217,0.55);
       box-shadow: 0 0 22px rgba(127,168,217,0.45);
     }
+    .fp-side-menu-icon { font-size: 1.9rem; line-height: 1; flex-shrink: 0; }
+    .fp-side-menu-text { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+    .fp-side-menu-label { font-size: 1.5rem; font-weight: 800; }
+    .fp-side-menu-count {
+      font-size: 0.78rem; font-weight: 600; color: #888; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .fp-side-menu-item:hover .fp-side-menu-count, .fp-side-menu-item--active .fp-side-menu-count { color: #a8c6e8; }
 
     /* ── Right-hand "Sort and Filter" panel — sticks to the page as you
        scroll the results, flush against the topbar above and the page
@@ -267,9 +278,27 @@
 <main class="fp-layout">
   <aside class="fp-side-panel" id="fp-side-panel">
     <nav class="fp-side-menu">
-      <a class="fp-side-menu-item fp-side-menu-item--active" href="/fanpages/search">Story</a>
-      <a class="fp-side-menu-item" href="#">Gallery Posts</a>
-      <a class="fp-side-menu-item" href="#">Profiles</a>
+      <a class="fp-side-menu-item fp-side-menu-item--active" href="/fanpages/search">
+        <span class="fp-side-menu-icon">📖</span>
+        <span class="fp-side-menu-text">
+          <span class="fp-side-menu-label">Story</span>
+          <span class="fp-side-menu-count" id="fp-side-menu-count-story">Loading…</span>
+        </span>
+      </a>
+      <a class="fp-side-menu-item" href="#">
+        <span class="fp-side-menu-icon">🖼️</span>
+        <span class="fp-side-menu-text">
+          <span class="fp-side-menu-label">Submissions</span>
+          <span class="fp-side-menu-count">Gallery posts &amp; chapters</span>
+        </span>
+      </a>
+      <a class="fp-side-menu-item" href="#">
+        <span class="fp-side-menu-icon">👤</span>
+        <span class="fp-side-menu-text">
+          <span class="fp-side-menu-label">Profiles</span>
+          <span class="fp-side-menu-count">Accounts &amp; characters</span>
+        </span>
+      </a>
     </nav>
   </aside>
 
@@ -365,6 +394,13 @@
 <script>
 function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+// Live result count under the "Story" left-panel link, for the current
+// query. Submissions/Profiles don't have a backing search yet, so they
+// just show a static description instead.
+function setStoryMenuCount(text) {
+  const el = document.getElementById('fp-side-menu-count-story');
+  if (el) el.textContent = text;
 }
 // Every synopsis cuts at the same length so cards read as a uniform size —
 // the fade (see .fp-result-synopsis mask) softens the hard stop visually.
@@ -555,6 +591,7 @@ async function runSearch() {
     try {
       const res = await fetch('/api/search/recent-bookmarks?limit=30');
       const data = await res.json();
+      setStoryMenuCount(`${data.works.length} bookmark${data.works.length === 1 ? '' : 's'}`);
       if (!data.works.length) { resultsEl.innerHTML = '<p class="fp-search-empty">No bookmarks yet.</p>'; return; }
       resultsEl.innerHTML = data.works.map(bookmarkCard).join('');
     } catch {
@@ -582,6 +619,7 @@ async function runSearch() {
     const data = await res.json();
     const works = data.works || [];
     subEl.innerHTML = `<strong>${data.total || 0}</strong> work${data.total === 1 ? '' : 's'} found — sorted by ${escapeHtml(SORT_LABELS[data.sort] || 'Best Match')}.`;
+    setStoryMenuCount(`${data.total || 0} stor${(data.total || 0) === 1 ? 'y' : 'ies'}${f.q ? ` for "${f.q}"` : ''}`);
 
     if (!works.length) {
       resultsEl.innerHTML = '<p class="fp-search-empty">No works match that search.</p>';
