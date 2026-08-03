@@ -6647,6 +6647,7 @@ app.get('/api/search/submissions', async (req, res) => {
   // means "don't filter", which is what an empty JS array on the SQL side
   // would NOT do, so that case passes NULL to skip the clause entirely.
   const ratingsFilter = req.query.ratings === undefined ? null : ratings;
+  const exclude = String(req.query.exclude || '').trim();
 
   const { rows } = await pool.query(
     `SELECT * FROM (
@@ -6687,9 +6688,13 @@ app.get('/api/search/submissions', async (req, res) => {
          OR username ILIKE '%' || $2 || '%' OR display_name ILIKE '%' || $2 || '%'
          OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) t WHERE t ILIKE '%' || $2 || '%')
        ))
+       AND ($6 = '' OR NOT (
+         title ILIKE '%' || $6 || '%' OR site_title ILIKE '%' || $6 || '%'
+         OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) t WHERE t ILIKE '%' || $6 || '%')
+       ))
      ORDER BY ${orderBy}
      LIMIT $3 OFFSET $4`,
-    [nsfwAllowed, q, limit, offset, ratingsFilter]
+    [nsfwAllowed, q, limit, offset, ratingsFilter, exclude]
   );
   // total_count via COUNT(*) OVER() would double-count across the UNION
   // ALL branches' own window once category/q filtering is applied inline
@@ -6715,8 +6720,12 @@ app.get('/api/search/submissions', async (req, res) => {
          title ILIKE '%' || $2 || '%' OR site_title ILIKE '%' || $2 || '%'
          OR username ILIKE '%' || $2 || '%' OR display_name ILIKE '%' || $2 || '%'
          OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) t WHERE t ILIKE '%' || $2 || '%')
+       ))
+       AND ($4 = '' OR NOT (
+         title ILIKE '%' || $4 || '%' OR site_title ILIKE '%' || $4 || '%'
+         OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) t WHERE t ILIKE '%' || $4 || '%')
        ))`,
-    [nsfwAllowed, q, ratingsFilter]
+    [nsfwAllowed, q, ratingsFilter, exclude]
   );
 
   res.json({
