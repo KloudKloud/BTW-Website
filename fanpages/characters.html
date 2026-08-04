@@ -94,6 +94,7 @@
     .fp-char-sort-wrap select:focus { outline: none; border-color: #7fa8d9; }
 
     .fp-char-filter-menu { display: flex; flex-direction: column; gap: 0.4rem; }
+    .fp-char-guest-filters { display: flex; flex-direction: column; gap: 0.4rem; }
     .fp-char-filter-item {
       display: flex; align-items: center; gap: 0.6rem;
       background: rgba(255,255,255,0.04); border: 1px solid transparent; border-radius: 10px;
@@ -219,15 +220,20 @@
       <button type="button" class="fp-char-filter-item" data-filter="">
         <span class="fp-char-filter-icon">🐾</span> All Characters
       </button>
-      <button type="button" class="fp-char-filter-item" data-filter="mine">
-        <span class="fp-char-filter-icon">✨</span> Your Characters
-      </button>
-      <button type="button" class="fp-char-filter-item" data-filter="followed">
-        <span class="fp-char-filter-icon">💫</span> Followed Characters
-      </button>
-      <button type="button" class="fp-char-filter-item" data-filter="liked">
-        <span class="fp-char-filter-icon">💖</span> Liked Characters
-      </button>
+      <div class="fp-guest-blur-wrap" id="fp-char-guest-filters-wrap">
+        <div class="fp-char-guest-filters">
+          <button type="button" class="fp-char-filter-item" data-filter="mine">
+            <span class="fp-char-filter-icon">✨</span> Your Characters
+          </button>
+          <button type="button" class="fp-char-filter-item" data-filter="followed">
+            <span class="fp-char-filter-icon">💫</span> Followed Characters
+          </button>
+          <button type="button" class="fp-char-filter-item" data-filter="liked">
+            <span class="fp-char-filter-icon">💖</span> Liked Characters
+          </button>
+        </div>
+        <div class="fp-guest-blur-overlay" id="fp-char-guest-filters-overlay" hidden><p>Sign in to create and save characters!</p></div>
+      </div>
     </nav>
   </aside>
 
@@ -249,6 +255,11 @@ function escapeHtml(s) {
 
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
 const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
+
+if (!token) {
+  document.querySelector('#fp-char-guest-filters-wrap .fp-char-guest-filters').classList.add('fp-guest-blur-content');
+  document.getElementById('fp-char-guest-filters-overlay').hidden = false;
+}
 
 const FILTER_LABELS = {
   '': 'All Characters', mine: 'Your Characters', followed: 'Followed Characters', liked: 'Liked Characters',
@@ -299,7 +310,12 @@ function wirePagination(el) {
 async function loadViewerBox() {
   const slot = document.getElementById('fp-char-viewer-slot');
   if (!token) {
-    slot.innerHTML = `<a class="fp-char-viewer-login" href="${window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`)}">Log in to like &amp; track your own characters →</a>`;
+    slot.innerHTML = `
+      <div class="fp-char-viewer-box">
+        <div class="fp-char-viewer-avatar-wrap"><img src="/images/defaultchar.jpg" alt="" /></div>
+        <span class="fp-char-viewer-name">Guest</span>
+      </div>
+    `;
     return;
   }
   try {

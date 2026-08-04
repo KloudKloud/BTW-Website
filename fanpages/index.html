@@ -1011,6 +1011,26 @@
 
   async function loadRecommendedFollowers() {
     const row = document.getElementById('fp-followers-row');
+    // Guests get a blurred placeholder instead of real recommendations —
+    // there's nothing personalized to recommend to someone with no account
+    // anyway, and it doubles as a soft sign-up nudge.
+    if (!token) {
+      row.innerHTML = `
+        <div class="fp-guest-blur-wrap">
+          <div class="fp-follower-grid fp-guest-blur-content">
+            ${Array.from({ length: 4 }).map(() => `
+              <div class="fp-follower-card">
+                <div class="fp-follower-avatar-fallback">?</div>
+                <span class="fp-follower-name">Guest User</span>
+                <span class="fp-follower-sub">0 Followers</span>
+              </div>
+            `).join('')}
+          </div>
+          <div class="fp-guest-blur-overlay"><p>Log in to see recommended followers…</p></div>
+        </div>
+      `;
+      return;
+    }
     try {
       // 4 people + the "See More" card fills the 5-column grid exactly,
       // with nothing to scroll.
