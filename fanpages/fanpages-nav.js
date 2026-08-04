@@ -155,7 +155,10 @@ if (!window.FP_BASE) {
 
     document.getElementById('fp-loginmodal-signup-link').addEventListener('click', (e) => {
       e.preventDefault();
-      window.location.href = fpUrl(`/register?from=${encodeURIComponent(navigateTarget)}`);
+      // Stashed in sessionStorage rather than a ?from= query param so the
+      // /register URL stays clean — register.html reads it back out.
+      sessionStorage.setItem('btw_auth_from', navigateTarget);
+      window.location.href = fpUrl('/register');
     });
 
     document.querySelectorAll('#fp-loginmodal-overlay .fp-loginmodal-eye').forEach((btn) => {

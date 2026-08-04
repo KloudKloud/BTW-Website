@@ -9,30 +9,30 @@
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <style>
     * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
     body {
-      margin: 0;
-      min-height: 100vh;
       font-family: 'Inter', 'Lato', sans-serif;
-    }
-    .signup-bg {
-      position: fixed; inset: 0; z-index: -2;
-      background-image: url('/images/gallery/kloudsaphbedroom_1.png');
-      background-size: cover; background-position: center;
-      filter: blur(14px) brightness(0.55) saturate(1.05);
-      transform: scale(1.08); /* hide the blurred edge */
-    }
-    .signup-bg-overlay {
-      position: fixed; inset: 0; z-index: -1;
-      background: rgba(10,9,8,0.55);
+      overflow: hidden; /* the page itself never scrolls — .signup-page does, if it ever needs to */
     }
 
-    /* Sits below the fixed 76px topbar (margin-top), filling exactly the
-       remaining viewport height so align-items/justify-content center — a
-       min-height:100vh box here would double-count the topbar's height and
-       leave the card sitting low with extra scroll space beneath it. */
+    /* Blurred full-bleed background — same proven pattern as the Hub page
+       (a real <img> with the blur filter on the img itself, not a CSS
+       background-image on a div; the div-based approach silently rendered
+       as a flat gray box). */
+    .signup-bg-wrap { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: #0d0d0d; }
+    .signup-bg-img {
+      width: 100%; height: 100%; object-fit: cover;
+      filter: blur(16px) brightness(0.6); transform: scale(1.08);
+    }
+    .signup-bg-overlay { position: absolute; inset: 0; background: rgba(10,9,8,0.45); }
+
+    /* Sits below the fixed 76px topbar, filling exactly the remaining
+       viewport height (not min-height:100vh, which double-counted the
+       topbar's height and left extra scrollable space below the card). */
     .signup-page {
       margin-top: 76px;
-      min-height: calc(100vh - 76px);
+      height: calc(100vh - 76px);
+      overflow-y: auto;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -132,8 +132,10 @@
 </head>
 <body>
 
-<div class="signup-bg"></div>
-<div class="signup-bg-overlay"></div>
+<div class="signup-bg-wrap">
+  <img class="signup-bg-img" src="/images/gallery/kloudsaphbedroom_1.png" alt="" />
+  <div class="signup-bg-overlay"></div>
+</div>
 
 <div id="fanpages-topbar-root"></div>
 <script src="/fanpages/fanpages-nav.js"></script>
@@ -177,8 +179,12 @@
 </div>
 
 <script>
+  // Read back whatever the "Sign up" link stashed before navigating here —
+  // keeps the URL as a clean /register instead of /register?from=... A
+  // ?from= query param still works as a fallback for any older link.
   const params = new URLSearchParams(location.search);
-  const from = params.get('from') || '/';
+  const from = sessionStorage.getItem('btw_auth_from') || params.get('from') || '/';
+  sessionStorage.removeItem('btw_auth_from');
 
   document.getElementById('signup-login-link').addEventListener('click', (e) => {
     e.preventDefault();
