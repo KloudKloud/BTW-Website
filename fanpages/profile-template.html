@@ -2018,7 +2018,7 @@
       </div>
       <div class="cc-actions">
         ${token && !isReply ? '<button class="cc-action-btn" data-action="reply">Reply</button>' : ''}
-        ${ccIsMine(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : ''}
+        ${ccIsMine(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : (token ? '<button class="cc-action-btn" data-action="report">Report</button>' : '')}
       </div>
     `;
     wrap.appendChild(body);
@@ -2027,6 +2027,8 @@
     if (replyBtn) replyBtn.addEventListener('click', () => ccOpenReplyBox(body, c));
     const deleteBtn = body.querySelector('[data-action="delete"]');
     if (deleteBtn) deleteBtn.addEventListener('click', () => ccDeleteComment(c.id));
+    const reportBtn = body.querySelector('[data-action="report"]');
+    if (reportBtn) reportBtn.addEventListener('click', () => reportContent('comment', c.id));
 
     if (!isReply && (c.replies || []).length) {
       const repliesWrap = document.createElement('div');
@@ -2071,6 +2073,17 @@
       await fetch(`/api/content-comments/${id}`, { method: 'DELETE', headers: authHeaders() });
       ccLoadComments();
     } catch {}
+  }
+  async function reportContent(targetType, targetId) {
+    if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
+    const reason = prompt('Briefly describe the issue (optional):') || '';
+    try {
+      const res = await fetch('/api/reports', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ target_type: targetType, target_id: targetId, reason }),
+      });
+      alert(res.ok ? 'Report submitted. Thank you for helping keep the community safe.' : 'Something went wrong submitting the report.');
+    } catch { alert('Network error. Please try again.'); }
   }
 
   // Gallery posts now live entirely on their own standalone page

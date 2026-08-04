@@ -672,6 +672,23 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);
   `).catch(e => console.error('notifications migration:', e.message));
 
+  // Reports — user-safety flagging for stories/comments/DMs/etc. Same
+  // target_type/target_id polymorphism as content_comments, so new
+  // reportable content types just need a resolver branch (see
+  // reportTargetInfo below), not a schema change.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reports (
+      id                SERIAL      PRIMARY KEY,
+      reporter_user_id  INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      target_type       TEXT        NOT NULL,
+      target_id         INTEGER     NOT NULL,
+      reason            TEXT        NOT NULL DEFAULT '',
+      status            TEXT        NOT NULL DEFAULT 'pending',
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_reports_status_created ON reports(status, created_at DESC);
+  `).catch(e => console.error('reports migration:', e.message));
+
   // Notifications page banner — single-row admin-adjustable crop, mirrors the
   // billboard's position_x/y + zoom fields but with no animation.
   await pool.query(`
@@ -2798,6 +2815,83 @@ app.post('/api/report', requireAuth, async (req, res) => {
   }).catch(console.error);
 
   res.json({ message: 'Report submitted. Thank you.' });
+});
+
+// Resolves a {title, link} pair per reportable target type, for the admin
+// notification email — same target_type/target_id polymorphism idea as
+// commentTargetInfo() below, kept separate since the reportable set
+// (story/comment/dm_message) doesn't line up with the commentable set.
+async function reportTargetInfo(targetType, targetId) {
+  if (targetType === 'story') {
+    const { rows: [s] } = await pool.query(
+      `SELECT ms.site_title, ms.story_path, u.username AS owner_username
+       FROM moderator_sites ms JOIN users u ON u.id = ms.owner_user_id
+       WHERE ms.id = $1`,
+      [targetId]
+    );
+    if (!s) return null;
+    return { title: s.site_title || 'Untitled Story', link: `/${s.story_path}` };
+  }
+  if (targetType === 'comment') {
+    const { rows: [c] } = await pool.query(
+      `SELECT cc.body, cc.target_type AS comment_target_type, cc.target_id AS comment_target_id, u.username
+       FROM content_comments cc JOIN users u ON u.id = cc.user_id
+       WHERE cc.id = $1`,
+      [targetId]
+    );
+    if (!c) return null;
+    const info = await commentTargetInfo(c.comment_target_type, c.comment_target_id).catch(() => null);
+    return { title: `Comment by ${c.username}: "${(c.body || '').slice(0, 80)}"`, link: info ? info.link : null };
+  }
+  if (targetType === 'dm_message') {
+    const { rows: [m] } = await pool.query(
+      `SELECT dm.body, u.username FROM dm_messages dm JOIN users u ON u.id = dm.sender_id WHERE dm.id = $1`,
+      [targetId]
+    );
+    if (!m) return null;
+    return { title: `DM from ${m.username}: "${(m.body || '').slice(0, 80)}"`, link: null };
+  }
+  return null;
+}
+
+// POST /api/reports — user-safety flag on a story, comment, or DM message.
+// Persists to the reports table (for a future admin review list) AND
+// emails the admin immediately, same as the legacy /api/report above, since
+// this is meant to be seen right away rather than discovered later.
+app.post('/api/reports', requireAuth, async (req, res) => {
+  const { target_type, target_id, reason } = req.body;
+  if (!['story', 'comment', 'dm_message'].includes(target_type)) return res.status(400).json({ error: 'Invalid report type.' });
+  const targetId = parseInt(target_id, 10);
+  if (!targetId) return res.status(400).json({ error: 'Invalid target.' });
+  const cleanReason = (reason || '').trim().slice(0, 1000);
+
+  await pool.query(
+    `INSERT INTO reports (reporter_user_id, target_type, target_id, reason) VALUES ($1, $2, $3, $4)`,
+    [req.user.id, target_type, targetId, cleanReason]
+  );
+
+  const { rows: [reporter] } = await pool.query('SELECT username, display_name FROM users WHERE id = $1', [req.user.id]);
+  const reporterName = (reporter && (reporter.display_name || reporter.username)) || 'Unknown';
+  const info = await reportTargetInfo(target_type, targetId).catch(() => null);
+  const typeLabel = { story: 'Story', comment: 'Comment', dm_message: 'DM Message' }[target_type];
+  const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  resend.emails.send({
+    from: 'BTW Reports <noreply@btwfanfic.net>',
+    to: process.env.ADMIN_EMAIL,
+    subject: `Content Report — ${typeLabel} — Between Two Worlds`,
+    html: emailShell(`
+      <h2 style="color:#c2547a;font-size:1.1rem;margin:0 0 12px;">⚠️ Content Report</h2>
+      <p style="color:#424242;font-size:0.9rem;margin:0 0 6px;"><strong>Reported by:</strong> ${reporterName}</p>
+      <p style="color:#424242;font-size:0.9rem;margin:0 0 6px;"><strong>Content:</strong> ${info ? escHtml(info.title) : `${typeLabel} #${targetId}`}</p>
+      ${info && info.link ? `<p style="color:#424242;font-size:0.9rem;margin:0 0 12px;"><a href="https://${siteHost(req)}${info.link}">View content →</a></p>` : ''}
+      ${cleanReason ? `<div style="background:#fff8f8;border-left:3px solid #c2547a;padding:12px 16px;border-radius:4px;margin:12px 0;">
+        <p style="color:#212121;font-size:0.95rem;margin:0;white-space:pre-wrap;">${escHtml(cleanReason)}</p>
+      </div>` : ''}
+    `),
+  }).catch(console.error);
+
+  res.json({ message: 'Report submitted. Thank you for helping keep the community safe.' });
 });
 
 app.post('/api/track', async (req, res) => {

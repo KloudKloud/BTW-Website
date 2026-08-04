@@ -555,6 +555,34 @@ document.getElementById('tab-home') && (document.getElementById('tab-home').href
 
 const authToken = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
 const authHeaders = () => ({ Authorization: `Bearer ${authToken}` });
+let currentUser = null;
+try {
+  const rawUser = localStorage.getItem('btw_user') || sessionStorage.getItem('btw_user');
+  if (rawUser) currentUser = JSON.parse(rawUser);
+} catch {}
+function ccIsMine(c) { return currentUser && currentUser.id === c.user_id; }
+async function ccDeleteComment(id) {
+  if (!confirm('Delete this comment?')) return;
+  try {
+    await fetch(`/api/content-comments/${id}`, { method: 'DELETE', headers: authHeaders() });
+    // Deleting can happen from either the paragraph drawer or the
+    // bottom-of-chapter list -- both reload functions no-op harmlessly
+    // if their own view isn't the one currently open.
+    if (typeof loadParagraphThread === 'function') loadParagraphThread();
+    if (typeof loadAllChapterComments === 'function') loadAllChapterComments();
+  } catch {}
+}
+async function reportContent(targetType, targetId) {
+  if (!authToken) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
+  const reason = prompt('Briefly describe the issue (optional):') || '';
+  try {
+    const res = await fetch('/api/reports', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ target_type: targetType, target_id: targetId, reason }),
+    });
+    alert(res.ok ? 'Report submitted. Thank you for helping keep the community safe.' : 'Something went wrong submitting the report.');
+  } catch { alert('Network error. Please try again.'); }
+}
 
 let SITE = null;
 let CHAPTERS = [];
@@ -1035,6 +1063,7 @@ function renderCommentItem(c, prefix, collapsible) {
         </div>
         <div class="cc-actions">
           <button type="button" class="cc-action-btn rd-cp-reply-toggle" data-comment-id="${c.id}" data-prefix="${prefix}">Reply</button>
+          ${ccIsMine(c) ? `<button type="button" class="cc-action-btn rd-cp-delete-btn" data-comment-id="${c.id}">Delete</button>` : `<button type="button" class="cc-action-btn" onclick="reportContent('comment', ${c.id})">Report</button>`}
         </div>
         <div class="rd-cp-reply-form" id="${prefix}-reply-form-${c.id}">
           <textarea class="rd-cp-textarea" placeholder="Reply to ${escapeHtml(c.display_name || c.username)}…" maxlength="2000"></textarea>
@@ -1090,6 +1119,9 @@ function wireCommentThreadEvents(prefix, collapsible) {
       form.classList.toggle('open');
       if (form.classList.contains('open')) form.querySelector('textarea').focus();
     });
+  });
+  scope.querySelectorAll('.rd-cp-delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => ccDeleteComment(btn.dataset.commentId));
   });
   scope.querySelectorAll('.rd-cp-reply-send').forEach(btn => {
     btn.addEventListener('click', async () => {

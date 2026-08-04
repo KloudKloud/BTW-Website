@@ -417,6 +417,13 @@
     }
     .dm-bubble--mine .dm-bubble-time { color: #3d2e08; }
     .dm-bubble--theirs .dm-bubble-time { color: rgba(255,255,255,0.45); }
+    .dm-bubble-report-btn {
+      display: block; margin-left: auto; margin-top: 0.2rem; background: none; border: none; cursor: pointer;
+      font-size: 0.68rem; font-weight: 600; text-decoration: underline; padding: 0; opacity: 0.55;
+    }
+    .dm-bubble-report-btn:hover { opacity: 1; }
+    .dm-bubble--mine .dm-bubble-report-btn { color: #3d2e08; }
+    .dm-bubble--theirs .dm-bubble-report-btn { color: rgba(255,255,255,0.65); }
     .dm-bubble p { margin: 0; white-space: pre-wrap; }
     .dm-bubble--mine { align-self: flex-end; background: #f0c060; color: #0d0d0d; border-bottom-right-radius: 4px; }
     .dm-bubble--theirs { align-self: flex-start; background: rgba(255,255,255,0.07); border-bottom-left-radius: 4px; }
@@ -1311,7 +1318,25 @@
     time.className = 'dm-bubble-time';
     time.textContent = dmTimeLabel(m.created_at);
     div.appendChild(time);
+    if (!m.is_mine) {
+      const reportBtn = document.createElement('button');
+      reportBtn.type = 'button';
+      reportBtn.className = 'dm-bubble-report-btn';
+      reportBtn.textContent = 'Report';
+      reportBtn.addEventListener('click', () => reportDmMessage(m.id));
+      div.appendChild(reportBtn);
+    }
     return div;
+  }
+  async function reportDmMessage(id) {
+    const reason = prompt('Briefly describe the issue (optional):') || '';
+    try {
+      const res = await fetch('/api/reports', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ target_type: 'dm_message', target_id: id, reason }),
+      });
+      alert(res.ok ? 'Report submitted. Thank you for helping keep the community safe.' : 'Something went wrong submitting the report.');
+    } catch { alert('Network error. Please try again.'); }
   }
 
   let dmSelectedGifUrl = null;
