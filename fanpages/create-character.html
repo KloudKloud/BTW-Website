@@ -13,6 +13,22 @@
     body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; margin: 0; padding: 0; }
     a { color: inherit; }
     [hidden] { display: none !important; }
+
+    /* Species suggest dropdown -- body-appended + fixed-position (see
+       renderSuggestDropdown), same pattern as create.html's tag suggest
+       boxes, instead of rendering inline where it used to show up as an
+       awkward box off to the side of the input. */
+    .wiki-fandom-suggest {
+      position: fixed; z-index: 3000;
+      background: #141018; border: 1px solid rgba(255,255,255,0.14); border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.55); overflow: hidden;
+    }
+    .wiki-fandom-suggest-item {
+      display: block; width: 100%; text-align: left; background: none; border: none;
+      color: #f0f0f0; font-family: 'Inter', sans-serif; font-size: 0.92rem;
+      padding: 0.75rem 1.05rem; cursor: pointer;
+    }
+    .wiki-fandom-suggest-item:hover, .wiki-fandom-suggest-item.active { background: rgba(127,168,217,0.15); }
     .cc-page { max-width: 880px; margin: 0 auto; padding: 6rem 1.25rem 4rem; }
     .cc-eyebrow {
       font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
@@ -201,9 +217,32 @@
   let workingSpecies = '';
   let speciesCatalog = [];
 
+  // Body-appended, fixed-position dropdown -- same pattern as the story/
+  // gallery tag suggest boxes (see create.html's positionSuggestDropdown),
+  // instead of rendering inline next to the input where it used to show up
+  // as an awkward box off to the side.
+  function positionSuggestDropdown(wrap, anchorId) {
+    const anchor = document.getElementById(anchorId);
+    const rect = anchor.getBoundingClientRect();
+    wrap.style.top = `${rect.bottom + 6}px`;
+    wrap.style.left = `${rect.left}px`;
+    wrap.style.width = `${rect.width}px`;
+  }
+  function repositionOpenSuggestDropdowns() {
+    document.querySelectorAll('.wiki-fandom-suggest').forEach(wrap => {
+      if (!wrap.hidden && wrap.dataset.anchor) positionSuggestDropdown(wrap, wrap.dataset.anchor);
+    });
+  }
+  window.addEventListener('scroll', repositionOpenSuggestDropdowns, true);
+  window.addEventListener('resize', repositionOpenSuggestDropdowns);
+
   function renderSuggestDropdown(wrapId, matches, onPick) {
     const wrap = document.getElementById(wrapId);
+    const anchorId = 'char-editor-species-box';
+    if (wrap.parentElement !== document.body) document.body.appendChild(wrap);
+    wrap.dataset.anchor = anchorId;
     if (!matches.length) { wrap.hidden = true; wrap.innerHTML = ''; return; }
+    positionSuggestDropdown(wrap, anchorId);
     wrap.innerHTML = matches.map(m => `<button type="button" class="wiki-fandom-suggest-item">${escapeHtml(m)}</button>`).join('');
     wrap.hidden = false;
     wrap.querySelectorAll('.wiki-fandom-suggest-item').forEach(btn => {
@@ -277,7 +316,14 @@
     }
   });
   document.addEventListener('click', (e) => {
-    if (!document.getElementById('char-editor-species-box').contains(e.target)) renderSuggestDropdown('char-editor-species-suggest', [], () => {});
+    if (!document.getElementById('char-editor-species-box').contains(e.target)) {
+      // Clicking away with something typed but not yet committed (no Enter,
+      // no suggestion picked) used to just discard it silently -- auto-commit
+      // whatever's there instead, same as the other tag inputs.
+      if (speciesInput.value.trim()) setWorkingSpecies(speciesInput.value);
+      speciesInput.value = '';
+      renderSuggestDropdown('char-editor-species-suggest', [], () => {});
+    }
   });
   fetch('/api/character-species-catalog').then(r => r.ok ? r.json() : { species: [] }).then(d => { speciesCatalog = d.species || []; }).catch(() => {});
 

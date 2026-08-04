@@ -1417,7 +1417,14 @@ speciesInput.addEventListener('keydown', (e) => {
   }
 });
 document.addEventListener('click', (e) => {
-  if (!document.getElementById('char-editor-species-box').contains(e.target)) renderSuggestDropdown('char-editor-species-suggest', [], () => {});
+  if (!document.getElementById('char-editor-species-box').contains(e.target)) {
+    // Clicking away with something typed but not yet committed (no Enter,
+    // no suggestion picked) used to just discard it silently -- auto-commit
+    // whatever's there instead, same as the other tag inputs.
+    if (speciesInput.value.trim()) setWorkingSpecies(speciesInput.value);
+    speciesInput.value = '';
+    renderSuggestDropdown('char-editor-species-suggest', [], () => {});
+  }
 });
 fetch('/api/character-species-catalog').then(r => r.ok ? r.json() : { species: [] }).then(d => { speciesCatalog = d.species || []; }).catch(() => {});
 

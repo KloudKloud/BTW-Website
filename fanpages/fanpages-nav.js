@@ -60,7 +60,7 @@ if (!window.FP_BASE) {
       <div class="fpnav-dropdown-wrap">
         <button class="fpnav-link fpnav-trigger-link" id="fpnav-community-btn" type="button">Community <span class="fpnav-caret">▾</span></button>
         <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
-          <a href="https://discord.gg/my4bPf2XUm" target="_blank" rel="noopener">Discord</a>
+          <a href="${fpUrl('/discord')}">Discord</a>
           <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donations</a>
           <a href="${fpUrl('/tos')}">BTW TOS</a>
         </div>
