@@ -1365,6 +1365,13 @@
               <textarea id="cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
               <button class="cc-compose-btn" id="cc-compose-btn" type="button">Post</button>
             </div>
+            <div class="fp-guest-blur-wrap" id="cc-guest-compose-wrap" style="display:none;">
+              <div class="cc-compose fp-guest-blur-content">
+                <textarea placeholder="Add a comment…" disabled></textarea>
+                <button class="cc-compose-btn" type="button" disabled>Post</button>
+              </div>
+              <div class="fp-guest-blur-overlay"><p>Sign in to join the conversation!</p></div>
+            </div>
             <div class="cc-list" id="cc-list"><p class="cc-empty">Loading…</p></div>
           </div>
         </div>
@@ -2140,7 +2147,7 @@ function renderJoinBtn(club) {
   btn.title = joined ? 'Click to leave' : 'Join this club';
 }
 document.getElementById('cl-banner-join-btn').addEventListener('click', async () => {
-  if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(location.pathname + location.search)}`); return; }
+  if (!token) { window.fpRequireSignIn('To join this club, you must create an account!'); return; }
   if (!currentClub) return;
   const btn = document.getElementById('cl-banner-join-btn');
   const wasJoined = !!currentClub.viewer_role;
@@ -2851,7 +2858,7 @@ document.getElementById('cl-create-social-post-btn').addEventListener('click', (
   // membership's a given there) — only the general Social post button
   // needs the "you have to join first" check.
   if (!currentClub || !currentClub.viewer_role) {
-    if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(location.pathname + location.search)}`); return; }
+    if (!token) { window.fpRequireSignIn('To post in this club, you must create an account!'); return; }
     openJoinPrompt();
     return;
   }
@@ -3025,6 +3032,18 @@ function renderPollDisplay(post) {
       </div>
       <button type="button" class="cl-poll-vote-btn" id="cl-poll-vote-submit-btn">Vote</button>
     `;
+    if (!token) {
+      wrap.querySelectorAll('input[name="cl-poll-vote-choice"]').forEach(input => {
+        input.addEventListener('click', (e) => {
+          e.preventDefault();
+          window.fpRequireSignIn('To participate in a club, first', 'to join the action!');
+        });
+      });
+      document.getElementById('cl-poll-vote-submit-btn').addEventListener('click', () => {
+        window.fpRequireSignIn('To participate in a club, first', 'to join the action!');
+      });
+      return;
+    }
     document.getElementById('cl-poll-vote-submit-btn').addEventListener('click', () => submitPollVote(post.id));
     return;
   }
@@ -3055,7 +3074,7 @@ async function submitPollVote(postId) {
   const btn = document.getElementById('cl-poll-vote-submit-btn');
   const inputs = [...document.querySelectorAll('input[name="cl-poll-vote-choice"]:checked')];
   if (!inputs.length) return;
-  if (!authHeaders().Authorization) { window.location.href = '/login.html'; return; }
+  if (!authHeaders().Authorization) { window.fpRequireSignIn('To participate in a club, first', 'to join the action!'); return; }
   btn.disabled = true;
   try {
     const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${postId}/poll/vote`, {
@@ -3076,7 +3095,6 @@ function updatePostMetaUI(post) {
 }
 document.getElementById('cl-post-like-btn').addEventListener('click', async () => {
   if (!currentPostDetail) return;
-  if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(location.pathname + location.search)}`); return; }
   try {
     const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${currentPostDetail.id}/like`, {
       method: currentPostDetail.user_liked ? 'DELETE' : 'POST', headers: authHeaders(),
@@ -3538,7 +3556,10 @@ async function ccLoadComments() {
 function ccInitSection(targetType, targetId) {
   ccTargetType = targetType;
   ccTargetId = targetId;
+  // Guests can see club posts and their comments, just not post or reply —
+  // the compose box shows blurred with a sign-in prompt instead of vanishing.
   document.getElementById('cc-compose').style.display = token ? 'flex' : 'none';
+  document.getElementById('cc-guest-compose-wrap').style.display = token ? 'none' : 'block';
   ccLoadComments();
 }
 

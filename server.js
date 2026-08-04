@@ -1117,6 +1117,16 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     );
   `).catch(e => console.error('club_post_likes migration:', e.message));
 
+  // Guests are still excluded from clubs generally (joining, commenting,
+  // voting), but liking a club post specifically is allowed per a later
+  // revision — same guest_device_id treatment as the other like tables.
+  await pool.query(`
+    ALTER TABLE club_post_likes ALTER COLUMN user_id DROP NOT NULL;
+    ALTER TABLE club_post_likes ADD COLUMN IF NOT EXISTS guest_device_id TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS club_post_likes_guest_unique
+      ON club_post_likes(post_id, guest_device_id) WHERE guest_device_id IS NOT NULL;
+  `).catch(e => console.error('club_post_likes guest migration:', e.message));
+
   // Tracks the last time a viewer opened a given club — powers the "Best"
   // feed's small personalization boost for clubs you've recently browsed
   // (in addition to the bigger boost for clubs you're actually a member
@@ -7904,23 +7914,36 @@ app.post('/api/clubs/:slug/posts/:postId/poll/vote', requireAuth, async (req, re
   });
 });
 
-app.post('/api/clubs/:slug/posts/:postId/like', requireAuth, async (req, res) => {
+// Guests can like club posts (unlike joining/commenting/voting, still
+// account-only) — no requireAuth here, optionalViewerId + the guest cookie
+// stand in for it.
+app.post('/api/clubs/:slug/posts/:postId/like', async (req, res) => {
   const { rows: [post] } = await pool.query(
     `SELECT cp.id FROM club_posts cp JOIN clubs c ON c.id = cp.club_id WHERE c.slug = $1 AND cp.id = $2`,
     [req.params.slug, req.params.postId]
   );
   if (!post) return res.status(404).json({ error: 'Post not found.' });
-  await pool.query('INSERT INTO club_post_likes (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [post.id, req.user.id]);
+  const viewerId = optionalViewerId(req);
+  await pool.query(
+    'INSERT INTO club_post_likes (post_id, user_id, guest_device_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+    [post.id, viewerId, viewerId ? null : req.guestId]
+  );
   const { rows: [{ count }] } = await pool.query('SELECT COUNT(*)::int AS count FROM club_post_likes WHERE post_id = $1', [post.id]);
   res.json({ liked: true, like_count: count });
 });
-app.delete('/api/clubs/:slug/posts/:postId/like', requireAuth, async (req, res) => {
+app.delete('/api/clubs/:slug/posts/:postId/like', async (req, res) => {
   const { rows: [post] } = await pool.query(
     `SELECT cp.id FROM club_posts cp JOIN clubs c ON c.id = cp.club_id WHERE c.slug = $1 AND cp.id = $2`,
     [req.params.slug, req.params.postId]
   );
   if (!post) return res.status(404).json({ error: 'Post not found.' });
-  await pool.query('DELETE FROM club_post_likes WHERE post_id = $1 AND user_id = $2', [post.id, req.user.id]);
+  const viewerId = optionalViewerId(req);
+  await pool.query(
+    viewerId
+      ? 'DELETE FROM club_post_likes WHERE post_id = $1 AND user_id = $2'
+      : 'DELETE FROM club_post_likes WHERE post_id = $1 AND guest_device_id = $2',
+    [post.id, viewerId || req.guestId]
+  );
   const { rows: [{ count }] } = await pool.query('SELECT COUNT(*)::int AS count FROM club_post_likes WHERE post_id = $1', [post.id]);
   res.json({ liked: false, like_count: count });
 });

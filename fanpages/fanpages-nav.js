@@ -323,11 +323,17 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
     });
   }
 
-  window.fpRequireSignIn = function (message) {
+  // suffix lets a caller phrase the sentence as "<message> Sign In or
+  // Create a free account <suffix>" instead of the default "<message> Sign
+  // In here or Create a Free Account here." — used where the trailing
+  // wording needs to be specific (e.g. poll voting).
+  window.fpRequireSignIn = function (message, suffix) {
     buildSignInFirstModal();
-    document.getElementById('fp-signinfirst-text').innerHTML =
-      `${message || DEFAULT_SIGNIN_MESSAGE} <a href="#" data-action="signin">Sign In</a> here or ` +
-      `<a href="#" data-action="register">Create a Free Account</a> here.`;
+    document.getElementById('fp-signinfirst-text').innerHTML = suffix
+      ? `${message || DEFAULT_SIGNIN_MESSAGE} <a href="#" data-action="signin">Sign In</a> or ` +
+        `<a href="#" data-action="register">Create a free account</a> ${suffix}`
+      : `${message || DEFAULT_SIGNIN_MESSAGE} <a href="#" data-action="signin">Sign In</a> here or ` +
+        `<a href="#" data-action="register">Create a Free Account</a> here.`;
     signInFirstOverlay.hidden = false;
   };
 })();

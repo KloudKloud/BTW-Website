@@ -43,6 +43,22 @@
     .soc-sidebar-avatar-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 1.25rem; }
     .soc-sidebar-username { font-weight: 700; font-size: 1.1rem; color: #f0f0f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .soc-sidebar-login { font-size: 1rem; color: #7fa8d9; text-decoration: none; display: block; padding: 0.4rem 0.4rem 0.9rem; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .soc-sidebar-guest-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+      padding: 0.75rem 0.4rem 1.1rem; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .soc-sidebar-guest-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; }
+    .soc-sidebar-guest-tag { font-weight: 700; font-size: 1rem; color: #f0f0f0; }
+    .soc-sidebar-guest-signin-btn {
+      background: #93b8e2; color: #0a0a0a; border: none; border-radius: 16px; padding: 0.4rem 1.1rem;
+      font-weight: 700; font-size: 0.85rem; cursor: pointer; font-family: inherit;
+    }
+    .soc-sidebar-guest-signin-btn:hover { background: #a8c6e8; }
+    .soc-sidebar-note-signin-btn {
+      display: inline-block; margin-top: 0.4rem; background: #93b8e2; color: #0a0a0a; border: none;
+      border-radius: 14px; padding: 0.35rem 0.9rem; font-weight: 700; font-size: 0.8rem; cursor: pointer; font-family: inherit;
+    }
+    .soc-sidebar-note-signin-btn:hover { background: #a8c6e8; }
     .soc-sidebar-user-menu {
       position: absolute; top: 100%; left: 0.2rem; right: 0.2rem; margin-top: 0.35rem;
       background: #1c1c1e; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
@@ -367,7 +383,14 @@ if (token && currentUser) {
     if (!menu.hidden && !e.target.closest('.soc-sidebar-user-wrap')) menu.hidden = true;
   });
 } else {
-  sidebarUserSlot.innerHTML = `<a class="soc-sidebar-login" href="${window.fpUrl(`/login?from=${encodeURIComponent(window.fpUrl('/clubs-explore'))}`)}">Sign In</a>`;
+  sidebarUserSlot.innerHTML = `
+    <div class="soc-sidebar-guest-wrap">
+      <img class="soc-sidebar-guest-avatar" src="/images/defaultchar.jpg" alt="" />
+      <span class="soc-sidebar-guest-tag">Guest</span>
+      <button type="button" class="soc-sidebar-guest-signin-btn" id="soc-sidebar-guest-signin-btn">Sign In</button>
+    </div>
+  `;
+  document.getElementById('soc-sidebar-guest-signin-btn').addEventListener('click', () => window.fpOpenLoginModal());
 }
 function setSidebarNsfwState(enabled) {
   const label = document.getElementById('soc-sidebar-nsfw-label');
@@ -389,7 +412,8 @@ async function loadSidebarClubs() {
   const wrap = document.getElementById('soc-sidebar-clubs');
   const modSection = document.getElementById('soc-sidebar-moderation-section');
   if (!token) {
-    wrap.innerHTML = '<p class="soc-sidebar-note">Log in to see your clubs~</p>';
+    wrap.innerHTML = '<p class="soc-sidebar-note">Sign in to see your clubs~ <button type="button" class="soc-sidebar-note-signin-btn" id="soc-sidebar-clubs-signin-btn">Sign In</button></p>';
+    document.getElementById('soc-sidebar-clubs-signin-btn').addEventListener('click', () => window.fpOpenLoginModal());
     modSection.style.display = 'none';
     return;
   }
@@ -486,7 +510,7 @@ function buildTypeChecks(selected) {
   });
 }
 document.getElementById('soc-create-club-btn').addEventListener('click', async () => {
-  if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.fpUrl('/clubs-explore'))}`); return; }
+  if (!token) { window.fpRequireSignIn('To start a club, you must create an account!'); return; }
   document.getElementById('soc-create-name').value = '';
   document.getElementById('soc-create-nsfw-toggle').checked = false;
   document.getElementById('soc-create-nsfw-label').textContent = 'SFW';
@@ -566,7 +590,7 @@ function clubCard(c) {
   joinBtn.textContent = '+ Join';
   joinBtn.addEventListener('click', async (e) => {
     e.preventDefault(); e.stopPropagation();
-    if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.fpUrl('/clubs-explore'))}`); return; }
+    if (!token) { window.fpRequireSignIn('To join this club, you must create an account!'); return; }
     joinBtn.disabled = true;
     try {
       const res = await fetch(`${API}/clubs/${encodeURIComponent(c.slug)}/join`, { method: 'POST', headers: authHeaders() });
