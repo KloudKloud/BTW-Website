@@ -15,56 +15,20 @@
 </head>
 <body>
 
+<!-- This page only exists as a landing target for links that carry a real
+     query string (email activation autotoken, password-reset token, or a
+     gated redirect's ?from=). Visiting it with none of those just opens the
+     same "Welcome" modal every other page uses, over a blank background,
+     and closing it sends you back to ?from (or home) since there's no real
+     page underneath to reveal. -->
 <div id="fanpages-topbar-root"></div>
 <script src="/fanpages/fanpages-nav.js"></script>
 
 <main class="auth-wrapper">
-  <div class="auth-card">
-
-    <!-- ── Login ── -->
-    <div class="auth-panel auth-panel--login">
-      <h2 class="auth-heading">Login</h2>
-
-      <div id="login-alert" class="auth-alert" hidden></div>
-
-      <form class="auth-form" id="login-form" novalidate>
-        <div class="auth-field">
-          <input type="text" id="login-identifier" name="identifier"
-                 placeholder="Username or email" autocomplete="username" required />
-        </div>
-        <div class="auth-field auth-field--password">
-          <input type="password" id="login-password" name="password"
-                 placeholder="Password" autocomplete="current-password" required />
-          <button type="button" class="auth-eye" aria-label="Toggle password visibility"
-                  data-target="login-password">&#128065;</button>
-        </div>
-        <label class="auth-remember">
-          <input type="checkbox" id="login-remember" name="remember" />
-          <span>Keep me signed in</span>
-        </label>
-        <button type="submit" class="auth-btn auth-btn--primary">Login</button>
-      </form>
-
-      <button type="button" class="auth-forgot" id="forgot-btn">Forgot your password?</button>
-    </div>
-
-    <!-- ── Forgot password ── -->
-    <div class="auth-panel auth-panel--forgot" id="panel-forgot" style="display:none">
-      <h2 class="auth-heading">Reset Password</h2>
-      <p class="auth-forgot-desc">Enter your username or email address and we'll send a reset link to the email on file.</p>
-      <div id="forgot-alert" class="auth-alert" hidden></div>
-      <form class="auth-form" id="forgot-form" novalidate>
-        <div class="auth-field">
-          <input type="text" id="forgot-identifier" name="identifier"
-                 placeholder="Username or email" autocomplete="username" required />
-        </div>
-        <button type="submit" class="auth-btn auth-btn--primary">Send Reset Link</button>
-      </form>
-      <button type="button" class="auth-forgot" id="back-to-login">← Back to Login</button>
-    </div>
+  <div class="auth-card" id="reset-card" style="display:none">
 
     <!-- ── Reset password (arrived via ?reset=token) ── -->
-    <div class="auth-panel auth-panel--reset" id="panel-reset" style="display:none">
+    <div class="auth-panel auth-panel--reset" id="panel-reset">
       <h2 class="auth-heading">Set New Password</h2>
       <div id="reset-alert" class="auth-alert" hidden></div>
       <form class="auth-form" id="reset-form" novalidate>
@@ -82,45 +46,6 @@
       </form>
     </div>
 
-    <!-- ── Divider ── -->
-    <div class="auth-divider"></div>
-
-    <!-- ── Register ── -->
-    <div class="auth-panel auth-panel--register">
-      <h2 class="auth-heading">Create an account</h2>
-      <p class="auth-age-notice">You must be <strong>18 or older</strong> to register. Creating an account grants access to mature content.</p>
-
-      <div id="register-alert" class="auth-alert" hidden></div>
-
-      <form class="auth-form" id="register-form" novalidate>
-        <div class="auth-field">
-          <input type="text" id="reg-username" name="username"
-                 placeholder="Username" autocomplete="off" required />
-        </div>
-        <div class="auth-field">
-          <input type="text" id="reg-displayname" name="displayname"
-                 placeholder="Display Name" autocomplete="off" maxlength="20" />
-        </div>
-        <div class="auth-field">
-          <input type="email" id="reg-email" name="email"
-                 placeholder="Email address" autocomplete="email" required />
-        </div>
-        <div class="auth-field auth-field--password">
-          <input type="password" id="reg-password" name="password"
-                 placeholder="Password" autocomplete="new-password" required />
-          <button type="button" class="auth-eye" aria-label="Toggle password visibility"
-                  data-target="reg-password">&#128065;</button>
-        </div>
-        <div class="auth-field auth-field--password">
-          <input type="password" id="reg-confirm" name="confirm"
-                 placeholder="Confirm Password" autocomplete="new-password" required />
-          <button type="button" class="auth-eye" aria-label="Toggle password visibility"
-                  data-target="reg-confirm">&#128065;</button>
-        </div>
-        <button type="submit" class="auth-btn auth-btn--register">Register</button>
-      </form>
-    </div>
-
   </div>
 </main>
 
@@ -131,11 +56,11 @@
 <script>
   const API = '/api';
   const params = new URLSearchParams(location.search);
+  const from = params.get('from') || '/';
 
   // Auto-login from welcome email link — fetch user data first so nav shows name
   const autoToken = params.get('autotoken');
   if (autoToken) {
-    const autoFrom = params.get('from') || '/fanpages';
     fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${autoToken}` } })
       .then(r => r.json())
       .then(data => {
@@ -143,21 +68,38 @@
         if (data.user) localStorage.setItem('btw_user', JSON.stringify(data.user));
       })
       .catch(() => { localStorage.setItem('btw_token', autoToken); })
-      .finally(() => { window.location.href = autoFrom; });
+      .finally(() => { window.location.href = from; });
   }
 
-  // Show "verified" banner if redirected from activation link
-  if (params.get('verified') === '1') {
-    showAlert('login-alert', 'Account activated! You can now log in.', 'success');
+  // Toggle password visibility (reset panel)
+  document.querySelectorAll('.auth-eye').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = document.getElementById(btn.dataset.target);
+      input.type = input.type === 'password' ? 'text' : 'password';
+      btn.classList.toggle('auth-eye--visible');
+    });
+  });
+
+  function showAlert(id, message, type = 'error') {
+    const el = document.getElementById(id);
+    el.textContent = message;
+    el.className = `auth-alert auth-alert--${type}`;
+    el.hidden = false;
+  }
+
+  function setLoading(btn, loading) {
+    btn.disabled = loading;
+    btn.style.opacity = loading ? '0.6' : '';
   }
 
   // ── Reset password flow (arrived via ?reset=token) ─────────────────────────
   const resetToken = params.get('reset');
   if (resetToken) {
-    document.querySelector('.auth-panel--login').style.display    = 'none';
-    document.querySelector('.auth-divider').style.display          = 'none';
-    document.querySelector('.auth-panel--register').style.display  = 'none';
-    document.getElementById('panel-reset').style.display           = 'flex';
+    document.getElementById('reset-card').style.display = 'flex';
+  } else if (!autoToken) {
+    // No token of any kind — just show the same Welcome modal every other
+    // page uses, in standalone mode (closing it sends you to ?from/home).
+    window.fpOpenLoginModal({ standalone: true, from });
   }
 
   document.getElementById('reset-form').addEventListener('submit', async e => {
@@ -182,157 +124,6 @@
       }
     } catch { showAlert('reset-alert', 'Network error. Please try again.'); }
     finally { setLoading(btn, false); }
-  });
-
-  // ── Forgot password panel ────────────────────────────────────────────────────
-  const loginPanel    = document.querySelector('.auth-panel--login');
-  const forgotPanel   = document.getElementById('panel-forgot');
-  const dividerEl     = document.querySelector('.auth-divider');
-  const registerPanel = document.querySelector('.auth-panel--register');
-
-  document.getElementById('forgot-btn').addEventListener('click', () => {
-    loginPanel.style.display    = 'none';
-    dividerEl.style.display     = 'none';
-    registerPanel.style.display = 'none';
-    forgotPanel.style.display   = 'flex';
-    document.getElementById('forgot-identifier').focus();
-  });
-
-  document.getElementById('back-to-login').addEventListener('click', () => {
-    forgotPanel.style.display   = 'none';
-    loginPanel.style.display    = '';
-    dividerEl.style.display     = '';
-    registerPanel.style.display = '';
-  });
-
-  document.getElementById('forgot-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const btn        = e.target.querySelector('button[type=submit]');
-    const identifier = document.getElementById('forgot-identifier').value.trim();
-    if (!identifier) { showAlert('forgot-alert', 'Please enter your username or email.'); return; }
-    setLoading(btn, true);
-    try {
-      const res  = await fetch(`${API}/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier }),
-      });
-      const data = await res.json();
-      if (!res.ok) { showAlert('forgot-alert', data.error || 'Something went wrong.'); }
-      else         { showAlert('forgot-alert', data.message, 'success'); }
-    } catch { showAlert('forgot-alert', 'Network error. Please try again.'); }
-    finally { setLoading(btn, false); }
-  });
-
-  // Toggle password visibility
-  document.querySelectorAll('.auth-eye').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const input = document.getElementById(btn.dataset.target);
-      input.type = input.type === 'password' ? 'text' : 'password';
-      btn.classList.toggle('auth-eye--visible');
-    });
-  });
-
-  function showAlert(id, message, type = 'error') {
-    const el = document.getElementById(id);
-    el.textContent = message;
-    el.className = `auth-alert auth-alert--${type}`;
-    el.hidden = false;
-  }
-
-  function setLoading(btn, loading) {
-    btn.disabled = loading;
-    btn.style.opacity = loading ? '0.6' : '';
-  }
-
-  // ── Login ──────────────────────────────────────────────────────────────────
-  document.getElementById('login-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const btn        = e.target.querySelector('button[type=submit]');
-    const identifier = document.getElementById('login-identifier').value.trim();
-    const password   = document.getElementById('login-password').value;
-    const remember   = document.getElementById('login-remember').checked;
-
-    if (!identifier || !password) {
-      showAlert('login-alert', 'Please fill in all fields.');
-      return;
-    }
-
-    setLoading(btn, true);
-    try {
-      const res  = await fetch(`${API}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        showAlert('login-alert', data.error || 'Login failed.');
-        return;
-      }
-      // Store token + user in the right storage
-      const storage = remember ? localStorage : sessionStorage;
-      storage.setItem('btw_token', data.token);
-      storage.setItem('btw_user', JSON.stringify(data.user));
-
-      const redirect = new URLSearchParams(location.search).get('from') || '/fanpages';
-      window.location.href = redirect;
-    } catch {
-      showAlert('login-alert', 'Network error. Please try again.');
-    } finally {
-      setLoading(btn, false);
-    }
-  });
-
-  // ── Register ───────────────────────────────────────────────────────────────
-  document.getElementById('register-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const btn         = e.target.querySelector('button[type=submit]');
-    const username    = document.getElementById('reg-username').value.trim();
-    const displayname = document.getElementById('reg-displayname').value.trim();
-    const email       = document.getElementById('reg-email').value.trim();
-    const password    = document.getElementById('reg-password').value;
-    const confirm      = document.getElementById('reg-confirm').value;
-
-    if (!username || !email || !password || !confirm) {
-      showAlert('register-alert', 'Please fill in all required fields.');
-      return;
-    }
-    if (password !== confirm) {
-      showAlert('register-alert', 'Passwords do not match.');
-      return;
-    }
-    if (password.length < 8) {
-      showAlert('register-alert', 'Password must be at least 8 characters.');
-      return;
-    }
-
-    setLoading(btn, true);
-    try {
-      const from = new URLSearchParams(location.search).get('from') || '';
-      const res  = await fetch(`${API}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, display_name: displayname, email, password, from }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        showAlert('register-alert', data.error || 'Registration failed.');
-        return;
-      }
-      // Replace the 18+ age notice with the success message
-      const ageNotice = document.querySelector('.auth-age-notice');
-      if (ageNotice) {
-        ageNotice.className = 'auth-alert auth-alert--success';
-        ageNotice.textContent = `Activation email sent to ${email} — check your inbox and click the link to activate your account. BE SURE TO CHECK SPAM!`;
-      } else {
-        showAlert('register-alert', data.message, 'success');
-      }
-    } catch {
-      showAlert('register-alert', 'Network error. Please try again.');
-    } finally {
-      setLoading(btn, false);
-    }
   });
 </script>
 

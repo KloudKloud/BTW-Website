@@ -35,6 +35,198 @@ if (!window.FP_BASE) {
   if (favicon) favicon.href = '/images/gallery/infernoselfie_8.png';
 }
 
+// ── Shared "Welcome" login modal — e621-style, available on every page that
+// loads this script (not gated behind #fanpages-topbar-root existing, since
+// pages like the story reader/editor also need to be able to pop it).
+// window.fpOpenLoginModal(opts) shows it:
+//   opts.from             — where the "Sign up" link should send the user,
+//                            and (in standalone mode) where closing the
+//                            modal without logging in should send them too.
+//                            Defaults to the current path+search.
+//   opts.redirectOnSuccess — where to navigate after a successful login.
+//                            Omitted means "just reload the current page"
+//                            (the normal case — the user never left it).
+//   opts.standalone       — true only for the thin /login landing page,
+//                            which has no real content behind it: closing
+//                            the modal (X / outside-click / Escape) there
+//                            navigates to opts.from instead of just hiding.
+(function () {
+  const fpUrl = window.fpUrl;
+  let modalOverlay = null;
+  let standalone = false;
+  let navigateTarget = '/';
+  let redirectOnSuccess = null;
+
+  function buildModal() {
+    if (modalOverlay) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="fpnav-modal-overlay" id="fp-loginmodal-overlay" hidden>
+        <div class="fpnav-modal-card fpnav-modal-card--login">
+          <button class="fpnav-modal-close" id="fp-loginmodal-close" type="button" aria-label="Close">&#10005;</button>
+
+          <div id="fp-loginmodal-view-login">
+            <h2 class="fp-loginmodal-title">Welcome!</h2>
+            <div class="fp-loginmodal-alert" id="fp-loginmodal-login-alert" hidden></div>
+            <form class="fp-loginmodal-form" id="fp-loginmodal-login-form" novalidate>
+              <div class="fp-loginmodal-field">
+                <input type="text" id="fp-loginmodal-identifier" placeholder="Username or email" autocomplete="username" required />
+              </div>
+              <div class="fp-loginmodal-field fp-loginmodal-field--password">
+                <input type="password" id="fp-loginmodal-password" placeholder="Password" autocomplete="current-password" required />
+                <button type="button" class="fp-loginmodal-eye" data-target="fp-loginmodal-password" aria-label="Toggle password visibility">&#128065;</button>
+              </div>
+              <label class="fp-loginmodal-remember">
+                <span>Remember me</span>
+                <span class="fp-loginmodal-toggle">
+                  <input type="checkbox" id="fp-loginmodal-remember" checked />
+                  <span class="fp-loginmodal-toggle-track"><span class="fp-loginmodal-toggle-thumb"></span></span>
+                </span>
+              </label>
+              <button type="submit" class="fp-loginmodal-btn fp-loginmodal-btn--primary">Sign In</button>
+            </form>
+            <button type="button" class="fp-loginmodal-link" id="fp-loginmodal-forgot-btn">Forgot your password?</button>
+            <div class="fp-loginmodal-divider"></div>
+            <p class="fp-loginmodal-signup-row">Don't have an account? <a href="#" id="fp-loginmodal-signup-link">Sign up</a></p>
+          </div>
+
+          <div id="fp-loginmodal-view-forgot" hidden>
+            <h2 class="fp-loginmodal-title">Reset Password</h2>
+            <p class="fp-loginmodal-desc">Enter your username or email and we'll send a reset link to the address on file.</p>
+            <div class="fp-loginmodal-alert" id="fp-loginmodal-forgot-alert" hidden></div>
+            <form class="fp-loginmodal-form" id="fp-loginmodal-forgot-form" novalidate>
+              <div class="fp-loginmodal-field">
+                <input type="text" id="fp-loginmodal-forgot-identifier" placeholder="Username or email" autocomplete="username" required />
+              </div>
+              <button type="submit" class="fp-loginmodal-btn fp-loginmodal-btn--primary">Send Reset Link</button>
+            </form>
+            <button type="button" class="fp-loginmodal-link" id="fp-loginmodal-back-to-login">&larr; Back to login</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrap.firstElementChild);
+    modalOverlay = document.getElementById('fp-loginmodal-overlay');
+    wireModal();
+  }
+
+  function showView(view) {
+    document.getElementById('fp-loginmodal-view-login').hidden = view !== 'login';
+    document.getElementById('fp-loginmodal-view-forgot').hidden = view !== 'forgot';
+  }
+
+  function showAlert(id, message, type) {
+    const el = document.getElementById(id);
+    el.textContent = message;
+    el.className = `fp-loginmodal-alert fp-loginmodal-alert--${type || 'error'}`;
+    el.hidden = false;
+  }
+
+  function setLoading(btn, loading) {
+    btn.disabled = loading;
+  }
+
+  function hideModal() {
+    modalOverlay.hidden = true;
+    document.body.classList.remove('fpnav-modal-open');
+  }
+
+  function handleClose() {
+    hideModal();
+    if (standalone) window.location.href = navigateTarget;
+  }
+
+  function handleLoginSuccess() {
+    hideModal();
+    if (redirectOnSuccess) { window.location.href = redirectOnSuccess; return; }
+    if (standalone) { window.location.href = navigateTarget; return; }
+    window.location.reload();
+  }
+
+  function wireModal() {
+    document.getElementById('fp-loginmodal-close').addEventListener('click', handleClose);
+    modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) handleClose(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modalOverlay && !modalOverlay.hidden) handleClose();
+    });
+
+    document.getElementById('fp-loginmodal-forgot-btn').addEventListener('click', () => showView('forgot'));
+    document.getElementById('fp-loginmodal-back-to-login').addEventListener('click', () => showView('login'));
+
+    document.getElementById('fp-loginmodal-signup-link').addEventListener('click', (e) => {
+      e.preventDefault();
+      window.location.href = fpUrl(`/register?from=${encodeURIComponent(navigateTarget)}`);
+    });
+
+    document.querySelectorAll('#fp-loginmodal-overlay .fp-loginmodal-eye').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const input = document.getElementById(btn.dataset.target);
+        input.type = input.type === 'password' ? 'text' : 'password';
+        btn.classList.toggle('fp-loginmodal-eye--visible');
+      });
+    });
+
+    document.getElementById('fp-loginmodal-login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button[type=submit]');
+      const identifier = document.getElementById('fp-loginmodal-identifier').value.trim();
+      const password = document.getElementById('fp-loginmodal-password').value;
+      const remember = document.getElementById('fp-loginmodal-remember').checked;
+      if (!identifier || !password) { showAlert('fp-loginmodal-login-alert', 'Please fill in all fields.'); return; }
+      setLoading(btn, true);
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) { showAlert('fp-loginmodal-login-alert', data.error || 'Login failed.'); return; }
+        const storage = remember ? localStorage : sessionStorage;
+        storage.setItem('btw_token', data.token);
+        storage.setItem('btw_user', JSON.stringify(data.user));
+        handleLoginSuccess();
+      } catch { showAlert('fp-loginmodal-login-alert', 'Network error. Please try again.'); }
+      finally { setLoading(btn, false); }
+    });
+
+    document.getElementById('fp-loginmodal-forgot-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button[type=submit]');
+      const identifier = document.getElementById('fp-loginmodal-forgot-identifier').value.trim();
+      if (!identifier) { showAlert('fp-loginmodal-forgot-alert', 'Please enter your username or email.'); return; }
+      setLoading(btn, true);
+      try {
+        const res = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier }),
+        });
+        const data = await res.json();
+        if (!res.ok) showAlert('fp-loginmodal-forgot-alert', data.error || 'Something went wrong.');
+        else showAlert('fp-loginmodal-forgot-alert', data.message, 'success');
+      } catch { showAlert('fp-loginmodal-forgot-alert', 'Network error. Please try again.'); }
+      finally { setLoading(btn, false); }
+    });
+  }
+
+  window.fpOpenLoginModal = function (opts) {
+    opts = opts || {};
+    buildModal();
+    showView('login');
+    document.getElementById('fp-loginmodal-login-alert').hidden = true;
+    document.getElementById('fp-loginmodal-forgot-alert').hidden = true;
+    document.getElementById('fp-loginmodal-login-form').reset();
+    document.getElementById('fp-loginmodal-remember').checked = true;
+    standalone = !!opts.standalone;
+    navigateTarget = opts.from || (window.location.pathname + window.location.search);
+    redirectOnSuccess = opts.redirectOnSuccess || null;
+    modalOverlay.hidden = false;
+    document.body.classList.add('fpnav-modal-open');
+    setTimeout(() => document.getElementById('fp-loginmodal-identifier').focus(), 30);
+  };
+})();
+
 // ── Shared persistent top bar for every /fanpages/* page ────────────────────
 // Injects into <div id="fanpages-topbar-root">. Handles: Fanpages/Social
 // links, search bar (visual only for now), the Upload dropdown (Create
@@ -97,7 +289,7 @@ if (!window.FP_BASE) {
           </div>
         </div>
 
-        <a class="fpnav-login-btn" id="fpnav-login-btn" href="${fpUrl(`/login?from=${encodeURIComponent(here)}`)}">Log In / Register</a>
+        <button class="fpnav-login-btn" id="fpnav-login-btn" type="button">Log In / Register</button>
 
         <div class="fpnav-dropdown-wrap" id="fpnav-avatar-wrap" style="display:none;">
           <button class="fpnav-avatar-btn" id="fpnav-avatar-btn" type="button">
@@ -126,7 +318,7 @@ if (!window.FP_BASE) {
         <button class="fpnav-modal-close" id="fpnav-modal-close" type="button">✕</button>
         <p class="fpnav-modal-title">Log in to continue</p>
         <p class="fpnav-modal-text">You'll need a free Between Two Worlds account to create or manage stories on Fanpages.</p>
-        <a class="fpnav-modal-cta" id="fpnav-modal-cta" href="${fpUrl('/login')}">Log In / Register</a>
+        <button class="fpnav-modal-cta" id="fpnav-modal-cta" type="button">Log In / Register</button>
       </div>
     </div>
   `;
@@ -199,16 +391,24 @@ if (!window.FP_BASE) {
     window.location.href = FP_BASE || '/';
   });
 
+  // ── Top-right login button — opens the shared Welcome modal in place ────
+  document.getElementById('fpnav-login-btn').addEventListener('click', () => window.fpOpenLoginModal());
+
   // ── Login-gated links (Create Story / My Stories) ───────────────────────
   const modalOverlay = document.getElementById('fpnav-modal-overlay');
   const modalCta      = document.getElementById('fpnav-modal-cta');
+  let gateDest = fpUrl('/');
 
   function openGateModal(dest) {
-    modalCta.href = fpUrl(`/login?from=${encodeURIComponent(dest)}`);
+    gateDest = dest;
     modalOverlay.hidden = false;
   }
   document.getElementById('fpnav-modal-close').addEventListener('click', () => { modalOverlay.hidden = true; });
   modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) modalOverlay.hidden = true; });
+  modalCta.addEventListener('click', () => {
+    modalOverlay.hidden = true;
+    window.fpOpenLoginModal({ from: gateDest, redirectOnSuccess: gateDest });
+  });
 
   root.querySelectorAll('[data-gate]').forEach(link => {
     link.addEventListener('click', (e) => {
