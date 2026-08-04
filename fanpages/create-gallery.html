@@ -313,12 +313,46 @@
   // position_x. Only a real drag (which only ever happens after ready()
   // has finished) should ever update galleryPos.
   let galleryPreviewInitializing = false;
+  // Cropper's own boundary-clamping isn't reliable for this exact
+  // combination (a fixed, non-resizable/non-movable crop box with
+  // dragMode:'move' panning the canvas underneath it) — dragging can pull
+  // the canvas past the image's edge and expose a blank void past it,
+  // confirmed visually. This independently re-clamps the canvas position
+  // after every crop event so it can never end up somewhere that would
+  // leave part of the crop box uncovered by the image, regardless of
+  // whatever Cropper's own internal limits thought was fine. Re-entrant
+  // guard: setCanvasData below fires its own 'crop' event, which would
+  // otherwise call this again — harmless since the second pass finds
+  // nothing left to clamp, but the flag keeps it a single correction pass.
+  let galleryClampingCanvas = false;
+  function clampGalleryCanvas() {
+    if (galleryClampingCanvas || !galleryPreviewCropper) return;
+    const canvasData = galleryPreviewCropper.getCanvasData();
+    const containerData = galleryPreviewCropper.getContainerData();
+    const minLeft = Math.min(0, containerData.width - canvasData.width);
+    const minTop = Math.min(0, containerData.height - canvasData.height);
+    const clampedLeft = Math.max(minLeft, Math.min(0, canvasData.left));
+    const clampedTop = Math.max(minTop, Math.min(0, canvasData.top));
+    if (Math.abs(clampedLeft - canvasData.left) > 0.01 || Math.abs(clampedTop - canvasData.top) > 0.01) {
+      galleryClampingCanvas = true;
+      galleryPreviewCropper.setCanvasData({ left: clampedLeft, top: clampedTop });
+      galleryClampingCanvas = false;
+    }
+  }
   function showGalleryPreview(src) {
     const previewImg = document.getElementById('gallery-editor-preview-img');
     document.getElementById('gallery-editor-preview-field').style.display = 'block';
     if (galleryPreviewCropper) { galleryPreviewCropper.destroy(); galleryPreviewCropper = null; }
     previewImg.removeAttribute('src');
     previewImg.onload = () => {
+      // The field was just switched from display:none to display:block a
+      // moment ago — without waiting a frame for that to actually be
+      // reflowed, Cropper can measure the wrapper's container size before
+      // its aspect-ratio-driven CSS size has settled, throwing off every
+      // "cover"/centering calculation in ready() below that assumes an
+      // accurate container size. (Same fix already in place over in the
+      // story editor's seShowGalleryPreview — this one just never got it.)
+      requestAnimationFrame(() => {
       galleryPreviewInitializing = true;
       galleryPreviewCropper = new Cropper(previewImg, {
         aspectRatio: 6 / 7, viewMode: 1, dragMode: 'move', autoCropArea: 1,
@@ -328,7 +362,14 @@
           // CANVAS size is at the moment it's set, so fixing the crop box
           // before the canvas just gets it silently shrunk back down to
           // match the old (wrong) canvas size. Fit the canvas ("cover")
-          // FIRST, then size the crop box to the container.
+          // FIRST, then size the crop box to the container. Cropper's own
+          // pan/drag boundary limiting isn't reliable for this exact combo
+          // (a fixed, non-resizable/non-movable crop box with dragMode:
+          // 'move' panning the canvas underneath it) — confirmed visually,
+          // dragging could pull the canvas past the image's edge and expose
+          // a blank void past it — so clampGalleryCanvas() re-enforces that
+          // boundary independently on every subsequent crop event instead
+          // of trusting Cropper's internal limits for it.
           const containerData = galleryPreviewCropper.getContainerData();
           const imgDataForFit = galleryPreviewCropper.getImageData();
           const coverScale = Math.max(containerData.width / imgDataForFit.naturalWidth, containerData.height / imgDataForFit.naturalHeight);
@@ -352,6 +393,7 @@
           // galleryPos is already correct (it's literally what was just
           // applied) -- resume normal tracking for the next real drag.
           galleryPreviewInitializing = false;
+          clampGalleryCanvas();
         },
         crop(event) {
           if (galleryPreviewInitializing) return;
@@ -361,7 +403,9 @@
           const maxY = imgData.naturalHeight - data.height;
           galleryPos.x = maxX > 0 ? Math.round((data.x / maxX) * 100) : 50;
           galleryPos.y = maxY > 0 ? Math.round((data.y / maxY) * 100) : 50;
+          clampGalleryCanvas();
         },
+      });
       });
     };
     previewImg.src = src;
