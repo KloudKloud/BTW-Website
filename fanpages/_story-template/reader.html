@@ -390,7 +390,7 @@
     .rd-cp-replies-toggle:hover { color: #a8c6e8; }
     .rd-cp-replies-hidden { display: none; }
     .rd-cp-para-tag {
-      display: inline-block; font-size: 0.72rem; color: #888; margin-bottom: 0.3rem;
+      display: inline-block; font-size: 0.72rem; color: #888; margin-top: 0.4rem;
       background: rgba(255,255,255,0.05); border-radius: 8px; padding: 0.1em 0.5em;
     }
 
@@ -495,14 +495,20 @@
     <div class="rd-bottom-comments">
       <p class="rd-recs-title">Comments</p>
       <div class="rd-cp-compose">
-        <input type="text" id="rd-bc-guest-name" class="cc-guest-name-input" placeholder="Guest name" maxlength="40" style="display:none;" />
-        <textarea class="rd-cp-textarea" id="rd-bc-input" placeholder="Add a comment…" maxlength="2000"></textarea>
-        <div id="rd-bc-gif-preview-wrap" class="rd-cp-gif-preview-wrap" data-target="bc-root" hidden>
-          <img alt="Selected GIF" />
-          <button type="button" class="rd-cp-gif-remove">✕</button>
+        <div class="cc-compose-box">
+          <p class="cc-guest-note" id="rd-bc-guest-note" style="display:none;">Guest accounts can still leave comments, and they will display with the chosen name above! Consider <a href="#" id="rd-bc-guest-signin-link">signing in</a> to give the author a real follow and support!</p>
+          <label class="cc-guest-label" id="rd-bc-guest-label" style="display:none;">Guest Name<span class="cc-required-star">*</span></label>
+          <input type="text" id="rd-bc-guest-name" class="cc-guest-name-input" placeholder="Guest name" maxlength="40" style="display:none;" />
+          <textarea class="rd-cp-textarea" id="rd-bc-input" placeholder="Add a comment…" maxlength="2000"></textarea>
+          <div id="rd-bc-gif-preview-wrap" class="rd-cp-gif-preview-wrap" data-target="bc-root" hidden>
+            <img alt="Selected GIF" />
+            <button type="button" class="rd-cp-gif-remove">✕</button>
+          </div>
+          <div class="rd-cp-compose-actions">
+            <button type="button" class="dm-gif-btn" id="rd-bc-gif-btn">GIF</button>
+          </div>
         </div>
-        <div class="rd-cp-compose-actions">
-          <button type="button" class="dm-gif-btn" id="rd-bc-gif-btn">GIF</button>
+        <div class="cc-compose-actions-row">
           <button type="button" class="rd-cp-send-btn" id="rd-bc-send">Post</button>
         </div>
       </div>
@@ -527,14 +533,20 @@
   <blockquote class="rd-cp-context" id="rd-cp-context"></blockquote>
 
   <div class="rd-cp-compose">
-    <input type="text" id="rd-cp-guest-name" class="cc-guest-name-input" placeholder="Guest name" maxlength="40" style="display:none;" />
-    <textarea class="rd-cp-textarea" id="rd-cp-input" placeholder="Add a comment…" maxlength="2000"></textarea>
-    <div id="rd-cp-gif-preview-wrap" class="rd-cp-gif-preview-wrap" hidden>
-      <img id="rd-cp-gif-preview" alt="Selected GIF" />
-      <button type="button" id="rd-cp-gif-remove" class="rd-cp-gif-remove">✕</button>
+    <div class="cc-compose-box">
+      <p class="cc-guest-note" id="rd-cp-guest-note" style="display:none;">Guest accounts can still leave comments, and they will display with the chosen name above! Consider <a href="#" id="rd-cp-guest-signin-link">signing in</a> to give the author a real follow and support!</p>
+      <label class="cc-guest-label" id="rd-cp-guest-label" style="display:none;">Guest Name<span class="cc-required-star">*</span></label>
+      <input type="text" id="rd-cp-guest-name" class="cc-guest-name-input" placeholder="Guest name" maxlength="40" style="display:none;" />
+      <textarea class="rd-cp-textarea" id="rd-cp-input" placeholder="Add a comment…" maxlength="2000"></textarea>
+      <div id="rd-cp-gif-preview-wrap" class="rd-cp-gif-preview-wrap" hidden>
+        <img id="rd-cp-gif-preview" alt="Selected GIF" />
+        <button type="button" id="rd-cp-gif-remove" class="rd-cp-gif-remove">✕</button>
+      </div>
+      <div class="rd-cp-compose-actions">
+        <button type="button" class="dm-gif-btn" id="rd-cp-gif-btn">GIF</button>
+      </div>
     </div>
-    <div class="rd-cp-compose-actions">
-      <button type="button" class="dm-gif-btn" id="rd-cp-gif-btn">GIF</button>
+    <div class="cc-compose-actions-row">
       <button type="button" class="rd-cp-send-btn" id="rd-cp-send">Post</button>
     </div>
   </div>
@@ -564,10 +576,16 @@ try {
 } catch {}
 function ccIsMine(c) { return currentUser && currentUser.id === c.user_id; }
 if (!authToken) {
-  ['rd-bc-guest-name', 'rd-cp-guest-name'].forEach(id => {
-    const input = document.getElementById(id);
+  ['rd-bc', 'rd-cp'].forEach(prefix => {
+    document.getElementById(`${prefix}-guest-note`).style.display = 'block';
+    document.getElementById(`${prefix}-guest-label`).style.display = 'block';
+    const input = document.getElementById(`${prefix}-guest-name`);
     input.style.display = 'block';
     input.value = localStorage.getItem('btw_guest_name') || '';
+    document.getElementById(`${prefix}-guest-signin-link`).addEventListener('click', (e) => {
+      e.preventDefault();
+      window.fpOpenLoginModal();
+    });
   });
 }
 async function ccDeleteComment(id) {
@@ -1078,16 +1096,16 @@ function renderCommentItem(c, prefix, collapsible) {
       ${commentAvatarHtml(c)}
       <div class="cc-body-wrap">
         <div class="cc-bubble">
-          ${collapsible && c.paragraph_index != null ? `<span class="rd-cp-para-tag">💬 inline comment</span><br>` : ''}
           ${commentNameHtml(c)}
           <span class="cc-time">${formatRelativeTime(c.created_at)}</span>
           ${c.reply_to_username ? `<div class="cc-mention">@${escapeHtml(c.reply_to_username)}</div>` : ''}
           ${c.body ? `<p class="cc-text">${escapeHtml(c.body)}</p>` : ''}
           ${c.gif_url ? `<img class="rd-cp-comment-gif" src="${escapeHtml(c.gif_url)}" alt="GIF" />` : ''}
+          ${collapsible && c.paragraph_index != null ? `<span class="rd-cp-para-tag">💬 inline comment</span>` : ''}
         </div>
         <div class="cc-actions">
           <button type="button" class="cc-action-btn rd-cp-reply-toggle" data-comment-id="${c.id}" data-prefix="${prefix}">Reply</button>
-          ${ccIsMine(c) ? `<button type="button" class="cc-action-btn rd-cp-delete-btn" data-comment-id="${c.id}">Delete</button>` : `<button type="button" class="cc-action-btn" onclick="reportContent('comment', ${c.id})">Report</button>`}
+          ${ccIsMine(c) ? `<button type="button" class="cc-action-btn rd-cp-delete-btn" data-comment-id="${c.id}">Delete</button>` : (authToken ? `<button type="button" class="cc-action-btn" onclick="reportContent('comment', ${c.id})">Report</button>` : '')}
         </div>
         <div class="rd-cp-reply-form" id="${prefix}-reply-form-${c.id}">
           <textarea class="rd-cp-textarea" placeholder="Reply to ${escapeHtml(c.display_name || c.username)}…" maxlength="2000"></textarea>

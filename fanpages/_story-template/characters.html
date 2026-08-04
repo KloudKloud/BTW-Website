@@ -78,9 +78,15 @@
       <div class="cc-section" id="char-detail-comments">
         <p class="cc-title">💬 Comments</p>
         <div class="cc-compose" id="cc-compose" style="display:none;">
-          <input type="text" id="cc-guest-name" class="cc-guest-name-input" placeholder="Guest name" maxlength="40" style="display:none;" />
-          <textarea id="cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
+          <div class="cc-compose-box">
+            <p class="cc-guest-note" id="cc-guest-note" style="display:none;">Guest accounts can still leave comments, and they will display with the chosen name above! Consider <a href="#" id="cc-guest-signin-link">signing in</a> to give the author a real follow and support!</p>
+            <label class="cc-guest-label" id="cc-guest-label" style="display:none;">Guest Name<span class="cc-required-star">*</span></label>
+            <input type="text" id="cc-guest-name" class="cc-guest-name-input" placeholder="Guest name" maxlength="40" style="display:none;" />
+            <textarea id="cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
+          </div>
+          <div class="cc-compose-actions-row">
           <button class="cc-compose-btn" id="cc-compose-btn" type="button">Post</button>
+          </div>
         </div>
         <div class="cc-list" id="cc-list"><p class="cc-empty">Loading…</p></div>
       </div>
@@ -786,6 +792,10 @@ function ccGuestName() {
   const input = document.getElementById('cc-guest-name');
   return input ? input.value.trim() : (localStorage.getItem('btw_guest_name') || '');
 }
+document.getElementById('cc-guest-signin-link').addEventListener('click', (e) => {
+  e.preventDefault();
+  window.fpOpenLoginModal();
+});
 function ccTimeAgo(iso) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
   if (diff < 60) return 'just now';
@@ -890,6 +900,8 @@ function ccInitSection(targetType, targetId) {
   ccTargetId = targetId;
   document.getElementById('cc-compose').style.display = 'flex';
   if (!token) {
+    document.getElementById('cc-guest-note').style.display = 'block';
+    document.getElementById('cc-guest-label').style.display = 'block';
     const guestInput = document.getElementById('cc-guest-name');
     guestInput.style.display = 'block';
     guestInput.value = localStorage.getItem('btw_guest_name') || '';
