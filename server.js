@@ -43,6 +43,31 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── Guest identity ──────────────────────────────────────────────────────────
+// Unregistered visitors can comment/like without ever creating an account,
+// so they need SOME stable identity to attach those rows to and to dedupe
+// repeat likes. A long-lived cookie stands in for that — issued the first
+// time any visitor hits the API, reused on every request after. Uses the
+// `cookie` package directly (not `cookie-parser`) since it's already a
+// transitive dependency here and adding a new top-level one just for this
+// felt unnecessary. req.guestId is always set to either the cookie's
+// existing value or the one just minted for this response.
+const cookieLib = require('cookie');
+const GUEST_COOKIE = 'btw_guest_id';
+const GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
+app.use((req, res, next) => {
+  const parsed = req.headers.cookie ? cookieLib.parse(req.headers.cookie) : {};
+  let guestId = parsed[GUEST_COOKIE];
+  if (!guestId) {
+    guestId = crypto.randomUUID();
+    res.append('Set-Cookie', cookieLib.serialize(GUEST_COOKIE, guestId, {
+      maxAge: GUEST_COOKIE_MAX_AGE, path: '/', httpOnly: true, sameSite: 'lax', secure: true,
+    }));
+  }
+  req.guestId = guestId;
+  next();
+});
+
 // The Fanpage system now also serves from btwfics.net (sharing this same
 // backend/DB), so email/redirect links built from a request must resolve to
 // whichever domain the user is actually on rather than one static env value —
@@ -986,6 +1011,46 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     );
   `).catch(e => console.error('chapter_likes migration:', e.message));
 
+  // Guest identity — lets unregistered visitors comment and like without an
+  // account (they never had to make one; a random guest_device_id cookie,
+  // set the first time they hit the API, stands in for user_id everywhere
+  // below). user_id becomes nullable on every one of these tables, and each
+  // gets a guest_device_id column plus a partial unique index so the SAME
+  // guest can't double-like the same thing (the existing UNIQUE(...,user_id)
+  // constraints don't help here since Postgres treats every NULL as
+  // distinct). Comments only need the column, not a unique index — replies
+  // aren't deduplicated for logged-in users either.
+  await pool.query(`
+    ALTER TABLE content_comments ALTER COLUMN user_id DROP NOT NULL;
+    ALTER TABLE content_comments ADD COLUMN IF NOT EXISTS guest_name TEXT;
+    ALTER TABLE content_comments ADD COLUMN IF NOT EXISTS guest_device_id TEXT;
+
+    ALTER TABLE likes ALTER COLUMN user_id DROP NOT NULL;
+    ALTER TABLE likes ADD COLUMN IF NOT EXISTS guest_device_id TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS likes_guest_unique
+      ON likes(item_type, item_id, guest_device_id) WHERE guest_device_id IS NOT NULL;
+
+    ALTER TABLE moderator_site_likes ALTER COLUMN user_id DROP NOT NULL;
+    ALTER TABLE moderator_site_likes ADD COLUMN IF NOT EXISTS guest_device_id TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS moderator_site_likes_guest_unique
+      ON moderator_site_likes(site_id, guest_device_id) WHERE guest_device_id IS NOT NULL;
+
+    ALTER TABLE moderator_gallery_likes ALTER COLUMN user_id DROP NOT NULL;
+    ALTER TABLE moderator_gallery_likes ADD COLUMN IF NOT EXISTS guest_device_id TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS moderator_gallery_likes_guest_unique
+      ON moderator_gallery_likes(gallery_id, guest_device_id) WHERE guest_device_id IS NOT NULL;
+
+    ALTER TABLE moderator_character_likes ALTER COLUMN user_id DROP NOT NULL;
+    ALTER TABLE moderator_character_likes ADD COLUMN IF NOT EXISTS guest_device_id TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS moderator_character_likes_guest_unique
+      ON moderator_character_likes(character_id, guest_device_id) WHERE guest_device_id IS NOT NULL;
+
+    ALTER TABLE chapter_likes ALTER COLUMN user_id DROP NOT NULL;
+    ALTER TABLE chapter_likes ADD COLUMN IF NOT EXISTS guest_device_id TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS chapter_likes_guest_unique
+      ON chapter_likes(chapter_id, guest_device_id) WHERE guest_device_id IS NOT NULL;
+  `).catch(e => console.error('guest identity migration:', e.message));
+
   // Seed Blue's site row if it doesn't exist yet, once his account is registered.
   // slug is no longer unique (authors can have multiple stories), so this is
   // guarded with an explicit existence check instead of ON CONFLICT.
@@ -1377,9 +1442,12 @@ function requireAuth(req, res, next) {
 }
 
 // Resolves the optional (not required) viewer from a Bearer token, and
-// whether they're allowed to see NSFW content: logged in AND haven't opted
-// into SFW Mode. Used anywhere spicy/NSFW content might get shuffled into
-// a public, no-auth-required feed (spotlights, activity feed) so it can be
+// whether they're allowed to see NSFW content. Guests (no token at all)
+// are allowed by default now — the AO3-style age gate at the door is what
+// stands in for that instead. The ONLY way mature/explicit content is
+// hidden is a logged-in account that has deliberately turned SFW Mode on.
+// Used anywhere spicy/NSFW content might get shuffled into a public,
+// no-auth-required feed (spotlights, activity feed) so it can be
 // filtered/blurred server-side instead of trusting the client.
 async function getViewerNsfwAccess(req) {
   let viewerId = null;
@@ -1387,7 +1455,7 @@ async function getViewerNsfwAccess(req) {
   if (auth && auth.startsWith('Bearer ')) {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
-  if (viewerId === null) return { viewerId: null, nsfwAllowed: false };
+  if (viewerId === null) return { viewerId: null, nsfwAllowed: true };
   const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
   return { viewerId, nsfwAllowed: !!(row && row.nsfw_enabled) };
 }
@@ -2059,35 +2127,36 @@ app.get('/api/likes/counts/:type', async (req, res) => {
 });
 
 app.get('/api/likes/mine/:type', async (req, res) => {
-  const token = (req.headers.authorization || '').replace('Bearer ', '');
-  if (!token) return res.json({ liked: [] });
-  try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const { rows } = await pool.query(
-      'SELECT item_id FROM likes WHERE user_id = $1 AND item_type = $2',
-      [payload.id, req.params.type]
-    );
-    res.json({ liked: rows.map(r => r.item_id) });
-  } catch { res.json({ liked: [] }); }
+  const viewerId = optionalViewerId(req);
+  const { rows } = await pool.query(
+    viewerId
+      ? 'SELECT item_id FROM likes WHERE user_id = $1 AND item_type = $2'
+      : 'SELECT item_id FROM likes WHERE guest_device_id = $1 AND item_type = $2',
+    [viewerId || req.guestId, req.params.type]
+  );
+  res.json({ liked: rows.map(r => r.item_id) });
 });
 
-app.post('/api/likes/toggle/:type/:id', requireAuth, async (req, res) => {
+app.post('/api/likes/toggle/:type/:id', async (req, res) => {
   const { type, id } = req.params;
   const itemId = parseInt(id, 10);
   if (!['art', 'chapter'].includes(type) || isNaN(itemId))
     return res.status(400).json({ error: 'Invalid type or id' });
 
+  const viewerId = optionalViewerId(req);
   const { rows: [existing] } = await pool.query(
-    'SELECT id FROM likes WHERE user_id = $1 AND item_type = $2 AND item_id = $3',
-    [req.user.id, type, itemId]
+    viewerId
+      ? 'SELECT id FROM likes WHERE user_id = $1 AND item_type = $2 AND item_id = $3'
+      : 'SELECT id FROM likes WHERE guest_device_id = $1 AND item_type = $2 AND item_id = $3',
+    [viewerId || req.guestId, type, itemId]
   );
 
   if (existing) {
     await pool.query('DELETE FROM likes WHERE id = $1', [existing.id]);
   } else {
     await pool.query(
-      'INSERT INTO likes (user_id, item_type, item_id) VALUES ($1, $2, $3)',
-      [req.user.id, type, itemId]
+      'INSERT INTO likes (user_id, guest_device_id, item_type, item_id) VALUES ($1, $2, $3, $4)',
+      [viewerId, viewerId ? null : req.guestId, type, itemId]
     );
   }
 
@@ -6245,23 +6314,30 @@ app.delete('/api/gallery/:id', requireAuth, async (req, res) => {
 });
 
 // ── Gallery likes — any logged-in user can like any story's gallery post ────
-app.post('/api/moderator/gallery/:id/like', requireAuth, async (req, res) => {
+app.post('/api/moderator/gallery/:id/like', async (req, res) => {
   const { rows: [item] } = await pool.query('SELECT id FROM moderator_gallery WHERE id = $1', [req.params.id]);
   if (!item) return res.status(404).json({ error: 'Not found.' });
+  const viewerId = optionalViewerId(req);
   await pool.query(
-    'INSERT INTO moderator_gallery_likes (user_id, gallery_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-    [req.user.id, item.id]
+    'INSERT INTO moderator_gallery_likes (user_id, guest_device_id, gallery_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+    [viewerId, viewerId ? null : req.guestId, item.id]
   );
   const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM moderator_gallery_likes WHERE gallery_id = $1', [item.id]);
   const info = await commentTargetInfo('gallery', item.id);
   if (info && info.ownerId) {
-    await notifyUser(info.ownerId, req.user.id, 'gallery_like', `liked your gallery post "${info.title}".`, info.link);
+    await notifyUser(info.ownerId, viewerId, 'gallery_like', `liked your gallery post "${info.title}".`, info.link);
   }
   res.json({ liked: true, like_count: Number(count) });
 });
 
-app.delete('/api/moderator/gallery/:id/like', requireAuth, async (req, res) => {
-  await pool.query('DELETE FROM moderator_gallery_likes WHERE user_id = $1 AND gallery_id = $2', [req.user.id, req.params.id]);
+app.delete('/api/moderator/gallery/:id/like', async (req, res) => {
+  const viewerId = optionalViewerId(req);
+  await pool.query(
+    viewerId
+      ? 'DELETE FROM moderator_gallery_likes WHERE user_id = $1 AND gallery_id = $2'
+      : 'DELETE FROM moderator_gallery_likes WHERE guest_device_id = $1 AND gallery_id = $2',
+    [viewerId || req.guestId, req.params.id]
+  );
   const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM moderator_gallery_likes WHERE gallery_id = $1', [req.params.id]);
   res.json({ liked: false, like_count: Number(count) });
 });
@@ -6285,23 +6361,30 @@ app.delete('/api/moderator/gallery/:id/bookmark', requireAuth, async (req, res) 
   res.json({ bookmarked: false });
 });
 
-app.post('/api/moderator/character/:id/like', requireAuth, async (req, res) => {
+app.post('/api/moderator/character/:id/like', async (req, res) => {
   const { rows: [item] } = await pool.query('SELECT id FROM moderator_characters WHERE id = $1', [req.params.id]);
   if (!item) return res.status(404).json({ error: 'Not found.' });
+  const viewerId = optionalViewerId(req);
   await pool.query(
-    'INSERT INTO moderator_character_likes (user_id, character_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-    [req.user.id, item.id]
+    'INSERT INTO moderator_character_likes (user_id, guest_device_id, character_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+    [viewerId, viewerId ? null : req.guestId, item.id]
   );
   const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM moderator_character_likes WHERE character_id = $1', [item.id]);
   const info = await commentTargetInfo('character', item.id);
   if (info && info.ownerId) {
-    await notifyUser(info.ownerId, req.user.id, 'character_like', `liked your character "${info.title}".`, info.link);
+    await notifyUser(info.ownerId, viewerId, 'character_like', `liked your character "${info.title}".`, info.link);
   }
   res.json({ liked: true, like_count: Number(count) });
 });
 
-app.delete('/api/moderator/character/:id/like', requireAuth, async (req, res) => {
-  await pool.query('DELETE FROM moderator_character_likes WHERE user_id = $1 AND character_id = $2', [req.user.id, req.params.id]);
+app.delete('/api/moderator/character/:id/like', async (req, res) => {
+  const viewerId = optionalViewerId(req);
+  await pool.query(
+    viewerId
+      ? 'DELETE FROM moderator_character_likes WHERE user_id = $1 AND character_id = $2'
+      : 'DELETE FROM moderator_character_likes WHERE guest_device_id = $1 AND character_id = $2',
+    [viewerId || req.guestId, req.params.id]
+  );
   const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM moderator_character_likes WHERE character_id = $1', [req.params.id]);
   res.json({ liked: false, like_count: Number(count) });
 });
@@ -6343,23 +6426,30 @@ app.post('/api/character/:id/view', async (req, res) => {
 
 // ── Chapter likes — any logged-in user can like any story's chapter, from
 // the Reader view ──────────────────────────────────────────────────────────
-app.post('/api/chapters/:id/like', requireAuth, async (req, res) => {
+app.post('/api/chapters/:id/like', async (req, res) => {
   const { rows: [ch] } = await pool.query('SELECT id FROM moderator_chapters WHERE id = $1', [req.params.id]);
   if (!ch) return res.status(404).json({ error: 'Not found.' });
+  const viewerId = optionalViewerId(req);
   await pool.query(
-    'INSERT INTO chapter_likes (user_id, chapter_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-    [req.user.id, ch.id]
+    'INSERT INTO chapter_likes (user_id, guest_device_id, chapter_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+    [viewerId, viewerId ? null : req.guestId, ch.id]
   );
   const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM chapter_likes WHERE chapter_id = $1', [ch.id]);
   const info = await commentTargetInfo('chapter_paragraph', ch.id);
   if (info && info.ownerId) {
-    await notifyUser(info.ownerId, req.user.id, 'chapter_like', `liked your chapter "${info.title}".`, info.link);
+    await notifyUser(info.ownerId, viewerId, 'chapter_like', `liked your chapter "${info.title}".`, info.link);
   }
   res.json({ liked: true, like_count: Number(count) });
 });
 
-app.delete('/api/chapters/:id/like', requireAuth, async (req, res) => {
-  await pool.query('DELETE FROM chapter_likes WHERE user_id = $1 AND chapter_id = $2', [req.user.id, req.params.id]);
+app.delete('/api/chapters/:id/like', async (req, res) => {
+  const viewerId = optionalViewerId(req);
+  await pool.query(
+    viewerId
+      ? 'DELETE FROM chapter_likes WHERE user_id = $1 AND chapter_id = $2'
+      : 'DELETE FROM chapter_likes WHERE guest_device_id = $1 AND chapter_id = $2',
+    [viewerId || req.guestId, req.params.id]
+  );
   const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM chapter_likes WHERE chapter_id = $1', [req.params.id]);
   res.json({ liked: false, like_count: Number(count) });
 });
@@ -6458,9 +6548,9 @@ app.get('/api/content-comments', async (req, res) => {
   const hasParagraph = req.query.paragraph_index !== undefined && req.query.paragraph_index !== '';
   const paragraphIndex = hasParagraph ? parseInt(req.query.paragraph_index, 10) : null;
   const { rows } = await pool.query(
-    `SELECT cc.id, cc.parent_id, cc.reply_to_username, cc.body, cc.gif_url, cc.paragraph_index, cc.created_at, cc.user_id,
-            u.username, u.display_name, u.avatar
-     FROM content_comments cc JOIN users u ON u.id = cc.user_id
+    `SELECT cc.id, cc.parent_id, cc.reply_to_username, cc.body, cc.gif_url, cc.paragraph_index, cc.created_at,
+            cc.user_id, cc.guest_name, u.username, u.display_name, u.avatar
+     FROM content_comments cc LEFT JOIN users u ON u.id = cc.user_id
      WHERE cc.target_type = $1 AND cc.target_id = $2 ${hasParagraph ? 'AND cc.paragraph_index = $3' : ''}
      ORDER BY cc.created_at ASC`,
     hasParagraph ? [targetType, targetId, paragraphIndex] : [targetType, targetId]
@@ -6468,10 +6558,18 @@ app.get('/api/content-comments', async (req, res) => {
   const byId = {};
   const roots = [];
   rows.forEach(r => {
+    // Guest-authored rows have no user_id — display_name/avatar fall back to
+    // the guest's typed name and the shared default avatar (handled
+    // client-side by is_guest, same as ccAvatarHtml already falls back for
+    // any missing avatar).
     const c = {
       id: r.id, body: r.body, gif_url: r.gif_url, paragraph_index: r.paragraph_index,
       created_at: r.created_at, reply_to_username: r.reply_to_username,
-      user_id: r.user_id, username: r.username, display_name: r.display_name, avatar: r.avatar, replies: [],
+      user_id: r.user_id, username: r.username,
+      display_name: r.user_id ? r.display_name : r.guest_name,
+      avatar: r.user_id ? r.avatar : null,
+      is_guest: !r.user_id,
+      replies: [],
     };
     byId[c.id] = c;
     if (r.parent_id && byId[r.parent_id]) byId[r.parent_id].replies.push(c);
@@ -6498,7 +6596,10 @@ app.get('/api/content-comments/paragraph-counts', async (req, res) => {
   res.json({ counts });
 });
 
-app.post('/api/content-comments', requireAuth, async (req, res) => {
+// No requireAuth here — guests can comment too (everywhere except clubs,
+// checked below), identified by the guest_id cookie set on every request.
+// A logged-in Bearer token still takes priority when present.
+app.post('/api/content-comments', async (req, res) => {
   const targetType = String(req.body.target_type || '');
   const targetId = parseInt(req.body.target_id, 10);
   const text = String(req.body.body || '').trim();
@@ -6510,32 +6611,53 @@ app.post('/api/content-comments', requireAuth, async (req, res) => {
   if (!text && !gifUrl) return res.status(400).json({ error: 'Comment cannot be empty.' });
   if (text.length > 2000) return res.status(400).json({ error: 'Comment is too long (max 2000 characters).' });
 
+  const viewerId = optionalViewerId(req);
+  let guestName = null;
+  if (!viewerId) {
+    // Clubs are explicitly held back from guest interaction for now.
+    if (targetType === 'club_post' || targetType === 'club_gallery_image') {
+      return res.status(401).json({ error: 'You need an account to comment in clubs.' });
+    }
+    guestName = String(req.body.guest_name || '').trim().slice(0, 40);
+    if (!guestName) return res.status(400).json({ error: 'Please enter a name.' });
+  }
+
   let rootParentId = null;
   let replyToUsername = null;
   let directParentUserId = null;
   if (parentId) {
     const { rows: [parent] } = await pool.query(
-      'SELECT id, parent_id, user_id FROM content_comments WHERE id = $1 AND target_type = $2 AND target_id = $3',
+      'SELECT id, parent_id, user_id, guest_name FROM content_comments WHERE id = $1 AND target_type = $2 AND target_id = $3',
       [parentId, targetType, targetId]
     );
     if (!parent) return res.status(404).json({ error: 'Comment not found.' });
     // Flatten to exactly one level — replying to a reply attaches to that reply's root.
     rootParentId = parent.parent_id || parent.id;
-    directParentUserId = parent.user_id;
-    const { rows: [replyTarget] } = await pool.query('SELECT username FROM users WHERE id = $1', [parent.user_id]);
-    replyToUsername = replyTarget ? replyTarget.username : null;
+    directParentUserId = parent.user_id; // null when replying to a guest — notifyUser no-ops on that
+    if (parent.user_id) {
+      const { rows: [replyTarget] } = await pool.query('SELECT username FROM users WHERE id = $1', [parent.user_id]);
+      replyToUsername = replyTarget ? replyTarget.username : null;
+    } else {
+      replyToUsername = parent.guest_name;
+    }
   }
 
-  const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
+  let author = null;
+  if (viewerId) {
+    const { rows: [a] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [viewerId]);
+    author = a;
+  }
   const { rows: [comment] } = await pool.query(
-    `INSERT INTO content_comments (target_type, target_id, user_id, parent_id, reply_to_username, body, gif_url, paragraph_index)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, created_at`,
-    [targetType, targetId, req.user.id, rootParentId, replyToUsername, text, gifUrl, paragraphIndex]
+    `INSERT INTO content_comments (target_type, target_id, user_id, guest_name, guest_device_id, parent_id, reply_to_username, body, gif_url, paragraph_index)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, created_at`,
+    [targetType, targetId, viewerId, viewerId ? null : guestName, viewerId ? null : req.guestId, rootParentId, replyToUsername, text, gifUrl, paragraphIndex]
   );
 
   // Notify: the comment you directly replied to gets "replied to your
   // comment"; everyone else who's posted anywhere in this thread gets a
-  // lighter "thread you're in got a new reply" notice. Never notify yourself.
+  // lighter "thread you're in got a new reply" notice. Never notify
+  // yourself, and guest participants (user_id null) have no account to
+  // notify at all.
   if (rootParentId) {
     const { rows: participants } = await pool.query(
       'SELECT DISTINCT user_id FROM content_comments WHERE id = $1 OR parent_id = $1',
@@ -6545,13 +6667,13 @@ app.post('/api/content-comments', requireAuth, async (req, res) => {
     await Promise.all(
       participants
         .map(r => r.user_id)
-        .filter(uid => uid !== req.user.id)
+        .filter(uid => uid && uid !== viewerId)
         .map(uid => {
           const isDirect = uid === directParentUserId;
           const message = isDirect
             ? `replied to your comment${info ? ` on "${info.title}"` : ''}.`
             : `added a new reply in a thread you're part of${info ? ` on "${info.title}"` : ''}.`;
-          return notifyUser(uid, req.user.id, isDirect ? 'comment_reply' : 'comment_thread_update', message, info ? info.link : null);
+          return notifyUser(uid, viewerId, isDirect ? 'comment_reply' : 'comment_thread_update', message, info ? info.link : null);
         })
     );
   } else {
@@ -6560,7 +6682,7 @@ app.post('/api/content-comments', requireAuth, async (req, res) => {
     // covers replies.
     const info = await commentTargetInfo(targetType, targetId);
     if (info && info.ownerId) {
-      await notifyUser(info.ownerId, req.user.id, 'content_comment', `commented on "${info.title}".`, info.link);
+      await notifyUser(info.ownerId, viewerId, 'content_comment', `commented on "${info.title}".`, info.link);
     }
   }
 
@@ -6568,7 +6690,11 @@ app.post('/api/content-comments', requireAuth, async (req, res) => {
     comment: {
       id: comment.id, body: text, gif_url: gifUrl, paragraph_index: paragraphIndex,
       created_at: comment.created_at, reply_to_username: replyToUsername,
-      user_id: req.user.id, username: author.username, display_name: author.display_name, avatar: author.avatar,
+      user_id: viewerId,
+      username: viewerId ? author.username : null,
+      display_name: viewerId ? author.display_name : guestName,
+      avatar: viewerId ? author.avatar : null,
+      is_guest: !viewerId,
       parent_id: rootParentId, replies: [],
     },
   });
@@ -7290,11 +7416,12 @@ app.get('/api/clubs', async (req, res) => {
   // click filters to clubs whose club_types array contains that one topic.
   const type = CLUB_TYPES.includes(req.query.type) ? req.query.type : null;
 
-  // Same "logged out or SFW Mode" gate used for spicy gallery/character
-  // content — NSFW clubs drop out of public browse for those viewers.
-  // mineOnly is exempt: your own clubs (owned or joined) always stay
-  // visible in your own list regardless of SFW Mode.
-  let nsfwAllowed = false;
+  // Same SFW Mode gate used for spicy gallery/character content — NSFW
+  // clubs drop out of public browse only for an account that's turned SFW
+  // Mode on; guests (no viewerId) see everything now. mineOnly is exempt:
+  // your own clubs (owned or joined) always stay visible in your own list
+  // regardless of SFW Mode.
+  let nsfwAllowed = true;
   if (viewerId) {
     const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
     nsfwAllowed = !!(row && row.nsfw_enabled);
@@ -7364,9 +7491,10 @@ app.get('/api/clubs/:slug', async (req, res) => {
   if (club.is_nsfw && !viewerRoleEarly) {
     // Members always keep access to their own club regardless of SFW Mode —
     // this gate is about hiding NSFW clubs from browsing/direct links for
-    // everyone else, same "logged out or SFW Mode" rule used for spicy
-    // gallery/character content.
-    let nsfwAllowed = false;
+    // everyone else. Guests (no viewerId) see everything now; only an
+    // account with SFW Mode on gets filtered, same as spicy gallery/
+    // character content.
+    let nsfwAllowed = true;
     if (viewerId) {
       const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
       nsfwAllowed = !!(row && row.nsfw_enabled);
@@ -8613,7 +8741,7 @@ app.get('/api/clubs-feed', async (req, res) => {
   if (auth && auth.startsWith('Bearer ')) {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
-  let nsfwAllowed = false;
+  let nsfwAllowed = true; // guests see everything now; only SFW Mode filters
   if (viewerId) {
     const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
     nsfwAllowed = !!(row && row.nsfw_enabled);
@@ -8672,7 +8800,7 @@ app.get('/api/clubs-recommended', async (req, res) => {
   if (auth && auth.startsWith('Bearer ')) {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
-  let nsfwAllowed = false;
+  let nsfwAllowed = true; // guests see everything now; only SFW Mode filters
   if (viewerId) {
     const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
     nsfwAllowed = !!(row && row.nsfw_enabled);
@@ -8733,7 +8861,7 @@ app.get('/api/clubs-explore', async (req, res) => {
   if (auth && auth.startsWith('Bearer ')) {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
-  let nsfwAllowed = false;
+  let nsfwAllowed = true; // guests see everything now; only SFW Mode filters
   if (viewerId) {
     const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
     nsfwAllowed = !!(row && row.nsfw_enabled);
