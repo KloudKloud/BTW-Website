@@ -1454,9 +1454,10 @@
           </div>
 
           <h3 class="cl-edit-section-title" style="margin-top: 2.25rem;">Club Icon (PFP)</h3>
-          <div class="cl-edit-imgbox" id="cl-edit-icon-wrap" style="aspect-ratio: 1 / 1; width: 120px;">
+          <div class="cl-edit-imgbox" id="cl-edit-icon-wrap" style="aspect-ratio: 1 / 1; width: 120px; position: relative;">
             <img id="cl-edit-icon-preview" alt="" />
             <div class="cl-edit-imgbox-overlay">📷 Change Icon</div>
+            <button type="button" class="fp-recrop-btn" id="cl-edit-icon-recrop-btn" style="display:none; position:absolute; bottom:4px; right:4px; z-index:3; font-size:0.68rem; padding:0.3rem 0.5rem;">✏️ Recrop</button>
           </div>
           <input type="file" id="cl-edit-icon-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
 
@@ -3941,6 +3942,7 @@ function populateHomeEditor(club) {
   document.getElementById('cl-edit-welcome-title').value = club.welcome_title || `Welcome To: ${club.name}`;
   document.getElementById('cl-edit-description').value = club.description || '';
   document.getElementById('cl-edit-icon-preview').src = club.icon_url || '/images/nopicture2.png';
+  document.getElementById('cl-edit-icon-recrop-btn').style.display = club.icon_url ? 'block' : 'none';
   setEditNsfwLabel(!!club.is_nsfw);
   document.getElementById('cl-edit-nsfw-toggle').checked = !!club.is_nsfw;
   setEditCoverMode(club.cover_mode || 'static', true);
@@ -3952,26 +3954,48 @@ document.getElementById('cl-edit-welcome-title').addEventListener('input', () =>
 document.getElementById('cl-edit-description').addEventListener('input', () => editDirty = true);
 
 // ── Club Icon (PFP) — same crop-on-upload pattern as everywhere else,
-// saves immediately (no waiting on the big Save button). ──────────────────
+// saves immediately (no waiting on the big Save button). image_original is
+// only sent the first time a NEW source photo is picked -- Recrop re-sends
+// just image (a fresh bake) from the existing original, so
+// icon_original_url stays untouched. Same pattern as the story banner/cover. ──
+let pendingNewIconFile = null;
 document.getElementById('cl-edit-icon-wrap').addEventListener('click', () => document.getElementById('cl-edit-icon-file-input').click());
+document.getElementById('cl-edit-icon-recrop-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!currentClub || !currentClub.icon_url) return;
+  pendingNewIconFile = null;
+  openCropModal({
+    title: 'Crop Club Icon', imageSrc: currentClub.icon_original_url || currentClub.icon_url, aspectRatio: 1, round: true,
+    onSave: saveClubIcon,
+  });
+});
 document.getElementById('cl-edit-icon-file-input').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
+  pendingNewIconFile = file;
   openCropModal({
     title: 'Crop Club Icon', imageSrc: URL.createObjectURL(file), aspectRatio: 1, round: true,
-    onSave: async (blob) => {
-      const fd = new FormData();
-      fd.append('image', blob, 'icon.jpg');
-      const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/icon`, { method: 'PUT', headers: authHeaders(), body: fd });
-      if (res.ok) {
-        const data = await res.json();
-        document.getElementById('cl-edit-icon-preview').src = data.icon_url;
-        if (currentClub) { currentClub.icon_url = data.icon_url; renderClub(currentClub); }
-      }
-    },
+    onSave: saveClubIcon,
   });
   e.target.value = '';
 });
+async function saveClubIcon(blob) {
+  const fd = new FormData();
+  fd.append('image', blob, 'icon.jpg');
+  if (pendingNewIconFile) fd.append('image_original', pendingNewIconFile, pendingNewIconFile.name || 'original.jpg');
+  const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/icon`, { method: 'PUT', headers: authHeaders(), body: fd });
+  if (res.ok) {
+    const data = await res.json();
+    pendingNewIconFile = null;
+    document.getElementById('cl-edit-icon-preview').src = data.icon_url;
+    document.getElementById('cl-edit-icon-recrop-btn').style.display = 'block';
+    if (currentClub) {
+      currentClub.icon_url = data.icon_url;
+      currentClub.icon_original_url = data.icon_original_url || currentClub.icon_original_url;
+      renderClub(currentClub);
+    }
+  }
+}
 
 // ── NSFW toggle — also saves immediately on flip. ──────────────────────────
 function setEditNsfwLabel(isNsfw) {

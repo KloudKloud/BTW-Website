@@ -2553,12 +2553,18 @@
   }
 
   // Avatar image upload/recrop — reuses the existing account-avatar endpoint.
+  // pendingNewAvatarFile only gets set for a genuinely new photo pick;
+  // Recrop reopens currentAuthor.avatar_original_url (the untouched
+  // source) instead of the previous crop's baked output, same pattern as
+  // the story banner/cover fix.
+  let pendingNewAvatarFile = null;
   document.getElementById('fp-avatar-camera-btn').addEventListener('click', () => {
     document.getElementById('fp-avatar-file-input').click();
   });
   document.getElementById('fp-avatar-file-input').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    pendingNewAvatarFile = file;
     openCropModal({
       title: 'Crop Profile Picture', imageSrc: URL.createObjectURL(file), aspectRatio: 1, round: true,
       onSave: uploadAvatar,
@@ -2567,14 +2573,16 @@
   });
   document.getElementById('fp-avatar-recrop-btn').addEventListener('click', () => {
     if (!currentAuthor || !currentAuthor.avatar) return;
+    pendingNewAvatarFile = null;
     openCropModal({
-      title: 'Crop Profile Picture', imageSrc: currentAuthor.avatar, aspectRatio: 1, round: true,
+      title: 'Crop Profile Picture', imageSrc: currentAuthor.avatar_original_url || currentAuthor.avatar, aspectRatio: 1, round: true,
       onSave: uploadAvatar,
     });
   });
   async function uploadAvatar(blob) {
     const fd = new FormData();
     fd.append('avatar', blob, 'avatar.jpg');
+    if (pendingNewAvatarFile) fd.append('avatar_original', pendingNewAvatarFile, pendingNewAvatarFile.name || 'original.jpg');
     try {
       const res = await fetch('/api/auth/avatar', { method: 'POST', headers: authHeaders(), body: fd });
       const data = await res.json();
@@ -2583,6 +2591,8 @@
       // the change looks like it silently failed to save.
       if (data.avatar) {
         currentAuthor.avatar = data.avatar;
+        currentAuthor.avatar_original_url = data.avatar_original_url || currentAuthor.avatar_original_url;
+        pendingNewAvatarFile = null;
         currentAuthor.avatar_position_x = 50;
         currentAuthor.avatar_position_y = 50;
         currentAuthor.avatar_zoom = 100;

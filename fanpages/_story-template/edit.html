@@ -1734,12 +1734,17 @@ async function uploadBanner(blob, originalFile) {
 }
 
 // ── Book cover — crop-and-upload via the shared Cropper.js modal ───────────
+// cover_original is only sent the first time a NEW source photo is picked --
+// Recrop re-sends just cover (a fresh bake) from the existing original, so
+// cover_original_url stays untouched. Same pattern as the banner/nav-cards.
+let pendingNewCoverFile = null;
 document.getElementById('cover-edit-btn').addEventListener('click', () => {
   document.getElementById('cover-file-input').click();
 });
 document.getElementById('cover-file-input').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
+  pendingNewCoverFile = file;
   openCropModal({
     title: 'Crop Book Cover', imageSrc: URL.createObjectURL(file), aspectRatio: 2 / 3, round: false,
     onSave: uploadCover,
@@ -1748,8 +1753,9 @@ document.getElementById('cover-file-input').addEventListener('change', (e) => {
 });
 document.getElementById('cover-recrop-btn').addEventListener('click', () => {
   if (!siteData.site || !siteData.site.cover_url) return;
+  pendingNewCoverFile = null;
   openCropModal({
-    title: 'Crop Book Cover', imageSrc: siteData.site.cover_url, aspectRatio: 2 / 3, round: false,
+    title: 'Crop Book Cover', imageSrc: siteData.site.cover_original_url || siteData.site.cover_url, aspectRatio: 2 / 3, round: false,
     onSave: uploadCover,
   });
 });
@@ -1757,11 +1763,13 @@ async function uploadCover(blob) {
   const coverImg = document.getElementById('cover-img');
   const fd = new FormData();
   fd.append('cover', blob, 'cover.jpg');
+  if (pendingNewCoverFile) fd.append('cover_original', pendingNewCoverFile, pendingNewCoverFile.name || 'original.jpg');
   fd.append('position_x', 50);
   fd.append('position_y', 50);
   const res = await fetch('/api/moderator/site/cover', { method: 'PUT', headers: authHeaders(), body: fd });
   if (res.ok) {
     const { site } = await res.json();
+    pendingNewCoverFile = null;
     siteData.site = { ...siteData.site, ...site };
     coverImg.src = site.cover_url + '?t=' + Date.now();
     coverImg.style.objectPosition = 'center';

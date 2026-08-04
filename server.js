@@ -17,7 +17,11 @@ const avatarStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, AVATARS_DIR),
   filename:    (req, file, cb) => {
     const ext = ({ 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' })[file.mimetype] || '.jpg';
-    cb(null, `${req.user.id}${ext}`);
+    // Two files can land in the same request now (the baked crop + the
+    // untouched original, see /api/auth/avatar) -- suffix by fieldname so
+    // they don't collide on the same {userId}{ext} filename.
+    const suffix = file.fieldname === 'avatar_original' ? '-original' : '';
+    cb(null, `${req.user.id}${suffix}${ext}`);
   },
 });
 const uploadAvatar = multer({
@@ -184,6 +188,7 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS account_banner_position_y INTEGER NOT NULL DEFAULT 50;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_position_x INTEGER NOT NULL DEFAULT 50;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_position_y INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_original_url TEXT NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_theme TEXT NOT NULL DEFAULT 'default';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_theme_bg_url TEXT NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_theme TEXT NOT NULL DEFAULT 'default';
@@ -291,6 +296,7 @@ async function initDb() {
     ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS cover_url TEXT NOT NULL DEFAULT '';
     ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS cover_position_x INTEGER NOT NULL DEFAULT 50;
     ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS cover_position_y INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS cover_original_url TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('moderator_sites cover migration:', e.message));
 
   // Quick-nav card art — the Characters/Chapters/Gallery shortcut cards on the
@@ -1137,6 +1143,7 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
 
   // Section title is editable per club (defaults to "Featured Cards").
   await pool.query(`
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS icon_original_url TEXT NOT NULL DEFAULT '';
     ALTER TABLE clubs ADD COLUMN IF NOT EXISTS featured_cards_title TEXT NOT NULL DEFAULT 'Featured Cards';
   `).catch(e => console.error('clubs featured_cards_title migration:', e.message));
 
@@ -1926,24 +1933,38 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 app.post('/api/auth/avatar', requireAuth, (req, res, next) => {
-  uploadAvatar.single('avatar')(req, res, async (err) => {
+  uploadAvatar.fields([{ name: 'avatar', maxCount: 1 }, { name: 'avatar_original', maxCount: 1 }])(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message || 'Upload failed.' });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+    const avatarFile = req.files && req.files.avatar && req.files.avatar[0];
+    if (!avatarFile) return res.status(400).json({ error: 'No file uploaded.' });
 
     const exts = ['.jpg', '.png', '.webp', '.gif'];
-    const newFile = req.file.filename;
+    const newFile = avatarFile.filename;
     exts.forEach(ext => {
       const old = path.join(AVATARS_DIR, `${req.user.id}${ext}`);
       if (path.basename(old) !== newFile && fs.existsSync(old)) fs.unlinkSync(old);
     });
 
-    const avatarUrl = `/images/avatars/${req.file.filename}`;
-    // Position/zoom reset to center/1x on every new upload, same as banner/cover/character-ref uploads.
-    await pool.query(
-      'UPDATE users SET avatar = $1, avatar_position_x = 50, avatar_position_y = 50, avatar_zoom = 100 WHERE id = $2',
-      [avatarUrl, req.user.id]
-    );
-    res.json({ avatar: avatarUrl, position_x: 50, position_y: 50, zoom: 100 });
+    const avatarUrl = `/images/avatars/${avatarFile.filename}`;
+    // `avatar_original` is only sent the first time a NEW source photo is
+    // picked -- Recrop re-sends just `avatar` (a fresh bake) from the
+    // existing original, so avatar_original_url stays untouched. Same
+    // pattern as the story banner/cover-card fix.
+    const originalFile = req.files.avatar_original && req.files.avatar_original[0];
+    if (originalFile) {
+      const originalUrl = `/images/avatars/${originalFile.filename}`;
+      await pool.query(
+        'UPDATE users SET avatar = $1, avatar_original_url = $2, avatar_position_x = 50, avatar_position_y = 50, avatar_zoom = 100 WHERE id = $3',
+        [avatarUrl, originalUrl, req.user.id]
+      );
+    } else {
+      await pool.query(
+        'UPDATE users SET avatar = $1, avatar_position_x = 50, avatar_position_y = 50, avatar_zoom = 100 WHERE id = $2',
+        [avatarUrl, req.user.id]
+      );
+    }
+    const { rows: [u] } = await pool.query('SELECT avatar_original_url FROM users WHERE id = $1', [req.user.id]);
+    res.json({ avatar: avatarUrl, avatar_original_url: u.avatar_original_url, position_x: 50, position_y: 50, zoom: 100 });
   });
 });
 
@@ -2005,7 +2026,7 @@ app.get('/api/auth/confirm-email', async (req, res) => {
 
 app.get('/api/auth/profile', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
-    'SELECT id, username, display_name, email, avatar, email_newsletter, nsfw_enabled FROM users WHERE id = $1', [req.user.id]
+    'SELECT id, username, display_name, email, avatar, avatar_original_url, email_newsletter, nsfw_enabled FROM users WHERE id = $1', [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
   res.json({ user: { ...user, email: decryptEmail(user.email) } });
@@ -3901,7 +3922,7 @@ app.delete(['/api/bookmarks/:slug', '/api/bookmarks/by-path/:owner/:story'], req
 // ── Author profile — /fanpages/:username, Twitter-style header + their stories ──
 app.get('/api/fanpage-profile/:username', async (req, res) => {
   const { rows: [author] } = await pool.query(
-    `SELECT id, username, display_name, avatar, avatar_position_x, avatar_position_y, avatar_zoom,
+    `SELECT id, username, display_name, avatar, avatar_original_url, avatar_position_x, avatar_position_y, avatar_zoom,
             pronouns, favorite_pokemon, account_bio, fun_fact, account_links,
             account_banner_url, account_banner_position_x, account_banner_position_y, account_banner_zoom,
             profile_theme, profile_theme_bg_url
@@ -4004,6 +4025,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       username: author.username,
       display_name: author.display_name || author.username,
       avatar: author.avatar || null,
+      avatar_original_url: author.avatar_original_url || '',
       avatar_position_x: author.avatar_position_x != null ? author.avatar_position_x : 50,
       avatar_position_y: author.avatar_position_y != null ? author.avatar_position_y : 50,
       avatar_zoom: author.avatar_zoom || 100,
@@ -4900,10 +4922,11 @@ async function sendSiteLookup(query, params, req, res) {
   res.json({
     site: {
       slug: site.slug, story_path: site.story_path, site_title: site.site_title, synopsis: site.synopsis,
-      bio: site.bio, links: site.links, banner_url: site.banner_url,
+      bio: site.bio, links: site.links, banner_url: site.banner_url, banner_original_url: site.banner_original_url || '',
       banner_position: site.banner_position, theme: site.theme, theme_bg_url: site.theme_bg_url,
-      cover_url: site.cover_url, cover_position_x: site.cover_position_x, cover_position_y: site.cover_position_y,
+      cover_url: site.cover_url, cover_original_url: site.cover_original_url || '', cover_position_x: site.cover_position_x, cover_position_y: site.cover_position_y,
       characters_card_url: site.characters_card_url, chapters_card_url: site.chapters_card_url, gallery_card_url: site.gallery_card_url,
+      characters_card_original_url: site.characters_card_original_url || '', chapters_card_original_url: site.chapters_card_original_url || '', gallery_card_original_url: site.gallery_card_original_url || '',
       characters_card_position_x: site.characters_card_position_x, characters_card_position_y: site.characters_card_position_y,
       chapters_card_position_x: site.chapters_card_position_x, chapters_card_position_y: site.chapters_card_position_y,
       gallery_card_position_x: site.gallery_card_position_x, gallery_card_position_y: site.gallery_card_position_y,
@@ -4995,15 +5018,26 @@ app.put('/api/moderator/site/banner-position', requireAuth, requireModerator, as
 });
 
 // ── Book cover — sits beside the story description on the About section ──────
-app.put('/api/moderator/site/cover', requireAuth, requireModerator, uploadModImage.single('cover'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
-  const coverUrl = `/images/moderators/${req.file.filename}`;
+app.put('/api/moderator/site/cover', requireAuth, requireModerator, uploadModImage.fields([{ name: 'cover', maxCount: 1 }, { name: 'cover_original', maxCount: 1 }]), async (req, res) => {
+  const coverFile = req.files && req.files.cover && req.files.cover[0];
+  if (!coverFile) return res.status(400).json({ error: 'Image is required.' });
+  const coverUrl = `/images/moderators/${coverFile.filename}`;
   const x = parseInt(req.body.position_x, 10);
   const y = parseInt(req.body.position_y, 10);
-  const { rows: [site] } = await pool.query(
-    `UPDATE moderator_sites SET cover_url = $1, cover_position_x = $2, cover_position_y = $3, updated_at = NOW() WHERE id = $4 RETURNING *`,
-    [coverUrl, Number.isFinite(x) ? x : 50, Number.isFinite(y) ? y : 50, req.modSite.id]
-  );
+  // `cover_original` is only sent the first time a NEW source photo is
+  // picked -- Recrop re-sends just `cover` (a fresh bake) from the
+  // existing original, so cover_original_url stays untouched. Same
+  // pattern as the story banner/nav-card fix.
+  const originalFile = req.files.cover_original && req.files.cover_original[0];
+  const { rows: [site] } = originalFile
+    ? await pool.query(
+        `UPDATE moderator_sites SET cover_url = $1, cover_original_url = $2, cover_position_x = $3, cover_position_y = $4, updated_at = NOW() WHERE id = $5 RETURNING *`,
+        [coverUrl, `/images/moderators/${originalFile.filename}`, Number.isFinite(x) ? x : 50, Number.isFinite(y) ? y : 50, req.modSite.id]
+      )
+    : await pool.query(
+        `UPDATE moderator_sites SET cover_url = $1, cover_position_x = $2, cover_position_y = $3, updated_at = NOW() WHERE id = $4 RETURNING *`,
+        [coverUrl, Number.isFinite(x) ? x : 50, Number.isFinite(y) ? y : 50, req.modSite.id]
+      );
   res.json({ site });
 });
 
@@ -7140,7 +7174,7 @@ function clubPublicShape(c, viewerRole) {
   return {
     id: c.id, slug: c.slug, name: c.name, description: c.description,
     banner_url: c.banner_url, banner_position_x: c.banner_position_x, banner_position_y: c.banner_position_y,
-    icon_url: c.icon_url, owner_user_id: c.owner_user_id,
+    icon_url: c.icon_url, icon_original_url: c.icon_original_url || '', owner_user_id: c.owner_user_id,
     theme: c.theme || 'default', theme_bg_url: c.theme_bg_url || '',
     sidebar_title: c.sidebar_title || '', sidebar_message: c.sidebar_message || '', is_nsfw: !!c.is_nsfw,
     welcome_title: c.welcome_title || '', cover_mode: c.cover_mode || 'static', cover_image_url: c.cover_image_url || '',
@@ -7337,17 +7371,29 @@ app.put('/api/clubs/:slug/sidebar-splash', requireAuth, async (req, res) => {
 // pattern as a profile or story page. Owner/admin only.
 // PUT /api/clubs/:slug/icon — the club's pfp, cropped 1:1 client-side same
 // as everywhere else that uses openCropModal.
-app.put('/api/clubs/:slug/icon', requireAuth, uploadModImage.single('image'), async (req, res) => {
+app.put('/api/clubs/:slug/icon', requireAuth, uploadModImage.fields([{ name: 'image', maxCount: 1 }, { name: 'image_original', maxCount: 1 }]), async (req, res) => {
   const ctx = await requireClubAdmin(req, res);
   if (!ctx) return;
-  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
-  const iconUrl = `/images/moderators/${req.file.filename}`;
+  const iconFile = req.files && req.files.image && req.files.image[0];
+  if (!iconFile) return res.status(400).json({ error: 'Image is required.' });
+  const iconUrl = `/images/moderators/${iconFile.filename}`;
   if (ctx.club.icon_url.startsWith('/images/moderators/')) {
     const oldPath = path.join('/var/www/btw', ctx.club.icon_url);
     if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
   }
-  await pool.query('UPDATE clubs SET icon_url = $1 WHERE id = $2', [iconUrl, ctx.club.id]);
-  res.json({ icon_url: iconUrl });
+  // `image_original` is only sent the first time a NEW source photo is
+  // picked -- Recrop re-sends just `image` (a fresh bake) from the
+  // existing original, so icon_original_url stays untouched. Same pattern
+  // as the story banner/cover fix.
+  const originalFile = req.files.image_original && req.files.image_original[0];
+  if (originalFile) {
+    const originalUrl = `/images/moderators/${originalFile.filename}`;
+    await pool.query('UPDATE clubs SET icon_url = $1, icon_original_url = $2 WHERE id = $3', [iconUrl, originalUrl, ctx.club.id]);
+  } else {
+    await pool.query('UPDATE clubs SET icon_url = $1 WHERE id = $2', [iconUrl, ctx.club.id]);
+  }
+  const { rows: [club] } = await pool.query('SELECT icon_original_url FROM clubs WHERE id = $1', [ctx.club.id]);
+  res.json({ icon_url: iconUrl, icon_original_url: club.icon_original_url });
 });
 
 // PUT /api/clubs/:slug/nsfw — { is_nsfw: true|false }, settable either way

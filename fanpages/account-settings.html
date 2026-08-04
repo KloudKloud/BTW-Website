@@ -171,6 +171,7 @@
 
       if (u.avatar) {
         currentAvatarUrl = u.avatar;
+        currentAvatarOriginalUrl = u.avatar_original_url || '';
         const img = document.getElementById('profile-avatar-img');
         const ph  = document.getElementById('profile-avatar-placeholder');
         const posX = u.avatar_position_x != null ? u.avatar_position_x : 50;
@@ -223,6 +224,16 @@
   // reposition flow. The exported crop is the final image, so uploads
   // always land centered (position 50/50) — the crop is baked in already.
   let currentAvatarUrl = null;
+  // The untouched source photo, kept separate from the baked circular crop
+  // in `currentAvatarUrl` -- Recrop reopens THIS, not the previous crop's
+  // output, so repositioning/zooming always has the full original to work
+  // with instead of progressively cropping an already-cropped image. Same
+  // pattern as the story banner/cover fix.
+  let currentAvatarOriginalUrl = null;
+  // The raw File object from the picker, only set when a genuinely NEW
+  // photo was chosen -- Recrop (no new file) leaves this null so the
+  // upload only sends a fresh bake, not a second copy of the original.
+  let pendingNewAvatarFile = null;
 
   document.getElementById('avatar-btn').addEventListener('click', () =>
     document.getElementById('avatar-file').click()
@@ -230,6 +241,7 @@
   document.getElementById('avatar-file').addEventListener('change', function () {
     const file = this.files[0];
     if (!file) return;
+    pendingNewAvatarFile = file;
     openCropModal({
       title: 'Crop Profile Picture', imageSrc: URL.createObjectURL(file), aspectRatio: 1, round: true,
       onSave: uploadAvatar,
@@ -238,8 +250,9 @@
   });
   document.getElementById('avatar-recrop-btn').addEventListener('click', () => {
     if (!currentAvatarUrl) return;
+    pendingNewAvatarFile = null;
     openCropModal({
-      title: 'Crop Profile Picture', imageSrc: currentAvatarUrl, aspectRatio: 1, round: true,
+      title: 'Crop Profile Picture', imageSrc: currentAvatarOriginalUrl || currentAvatarUrl, aspectRatio: 1, round: true,
       onSave: uploadAvatar,
     });
   });
@@ -247,6 +260,7 @@
   async function uploadAvatar(blob) {
     const form = new FormData();
     form.append('avatar', blob, 'avatar.jpg');
+    if (pendingNewAvatarFile) form.append('avatar_original', pendingNewAvatarFile, pendingNewAvatarFile.name || 'original.jpg');
     try {
       const res  = await fetch(`${API}/auth/avatar`, {
         method:  'POST',
@@ -257,6 +271,8 @@
       if (!res.ok) { showAlert('profile-alert', data.error, 'error'); return; }
 
       currentAvatarUrl = data.avatar;
+      currentAvatarOriginalUrl = data.avatar_original_url || currentAvatarOriginalUrl;
+      pendingNewAvatarFile = null;
       const img = document.getElementById('profile-avatar-img');
       const ph  = document.getElementById('profile-avatar-placeholder');
       const url = data.avatar + '?t=' + Date.now();
