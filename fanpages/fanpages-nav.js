@@ -289,7 +289,7 @@ if (!window.FP_BASE) {
           </div>
         </div>
 
-        <button class="fpnav-login-btn" id="fpnav-login-btn" type="button">Log In / Register</button>
+        <button class="fpnav-login-btn" id="fpnav-login-btn" type="button">Sign In</button>
 
         <div class="fpnav-dropdown-wrap" id="fpnav-avatar-wrap" style="display:none;">
           <button class="fpnav-avatar-btn" id="fpnav-avatar-btn" type="button">
@@ -318,7 +318,7 @@ if (!window.FP_BASE) {
         <button class="fpnav-modal-close" id="fpnav-modal-close" type="button">✕</button>
         <p class="fpnav-modal-title">Log in to continue</p>
         <p class="fpnav-modal-text">You'll need a free Between Two Worlds account to create or manage stories on Fanpages.</p>
-        <button class="fpnav-modal-cta" id="fpnav-modal-cta" type="button">Log In / Register</button>
+        <button class="fpnav-modal-cta" id="fpnav-modal-cta" type="button">Sign In</button>
       </div>
     </div>
   `;
