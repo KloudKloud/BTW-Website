@@ -305,12 +305,21 @@
   // adjusts the TILE preview crop metadata (position_x/position_y); the
   // full-size art itself is never re-cropped or re-uploaded.
   let galleryPreviewCropper = null;
+  // Guards the crop handler against Cropper's OWN setup calls below
+  // (setCanvasData/setCropBoxData/setData each fire their own 'crop' event)
+  // recomputing galleryPos from an intermediate, not-yet-final state and
+  // clobbering the deliberate centered value with it -- that's what made a
+  // brand-new upload with zero user interaction still save an off-center
+  // position_x. Only a real drag (which only ever happens after ready()
+  // has finished) should ever update galleryPos.
+  let galleryPreviewInitializing = false;
   function showGalleryPreview(src) {
     const previewImg = document.getElementById('gallery-editor-preview-img');
     document.getElementById('gallery-editor-preview-field').style.display = 'block';
     if (galleryPreviewCropper) { galleryPreviewCropper.destroy(); galleryPreviewCropper = null; }
     previewImg.removeAttribute('src');
     previewImg.onload = () => {
+      galleryPreviewInitializing = true;
       galleryPreviewCropper = new Cropper(previewImg, {
         aspectRatio: 6 / 7, viewMode: 1, dragMode: 'move', autoCropArea: 1,
         cropBoxResizable: false, cropBoxMovable: false, background: false, responsive: true,
@@ -340,8 +349,12 @@
             x: maxX > 0 ? (galleryPos.x / 100) * maxX : data.x,
             y: maxY > 0 ? (galleryPos.y / 100) * maxY : data.y,
           });
+          // galleryPos is already correct (it's literally what was just
+          // applied) -- resume normal tracking for the next real drag.
+          galleryPreviewInitializing = false;
         },
         crop(event) {
+          if (galleryPreviewInitializing) return;
           const data = event.detail;
           const imgData = galleryPreviewCropper.getImageData();
           const maxX = imgData.naturalWidth - data.width;

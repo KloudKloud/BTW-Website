@@ -2665,6 +2665,12 @@ function seGetSelectedCategory() {
 // re-cropped or re-uploaded, only position_x/position_y (galleryPos).
 let seGalleryPos = { x: 50, y: 50 };
 let seGalleryPreviewCropper = null;
+// See create-gallery.html's showGalleryPreview for why this flag exists —
+// Cropper's own setup calls below each fire a 'crop' event, and without
+// this guard the crop handler recomputes seGalleryPos from an intermediate
+// (not-yet-final) state, clobbering the deliberate centered value even on
+// a brand-new upload with zero user interaction.
+let seGalleryPreviewInitializing = false;
 function seShowGalleryPreview(src) {
   const previewImg = document.getElementById('se-gallery-editor-preview-img');
   document.getElementById('se-gallery-editor-preview-field').style.display = 'block';
@@ -2672,6 +2678,7 @@ function seShowGalleryPreview(src) {
   previewImg.removeAttribute('src');
   previewImg.onload = () => {
     requestAnimationFrame(() => {
+      seGalleryPreviewInitializing = true;
       seGalleryPreviewCropper = new Cropper(previewImg, {
         aspectRatio: 6 / 7, viewMode: 1, dragMode: 'move', autoCropArea: 1,
         cropBoxResizable: false, cropBoxMovable: false, background: false, responsive: true,
@@ -2696,8 +2703,10 @@ function seShowGalleryPreview(src) {
             x: maxX > 0 ? (seGalleryPos.x / 100) * maxX : data.x,
             y: maxY > 0 ? (seGalleryPos.y / 100) * maxY : data.y,
           });
+          seGalleryPreviewInitializing = false;
         },
         crop(event) {
+          if (seGalleryPreviewInitializing) return;
           const data = event.detail;
           const imgData = seGalleryPreviewCropper.getImageData();
           const maxX = imgData.naturalWidth - data.width;

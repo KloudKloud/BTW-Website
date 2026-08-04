@@ -2720,11 +2720,17 @@ function updatePostPreviewField() {
   postPreviewPos = { x: 50, y: 50 };
   showPostPreviewCrop(postCreateImages[0].objectUrl);
 }
+// Guards the crop handler against Cropper's own setup calls in ready()
+// below (each fires its own 'crop' event) recomputing postPreviewPos from
+// an intermediate, not-yet-final state — see create-gallery.html's
+// showGalleryPreview for the full explanation.
+let postCreateCropperInitializing = false;
 function showPostPreviewCrop(src) {
   const previewImg = document.getElementById('cl-post-preview-img');
   if (postCreateCropper) { postCreateCropper.destroy(); postCreateCropper = null; }
   previewImg.removeAttribute('src');
   previewImg.onload = () => {
+    postCreateCropperInitializing = true;
     postCreateCropper = new Cropper(previewImg, {
       aspectRatio: 1, viewMode: 1, dragMode: 'move', autoCropArea: 1,
       cropBoxResizable: false, cropBoxMovable: false, background: false, responsive: true,
@@ -2752,8 +2758,10 @@ function showPostPreviewCrop(src) {
           x: maxX > 0 ? (postPreviewPos.x / 100) * maxX : data.x,
           y: maxY > 0 ? (postPreviewPos.y / 100) * maxY : data.y,
         });
+        postCreateCropperInitializing = false;
       },
       crop(event) {
+        if (postCreateCropperInitializing) return;
         const data = event.detail;
         const imgData = postCreateCropper.getImageData();
         const maxX = imgData.naturalWidth - data.width;
@@ -4497,6 +4505,8 @@ document.getElementById('cl-page-text-field-add-btn').addEventListener('click', 
 let editPageGalleryCache = [];
 let galleryPreviewCropper = null;
 let galleryItemPos = { x: 50, y: 50 };
+// See create-gallery.html's showGalleryPreview for why this guard exists.
+let galleryPreviewCropperInitializing = false;
 let editingGalleryItemId = null;
 let pendingGalleryItemFile = null;
 
@@ -4589,6 +4599,7 @@ function showPageGalleryPreview(src) {
   if (galleryPreviewCropper) { galleryPreviewCropper.destroy(); galleryPreviewCropper = null; }
   previewImg.removeAttribute('src');
   previewImg.onload = () => {
+    galleryPreviewCropperInitializing = true;
     galleryPreviewCropper = new Cropper(previewImg, {
       aspectRatio: 1, viewMode: 1, dragMode: 'move', autoCropArea: 1,
       cropBoxResizable: false, cropBoxMovable: false, background: false, responsive: true,
@@ -4611,8 +4622,10 @@ function showPageGalleryPreview(src) {
           x: maxX > 0 ? (galleryItemPos.x / 100) * maxX : data.x,
           y: maxY > 0 ? (galleryItemPos.y / 100) * maxY : data.y,
         });
+        galleryPreviewCropperInitializing = false;
       },
       crop(event) {
+        if (galleryPreviewCropperInitializing) return;
         const data = event.detail;
         const imgData = galleryPreviewCropper.getImageData();
         const maxX = imgData.naturalWidth - data.width;
