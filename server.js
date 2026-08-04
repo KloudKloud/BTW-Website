@@ -1693,8 +1693,18 @@ app.post('/api/auth/verify', async (req, res) => {
 
   await pool.query('UPDATE users SET verified = true, verify_token = NULL WHERE id = $1', [user.id]);
 
+  // Every new account follows @btwteam by default — they're free to
+  // unfollow afterward, this just seeds it so the welcome modal has
+  // something real to show as already-followed.
+  await pool.query(
+    `INSERT INTO user_follows (follower_id, followed_id)
+     SELECT $1, id FROM users WHERE username = 'btwteam'
+     ON CONFLICT DO NOTHING`,
+    [user.id]
+  ).catch(e => console.error('btwteam auto-follow:', e.message));
+
   const autoToken = signToken(user.id);
-  const loginUrl  = `https://${siteHost(req)}/login?autotoken=${autoToken}`
+  const loginUrl  = `https://${siteHost(req)}/login?autotoken=${autoToken}&welcome=1`
     + (fromPath ? `&from=${encodeURIComponent(fromPath)}` : '');
 
   try {

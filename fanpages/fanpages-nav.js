@@ -52,6 +52,38 @@ if (!window.FP_BASE) {
   if (favicon) favicon.href = '/images/gallery/infernoselfie_8.png';
 }
 
+// ── First-time welcome modal ─────────────────────────────────────────────
+// Every new account auto-follows @btwteam server-side at verification
+// (see POST /api/auth/verify). login.html sets btw_show_welcome when that
+// verification's autotoken link lands there — this is the one-time payoff:
+// shown on whichever page the user actually lands on, then never again.
+if (localStorage.getItem('btw_show_welcome') === '1') {
+  localStorage.removeItem('btw_show_welcome');
+  fetch('/api/fanpage-profile/btwteam').then(r => r.ok ? r.json() : null).then(data => {
+    const team = data && data.author;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="fpnav-modal-overlay" id="fp-welcome-overlay">
+        <div class="fpnav-modal-card fp-welcome-card">
+          <p class="fpnav-modal-title">Welcome to Between Two Worlds!</p>
+          <div class="fp-welcome-team-row">
+            <img class="fp-welcome-team-avatar" src="${(team && team.avatar) || '/images/gallery/pixiegarden_5.png'}" alt="" />
+            <div class="fp-welcome-team-info">
+              <span class="fp-welcome-team-name">${(team && (team.display_name || team.username)) || 'BTW Team'}</span>
+              <span class="fp-welcome-team-following">&#10003; Following</span>
+            </div>
+          </div>
+          <p class="fpnav-modal-text">May you venture off, traveler, and experience the world beyond~</p>
+          <button class="fpnav-modal-cta" id="fp-welcome-next" type="button">Next</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrap.firstElementChild);
+    const overlay = document.getElementById('fp-welcome-overlay');
+    document.getElementById('fp-welcome-next').addEventListener('click', () => overlay.remove());
+  }).catch(() => {});
+}
+
 // ── Shared "Welcome" login modal — e621-style, available on every page that
 // loads this script (not gated behind #fanpages-topbar-root existing, since
 // pages like the story reader/editor also need to be able to pop it).
