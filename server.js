@@ -1563,26 +1563,6 @@ const emailConfirmEmailChange = (name, confirmUrl) => emailShell(`
   </p>
 `);
 
-const emailWelcome = (name, loginUrl) => emailShell(`
-  <div style="text-align:center;margin-bottom:24px;">
-    <div style="display:inline-block;background:#e8f5e9;border-radius:50%;width:60px;height:60px;line-height:60px;font-size:1.8rem;">✓</div>
-  </div>
-  <h2 style="color:#1a237e;font-size:1.25rem;text-align:center;margin:0 0 8px;">Thank you for signing up!</h2>
-  <p style="color:#2e7d32;font-size:1rem;text-align:center;font-weight:bold;margin:0 0 20px;">Your account is now active.</p>
-  <p style="color:#424242;font-size:0.95rem;line-height:1.7;text-align:center;margin:0 0 28px;">
-    Welcome aboard, <strong style="color:#e65100;">${name}</strong>! Click the button below to head back and log in to your new account.
-  </p>
-  <div style="text-align:center;margin-bottom:28px;">
-    <a href="${loginUrl}"
-       style="display:inline-block;background:#1565c0;color:#ffffff;text-decoration:none;padding:13px 36px;border-radius:6px;font-weight:bold;font-size:1rem;letter-spacing:0.02em;">
-      Login to the site
-    </a>
-  </div>
-  <p style="color:#bdbdbd;font-size:0.78rem;text-align:center;margin:0;">
-    This link will log you in automatically — no password needed.
-  </p>
-`);
-
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 // POST /api/auth/register
@@ -1752,21 +1732,12 @@ app.post('/api/auth/verify', async (req, res) => {
   ).catch(e => console.error('btwteam auto-follow:', e.message));
 
   const autoToken = signToken(user.id);
+  // No separate "welcome" email anymore — activation now auto-logs the
+  // user in and redirects them into the site immediately, so a second
+  // email with its own "Login to the site" link just arrived redundant
+  // (they're usually already on the site, logged in, by the time it's read).
   const loginUrl  = `https://${siteHost(req)}/login?autotoken=${autoToken}&welcome=1`
     + (fromPath ? `&from=${encodeURIComponent(fromPath)}` : '');
-
-  try {
-    await resend.emails.send({
-      from: 'Between Two Worlds <hello@btwfanfic.net>',
-      reply_to: 'hello@btwfanfic.net',
-      to: decryptEmail(user.email),
-      subject: 'Welcome to Between Two Worlds!',
-      html: emailWelcome(user.display_name || user.username, loginUrl),
-      text: `Hi ${user.display_name || user.username},\n\nYour Between Two Worlds account is now active!\n\nClick the link below to log in automatically:\n${loginUrl}\n\nWelcome aboard!\n\n— Between Two Worlds`,
-    });
-  } catch (err) {
-    console.error('Welcome email error:', err.message);
-  }
 
   res.json({ redirect: loginUrl });
 });
