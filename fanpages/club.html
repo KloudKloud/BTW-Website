@@ -3351,14 +3351,21 @@ async function toggleGalleryLike(img) {
 // idea as the Fanpage gallery's own image detail page: big image, title,
 // description, a heart, prev/next to the neighboring images, and the
 // shared comments block relocated in here while open.
-function openPageGalleryDetail(idx) {
+// Splits "swap which image is showing" from "open the detail view fresh"
+// so the prev/next arrows (which just call showGalleryDetailImage) don't
+// re-trigger the scroll-to-top every click -- only the initial open from
+// the grid does that.
+function showGalleryDetailImage(idx) {
   pageGalleryDetailIdx = idx;
   renderGalleryDetail();
+  ccMoveTo('cl-gallery-detail-comments-slot');
+  ccInitSection('club_gallery_image', pageGalleryImages[idx].id);
+}
+function openPageGalleryDetail(idx) {
   document.getElementById('cl-custom-page-view').hidden = true;
   document.getElementById('cl-gallery-detail-view').hidden = false;
   window.scrollTo(0, 0);
-  ccMoveTo('cl-gallery-detail-comments-slot');
-  ccInitSection('club_gallery_image', pageGalleryImages[idx].id);
+  showGalleryDetailImage(idx);
 }
 function renderGalleryDetail() {
   const img = pageGalleryImages[pageGalleryDetailIdx];
@@ -3381,11 +3388,11 @@ document.getElementById('cl-gallery-detail-like-btn').addEventListener('click', 
 });
 document.getElementById('cl-gallery-detail-prev').addEventListener('click', () => {
   if (pageGalleryDetailIdx === 0) return;
-  openPageGalleryDetail(pageGalleryDetailIdx - 1);
+  showGalleryDetailImage(pageGalleryDetailIdx - 1);
 });
 document.getElementById('cl-gallery-detail-next').addEventListener('click', () => {
   if (pageGalleryDetailIdx === pageGalleryImages.length - 1) return;
-  openPageGalleryDetail(pageGalleryDetailIdx + 1);
+  showGalleryDetailImage(pageGalleryDetailIdx + 1);
 });
 document.getElementById('cl-gallery-detail-back-btn').addEventListener('click', () => {
   document.getElementById('cl-gallery-detail-view').hidden = true;

@@ -51,8 +51,9 @@
     .notif-main { max-width: 1500px; margin: 0 auto; padding: 3rem 2rem 5rem; }
     .notif-layout { display: flex; gap: 2.5rem; align-items: flex-start; }
 
-    /* Long box on the left — the same billboard slides as the hub, just
-       auto-cycling with no manual nav (no arrows, no dots). */
+    /* Long box on the left — a stagnant placeholder image (was an
+       auto-cycling ad-style billboard, removed per request; swap the src
+       above whenever there's real art for this spot). */
     .notif-billboard {
       position: relative;
       width: 400px;
@@ -64,27 +65,7 @@
       border: 1px solid rgba(255,255,255,0.08);
       box-shadow: 0 24px 70px rgba(0,0,0,0.55);
     }
-    .notif-billboard-track { position: absolute; inset: 0; }
-    .notif-billboard-slide {
-      position: absolute; inset: 0;
-      opacity: 0; transition: opacity 1.4s ease;
-      display: block;
-    }
-    .notif-billboard-slide.active { opacity: 1; z-index: 1; }
-    .notif-billboard-slide-bg { position: absolute; inset: 0; background-repeat: no-repeat; }
-    .notif-billboard-slide-scrim {
-      position: absolute; left: 0; right: 0; bottom: 0; padding: 1.75rem 1.5rem 1.25rem;
-      background: linear-gradient(to top, rgba(0,0,0,0.82), transparent);
-    }
-    .notif-billboard-slide-cap {
-      font-family: 'Cinzel', Georgia, serif; font-size: 1.15rem; font-weight: 700;
-      margin-bottom: 0.3rem; text-shadow: 0 2px 10px rgba(0,0,0,0.6);
-    }
-    .notif-billboard-slide-credit { font-size: 0.78rem; color: rgba(255,255,255,0.75); }
-    .notif-billboard-empty {
-      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-      color: #999; font-size: 0.9rem; text-align: center; padding: 2rem;
-    }
+    .notif-billboard-static-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
     .notif-content { flex: 1; min-width: 0; }
 
@@ -627,10 +608,7 @@
   <div class="notif-layout">
 
     <aside class="notif-billboard" id="notif-billboard">
-      <div class="notif-billboard-track" id="notif-billboard-track"></div>
-      <div class="notif-billboard-empty" id="notif-billboard-empty">
-        <p>✨ Something fun is coming to this spot soon!</p>
-      </div>
+      <img class="notif-billboard-static-img" src="/images/gallery/solusgarnet_17.png" alt="" />
     </aside>
 
     <section class="notif-content">
@@ -823,11 +801,6 @@
       .catch(() => {});
   }
 
-  // ── Billboard — same slides/data source as the hub, auto-cycling only ────
-  let billboardSlides = [];
-  let billboardIndex = 0;
-  let billboardTimer = null;
-
   const billboardImgDims = {};
   function loadImageDims(url) {
     if (billboardImgDims[url]) return Promise.resolve(billboardImgDims[url]);
@@ -844,96 +817,6 @@
     const factor = (zoomPercent || 100) / 100;
     return { w: (renderedW / (boxW || 1)) * 100 * factor, h: (renderedH / (boxH || 1)) * 100 * factor };
   }
-
-  async function renderBillboard(slides) {
-    billboardSlides = slides;
-    const track = document.getElementById('notif-billboard-track');
-    const empty = document.getElementById('notif-billboard-empty');
-
-    if (!slides.length) {
-      empty.style.display = 'flex';
-      track.innerHTML = '';
-      return;
-    }
-    empty.style.display = 'none';
-
-    await Promise.all(slides.map(s => loadImageDims(s.image_url)));
-
-    track.innerHTML = '';
-    slides.forEach((slide, i) => {
-      const el = document.createElement('div');
-      el.className = 'notif-billboard-slide' + (i === 0 ? ' active' : '');
-      el.innerHTML = `
-        <div class="notif-billboard-slide-bg"></div>
-        ${(slide.caption || slide.credit) ? `
-          <div class="notif-billboard-slide-scrim">
-            ${slide.caption ? `<p class="notif-billboard-slide-cap">${escapeHtml(slide.caption)}</p>` : ''}
-            ${slide.credit ? `<p class="notif-billboard-slide-credit">${escapeHtml(slide.credit)}</p>` : ''}
-          </div>` : ''}
-      `;
-      track.appendChild(el);
-    });
-
-    billboardIndex = 0;
-    playSlideAnimation(0);
-    restartBillboardTimer();
-  }
-
-  const BILLBOARD_INTERVAL_MS = 15000;
-
-  function playSlideAnimation(index) {
-    const slide = billboardSlides[index];
-    if (!slide) return;
-    const el = document.querySelectorAll('.notif-billboard-slide')[index];
-    if (!el) return;
-    const bg = el.querySelector('.notif-billboard-slide-bg');
-    const dims = billboardImgDims[slide.image_url];
-    if (!dims) return;
-    const boxW = el.clientWidth, boxH = el.clientHeight;
-
-    bg.style.transition = 'none';
-    bg.style.backgroundImage = `url(${slide.image_url})`;
-    const startSize = coverBgSize(dims, boxW, boxH, slide.zoom);
-    bg.style.backgroundSize = `${startSize.w}% ${startSize.h}%`;
-    bg.style.backgroundPosition = `${slide.position_x}% ${slide.position_y}%`;
-    void bg.offsetWidth;
-
-    if (slide.animation_type && slide.animation_type !== 'none') {
-      bg.style.transition = `background-position ${BILLBOARD_INTERVAL_MS}ms linear, background-size ${BILLBOARD_INTERVAL_MS}ms linear`;
-      requestAnimationFrame(() => {
-        if (slide.animation_type === 'pan_v') {
-          bg.style.backgroundPosition = `${slide.position_x}% ${slide.end_position_y}%`;
-        } else if (slide.animation_type === 'pan_h') {
-          bg.style.backgroundPosition = `${slide.end_position_x}% ${slide.position_y}%`;
-        } else if (slide.animation_type === 'zoom') {
-          const endSize = coverBgSize(dims, boxW, boxH, slide.end_zoom);
-          bg.style.backgroundSize = `${endSize.w}% ${endSize.h}%`;
-        }
-      });
-    }
-  }
-
-  window.addEventListener('resize', () => { if (billboardSlides.length) playSlideAnimation(billboardIndex); });
-
-  function goToSlide(i) {
-    if (!billboardSlides.length) return;
-    billboardIndex = (i + billboardSlides.length) % billboardSlides.length;
-    document.querySelectorAll('.notif-billboard-slide').forEach((el, idx) => el.classList.toggle('active', idx === billboardIndex));
-    playSlideAnimation(billboardIndex);
-    restartBillboardTimer();
-  }
-
-  function restartBillboardTimer() {
-    if (billboardTimer) clearInterval(billboardTimer);
-    if (billboardSlides.length > 1) {
-      billboardTimer = setInterval(() => goToSlide(billboardIndex + 1), BILLBOARD_INTERVAL_MS);
-    }
-  }
-
-  fetch('/api/hub-billboard')
-    .then(r => r.ok ? r.json() : { slides: [] })
-    .then(data => renderBillboard(data.slides || []))
-    .catch(() => renderBillboard([]));
 
   // ── Reduced banner (admin-adjustable crop) ────────────────────────────────
   let bannerData = null;

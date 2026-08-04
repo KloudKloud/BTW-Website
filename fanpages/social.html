@@ -153,6 +153,14 @@
       border-radius: 10px; padding: 0.1em 0.5em;
     }
     .soc-manage-list { display: flex; flex-direction: column; gap: 0.3rem; max-height: 50vh; overflow-y: auto; margin-bottom: 1rem; }
+    .soc-manage-row { display: flex; align-items: center; gap: 0.5rem; }
+    .soc-manage-row .soc-sidebar-club-link { flex: 1; min-width: 0; }
+    .soc-manage-delete-btn {
+      flex-shrink: 0; background: none; border: 1px solid rgba(217,90,90,0.35); color: #d97a72;
+      border-radius: 8px; font-size: 0.78rem; font-weight: 600; padding: 0.4em 0.7em; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .soc-manage-delete-btn:hover { background: rgba(217,90,90,0.12); border-color: rgba(217,90,90,0.6); }
 
     /* ── Main content ──
        Offset by the fixed sidebar's width on the left and the fixed
@@ -447,6 +455,18 @@
   </div>
 </div>
 
+<!-- Delete-club confirm — only shown for clubs the viewer owns. -->
+<div class="mod-confirm-overlay" id="soc-club-delete-confirm-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title" id="soc-club-delete-confirm-title">Delete this club?</p>
+    <p class="mod-confirm-text">This permanently deletes the club, its posts, and its members. This can't be undone.</p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="soc-club-delete-confirm-cancel" type="button">Cancel</button>
+      <button class="mod-btn mod-btn--danger" id="soc-club-delete-confirm-yes" type="button">Delete</button>
+    </div>
+  </div>
+</div>
+
 <!-- Create Club modal -->
 <div class="char-editor-overlay" id="soc-create-overlay" hidden>
   <div class="char-editor-modal">
@@ -615,14 +635,66 @@ function setModCollapsed(collapsed) {
 modCollapseBtn.addEventListener('click', () => setModCollapsed(!modCollapseBtn.classList.contains('soc-collapsed')));
 if (localStorage.getItem('soc_mod_collapsed') === '1') setModCollapsed(true);
 
-// "⚙️ Manage" — the full list in a modal, same clubs as the preview.
-document.getElementById('soc-mod-manage-btn').addEventListener('click', () => {
+// "⚙️ Manage" — the full list in a modal, same clubs as the preview, but
+// each row for a club the viewer OWNS also gets a Delete button (only the
+// owner can delete — enforced server-side too).
+function manageClubRowEl(c) {
+  const row = document.createElement('div');
+  row.className = 'soc-manage-row';
+  row.appendChild(sidebarModClubLink(c));
+  if (c.viewer_role === 'owner') {
+    const delBtn = document.createElement('button');
+    delBtn.className = 'soc-manage-delete-btn';
+    delBtn.type = 'button';
+    delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', () => openClubDeleteConfirm(c));
+    row.appendChild(delBtn);
+  }
+  return row;
+}
+function renderManageList() {
   const list = document.getElementById('soc-manage-list');
   list.innerHTML = modClubsCache.length
     ? ''
     : '<p class="soc-sidebar-note">Nothing to manage yet.</p>';
-  modClubsCache.forEach(c => list.appendChild(sidebarModClubLink(c)));
+  modClubsCache.forEach(c => list.appendChild(manageClubRowEl(c)));
+}
+document.getElementById('soc-mod-manage-btn').addEventListener('click', () => {
+  renderManageList();
   document.getElementById('soc-manage-overlay').hidden = false;
+});
+
+// Delete-club confirm.
+let clubPendingDelete = null;
+function openClubDeleteConfirm(c) {
+  clubPendingDelete = c;
+  document.getElementById('soc-club-delete-confirm-title').textContent = `Delete "${c.name}"?`;
+  document.getElementById('soc-club-delete-confirm-overlay').hidden = false;
+}
+document.getElementById('soc-club-delete-confirm-cancel').addEventListener('click', () => {
+  clubPendingDelete = null;
+  document.getElementById('soc-club-delete-confirm-overlay').hidden = true;
+});
+document.getElementById('soc-club-delete-confirm-yes').addEventListener('click', async () => {
+  if (!clubPendingDelete) return;
+  const btn = document.getElementById('soc-club-delete-confirm-yes');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(clubPendingDelete.slug)}`, {
+      method: 'DELETE', headers: authHeaders(),
+    });
+    if (res.ok) {
+      modClubsCache = modClubsCache.filter(c => c.slug !== clubPendingDelete.slug);
+      renderManageList();
+      renderModClubsPreview();
+      document.getElementById('soc-club-delete-confirm-overlay').hidden = true;
+    }
+  } catch {} finally {
+    btn.disabled = false;
+    btn.textContent = 'Delete';
+    clubPendingDelete = null;
+  }
 });
 document.getElementById('soc-manage-close').addEventListener('click', () => {
   document.getElementById('soc-manage-overlay').hidden = true;
