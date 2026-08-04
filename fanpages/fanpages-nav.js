@@ -245,6 +245,59 @@ if (!window.FP_BASE) {
     document.body.classList.add('fpnav-modal-open');
     setTimeout(() => document.getElementById('fp-loginmodal-identifier').focus(), 30);
   };
+
+  // ── "Sign In First" prompt — the small closable notice shown whenever a
+  // guest tries an account-only action (Follow, joining a club, voting in a
+  // poll, etc.) instead of yanking them to a different page. Closing it
+  // (X, outside-click, Escape) just hides it and leaves them exactly where
+  // they were; its two inline links either open the real login modal or
+  // send them to registration. window.fpRequireSignIn(message) is the
+  // entry point — message defaults to the Follow-specific wording but any
+  // caller can override it.
+  let signInFirstOverlay = null;
+  const DEFAULT_SIGNIN_MESSAGE = 'To do that, you must create an account!';
+
+  function buildSignInFirstModal() {
+    if (signInFirstOverlay) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="fpnav-modal-overlay" id="fp-signinfirst-overlay" hidden>
+        <div class="fpnav-modal-card">
+          <button class="fpnav-modal-close" id="fp-signinfirst-close" type="button" aria-label="Close">&#10005;</button>
+          <p class="fpnav-modal-title">Sign In First</p>
+          <p class="fpnav-modal-text" id="fp-signinfirst-text"></p>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrap.firstElementChild);
+    signInFirstOverlay = document.getElementById('fp-signinfirst-overlay');
+
+    function hide() { signInFirstOverlay.hidden = true; }
+    document.getElementById('fp-signinfirst-close').addEventListener('click', hide);
+    signInFirstOverlay.addEventListener('click', (e) => { if (e.target === signInFirstOverlay) hide(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !signInFirstOverlay.hidden) hide();
+    });
+    document.getElementById('fp-signinfirst-text').addEventListener('click', (e) => {
+      const action = e.target.dataset && e.target.dataset.action;
+      if (!action) return;
+      e.preventDefault();
+      hide();
+      if (action === 'signin') window.fpOpenLoginModal();
+      else if (action === 'register') {
+        sessionStorage.setItem('btw_auth_from', window.location.pathname + window.location.search);
+        window.location.href = fpUrl('/register');
+      }
+    });
+  }
+
+  window.fpRequireSignIn = function (message) {
+    buildSignInFirstModal();
+    document.getElementById('fp-signinfirst-text').innerHTML =
+      `${message || DEFAULT_SIGNIN_MESSAGE} <a href="#" data-action="signin">Sign In</a> here or ` +
+      `<a href="#" data-action="register">Create a Free Account</a> here.`;
+    signInFirstOverlay.hidden = false;
+  };
 })();
 
 // ── Shared persistent top bar for every /fanpages/* page ────────────────────
@@ -278,7 +331,11 @@ if (!window.FP_BASE) {
         </div>
       </div>
 
-      <a class="fpnav-link fpnav-trigger-link${here === fpUrl('/characters') ? ' active' : ''}" href="${fpUrl('/characters')}">Characters</a>
+      <!-- Never gets an .active/glow state, even when the current page IS
+           /characters — Browse's own "Characters" entry points at the same
+           URL, and having both light up this top-level button felt wrong,
+           so per request it just never lights up at all. -->
+      <a class="fpnav-link fpnav-trigger-link" href="${fpUrl('/characters')}">Characters</a>
 
       <div class="fpnav-dropdown-wrap fpnav-left-dropdown-wrap">
         <button class="fpnav-link fpnav-trigger-link${[fpUrl('/search'), fpUrl('/fandoms')].includes(here) ? ' active' : ''}" id="fpnav-browse-btn" type="button">Browse <span class="fpnav-caret">▾</span></button>

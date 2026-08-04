@@ -664,8 +664,10 @@ async function setReaderTheme(theme) {
 }
 
 document.getElementById('rd-theme-dark').addEventListener('click', () => setReaderTheme('dark'));
+// Guests can preview a custom background too — it just can't persist
+// anywhere without an account, so the upload step below is skipped for them
+// and it resets back to Dark on their next visit.
 document.getElementById('rd-theme-custom').addEventListener('click', () => {
-  if (!authToken) { window.location.href = '/login.html'; return; }
   document.getElementById('rd-theme-bg-file-input').click();
 });
 
@@ -681,13 +683,15 @@ readerThemeBgFileInput.addEventListener('change', async (e) => {
   readerTheme = 'custom';
   readerThemeBgUrl = URL.createObjectURL(file); // instant preview
   applyReaderTheme();
-  const fd = new FormData();
-  fd.append('image', file);
-  const res = await fetch('/api/account/reader-theme-bg', { method: 'PUT', headers: authHeaders(), body: fd });
-  if (res.ok) {
-    const data = await res.json();
-    readerThemeBgUrl = data.theme_bg_url;
-    applyReaderTheme();
+  if (authToken) {
+    const fd = new FormData();
+    fd.append('image', file);
+    const res = await fetch('/api/account/reader-theme-bg', { method: 'PUT', headers: authHeaders(), body: fd });
+    if (res.ok) {
+      const data = await res.json();
+      readerThemeBgUrl = data.theme_bg_url;
+      applyReaderTheme();
+    }
   }
   readerThemeBgFileInput.value = '';
 });
@@ -880,7 +884,7 @@ function renderSideLinks() {
   `).join('');
 }
 document.getElementById('rd-follow-btn').addEventListener('click', async () => {
-  if (!authToken) { window.location.href = '/login.html'; return; }
+  if (!authToken) { window.fpRequireSignIn('To follow this author, you must create an account!'); return; }
   const wasFollowing = !!SITE.is_following;
   try {
     await fetch(`/api/follows/${SITE.author_username}`, { method: wasFollowing ? 'DELETE' : 'POST', headers: authHeaders() });

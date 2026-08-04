@@ -2198,7 +2198,14 @@
     info.appendChild(sub);
     row.appendChild(info);
 
-    if (!u.is_self && token) {
+    if (!u.is_self && !token) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'fp-follow-btn fp-follow-btn--follow';
+      btn.textContent = 'Follow';
+      btn.addEventListener('click', () => window.fpRequireSignIn('To follow this user, you must create an account!'));
+      row.appendChild(btn);
+    } else if (!u.is_self) {
       const btn = document.createElement('button');
       btn.type = 'button';
       let following = u.is_following;
@@ -2399,12 +2406,17 @@
       return;
     }
 
+    // Guests keep seeing a normal-looking Follow button rather than a
+    // different "Log In to Follow" link -- clicking it just opens the
+    // Sign In First prompt in place instead of hitting the API or
+    // navigating anywhere.
     if (!token) {
-      const a = document.createElement('a');
-      a.className = 'fp-action-btn fp-action-btn--login';
-      a.href = window.fpUrl(`/login?from=${encodeURIComponent(here)}`);
-      a.textContent = 'Log In to Follow';
-      wrap.appendChild(a);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'fp-action-btn fp-action-btn--follow';
+      btn.textContent = 'Follow';
+      btn.addEventListener('click', () => window.fpRequireSignIn('To follow this user, you must create an account!'));
+      wrap.appendChild(btn);
       return;
     }
 
