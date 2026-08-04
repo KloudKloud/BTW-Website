@@ -78,6 +78,7 @@
       <div class="cc-section" id="char-detail-comments">
         <p class="cc-title">💬 Comments</p>
         <div class="cc-compose" id="cc-compose" style="display:none;">
+          <input type="text" id="cc-guest-name" class="cc-guest-name-input" placeholder="Guest name" maxlength="40" style="display:none;" />
           <textarea id="cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
           <button class="cc-compose-btn" id="cc-compose-btn" type="button">Post</button>
         </div>
@@ -474,7 +475,6 @@ function renderProfile(char) {
   likeBtn.setAttribute('aria-label', 'Like this character');
   likeBtn.innerHTML = `<span class="char-like-icon">${char.liked ? '♥' : '♡'}</span> <span class="char-like-count">${char.likeCount}</span>`;
   likeBtn.addEventListener('click', async () => {
-    if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
     likeBtn.disabled = true;
     try {
       const res = await fetch(`/api/moderator/character/${char.id}/like`, { method: char.liked ? 'DELETE' : 'POST', headers: authHeaders() });
@@ -770,11 +770,20 @@ const CURRENT_USER = (() => {
 let ccTargetType = null, ccTargetId = null;
 
 function ccAvatarHtml(c) {
+  if (c.is_guest) return '<img class="cc-avatar" src="/images/defaultchar.jpg" alt="" />';
   const name = c.display_name || c.username || '?';
   const initial = escapeHtml(name.charAt(0).toUpperCase());
   return c.avatar
     ? `<img class="cc-avatar" src="${c.avatar}" alt="" />`
     : `<span class="cc-avatar-fallback">${initial}</span>`;
+}
+function ccNameHtml(c) {
+  if (c.is_guest) return `<span class="cc-name cc-name-guest">${escapeHtml(c.display_name || 'Guest')}</span>`;
+  return `<span class="cc-name"><a href="${window.fpUrl(`/${encodeURIComponent(c.username)}`)}">${escapeHtml(c.display_name || c.username)}</a></span>`;
+}
+function ccGuestName() {
+  const input = document.getElementById('cc-guest-name');
+  return input ? input.value.trim() : (localStorage.getItem('btw_guest_name') || '');
 }
 function ccTimeAgo(iso) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -797,17 +806,19 @@ function ccCommentEl(c, isReply) {
   body.className = 'cc-body-wrap';
   body.innerHTML = `
     <div class="cc-bubble">
-      <span class="cc-name"><a href="${window.fpUrl(`/${encodeURIComponent(c.username)}`)}">${escapeHtml(c.display_name || c.username)}</a></span>
+      ${ccNameHtml(c)}
       <span class="cc-time">${ccTimeAgo(c.created_at)}</span>
       <p class="cc-text">${c.reply_to_username ? `<span class="cc-mention">@${escapeHtml(c.reply_to_username)}</span> ` : ''}${escapeHtml(c.body)}</p>
     </div>
     <div class="cc-actions">
-      ${token && !isReply ? '<button class="cc-action-btn" data-action="reply">Reply</button>' : ''}
+      ${!isReply ? '<button class="cc-action-btn" data-action="reply">Reply</button>' : ''}
       ${ccIsMine(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : ''}
     </div>
   `;
   wrap.appendChild(body);
 
+  const guestNameEl = body.querySelector('.cc-name-guest');
+  if (guestNameEl) guestNameEl.addEventListener('click', () => alert('Account does not exist.'));
   const replyBtn = body.querySelector('[data-action="reply"]');
   if (replyBtn) replyBtn.addEventListener('click', () => ccOpenReplyBox(body, c));
   const deleteBtn = body.querySelector('[data-action="delete"]');
@@ -835,12 +846,14 @@ function ccOpenReplyBox(bodyEl, parentComment) {
   box.querySelector('button').addEventListener('click', async () => {
     const text = textarea.value.trim();
     if (!text) return;
+    const guestName = token ? null : ccGuestName();
+    if (!token && !guestName) { alert('Add your name in the comment box above first.'); return; }
     const btn = box.querySelector('button');
     btn.disabled = true;
     try {
       const res = await fetch('/api/content-comments', {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ target_type: ccTargetType, target_id: ccTargetId, body: text, parent_id: parentComment.id }),
+        body: JSON.stringify({ target_type: ccTargetType, target_id: ccTargetId, body: text, parent_id: parentComment.id, guest_name: guestName }),
       });
       if (res.ok) await ccLoadComments();
     } finally { btn.disabled = false; }
@@ -874,7 +887,12 @@ async function ccLoadComments() {
 function ccInitSection(targetType, targetId) {
   ccTargetType = targetType;
   ccTargetId = targetId;
-  document.getElementById('cc-compose').style.display = token ? 'flex' : 'none';
+  document.getElementById('cc-compose').style.display = 'flex';
+  if (!token) {
+    const guestInput = document.getElementById('cc-guest-name');
+    guestInput.style.display = 'block';
+    guestInput.value = localStorage.getItem('btw_guest_name') || '';
+  }
   ccLoadComments();
 }
 
@@ -882,12 +900,18 @@ document.getElementById('cc-compose-btn').addEventListener('click', async () => 
   const input = document.getElementById('cc-compose-input');
   const text = input.value.trim();
   if (!text || !ccTargetType) return;
+  let guestName = null;
+  if (!token) {
+    guestName = ccGuestName();
+    if (!guestName) { alert('Please enter a name.'); document.getElementById('cc-guest-name').focus(); return; }
+    localStorage.setItem('btw_guest_name', guestName);
+  }
   const btn = document.getElementById('cc-compose-btn');
   btn.disabled = true;
   try {
     const res = await fetch('/api/content-comments', {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ target_type: ccTargetType, target_id: ccTargetId, body: text }),
+      body: JSON.stringify({ target_type: ccTargetType, target_id: ccTargetId, body: text, guest_name: guestName }),
     });
     if (res.ok) { input.value = ''; await ccLoadComments(); }
   } finally { btn.disabled = false; }

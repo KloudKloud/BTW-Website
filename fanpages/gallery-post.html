@@ -138,6 +138,7 @@
     <div class="cc-section" id="fp-gallery-detail-comments">
       <p class="cc-title">💬 Comments</p>
       <div class="cc-compose" id="fp-cc-compose" style="display:none;">
+        <input type="text" id="fp-cc-guest-name" class="cc-guest-name-input" placeholder="Guest name" maxlength="40" style="display:none;" />
         <textarea id="fp-cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
         <button class="cc-compose-btn" id="fp-cc-compose-btn" type="button">Post</button>
       </div>
@@ -313,9 +314,16 @@ const CURRENT_USER = (() => {
   try { return JSON.parse(localStorage.getItem('btw_user') || sessionStorage.getItem('btw_user') || 'null'); } catch { return null; }
 })();
 function ccAvatarHtml(c) {
+  if (c.is_guest) return '<img class="cc-avatar" src="/images/defaultchar.jpg" alt="" />';
   const name = c.display_name || c.username || '?';
   const initial = escapeHtml(name.charAt(0).toUpperCase());
   return c.avatar ? `<img class="cc-avatar" src="${c.avatar}" alt="" />` : `<span class="cc-avatar-fallback">${initial}</span>`;
+}
+// Guests never had a real account — clicking their name shouldn't navigate
+// anywhere, just explain why.
+function ccNameHtml(c) {
+  if (c.is_guest) return `<span class="cc-name cc-name-guest">${escapeHtml(c.display_name || 'Guest')}</span>`;
+  return `<span class="cc-name"><a href="${window.fpUrl(`/${encodeURIComponent(c.username)}`)}">${escapeHtml(c.display_name || c.username)}</a></span>`;
 }
 function ccTimeAgo(iso) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -326,6 +334,12 @@ function ccTimeAgo(iso) {
   return new Date(iso).toLocaleDateString();
 }
 function ccIsMine(c) { return CURRENT_USER && CURRENT_USER.id === c.user_id; }
+// Guests type their name once (in the main compose box); it's remembered in
+// localStorage so replies don't have to ask again every time.
+function ccGuestName() {
+  const input = document.getElementById('fp-cc-guest-name');
+  return input ? input.value.trim() : (localStorage.getItem('btw_guest_name') || '');
+}
 function ccCommentEl(c, isReply) {
   const wrap = document.createElement('div');
   wrap.className = 'cc-item';
@@ -336,16 +350,18 @@ function ccCommentEl(c, isReply) {
   body.className = 'cc-body-wrap';
   body.innerHTML = `
     <div class="cc-bubble">
-      <span class="cc-name"><a href="${window.fpUrl(`/${encodeURIComponent(c.username)}`)}">${escapeHtml(c.display_name || c.username)}</a></span>
+      ${ccNameHtml(c)}
       <span class="cc-time">${ccTimeAgo(c.created_at)}</span>
       <p class="cc-text">${c.reply_to_username ? `<span class="cc-mention">@${escapeHtml(c.reply_to_username)}</span> ` : ''}${escapeHtml(c.body)}</p>
     </div>
     <div class="cc-actions">
-      ${token && !isReply ? '<button class="cc-action-btn" data-action="reply">Reply</button>' : ''}
+      ${!isReply ? '<button class="cc-action-btn" data-action="reply">Reply</button>' : ''}
       ${ccIsMine(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : (token ? '<button class="cc-action-btn" data-action="report">Report</button>' : '')}
     </div>
   `;
   wrap.appendChild(body);
+  const guestNameEl = body.querySelector('.cc-name-guest');
+  if (guestNameEl) guestNameEl.addEventListener('click', () => alert('Account does not exist.'));
   const replyBtn = body.querySelector('[data-action="reply"]');
   if (replyBtn) replyBtn.addEventListener('click', () => ccOpenReplyBox(body, c));
   const reportBtn = body.querySelector('[data-action="report"]');
@@ -373,12 +389,14 @@ function ccOpenReplyBox(bodyEl, parentComment) {
   box.querySelector('button').addEventListener('click', async () => {
     const text = textarea.value.trim();
     if (!text) return;
+    const guestName = token ? null : ccGuestName();
+    if (!token && !guestName) { alert('Add your name in the comment box above first.'); return; }
     const btn = box.querySelector('button');
     btn.disabled = true;
     try {
       const res = await fetch('/api/content-comments', {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ target_type: 'gallery', target_id: GALLERY_ID, body: text, parent_id: parentComment.id }),
+        body: JSON.stringify({ target_type: 'gallery', target_id: GALLERY_ID, body: text, parent_id: parentComment.id, guest_name: guestName }),
       });
       if (res.ok) await ccLoadComments();
     } finally { btn.disabled = false; }
@@ -420,12 +438,18 @@ document.getElementById('fp-cc-compose-btn').addEventListener('click', async () 
   const input = document.getElementById('fp-cc-compose-input');
   const text = input.value.trim();
   if (!text) return;
+  let guestName = null;
+  if (!token) {
+    guestName = ccGuestName();
+    if (!guestName) { alert('Please enter a name.'); document.getElementById('fp-cc-guest-name').focus(); return; }
+    localStorage.setItem('btw_guest_name', guestName);
+  }
   const btn = document.getElementById('fp-cc-compose-btn');
   btn.disabled = true;
   try {
     const res = await fetch('/api/content-comments', {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ target_type: 'gallery', target_id: GALLERY_ID, body: text }),
+      body: JSON.stringify({ target_type: 'gallery', target_id: GALLERY_ID, body: text, guest_name: guestName }),
     });
     if (res.ok) { input.value = ''; await ccLoadComments(); }
   } finally { btn.disabled = false; }
@@ -443,7 +467,6 @@ document.getElementById('fp-gallery-detail-back').addEventListener('click', (e) 
 });
 
 document.getElementById('fp-gallery-detail-like').addEventListener('click', async () => {
-  if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
   const btn = document.getElementById('fp-gallery-detail-like');
   if (btn.disabled) return;
   btn.disabled = true;
@@ -503,7 +526,12 @@ document.getElementById('fp-gallery-detail-share').addEventListener('click', (e)
     renderStatsBox(item);
     bumpViewCount(item.id);
 
-    document.getElementById('fp-cc-compose').style.display = token ? 'flex' : 'none';
+    document.getElementById('fp-cc-compose').style.display = 'flex';
+    if (!token) {
+      const guestInput = document.getElementById('fp-cc-guest-name');
+      guestInput.style.display = 'block';
+      guestInput.value = localStorage.getItem('btw_guest_name') || '';
+    }
     ccLoadComments();
   } catch {
     document.getElementById('fp-gallery-detail-view').innerHTML = '<p style="padding:3rem 0; text-align:center; color:#999;">Couldn\'t load this gallery post.</p>';

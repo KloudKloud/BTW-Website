@@ -495,6 +495,7 @@
     <div class="rd-bottom-comments">
       <p class="rd-recs-title">Comments</p>
       <div class="rd-cp-compose">
+        <input type="text" id="rd-bc-guest-name" class="cc-guest-name-input" placeholder="Guest name" maxlength="40" style="display:none;" />
         <textarea class="rd-cp-textarea" id="rd-bc-input" placeholder="Add a comment…" maxlength="2000"></textarea>
         <div id="rd-bc-gif-preview-wrap" class="rd-cp-gif-preview-wrap" data-target="bc-root" hidden>
           <img alt="Selected GIF" />
@@ -526,6 +527,7 @@
   <blockquote class="rd-cp-context" id="rd-cp-context"></blockquote>
 
   <div class="rd-cp-compose">
+    <input type="text" id="rd-cp-guest-name" class="cc-guest-name-input" placeholder="Guest name" maxlength="40" style="display:none;" />
     <textarea class="rd-cp-textarea" id="rd-cp-input" placeholder="Add a comment…" maxlength="2000"></textarea>
     <div id="rd-cp-gif-preview-wrap" class="rd-cp-gif-preview-wrap" hidden>
       <img id="rd-cp-gif-preview" alt="Selected GIF" />
@@ -561,6 +563,13 @@ try {
   if (rawUser) currentUser = JSON.parse(rawUser);
 } catch {}
 function ccIsMine(c) { return currentUser && currentUser.id === c.user_id; }
+if (!authToken) {
+  ['rd-bc-guest-name', 'rd-cp-guest-name'].forEach(id => {
+    const input = document.getElementById(id);
+    input.style.display = 'block';
+    input.value = localStorage.getItem('btw_guest_name') || '';
+  });
+}
 async function ccDeleteComment(id) {
   if (!confirm('Delete this comment?')) return;
   try {
@@ -824,7 +833,6 @@ function renderLikeState() {
   document.getElementById('rd-like-count').textContent = CURRENT.like_count || 0;
 }
 document.getElementById('rd-like-btn').addEventListener('click', async () => {
-  if (!authToken) { window.location.href = '/login.html'; return; }
   const wasLiked = !!CURRENT.liked;
   try {
     const res = await fetch(`/api/chapters/${CURRENT.id}/like`, { method: wasLiked ? 'DELETE' : 'POST', headers: authHeaders() });
@@ -1033,9 +1041,21 @@ async function loadParagraphThread() {
 }
 
 function commentAvatarHtml(c) {
+  if (c.is_guest) return '<img class="cc-avatar" src="/images/defaultchar.jpg" alt="" />';
   return c.avatar
     ? `<img class="cc-avatar" src="${escapeHtml(c.avatar)}" alt="" />`
     : `<span class="cc-avatar-fallback">${escapeHtml(((c.display_name || c.username || '?')[0] || '?').toUpperCase())}</span>`;
+}
+function commentNameHtml(c) {
+  if (c.is_guest) return `<span class="cc-name cc-name-guest">${escapeHtml(c.display_name || 'Guest')}</span>`;
+  return `<span class="cc-name"><a href="${window.fpUrl(`/${escapeHtml(c.username)}`)}">${escapeHtml(c.display_name || c.username)}</a></span>`;
+}
+// Each of the two compose sections (bottom-of-chapter "rd-bc" and the
+// paragraph drawer "rd-cp") has its own guest-name input; replies within a
+// thread reuse whichever one belongs to that thread's prefix.
+function ccGuestName(prefix) {
+  const input = document.getElementById(prefix === 'rd-cp' ? 'rd-cp-guest-name' : 'rd-bc-guest-name');
+  return input ? input.value.trim() : (localStorage.getItem('btw_guest_name') || '');
 }
 
 // `collapsible` — the bottom-of-chapter list collapses replies behind a
@@ -1055,7 +1075,7 @@ function renderCommentItem(c, prefix, collapsible) {
       <div class="cc-body-wrap">
         <div class="cc-bubble">
           ${collapsible && c.paragraph_index != null ? `<span class="rd-cp-para-tag">💬 inline comment</span><br>` : ''}
-          <span class="cc-name"><a href="${window.fpUrl(`/${escapeHtml(c.username)}`)}">${escapeHtml(c.display_name || c.username)}</a></span>
+          ${commentNameHtml(c)}
           <span class="cc-time">${formatRelativeTime(c.created_at)}</span>
           ${c.reply_to_username ? `<div class="cc-mention">@${escapeHtml(c.reply_to_username)}</div>` : ''}
           ${c.body ? `<p class="cc-text">${escapeHtml(c.body)}</p>` : ''}
@@ -1104,6 +1124,9 @@ function clearGifPreview(prefix, target) {
 
 function wireCommentThreadEvents(prefix, collapsible) {
   const scope = document.getElementById(`${prefix}-list`);
+  scope.querySelectorAll('.cc-name-guest').forEach(el => {
+    el.addEventListener('click', () => alert('Account does not exist.'));
+  });
   scope.querySelectorAll('.rd-cp-replies-toggle').forEach(btn => {
     const showLabel = btn.textContent;
     btn.addEventListener('click', () => {
@@ -1125,7 +1148,6 @@ function wireCommentThreadEvents(prefix, collapsible) {
   });
   scope.querySelectorAll('.rd-cp-reply-send').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!authToken) { window.location.href = '/login.html'; return; }
       const targetId = btn.dataset.targetId;
       const p = btn.dataset.prefix;
       const form = document.getElementById(`${p}-reply-form-${targetId}`);
@@ -1171,14 +1193,23 @@ function wireCommentThreadEvents(prefix, collapsible) {
 // paragraph_index: null while a reply to an inline comment there still
 // carries that comment's own paragraph_index.
 async function submitComment(prefix, parentId, text, gifUrl, paragraphIndex, collapsible) {
-  if (!authToken) { window.location.href = '/login.html'; return; }
+  let guestName = null;
+  if (!authToken) {
+    guestName = ccGuestName(prefix);
+    if (!guestName) {
+      alert('Please enter a name.');
+      document.getElementById(prefix === 'rd-cp' ? 'rd-cp-guest-name' : 'rd-bc-guest-name').focus();
+      return;
+    }
+    localStorage.setItem('btw_guest_name', guestName);
+  }
   try {
     await fetch('/api/content-comments', {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         target_type: 'chapter_paragraph', target_id: CURRENT.id,
-        paragraph_index: paragraphIndex, parent_id: parentId, body: text, gif_url: gifUrl,
+        paragraph_index: paragraphIndex, parent_id: parentId, body: text, gif_url: gifUrl, guest_name: guestName,
       }),
     });
     if (prefix === 'rd-cp') loadParagraphThread();
@@ -1187,7 +1218,6 @@ async function submitComment(prefix, parentId, text, gifUrl, paragraphIndex, col
 }
 
 document.getElementById('rd-cp-send').addEventListener('click', async () => {
-  if (!authToken) { window.location.href = '/login.html'; return; }
   const textarea = document.getElementById('rd-cp-input');
   const text = textarea.value.trim();
   const gifUrl = pendingGif['rd-cp'].root || null;
@@ -1224,7 +1254,6 @@ async function loadAllChapterComments() {
   }
 }
 document.getElementById('rd-bc-send').addEventListener('click', async () => {
-  if (!authToken) { window.location.href = '/login.html'; return; }
   const textarea = document.getElementById('rd-bc-input');
   const text = textarea.value.trim();
   const gifUrl = pendingGif['rd-bc'].root || null;
