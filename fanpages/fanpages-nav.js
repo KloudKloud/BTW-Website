@@ -27,6 +27,23 @@ window.fpFixLinks = function (container) {
   });
 };
 
+// ── Site-wide 18+ age gate ───────────────────────────────────────────────
+// Runs before anything else on this script (topbar injection, favicon
+// swap, etc.) so there's minimal flash of the underlying page. Every
+// unregistered visitor must accept once, no matter which page they land
+// on first. Logged-in users skip this — they already agreed to the 18+
+// notice at signup. Guests are asked exactly once; remembered in
+// localStorage until they clear it themselves (no expiry).
+(function () {
+  const hasToken = !!(localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token'));
+  const confirmed = localStorage.getItem('btw_age_confirmed') === '1';
+  const gateUrl = window.fpUrl('/agecheck');
+  const onGatePage = location.pathname.replace(/\/$/, '') === gateUrl.replace(/\/$/, '');
+  if (hasToken || confirmed || onGatePage) return;
+  const from = location.pathname + location.search;
+  window.location.replace(`${gateUrl}?from=${encodeURIComponent(from)}`);
+})();
+
 // btwfics.net gets its own favicon so the browser tab visually distinguishes
 // it from btwfanfic.net, even though every page's static <link rel="icon">
 // markup still points at the shared default (same file serves both domains).
