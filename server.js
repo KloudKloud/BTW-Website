@@ -3895,10 +3895,12 @@ app.get('/api/bookmarks', requireAuth, async (req, res) => {
 async function findSiteBySlugParam(req) {
   const { owner, story } = req.params;
   if (owner && story) {
-    const { rows: [site] } = await pool.query('SELECT id FROM moderator_sites WHERE story_path = $1', [`${owner}/${story}`]);
+    const { rows: [site] } = await pool.query(
+      'SELECT id, owner_user_id, site_title, story_path FROM moderator_sites WHERE story_path = $1', [`${owner}/${story}`]);
     return site || null;
   }
-  const { rows: [site] } = await pool.query('SELECT id FROM moderator_sites WHERE slug = $1 ORDER BY created_at ASC LIMIT 1', [req.params.slug]);
+  const { rows: [site] } = await pool.query(
+    'SELECT id, owner_user_id, site_title, story_path FROM moderator_sites WHERE slug = $1 ORDER BY created_at ASC LIMIT 1', [req.params.slug]);
   return site || null;
 }
 
@@ -3909,6 +3911,8 @@ app.post(['/api/bookmarks/:slug', '/api/bookmarks/by-path/:owner/:story'], requi
     'INSERT INTO moderator_bookmarks (user_id, site_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
     [req.user.id, site.id]
   );
+  await notifyUser(site.owner_user_id, req.user.id, 'story_bookmark',
+    `bookmarked your story "${site.site_title || 'Untitled'}".`, `/${site.story_path}`);
   res.json({ message: 'Bookmarked.' });
 });
 
@@ -4174,6 +4178,10 @@ app.post('/api/newspaper', requireAuth, uploadInbox.array('attachments', 4), asy
     `INSERT INTO newspaper_posts (user_id, title, body, attachments) VALUES ($1, $2, $3, $4) RETURNING *`,
     [req.user.id, title, body, JSON.stringify(attachments)]
   );
+  const { rows: [actor] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
+  await notifyFollowers(req.user.id, 'new_newspaper',
+    `posted a new newspaper${title ? `: "${title}"` : '.'}`,
+    `/${actor.username}?news=${post.id}#newspaper`);
   res.json({ post: { ...post, comment_count: 0 } });
 });
 
@@ -4218,13 +4226,18 @@ app.get('/api/newspaper/post/:id/comments', async (req, res) => {
 app.post('/api/newspaper/post/:id/comments', requireAuth, async (req, res) => {
   const body = String(req.body.body || '').trim().slice(0, 2000);
   if (!body) return res.status(400).json({ error: 'Comment cannot be empty.' });
-  const { rows: [post] } = await pool.query('SELECT id FROM newspaper_posts WHERE id = $1', [req.params.id]);
+  const { rows: [post] } = await pool.query(
+    `SELECT np.id, np.user_id, np.title, u.username AS owner_username
+     FROM newspaper_posts np JOIN users u ON u.id = np.user_id WHERE np.id = $1`, [req.params.id]);
   if (!post) return res.status(404).json({ error: 'Post not found.' });
   const { rows: [comment] } = await pool.query(
     `INSERT INTO newspaper_comments (post_id, user_id, body) VALUES ($1, $2, $3) RETURNING id, body, created_at`,
     [post.id, req.user.id, body]
   );
   const { rows: [me] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
+  await notifyUser(post.user_id, req.user.id, 'newspaper_comment',
+    `commented on your newspaper${post.title ? ` "${post.title}"` : ''}.`,
+    `/${post.owner_username}?news=${post.id}#newspaper`);
   res.json({
     comment: {
       id: comment.id, body: comment.body, created_at: comment.created_at,
@@ -4342,6 +4355,8 @@ app.post('/api/follows/:username', requireAuth, async (req, res) => {
     'INSERT INTO user_follows (follower_id, followed_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
     [req.user.id, target.id]
   );
+  const { rows: [follower] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
+  await notifyUser(target.id, req.user.id, 'follow', 'started following you.', `/${follower.username}`);
   res.json({ message: 'Followed.' });
 });
 
@@ -5419,11 +5434,20 @@ app.post('/api/moderator/chapters', requireAuth, requireModerator, uploadChapter
 app.put('/api/moderator/chapters/:id/status', requireAuth, requireModerator, async (req, res) => {
   const status = req.body.status;
   if (!['draft', 'published'].includes(status)) return res.status(400).json({ error: 'status must be draft or published.' });
+  const { rows: [existing] } = await pool.query(
+    'SELECT status FROM moderator_chapters WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
+  );
   const { rows: [chapter] } = await pool.query(
     'UPDATE moderator_chapters SET status = $1, updated_at = NOW() WHERE id = $2 AND site_id = $3 RETURNING *',
     [status, req.params.id, req.modSite.id]
   );
   if (!chapter) return res.status(404).json({ error: 'Not found.' });
+  // Only notify followers on the draft→published transition, not every save.
+  if (existing && existing.status !== 'published' && status === 'published') {
+    await notifyFollowers(req.user.id, 'new_chapter',
+      `published a new chapter: "${chapter.title}".`,
+      `/${req.modSite.story_path}/reader?ch=${chapter.id}`);
+  }
   res.json({ chapter });
 });
 
@@ -5851,6 +5875,10 @@ app.post('/api/characters', requireAuth, async (req, res) => {
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
      JSON.stringify(relationships || []), !!ref_is_nsfw]
   );
+  const { rows: [actor] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
+  await notifyFollowers(req.user.id, 'new_character',
+    `uploaded a new character: "${character.name}".`,
+    `/${actor.username}?char=${character.id}#characters`);
   res.json({ character });
 });
 
@@ -5941,6 +5969,10 @@ app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage
     'INSERT INTO gallery_story_links (gallery_id, site_id, sort_order) VALUES ($1, $2, $3)',
     [item.id, req.modSite.id, maxOrder + 1]
   );
+  const { rows: [actor1] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
+  await notifyFollowers(req.user.id, 'new_gallery',
+    `uploaded new gallery art${item.title ? `: "${item.title}"` : '.'}`,
+    `/${actor1.username}?gallery=${item.id}#gallery`);
   res.json({ item });
 });
 
@@ -6161,6 +6193,10 @@ app.post('/api/gallery', requireAuth, uploadModImage.single('image'), async (req
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
     [req.user.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY, JSON.stringify(tags)]
   );
+  const { rows: [actor2] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
+  await notifyFollowers(req.user.id, 'new_gallery',
+    `uploaded new gallery art${item.title ? `: "${item.title}"` : '.'}`,
+    `/${actor2.username}?gallery=${item.id}#gallery`);
   res.json({ item });
 });
 
@@ -6217,6 +6253,10 @@ app.post('/api/moderator/gallery/:id/like', requireAuth, async (req, res) => {
     [req.user.id, item.id]
   );
   const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM moderator_gallery_likes WHERE gallery_id = $1', [item.id]);
+  const info = await commentTargetInfo('gallery', item.id);
+  if (info && info.ownerId) {
+    await notifyUser(info.ownerId, req.user.id, 'gallery_like', `liked your gallery post "${info.title}".`, info.link);
+  }
   res.json({ liked: true, like_count: Number(count) });
 });
 
@@ -6233,6 +6273,10 @@ app.post('/api/moderator/gallery/:id/bookmark', requireAuth, async (req, res) =>
     'INSERT INTO moderator_gallery_bookmarks (user_id, gallery_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
     [req.user.id, item.id]
   );
+  const info = await commentTargetInfo('gallery', item.id);
+  if (info && info.ownerId) {
+    await notifyUser(info.ownerId, req.user.id, 'gallery_bookmark', `bookmarked your gallery post "${info.title}".`, info.link);
+  }
   res.json({ bookmarked: true });
 });
 
@@ -6249,6 +6293,10 @@ app.post('/api/moderator/character/:id/like', requireAuth, async (req, res) => {
     [req.user.id, item.id]
   );
   const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM moderator_character_likes WHERE character_id = $1', [item.id]);
+  const info = await commentTargetInfo('character', item.id);
+  if (info && info.ownerId) {
+    await notifyUser(info.ownerId, req.user.id, 'character_like', `liked your character "${info.title}".`, info.link);
+  }
   res.json({ liked: true, like_count: Number(count) });
 });
 
@@ -6265,6 +6313,10 @@ app.post('/api/moderator/character/:id/bookmark', requireAuth, async (req, res) 
     'INSERT INTO moderator_character_bookmarks (user_id, character_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
     [req.user.id, item.id]
   );
+  const info = await commentTargetInfo('character', item.id);
+  if (info && info.ownerId) {
+    await notifyUser(info.ownerId, req.user.id, 'character_bookmark', `bookmarked your character "${info.title}".`, info.link);
+  }
   res.json({ bookmarked: true });
 });
 
@@ -6299,6 +6351,10 @@ app.post('/api/chapters/:id/like', requireAuth, async (req, res) => {
     [req.user.id, ch.id]
   );
   const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM chapter_likes WHERE chapter_id = $1', [ch.id]);
+  const info = await commentTargetInfo('chapter_paragraph', ch.id);
+  if (info && info.ownerId) {
+    await notifyUser(info.ownerId, req.user.id, 'chapter_like', `liked your chapter "${info.title}".`, info.link);
+  }
   res.json({ liked: true, like_count: Number(count) });
 });
 
@@ -6308,53 +6364,73 @@ app.delete('/api/chapters/:id/like', requireAuth, async (req, res) => {
   res.json({ liked: false, like_count: Number(count) });
 });
 
+// ── Notifications — generic fan-out helpers used by every real event below
+// (follow, like, bookmark, top-level comment, new chapter/character/gallery/
+// newspaper post, club join/post). Never notifies someone about their own
+// action. ────────────────────────────────────────────────────────────────
+async function notifyUser(userId, actorId, type, message, link) {
+  if (!userId || userId === actorId) return;
+  await pool.query(
+    `INSERT INTO notifications (user_id, actor_user_id, type, message, link) VALUES ($1, $2, $3, $4, $5)`,
+    [userId, actorId, type, message, link]
+  ).catch(e => console.error('notification insert:', e.message));
+}
+
+// "Someone you follow did X" — fans a single event out to every follower.
+async function notifyFollowers(actorId, type, message, link) {
+  const { rows } = await pool.query('SELECT follower_id FROM user_follows WHERE followed_id = $1', [actorId]);
+  await Promise.all(rows.map(r => notifyUser(r.follower_id, actorId, type, message, link)));
+}
+
 // ── Universal comments — target_type/target_id, reusable for gallery posts
 // now and Newspaper/Social posts later. Replies are exactly one level deep:
 // a reply's parent_id always points at a ROOT comment, enforced here by
 // flattening (replying to a reply re-parents onto that reply's root). ──────
 
-// Resolves a {title, link} pair per target type, for notification text —
-// add a case here whenever a new target_type gets comments wired up.
+// Resolves a {title, link, ownerId} triple per target type, for notification
+// text and direct-owner notifications — add a case here whenever a new
+// target_type gets comments wired up. ownerId is null where the content has
+// no single user owner (e.g. admin-curated club gallery pages).
 async function commentTargetInfo(targetType, targetId) {
   if (targetType === 'gallery') {
     const { rows: [g] } = await pool.query(
-      `SELECT mg.title, u.username AS owner_username
+      `SELECT mg.title, mg.owner_user_id, u.username AS owner_username
        FROM moderator_gallery mg JOIN users u ON u.id = mg.owner_user_id
        WHERE mg.id = $1`,
       [targetId]
     );
     if (!g) return null;
-    return { title: g.title || 'Untitled', link: `/${g.owner_username}?gallery=${targetId}#gallery` };
+    return { title: g.title || 'Untitled', link: `/${g.owner_username}?gallery=${targetId}#gallery`, ownerId: g.owner_user_id };
   }
   if (targetType === 'character') {
     const { rows: [c] } = await pool.query(
-      `SELECT mc.name, u.username AS owner_username
+      `SELECT mc.name, mc.owner_user_id, u.username AS owner_username
        FROM moderator_characters mc JOIN users u ON u.id = mc.owner_user_id
        WHERE mc.id = $1`,
       [targetId]
     );
     if (!c) return null;
-    return { title: c.name || 'Unnamed', link: `/${c.owner_username}?char=${targetId}#characters` };
+    return { title: c.name || 'Unnamed', link: `/${c.owner_username}?char=${targetId}#characters`, ownerId: c.owner_user_id };
   }
   if (targetType === 'chapter_paragraph') {
     const { rows: [c] } = await pool.query(
-      `SELECT mc.title, ms.story_path
+      `SELECT mc.title, ms.story_path, ms.owner_user_id
        FROM moderator_chapters mc JOIN moderator_sites ms ON ms.id = mc.site_id
        WHERE mc.id = $1`,
       [targetId]
     );
     if (!c) return null;
-    return { title: c.title || 'Untitled Chapter', link: `/${c.story_path}/reader?ch=${targetId}` };
+    return { title: c.title || 'Untitled Chapter', link: `/${c.story_path}/reader?ch=${targetId}`, ownerId: c.owner_user_id };
   }
   if (targetType === 'club_post') {
     const { rows: [p] } = await pool.query(
-      `SELECT cp.title, c.slug
+      `SELECT cp.title, cp.author_user_id, c.slug
        FROM club_posts cp JOIN clubs c ON c.id = cp.club_id
        WHERE cp.id = $1`,
       [targetId]
     );
     if (!p) return null;
-    return { title: p.title || 'Untitled', link: `/club?slug=${encodeURIComponent(p.slug)}&post=${targetId}` };
+    return { title: p.title || 'Untitled', link: `/club?slug=${encodeURIComponent(p.slug)}&post=${targetId}`, ownerId: p.author_user_id };
   }
   if (targetType === 'club_gallery_image') {
     const { rows: [g] } = await pool.query(
@@ -6367,7 +6443,7 @@ async function commentTargetInfo(targetType, targetId) {
     if (!g) return null;
     // Not independently deep-linkable (the detail view is an in-page swap,
     // not a routed URL) — link back to the gallery page itself instead.
-    return { title: g.title || 'Untitled', link: `/club?slug=${encodeURIComponent(g.club_slug)}&page=${encodeURIComponent(g.page_slug)}` };
+    return { title: g.title || 'Untitled', link: `/club?slug=${encodeURIComponent(g.club_slug)}&page=${encodeURIComponent(g.page_slug)}`, ownerId: null };
   }
   return null;
 }
@@ -6466,7 +6542,6 @@ app.post('/api/content-comments', requireAuth, async (req, res) => {
       [rootParentId]
     );
     const info = await commentTargetInfo(targetType, targetId);
-    const actorName = author.display_name || author.username;
     await Promise.all(
       participants
         .map(r => r.user_id)
@@ -6474,14 +6549,19 @@ app.post('/api/content-comments', requireAuth, async (req, res) => {
         .map(uid => {
           const isDirect = uid === directParentUserId;
           const message = isDirect
-            ? `${actorName} replied to your comment${info ? ` on "${info.title}"` : ''}.`
-            : `${actorName} added a new reply in a thread you're part of${info ? ` on "${info.title}"` : ''}.`;
-          return pool.query(
-            `INSERT INTO notifications (user_id, actor_user_id, type, message, link) VALUES ($1, $2, $3, $4, $5)`,
-            [uid, req.user.id, isDirect ? 'comment_reply' : 'comment_thread_update', message, info ? info.link : null]
-          ).catch(() => {});
+            ? `replied to your comment${info ? ` on "${info.title}"` : ''}.`
+            : `added a new reply in a thread you're part of${info ? ` on "${info.title}"` : ''}.`;
+          return notifyUser(uid, req.user.id, isDirect ? 'comment_reply' : 'comment_thread_update', message, info ? info.link : null);
         })
     );
+  } else {
+    // Fresh top-level comment (not a reply) — notify whoever owns the
+    // content itself, since the thread-participant fan-out above only
+    // covers replies.
+    const info = await commentTargetInfo(targetType, targetId);
+    if (info && info.ownerId) {
+      await notifyUser(info.ownerId, req.user.id, 'content_comment', `commented on "${info.title}".`, info.link);
+    }
   }
 
   res.json({
@@ -7446,12 +7526,15 @@ app.delete('/api/clubs/:slug', requireAuth, async (req, res) => {
 
 // POST /api/clubs/:slug/join
 app.post('/api/clubs/:slug/join', requireAuth, async (req, res) => {
-  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  const { rows: [club] } = await pool.query('SELECT id, name, slug FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   await pool.query(
     `INSERT INTO club_members (club_id, user_id, role) VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING`,
     [club.id, req.user.id]
   );
+  await notifyFollowers(req.user.id, 'club_join',
+    `joined the club "${club.name}".`,
+    `/club?slug=${encodeURIComponent(club.slug)}`);
   res.json({ message: 'Joined!' });
 });
 
@@ -7708,7 +7791,7 @@ app.delete('/api/clubs/:slug/posts/:postId/like', requireAuth, async (req, res) 
 // reposition (preview_position_x/y), same idea as the gallery preview crop:
 // the source image itself is untouched.
 app.post('/api/clubs/:slug/posts', requireAuth, uploadModImage.array('images', 10), async (req, res) => {
-  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  const { rows: [club] } = await pool.query('SELECT id, name, slug FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const role = await getClubRole(club.id, req.user.id);
   if (!role) return res.status(403).json({ error: 'Join this club to post in it.' });
@@ -7740,6 +7823,15 @@ app.post('/api/clubs/:slug/posts', requireAuth, uploadModImage.array('images', 1
     [club.id, req.user.id, title, body, imageUrls[0] || '', JSON.stringify(imageUrls), previewX, previewY, poll ? JSON.stringify(poll) : null, isAdminPost]
   );
   const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
+  const { rows: members } = await pool.query('SELECT user_id FROM club_members WHERE club_id = $1', [club.id]);
+  const postLink = `/club?slug=${encodeURIComponent(club.slug)}&post=${post.id}`;
+  await Promise.all(
+    members
+      .map(m => m.user_id)
+      .filter(uid => uid !== req.user.id)
+      .map(uid => notifyUser(uid, req.user.id, 'club_post',
+        `posted "${title}" in ${club.name}.`, postLink))
+  );
   res.json({ post: clubPostPublicShape({ ...post, username: author.username, display_name: author.display_name, avatar: author.avatar }) });
 });
 
