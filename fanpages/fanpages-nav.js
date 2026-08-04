@@ -59,28 +59,57 @@ if (!window.FP_BASE) {
 // shown on whichever page the user actually lands on, then never again.
 if (localStorage.getItem('btw_show_welcome') === '1') {
   localStorage.removeItem('btw_show_welcome');
-  fetch('/api/fanpage-profile/btwteam').then(r => r.ok ? r.json() : null).then(data => {
+  const welcomeToken = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+  const welcomeAuthHeaders = welcomeToken ? { Authorization: `Bearer ${welcomeToken}` } : {};
+  fetch('/api/fanpage-profile/btwteam', { headers: welcomeAuthHeaders }).then(r => r.ok ? r.json() : null).then(data => {
     const team = data && data.author;
+    let following = !!(data && data.is_following);
     const wrap = document.createElement('div');
     wrap.innerHTML = `
       <div class="fpnav-modal-overlay" id="fp-welcome-overlay">
         <div class="fpnav-modal-card fp-welcome-card">
-          <p class="fpnav-modal-title">Welcome to Between Two Worlds!</p>
+          <p class="fp-welcome-title">Welcome to Between Two Worlds!</p>
+          <p class="fpnav-modal-text">You can follow other users, and customize your profile page to sparkle big! &#10024; We've followed ourselves to get you started, and don't be afraid to make new friends!</p>
           <div class="fp-welcome-team-row">
             <img class="fp-welcome-team-avatar" src="${(team && team.avatar) || '/images/gallery/pixiegarden_5.png'}" alt="" />
             <div class="fp-welcome-team-info">
               <span class="fp-welcome-team-name">${(team && (team.display_name || team.username)) || 'BTW Team'}</span>
-              <span class="fp-welcome-team-following">&#10003; Following</span>
+              <span class="fp-welcome-team-followers">${(data && data.follower_count) || 0} follower${(data && data.follower_count) === 1 ? '' : 's'}</span>
             </div>
+            <button type="button" class="fp-welcome-team-follow-btn${following ? ' following' : ''}" id="fp-welcome-follow-btn">
+              ${following ? '&#10003; Following' : 'Follow'}
+            </button>
           </div>
-          <p class="fpnav-modal-text">May you venture off, traveler, and experience the world beyond~</p>
-          <button class="fpnav-modal-cta" id="fp-welcome-next" type="button">Next</button>
+          <p class="fpnav-modal-text fp-welcome-flavor">May you venture off, traveler, and experience the world beyond~</p>
+          <button class="fpnav-modal-cta" id="fp-welcome-next" type="button">Take me to Profile!</button>
         </div>
       </div>
     `;
     document.body.appendChild(wrap.firstElementChild);
     const overlay = document.getElementById('fp-welcome-overlay');
-    document.getElementById('fp-welcome-next').addEventListener('click', () => overlay.remove());
+    const followBtn = document.getElementById('fp-welcome-follow-btn');
+    if (team) {
+      followBtn.addEventListener('click', async () => {
+        followBtn.disabled = true;
+        try {
+          const res = await fetch(`/api/follows/${team.username}`, {
+            method: following ? 'DELETE' : 'POST', headers: welcomeAuthHeaders,
+          });
+          if (res.ok) {
+            following = !following;
+            followBtn.classList.toggle('following', following);
+            followBtn.innerHTML = following ? '&#10003; Following' : 'Follow';
+          }
+        } catch {}
+        followBtn.disabled = false;
+      });
+    }
+    document.getElementById('fp-welcome-next').addEventListener('click', () => {
+      overlay.remove();
+      let me = null;
+      try { me = JSON.parse(localStorage.getItem('btw_user') || sessionStorage.getItem('btw_user') || 'null'); } catch {}
+      window.location.href = me ? fpUrl(`/${me.username}`) : fpUrl('/');
+    });
   }).catch(() => {});
 }
 

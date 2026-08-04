@@ -1509,24 +1509,40 @@ const emailShell = (body) => `
   </div>
 `;
 
-const emailActivate = (name, verifyUrl) => emailShell(`
-  <h2 style="color:#1a237e;font-size:1.2rem;margin:0 0 12px;">Hello, <span style="color:#e65100;">${name}</span>!</h2>
-  <p style="color:#424242;font-size:0.95rem;line-height:1.7;margin:0 0 10px;">
-    Thanks for creating an account. You're one step away — click the button below to activate your account.
-  </p>
-  <p style="color:#757575;font-size:0.85rem;line-height:1.6;margin:0 0 28px;">
-    Once activated you'll have full access to the site, including member-only content.
-  </p>
-  <div style="text-align:center;margin-bottom:28px;">
-    <a href="${verifyUrl}"
-       style="display:inline-block;background:#00796b;color:#ffffff;text-decoration:none;padding:13px 36px;border-radius:6px;font-weight:bold;font-size:1rem;letter-spacing:0.02em;">
-      Activate your Account
-    </a>
+// Its own dark+gold shell (not emailShell, whose navy-blue header doesn't
+// fit this one) — this is the very first email a new user sees, so it gets
+// the full site-matching treatment: black-and-gold header, dark card body,
+// gold gradient CTA button.
+const emailActivate = (name, verifyUrl) => `
+  <div style="background:#0a0908;padding:40px 16px;font-family:Georgia,'Times New Roman',serif;">
+    <div style="max-width:520px;margin:0 auto;">
+      <div style="background:#0d0b08;border:1px solid #3a2f1a;border-radius:14px 14px 0 0;padding:30px 32px;text-align:center;">
+        <h1 style="color:#f0c060;font-size:1.7rem;margin:0;letter-spacing:0.04em;text-shadow:0 0 18px rgba(240,192,96,0.45);">
+          ✨ Between Two Worlds ✨
+        </h1>
+      </div>
+      <div style="background:#161116;padding:38px 34px;border-left:1px solid #3a2f1a;border-right:1px solid #3a2f1a;font-family:Arial,Helvetica,sans-serif;">
+        <h2 style="color:#f2ece0;font-size:1.5rem;margin:0 0 16px;text-align:center;">
+          Welcome, <span style="color:#f0c060;">${name}</span>!
+        </h2>
+        <p style="color:#c9c2d4;font-size:1rem;line-height:1.75;margin:0 0 30px;text-align:center;">
+          You are now entering BTW, a world like no other! To activate your account, all you have to do is press the button below ^w^ Adventure awaits!
+        </p>
+        <div style="text-align:center;margin-bottom:8px;">
+          <a href="${verifyUrl}"
+             style="display:inline-block;background:linear-gradient(135deg,#f0c060,#d4a03f);color:#1a1510;text-decoration:none;padding:16px 44px;border-radius:10px;font-weight:bold;font-size:1.05rem;letter-spacing:0.02em;font-family:Arial,Helvetica,sans-serif;">
+            Activate Your Account
+          </a>
+        </div>
+      </div>
+      <div style="background:#0d0b08;border:1px solid #3a2f1a;border-top:none;border-radius:0 0 14px 14px;padding:18px 32px;text-align:center;">
+        <p style="color:#6b6470;font-size:0.78rem;margin:0;font-family:Arial,Helvetica,sans-serif;">
+          If you didn't sign up for Between Two Worlds, you can safely ignore this email.
+        </p>
+      </div>
+    </div>
   </div>
-  <p style="color:#bdbdbd;font-size:0.78rem;text-align:center;margin:0;">
-    If you didn't sign up for Between Two Worlds, you can safely ignore this email.
-  </p>
-`);
+`;
 
 const emailConfirmEmailChange = (name, confirmUrl) => emailShell(`
   <h2 style="color:#1a237e;font-size:1.2rem;margin:0 0 12px;">Hi, <span style="color:#e65100;">${name}</span>!</h2>
@@ -1652,33 +1668,42 @@ h2{color:#e55;}a{color:#7ca0ff;}</style></head>
 <a href="https://${siteHost(req)}/login">Back to login →</a></body></html>`);
   }
 
-  // Show a button — only a POST actually activates (scanners don't submit forms)
+  // Auto-activates via JS on load — no button/click required from the real
+  // user, so there's no visible "second page" in the way. The raw GET
+  // itself still never consumes the token (still scanner-safe: a dumb
+  // HTTP-only link-scanner that doesn't execute JS never fires the POST
+  // below), it's just that a real browser does it instantly instead of
+  // waiting on a manual click.
   res.send(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Activate Account — Between Two Worlds</title>
+<html><head><meta charset="utf-8"><title>Activating… — Between Two Worlds</title>
 <style>
   body{font-family:Arial,sans-serif;background:#0d0d1a;color:#ccc;display:flex;align-items:center;
        justify-content:center;min-height:100vh;margin:0;}
   .box{background:#161625;border:1px solid rgba(255,255,255,0.08);border-radius:14px;
        padding:48px 40px;max-width:420px;text-align:center;}
   h2{color:#fff;margin:0 0 12px;}
-  p{color:rgba(200,190,230,0.7);font-size:0.95rem;line-height:1.6;margin:0 0 28px;}
-  button{background:#00796b;color:#fff;border:none;border-radius:8px;padding:14px 36px;
-         font-size:1rem;font-weight:bold;cursor:pointer;transition:background .15s;}
-  button:hover{background:#009688;}
-  button:disabled{opacity:0.6;cursor:default;}
+  p{color:rgba(200,190,230,0.7);font-size:0.95rem;line-height:1.6;margin:0 0 8px;}
+  .spinner{width:32px;height:32px;margin:0 auto 20px;border:3px solid rgba(255,255,255,0.15);
+       border-top-color:#00796b;border-radius:50%;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
   .msg{margin-top:16px;font-size:0.9rem;min-height:1.2em;}
+  button{background:#00796b;color:#fff;border:none;border-radius:8px;padding:14px 36px;
+         font-size:1rem;font-weight:bold;cursor:pointer;transition:background .15s;display:none;}
+  button:hover{background:#009688;}
 </style></head>
 <body><div class="box">
-  <h2>Almost there!</h2>
-  <p>Click the button below to activate your Between Two Worlds account and start exploring.</p>
-  <button id="btn" onclick="activate()">Activate My Account</button>
+  <div class="spinner" id="spinner"></div>
+  <h2 id="heading">Activating your account…</h2>
+  <p id="subtext">Just a moment — this'll only take a second.</p>
   <div class="msg" id="msg"></div>
+  <button id="retry-btn" onclick="activate()">Try Again</button>
 </div>
 <script>
 async function activate() {
-  const btn = document.getElementById('btn');
-  const msg = document.getElementById('msg');
-  btn.disabled = true; btn.textContent = 'Activating…';
+  document.getElementById('spinner').style.display = 'block';
+  document.getElementById('heading').textContent = 'Activating your account…';
+  document.getElementById('retry-btn').style.display = 'none';
+  document.getElementById('msg').textContent = '';
   try {
     const r = await fetch('/api/auth/verify', {
       method: 'POST',
@@ -1687,9 +1712,22 @@ async function activate() {
     });
     const d = await r.json();
     if (d.redirect) { window.location.href = d.redirect; }
-    else { msg.style.color='#e55'; msg.textContent = d.error || 'Something went wrong.'; btn.disabled=false; btn.textContent='Try Again'; }
-  } catch(e) { msg.style.color='#e55'; msg.textContent='Network error — please try again.'; btn.disabled=false; btn.textContent='Try Again'; }
+    else {
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('heading').textContent = 'Something went wrong';
+      document.getElementById('msg').style.color = '#e55';
+      document.getElementById('msg').textContent = d.error || 'Something went wrong.';
+      document.getElementById('retry-btn').style.display = 'inline-block';
+    }
+  } catch (e) {
+    document.getElementById('spinner').style.display = 'none';
+    document.getElementById('heading').textContent = 'Network error';
+    document.getElementById('msg').style.color = '#e55';
+    document.getElementById('msg').textContent = 'Please try again.';
+    document.getElementById('retry-btn').style.display = 'inline-block';
+  }
 }
+activate();
 </script></body></html>`);
 });
 
