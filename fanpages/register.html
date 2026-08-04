@@ -130,6 +130,14 @@
     .signup-alert--error   { background: rgba(194,84,122,0.15); color: #e8849e; border: 1px solid rgba(194,84,122,0.3); }
     .signup-alert--success { background: rgba(80,160,100,0.15); color: #7dd4a0; border: 1px solid rgba(80,160,100,0.3); }
 
+    .signup-resend-btn {
+      display: block; width: 100%; background: none; border: 1px solid rgba(240,192,96,0.35);
+      border-radius: 9px; color: #f0c060; font-family: inherit; font-size: 0.88rem; font-weight: 700;
+      padding: 0.65rem; cursor: pointer; margin-top: 0.9rem; transition: background 0.15s, opacity 0.15s;
+    }
+    .signup-resend-btn:hover { background: rgba(240,192,96,0.08); }
+    .signup-resend-btn:disabled { opacity: 0.6; cursor: default; }
+
     .signup-login-row {
       text-align: center; font-size: 0.86rem; color: rgba(230,220,200,0.55); margin: 1.4rem 0 0;
     }
@@ -162,6 +170,7 @@
     </div>
 
     <div id="signup-alert" class="signup-alert" hidden></div>
+    <button type="button" class="signup-resend-btn" id="signup-resend-btn" hidden>Send again</button>
 
     <form class="signup-form" id="signup-form" novalidate>
       <div class="signup-field">
@@ -263,10 +272,35 @@
       document.getElementById('signup-form').style.display = 'none';
       document.getElementById('signup-login-row').style.display = 'none';
       showAlert(`Activation email sent to ${email}! BE SURE TO CHECK SPAM!! Click on the link activate your account, and we'll see you back here! 🌸`, 'success');
+      const resendBtn = document.getElementById('signup-resend-btn');
+      resendBtn.hidden = false;
+      resendBtn.dataset.email = email;
     } catch {
       showAlert('Network error. Please try again.');
     } finally {
       setLoading(btn, false);
+    }
+  });
+
+  document.getElementById('signup-resend-btn').addEventListener('click', async (e) => {
+    const resendBtn = e.currentTarget;
+    const emailToResend = resendBtn.dataset.email;
+    if (!emailToResend) return;
+    resendBtn.disabled = true;
+    resendBtn.textContent = 'Sending…';
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailToResend, from }),
+      });
+      const data = await res.json();
+      showAlert(data.message || 'Sent again — check your inbox!', 'success');
+    } catch {
+      showAlert('Network error. Please try again.', 'error');
+    } finally {
+      resendBtn.disabled = false;
+      resendBtn.textContent = 'Send again';
     }
   });
 </script>

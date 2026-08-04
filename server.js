@@ -1631,6 +1631,42 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+// POST /api/auth/resend-verification — the "Send again" button under the
+// post-registration "check your inbox" message. Reuses the existing
+// verify_token (an old copy of the email in someone's inbox keeps working
+// too — nothing gets invalidated by resending). Responds identically
+// whether or not the email is registered/already verified so this can't
+// be used to probe which addresses have accounts.
+app.post('/api/auth/resend-verification', async (req, res) => {
+  const { email, from } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required.' });
+  const genericMessage = { message: "If that email has a pending activation, we've sent it again." };
+
+  const { rows: [user] } = await pool.query(
+    'SELECT display_name, username, verify_token, verified FROM users WHERE email_hash = $1',
+    [hashEmail(email)]
+  );
+  if (!user || user.verified || !user.verify_token) return res.json(genericMessage);
+
+  const dname = user.display_name || user.username;
+  const verifyUrl = `https://${siteHost(req)}/api/auth/verify?token=${user.verify_token}`
+    + (from ? `&from=${encodeURIComponent(from)}` : '');
+
+  try {
+    await resend.emails.send({
+      from: 'Between Two Worlds <hello@btwfanfic.net>',
+      reply_to: 'hello@btwfanfic.net',
+      to: email,
+      subject: 'Activate your Between Two Worlds account',
+      html: emailActivate(dname, verifyUrl),
+      text: `Hello, ${dname}!\n\nThanks for signing up for Between Two Worlds.\n\nClick the link below to activate your account:\n${verifyUrl}\n\nIf you didn't sign up, you can safely ignore this email.\n\n— Between Two Worlds`,
+    });
+  } catch (err) {
+    console.error('Resend verification email error:', err.message);
+  }
+  res.json(genericMessage);
+});
+
 // GET /api/auth/verify?token=xxx — shows confirmation page (safe for email scanners)
 app.get('/api/auth/verify', async (req, res) => {
   const { token, from } = req.query;
