@@ -2912,6 +2912,11 @@ app.post('/api/report', requireAuth, async (req, res) => {
 // commentTargetInfo() below, kept separate since the reportable set
 // (story/comment/dm_message) doesn't line up with the commentable set.
 async function reportTargetInfo(targetType, targetId) {
+  if (targetType === 'user') {
+    const { rows: [u] } = await pool.query('SELECT username, display_name FROM users WHERE id = $1', [targetId]);
+    if (!u) return null;
+    return { title: `User: ${u.display_name || u.username}`, link: `/${u.username}` };
+  }
   if (targetType === 'story') {
     const { rows: [s] } = await pool.query(
       `SELECT ms.site_title, ms.story_path, u.username AS owner_username
@@ -2950,7 +2955,7 @@ async function reportTargetInfo(targetType, targetId) {
 // this is meant to be seen right away rather than discovered later.
 app.post('/api/reports', requireAuth, async (req, res) => {
   const { target_type, target_id, reason } = req.body;
-  if (!['story', 'comment', 'dm_message'].includes(target_type)) return res.status(400).json({ error: 'Invalid report type.' });
+  if (!['story', 'comment', 'dm_message', 'user'].includes(target_type)) return res.status(400).json({ error: 'Invalid report type.' });
   const targetId = parseInt(target_id, 10);
   if (!targetId) return res.status(400).json({ error: 'Invalid target.' });
   const cleanReason = (reason || '').trim().slice(0, 1000);
@@ -2963,7 +2968,7 @@ app.post('/api/reports', requireAuth, async (req, res) => {
   const { rows: [reporter] } = await pool.query('SELECT username, display_name FROM users WHERE id = $1', [req.user.id]);
   const reporterName = (reporter && (reporter.display_name || reporter.username)) || 'Unknown';
   const info = await reportTargetInfo(target_type, targetId).catch(() => null);
-  const typeLabel = { story: 'Story', comment: 'Comment', dm_message: 'DM Message' }[target_type];
+  const typeLabel = { story: 'Story', comment: 'Comment', dm_message: 'DM Message', user: 'User' }[target_type];
   const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   resend.emails.send({

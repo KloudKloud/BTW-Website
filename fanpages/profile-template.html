@@ -203,6 +203,25 @@
     .fp-profile-msg-btn:hover { border-color: #7fa8d9; color: #7fa8d9; }
     .fp-profile-msg-btn svg { width: 22px; height: 22px; }
 
+    .fp-more-menu-wrap { position: relative; flex-shrink: 0; }
+    .fp-more-menu-btn {
+      width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #f0f0f0;
+      font-size: 1.1rem; letter-spacing: 0.05em; cursor: pointer; font-family: inherit;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .fp-more-menu-btn:hover { border-color: #7fa8d9; color: #7fa8d9; }
+    .fp-more-menu-dropdown {
+      position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; min-width: 160px;
+      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.5); overflow: hidden; padding: 0.35rem;
+    }
+    .fp-more-menu-dropdown button {
+      display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+      color: #e8849e; font-family: inherit; font-size: 0.9rem; padding: 0.6rem 0.75rem; border-radius: 8px;
+    }
+    .fp-more-menu-dropdown button:hover { background: rgba(194,84,122,0.12); }
+
     .fp-name-row { display: flex; align-items: center; justify-content: center; margin-top: 0.75rem; }
     .fp-name {
       font-family: 'Fredoka', 'Lato', Arial, sans-serif; font-weight: 700;
@@ -2018,7 +2037,7 @@
       </div>
       <div class="cc-actions">
         ${token && !isReply ? '<button class="cc-action-btn" data-action="reply">Reply</button>' : ''}
-        ${ccIsMine(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : (token ? '<button class="cc-action-btn" data-action="report">Report</button>' : '')}
+        ${ccIsMine(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : (token ? '<button class="cc-action-btn cc-action-btn--flag" data-action="report" title="Report">&#127987;&#65039;</button>' : '')}
       </div>
     `;
     wrap.appendChild(body);
@@ -2074,17 +2093,8 @@
       ccLoadComments();
     } catch {}
   }
-  async function reportContent(targetType, targetId) {
-    if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
-    const reason = prompt('Briefly describe the issue (optional):') || '';
-    try {
-      const res = await fetch('/api/reports', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ target_type: targetType, target_id: targetId, reason }),
-      });
-      alert(res.ok ? 'Report submitted. Thank you for helping keep the community safe.' : 'Something went wrong submitting the report.');
-    } catch { alert('Network error. Please try again.'); }
-  }
+  // reportContent(targetType, targetId) is defined globally in
+  // fanpages-nav.js (shared by every flag button site-wide).
 
   // Gallery posts now live entirely on their own standalone page
   // (gallery-post.html) with their own copy of this comment system --
@@ -2417,6 +2427,7 @@
       btn.textContent = 'Follow';
       btn.addEventListener('click', () => window.fpRequireSignIn('To follow this user, you must create an account!'));
       wrap.appendChild(btn);
+      wrap.appendChild(buildMoreMenu(author));
       return;
     }
 
@@ -2450,6 +2461,38 @@
       btn.disabled = false;
     });
     wrap.appendChild(btn);
+    wrap.appendChild(buildMoreMenu(author));
+  }
+
+  // "•••" menu next to Follow — just "Report User" for now, a spot to hang
+  // more per-profile moderation actions off of later.
+  function buildMoreMenu(author) {
+    const moreWrap = document.createElement('div');
+    moreWrap.className = 'fp-more-menu-wrap';
+    const moreBtn = document.createElement('button');
+    moreBtn.type = 'button';
+    moreBtn.className = 'fp-more-menu-btn';
+    moreBtn.textContent = '•••';
+    moreBtn.setAttribute('aria-label', 'More actions');
+    const dropdown = document.createElement('div');
+    dropdown.className = 'fp-more-menu-dropdown';
+    dropdown.hidden = true;
+    const reportItem = document.createElement('button');
+    reportItem.type = 'button';
+    reportItem.textContent = 'Report User';
+    reportItem.addEventListener('click', () => {
+      dropdown.hidden = true;
+      reportContent('user', author.id);
+    });
+    dropdown.appendChild(reportItem);
+    moreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdown.hidden = !dropdown.hidden;
+    });
+    document.addEventListener('click', () => { dropdown.hidden = true; });
+    moreWrap.appendChild(moreBtn);
+    moreWrap.appendChild(dropdown);
+    return moreWrap;
   }
 
   document.getElementById('fp-share-btn').addEventListener('click', async () => {

@@ -365,7 +365,7 @@ function ccCommentEl(c, isReply) {
     </div>
     <div class="cc-actions">
       ${!isReply ? '<button class="cc-action-btn" data-action="reply">Reply</button>' : ''}
-      ${ccIsMine(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : (token ? '<button class="cc-action-btn" data-action="report">Report</button>' : '')}
+      ${ccIsMine(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : (token ? '<button class="cc-action-btn cc-action-btn--flag" data-action="report" title="Report">&#127987;&#65039;</button>' : '')}
     </div>
   `;
   wrap.appendChild(body);
@@ -414,17 +414,8 @@ function ccOpenReplyBox(bodyEl, parentComment) {
   bodyEl.insertBefore(box, repliesWrap || null);
   textarea.focus();
 }
-async function reportContent(targetType, targetId) {
-  if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
-  const reason = prompt('Briefly describe the issue (optional):') || '';
-  try {
-    const res = await fetch('/api/reports', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ target_type: targetType, target_id: targetId, reason }),
-    });
-    alert(res.ok ? 'Report submitted. Thank you for helping keep the community safe.' : 'Something went wrong submitting the report.');
-  } catch { alert('Network error. Please try again.'); }
-}
+// reportContent(targetType, targetId) is defined globally in fanpages-nav.js
+// (shared by every flag button site-wide) — no local copy needed here.
 async function ccDeleteComment(id) {
   if (!confirm('Delete this comment?')) return;
   try {

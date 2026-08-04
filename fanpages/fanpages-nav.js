@@ -300,6 +300,86 @@ if (!window.FP_BASE) {
   };
 })();
 
+// ── Report modal — shared by every "🏳️" flag button on the site (comments,
+// stories, DMs, user profiles). Named `window.reportContent` (not fp-
+// prefixed) so it's a drop-in replacement for the identical function that
+// used to be copy-pasted into gallery-post.html, club.html, reader.html and
+// profile-template.html — every existing onclick="reportContent(...)" call
+// site keeps working untouched once each file's own local copy is deleted.
+(function () {
+  let overlay = null;
+
+  function build() {
+    if (overlay) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="fpnav-modal-overlay" id="fp-report-overlay" hidden>
+        <div class="fpnav-modal-card">
+          <button class="fpnav-modal-close" id="fp-report-close" type="button" aria-label="Close">&#10005;</button>
+          <p class="fpnav-modal-title">Report Content</p>
+          <div class="fp-report-alert" id="fp-report-alert" hidden></div>
+          <label class="fp-report-label" for="fp-report-textarea">What to Report</label>
+          <textarea class="fp-report-textarea" id="fp-report-textarea" maxlength="1000" placeholder="Briefly describe the issue…"></textarea>
+          <button class="fpnav-modal-cta" id="fp-report-submit" type="button">Submit Report</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrap.firstElementChild);
+    overlay = document.getElementById('fp-report-overlay');
+
+    function hide() { overlay.hidden = true; }
+    document.getElementById('fp-report-close').addEventListener('click', hide);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) hide(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !overlay.hidden) hide(); });
+  }
+
+  window.reportContent = function (targetType, targetId) {
+    const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+    if (!token) { window.fpRequireSignIn(); return; }
+    build();
+    const textarea = document.getElementById('fp-report-textarea');
+    const alertEl = document.getElementById('fp-report-alert');
+    const submitBtn = document.getElementById('fp-report-submit');
+    textarea.value = '';
+    alertEl.hidden = true;
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit Report';
+    overlay.hidden = false;
+    setTimeout(() => textarea.focus(), 30);
+
+    submitBtn.onclick = async () => {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting…';
+      try {
+        const res = await fetch('/api/reports', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ target_type: targetType, target_id: targetId, reason: textarea.value.trim() }),
+        });
+        if (res.ok) {
+          alertEl.textContent = 'Report submitted. Thank you for helping keep the community safe.';
+          alertEl.className = 'fp-report-alert fp-report-alert--success';
+          alertEl.hidden = false;
+          submitBtn.textContent = 'Submitted';
+          setTimeout(() => { overlay.hidden = true; }, 1600);
+        } else {
+          alertEl.textContent = 'Something went wrong submitting the report.';
+          alertEl.className = 'fp-report-alert fp-report-alert--error';
+          alertEl.hidden = false;
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Submit Report';
+        }
+      } catch {
+        alertEl.textContent = 'Network error. Please try again.';
+        alertEl.className = 'fp-report-alert fp-report-alert--error';
+        alertEl.hidden = false;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Report';
+      }
+    };
+  };
+})();
+
 // ── Shared persistent top bar for every /fanpages/* page ────────────────────
 // Injects into <div id="fanpages-topbar-root">. Handles: Fanpages/Social
 // links, search bar (visual only for now), the Upload dropdown (Create

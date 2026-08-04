@@ -599,17 +599,8 @@ async function ccDeleteComment(id) {
     if (typeof loadAllChapterComments === 'function') loadAllChapterComments();
   } catch {}
 }
-async function reportContent(targetType, targetId) {
-  if (!authToken) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`); return; }
-  const reason = prompt('Briefly describe the issue (optional):') || '';
-  try {
-    const res = await fetch('/api/reports', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ target_type: targetType, target_id: targetId, reason }),
-    });
-    alert(res.ok ? 'Report submitted. Thank you for helping keep the community safe.' : 'Something went wrong submitting the report.');
-  } catch { alert('Network error. Please try again.'); }
-}
+// reportContent(targetType, targetId) is defined globally in fanpages-nav.js
+// (shared by every flag button site-wide) — no local copy needed here.
 
 let SITE = null;
 let CHAPTERS = [];
@@ -1105,7 +1096,7 @@ function renderCommentItem(c, prefix, collapsible) {
         </div>
         <div class="cc-actions">
           <button type="button" class="cc-action-btn rd-cp-reply-toggle" data-comment-id="${c.id}" data-prefix="${prefix}">Reply</button>
-          ${ccIsMine(c) ? `<button type="button" class="cc-action-btn rd-cp-delete-btn" data-comment-id="${c.id}">Delete</button>` : (authToken ? `<button type="button" class="cc-action-btn" onclick="reportContent('comment', ${c.id})">Report</button>` : '')}
+          ${ccIsMine(c) ? `<button type="button" class="cc-action-btn rd-cp-delete-btn" data-comment-id="${c.id}">Delete</button>` : (authToken ? `<button type="button" class="cc-action-btn cc-action-btn--flag" title="Report" onclick="reportContent('comment', ${c.id})">&#127987;&#65039;</button>` : '')}
         </div>
         <div class="rd-cp-reply-form" id="${prefix}-reply-form-${c.id}">
           <textarea class="rd-cp-textarea" placeholder="Reply to ${escapeHtml(c.display_name || c.username)}…" maxlength="2000"></textarea>

@@ -167,9 +167,7 @@
             <button class="fp-share-icon-btn" id="story-share-btn" type="button" title="Share this story">
               <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
             </button>
-            <button class="fp-share-icon-btn" id="story-report-btn" type="button" title="Report this story">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M5 21V4M5 4h13l-2.5 4L18 12H5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
+            <button class="fp-share-icon-btn cc-action-btn--flag" id="story-report-btn" type="button" title="Report" style="display:none;">&#127987;&#65039;</button>
             <button class="wiki-hero-btn wiki-hero-btn--edit" id="edit-profile-btn" style="display:none;" type="button">✎ Edit Story</button>
           </div>
 
@@ -835,17 +833,13 @@ document.getElementById('banner-edit-pencil').addEventListener('click', () => { 
 document.getElementById('story-share-btn').addEventListener('click', (e) => {
   fpShare(e.currentTarget, window.location.href);
 });
-document.getElementById('story-report-btn').addEventListener('click', async () => {
-  const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
-  if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname)}`); return; }
-  const reason = prompt('Briefly describe the issue (optional):') || '';
-  try {
-    const res = await fetch('/api/reports', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ target_type: 'story', target_id: siteData.site.id, reason }),
-    });
-    alert(res.ok ? 'Report submitted. Thank you for helping keep the community safe.' : 'Something went wrong submitting the report.');
-  } catch { alert('Network error. Please try again.'); }
+// Hidden entirely for guests, not just gated on click — reports are an
+// account-only action with nothing useful for a guest to click into.
+if (localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token')) {
+  document.getElementById('story-report-btn').style.display = '';
+}
+document.getElementById('story-report-btn').addEventListener('click', () => {
+  reportContent('story', siteData.site.id);
 });
 document.getElementById('cancel-edit-btn').addEventListener('click', exitEditMode);
 
