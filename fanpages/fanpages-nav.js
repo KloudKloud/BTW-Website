@@ -508,14 +508,6 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
       </div>
     </div>
 
-    <div class="fpnav-modal-overlay" id="fpnav-modal-overlay" hidden>
-      <div class="fpnav-modal-card">
-        <button class="fpnav-modal-close" id="fpnav-modal-close" type="button">✕</button>
-        <p class="fpnav-modal-title">Log in to continue</p>
-        <p class="fpnav-modal-text">You'll need a free Between Two Worlds account to create or manage stories on Fanpages.</p>
-        <button class="fpnav-modal-cta" id="fpnav-modal-cta" type="button">Sign In</button>
-      </div>
-    </div>
   `;
 
   // ── Search ───────────────────────────────────────────────────────────────
@@ -589,27 +581,15 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   // ── Top-right login button — opens the shared Welcome modal in place ────
   document.getElementById('fpnav-login-btn').addEventListener('click', () => window.fpOpenLoginModal());
 
-  // ── Login-gated links (Create Story / My Stories) ───────────────────────
-  const modalOverlay = document.getElementById('fpnav-modal-overlay');
-  const modalCta      = document.getElementById('fpnav-modal-cta');
-  let gateDest = fpUrl('/');
-
-  function openGateModal(dest) {
-    gateDest = dest;
-    modalOverlay.hidden = false;
-  }
-  document.getElementById('fpnav-modal-close').addEventListener('click', () => { modalOverlay.hidden = true; });
-  modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) modalOverlay.hidden = true; });
-  modalCta.addEventListener('click', () => {
-    modalOverlay.hidden = true;
-    window.fpOpenLoginModal({ from: gateDest, redirectOnSuccess: gateDest });
-  });
-
+  // ── Login-gated links (Creator Hub / +Story / +Character / +Gallery) ────
+  // No intermediate "Log in to continue" message anymore — clicking any of
+  // these while logged out opens the real sign-in modal immediately.
   root.querySelectorAll('[data-gate]').forEach(link => {
     link.addEventListener('click', (e) => {
       if (!token) {
         e.preventDefault();
-        openGateModal(link.dataset.gate);
+        const dest = link.dataset.gate;
+        window.fpOpenLoginModal({ from: dest, redirectOnSuccess: dest });
       }
     });
   });
