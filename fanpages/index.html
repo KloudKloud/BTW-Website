@@ -399,9 +399,23 @@
       text-shadow: 0 2px 6px rgba(0,0,0,0.55), 0 0 6px rgba(127,168,217,0.4);
     }
     .fp-row-empty { color: #999; font-size: 0.92rem; }
-    .fp-row-scroll { display: flex; gap: 1.1rem; overflow-x: auto; padding-bottom: 0.5rem; }
+    .fp-row-scroll { display: flex; gap: 1.1rem; overflow-x: auto; padding-bottom: 0.5rem; scroll-behavior: smooth; }
     .fp-row-scroll::-webkit-scrollbar { height: 6px; }
     .fp-row-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+    /* Wattpad-style "shift the row over" arrows -- shown only when there's
+       actually more to scroll to in that direction. */
+    .fp-row-carousel { position: relative; }
+    .fp-row-arrow {
+      position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
+      width: 36px; height: 36px; border-radius: 50%; border: none;
+      background: rgba(0,0,0,0.6); color: #fff; font-size: 1.3rem; line-height: 1; cursor: pointer;
+      align-items: center; justify-content: center; transition: background 0.2s;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    }
+    .fp-row-arrow:hover { background: rgba(0,0,0,0.8); }
+    .fp-row-arrow--prev { left: -6px; }
+    .fp-row-arrow--next { right: -6px; }
 
     .fp-card {
       position: relative;
@@ -511,8 +525,7 @@
     }
     .fp-disclaimer-box a { color: #7fa8d9; text-decoration: underline; }
     .fp-disclaimer-box .fp-disclaimer-highlight { color: #f0c060; }
-    .fp-disclaimer-box p { margin-bottom: 0.75rem; }
-    .fp-disclaimer-sig { display: block; margin-top: 0.75rem; color: #ccc; }
+    .fp-disclaimer-box p { margin-bottom: 0; }
   </style>
 </head>
 <body>
@@ -683,7 +696,6 @@
           Consider supporting our website and the original book by <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donating Here</a>.
           Donations are completely optional, and they help support this site + keep this little 'vee nice and fed! I appreciate you all for hanging out! &lt;3
         </p>
-        <span class="fp-disclaimer-sig">— VeekitPaws</span>
       </div>
     </div>
 
@@ -710,18 +722,48 @@
   let billboardIndex = 0;
   let billboardTimer = null;
 
-  // Slide 0 (the earliest-created — sort_order is never reassigned once set,
-  // so this is always "Drawing is my passion~") always leads the rotation;
-  // everything after it shuffles into a fresh random order on every page
-  // load, same spirit as the character/gallery/story spotlight picks.
-  function shuffleBillboardAfterFirst(slides) {
-    if (slides.length < 3) return slides;
-    const [first, ...rest] = slides;
-    for (let i = rest.length - 1; i > 0; i--) {
+  function shuffleInPlace(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [rest[i], rest[j]] = [rest[j], rest[i]];
+      [arr[i], arr[j]] = [arr[j], arr[i]];
     }
-    return [first, ...rest];
+    return arr;
+  }
+
+  // VIP slides (donation ads / important announcements, marked in Admin ->
+  // Bulletin) get force-inserted into every 4th slot of the sequence, on
+  // top of already being eligible for the normal shuffle everywhere else --
+  // each slot gets its own independent random pick among the VIP pool, so
+  // one particular VIP slide isn't guaranteed to always land on slot 40.
+  function insertVipEveryFourth(ordered, allSlides) {
+    const vips = allSlides.filter(s => s.is_vip);
+    if (!vips.length) return ordered;
+    for (let i = 3; i < ordered.length; i += 4) {
+      ordered[i] = vips[Math.floor(Math.random() * vips.length)];
+    }
+    return ordered;
+  }
+
+  // The mandatory "intro" slide (slide 0 -- sort_order is never reassigned
+  // once set, so this is always "Drawing is my passion~") only leads the
+  // rotation on a visitor's very first-ever page load in this browser
+  // (tracked via localStorage) -- every load/navigation after that is a
+  // fully fresh shuffle including that slide, instead of resetting back to
+  // it every single time someone returns to the hub.
+  const BILLBOARD_INTRO_SEEN_KEY = 'btw_billboard_intro_seen';
+  function buildBillboardOrder(slides) {
+    if (slides.length < 3) return slides;
+    const firstEverVisit = !localStorage.getItem(BILLBOARD_INTRO_SEEN_KEY);
+    if (firstEverVisit) { try { localStorage.setItem(BILLBOARD_INTRO_SEEN_KEY, '1'); } catch {} }
+
+    let ordered;
+    if (firstEverVisit) {
+      const [first, ...rest] = slides;
+      ordered = [first, ...shuffleInPlace(rest)];
+    } else {
+      ordered = shuffleInPlace(slides.slice());
+    }
+    return insertVipEveryFourth(ordered, slides);
   }
 
   // Pan + zoom via background-image instead of object-fit + transform:scale.
@@ -931,7 +973,7 @@
     const billboardToken = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
     fetch('/api/hub-billboard', { headers: billboardToken ? { Authorization: `Bearer ${billboardToken}` } : {} })
       .then(r => r.ok ? r.json() : { slides: [] })
-      .then(data => renderBillboard(shuffleBillboardAfterFirst(data.slides || [])))
+      .then(data => renderBillboard(buildBillboardOrder(data.slides || [])))
       .catch(() => renderBillboard([]));
   }
 </script>
@@ -1042,6 +1084,45 @@
     return a;
   }
 
+  // Wraps a `.fp-row-scroll` in a Wattpad-style carousel with prev/next
+  // arrows that "shift" the row by roughly one screenful, instead of just
+  // leaving it as a bare horizontal scroller. Arrows only show up when
+  // there's actually more content in that direction.
+  function mountRowScroller(container, scroller) {
+    const wrap = document.createElement('div');
+    wrap.className = 'fp-row-carousel';
+
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'fp-row-arrow fp-row-arrow--prev';
+    prevBtn.type = 'button';
+    prevBtn.setAttribute('aria-label', 'Show previous');
+    prevBtn.textContent = '‹';
+    prevBtn.style.display = 'none';
+
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'fp-row-arrow fp-row-arrow--next';
+    nextBtn.type = 'button';
+    nextBtn.setAttribute('aria-label', 'Show more');
+    nextBtn.textContent = '›';
+    nextBtn.style.display = 'none';
+
+    function updateArrows() {
+      const max = scroller.scrollWidth - scroller.clientWidth;
+      prevBtn.style.display = scroller.scrollLeft > 4 ? 'flex' : 'none';
+      nextBtn.style.display = scroller.scrollLeft < max - 4 ? 'flex' : 'none';
+    }
+    prevBtn.addEventListener('click', () => scroller.scrollBy({ left: -scroller.clientWidth * 0.9, behavior: 'smooth' }));
+    nextBtn.addEventListener('click', () => scroller.scrollBy({ left: scroller.clientWidth * 0.9, behavior: 'smooth' }));
+    scroller.addEventListener('scroll', updateArrows);
+    window.addEventListener('resize', updateArrows);
+
+    wrap.appendChild(scroller);
+    wrap.appendChild(prevBtn);
+    wrap.appendChild(nextBtn);
+    container.appendChild(wrap);
+    requestAnimationFrame(updateArrows);
+  }
+
   async function loadRecommended() {
     const row = document.getElementById('fp-recommended-row');
     try {
@@ -1064,7 +1145,7 @@
         scroller.appendChild(card);
       });
       row.innerHTML = '';
-      row.appendChild(scroller);
+      mountRowScroller(row, scroller);
     } catch { row.innerHTML = '<p class="fp-row-empty">Couldn\'t load stories right now.</p>'; }
   }
 
@@ -1252,12 +1333,12 @@
       const res  = await fetch('/api/bookmarks', { headers: authHeaders() });
       const data = await res.json();
       const saved = data.bookmarks || [];
-      if (!saved.length) { row.innerHTML = '<p class="fp-row-empty">You haven\'t bookmarked any stories yet — tap the ♡ on a story below to add one!</p>'; return; }
+      if (!saved.length) { row.innerHTML = '<p class="fp-row-empty">You haven\'t bookmarked any stories yet. Tap the ♡ on a story you love to save it!</p>'; return; }
       const scroller = document.createElement('div');
       scroller.className = 'fp-row-scroll';
       saved.forEach(s => scroller.appendChild(storyCard({ ...s, bookmarked: true }, { showBookmark: true })));
       row.innerHTML = '';
-      row.appendChild(scroller);
+      mountRowScroller(row, scroller);
     } catch { row.innerHTML = '<p class="fp-row-empty">Couldn\'t load your bookmarked stories right now.</p>'; }
   }
 

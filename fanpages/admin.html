@@ -48,6 +48,7 @@
     }
     .hb-card-badge--nsfw { background: rgba(217,74,74,0.85); border: 1px solid rgba(255,255,255,0.25); }
     .hb-card-badge--sfw { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); }
+    .hb-card-badge--vip { left: 8px; right: auto; background: rgba(240,192,96,0.9); color: #1a1200; border: 1px solid rgba(255,255,255,0.3); }
     .hb-card-img-wrap .hb-preview-bg { background-repeat: no-repeat; }
     .hb-card-body { padding: 0.9rem 1rem; }
     .hb-card-caption { font-size: 0.9rem; font-weight: 700; color: #f0f0f0; margin-bottom: 0.2rem; }
@@ -346,6 +347,12 @@
         <span>Mark this slide as NSFW <span style="font-weight:400;color:#888;">— only shown to logged-in users who have NSFW content enabled</span></span>
       </label>
     </div>
+    <div class="mod-field">
+      <label class="profile-checkbox-label">
+        <input type="checkbox" id="hb-vip" />
+        <span>Mark this slide as VIP <span style="font-weight:400;color:#888;">— guaranteed to fill roughly every 4th slot in the rotation, on top of being eligible for the normal shuffle everywhere else too</span></span>
+      </label>
+    </div>
 
     <p class="mod-panel-msg" id="hb-editor-msg"></p>
 
@@ -557,6 +564,7 @@ async function renderGrid() {
       <div class="hb-card-img-wrap">
         <div class="hb-preview-bg"></div>
         <span class="hb-card-badge ${slide.is_nsfw ? 'hb-card-badge--nsfw' : 'hb-card-badge--sfw'}">${slide.is_nsfw ? 'NSFW' : 'SFW'}</span>
+        ${slide.is_vip ? '<span class="hb-card-badge hb-card-badge--vip">⭐ VIP</span>' : ''}
       </div>
       <div class="hb-card-body">
         ${slide.caption ? `<p class="hb-card-caption">${escapeHtml(slide.caption)}</p>` : ''}
@@ -626,6 +634,7 @@ async function openEditor(slide) {
   document.getElementById('hb-credit').value = slide ? (slide.credit || '') : '';
   document.getElementById('hb-link').value = slide ? (slide.link || '') : '';
   document.getElementById('hb-nsfw').checked = slide ? !!slide.is_nsfw : false;
+  document.getElementById('hb-vip').checked = slide ? !!slide.is_vip : false;
   document.getElementById('hb-editor-msg').textContent = '';
   updateSaveButtonState();
 
@@ -690,6 +699,7 @@ document.getElementById('hb-editor-save').addEventListener('click', async () => 
   fd.append('credit', document.getElementById('hb-credit').value.trim());
   fd.append('link', document.getElementById('hb-link').value.trim());
   fd.append('is_nsfw', document.getElementById('hb-nsfw').checked ? 'true' : 'false');
+  fd.append('is_vip', document.getElementById('hb-vip').checked ? 'true' : 'false');
 
   const saveBtn = document.getElementById('hb-editor-save');
   saveBtn.disabled = true;

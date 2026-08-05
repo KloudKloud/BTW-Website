@@ -686,6 +686,13 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE hub_billboard_slides ADD COLUMN IF NOT EXISTS is_nsfw BOOLEAN NOT NULL DEFAULT false;
   `).catch(e => console.error('hub_billboard_slides is_nsfw migration:', e.message));
 
+  // "VIP" slides (donation ads, important announcements) -- the frontend
+  // guarantees one lands in every 4th slot of the shuffled rotation, on top
+  // of being eligible for the normal random shuffle everywhere else too.
+  await pool.query(`
+    ALTER TABLE hub_billboard_slides ADD COLUMN IF NOT EXISTS is_vip BOOLEAN NOT NULL DEFAULT false;
+  `).catch(e => console.error('hub_billboard_slides is_vip migration:', e.message));
+
   // Notifications — the bell icon on Fanpages. Covers system messages (the
   // welcome note) today; bookmark/follow/like/comment/social activity gets
   // wired up to insert rows here as those features land.
@@ -3430,15 +3437,16 @@ app.post('/api/admin/hub-billboard', requireAuth, requireAdmin, uploadModImage.s
   const endPositionY = clampPosition(req.body.end_position_y);
   const endZoom = clampZoom(req.body.end_zoom, 100);
   const isNsfw = req.body.is_nsfw === 'true' || req.body.is_nsfw === '1';
+  const isVip = req.body.is_vip === 'true' || req.body.is_vip === '1';
   const imageUrl = `/images/moderators/${req.file.filename}`;
   const { rows: [{ maxOrder }] } = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM hub_billboard_slides');
   const { rows: [slide] } = await pool.query(
     `INSERT INTO hub_billboard_slides
        (image_url, position_x, position_y, zoom, caption, credit, link, sort_order,
-        animation_type, end_position_x, end_position_y, end_zoom, is_nsfw)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+        animation_type, end_position_x, end_position_y, end_zoom, is_nsfw, is_vip)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
     [imageUrl, positionX, positionY, zoom, (caption || '').trim(), (credit || '').trim(), (link || '').trim(), maxOrder + 1,
-     animationType, endPositionX, endPositionY, endZoom, isNsfw]
+     animationType, endPositionX, endPositionY, endZoom, isNsfw, isVip]
   );
   res.json({ slide });
 });
@@ -3458,6 +3466,7 @@ app.put('/api/admin/hub-billboard/:id', requireAuth, requireAdmin, uploadModImag
   const endPositionY = req.body.end_position_y !== undefined ? clampPosition(req.body.end_position_y) : existing.end_position_y;
   const endZoom = req.body.end_zoom !== undefined ? clampZoom(req.body.end_zoom, existing.end_zoom) : existing.end_zoom;
   const isNsfw = req.body.is_nsfw !== undefined ? (req.body.is_nsfw === 'true' || req.body.is_nsfw === '1') : existing.is_nsfw;
+  const isVip = req.body.is_vip !== undefined ? (req.body.is_vip === 'true' || req.body.is_vip === '1') : existing.is_vip;
 
   let imageUrl = existing.image_url;
   if (req.file) {
@@ -3472,11 +3481,11 @@ app.put('/api/admin/hub-billboard/:id', requireAuth, requireAdmin, uploadModImag
     `UPDATE hub_billboard_slides SET
        image_url = $1, position_x = $2, position_y = $3, zoom = $4,
        caption = COALESCE($5, caption), credit = COALESCE($6, credit), link = COALESCE($7, link),
-       animation_type = $8, end_position_x = $9, end_position_y = $10, end_zoom = $11, is_nsfw = $12
-     WHERE id = $13 RETURNING *`,
+       animation_type = $8, end_position_x = $9, end_position_y = $10, end_zoom = $11, is_nsfw = $12, is_vip = $13
+     WHERE id = $14 RETURNING *`,
     [imageUrl, positionX, positionY, zoom, caption != null ? caption.trim() : null,
      credit != null ? credit.trim() : null, link != null ? link.trim() : null,
-     animationType, endPositionX, endPositionY, endZoom, isNsfw, existing.id]
+     animationType, endPositionX, endPositionY, endZoom, isNsfw, isVip, existing.id]
   );
   res.json({ slide });
 });
