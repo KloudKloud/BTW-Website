@@ -6966,22 +6966,23 @@ app.get('/api/spotlight/stories', async (req, res) => {
 
 app.get('/api/spotlight/clubs', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 12, 100);
+  // nsfwAllowed defaults to true for guests too (age-gated at the door, not
+  // here) -- only an account with SFW Mode on gets NSFW clubs filtered out,
+  // same rule the gallery/character spotlights use.
   const { nsfwAllowed } = await getViewerNsfwAccess(req);
-  // Same "excluded entirely, not blurred" rule the gallery spotlight uses
-  // for NSFW content — an NSFW club just never enters the rotation for a
-  // viewer who can't see it, rather than showing a locked placeholder.
+  // Any club is eligible -- no custom icon and no posts yet is fine, the
+  // frontend falls back to a lettered avatar the same way social.html does.
   const { rows } = await pool.query(
     `SELECT c.slug, c.name, c.icon_url,
             (SELECT COUNT(*)::int FROM club_members cm WHERE cm.club_id = c.id) AS member_count
      FROM clubs c
-     WHERE c.icon_url IS NOT NULL AND c.icon_url <> ''
-       AND (c.is_nsfw = FALSE OR $2::boolean)
+     WHERE (c.is_nsfw = FALSE OR $2::boolean)
      ORDER BY RANDOM() LIMIT $1`,
     [limit, nsfwAllowed]
   );
   res.json({
     clubs: rows.map(r => ({
-      slug: r.slug, name: r.name, icon_url: r.icon_url, member_count: r.member_count,
+      slug: r.slug, name: r.name, icon_url: r.icon_url || null, member_count: r.member_count,
     })),
   });
 });

@@ -40,35 +40,48 @@
     }
     .fp-hero-inner {
       position: relative; z-index: 2; width: 100%; box-sizing: border-box;
-      padding: 1.5rem 2rem;
-      display: grid; grid-template-columns: minmax(195px, 250px) minmax(0, 1fr) minmax(195px, 250px);
-      align-items: stretch; gap: 0.85rem;
+      padding: 1.5rem calc(clamp(210px, 17vw, 270px) + 1.5rem);
+      display: flex; justify-content: center;
     }
-    @media (max-width: 1150px) { .fp-hero-inner { grid-template-columns: 1fr; padding: 1.5rem 1.25rem; } }
-    .fp-hero-text { display: flex; align-items: center; min-width: 0; }
-    @media (max-width: 1150px) { .fp-hero-text { order: 2; } .fp-hero-bulletin { order: 1; } }
+    @media (max-width: 1150px) { .fp-hero-inner { padding: 1.5rem 1.25rem; } }
 
-    /* The bulletin keeps its own comfortable max-width, centered within
-       its (now much wider, full-bleed) grid track, so it doesn't balloon
-       to fill the whole gap on ultra-wide screens. */
+    /* The bulletin keeps its own comfortable max-width, centered in the
+       banner, with side padding roughly matching the side panels' width so
+       it never overlaps them on narrower screens. */
     .fp-hero-bulletin { width: 100%; min-width: 0; max-width: 900px; margin: 0 auto; }
 
-    /* Donations/Feedback — full-height boxed cards flush to the far left
-       and right edges of the banner, matching the bulletin's height. */
+    /* Donations/Feedback — now full-height side panels, flush to the true
+       left/right edges of the banner (top to bottom, nav bar to border),
+       instead of grid columns sharing the bulletin's row. */
+    .fp-hero-side {
+      position: absolute; top: 0; bottom: 0; z-index: 2;
+      width: clamp(210px, 17vw, 270px); box-sizing: border-box;
+    }
+    .fp-hero-side--left { left: 0; }
+    .fp-hero-side--right { right: 0; }
+    @media (max-width: 1150px) {
+      .fp-hero-side { position: static; width: 100%; }
+      .fp-hero-banner { display: flex; flex-direction: column; }
+      .fp-hero-side--left { order: 1; }
+      .fp-hero-inner { order: 2; }
+      .fp-hero-side--right { order: 3; }
+    }
+
     .fp-hero-box {
-      position: relative; width: 100%; height: 75%; box-sizing: border-box;
+      position: relative; width: 100%; height: 100%; box-sizing: border-box;
       display: flex; flex-direction: column; padding: 1rem 0.9rem;
-      border-radius: 18px; overflow: hidden;
       background-image: linear-gradient(160deg, rgba(10,8,20,0.4), rgba(10,8,20,0.6)), url('/images/home/box-background-2.png');
       background-size: cover;
       border: 1px solid rgba(255,255,255,0.18);
       box-shadow: 0 14px 34px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12);
     }
-    .fp-hero-box--donations { background-position: 15% 25%; }
-    .fp-hero-box--feedback { background-position: 85% 60%; }
-    @media (max-width: 1150px) { .fp-hero-box { height: auto; min-height: 280px; } }
+    .fp-hero-side--left .fp-hero-box { border-radius: 0 18px 18px 0; background-position: 15% 25%; }
+    .fp-hero-side--right .fp-hero-box { border-radius: 18px 0 0 18px; background-position: 85% 60%; }
+    @media (max-width: 1150px) {
+      .fp-hero-box { height: auto; min-height: 280px; border-radius: 18px !important; }
+    }
 
-    .fp-hero-box-title { display: flex; align-items: center; gap: 0.5rem; flex: none; }
+    .fp-hero-box-title { display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex: none; }
     .fp-hero-label {
       font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 1.6rem; color: #fff;
       text-shadow: 0 2px 10px rgba(0,0,0,0.8);
@@ -539,24 +552,25 @@
     <source src="/images/home/top-background.webm" type="video/webm" />
   </video>
   <div class="fp-hero-scrim"></div>
-  <div class="fp-hero-inner">
-    <div class="fp-hero-text fp-hero-text--left">
-      <div class="fp-hero-box fp-hero-box--donations">
-        <div class="fp-hero-box-title">
-          <h2 class="fp-hero-label">Donations</h2>
-          <img class="fp-hero-box-deco" src="/images/home/decoration-2.png" alt="" />
-        </div>
-        <div class="fp-hero-box-rule"></div>
-        <div class="fp-hero-donors" id="fp-hero-donors">
-          <p class="fp-hero-donors-empty" id="fp-hero-donors-empty">Loading supporters…</p>
-        </div>
-        <div class="fp-hero-donate-btns">
-          <a class="fp-hero-donate-btn fp-hero-donate-btn--kofi" href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">☕ Ko-fi</a>
-          <a class="fp-hero-donate-btn fp-hero-donate-btn--paypal" href="https://www.paypal.com/donate?business=mewtwosmew%40gmail.com&currency_code=USD" target="_blank" rel="noopener">💳 PayPal</a>
-        </div>
+
+  <div class="fp-hero-side fp-hero-side--left">
+    <div class="fp-hero-box">
+      <div class="fp-hero-box-title">
+        <h2 class="fp-hero-label">Donations</h2>
+        <img class="fp-hero-box-deco" src="/images/home/decoration-2.png" alt="" />
+      </div>
+      <div class="fp-hero-box-rule"></div>
+      <div class="fp-hero-donors" id="fp-hero-donors">
+        <p class="fp-hero-donors-empty" id="fp-hero-donors-empty">Loading supporters…</p>
+      </div>
+      <div class="fp-hero-donate-btns">
+        <a class="fp-hero-donate-btn fp-hero-donate-btn--kofi" href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">☕ Ko-fi</a>
+        <a class="fp-hero-donate-btn fp-hero-donate-btn--paypal" href="https://www.paypal.com/donate?business=mewtwosmew%40gmail.com&currency_code=USD" target="_blank" rel="noopener">💳 PayPal</a>
       </div>
     </div>
+  </div>
 
+  <div class="fp-hero-inner">
     <div class="fp-hero-bulletin">
       <section class="fp-billboard" id="fp-billboard">
         <div class="fp-billboard-track" id="fp-billboard-track"></div>
@@ -568,20 +582,20 @@
         <div class="fp-billboard-dots" id="fp-billboard-dots"><div class="fp-billboard-dots-track" id="fp-billboard-dots-track"></div></div>
       </section>
     </div>
+  </div>
 
-    <div class="fp-hero-text fp-hero-text--right">
-      <div class="fp-hero-box fp-hero-box--feedback">
-        <div class="fp-hero-box-title">
-          <h2 class="fp-hero-label">Feedback</h2>
-          <img class="fp-hero-box-deco" src="/images/home/decoration-2.png" alt="" />
-        </div>
-        <div class="fp-hero-box-rule"></div>
-        <div class="fp-hero-feedback-text">
-          <p class="fp-hero-feedback-line"><img src="/images/home/decoration-2.png" alt="" />Your feedback helps this website grow, flourish, and keeps this 'vee happy.</p>
-          <p class="fp-hero-feedback-line"><img src="/images/home/decoration-2.png" alt="" />Wanna reach out? Click below and share your thoughts.</p>
-        </div>
-        <a class="fp-hero-feedback-btn" href="/inbox">💬 Feedback</a>
+  <div class="fp-hero-side fp-hero-side--right">
+    <div class="fp-hero-box">
+      <div class="fp-hero-box-title">
+        <h2 class="fp-hero-label">Feedback</h2>
+        <img class="fp-hero-box-deco" src="/images/home/decoration-2.png" alt="" />
       </div>
+      <div class="fp-hero-box-rule"></div>
+      <div class="fp-hero-feedback-text">
+        <p class="fp-hero-feedback-line"><img src="/images/home/decoration-2.png" alt="" />Your feedback helps this website grow, flourish, and keeps this 'vee happy.</p>
+        <p class="fp-hero-feedback-line"><img src="/images/home/decoration-2.png" alt="" />Wanna reach out? Click below and share your thoughts.</p>
+      </div>
+      <a class="fp-hero-feedback-btn" href="/inbox">💬 Feedback</a>
     </div>
   </div>
 </section>
@@ -1437,11 +1451,20 @@
     a.href = window.fpUrl(`/club?slug=${encodeURIComponent(c.slug)}`);
     const imgWrap = document.createElement('div');
     imgWrap.className = 'fp-spotlight-img-wrap';
-    const img = document.createElement('img');
-    img.className = 'fp-spotlight-img';
-    img.src = c.icon_url;
-    img.alt = '';
-    imgWrap.appendChild(img);
+    if (c.icon_url) {
+      const img = document.createElement('img');
+      img.className = 'fp-spotlight-img';
+      img.src = c.icon_url;
+      img.alt = '';
+      imgWrap.appendChild(img);
+    } else {
+      // No custom club icon yet -- fall back to the same lettered avatar
+      // treatment social.html uses, over the wrap's own gradient background.
+      const letter = document.createElement('span');
+      letter.style.cssText = 'position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:#fff;font-family:Cinzel,Georgia,serif;font-weight:700;font-size:2.4rem;text-shadow:0 2px 10px rgba(0,0,0,0.6);';
+      letter.textContent = (c.name || '?').charAt(0).toUpperCase();
+      imgWrap.appendChild(letter);
+    }
     const name = document.createElement('p');
     name.className = 'fp-spotlight-name';
     name.textContent = c.name || 'Unnamed Club';
