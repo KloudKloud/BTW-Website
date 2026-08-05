@@ -41,11 +41,11 @@
     .fp-hero-inner {
       position: relative; z-index: 2; width: 100%; box-sizing: border-box;
       padding: 1.5rem 2rem;
-      display: grid; grid-template-columns: minmax(170px, 220px) minmax(0, 1fr) minmax(170px, 220px);
-      align-items: stretch; gap: 1.25rem;
+      display: grid; grid-template-columns: minmax(195px, 250px) minmax(0, 1fr) minmax(195px, 250px);
+      align-items: stretch; gap: 0.85rem;
     }
     @media (max-width: 1150px) { .fp-hero-inner { grid-template-columns: 1fr; padding: 1.5rem 1.25rem; } }
-    .fp-hero-text { display: flex; min-width: 0; }
+    .fp-hero-text { display: flex; align-items: center; min-width: 0; }
     @media (max-width: 1150px) { .fp-hero-text { order: 2; } .fp-hero-bulletin { order: 1; } }
 
     /* The bulletin keeps its own comfortable max-width, centered within
@@ -56,17 +56,17 @@
     /* Donations/Feedback — full-height boxed cards flush to the far left
        and right edges of the banner, matching the bulletin's height. */
     .fp-hero-box {
-      position: relative; width: 100%; box-sizing: border-box;
+      position: relative; width: 100%; height: 75%; box-sizing: border-box;
       display: flex; flex-direction: column; padding: 1rem 0.9rem;
       border-radius: 18px; overflow: hidden;
-      background-image: linear-gradient(160deg, rgba(10,8,20,0.4), rgba(10,8,20,0.6)), url('/images/home/box-background-3.png');
+      background-image: linear-gradient(160deg, rgba(10,8,20,0.4), rgba(10,8,20,0.6)), url('/images/home/box-background-2.png');
       background-size: cover;
       border: 1px solid rgba(255,255,255,0.18);
       box-shadow: 0 14px 34px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12);
     }
     .fp-hero-box--donations { background-position: 15% 25%; }
     .fp-hero-box--feedback { background-position: 85% 60%; }
-    @media (max-width: 1150px) { .fp-hero-box { min-height: 280px; } }
+    @media (max-width: 1150px) { .fp-hero-box { height: auto; min-height: 280px; } }
 
     .fp-hero-box-title { display: flex; align-items: center; gap: 0.5rem; flex: none; }
     .fp-hero-label {
@@ -220,6 +220,7 @@
     .fp-shine-card--boxed.fp-boxed-a { background-position: 8% 15%; }
     .fp-shine-card--boxed.fp-boxed-b { background-position: 50% 55%; }
     .fp-shine-card--boxed.fp-boxed-c { background-position: 92% 80%; }
+    .fp-shine-card--boxed.fp-boxed-d { background-position: 60% 10%; }
     .fp-card-deco { position: absolute; z-index: 0; pointer-events: none; object-fit: contain; opacity: 0.9; }
     .fp-card-deco--tr { top: -14px; right: -10px; width: 46px; height: 46px; }
     .fp-card-deco--bl { bottom: -12px; left: -12px; width: 36px; height: 36px; }
@@ -240,9 +241,12 @@
       background: linear-gradient(to right, rgba(240,192,96,0.6), transparent);
     }
 
-    /* ── Row of three: Character Spotlight | Gallery Spotlight | Story Spotlight ── */
-    .fp-spotlight-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-bottom: 1.5rem; align-items: stretch; }
-    @media (max-width: 900px) { .fp-spotlight-row { grid-template-columns: 1fr; } }
+    /* ── Row of four: Character | Gallery | Story | Club Spotlight ── */
+    .fp-spotlight-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; margin-bottom: 1.5rem; align-items: stretch; }
+    @media (max-width: 1150px) { .fp-spotlight-row { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 640px) { .fp-spotlight-row { grid-template-columns: 1fr; } }
+    .fp-spotlight-row .fp-shine-card { padding: 1.4rem 1.2rem; }
+    .fp-spotlight-row .fp-shine-title--big { font-size: 1.3rem; }
 
     /* ── Character / Gallery spotlight — cycles one item at a time ── */
     .fp-spotlight-display {
@@ -556,7 +560,7 @@
     <div class="fp-hero-bulletin">
       <section class="fp-billboard" id="fp-billboard">
         <div class="fp-billboard-track" id="fp-billboard-track"></div>
-        <div class="fp-billboard-empty" id="fp-billboard-empty">
+        <div class="fp-billboard-empty" id="fp-billboard-empty" style="display:none;">
           <p>✨ Something fun is coming to this spot soon!</p>
         </div>
         <button class="fp-billboard-arrow fp-billboard-arrow--prev" id="fp-billboard-prev" type="button" aria-label="Previous slide" style="display:none;">‹</button>
@@ -612,6 +616,14 @@
       <div class="fp-shine-card fp-shine-card--boxed fp-boxed-c">
         <h2 class="fp-shine-title fp-shine-title--big">Story Spotlight <img class="fp-title-deco" src="/images/home/decoration-1.png" alt="" /></h2>
         <div class="fp-spotlight-display" id="fp-story-spotlight">
+          <p class="fp-spotlight-loading">Loading…</p>
+        </div>
+        <img class="fp-card-deco fp-card-deco--tr" src="/images/home/decoration-8.png" alt="" />
+      </div>
+
+      <div class="fp-shine-card fp-shine-card--boxed fp-boxed-d">
+        <h2 class="fp-shine-title fp-shine-title--big">Club Spotlight <img class="fp-title-deco" src="/images/home/decoration-1.png" alt="" /></h2>
+        <div class="fp-spotlight-display" id="fp-club-spotlight">
           <p class="fp-spotlight-loading">Loading…</p>
         </div>
         <img class="fp-card-deco fp-card-deco--tr" src="/images/home/decoration-8.png" alt="" />
@@ -1419,6 +1431,44 @@
     }
   }
 
+  function clubSpotlightItem(c) {
+    const a = document.createElement('a');
+    a.className = 'fp-spotlight-item';
+    a.href = window.fpUrl(`/club?slug=${encodeURIComponent(c.slug)}`);
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'fp-spotlight-img-wrap';
+    const img = document.createElement('img');
+    img.className = 'fp-spotlight-img';
+    img.src = c.icon_url;
+    img.alt = '';
+    imgWrap.appendChild(img);
+    const name = document.createElement('p');
+    name.className = 'fp-spotlight-name';
+    name.textContent = c.name || 'Unnamed Club';
+    const from = document.createElement('p');
+    from.className = 'fp-spotlight-from';
+    from.textContent = `${c.member_count} member${c.member_count === 1 ? '' : 's'}`;
+    a.appendChild(imgWrap);
+    a.appendChild(name);
+    a.appendChild(from);
+    return a;
+  }
+
+  async function fetchClubSpotlightBatch() {
+    const res = await fetch('/api/spotlight/clubs?limit=100');
+    const data = await res.json();
+    return data.clubs || [];
+  }
+  async function loadClubSpotlight() {
+    const el = document.getElementById('fp-club-spotlight');
+    try {
+      const clubs = await fetchClubSpotlightBatch();
+      startSpotlightCycle(clubs, fetchClubSpotlightBatch, el, clubSpotlightItem, 37000);
+    } catch {
+      el.innerHTML = '<p class="fp-spotlight-empty">Couldn\'t load clubs right now.</p>';
+    }
+  }
+
   // ── Recent Submissions — newest chapters/art/characters across every
   // fanpage, mixed FurAffinity-style. Hover reveals the title/name. ──
   function rsCaptionHtml(href, title, authorUsername, author) {
@@ -1562,6 +1612,7 @@
     loadCharacterSpotlight();
     loadGallerySpotlight();
     loadStorySpotlight();
+    loadClubSpotlight();
     loadActivityFeed();
 
     if (token) {

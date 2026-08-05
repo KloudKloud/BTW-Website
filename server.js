@@ -6964,6 +6964,28 @@ app.get('/api/spotlight/stories', async (req, res) => {
   });
 });
 
+app.get('/api/spotlight/clubs', async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit, 10) || 12, 100);
+  const { nsfwAllowed } = await getViewerNsfwAccess(req);
+  // Same "excluded entirely, not blurred" rule the gallery spotlight uses
+  // for NSFW content — an NSFW club just never enters the rotation for a
+  // viewer who can't see it, rather than showing a locked placeholder.
+  const { rows } = await pool.query(
+    `SELECT c.slug, c.name, c.icon_url,
+            (SELECT COUNT(*)::int FROM club_members cm WHERE cm.club_id = c.id) AS member_count
+     FROM clubs c
+     WHERE c.icon_url IS NOT NULL AND c.icon_url <> ''
+       AND (c.is_nsfw = FALSE OR $2::boolean)
+     ORDER BY RANDOM() LIMIT $1`,
+    [limit, nsfwAllowed]
+  );
+  res.json({
+    clubs: rows.map(r => ({
+      slug: r.slug, name: r.name, icon_url: r.icon_url, member_count: r.member_count,
+    })),
+  });
+});
+
 // ── Recent Submissions feed — newest stories/chapters/art/characters across
 // every fanpage, newest first. Gallery is filtered to SFW only for viewers
 // without NSFW access. ──────────────────────────────────────────────────
