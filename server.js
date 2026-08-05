@@ -5987,14 +5987,26 @@ app.get('/api/characters/:id', async (req, res) => {
 // character viewer (small cover-art cards, click through to that story's
 // home page).
 app.get('/api/characters/:id/stories', async (req, res) => {
+  const { viewerId } = await getViewerNsfwAccess(req);
+  // A still-drafted story (no published chapter yet) should only ever be
+  // clickable/visible to its own owner here -- anyone else browsing a
+  // character card would otherwise be able to jump straight into an
+  // unpublished book that was only linked for the author's own convenience.
   const { rows } = await pool.query(
     `SELECT ms.id AS site_id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.avatar AS author_avatar
      FROM character_story_links csl
      JOIN moderator_sites ms ON ms.id = csl.site_id
      JOIN users u ON u.id = ms.owner_user_id
      WHERE csl.character_id = $1
+       AND (
+         ms.owner_user_id = $2
+         OR EXISTS (
+           SELECT 1 FROM moderator_chapters mc
+           WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+         )
+       )
      ORDER BY csl.sort_order, ms.id`,
-    [req.params.id]
+    [req.params.id, viewerId || 0]
   );
   res.json({
     stories: rows.map(r => ({ id: r.site_id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url, author_avatar: r.author_avatar })),
@@ -6277,15 +6289,25 @@ app.post('/api/gallery/:id/view', async (req, res) => {
 // Every story and character a gallery post is linked to — pre-fills the
 // "Link To:" section when editing an existing post.
 app.get('/api/gallery/:id/links', async (req, res) => {
-  const { nsfwAllowed } = await getViewerNsfwAccess(req);
+  const { viewerId, nsfwAllowed } = await getViewerNsfwAccess(req);
+  // Same rule as a character's Linked Stories -- a drafted, never-published
+  // story only shows up here for its own owner, not every visitor.
   const [{ rows: stories }, { rows: characters }] = await Promise.all([
     pool.query(
       `SELECT ms.id AS site_id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.synopsis, u.avatar AS author_avatar
        FROM gallery_story_links gsl
        JOIN moderator_sites ms ON ms.id = gsl.site_id
        JOIN users u ON u.id = ms.owner_user_id
-       WHERE gsl.gallery_id = $1 ORDER BY gsl.sort_order, ms.id`,
-      [req.params.id]
+       WHERE gsl.gallery_id = $1
+         AND (
+           ms.owner_user_id = $2
+           OR EXISTS (
+             SELECT 1 FROM moderator_chapters mc
+             WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+           )
+         )
+       ORDER BY gsl.sort_order, ms.id`,
+      [req.params.id, viewerId || 0]
     ),
     pool.query(
       `SELECT mc.id, mc.name, mc.ref_image, mc.ref_is_nsfw, mc.stats,

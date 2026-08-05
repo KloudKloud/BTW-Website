@@ -1163,9 +1163,21 @@ function insertBlockAtAnchor(block) {
   const anchorBlock = findAnchorParagraph();
   // Land it right before the empty line it was triggered from, leaving
   // that empty paragraph in place afterward so there's still somewhere to
-  // keep typing right below the new media.
-  if (anchorBlock) editor.insertBefore(block, anchorBlock);
-  else editor.appendChild(block);
+  // keep typing right below the new media -- but only when it's actually
+  // needed. If real content already continues after the anchor (it was
+  // just the empty line the user hovered to summon the insert button,
+  // not their next paragraph), that anchor is now a redundant blank line
+  // sitting right after a contenteditable="false" block: browsers select
+  // the block on the first Backspace into it instead of merging text,
+  // making the stray line look stuck and un-deletable. Drop it instead.
+  if (anchorBlock) {
+    editor.insertBefore(block, anchorBlock);
+    if (!anchorBlock.textContent.trim() && anchorBlock.nextElementSibling) {
+      anchorBlock.remove();
+    }
+  } else {
+    editor.appendChild(block);
+  }
   markDirty();
   updateStatusLine();
 }
