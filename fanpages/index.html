@@ -136,16 +136,21 @@
     .fp-hero-feedback-btn:hover { transform: translateY(-2px); }
     .fp-hero-feedback-btn:active { transform: translateY(1px); border-bottom-width: 2px; }
 
-    /* ── Video-area — the MainBackground video fills the strip below the
-       hero; page content (spotlight row + recent submissions) sits inside
-       a centered "active" column on top of it. ── */
-    /* Fixed to the viewport (not the section) -- covers exactly one screen's
-       worth of pixels and stays there as the page scrolls past it, instead
-       of stretching (and object-fit:cover zooming in) to match however
-       tall the section ends up being. */
-    .fp-video-area { position: relative; width: 100%; }
-    .fp-video-area-bg { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -1; }
-    .fp-video-area-scrim { position: fixed; inset: 0; z-index: -1; background: rgba(8,6,14,0.55); }
+    /* ── Video-area — split into two stacked sections, each with its own
+       looping video, so object-fit:cover never has to zoom in hard to
+       cover the whole page's height (see the split-vs-fixed A/B test). ── */
+    .fp-video-area { position: relative; width: 100%; overflow: hidden; }
+    .fp-video-area-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+    .fp-video-area-scrim { position: absolute; inset: 0; z-index: 1; background: rgba(8,6,14,0.55); }
+    /* A soft crossfade at the seam between the two video sections instead
+       of a hard cut -- a gradient overlay fading the first section's video
+       down to solid dark right at its bottom edge, so the transition into
+       the second section's different footage reads as a fade, not a jump. */
+    .fp-video-area--seam::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 140px; z-index: 1;
+      background: linear-gradient(to bottom, transparent, rgba(8,6,14,0.96));
+      pointer-events: none;
+    }
     .fp-video-area-inner { position: relative; z-index: 2; padding-top: 2.5rem; padding-bottom: 3rem; }
 
     /* Billboard — the big "theater" banner, crossfades between promo slides */
@@ -294,7 +299,7 @@
        (left, transparent rows over the same video background) beside a
        narrow Recommended Followers panel (right, boxed like the hero's
        Donations/Feedback panels). ── */
-    .fp-below-row { display: grid; grid-template-columns: 1fr 260px; gap: 1.5rem; align-items: stretch; margin-bottom: 3rem; margin-top: 2.75rem; }
+    .fp-below-row { display: grid; grid-template-columns: 1fr 260px; gap: 1.5rem; align-items: stretch; margin-bottom: 3rem; }
     @media (max-width: 900px) { .fp-below-row { grid-template-columns: 1fr; } }
     .fp-below-main { min-width: 0; display: flex; flex-direction: column; gap: 2rem; }
     .fp-below-main .fp-row { margin-bottom: 0; }
@@ -494,7 +499,7 @@
     .rs-card-caption-author a:hover { text-decoration: underline; }
 
     /* Disclaimer — same box used at the bottom of every user's profile page */
-    .fp-disclaimer { max-width: 1200px; margin: 3rem auto 4rem; padding: 0 2rem; }
+    .fp-disclaimer { max-width: 1200px; margin: 3rem auto 0; padding: 0 2rem; }
     .fp-disclaimer-box {
       border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1.5rem;
       font-size: 0.85rem; line-height: 1.8; color: #999; text-align: center; font-style: italic;
@@ -575,12 +580,13 @@
   </div>
 </section>
 
-<!-- ══ Video area — MainBackground video, fixed to the viewport (see
-     .fp-video-area-bg) behind the wider "active" column holding the
-     spotlight cards, Recent Submissions, Recommended Stories/Bookmarked
-     Stories/Recommended Followers, and the disclaimer. A/B test against
-     the two-video split approach per user request. ══ -->
-<section class="fp-video-area">
+<!-- ══ Video area — MainBackground behind the spotlight cards + Recent
+     Submissions; a second section further down (MainBackground4) takes
+     over for Recommended Stories/Bookmarked Stories/Recommended Followers
+     + the disclaimer, each covering only its own section's height so
+     neither has to zoom in hard. A soft gradient fade at the seam (see
+     .fp-video-area--seam) blends the cut between the two. ══ -->
+<section class="fp-video-area fp-video-area--seam">
   <video class="fp-video-area-bg" autoplay muted loop playsinline>
     <source src="/images/home/main-background.mp4" type="video/mp4" />
   </video>
@@ -633,6 +639,17 @@
         </div>
       </div>
     </section>
+
+  </div>
+</section>
+
+<section class="fp-video-area">
+  <video class="fp-video-area-bg" autoplay muted loop playsinline>
+    <source src="/images/home/main-background-4.mp4" type="video/mp4" />
+  </video>
+  <div class="fp-video-area-scrim"></div>
+
+  <div class="fp-main fp-video-area-inner">
 
     <!-- Recommended Stories + Bookmarked Stories (left, transparent rows) |
          Recommended Followers (right, boxed panel) -->
