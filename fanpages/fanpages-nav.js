@@ -578,10 +578,11 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   // Closing is debounced on a short timer (cleared by re-entering either
   // the button or the menu) so crossing the small visual gap between them
   // on the way down doesn't get treated as "left the menu" and slam it shut.
-  // Clicking the button (as opposed to just hovering it) pins it open —
-  // unlike the plain wireDropdown click-toggle above, a second/third/etc.
-  // click here never closes it again; only opening a different menu or a
-  // genuine click elsewhere on the page (the document listener below) does.
+  // Clicking the button (as opposed to just hovering it) pins it open, so
+  // hover's debounced auto-close leaves it alone even if the mouse wanders
+  // off it — it stays open until either it's clicked again (closes it,
+  // same as a normal toggle button) or a genuine click elsewhere on the
+  // page (the document listener below) does.
   function wireHoverDropdown(btnId, dropdownId) {
     const btn = document.getElementById(btnId);
     const wrap = btn && btn.closest('.fpnav-dropdown-wrap');
@@ -604,6 +605,12 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
     dd.addEventListener('mouseleave', scheduleClose);
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (!dd.hidden) {
+        clearTimeout(closeTimer);
+        dd.hidden = true;
+        dd.classList.remove('fpnav-pinned');
+        return;
+      }
       open();
       dd.classList.add('fpnav-pinned');
     });
