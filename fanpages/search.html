@@ -308,41 +308,37 @@
       display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.75rem;
     }
     .fp-layout--no-side .fp-result {
-      flex-direction: row; align-items: stretch; height: 300px; padding: 0; overflow: hidden;
+      flex-direction: row; align-items: stretch; height: 400px; padding: 0; overflow: hidden;
       position: relative;
       background: linear-gradient(160deg, rgba(10,8,14,0.86), rgba(10,8,14,0.76)), url('/images/home/potential-box-background.png');
       background-size: cover; background-position: center;
     }
-    .fp-layout--no-side .fp-result-cover-link { width: 40%; height: 100%; align-items: stretch; overflow: hidden; }
+    /* Cover keeps its natural 2:3 ratio (same as every cover elsewhere on
+       the site) sized off the card's height, instead of being stretched/
+       cropped to fill a fixed-percentage column -- the full image shows,
+       no zoom. */
+    .fp-layout--no-side .fp-result-cover-link { width: auto; height: 100%; aspect-ratio: 2 / 3; flex-shrink: 0; align-items: stretch; overflow: hidden; position: relative; }
     .fp-layout--no-side .fp-result-cover {
-      width: 100%; height: 100%; border-radius: 0; border: none; box-shadow: none;
-      transform: scale(1.08); transform-origin: center;
+      width: 100%; height: 100%; border-radius: 0; border: none; box-shadow: none; object-fit: cover;
     }
     .fp-layout--no-side .fp-result-cover-link .wiki-generated-cover { width: 100%; height: 100%; border-radius: 0; border: none; box-shadow: none; }
-    .fp-layout--no-side .fp-result-body { padding: 1rem 1.15rem 0.85rem; overflow: hidden; }
+    .fp-layout--no-side .fp-result-body { padding: 1rem 1.15rem 0.85rem; overflow: hidden; display: flex; flex-direction: column; }
     .fp-layout--no-side .fp-result-title { font-size: 1.18rem; line-height: 1.25; }
     .fp-layout--no-side .fp-result-date { display: none; }
     .fp-layout--no-side .fp-result-author { margin: 0.35rem 0 0.55rem; }
     .fp-layout--no-side .fp-result-synopsis {
       font-size: 0.84rem; line-height: 1.5; margin-bottom: 0.6rem;
-      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden;
     }
-    .fp-layout--no-side .fp-result-chars { display: none; }
-    .fp-layout--no-side .fp-result-stats { display: none; }
-    /* Tags clamp to ~2 rows; the Expand chip only appears when a card's
-       tag list actually overflows that (added in JS, same pattern as the
-       homepage story hero's tagcloud-expand button). Clicking it doesn't
-       just reveal more tags -- it soft-opens the full story quick-view
-       modal, same as clicking the rest of a truncated card would. */
+    .fp-layout--no-side .fp-result-chars { margin: 0 0 0.6rem; }
+    .fp-layout--no-side .fp-result-stats { margin-top: auto; font-size: 0.82rem; gap: 0.3rem 0.9rem; }
+    /* Tags clamp to ~3 rows with the same soft fade the synopsis uses,
+       instead of a hard cutoff + an extra button to click through. */
     .fp-layout--no-side .fp-tag-row {
-      max-height: 62px; overflow: hidden; margin-bottom: 0.5rem; position: relative;
+      max-height: 96px; overflow: hidden; margin-bottom: 0.6rem;
+      -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
+      mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
     }
-    .fp-result-expand-chip {
-      display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(240,192,96,0.14);
-      border: 1px solid rgba(240,192,96,0.4); color: #f0c060; border-radius: 20px; padding: 0.32em 0.9em;
-      font-size: 0.82rem; font-weight: 700; cursor: pointer; font-family: inherit;
-    }
-    .fp-result-expand-chip:hover { background: rgba(240,192,96,0.26); }
     /* Sparkle accents on each card -- decoration-8 tucked into the top-right
        corner (same treatment as the homepage Spotlight cards), decoration-2
        as a smaller echo bottom-left of the cover. Both z-index above the
@@ -350,32 +346,9 @@
     .fp-result-deco { display: none; }
     .fp-layout--no-side .fp-result-deco { display: block; position: absolute; z-index: 2; pointer-events: none; object-fit: contain; opacity: 0.9; }
     .fp-layout--no-side .fp-result-deco--tr { top: -12px; right: -8px; width: 40px; height: 40px; }
-    .fp-layout--no-side .fp-result-deco--bl { bottom: 6px; left: calc(40% - 14px); width: 26px; height: 26px; opacity: 0.85; }
+    .fp-layout--no-side .fp-result-deco--bl { bottom: 6px; right: 6px; width: 26px; height: 26px; opacity: 0.85; }
     .fp-result-title-deco { display: none; }
     .fp-layout--no-side .fp-result-title-deco { display: inline-block; width: 16px; height: 16px; object-fit: contain; flex-shrink: 0; margin-left: 0.3rem; vertical-align: -2px; }
-
-    /* ── Story quick-view modal ("soft open") — full untruncated synopsis
-       and tag list for whichever card's Expand chip was clicked. ── */
-    .fp-quickview-overlay { position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 2rem; }
-    .fp-quickview-overlay[hidden] { display: none; }
-    .fp-quickview-card {
-      position: relative; width: 100%; max-width: 640px; max-height: 84vh; overflow-y: auto;
-      background: linear-gradient(160deg, rgba(18,15,22,0.97), rgba(18,15,22,0.97)), url('/images/home/potential-box-background.png');
-      background-size: cover; background-position: center;
-      border: 1px solid rgba(240,192,96,0.3); border-radius: 16px; padding: 2rem;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.6);
-    }
-    .fp-quickview-close {
-      position: absolute; top: 14px; right: 14px; width: 32px; height: 32px; border-radius: 50%;
-      background: rgba(255,255,255,0.08); border: none; color: #ddd; font-size: 1.1rem; cursor: pointer;
-    }
-    .fp-quickview-close:hover { background: rgba(255,255,255,0.18); color: #fff; }
-    .fp-quickview-cover { float: left; width: 130px; height: 195px; object-fit: cover; border-radius: 12px; margin: 0 1.25rem 0.75rem 0; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
-    .fp-quickview-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.4rem; color: #fff; margin-bottom: 0.5rem; }
-    .fp-quickview-synopsis { font-size: 0.95rem; line-height: 1.65; color: #ddd; white-space: pre-line; margin-bottom: 1rem; }
-    .fp-quickview-card .fp-tag-row { clear: both; max-height: none; }
-    .fp-quickview-goto { display: inline-block; margin-top: 1.25rem; background: #f0c060; color: #1a1510; font-weight: 700; text-decoration: none; padding: 0.6em 1.3em; border-radius: 10px; }
-    .fp-quickview-goto:hover { background: #f5cf7c; }
 
     .fp-search-empty { color: #ddd; font-size: 1rem; padding: 2rem 0; }
     .fp-pagination { display: flex; justify-content: center; gap: 0.6rem; margin-top: 2.5rem; }
@@ -820,10 +793,6 @@
 </main>
 </div>
 
-<div class="fp-quickview-overlay" id="fp-quickview-overlay" hidden>
-  <div class="fp-quickview-card" id="fp-quickview-card"></div>
-</div>
-
 <script src="/fanpages/fanpages-nav.js"></script>
 <script>
 function escapeHtml(s) {
@@ -862,7 +831,7 @@ function setProfilesMenuCount(text) {
 function truncateSynopsis(s) {
   const text = (s || '').trim();
   if (!text) return 'No description yet.';
-  return text.length > 400 ? text.slice(0, 400).trim() + '…' : text;
+  return text.length > 500 ? text.slice(0, 500).trim() + '…' : text;
 }
 function ratingClass(rating) {
   if (rating === 'mature') return 'fp-tag-pill--rating-teen';
@@ -923,17 +892,14 @@ function charsRowHtml(w) {
   `;
 }
 
-// Browse-grid cards need the full work object again when their Expand chip
-// is clicked (for the untruncated quick-view modal) -- stashed by index
-// rather than re-fetching, since /api/search/works already returns full
-// synopsis/tags/etc. up front.
-let BROWSE_WORKS = [];
-function resultCard(w, idx) {
+function resultCard(w) {
   return `
-    <div class="fp-result" data-href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}" data-work-idx="${idx}">
-      <a class="fp-result-cover-link" href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">${coverHtml(w)}</a>
+    <div class="fp-result" data-href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">
+      <a class="fp-result-cover-link" href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">
+        ${coverHtml(w)}
+        <img class="fp-result-deco fp-result-deco--bl" src="/images/home/decoration-2.png" alt="" />
+      </a>
       <img class="fp-result-deco fp-result-deco--tr" src="/images/home/decoration-8.png" alt="" />
-      <img class="fp-result-deco fp-result-deco--bl" src="/images/home/decoration-2.png" alt="" />
       <div class="fp-result-body">
         <div class="fp-result-title-row">
           <a class="fp-result-title" href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">${escapeHtml(w.site_title || 'Untitled Story')}<img class="fp-result-title-deco" src="/images/home/decoration-1.png" alt="" /></a>
@@ -955,44 +921,6 @@ function resultCard(w, idx) {
   `;
 }
 
-// Only worth an Expand chip if the tag row is actually taller than its
-// 2-row clamp -- same "only show the toggle if it'd do something" rule as
-// the homepage story hero's tagcloud-expand button.
-function wireBrowseCardExtras(container) {
-  container.querySelectorAll('.fp-result').forEach(card => {
-    const tagRow = card.querySelector('.fp-tag-row');
-    const idx = card.dataset.workIdx;
-    if (tagRow && tagRow.scrollHeight > tagRow.clientHeight + 2) {
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = 'fp-result-expand-chip';
-      chip.textContent = 'Expand ▾';
-      chip.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openQuickView(BROWSE_WORKS[idx]); });
-      card.querySelector('.fp-result-body').insertBefore(chip, tagRow.nextSibling);
-    }
-  });
-}
-
-function openQuickView(w) {
-  if (!w) return;
-  const overlay = document.getElementById('fp-quickview-overlay');
-  const card = document.getElementById('fp-quickview-card');
-  card.innerHTML = `
-    <button class="fp-quickview-close" id="fp-quickview-close" type="button" aria-label="Close">✕</button>
-    <a href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}"><img class="fp-quickview-cover" src="${escapeHtml(w.cover_url || '/images/gallery/pixernbath_13.png')}" alt="" /></a>
-    <h2 class="fp-quickview-title">${escapeHtml(w.site_title || 'Untitled Story')}</h2>
-    ${authorRowHtml(w)}
-    <p class="fp-quickview-synopsis">${escapeHtml((w.synopsis || '').trim() || 'No description yet.')}</p>
-    ${tagsRowHtml(w)}
-    <a class="fp-quickview-goto" href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">Go to Story →</a>
-  `;
-  overlay.hidden = false;
-  document.getElementById('fp-quickview-close').addEventListener('click', closeQuickView);
-}
-function closeQuickView() { document.getElementById('fp-quickview-overlay').hidden = true; }
-document.getElementById('fp-quickview-overlay').addEventListener('click', (e) => {
-  if (e.target.id === 'fp-quickview-overlay') closeQuickView();
-});
 
 function bookmarkCard(w) {
   return `
@@ -1420,9 +1348,7 @@ async function runSearch() {
       resultsEl.innerHTML = '<p class="fp-search-empty">No works match that search.</p>';
       return;
     }
-    BROWSE_WORKS = works;
-    resultsEl.innerHTML = works.map((w, idx) => resultCard(w, idx)).join('');
-    if (isBrowseMode) wireBrowseCardExtras(resultsEl);
+    resultsEl.innerHTML = works.map(resultCard).join('');
 
     const totalPages = Math.max(1, Math.ceil((data.total || 0) / (data.limit || 20)));
     if (totalPages > 1) {
