@@ -3972,12 +3972,15 @@ app.get('/api/recommended-followers', async (req, res) => {
     try { userId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
   const limit = Math.min(parseInt(req.query.limit, 10) || 5, 100);
+  const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
   // A real ranking instead of a coin flip: follower count (established
   // presence) weighted heaviest, story count (there's something to
   // actually read) next, with a flat bonus for anyone who's updated a
-  // chapter in the last 30 days (still active). Random only breaks ties
-  // among otherwise-equal accounts, not the whole ordering.
+  // chapter in the last 30 days (still active). Tiebreak is u.id (not
+  // random()) so that paging through with offset/limit -- the "Show More"
+  // modal fetches 100 at a time -- returns a stable, non-overlapping
+  // sequence instead of reshuffling between requests.
   const { rows } = await pool.query(`
     SELECT u.id, u.username, u.display_name, u.avatar, s.score
     FROM users u
@@ -3997,9 +4000,9 @@ app.get('/api/recommended-followers', async (req, res) => {
       AND NOT EXISTS (
         SELECT 1 FROM user_follows f WHERE f.follower_id = $1 AND f.followed_id = u.id
       )
-    ORDER BY (u.username = 'veekitpaws') DESC, s.score DESC, random()
-    LIMIT $2
-  `, [userId, limit]);
+    ORDER BY (u.username = 'veekitpaws') DESC, s.score DESC, u.id ASC
+    LIMIT $2 OFFSET $3
+  `, [userId, limit, offset]);
 
   res.json({
     users: rows.map(u => ({
