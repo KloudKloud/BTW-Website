@@ -550,6 +550,14 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   });
 
   // ── Dropdown toggling ────────────────────────────────────────────────────
+  // "Pinned" (via the fpnav-pinned class) means a menu was explicitly
+  // clicked open — it should ignore the hover-driven auto-close below and
+  // stay open until something else opens or a genuine click-elsewhere-on-
+  // the-page closes it, no matter how many times it's re-clicked or how far
+  // the mouse wanders off it in the meantime.
+  function closeAllDropdowns() {
+    document.querySelectorAll('.fpnav-dropdown').forEach(el => { el.hidden = true; el.classList.remove('fpnav-pinned'); });
+  }
   function wireDropdown(btnId, dropdownId) {
     const btn = document.getElementById(btnId);
     const dd  = document.getElementById(dropdownId);
@@ -557,20 +565,23 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const willOpen = dd.hidden;
-      document.querySelectorAll('.fpnav-dropdown').forEach(el => { el.hidden = true; });
+      closeAllDropdowns();
       dd.hidden = !willOpen;
+      dd.classList.toggle('fpnav-pinned', willOpen);
     });
   }
   wireDropdown('fpnav-upload-btn', 'fpnav-upload-dropdown');
   wireDropdown('fpnav-avatar-btn', 'fpnav-avatar-dropdown');
-  wireDropdown('fpnav-browse-btn', 'fpnav-browse-dropdown');
-  wireDropdown('fpnav-community-btn', 'fpnav-community-dropdown');
   // Community and Browse also open on hover (not just click), unlike the
   // Create/avatar menus — they're pure navigation with no login-gating to
   // worry about, so there's no downside to making them quicker to get to.
   // Closing is debounced on a short timer (cleared by re-entering either
   // the button or the menu) so crossing the small visual gap between them
   // on the way down doesn't get treated as "left the menu" and slam it shut.
+  // Clicking the button (as opposed to just hovering it) pins it open —
+  // unlike the plain wireDropdown click-toggle above, a second/third/etc.
+  // click here never closes it again; only opening a different menu or a
+  // genuine click elsewhere on the page (the document listener below) does.
   function wireHoverDropdown(btnId, dropdownId) {
     const btn = document.getElementById(btnId);
     const wrap = btn && btn.closest('.fpnav-dropdown-wrap');
@@ -579,10 +590,11 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
     let closeTimer = null;
     const open = () => {
       clearTimeout(closeTimer);
-      document.querySelectorAll('.fpnav-dropdown').forEach(el => { if (el !== dd) el.hidden = true; });
+      document.querySelectorAll('.fpnav-dropdown').forEach(el => { if (el !== dd) { el.hidden = true; el.classList.remove('fpnav-pinned'); } });
       dd.hidden = false;
     };
     const scheduleClose = () => {
+      if (dd.classList.contains('fpnav-pinned')) return;
       clearTimeout(closeTimer);
       closeTimer = setTimeout(() => { dd.hidden = true; }, 150);
     };
@@ -590,11 +602,17 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
     wrap.addEventListener('mouseleave', scheduleClose);
     dd.addEventListener('mouseenter', open);
     dd.addEventListener('mouseleave', scheduleClose);
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      open();
+      dd.classList.add('fpnav-pinned');
+    });
   }
   wireHoverDropdown('fpnav-browse-btn', 'fpnav-browse-dropdown');
   wireHoverDropdown('fpnav-community-btn', 'fpnav-community-dropdown');
-  document.addEventListener('click', () => {
-    document.querySelectorAll('.fpnav-dropdown').forEach(el => { el.hidden = true; });
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.fpnav-dropdown-wrap')) return;
+    closeAllDropdowns();
   });
 
   document.getElementById('fpnav-logout-link').addEventListener('click', (e) => {

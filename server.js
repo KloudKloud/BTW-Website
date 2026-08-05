@@ -3876,7 +3876,7 @@ function recDiversify(scored, limit, perAuthorCap) {
   return picked.map(s => ({
     slug: s.slug, story_path: s.story_path || s.slug, site_title: s.site_title, cover_url: s.cover_url,
     synopsis: s.synopsis || '', tags: s.tags || [], author: s.display_name || s.username, author_username: s.username,
-    author_avatar: s.avatar || null, bookmarked: false, reason: s.reason,
+    author_avatar: s.avatar || null, bookmarked: !!s.bookmarked, reason: s.reason,
   }));
 }
 
@@ -3942,7 +3942,7 @@ app.get('/api/recommendations/stories', async (req, res) => {
   }
 
   const scored = pool_stories
-    .filter(s => !myOwnSiteIds.has(s.id) && !myBookmarkedSiteIds.has(s.id))
+    .filter(s => !myOwnSiteIds.has(s.id))
     .map(s => {
       let score = 0;
       let reason = null;
@@ -3961,7 +3961,7 @@ app.get('/api/recommendations/stories', async (req, res) => {
         if (!reason) reason = 'Readers like you also bookmarked this';
       }
       score += recTrendingScore(s);
-      return { ...s, score, reason: reason || 'Trending now' };
+      return { ...s, score, reason: reason || 'Trending now', bookmarked: myBookmarkedSiteIds.has(s.id) };
     });
 
   res.json({ stories: recDiversify(scored, limit, 3) });
