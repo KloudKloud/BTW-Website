@@ -3982,11 +3982,14 @@ app.get('/api/recommended-followers', async (req, res) => {
   // modal fetches 100 at a time -- returns a stable, non-overlapping
   // sequence instead of reshuffling between requests.
   const { rows } = await pool.query(`
-    SELECT u.id, u.username, u.display_name, u.avatar, s.score
+    SELECT u.id, u.username, u.display_name, u.avatar, s.score,
+           raw.follower_count, raw.following_count, raw.club_count
     FROM users u
     JOIN LATERAL (
       SELECT
         (SELECT COUNT(*)::int FROM user_follows f WHERE f.followed_id = u.id) AS follower_count,
+        (SELECT COUNT(*)::int FROM user_follows f2 WHERE f2.follower_id = u.id) AS following_count,
+        (SELECT COUNT(*)::int FROM club_members cm JOIN clubs c ON c.id = cm.club_id WHERE cm.user_id = u.id) AS club_count,
         (SELECT COUNT(*)::int FROM moderator_sites ms WHERE ms.owner_user_id = u.id) AS story_count,
         (SELECT MAX(mc.updated_at) FROM moderator_chapters mc JOIN moderator_sites ms ON ms.id = mc.site_id
          WHERE ms.owner_user_id = u.id AND mc.status = 'published') AS last_chapter_at
@@ -4009,6 +4012,7 @@ app.get('/api/recommended-followers', async (req, res) => {
       username: u.username,
       display_name: u.display_name || u.username,
       avatar: u.avatar || null,
+      follower_count: u.follower_count, following_count: u.following_count, club_count: u.club_count,
     })),
   });
 });
