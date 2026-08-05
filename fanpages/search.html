@@ -308,7 +308,7 @@
       display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.75rem;
     }
     .fp-layout--no-side .fp-result {
-      flex-direction: row; align-items: stretch; height: 270px; padding: 0; overflow: hidden;
+      flex-direction: row; align-items: stretch; height: 296px; padding: 0; overflow: hidden;
       position: relative;
       background: linear-gradient(160deg, rgba(10,8,14,0.86), rgba(10,8,14,0.76)), url('/images/home/potential-box-background.png');
       background-size: cover; background-position: center;
@@ -326,8 +326,10 @@
     /* Title + author share one line to save vertical room -- .fp-result-head
        wraps both (title-row + the author link) in a single flex row;
        outside browse mode this wrapper has no special styling, so the
-       normal AO3-style listing still stacks them as before. */
-    .fp-layout--no-side .fp-result-head { display: flex; align-items: baseline; gap: 0.55rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+       normal AO3-style listing still stacks them as before. align-items:
+       center (not baseline) since the author link's avatar circle throws
+       baseline alignment off, reading as sitting above the title. */
+    .fp-layout--no-side .fp-result-head { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
     .fp-layout--no-side .fp-result-title-row { display: contents; }
     .fp-layout--no-side .fp-result-title { font-size: 1.05rem; line-height: 1.2; }
     .fp-layout--no-side .fp-result-date { display: none; }
@@ -336,14 +338,25 @@
       font-size: 0.82rem; line-height: 1.42; margin-bottom: 0.5rem;
       display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
     }
+    /* Character chips + stats travel together, pinned to the bottom of the
+       card as one unit (margin-top:auto on the wrapper) -- stats always
+       lands on the card's bottom edge, chips sit directly above it, and if
+       a story has no linked characters that's just a smaller wrapper (the
+       auto margin still pushes the lone stats row down), not stats
+       floating awkwardly right under the description. */
+    .fp-layout--no-side .fp-result-bottom { margin-top: auto; }
     .fp-layout--no-side .fp-result-chars { margin: 0 0 0.4rem; }
     .fp-layout--no-side .fp-result-stats { margin-top: 0; font-size: 0.78rem; gap: 0.25rem 0.75rem; }
-    /* Tags reserve a fixed-height block (~3 rows) regardless of how many a
-       story actually has -- a story with 0-1 rows of tags just leaves that
-       space empty rather than letting the description shift up, so every
-       card in the grid stays the exact same height. */
+    /* Tags reserve a fixed-height block (3 rows) regardless of how many a
+       story actually has. align-content:flex-start keeps a single row of
+       tags hugging its own natural height instead of the lone row
+       stretching to fill the whole reserved block (which read as one
+       giant pill) -- a story with 0-2 rows just leaves the rest of that
+       block empty, same idea as the character-chips gap above. The fade
+       only ever shows real overflow: with fewer tags than fit, the masked
+       region is already blank, so nothing visibly fades. */
     .fp-layout--no-side .fp-tag-row {
-      height: 68px; overflow: hidden; margin-bottom: 0.4rem;
+      height: 94px; overflow: hidden; margin-bottom: 0.4rem; align-content: flex-start;
       -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
       mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
     }
@@ -621,7 +634,7 @@
       .fp-result { flex-direction: column; }
       .fp-result-cover { width: 100%; height: auto; aspect-ratio: 2 / 3; }
       .fp-layout--no-side .fp-results-list { grid-template-columns: 1fr; }
-      .fp-layout--no-side .fp-result { flex-direction: row; height: 220px; }
+      .fp-layout--no-side .fp-result { flex-direction: row; height: 246px; }
       .fp-layout--no-side .fp-result-cover { width: 100%; height: 100%; aspect-ratio: auto; }
     }
   </style>
@@ -918,13 +931,15 @@ function resultCard(w) {
         </div>
         ${tagsRowHtml(w)}
         <p class="fp-result-synopsis">${escapeHtml(truncateSynopsis(w.synopsis))}</p>
-        ${charsRowHtml(w)}
-        <div class="fp-result-stats">
-          ${w.word_count != null ? `<span>Words: <strong>${w.word_count.toLocaleString()}</strong></span>` : ''}
-          <span>👁 <strong>${(w.hits || 0).toLocaleString()}</strong></span>
-          <span>⭐ <strong>${(w.kudos || 0).toLocaleString()}</strong></span>
-          <span>💬 <strong>${(w.comments || 0).toLocaleString()}</strong></span>
-          <span>🔖 <strong>${(w.bookmarks || 0).toLocaleString()}</strong></span>
+        <div class="fp-result-bottom">
+          ${charsRowHtml(w)}
+          <div class="fp-result-stats">
+            ${w.word_count != null ? `<span>Words: <strong>${w.word_count.toLocaleString()}</strong></span>` : ''}
+            <span>👁 <strong>${(w.hits || 0).toLocaleString()}</strong></span>
+            <span>⭐ <strong>${(w.kudos || 0).toLocaleString()}</strong></span>
+            <span>💬 <strong>${(w.comments || 0).toLocaleString()}</strong></span>
+            <span>🔖 <strong>${(w.bookmarks || 0).toLocaleString()}</strong></span>
+          </div>
         </div>
       </div>
     </div>
