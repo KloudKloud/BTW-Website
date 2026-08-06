@@ -5399,17 +5399,50 @@ app.get('/api/moderator/my-sites', requireAuth, async (req, res) => {
   };
   const siteOrderBy = SITE_SORTS[req.query.sort] || SITE_SORTS.page;
   const { rows } = await pool.query(
-    `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.view_count, ms.updated_at, u.avatar,
+    `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.view_count, ms.updated_at,
+       ms.synopsis, ms.rating, ms.is_complete, u.avatar, u.display_name, u.username,
+       NOT EXISTS (
+         SELECT 1 FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+       ) AS is_draft_only,
        (SELECT COUNT(*)::int FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0) AS published_chapter_count,
        (SELECT COUNT(*)::int FROM moderator_chapters mc WHERE mc.site_id = ms.id AND (mc.status = 'draft' OR length(trim(mc.body)) = 0)) AS draft_chapter_count,
        (SELECT COUNT(*)::int FROM moderator_site_likes WHERE site_id = ms.id) AS like_count,
        (SELECT COUNT(*)::int FROM content_comments cc JOIN moderator_chapters mc ON mc.id = cc.target_id AND cc.target_type = 'chapter_paragraph' WHERE mc.site_id = ms.id) AS comment_count,
-       (SELECT MAX(mc.updated_at) FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0) AS last_chapter_update
+       (SELECT MAX(mc.updated_at) FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0) AS last_chapter_update,
+       COALESCE((
+         SELECT SUM(GREATEST(1, array_length(regexp_split_to_array(trim(regexp_replace(mc5.body, '<[^>]+>', ' ', 'g')), '\\s+'), 1)))
+         FROM moderator_chapters mc5 WHERE mc5.site_id = ms.id AND mc5.status = 'published' AND length(trim(mc5.body)) > 0
+       ), 0) AS word_count
      FROM moderator_sites ms JOIN users u ON u.id = ms.owner_user_id
      WHERE ms.owner_user_id = $1 ORDER BY ${siteOrderBy}`,
     [req.user.id]
   );
-  res.json({ sites: rows.map(s => ({ ...s, author_avatar: s.avatar || null, avatar: undefined })) });
+
+  // A few tagged-character thumbnails per story, for the Stories tab's
+  // teaser cards -- same batched pattern as GET /api/fanpage-profile/:username.
+  const siteIds = rows.map(s => s.id);
+  const charsBySite = {};
+  if (siteIds.length) {
+    const { rows: siteChars } = await pool.query(
+      `SELECT csl.site_id, mc.id, mc.name, mc.ref_image, u.username AS owner_username FROM character_story_links csl
+       JOIN moderator_characters mc ON mc.id = csl.character_id
+       JOIN users u ON u.id = mc.owner_user_id
+       WHERE csl.site_id = ANY($1::int[]) ORDER BY csl.sort_order LIMIT 200`,
+      [siteIds]
+    );
+    siteChars.forEach(c => {
+      (charsBySite[c.site_id] = charsBySite[c.site_id] || []).push({ id: c.id, name: c.name, ref_image: c.ref_image, owner_username: c.owner_username });
+    });
+  }
+
+  res.json({
+    sites: rows.map(s => ({
+      ...s, author_avatar: s.avatar || null, avatar: undefined,
+      author: s.display_name || s.username, author_username: s.username,
+      hits: s.view_count || 0, kudos: Number(s.like_count), is_complete: !!s.is_complete,
+      characters: (charsBySite[s.id] || []).slice(0, 4),
+    })),
+  });
 });
 
 // "Reorder" from the Creator Hub -- profile-wide Stories order
