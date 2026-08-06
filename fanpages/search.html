@@ -53,6 +53,13 @@
       position: absolute; top: 0; left: 0; right: 0; bottom: auto; height: 100vh;
     }
     .fp-bg-overlay { position: fixed; inset: 0; background: rgba(8,6,10,0.45); z-index: 0; }
+    /* Profiles gets the actual main-background-4 video instead of a still
+       image -- locked in place (fixed, full frame, no scroll) since the
+       page itself never scrolls here; only the results column does (see
+       .fp-layout--profiles .fp-results-col below). Hidden by default,
+       shown only on the Profiles tab via JS. */
+    .fp-bg-video-el { display: none; position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+    .fp-bg-video-el--active { display: block; }
     /* A couple of sparkle accents floating over the Posts wallpaper
        specifically -- scroll with it (position:absolute, same as the
        wallpaper itself) since it's one big image with no cards breaking
@@ -163,7 +170,17 @@
     .fp-layout--profiles { grid-template-columns: 250px 1fr; }
     .fp-layout--profiles .fp-filter-panel,
     .fp-layout--profiles .fp-filter-fab { display: none; }
-    .fp-layout--profiles .fp-results-col { max-width: 680px; margin: 0 auto; }
+    /* Only this column scrolls -- same sticky/self-contained treatment as
+       the side panel, so the fixed background video underneath never has
+       to move (nothing else on the page scrolls to begin with). */
+    .fp-layout--profiles .fp-results-col {
+      max-width: 680px; margin: 0 auto;
+      position: sticky; top: 76px; height: calc(100vh - 76px); overflow-y: auto;
+      overscroll-behavior: contain; padding-right: 0.5rem;
+    }
+    .fp-layout--profiles .fp-results-col::-webkit-scrollbar { width: 8px; }
+    .fp-layout--profiles .fp-results-col::-webkit-scrollbar-track { background: transparent; }
+    .fp-layout--profiles .fp-results-col::-webkit-scrollbar-thumb { background: #444; border-radius: 8px; }
 
     .fp-profile-tabs { display: flex; gap: 2rem; border-bottom: 1px solid rgba(255,255,255,0.14); margin-bottom: 1.5rem; }
     .fp-profile-tab {
@@ -174,10 +191,21 @@
     .fp-profile-tab:hover { color: #ddd; }
     .fp-profile-tab--active { color: #fff; border-bottom-color: #7fa8d9; }
 
+    /* Boxed card instead of a plain borderless row -- box-background-2
+       art (cropped to a couple of alternating regions) + a dark scrim,
+       same system as the rest of the site's boxed cards. */
     .fp-profile-card {
-      display: flex; align-items: center; gap: 1.3rem; padding: 1.6rem 0;
-      border-bottom: 1px solid rgba(0,0,0,0.55);
+      display: flex; align-items: center; gap: 1.3rem; padding: 1.3rem 1.5rem;
+      border-radius: 14px; margin-bottom: 1rem; position: relative; overflow: hidden;
+      background: linear-gradient(160deg, rgba(10,8,14,0.82), rgba(10,8,14,0.72)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(255,255,255,0.16);
+      transition: border-color 0.15s;
     }
+    .fp-profile-card:hover { border-color: rgba(240,192,96,0.4); }
+    .fp-profile-card:nth-of-type(3n+1) { background-position: 20% 30%; }
+    .fp-profile-card:nth-of-type(3n+2) { background-position: 70% 60%; }
+    .fp-profile-card:nth-of-type(3n+3) { background-position: 40% 85%; }
     .fp-profile-avatar, .fp-profile-avatar-fallback {
       width: 76px; height: 76px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
     }
@@ -686,6 +714,7 @@
         padding: 1.5rem 0; border-right: none; border-bottom: 2px solid rgba(255,255,255,0.4);
       }
       .fp-results-list--grid { grid-template-columns: repeat(3, 1fr); }
+      .fp-layout--profiles .fp-results-col { position: static; height: auto; overflow: visible; padding-right: 0; }
     }
     @media (max-width: 720px) {
       .fp-result { flex-direction: column; }
@@ -698,6 +727,9 @@
 <body>
 
 <div class="fp-bg-video"></div>
+<video class="fp-bg-video-el" id="fp-bg-video-el" autoplay muted loop playsinline>
+  <source src="/images/home/main-background-4.mp4" type="video/mp4" />
+</video>
 <img class="fp-bg-sparkle fp-bg-sparkle--a" src="/images/home/decoration-1.png" alt="" />
 <img class="fp-bg-sparkle fp-bg-sparkle--b" src="/images/home/decoration-8.png" alt="" />
 <div class="fp-bg-overlay"></div>
@@ -1629,6 +1661,11 @@ const isBrowseStories = isBrowseMode && isStoriesView;
 document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--stories', isStoriesView);
 const isPostsView = currentView === 'submissions';
 document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--posts', isPostsView);
+// Profiles gets the main-background-4 video instead -- only the results
+// column scrolls on this tab (see .fp-layout--profiles .fp-results-col),
+// so the video can stay locked in place same as before it ever needed to
+// account for page scroll.
+document.getElementById('fp-bg-video-el').classList.toggle('fp-bg-video-el--active', currentView === 'profiles');
 // The Posts wallpaper is position:absolute (scrolls with the page) instead
 // of the fixed/inset:0 every other variant uses, so it needs an explicit
 // pixel height matching the full page -- percentage/inset heights can't
