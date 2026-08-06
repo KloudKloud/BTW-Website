@@ -501,6 +501,21 @@ function wireLikeButtons(root) {
 // its "Character Spotlights" side nav -- this page already has its own
 // sidebar -- plus a Back button, and a prev/next slideshow that walks the
 // current *search results* instead of the same owner's other characters. ──
+// A view only counts once a character has actually been open for 10s (not
+// just refreshed, or clicked past mid-slideshow), and at most once per 5
+// minutes per character -- both tracked client-side.
+let pendingViewTimer = null;
+function scheduleCharViewBump(id) {
+  clearTimeout(pendingViewTimer);
+  const cooldownKey = `btw_view_character_${id}`;
+  pendingViewTimer = setTimeout(() => {
+    const last = parseInt(localStorage.getItem(cooldownKey) || '0', 10);
+    if (Date.now() - last < 5 * 60 * 1000) return;
+    localStorage.setItem(cooldownKey, String(Date.now()));
+    fetch(`/api/character/${id}/view`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+  }, 10000);
+}
+
 const NA = 'N/A';
 const DEFAULT_REF = '/images/defaultchar.jpg';
 let lastSearchItems = [];
@@ -937,7 +952,7 @@ function renderCharDetailProfile(char, locked) {
   footer.appendChild(bookmarkBtn);
 
   profile.appendChild(footer);
-  fetch(`/api/character/${char.id}/view`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+  scheduleCharViewBump(char.id);
 
   renderCharDetailNav(char);
   ccInitSection(char.id);
@@ -1000,6 +1015,7 @@ function openCharacterDetail(id, locked) {
 }
 
 function closeCharacterDetail() {
+  clearTimeout(pendingViewTimer);
   const usp = new URLSearchParams(window.location.search);
   usp.delete('char');
   const qs = usp.toString();
@@ -1016,6 +1032,7 @@ window.addEventListener('popstate', () => {
   if (id) {
     showCharacterDetail(id, false);
   } else {
+    clearTimeout(pendingViewTimer);
     document.getElementById('fp-char-list-view').hidden = false;
     document.getElementById('fp-char-detail-view').hidden = true;
     syncBgHeight();

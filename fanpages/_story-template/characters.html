@@ -203,6 +203,21 @@ let GHOST_CHAR = null;
 const DEFAULT_REF = '/images/characters/noreference.png';
 const NA = 'N/A';
 
+// A view only counts once a character has actually been open for 10s (not
+// just refreshed, or clicked past mid-slideshow), and at most once per 5
+// minutes per character -- both tracked client-side.
+let pendingViewTimer = null;
+function scheduleCharViewBump(id) {
+  clearTimeout(pendingViewTimer);
+  const cooldownKey = `btw_view_character_${id}`;
+  pendingViewTimer = setTimeout(() => {
+    const last = parseInt(localStorage.getItem(cooldownKey) || '0', 10);
+    if (Date.now() - last < 5 * 60 * 1000) return;
+    localStorage.setItem(cooldownKey, String(Date.now()));
+    fetch(`/api/character/${id}/view`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+  }, 10000);
+}
+
 // ── Story theme background (default black, or the author's uploaded image) ──
 function hexToRgba(hex, alpha) {
   const n = parseInt(hex.replace('#', ''), 16);
@@ -563,7 +578,7 @@ function renderProfile(char) {
   footer.appendChild(bookmarkBtn);
 
   profile.appendChild(footer);
-  fetch(`/api/character/${char.id}/view`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+  scheduleCharViewBump(char.id);
 
   // Edit box under Navigate — story owner only, for whichever character is
   // showing. A character linked onto the story by its actual owner (e.g. a
@@ -688,6 +703,7 @@ async function viewCharacter(id) {
 }
 
 function closeCharDetail() {
+  clearTimeout(pendingViewTimer);
   GHOST_CHAR = null;
   document.getElementById('chars-detail-view').hidden = true;
   document.getElementById('chars-grid-view').hidden = false;

@@ -1485,6 +1485,7 @@
       applyProfileTheme('custom', '/images/home/potential-box-background.png');
     } else if (currentAuthor) {
       applyProfileTheme(currentAuthor.profile_theme, currentAuthor.profile_theme_bg_url);
+      clearTimeout(pendingViewTimer);
     }
     if (tab === 'characters') loadCharactersTab();
     if (tab === 'gallery') loadGalleryTab();
@@ -1499,6 +1500,20 @@
   const NA = 'N/A';
   const DEFAULT_REF = '/images/defaultchar.jpg';
   function isBlank(v) { return !v || !v.trim() || v.trim() === NA; }
+  // A view only counts once a character has actually been open for 10s
+  // (not just refreshed, or clicked past mid-slideshow), and at most once
+  // per 5 minutes per character -- both tracked client-side.
+  let pendingViewTimer = null;
+  function scheduleCharViewBump(id) {
+    clearTimeout(pendingViewTimer);
+    const cooldownKey = `btw_view_character_${id}`;
+    pendingViewTimer = setTimeout(() => {
+      const last = parseInt(localStorage.getItem(cooldownKey) || '0', 10);
+      if (Date.now() - last < 5 * 60 * 1000) return;
+      localStorage.setItem(cooldownKey, String(Date.now()));
+      fetch(`/api/character/${id}/view`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+    }, 10000);
+  }
   function escapeHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
@@ -1849,7 +1864,7 @@
     footer.appendChild(bookmarkBtn);
 
     profile.appendChild(footer);
-    fetch(`/api/character/${char.id}/view`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+    scheduleCharViewBump(char.id);
 
     renderFpCharNav(char);
     ccInitSection('character', char.id);
@@ -1962,6 +1977,7 @@
     selectFpCharacter(id, scroll);
   }
   function closeCharDetail() {
+    clearTimeout(pendingViewTimer);
     document.getElementById('fp-chars-detail-view').hidden = true;
     document.getElementById('fp-chars-grid-view').hidden = false;
   }

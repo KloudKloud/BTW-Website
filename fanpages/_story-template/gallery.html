@@ -250,8 +250,19 @@ function renderStatsBox(item) {
   tagsWrap.innerHTML = tags.map(t => `<a class="art-view-stats-tag-pill" href="${window.fpUrl(`/search?view=submissions&browse=1&q=${encodeURIComponent(t)}`)}">${escapeHtml(t)}</a>`).join('');
 }
 
+// A view only counts once a post has actually been open for 10s (not
+// just refreshed/bounced off of, or clicked past mid-slideshow), and at
+// most once per 5 minutes per item -- both tracked client-side.
+let pendingViewTimer = null;
 function bumpGalleryViewCount(id) {
-  fetch(`/api/gallery/${id}/view`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+  clearTimeout(pendingViewTimer);
+  const cooldownKey = `btw_view_gallery_${id}`;
+  pendingViewTimer = setTimeout(() => {
+    const last = parseInt(localStorage.getItem(cooldownKey) || '0', 10);
+    if (Date.now() - last < 5 * 60 * 1000) return;
+    localStorage.setItem(cooldownKey, String(Date.now()));
+    fetch(`/api/gallery/${id}/view`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+  }, 10000);
 }
 
 // ── Slideshow prev/next nav (mirrors the main site's art-view slideshow) ──

@@ -309,8 +309,23 @@ async function loadTagsSection(item) {
   }
 }
 
+// A view only counts once the post has actually been open for 10s (not
+// just refreshed/bounced off of), and at most once per 5 minutes per
+// item -- both tracked client-side, same pattern used by every other
+// view-count trigger site-wide.
+let pendingViewTimer = null;
+function scheduleViewBump(kind, id, url) {
+  clearTimeout(pendingViewTimer);
+  const cooldownKey = `btw_view_${kind}_${id}`;
+  pendingViewTimer = setTimeout(() => {
+    const last = parseInt(localStorage.getItem(cooldownKey) || '0', 10);
+    if (Date.now() - last < 5 * 60 * 1000) return;
+    localStorage.setItem(cooldownKey, String(Date.now()));
+    fetch(url, { method: 'POST', headers: authHeaders() }).catch(() => {});
+  }, 10000);
+}
 function bumpViewCount(id) {
-  fetch(`/api/gallery/${id}/view`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+  scheduleViewBump('gallery', id, `/api/gallery/${id}/view`);
 }
 
 // ── Comments (target_type='gallery') — same shared system used everywhere
