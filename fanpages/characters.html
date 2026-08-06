@@ -231,21 +231,29 @@
        Spotlights" side nav (this page already has its own sidebar), plus
        a Back button, and a prev/next slideshow that walks the current
        search results instead of the same owner's other characters. ── */
+    #fp-char-main-col { position: relative; }
     #fp-char-detail-view.chars-main { padding-bottom: 4rem; max-width: 760px; margin: 0 auto; }
 
     /* Golden glowing pill, same chevron used by the chapter editor's own
-       Back button. Sits above the reference image. */
+       Back button. Sits at the far left of the page, right next to the
+       sidebar, on the same horizontal line as the top of the reference
+       image (which now starts right at the top of this column instead of
+       being pushed down by a button row above it). */
     .fp-char-back-btn {
+      position: absolute; left: 0; top: 0; z-index: 3;
       display: inline-flex; align-items: center; gap: 0.5rem;
       background: linear-gradient(160deg, rgba(38,30,16,0.85), rgba(20,16,10,0.85));
       border: 1px solid rgba(240,192,96,0.6); color: #f7d68a;
       border-radius: 30px; padding: 0.85em 1.6em; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 700;
-      cursor: pointer; white-space: nowrap; box-shadow: 0 0 20px rgba(240,192,96,0.35);
+      cursor: pointer; white-space: nowrap;
+      /* Softer/tighter than a wide ambient glow -- against this page's own
+         busy blurred wallpaper a wide 20px glow read as a hazy rectangle
+         behind the pill instead of a clean glow. */
+      box-shadow: 0 0 8px rgba(240,192,96,0.22);
       transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
-      margin: 0 0 1.1rem;
     }
     .fp-char-back-btn svg { width: 22px; height: 22px; flex-shrink: 0; }
-    .fp-char-back-btn:hover { border-color: #f0c060; color: #fff; box-shadow: 0 0 30px rgba(240,192,96,0.55); transform: translateY(-1px); }
+    .fp-char-back-btn:hover { border-color: #f0c060; color: #fff; box-shadow: 0 0 16px rgba(240,192,96,0.4); transform: translateY(-1px); }
 
     @media (max-width: 1300px) {
       .fp-char-grid { grid-template-columns: repeat(4, 1fr); }
@@ -315,7 +323,7 @@
     </div>
   </aside>
 
-  <div>
+  <div id="fp-char-main-col">
     <div id="fp-char-list-view">
       <h1 class="fp-char-main-heading">Characters <img src="/images/home/decoration-1.png" alt="" /></h1>
       <p class="fp-char-main-sub" id="fp-char-main-sub"></p>
@@ -324,11 +332,12 @@
       <div class="fp-pagination" id="fp-pagination-bottom" hidden></div>
     </div>
 
+    <button type="button" class="fp-char-back-btn" id="fp-char-back-btn" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      Back
+    </button>
+
     <div id="fp-char-detail-view" class="chars-main" hidden>
-      <button type="button" class="fp-char-back-btn" id="fp-char-back-btn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-        Back
-      </button>
       <div id="fp-char-profile" class="char-profile"></div>
 
       <div id="fp-char-detail-nav" class="art-nav"></div>
@@ -993,6 +1002,7 @@ async function showCharacterDetail(id, locked) {
   const profileEl = document.getElementById('fp-char-profile');
   listView.hidden = true;
   detailView.hidden = false;
+  document.getElementById('fp-char-back-btn').hidden = false;
   profileEl.innerHTML = '<p class="fp-char-empty">Loading…</p>';
   document.getElementById('fp-char-detail-nav').innerHTML = '';
   window.scrollTo(0, 0);
@@ -1022,6 +1032,7 @@ function closeCharacterDetail() {
   history.pushState({}, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
   document.getElementById('fp-char-list-view').hidden = false;
   document.getElementById('fp-char-detail-view').hidden = true;
+  document.getElementById('fp-char-back-btn').hidden = true;
   syncBgHeight();
 }
 
@@ -1035,6 +1046,7 @@ window.addEventListener('popstate', () => {
     clearTimeout(pendingViewTimer);
     document.getElementById('fp-char-list-view').hidden = false;
     document.getElementById('fp-char-detail-view').hidden = true;
+    document.getElementById('fp-char-back-btn').hidden = true;
     syncBgHeight();
   }
 });
