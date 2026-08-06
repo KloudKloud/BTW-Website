@@ -31,7 +31,7 @@
        updateTabBackground) -- Characters/Gallery use their own scrolling
        wallpaper below instead. */
     .fp-bg-wrap { position: relative; background: #0d0d0d; }
-    .fp-bg-img { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(14px) brightness(0.95); z-index: 0; display: none; }
+    .fp-bg-img { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(8px) brightness(0.95); z-index: 0; display: none; }
     .fp-bg-overlay { position: fixed; inset: 0; background: rgba(10,10,10,0.72); z-index: 0; display: none; }
     /* Characters/Gallery tabs — same "Browse > Posts" wallpaper treatment
        as the Fanpage Hub's Characters browse page: PotentialBoxBackground,
@@ -84,7 +84,18 @@
     .fp-theme-swatch--upload:hover { background: #292929; }
 
     /* ── Banner + avatar bleed (Twitter-style) ── */
-    .fp-banner-wrap { position: relative; width: 100%; height: 500px; background: #1a1a1a; overflow: hidden; }
+    .fp-banner-wrap { position: relative; width: 100%; height: 380px; background: #1a1a1a; overflow: hidden; }
+    /* Soft blurred transition at the seam between the banner and the
+       content below, instead of a hard cut -- a thin backdrop-blurred strip
+       masked to fade in from the top so it reads as a gradual blur rather
+       than a visible blurred box. */
+    .fp-banner-wrap::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 48px; z-index: 4;
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      -webkit-mask-image: linear-gradient(to bottom, transparent, black);
+      mask-image: linear-gradient(to bottom, transparent, black);
+      pointer-events: none;
+    }
     /* Pan + zoom via background-image/background-size instead of
        object-fit + transform:scale() — the two don't compose (scale()
        happens after object-fit places the image, so position sliders can
@@ -864,7 +875,7 @@
        tabs scroll instead of overflowing, and every multi-column tab
        (Home/Characters/Gallery/My Stories) collapses to one column. */
     @media (max-width: 760px) {
-      .fp-banner-wrap { height: 260px; }
+      .fp-banner-wrap { height: 200px; }
       body.fp-editing .fp-banner-wrap { margin-top: 68px; }
       .fp-avatar-wrap { width: 96px; height: 96px; top: -48px; }
       .fp-avatar, .fp-avatar-fallback { width: 96px; height: 96px; }
@@ -894,7 +905,7 @@
     }
 
     @media (max-width: 480px) {
-      .fp-banner-wrap { height: 200px; }
+      .fp-banner-wrap { height: 150px; }
       .fp-avatar-wrap { width: 80px; height: 80px; top: -40px; }
       .fp-avatar, .fp-avatar-fallback { width: 80px; height: 80px; }
       .fp-name { font-size: 1.4rem; }
@@ -1392,18 +1403,16 @@
     currentStories.forEach(s => grid.appendChild(storyTeaserCardEl(s)));
   }
 
-  // ── Profile theme — default (plain dark) or a custom blurred background ──
+  // ── Profile theme — a custom blurred background, or the same "Browse >
+  // Posts" wallpaper the rest of the site defaults to (never a plain dark
+  // screen) ──
+  const FP_DEFAULT_HOME_BG = '/images/home/potential-box-background.png';
   function applyProfileTheme(themeId, bgUrl) {
     const bgImg = document.getElementById('fp-bg-img');
     const bgOverlay = document.getElementById('fp-bg-overlay');
-    if (themeId === 'custom' && bgUrl) {
-      bgImg.src = bgUrl;
-      bgImg.style.display = 'block';
-      bgOverlay.style.display = 'block';
-    } else {
-      bgImg.style.display = 'none';
-      bgOverlay.style.display = 'none';
-    }
+    bgImg.src = (themeId === 'custom' && bgUrl) ? bgUrl : FP_DEFAULT_HOME_BG;
+    bgImg.style.display = 'block';
+    bgOverlay.style.display = 'block';
     document.querySelectorAll('.fp-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
   }
 
@@ -1446,9 +1455,9 @@
     const defaultBtn = document.createElement('button');
     defaultBtn.className = 'fp-theme-swatch';
     defaultBtn.type = 'button';
-    defaultBtn.title = 'Default (plain dark)';
+    defaultBtn.title = 'Default';
     defaultBtn.dataset.theme = 'default';
-    defaultBtn.innerHTML = '<span></span>';
+    defaultBtn.innerHTML = '<span style="background-image:url(/images/home/potential-box-background.png);background-size:cover;background-position:center;"></span>';
     defaultBtn.addEventListener('click', () => selectProfileTheme('default'));
     grid.appendChild(defaultBtn);
 
