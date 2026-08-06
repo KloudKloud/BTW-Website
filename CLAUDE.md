@@ -224,6 +224,69 @@ re-derive each time.
   box-background art every item shares, not a flat solid-color fill swap — the fill is
   art now, not a color, so "active" has to be communicated via border/shadow instead.
 
+## Characters/Gallery card-grid redesign — the current direction, keep extending it
+
+Three pages — `fanpages/characters.html` (Fanpage Hub browse), the profile's
+Characters/Gallery tabs (`fanpages/profile-template.html`), and a story's own
+Characters/Gallery pages (`fanpages/_story-template/characters.html` /
+`gallery.html`) — got rebuilt this session onto one shared visual/interaction
+pattern. **This is not a one-off: the plan is to keep carrying the same bubbly-
+font + box-background-art treatment into whatever page comes next**, the same
+way the homepage/Browse redesigns spread earlier. Default to this pattern
+first before inventing a new one.
+
+- **Card grid + in-page detail view, not a separate page load.** Clicking a
+  character/post card swaps the grid out for a single-item detail view in the
+  same DOM (`#…-grid-view` / `#…-detail-view` sibling divs, one `hidden` at a
+  time) instead of navigating away — a "Back" button returns to the grid.
+  `?char=ID`/`?post=ID` stays in the URL via `history.pushState` so it's still
+  a real deep link, but no full reload happens switching between the two.
+- **Universal card styling, not page-scoped.** `.char-name`/`.char-box-title`
+  (glowy blue #cfe0f5, Fredoka, same treatment as the homepage's Spotlight
+  titles) live in `fanpages/fanpages.css` (this is the file that actually wins
+  the cascade — it's loaded *after* `style.css`, which has its own now-
+  legacy-but-still-present copies of the same two selectors; keep both in sync
+  if you touch either) — and `.char-bio-box`/`.char-box`/`.char-lore-box`
+  (box-background-2 art fill) live in `style.css`. `.cc-compose > textarea`
+  (PotentialBoxBackground, rounded, Fredoka placeholder) in `fanpages.css` is
+  the universal comment-box look — direct-child combinator so it never touches
+  gallery-post.html's differently-structured nested `.cc-compose-box textarea`
+  variant. Changing any of these changes it everywhere at once; that's
+  intentional now — don't re-scope back to page-local overrides.
+- **Back button**: golden glowing pill (`.fp-char-back-btn`), chevron SVG
+  copied from the chapter editor's own Back button
+  (`<path d="M15 18l-6-6 6-6"/>`), label just "Back". Keep the glow *tight* —
+  `box-shadow: 0 0 8px rgba(240,192,96,0.22)` — a wider one (the original
+  `0 0 20px/0.35`) reads as a hazy rectangle behind the pill against these
+  pages' busy blurred wallpapers, not a clean ambient glow. Position: `position:
+  absolute; left:<sidebar-width or page-padding>; top:0;` against a `position:
+  relative` ancestor sized to the *whole column* (not the narrower centered
+  detail card) — sits right next to the sidebar (Fanpage Hub Characters page)
+  or the page's own left padding edge (profile tab, no sidebar there), on the
+  same horizontal line as the top of the reference image, which no longer gets
+  pushed down by a button row above it.
+- **A profile's/story's custom "theme" is a Home-tab-only thing now**, not an
+  account-wide background — this was an explicit direction change this
+  session. Characters and Gallery (profile tabs *and* story pages) always
+  force the same scrolling "Browse > Posts" wallpaper
+  (`/images/home/potential-box-background.png`, `blur(4px)`, position:absolute
+  with JS-measured height so it scrolls *with* the page — see `syncBgHeight`/
+  `syncScrollBgHeight` in each file) regardless of what background was picked
+  for Home. `profile-template.html`'s `updateTabBackground(tab)` is the single
+  place that decides which of the two background layers (real theme vs.
+  forced Posts wallpaper) is visible; story pages hardcode the forced call
+  directly since Home/Chapters/Gallery/Characters are separate page loads
+  there, not JS tab-switches. Stories/Newspapers tabs get neither (plain
+  default) — extend this same three-way split to any new profile tab.
+- **Pagination**: reuse the exact `fpGalleryPaginationHtml`/`.fp-page-btn`
+  e621-style numbered-pager markup already in `fanpages.css` — don't invent a
+  new pager.
+- Sprite decorations (decoration-1 star / decoration-8 moon) got *removed*
+  from the Search/Browse side filter panels and the Posts wallpaper's top-left
+  corner this session (they read as clutter once the page had enough going
+  on) — don't re-add them there without being asked; they're still fine/in-use
+  elsewhere (card corners, section headings).
+
 ## Between Two Worlds — manually migrated from btwfanfic.net (this session)
 
 VeekitPaws' own book got manually inserted into the `moderator_sites`/`moderator_characters`
