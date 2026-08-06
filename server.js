@@ -7383,7 +7383,8 @@ app.get('/api/search/characters', async (req, res) => {
   let filterClause = '';
   if (filter === 'mine') filterClause = 'AND mch.owner_user_id = $4';
   else if (filter === 'followed') filterClause = 'AND mch.owner_user_id IN (SELECT followed_id FROM user_follows WHERE follower_id = $4)';
-  else if (filter === 'liked') filterClause = 'AND mch.id IN (SELECT character_id FROM moderator_character_likes WHERE user_id = $4)';
+  else if (filter === 'liked') filterClause = `AND (mch.id IN (SELECT character_id FROM moderator_character_likes WHERE user_id = $4)
+       OR mch.id IN (SELECT character_id FROM moderator_character_bookmarks WHERE user_id = $4))`;
 
   // "Best Match" isn't just query relevance -- with no query typed (the
   // common case when just browsing) it still needs to produce a sensible

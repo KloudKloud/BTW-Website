@@ -172,10 +172,14 @@
       background-size: cover; background-position: center;
     }
     .fp-char-card-body-deco { position: absolute; top: -8px; right: -6px; width: 26px; height: 26px; object-fit: contain; opacity: 0.9; pointer-events: none; }
-    .fp-char-card-name { font-size: 0.84rem; font-weight: 700; color: #fff; margin-bottom: 0.2rem; }
+    .fp-char-card-name-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; }
+    .fp-char-card-name {
+      font-size: 0.84rem; font-weight: 700; color: #fff;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+    }
     .fp-char-card-species {
-      display: inline-block; background: rgba(127,168,217,0.16); color: #a8c6e8; border-radius: 20px;
-      padding: 0.15em 0.6em; font-size: 0.64rem; font-weight: 700; margin-bottom: 0.3rem;
+      display: inline-block; flex-shrink: 0; background: rgba(127,168,217,0.16); color: #a8c6e8; border-radius: 20px;
+      padding: 0.15em 0.6em; font-size: 0.64rem; font-weight: 700;
     }
     .fp-char-card-owner { font-size: 0.72rem; color: #999; }
 
@@ -392,8 +396,10 @@ function charCardHtml(c) {
         <div class="fp-char-card-img-wrap">${imgHtml}</div>
         <div class="fp-char-card-body">
           <img class="fp-char-card-body-deco" src="/images/home/decoration-8.png" alt="" />
-          <p class="fp-char-card-name">${escapeHtml(c.name)}</p>
-          ${c.species ? `<span class="fp-char-card-species">${escapeHtml(c.species)}</span><br>` : ''}
+          <div class="fp-char-card-name-row">
+            <p class="fp-char-card-name">${escapeHtml(c.name)}</p>
+            ${c.species ? `<span class="fp-char-card-species">${escapeHtml(c.species)}</span>` : ''}
+          </div>
           <p class="fp-char-card-owner">by ${escapeHtml(c.owner)}</p>
         </div>
       </a>
@@ -455,6 +461,15 @@ function wireFilterMenu() {
 
 const SORT_LABELS = { best_match: 'Best Match', updated: 'Date Updated', popular: 'Popular' };
 
+// Filter-specific empty-state splash — only shown for the bare "browsing
+// your own list" case (no search query typed on top of the filter); a
+// query still falls through to the generic "no characters match" message.
+const EMPTY_FILTER_HTML = {
+  mine: `You have not created any characters yet! If you'd like to make characters and link them to stories, art, and posts you make across the website, <a href="${escapeHtml(window.fpUrl('/create-character'))}">Create a Character</a> and get started! ❤️`,
+  followed: `Nobody you follow has characters posted! Follow your favorite writers and artists for their characters to appear here! ❤️`,
+  liked: `You haven't liked any characters yet! Like or bookmark your favorite characters for them to appear here. ❤️`,
+};
+
 async function runCharacterSearch() {
   const gridEl = document.getElementById('fp-char-grid');
   const subEl = document.getElementById('fp-char-main-sub');
@@ -490,7 +505,9 @@ async function runCharacterSearch() {
     subEl.innerHTML = `<strong>${data.total || 0}</strong> character${data.total === 1 ? '' : 's'} found${bits.length ? ` for ${escapeHtml(bits.join(', '))}` : ''} — sorted by ${escapeHtml(SORT_LABELS[data.sort] || 'Best Match')}.`;
 
     if (!items.length) {
-      gridEl.innerHTML = '<p class="fp-char-empty">No characters match that search.</p>';
+      gridEl.innerHTML = (filter && !q && EMPTY_FILTER_HTML[filter])
+        ? `<p class="fp-char-empty">${EMPTY_FILTER_HTML[filter]}</p>`
+        : '<p class="fp-char-empty">No characters match that search.</p>';
       syncBgHeight();
       return;
     }
