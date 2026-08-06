@@ -384,6 +384,7 @@
        below a whole page of results -- reset to flush here) with just a
        little room before the first row of tiles. */
     #fp-gallery-pagination-top { margin-top: 0; margin-bottom: 1rem; }
+    #fp-chars-pagination-top { margin-top: 0; margin-bottom: 1.25rem; }
     /* "All Newspapers" back link — bigger, green glow so it reads clearly
        as the way out of the full-post view. */
     #fp-newspaper-detail-wrap .art-view-back {
@@ -1206,8 +1207,9 @@
      the grid and detail states; only this tab's own content swaps. -->
 <div class="fp-tab-view" id="fp-characters-view" hidden>
   <div id="fp-chars-grid-view">
+    <div class="fp-pagination" id="fp-chars-pagination-top" hidden></div>
     <div class="fp-char-grid" id="fp-chars-grid"><p class="fp-tab-view-empty">Loading…</p></div>
-    <div class="fp-pagination" id="fp-chars-pagination"></div>
+    <div class="fp-pagination" id="fp-chars-pagination-bottom" hidden></div>
   </div>
 
   <button type="button" class="fp-char-back-btn" id="fp-chars-back-btn" hidden>
@@ -1502,18 +1504,16 @@
     currentStories.forEach(s => grid.appendChild(storyTeaserCardEl(s)));
   }
 
-  // ── Profile theme — default (plain dark) or a custom blurred background ──
+  // ── Profile theme — default (box-background-2, slightly blurred -- just
+  // trying this out, easy to revert to plain dark if it doesn't land) or a
+  // custom uploaded background ──
+  const FP_DEFAULT_HOME_BG = '/images/home/potential-box-background.png';
   function applyProfileTheme(themeId, bgUrl) {
     const bgImg = document.getElementById('fp-bg-img');
     const bgOverlay = document.getElementById('fp-bg-overlay');
-    if (themeId === 'custom' && bgUrl) {
-      bgImg.src = bgUrl;
-      bgImg.style.display = 'block';
-      bgOverlay.style.display = 'block';
-    } else {
-      bgImg.style.display = 'none';
-      bgOverlay.style.display = 'none';
-    }
+    bgImg.src = (themeId === 'custom' && bgUrl) ? bgUrl : FP_DEFAULT_HOME_BG;
+    bgImg.style.display = 'block';
+    bgOverlay.style.display = 'block';
     document.querySelectorAll('.fp-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
   }
 
@@ -1561,9 +1561,9 @@
     const defaultBtn = document.createElement('button');
     defaultBtn.className = 'fp-theme-swatch';
     defaultBtn.type = 'button';
-    defaultBtn.title = 'Default (plain dark)';
+    defaultBtn.title = 'Default';
     defaultBtn.dataset.theme = 'default';
-    defaultBtn.innerHTML = '<span></span>';
+    defaultBtn.innerHTML = '<span style="background-image:url(/images/home/potential-box-background.png);background-size:cover;background-position:center;"></span>';
     defaultBtn.addEventListener('click', () => selectProfileTheme('default'));
     grid.appendChild(defaultBtn);
 
@@ -2182,10 +2182,21 @@
     `;
   }
 
+  function wireFpCharsPagination(el) {
+    el.querySelectorAll('.fp-page-btn').forEach(btn => {
+      if (btn.disabled) return;
+      btn.addEventListener('click', () => {
+        renderCharsGrid(parseInt(btn.dataset.page, 10));
+        document.getElementById('fp-chars-grid-view').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  }
+
   function renderCharsGrid(page) {
     fpCharsPage = page;
     const gridEl = document.getElementById('fp-chars-grid');
-    const pagEl = document.getElementById('fp-chars-pagination');
+    const topPag = document.getElementById('fp-chars-pagination-top');
+    const bottomPag = document.getElementById('fp-chars-pagination-bottom');
     const totalPages = Math.max(1, Math.ceil(FP_CHARACTERS.length / FP_CHARS_PAGE_SIZE));
     const start = (page - 1) * FP_CHARS_PAGE_SIZE;
     const pageItems = FP_CHARACTERS.slice(start, start + FP_CHARS_PAGE_SIZE);
@@ -2215,14 +2226,10 @@
         btn.disabled = false;
       });
     });
-    pagEl.innerHTML = totalPages > 1 ? fpGalleryPaginationHtml(page, totalPages) : '';
-    pagEl.querySelectorAll('.fp-page-btn').forEach(btn => {
-      if (btn.disabled) return;
-      btn.addEventListener('click', () => {
-        renderCharsGrid(parseInt(btn.dataset.page, 10));
-        document.getElementById('fp-chars-grid-view').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    });
+    const showPag = totalPages > 1;
+    const pagHtml = showPag ? fpGalleryPaginationHtml(page, totalPages) : '';
+    topPag.hidden = !showPag; topPag.innerHTML = pagHtml; wireFpCharsPagination(topPag);
+    bottomPag.hidden = !showPag; bottomPag.innerHTML = pagHtml; wireFpCharsPagination(bottomPag);
     syncScrollBgHeight();
     gridEl.querySelectorAll('img').forEach(img => img.addEventListener('load', syncScrollBgHeight, { once: true }));
   }
@@ -2309,7 +2316,8 @@
         fpCharactersLoaded = true;
         if (!FP_CHARACTERS.length) {
           gridEl.innerHTML = `<p class="fp-tab-view-empty">@${USERNAME} hasn't added any characters yet.</p>`;
-          document.getElementById('fp-chars-pagination').innerHTML = '';
+          document.getElementById('fp-chars-pagination-top').hidden = true;
+          document.getElementById('fp-chars-pagination-bottom').hidden = true;
           return;
         }
         renderCharsGrid(1);
