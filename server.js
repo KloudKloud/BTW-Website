@@ -411,6 +411,22 @@ async function initDb() {
   await pool.query(`ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS is_complete BOOLEAN NOT NULL DEFAULT false`)
     .catch(e => console.error('moderator_sites is_complete migration:', e.message));
 
+  // Owner-curated "Page Order" for the profile's Stories tab -- a brand new
+  // published chapter bumps its story to the top (see the chapter status
+  // endpoint), otherwise reordered via the Creator Hub's Reorder mode.
+  // Characters/Gallery reuse their own base tables' existing (previously
+  // dead) sort_order columns for the same purpose instead of a new column.
+  await pool.query(`ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS profile_sort_order INTEGER NOT NULL DEFAULT 0`)
+    .catch(e => console.error('moderator_sites profile_sort_order migration:', e.message));
+
+  // Gallery had no updated_at at all -- needed for the profile Gallery tab's
+  // "Date Updated" sort option. Backfill existing rows from created_at so
+  // they don't all sort as "just updated."
+  await pool.query(`ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ`)
+    .catch(e => console.error('moderator_gallery updated_at migration:', e.message));
+  await pool.query(`UPDATE moderator_gallery SET updated_at = created_at WHERE updated_at IS NULL`)
+    .catch(e => console.error('moderator_gallery updated_at backfill:', e.message));
+
   // Marks throwaway seed/demo accounts and their stories so they can be
   // wiped in one shot (DELETE FROM users WHERE is_test_data, cascades to
   // everything they own) without touching any real author's content.
@@ -4169,6 +4185,14 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
   // discoverable" rule used by search/browse/spotlight. The owner still
   // sees them, flagged is_draft_only so the card can read as a draft
   // instead of a real published story.
+  const STORY_SORTS = {
+    page: 'ms.profile_sort_order ASC, ms.created_at DESC',
+    updated: 'last_chapter_update DESC NULLS LAST, ms.created_at DESC',
+    oldest: 'ms.created_at ASC',
+    popular: 'like_count DESC, ms.created_at DESC',
+  };
+  const storyOrderBy = STORY_SORTS[req.query.sort] || STORY_SORTS.page;
+
   const [{ rows: sites }, followerCount, followingCount, clubCount, isFollowing, featuredChars, featuredGallery, featuredStoryIds, activity] = await Promise.all([
     pool.query(
       `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.synopsis,
@@ -4180,14 +4204,15 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
               COALESCE(lc.count, 0) AS like_count,
               COALESCE(bc.count, 0) AS bookmark_count,
               COALESCE(cc.count, 0) AS comment_count,
-              COALESCE(wc.word_count, 0) AS word_count
+              COALESCE(wc.word_count, 0) AS word_count,
+              wc.last_chapter_update
        FROM moderator_sites ms
        LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_site_likes WHERE site_id = ms.id) lc ON true
        LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_bookmarks WHERE site_id = ms.id) bc ON true
        LEFT JOIN LATERAL (
          SELECT COALESCE(SUM(
            GREATEST(1, array_length(regexp_split_to_array(trim(regexp_replace(mc4.body, '<[^>]+>', ' ', 'g')), '\\s+'), 1))
-         ), 0) AS word_count
+         ), 0) AS word_count, MAX(mc4.updated_at) AS last_chapter_update
          FROM moderator_chapters mc4 WHERE mc4.site_id = ms.id AND mc4.status = 'published' AND length(trim(mc4.body)) > 0
        ) wc ON true
        LEFT JOIN LATERAL (
@@ -4200,7 +4225,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
            SELECT 1 FROM moderator_chapters mc3
            WHERE mc3.site_id = ms.id AND mc3.status = 'published' AND length(trim(mc3.body)) > 0
          ))
-       ORDER BY ms.created_at ASC`,
+       ORDER BY ${storyOrderBy}`,
       [author.id, viewerId]
     ),
     pool.query('SELECT COUNT(*)::int AS n FROM user_follows WHERE followed_id = $1', [author.id]),
@@ -4625,6 +4650,17 @@ app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
 
+  // "Page Order" (default) is the owner's own manual/auto order, curated via
+  // the Creator Hub's Reorder mode (see PUT .../characters/profile-order) --
+  // new characters land at the top automatically (see POST .../characters).
+  const CHAR_SORTS = {
+    page: 'mc.sort_order ASC, mc.created_at DESC',
+    updated: 'mc.updated_at DESC NULLS LAST, mc.created_at DESC',
+    oldest: 'mc.created_at ASC',
+    popular: 'like_count DESC, mc.created_at DESC',
+  };
+  const charOrderBy = CHAR_SORTS[req.query.sort] || CHAR_SORTS.page;
+
   const { rows } = await pool.query(
     `SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.view_count,
             mc.description, mc.stats, mc.facts, mc.lore, mc.relationships,
@@ -4638,7 +4674,7 @@ app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
      ) csl ON true
      LEFT JOIN moderator_sites ms ON ms.id = csl.site_id
      WHERE mc.owner_user_id = $1
-     ORDER BY mc.created_at DESC`,
+     ORDER BY ${charOrderBy}`,
     [author.id, viewerId || 0]
   );
   res.json({
@@ -4673,6 +4709,14 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
     : false;
   const nsfwLock = !loggedIn ? 'login' : (!viewerNsfwEnabled ? 'sfw_mode' : null);
 
+  const GALLERY_SORTS = {
+    page: 'mg.sort_order ASC, mg.created_at DESC',
+    updated: 'mg.updated_at DESC NULLS LAST, mg.created_at DESC',
+    oldest: 'mg.created_at ASC',
+    popular: 'like_count DESC, mg.created_at DESC',
+  };
+  const galleryOrderBy = GALLERY_SORTS[req.query.sort] || GALLERY_SORTS.page;
+
   const { rows } = await pool.query(
     `SELECT mg.id, mg.image_url, mg.title, mg.description, mg.category, mg.position_x, mg.position_y,
             mg.tags, mg.view_count,
@@ -4687,7 +4731,7 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
      ) gsl ON true
      LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
      WHERE mg.owner_user_id = $1 AND (mg.category = 'sfw' OR $3 = false)
-     ORDER BY mg.created_at DESC`,
+     ORDER BY ${galleryOrderBy}`,
     [author.id, viewerId || 0, !!nsfwLock]
   );
   res.json({
@@ -5347,17 +5391,47 @@ app.get('/api/moderator-sites/:slug/is-owner', requireAuth, async (req, res) => 
 // "My Stories" page. Doesn't go through requireModerator since that resolves
 // to a single story — this deliberately lists all of them.
 app.get('/api/moderator/my-sites', requireAuth, async (req, res) => {
+  const SITE_SORTS = {
+    page: 'ms.profile_sort_order ASC, ms.created_at DESC',
+    updated: 'last_chapter_update DESC NULLS LAST, ms.created_at DESC',
+    oldest: 'ms.created_at ASC',
+    popular: 'like_count DESC, ms.created_at DESC',
+  };
+  const siteOrderBy = SITE_SORTS[req.query.sort] || SITE_SORTS.page;
   const { rows } = await pool.query(
     `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.view_count, ms.updated_at, u.avatar,
        (SELECT COUNT(*)::int FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0) AS published_chapter_count,
        (SELECT COUNT(*)::int FROM moderator_chapters mc WHERE mc.site_id = ms.id AND (mc.status = 'draft' OR length(trim(mc.body)) = 0)) AS draft_chapter_count,
        (SELECT COUNT(*)::int FROM moderator_site_likes WHERE site_id = ms.id) AS like_count,
-       (SELECT COUNT(*)::int FROM content_comments cc JOIN moderator_chapters mc ON mc.id = cc.target_id AND cc.target_type = 'chapter_paragraph' WHERE mc.site_id = ms.id) AS comment_count
+       (SELECT COUNT(*)::int FROM content_comments cc JOIN moderator_chapters mc ON mc.id = cc.target_id AND cc.target_type = 'chapter_paragraph' WHERE mc.site_id = ms.id) AS comment_count,
+       (SELECT MAX(mc.updated_at) FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0) AS last_chapter_update
      FROM moderator_sites ms JOIN users u ON u.id = ms.owner_user_id
-     WHERE ms.owner_user_id = $1 ORDER BY ms.created_at ASC`,
+     WHERE ms.owner_user_id = $1 ORDER BY ${siteOrderBy}`,
     [req.user.id]
   );
   res.json({ sites: rows.map(s => ({ ...s, author_avatar: s.avatar || null, avatar: undefined })) });
+});
+
+// "Reorder" from the Creator Hub -- profile-wide Stories order
+// (moderator_sites.profile_sort_order). Same shape as the characters/gallery
+// profile-order endpoints above.
+app.put('/api/moderator/sites/profile-order', requireAuth, async (req, res) => {
+  const order = req.body.order;
+  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of site IDs.' });
+  await pool.query('BEGIN');
+  try {
+    for (let i = 0; i < order.length; i++) {
+      await pool.query(
+        'UPDATE moderator_sites SET profile_sort_order = $1 WHERE id = $2 AND owner_user_id = $3',
+        [i, order[i], req.user.id]
+      );
+    }
+    await pool.query('COMMIT');
+  } catch (e) {
+    await pool.query('ROLLBACK');
+    return res.status(500).json({ error: 'Could not save the new order.' });
+  }
+  res.json({ message: 'Order saved.' });
 });
 
 // ── Site (Above All Else / Meet Blue text + links) ────────────────────────────
@@ -5809,11 +5883,19 @@ app.put('/api/moderator/chapters/:id/status', requireAuth, requireModerator, asy
     [status, req.params.id, req.modSite.id]
   );
   if (!chapter) return res.status(404).json({ error: 'Not found.' });
-  // Only notify followers on the draft→published transition, not every save.
+  // Only notify followers on the draft→published transition, not every save
+  // -- also the one moment a story jumps back to the top of the owner's
+  // profile Page Order (editing an already-published chapter doesn't).
   if (existing && existing.status !== 'published' && status === 'published') {
     await notifyFollowers(req.user.id, 'new_chapter',
       `published a new chapter: "${chapter.title}".`,
       `/${req.modSite.story_path}/reader?ch=${chapter.id}`);
+    await pool.query(
+      `UPDATE moderator_sites SET profile_sort_order = (
+         SELECT COALESCE(MIN(profile_sort_order), 0) - 1 FROM moderator_sites WHERE owner_user_id = $1
+       ) WHERE id = $2`,
+      [req.user.id, req.modSite.id]
+    );
   }
   res.json({ chapter });
 });
@@ -5982,6 +6064,31 @@ app.put('/api/moderator/characters/reorder', requireAuth, requireModerator, asyn
   res.json({ message: 'Order saved.' });
 });
 
+// "Reorder" from the Creator Hub -- distinct from the endpoint above, which
+// reorders a character's link within one specific story's roster. This one
+// reorders the owner's entire profile Characters tab (the base table's own,
+// previously-dead, sort_order column), independent of which story (if any)
+// each character is linked to. requireAuth only, not requireModerator --
+// standalone characters (no story at all) are owned by plain accounts too.
+app.put('/api/moderator/characters/profile-order', requireAuth, async (req, res) => {
+  const order = req.body.order;
+  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of character IDs.' });
+  await pool.query('BEGIN');
+  try {
+    for (let i = 0; i < order.length; i++) {
+      await pool.query(
+        'UPDATE moderator_characters SET sort_order = $1 WHERE id = $2 AND owner_user_id = $3',
+        [i, order[i], req.user.id]
+      );
+    }
+    await pool.query('COMMIT');
+  } catch (e) {
+    await pool.query('ROLLBACK');
+    return res.status(500).json({ error: 'Could not save the new order.' });
+  }
+  res.json({ message: 'Order saved.' });
+});
+
 // Instant "create + attach to this story" — same one-click flow authors are
 // used to. Ownership lives on the character itself (owner_user_id); the
 // link to this story is a separate row, so the same character can later be
@@ -5990,12 +6097,16 @@ app.post('/api/moderator/characters', requireAuth, requireModerator, async (req,
   const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
   const cleanStats = await sanitizeCharacterStats(stats || {});
+  // New characters jump to the top of the owner's profile Page Order.
+  const { rows: [{ minOrder: profileMinOrder }] } = await pool.query(
+    'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_characters WHERE owner_user_id = $1', [req.user.id]
+  );
   const { rows: [character] } = await pool.query(
-    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
-     JSON.stringify(relationships || []), !!ref_is_nsfw]
+     JSON.stringify(relationships || []), !!ref_is_nsfw, profileMinOrder]
   );
   const { rows: [{ maxOrder }] } = await pool.query(
     'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM character_story_links WHERE site_id = $1', [req.modSite.id]
@@ -6247,12 +6358,15 @@ app.post('/api/characters', requireAuth, async (req, res) => {
   const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
   const cleanStats = await sanitizeCharacterStats(stats || {});
+  const { rows: [{ minOrder: profileMinOrder }] } = await pool.query(
+    'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_characters WHERE owner_user_id = $1', [req.user.id]
+  );
   const { rows: [character] } = await pool.query(
-    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
-     JSON.stringify(relationships || []), !!ref_is_nsfw]
+     JSON.stringify(relationships || []), !!ref_is_nsfw, profileMinOrder]
   );
   const { rows: [actor] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
   await notifyFollowers(req.user.id, 'new_character',
@@ -6336,10 +6450,14 @@ app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage
   const positionX = clampPosition(req.body.position_x);
   const positionY = clampPosition(req.body.position_y);
   const tags = (await parseGalleryTags(req.body.tags)) || [];
+  // New gallery posts jump to the top of the owner's profile Page Order.
+  const { rows: [{ minOrder: galleryProfileMinOrder }] } = await pool.query(
+    'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_gallery WHERE owner_user_id = $1', [req.user.id]
+  );
   const { rows: [item] } = await pool.query(
-    `INSERT INTO moderator_gallery (owner_user_id, category, image_url, title, description, position_x, position_y, tags)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-    [req.user.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY, JSON.stringify(tags)]
+    `INSERT INTO moderator_gallery (owner_user_id, category, image_url, title, description, position_x, position_y, tags, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+    [req.user.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY, JSON.stringify(tags), galleryProfileMinOrder]
   );
   const { rows: [{ maxOrder }] } = await pool.query(
     'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM gallery_story_links WHERE site_id = $1', [req.modSite.id]
@@ -6368,6 +6486,28 @@ app.put('/api/moderator/gallery/reorder', requireAuth, requireModerator, async (
       await pool.query(
         'UPDATE gallery_story_links SET sort_order = $1 WHERE gallery_id = $2 AND site_id = $3',
         [i, order[i], req.modSite.id]
+      );
+    }
+    await pool.query('COMMIT');
+  } catch (e) {
+    await pool.query('ROLLBACK');
+    return res.status(500).json({ error: 'Could not save the new order.' });
+  }
+  res.json({ message: 'Order saved.' });
+});
+
+// "Reorder" from the Creator Hub -- profile-wide Gallery order (the base
+// table's own sort_order), independent of any story link. See the matching
+// characters/profile-order endpoint above for the full rationale.
+app.put('/api/moderator/gallery/profile-order', requireAuth, async (req, res) => {
+  const order = req.body.order;
+  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of gallery IDs.' });
+  await pool.query('BEGIN');
+  try {
+    for (let i = 0; i < order.length; i++) {
+      await pool.query(
+        'UPDATE moderator_gallery SET sort_order = $1 WHERE id = $2 AND owner_user_id = $3',
+        [i, order[i], req.user.id]
       );
     }
     await pool.query('COMMIT');
@@ -6577,10 +6717,13 @@ app.post('/api/gallery', requireAuth, uploadModImage.single('image'), async (req
   const positionX = clampPosition(req.body.position_x);
   const positionY = clampPosition(req.body.position_y);
   const tags = (await parseGalleryTags(req.body.tags)) || [];
+  const { rows: [{ minOrder: galleryProfileMinOrder }] } = await pool.query(
+    'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_gallery WHERE owner_user_id = $1', [req.user.id]
+  );
   const { rows: [item] } = await pool.query(
-    `INSERT INTO moderator_gallery (owner_user_id, category, image_url, title, description, position_x, position_y, tags)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-    [req.user.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY, JSON.stringify(tags)]
+    `INSERT INTO moderator_gallery (owner_user_id, category, image_url, title, description, position_x, position_y, tags, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+    [req.user.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY, JSON.stringify(tags), galleryProfileMinOrder]
   );
   const { rows: [actor2] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
   await notifyFollowers(req.user.id, 'new_gallery',

@@ -386,12 +386,39 @@
     /* "<name>'s Gallery Page" eyebrow removed -- the profile's own tab bar
        already says whose gallery this is. */
     #fp-gallery-eyebrow { display: none; }
-    /* The top pager sits right under the tabs (the shared .fp-pagination
-       rule's 2.5rem margin-top is meant for the *bottom* pager, sitting
-       below a whole page of results -- reset to flush here) with just a
-       little room before the first row of tiles. */
-    #fp-gallery-pagination-top { margin-top: 0; margin-bottom: 1rem; }
-    #fp-chars-pagination-top { margin-top: 0; margin-bottom: 1.25rem; }
+    /* Toolbar row -- top pager (left) + Sort By (right), same row, on all
+       three of Stories/Characters/Gallery. The shared .fp-pagination rule's
+       2.5rem margin-top/center justify is meant for a lone *bottom* pager;
+       reset both here since this row owns its own spacing/alignment. */
+    .fp-tab-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 0; margin-bottom: 1rem; flex-wrap: wrap; }
+    .fp-tab-toolbar .fp-pagination { justify-content: flex-start; margin: 0; }
+
+    /* Sort By -- a custom button+popover instead of a native <select>, since
+       both the closed box and its open option list need the same
+       box-background-2.png art fill (native <option> styling can't do
+       that reliably across browsers). */
+    .fp-sort-wrap { position: relative; flex-shrink: 0; }
+    .fp-sort-btn {
+      display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
+      background: linear-gradient(160deg, rgba(10,8,14,0.82), rgba(10,8,14,0.7)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; color: #f0f0f0;
+      font-family: inherit; font-size: 0.85rem; font-weight: 600; padding: 0.5rem 1rem;
+    }
+    .fp-sort-btn:hover { border-color: rgba(240,192,96,0.5); }
+    .fp-sort-caret { font-size: 0.7rem; color: #f0c060; }
+    .fp-sort-menu {
+      position: absolute; z-index: 20; top: calc(100% + 0.4rem); right: 0; min-width: 170px;
+      background: linear-gradient(160deg, rgba(10,8,14,0.92), rgba(10,8,14,0.86)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 0.4rem; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .fp-sort-menu-item {
+      display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+      color: #ddd; font-family: inherit; font-size: 0.85rem; font-weight: 600; padding: 0.55rem 0.7rem; border-radius: 8px;
+    }
+    .fp-sort-menu-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .fp-sort-menu-item.active { color: #f0c060; }
     /* "All Newspapers" back link — bigger, green glow so it reads clearly
        as the way out of the full-post view. */
     #fp-newspaper-detail-wrap .art-view-back {
@@ -1155,7 +1182,10 @@
      the grid and detail states; only this tab's own content swaps. -->
 <div class="fp-tab-view" id="fp-characters-view" hidden>
   <div id="fp-chars-grid-view">
-    <div class="fp-pagination" id="fp-chars-pagination-top" hidden></div>
+    <div class="fp-tab-toolbar" id="fp-chars-toolbar" hidden>
+      <div class="fp-pagination" id="fp-chars-pagination-top"></div>
+      <div class="fp-sort-wrap" id="fp-chars-sort-wrap"></div>
+    </div>
     <div class="fp-char-grid" id="fp-chars-grid"><p class="fp-tab-view-empty">Loading…</p></div>
     <div class="fp-pagination" id="fp-chars-pagination-bottom" hidden></div>
   </div>
@@ -1190,7 +1220,10 @@
   <div class="mod-gallery-main mod-gallery-main--no-sidebar" id="fp-gallery-grid-view">
     <div class="mod-gallery-content">
       <p class="mod-gallery-eyebrow" id="fp-gallery-eyebrow">Fan Art &amp; Illustrations</p>
-      <div class="fp-pagination" id="fp-gallery-pagination-top" hidden></div>
+      <div class="fp-tab-toolbar" id="fp-gallery-toolbar" hidden>
+        <div class="fp-pagination" id="fp-gallery-pagination-top"></div>
+        <div class="fp-sort-wrap" id="fp-gallery-sort-wrap"></div>
+      </div>
       <div class="gallery-grid gallery-grid--4up" id="fp-gallery-grid"></div>
       <div class="mod-gallery-empty-state" id="fp-gallery-empty-msg" style="display:none;">
         <p class="mod-gallery-sidebar-label">No artwork yet~</p>
@@ -1202,7 +1235,12 @@
 </div>
 
 <div class="fp-tab-view" id="fp-stories-view" hidden>
+  <div class="fp-tab-toolbar" id="fp-stories-toolbar" hidden>
+    <div class="fp-pagination" id="fp-stories-pagination-top"></div>
+    <div class="fp-sort-wrap" id="fp-stories-sort-wrap"></div>
+  </div>
   <div class="fp-bcard-grid" id="fp-stories-grid"></div>
+  <div class="fp-pagination" id="fp-stories-pagination-bottom" hidden></div>
 </div>
 
 <div class="fp-tab-view" id="fp-newspaper-view" hidden>
@@ -1497,7 +1535,7 @@
     if (tab !== 'characters') clearTimeout(pendingViewTimer);
     if (tab === 'characters') loadCharactersTab();
     if (tab === 'gallery') loadGalleryTab();
-    if (tab === 'stories') renderStoriesTeaserList(document.getElementById('fp-stories-grid'));
+    if (tab === 'stories') renderStoriesTeaserList();
     if (tab === 'newspaper') loadNewspaperTab();
   }
 
@@ -1618,19 +1656,76 @@
   }
 
   // Stories tab -- same bcard as Featured Stories, but the full unfiltered
-  // list (including the owner's own drafts) instead of a top-3 pick.
-  function renderStoriesTeaserList(grid) {
+  // list (including the owner's own drafts) instead of a top-3 pick, plus
+  // its own pagination + Sort By (Characters/Gallery already have both).
+  // currentStories is already fetched by loadProfile() at page-load (default
+  // Page Order) -- a fresh /api/fanpage-profile/:username?sort=... call is
+  // only needed when the Sort By dropdown actually changes.
+  const FP_STORIES_PAGE_SIZE = 10;
+  let fpStoriesPage = 1;
+  let fpStoriesSort = 'page';
+
+  function renderStoriesTeaserList() {
+    const grid = document.getElementById('fp-stories-grid');
+    const toolbar = document.getElementById('fp-stories-toolbar');
+    const topPag = document.getElementById('fp-stories-pagination-top');
+    const bottomPag = document.getElementById('fp-stories-pagination-bottom');
     grid.innerHTML = '';
     if (!currentStories.length) {
       grid.innerHTML = '<p class="fp-tab-view-empty">No stories yet.</p>';
+      toolbar.hidden = true;
+      bottomPag.hidden = true;
       return;
     }
-    currentStories.forEach(s => grid.appendChild(featuredStoryCardEl(s)));
+    const totalPages = Math.max(1, Math.ceil(currentStories.length / FP_STORIES_PAGE_SIZE));
+    fpStoriesPage = Math.min(Math.max(1, fpStoriesPage), totalPages);
+    const start = (fpStoriesPage - 1) * FP_STORIES_PAGE_SIZE;
+    const pageItems = currentStories.slice(start, start + FP_STORIES_PAGE_SIZE);
+    pageItems.forEach(s => grid.appendChild(featuredStoryCardEl(s)));
+
+    const pagHtml = fpGalleryPaginationHtml(fpStoriesPage, totalPages);
+    toolbar.hidden = false;
+    topPag.innerHTML = pagHtml;
+    wireFpStoriesPagination(topPag);
+    bottomPag.hidden = false;
+    bottomPag.innerHTML = pagHtml;
+    wireFpStoriesPagination(bottomPag);
+    renderSortDropdown('fp-stories-sort-wrap', fpStoriesSort, (val) => {
+      fpStoriesSort = val;
+      fpStoriesPage = 1;
+      loadStoriesSort();
+    });
+
     // Cover images load in async and can grow the page after this tab's
     // scrolling wallpaper was last measured -- same re-sync the Characters/
     // Gallery grids already do.
     syncScrollBgHeight();
     grid.querySelectorAll('img').forEach(img => img.addEventListener('load', syncScrollBgHeight, { once: true }));
+  }
+  function wireFpStoriesPagination(el) {
+    el.querySelectorAll('.fp-page-btn').forEach(btn => {
+      if (btn.disabled) return;
+      btn.addEventListener('click', () => {
+        fpStoriesPage = parseInt(btn.dataset.page, 10);
+        renderStoriesTeaserList();
+        document.getElementById('fp-stories-view').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  }
+  // Only Sort By changes need a fresh fetch -- Page Order is what
+  // loadProfile() already fetched, and pagination is a pure client-side
+  // slice of the (unpaginated) currentStories array.
+  async function loadStoriesSort() {
+    const grid = document.getElementById('fp-stories-grid');
+    grid.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
+    try {
+      const res = await fetch(`/api/fanpage-profile/${USERNAME}?sort=${fpStoriesSort}`, { headers: authHeaders() });
+      const data = await res.json();
+      currentStories = data.stories || [];
+      renderStoriesTeaserList();
+    } catch {
+      grid.innerHTML = '<p class="fp-tab-view-empty">Couldn\'t load stories right now.</p>';
+    }
   }
   function richText(s) {
     let out = escapeHtml(s || '');
@@ -2015,6 +2110,7 @@
   // returns to the grid (not out of the tab -- the tabs above stay put). ──
   const FP_CHARS_PAGE_SIZE = 20;
   let fpCharsPage = 1;
+  let fpCharsSort = 'page';
 
   function fpCharCardHtml(c) {
     const posX = c.refPosX != null ? c.refPosX : 50;
@@ -2042,6 +2138,43 @@
       </div>
     `;
   }
+
+  // ── Sort By dropdown — shared by Stories/Characters/Gallery, custom
+  // button+popover instead of a native <select> so both the closed box and
+  // its open option list can carry the box-background-2.png art fill. ────
+  const FP_SORT_OPTIONS = [
+    { value: 'page', label: 'Page Order' },
+    { value: 'updated', label: 'Date Updated' },
+    { value: 'oldest', label: 'Oldest' },
+    { value: 'popular', label: 'Popular' },
+  ];
+  function renderSortDropdown(containerId, current, onChange) {
+    const wrap = document.getElementById(containerId);
+    const currentLabel = (FP_SORT_OPTIONS.find(o => o.value === current) || FP_SORT_OPTIONS[0]).label;
+    wrap.innerHTML = `
+      <button type="button" class="fp-sort-btn" id="${containerId}-btn">Sort: ${currentLabel} <span class="fp-sort-caret">▾</span></button>
+      <div class="fp-sort-menu" id="${containerId}-menu" hidden>
+        ${FP_SORT_OPTIONS.map(o => `<button type="button" class="fp-sort-menu-item${o.value === current ? ' active' : ''}" data-value="${o.value}">${o.label}</button>`).join('')}
+      </div>
+    `;
+    document.getElementById(`${containerId}-btn`).addEventListener('click', (e) => {
+      e.stopPropagation();
+      const menu = document.getElementById(`${containerId}-menu`);
+      document.querySelectorAll('.fp-sort-menu').forEach(m => { if (m !== menu) m.hidden = true; });
+      menu.hidden = !menu.hidden;
+    });
+    wrap.querySelectorAll('.fp-sort-menu-item').forEach(item => {
+      item.addEventListener('click', () => {
+        document.getElementById(`${containerId}-menu`).hidden = true;
+        onChange(item.dataset.value);
+      });
+    });
+  }
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('.fp-sort-menu').forEach(m => {
+      if (!m.hidden && !m.parentElement.contains(e.target)) m.hidden = true;
+    });
+  });
 
   function wireFpCharsPagination(el) {
     el.querySelectorAll('.fp-page-btn').forEach(btn => {
@@ -2092,8 +2225,16 @@
     // only appearing once there's enough content to actually page through.
     const showPag = FP_CHARACTERS.length > 0;
     const pagHtml = showPag ? fpGalleryPaginationHtml(page, totalPages) : '';
-    topPag.hidden = !showPag; topPag.innerHTML = pagHtml; wireFpCharsPagination(topPag);
+    document.getElementById('fp-chars-toolbar').hidden = !showPag;
+    topPag.innerHTML = pagHtml; wireFpCharsPagination(topPag);
     bottomPag.hidden = !showPag; bottomPag.innerHTML = pagHtml; wireFpCharsPagination(bottomPag);
+    if (showPag) {
+      renderSortDropdown('fp-chars-sort-wrap', fpCharsSort, (val) => {
+        fpCharsSort = val;
+        fpCharactersPromise = null;
+        loadCharactersTab();
+      });
+    }
     syncScrollBgHeight();
     gridEl.querySelectorAll('img').forEach(img => img.addEventListener('load', syncScrollBgHeight, { once: true }));
   }
@@ -2174,13 +2315,13 @@
       const gridEl = document.getElementById('fp-chars-grid');
       gridEl.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
       try {
-        const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-characters`);
+        const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-characters?sort=${fpCharsSort}`);
         const data = await res.json();
         FP_CHARACTERS = (data.characters || []).map(normalizeFpChar);
         fpCharactersLoaded = true;
         if (!FP_CHARACTERS.length) {
           gridEl.innerHTML = `<p class="fp-tab-view-empty">@${USERNAME} hasn't added any characters yet.</p>`;
-          document.getElementById('fp-chars-pagination-top').hidden = true;
+          document.getElementById('fp-chars-toolbar').hidden = true;
           document.getElementById('fp-chars-pagination-bottom').hidden = true;
           return;
         }
@@ -2198,6 +2339,7 @@
   let FP_GALLERY_ITEMS = [];
   let fpGalleryLoaded = false;
   let fpGalleryPage = 1;
+  let fpGallerySort = 'page';
   const FP_GALLERY_PAGE_SIZE = 40;
 
   // e621-style numbered pager, same look/markup as Submissions search's own
@@ -2239,7 +2381,7 @@
     if (!FP_GALLERY_ITEMS.length) {
       grid.hidden = true;
       emptyEl.style.display = '';
-      topPag.hidden = true;
+      document.getElementById('fp-gallery-toolbar').hidden = true;
       bottomPag.hidden = true;
       return;
     }
@@ -2253,8 +2395,16 @@
     const pageItems = FP_GALLERY_ITEMS.slice(start, start + FP_GALLERY_PAGE_SIZE);
 
     const pagHtml = fpGalleryPaginationHtml(fpGalleryPage, totalPages);
-    topPag.hidden = false; topPag.innerHTML = pagHtml; wireFpGalleryPagination(topPag);
+    document.getElementById('fp-gallery-toolbar').hidden = false;
+    topPag.innerHTML = pagHtml; wireFpGalleryPagination(topPag);
     bottomPag.hidden = false; bottomPag.innerHTML = pagHtml; wireFpGalleryPagination(bottomPag);
+    renderSortDropdown('fp-gallery-sort-wrap', fpGallerySort, (val) => {
+      fpGallerySort = val;
+      fpGalleryLoaded = false;
+      fpGalleryPromise = null;
+      fpGalleryPage = 1;
+      loadGalleryTab();
+    });
 
     const uploaderName = (currentAuthor && (currentAuthor.display_name || currentAuthor.username)) || USERNAME;
     pageItems.forEach(g => {
@@ -2442,7 +2592,7 @@
       const grid = document.getElementById('fp-gallery-grid');
       grid.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
       try {
-        const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-gallery`, { headers: authHeaders() });
+        const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-gallery?sort=${fpGallerySort}`, { headers: authHeaders() });
         const data = await res.json();
         FP_GALLERY_ITEMS = data.gallery || [];
         fpGalleryLoaded = true;

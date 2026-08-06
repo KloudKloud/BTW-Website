@@ -76,6 +76,30 @@
     }
     .ed-create-btn:hover { box-shadow: 0 0 22px rgba(107,63,160,0.75); transform: translateY(-1px); }
     .ed-create-btn-icon { font-size: 1rem; line-height: 1; }
+    /* Reorder button -- same shell as Create, gold instead of purple so the
+       two don't read as the same action. */
+    .ed-reorder-btn { background: linear-gradient(135deg, #b8863a, #f0c060); box-shadow: 0 0 14px rgba(240,192,96,0.4); color: #1a1408; }
+    .ed-reorder-btn:hover { box-shadow: 0 0 22px rgba(240,192,96,0.65); }
+    .ed-reorder-label { font-size: 0.85rem; color: #ccc; text-align: center; margin: 0; }
+    .ed-reorder-cancel { background: transparent; border: 1px solid rgba(255,255,255,0.25); box-shadow: none; color: #f0f0f0; }
+    .ed-reorder-cancel:hover { border-color: #f0f0f0; box-shadow: none; transform: none; }
+
+    /* Reorder mode's simplified list rows -- plain draggable strips instead
+       of the real navigable cards, so a click during drag never accidentally
+       follows a link away from the page. */
+    .ed-reorder-row {
+      display: flex; align-items: center; gap: 1rem; cursor: grab;
+      background: #161616; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+      padding: 0.75rem 1.1rem; transition: border-color 0.15s, background 0.15s, opacity 0.15s;
+    }
+    .ed-reorder-row.dragging { opacity: 0.35; cursor: grabbing; }
+    .ed-reorder-row.drop-target { border-color: rgba(240,192,96,0.7); background: rgba(240,192,96,0.1); }
+    .ed-reorder-cover { width: 46px; height: 46px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: #222; border: 1px solid rgba(255,255,255,0.1); }
+    .ed-reorder-title { flex: 1; min-width: 0; font-size: 0.95rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ed-reorder-drag-handle {
+      flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      background: rgba(240,192,96,0.1); border: 1px solid rgba(240,192,96,0.35); color: #f0c060; font-size: 1.05rem;
+    }
 
     .ed-list-col { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
     .ed-empty {
@@ -225,7 +249,7 @@
 
   <div class="ed-layout">
     <div class="ed-create-col">
-      <div class="ed-side-box">
+      <div class="ed-side-box" id="ed-side-box-normal">
         <div class="ed-search-wrap">
           <span class="ed-search-icon">🔍</span>
           <input type="text" class="ed-search-input" id="ed-search-input" placeholder="Find a story, character, art..." />
@@ -236,6 +260,15 @@
           <span class="ed-create-btn-icon">➕</span>
           <span id="ed-create-btn-label">Create Story</span>
         </a>
+        <button class="ed-create-btn ed-reorder-btn" id="ed-reorder-btn" type="button">
+          <span class="ed-create-btn-icon">↕️</span>
+          <span id="ed-reorder-btn-label">Reorder Stories</span>
+        </button>
+      </div>
+      <div class="ed-side-box" id="ed-side-box-reorder" hidden>
+        <p class="ed-reorder-label">Drag to reorder</p>
+        <button class="ed-create-btn" id="ed-reorder-save" type="button">Save Order</button>
+        <button class="ed-create-btn ed-reorder-cancel" id="ed-reorder-cancel" type="button">Cancel</button>
       </div>
     </div>
     <div class="ed-list-col" id="ed-list"><p class="ed-empty">Loading…</p></div>
@@ -282,6 +315,14 @@
     characters: { href: window.fpUrl('/create-character'), label: 'Create Character' },
     gallery:    { href: window.fpUrl('/create-gallery'),   label: 'Create Gallery' },
   };
+  // Powers the Creator Hub's "Reorder" mode -- drags the tab's items into a
+  // new Page Order, saved via a profile-wide reorder endpoint distinct from
+  // the per-story-roster reorder used inside the Story Editor itself.
+  const REORDER_CONFIG = {
+    stories:    { endpoint: '/api/moderator/sites/profile-order',      label: 'Reorder Stories' },
+    characters: { endpoint: '/api/moderator/characters/profile-order', label: 'Reorder Characters' },
+    gallery:    { endpoint: '/api/moderator/gallery/profile-order',    label: 'Reorder Gallery' },
+  };
   const SEARCH_FIELD = { stories: 'site_title', characters: 'name', gallery: 'title' };
   const SEARCH_PLACEHOLDER = {
     stories: 'Find a story...', characters: 'Find a character...', gallery: 'Find gallery art...',
@@ -293,9 +334,11 @@
 
   function switchEdTab(tab) {
     currentTab = tab;
+    if (edReorderActive) exitEdReorderMode();
     TABS.forEach(t => document.getElementById(`ed-tab-${t}`).classList.toggle('active', t === tab));
     document.getElementById('ed-create-btn').href = CREATE_CONFIG[tab].href;
     document.getElementById('ed-create-btn-label').textContent = CREATE_CONFIG[tab].label;
+    document.getElementById('ed-reorder-btn-label').textContent = REORDER_CONFIG[tab].label;
     const searchInput = document.getElementById('ed-search-input');
     searchInput.value = '';
     searchInput.placeholder = SEARCH_PLACEHOLDER[tab];
@@ -511,6 +554,7 @@
     const storyPath = s.story_path || s.slug;
     const row = document.createElement('div');
     row.className = 'ed-story-row';
+    row.dataset.id = s.id;
     row.innerHTML = `
       <a class="ed-story-link" href="${window.fpUrl(`/${storyPath}/edit?from=hub`)}">
         ${window.wikiGeneratedCoverHtml(s, { imgClass: 'ed-card-img ed-card-img--story', small: true })}
@@ -545,10 +589,11 @@
     return row;
   }
 
-  function edCard(href, coverHtml, title, sub) {
+  function edCard(href, coverHtml, title, sub, id) {
     const a = document.createElement('a');
     a.className = 'ed-card';
     a.href = href;
+    a.dataset.id = id;
     a.innerHTML = `
       ${coverHtml}
       <div class="ed-card-info">
@@ -567,20 +612,27 @@
     cache.stories = data.sites || [];
     return cache.stories;
   }
+  async function resolveUsername() {
+    if (USERNAME) return USERNAME;
+    const me = await fetch('/api/auth/me', { headers: authHeaders() }).then(r => r.json()).catch(() => null);
+    USERNAME = me && me.user ? me.user.username : null;
+    return USERNAME;
+  }
+  // Switched from the /api/characters/mine picker endpoint (alphabetical,
+  // capped at 30 results -- fine for a "link to" search box, not for a full
+  // management/reorder list) to the same all-characters endpoint the public
+  // profile itself uses -- no cap, and already Page-Order-aware.
   async function loadCharacters() {
     if (cache.characters) return cache.characters;
-    const res = await fetch('/api/characters/mine', { headers: authHeaders() });
+    if (!await resolveUsername()) { cache.characters = []; return cache.characters; }
+    const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-characters`, { headers: authHeaders() });
     const data = await res.json();
     cache.characters = data.characters || [];
     return cache.characters;
   }
   async function loadGallery() {
     if (cache.gallery) return cache.gallery;
-    if (!USERNAME) {
-      const me = await fetch('/api/auth/me', { headers: authHeaders() }).then(r => r.json()).catch(() => null);
-      USERNAME = me && me.user ? me.user.username : null;
-    }
-    if (!USERNAME) { cache.gallery = []; return cache.gallery; }
+    if (!await resolveUsername()) { cache.gallery = []; return cache.gallery; }
     const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-gallery`, { headers: authHeaders() });
     const data = await res.json();
     cache.gallery = data.gallery || [];
@@ -606,13 +658,13 @@
       items.forEach(c => list.appendChild(edCard(
         window.fpUrl(`/create-character?id=${c.id}`),
         `<img class="ed-card-img" src="${c.ref_image || '/images/defaultchar.jpg'}" alt="" />`,
-        c.name, 'Click to edit or delete'
+        c.name, 'Click to edit or delete', c.id
       )));
     } else {
       items.forEach(g => list.appendChild(edCard(
         window.fpUrl(`/create-gallery?id=${g.id}`),
         `<img class="ed-card-img" src="${g.image}" alt="" />`,
-        g.title || 'Untitled', `${(g.category || 'sfw').toUpperCase()} — Click to edit or delete`
+        g.title || 'Untitled', `${(g.category || 'sfw').toUpperCase()} — Click to edit or delete`, g.id
       )));
     }
   }
@@ -627,6 +679,101 @@
       list.innerHTML = '<p class="ed-empty">Couldn\'t load this right now.</p>';
     }
   }
+
+  // ── Reorder mode — hand-rolled native drag-and-drop, same pattern as the
+  // Story Editor's own Reorder (Characters/Gallery/Chapters tabs of
+  // fanpages/_story-template/edit.html), just against the profile-wide
+  // "profile-order" endpoints instead of a single story's roster. One
+  // generic implementation instead of three copies, since this page (unlike
+  // the Story Editor) only ever has one list column visible at a time. ────
+  let edReorderActive = false;
+  let edDraggingRow = null;
+
+  function edReorderCoverHtml(tab, item) {
+    if (tab === 'stories') return window.wikiGeneratedCoverHtml(item, { imgClass: 'ed-reorder-cover', small: true });
+    const src = tab === 'characters' ? (item.ref_image || '/images/defaultchar.jpg') : item.image;
+    return `<img class="ed-reorder-cover" src="${src}" alt="" />`;
+  }
+  function edReorderTitle(tab, item) {
+    if (tab === 'stories') return item.site_title || 'Untitled Story';
+    if (tab === 'characters') return item.name;
+    return item.title || 'Untitled';
+  }
+  function edReorderRowEl(tab, item) {
+    const row = document.createElement('div');
+    row.className = 'ed-reorder-row';
+    row.draggable = true;
+    row.dataset.id = item.id;
+    row.innerHTML = `
+      ${edReorderCoverHtml(tab, item)}
+      <span class="ed-reorder-title">${escapeHtml(edReorderTitle(tab, item))}</span>
+      <span class="ed-reorder-drag-handle">⠿</span>
+    `;
+    row.addEventListener('dragstart', () => { edDraggingRow = row; row.classList.add('dragging'); });
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      edDraggingRow = null;
+      document.querySelectorAll('.ed-reorder-row.drop-target').forEach(r => r.classList.remove('drop-target'));
+    });
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (row !== edDraggingRow) row.classList.add('drop-target');
+    });
+    row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      row.classList.remove('drop-target');
+      if (!edDraggingRow || edDraggingRow === row) return;
+      const list = document.getElementById('ed-list');
+      const rows = [...list.children];
+      const draggingBefore = rows.indexOf(edDraggingRow) < rows.indexOf(row);
+      list.insertBefore(edDraggingRow, draggingBefore ? row.nextSibling : row);
+    });
+    return row;
+  }
+
+  function enterEdReorderMode() {
+    const items = cache[currentTab] || [];
+    if (items.length < 2) return;
+    edReorderActive = true;
+    document.getElementById('ed-side-box-normal').hidden = true;
+    document.getElementById('ed-side-box-reorder').hidden = false;
+    closeAllContinueDropdowns();
+    closeAllMoreMenus();
+    const list = document.getElementById('ed-list');
+    list.innerHTML = '';
+    items.forEach(item => list.appendChild(edReorderRowEl(currentTab, item)));
+  }
+  function exitEdReorderMode() {
+    edReorderActive = false;
+    document.getElementById('ed-side-box-normal').hidden = false;
+    document.getElementById('ed-side-box-reorder').hidden = true;
+  }
+  document.getElementById('ed-reorder-btn').addEventListener('click', enterEdReorderMode);
+  document.getElementById('ed-reorder-cancel').addEventListener('click', () => {
+    exitEdReorderMode();
+    renderItems(currentTab, cache[currentTab] || [], false);
+  });
+  document.getElementById('ed-reorder-save').addEventListener('click', async () => {
+    const saveBtn = document.getElementById('ed-reorder-save');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+    const order = [...document.getElementById('ed-list').children].map(r => r.dataset.id);
+    try {
+      await fetch(REORDER_CONFIG[currentTab].endpoint, {
+        method: 'PUT',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order }),
+      });
+      cache[currentTab] = null; // force a refetch so Page Order reflects the save
+    } catch {
+      alert('Could not save the new order — please try again.');
+    }
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save Order';
+    exitEdReorderMode();
+    renderTab(currentTab);
+  });
 
   const initialTab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'stories';
   switchEdTab(initialTab);
