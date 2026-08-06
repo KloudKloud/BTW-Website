@@ -316,6 +316,10 @@
        Story-tab search results (still the single-column AO3-style list)
        stay completely untouched. ── */
     .fp-bcard-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.1rem; }
+    /* Filtered Story search (tag click, "Sort and Filter", quick search)
+       still has the side filter panel eating width -- 2 per row instead
+       of 3 so cards don't get squeezed. */
+    .fp-bcard-grid--narrow { grid-template-columns: repeat(2, 1fr); }
     .fp-bcard {
       display: flex; flex-direction: row; cursor: pointer; overflow: hidden; position: relative; height: 250px;
       background: linear-gradient(160deg, rgba(10,8,14,0.86), rgba(10,8,14,0.76)), url('/images/home/potential-box-background.png');
@@ -643,7 +647,7 @@
     @media (max-width: 720px) {
       .fp-result { flex-direction: column; }
       .fp-result-cover { width: 100%; height: auto; aspect-ratio: 2 / 3; }
-      .fp-bcard-grid { grid-template-columns: 1fr; }
+      .fp-bcard-grid, .fp-bcard-grid--narrow { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -1426,12 +1430,13 @@ async function runSearch() {
     }
     setStoryMenuCount(`${data.total || 0} stor${(data.total || 0) === 1 ? 'y' : 'ies'}${f.q ? ` for "${f.q}"` : ''}`);
 
-    resultsEl.classList.toggle('fp-bcard-grid', isBrowseStories);
+    resultsEl.classList.toggle('fp-bcard-grid', isStoriesView);
+    resultsEl.classList.toggle('fp-bcard-grid--narrow', isStoriesView && !isBrowseMode);
     if (!works.length) {
       resultsEl.innerHTML = '<p class="fp-search-empty">No works match that search.</p>';
       return;
     }
-    resultsEl.innerHTML = works.map(isBrowseStories ? browseResultCard : resultCard).join('');
+    resultsEl.innerHTML = works.map(isStoriesView ? browseResultCard : resultCard).join('');
 
     const totalPages = Math.max(1, Math.ceil((data.total || 0) / (data.limit || 20)));
     if (totalPages > 1) {
@@ -1545,11 +1550,17 @@ const currentView = new URLSearchParams(window.location.search).get('view');
 // Submissions" heading up top, everything else (right filter panel,
 // collapse arrow, the actual result-fetching) identical to the normal tab.
 const isBrowseMode = new URLSearchParams(window.location.search).get('browse') === '1';
-// The unblurred box-background-5 wallpaper + fp-bcard grid only belong to
-// Browse -> Stories specifically -- Posts/Profiles (and a plain Story
-// search) keep the original blurred wallpaper untouched.
-const isBrowseStories = isBrowseMode && currentView !== 'submissions' && currentView !== 'profiles';
-document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--stories', isBrowseStories);
+// The unblurred box-background-5 wallpaper + fp-bcard grid belong to any
+// Story-tab result set -- Browse's own "Recent Stories" feed AND a normal
+// filtered Story search/tag click both count. Posts/Profiles keep the
+// original blurred wallpaper untouched. isBrowseStories narrows further
+// to just Browse's feed (no side filter panel) for the bits that need to
+// know that specifically -- the 6-per-page limit and the 3-per-row grid
+// (the filtered search still has its side panel eating width, so it gets
+// 2-per-row instead via fp-bcard-grid--narrow).
+const isStoriesView = currentView !== 'submissions' && currentView !== 'profiles';
+const isBrowseStories = isBrowseMode && isStoriesView;
+document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--stories', isStoriesView);
 if (isBrowseMode) {
   fpLayoutEl.classList.add('fp-layout--no-side');
   const headingEl = document.getElementById('fp-browse-heading');
