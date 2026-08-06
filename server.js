@@ -4233,49 +4233,69 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     // fetchStoryCardsById below, shared with the "no explicit picks yet"
     // default path so both render identically.
     pool.query(
-      `SELECT ref_id FROM user_featured_items WHERE user_id = $1 AND kind = 'story' ORDER BY sort_order LIMIT 4`,
+      `SELECT ref_id FROM user_featured_items WHERE user_id = $1 AND kind = 'story' ORDER BY sort_order LIMIT 3`,
       [author.id]
     ),
     // Recent Activity -- no unified activity log exists, so this is a
     // hand-rolled UNION ALL across every place this user can act. Each
-    // branch normalizes to the same (type, ts, label, context, ref_a) shape;
-    // the JSON response below turns that into a human sentence + link.
-    // "Liked" rows deliberately don't carry enough info to link anywhere
-    // (the liked item may belong to someone else's story) and render as
-    // plain text instead.
+    // branch normalizes to the same (type, ts, label, context, ref_a,
+    // owner_username) shape; the JSON response below turns that into a
+    // human sentence + link. owner_username is only populated for the
+    // "liked a character" branch -- every other type either belongs to this
+    // user themselves (posted/commented types all link via story_path,
+    // which is already owner-qualified, or a plain content id) or doesn't
+    // need an owner to build its link.
     pool.query(
       `SELECT * FROM (
          (SELECT 'chapter' AS type, COALESCE(mc.updated_at, mc.created_at) AS ts,
-                 mc.title AS label, ms.site_title AS context, COALESCE(ms.story_path, ms.slug) AS ref_a
+                 mc.title AS label, ms.site_title AS context, COALESCE(ms.story_path, ms.slug) AS ref_a, NULL AS owner_username
           FROM moderator_chapters mc JOIN moderator_sites ms ON ms.id = mc.site_id
           WHERE ms.owner_user_id = $1 AND mc.status = 'published' AND length(trim(mc.body)) > 0
           ORDER BY ts DESC LIMIT 5)
          UNION ALL
-         (SELECT 'character', created_at, name, NULL, id::text
+         (SELECT 'character', created_at, name, NULL, id::text, NULL
           FROM moderator_characters WHERE owner_user_id = $1 ORDER BY created_at DESC LIMIT 5)
          UNION ALL
-         (SELECT 'gallery', created_at, title, NULL, id::text
+         (SELECT 'gallery', created_at, title, NULL, id::text, NULL
           FROM moderator_gallery WHERE owner_user_id = $1 ORDER BY created_at DESC LIMIT 5)
          UNION ALL
-         (SELECT 'newspaper', created_at, title, NULL, id::text
+         (SELECT 'newspaper', created_at, title, NULL, id::text, NULL
           FROM newspaper_posts WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5)
          UNION ALL
-         (SELECT 'like_character', cl.created_at, mc.name, NULL, NULL
+         (SELECT 'like_character', cl.created_at, mc.name, NULL, mc.id::text, u.username
           FROM moderator_character_likes cl JOIN moderator_characters mc ON mc.id = cl.character_id
+          JOIN users u ON u.id = mc.owner_user_id
           WHERE cl.user_id = $1 ORDER BY cl.created_at DESC LIMIT 5)
          UNION ALL
-         (SELECT 'like_chapter', chl.created_at, mc2.title, ms2.site_title, NULL
+         (SELECT 'like_chapter', chl.created_at, mc2.title, ms2.site_title, COALESCE(ms2.story_path, ms2.slug), NULL
           FROM chapter_likes chl JOIN moderator_chapters mc2 ON mc2.id = chl.chapter_id
           JOIN moderator_sites ms2 ON ms2.id = mc2.site_id
           WHERE chl.user_id = $1 ORDER BY chl.created_at DESC LIMIT 5)
          UNION ALL
-         (SELECT 'like_gallery', gl.created_at, mg.title, NULL, NULL
+         (SELECT 'like_gallery', gl.created_at, mg.title, NULL, mg.id::text, NULL
           FROM moderator_gallery_likes gl JOIN moderator_gallery mg ON mg.id = gl.gallery_id
           WHERE gl.user_id = $1 ORDER BY gl.created_at DESC LIMIT 5)
          UNION ALL
-         (SELECT 'club_post', cp.created_at, cp.title, c.name, c.slug
+         (SELECT 'club_post', cp.created_at, cp.title, c.name, c.slug, NULL
           FROM club_posts cp JOIN clubs c ON c.id = cp.club_id
           WHERE cp.author_user_id = $1 ORDER BY cp.created_at DESC LIMIT 5)
+         UNION ALL
+         (SELECT 'comment_chapter', cc1.created_at, mc4.title, ms4.site_title, COALESCE(ms4.story_path, ms4.slug), NULL
+          FROM content_comments cc1
+          JOIN moderator_chapters mc4 ON mc4.id = cc1.target_id AND cc1.target_type = 'chapter_paragraph'
+          JOIN moderator_sites ms4 ON ms4.id = mc4.site_id
+          WHERE cc1.user_id = $1 ORDER BY cc1.created_at DESC LIMIT 5)
+         UNION ALL
+         (SELECT 'comment_gallery', cc2.created_at, mg2.title, NULL, mg2.id::text, NULL
+          FROM content_comments cc2
+          JOIN moderator_gallery mg2 ON mg2.id = cc2.target_id AND cc2.target_type = 'gallery'
+          WHERE cc2.user_id = $1 ORDER BY cc2.created_at DESC LIMIT 5)
+         UNION ALL
+         (SELECT 'comment_club_post', cc3.created_at, cp2.title, c2.name, c2.slug, NULL
+          FROM content_comments cc3
+          JOIN club_posts cp2 ON cp2.id = cc3.target_id AND cc3.target_type = 'club_post'
+          JOIN clubs c2 ON c2.id = cp2.club_id
+          WHERE cc3.user_id = $1 ORDER BY cc3.created_at DESC LIMIT 5)
        ) combined
        ORDER BY ts DESC LIMIT 5`,
       [author.id]
@@ -4322,22 +4342,27 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       )).rows;
   const featuredStories = featuredStoryIds.rows.length
     ? await fetchStoryCardsById(featuredStoryIds.rows.map(r => Number(r.ref_id)))
-    : await fetchDefaultStoryCards(author.id, 4);
+    : await fetchDefaultStoryCards(author.id, 3);
 
-  // Recent Activity — turn the normalized (type, ts, label, context, ref_a)
-  // rows into a human sentence + link. "Liked" rows render as plain text
-  // (no link_url) since the liked item may belong to someone else's story
-  // and we didn't fetch enough info here to safely build that link.
+  // Recent Activity — turn the normalized (type, ts, label, context, ref_a,
+  // owner_username) rows into a human sentence + link. Every type is
+  // clickable now: character-based links need an explicit owner (a "like"
+  // can point at someone else's character), everything else either belongs
+  // to this profile's owner already or links via an owner-qualified
+  // story_path / plain content id.
   const recentActivity = activity.rows.map(r => {
     switch (r.type) {
       case 'chapter': return { type: r.type, title: `Updated a chapter in "${r.context}"`, timestamp: r.ts, link: `/${r.ref_a}` };
       case 'character': return { type: r.type, title: `Posted a new character: "${r.label}"`, timestamp: r.ts, link: `/${author.username}?char=${r.ref_a}#characters` };
       case 'gallery': return { type: r.type, title: `Posted new gallery art: "${r.label}"`, timestamp: r.ts, link: `/gallery-post?id=${r.ref_a}` };
       case 'newspaper': return { type: r.type, title: `Made a newspaper post: "${r.label}"`, timestamp: r.ts, link: `/${author.username}#newspaper` };
-      case 'like_character': return { type: r.type, title: `Liked a character: "${r.label}"`, timestamp: r.ts, link: null };
-      case 'like_chapter': return { type: r.type, title: `Liked a chapter in "${r.context}"`, timestamp: r.ts, link: null };
-      case 'like_gallery': return { type: r.type, title: `Liked a gallery post: "${r.label}"`, timestamp: r.ts, link: null };
+      case 'like_character': return { type: r.type, title: `Liked a character: "${r.label}"`, timestamp: r.ts, link: `/${r.owner_username}?char=${r.ref_a}#characters` };
+      case 'like_chapter': return { type: r.type, title: `Liked a chapter in "${r.context}"`, timestamp: r.ts, link: `/${r.ref_a}` };
+      case 'like_gallery': return { type: r.type, title: `Liked a gallery post: "${r.label}"`, timestamp: r.ts, link: `/gallery-post?id=${r.ref_a}` };
       case 'club_post': return { type: r.type, title: `Posted in the "${r.context}" club`, timestamp: r.ts, link: `/club?slug=${r.ref_a}` };
+      case 'comment_chapter': return { type: r.type, title: `Commented on a chapter in "${r.context}"`, timestamp: r.ts, link: `/${r.ref_a}` };
+      case 'comment_gallery': return { type: r.type, title: `Commented on a gallery post: "${r.label}"`, timestamp: r.ts, link: `/gallery-post?id=${r.ref_a}` };
+      case 'comment_club_post': return { type: r.type, title: `Commented on a post in the "${r.context}" club`, timestamp: r.ts, link: `/club?slug=${r.ref_a}` };
       default: return { type: r.type, title: r.label, timestamp: r.ts, link: null };
     }
   });
@@ -5095,11 +5120,11 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
 });
 
 // PUT /api/account/featured — replaces the caller's featured-characters,
-// featured-gallery, or featured-stories set (max 3, 3, or 4 respectively) in
+// featured-gallery, or featured-stories set (max 3 each) in
 // one shot.
 app.put('/api/account/featured', requireAuth, async (req, res) => {
   const kind = ['gallery', 'story'].includes(req.body.kind) ? req.body.kind : 'character';
-  const items = Array.isArray(req.body.items) ? req.body.items.slice(0, kind === 'story' ? 4 : 3) : [];
+  const items = Array.isArray(req.body.items) ? req.body.items.slice(0, 3) : [];
 
   const client = await pool.connect();
   try {
