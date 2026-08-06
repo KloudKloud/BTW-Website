@@ -340,9 +340,9 @@
     .fp-bcard-title-deco { width: 14px; height: 14px; object-fit: contain; flex-shrink: 0; margin-left: 0.2rem; vertical-align: -2px; }
     .fp-bcard-author { display: inline-flex; align-items: center; gap: 0.35rem; text-decoration: none; }
     .fp-bcard-author:hover .fp-bcard-author-name { color: #7fa8d9; text-decoration: underline; }
-    .fp-bcard-author-avatar, .fp-bcard-author-avatar-fallback { width: 17px; height: 17px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-    .fp-bcard-author-avatar-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.55rem; }
-    .fp-bcard-author-name { font-size: 0.74rem; font-weight: 600; color: #ccc; }
+    .fp-bcard-author-avatar, .fp-bcard-author-avatar-fallback { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .fp-bcard-author-avatar-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.68rem; }
+    .fp-bcard-author-name { font-size: 0.86rem; font-weight: 600; color: #ccc; }
     .fp-bcard-badges { display: flex; gap: 0.4rem; margin-bottom: 0.6rem; }
     /* Rating colors are hard-pinned to a plain green/yellow/red
        traffic-light scheme here specifically (General/Mature/Explicit),
@@ -518,7 +518,8 @@
       margin-bottom: -5rem; margin-right: -2.5rem;
       height: calc(100vh - 76px);
       display: flex; flex-direction: column;
-      background: #14121a;
+      background: linear-gradient(175deg, rgba(14,12,20,0.88), rgba(14,12,20,0.82)), url('/images/home/box-background-3.png');
+      background-size: cover; background-position: center;
       border: 1px solid rgba(255,255,255,0.14);
       padding: 1.5rem; max-height: calc(100vh - 76px); overflow-y: auto;
       scrollbar-color: #444 #1a1a1e; /* Firefox */
@@ -528,6 +529,14 @@
       overscroll-behavior: contain;
       contain: layout;
     }
+    /* Corner sparkles on the boxed background, same decoration system as
+       the rest of the site -- pointer-events:none + a negative z-index
+       (the sticky panel establishes its own stacking context) so they sit
+       above its background art but below every real static-flow control,
+       never blocking a click. */
+    .fp-filter-panel-deco { position: absolute; z-index: -1; pointer-events: none; object-fit: contain; opacity: 0.85; }
+    .fp-filter-panel-deco--tl { top: 10px; left: 10px; width: 34px; height: 34px; }
+    .fp-filter-panel-deco--br { bottom: 10px; right: 10px; width: 46px; height: 46px; }
     .fp-filter-panel::-webkit-scrollbar { width: 8px; }
     .fp-filter-panel::-webkit-scrollbar-track { background: #1a1a1e; border-radius: 8px; }
     .fp-filter-panel::-webkit-scrollbar-thumb { background: #444; border-radius: 8px; }
@@ -711,6 +720,8 @@
   </button>
 
   <aside class="fp-filter-panel" id="fp-filter-panel">
+    <img class="fp-filter-panel-deco fp-filter-panel-deco--tl" src="/images/home/decoration-1.png" alt="" />
+    <img class="fp-filter-panel-deco fp-filter-panel-deco--br" src="/images/home/decoration-8.png" alt="" />
     <button class="fp-filter-apply-btn fp-filter-apply-btn--top" id="fp-filter-apply-top" type="button">Sort and Filter</button>
     <div class="fp-filter-query">Current search: <strong id="fp-filter-query-text">Everything</strong></div>
     <div class="fp-side-search-wrap">
@@ -1163,7 +1174,12 @@ async function runSubmissionsSearch() {
   const p = new URLSearchParams(window.location.search);
   const q = p.get('q') || '';
   const page = Math.max(1, parseInt(p.get('page'), 10) || 1);
-  const sort = p.get('sort') || 'best_match';
+  // Browse -> Posts opens as "Recent Submissions" (newest first), not a
+  // relevance-ranked search -- the Sort dropdown should default to
+  // matching that instead of showing "Best Match" while actually sorted
+  // by date. A plain Posts search (no browse=1) still defaults to
+  // best_match same as Stories/Profiles.
+  const sort = p.get('sort') || (isBrowseMode ? 'updated' : 'best_match');
   const ratingsParam = p.get('ratings');
   const ratings = ratingsParam ? ratingsParam.split(',').filter(r => POSTS_RATING_VALUES.includes(r)) : POSTS_RATING_VALUES.slice();
   const exclude = p.get('exclude') || '';
