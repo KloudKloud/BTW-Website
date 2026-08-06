@@ -96,7 +96,7 @@
     .fp-banner-wrap::after {
       content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 48px; z-index: 4;
       background: linear-gradient(to bottom, transparent, rgba(6,5,8,0.6));
-      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
       -webkit-mask-image: linear-gradient(to bottom, transparent, black);
       mask-image: linear-gradient(to bottom, transparent, black);
       pointer-events: none;
@@ -1408,16 +1408,18 @@
     currentStories.forEach(s => grid.appendChild(storyTeaserCardEl(s)));
   }
 
-  // ── Profile theme — a custom blurred background, or the same "Browse >
-  // Posts" wallpaper the rest of the site defaults to (never a plain dark
-  // screen) ──
-  const FP_DEFAULT_HOME_BG = '/images/home/potential-box-background.png';
+  // ── Profile theme — default (plain dark) or a custom blurred background ──
   function applyProfileTheme(themeId, bgUrl) {
     const bgImg = document.getElementById('fp-bg-img');
     const bgOverlay = document.getElementById('fp-bg-overlay');
-    bgImg.src = (themeId === 'custom' && bgUrl) ? bgUrl : FP_DEFAULT_HOME_BG;
-    bgImg.style.display = 'block';
-    bgOverlay.style.display = 'block';
+    if (themeId === 'custom' && bgUrl) {
+      bgImg.src = bgUrl;
+      bgImg.style.display = 'block';
+      bgOverlay.style.display = 'block';
+    } else {
+      bgImg.style.display = 'none';
+      bgOverlay.style.display = 'none';
+    }
     document.querySelectorAll('.fp-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
   }
 
@@ -1465,9 +1467,9 @@
     const defaultBtn = document.createElement('button');
     defaultBtn.className = 'fp-theme-swatch';
     defaultBtn.type = 'button';
-    defaultBtn.title = 'Default';
+    defaultBtn.title = 'Default (plain dark)';
     defaultBtn.dataset.theme = 'default';
-    defaultBtn.innerHTML = '<span style="background-image:url(/images/home/potential-box-background.png);background-size:cover;background-position:center;"></span>';
+    defaultBtn.innerHTML = '<span></span>';
     defaultBtn.addEventListener('click', () => selectProfileTheme('default'));
     grid.appendChild(defaultBtn);
 
