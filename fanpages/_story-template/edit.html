@@ -90,6 +90,10 @@
       font-family: 'Baloo 2', 'Georgia', serif; font-size: 1.3rem; font-weight: 700; color: #f0f0f0;
     }
     .cs-field-hint { font-family: 'Inter', sans-serif; font-size: 0.82rem; color: #999; }
+    /* Marks Title/Description/Rating as required -- these are the fields
+       the backend won't let a story save without, so the flag isn't
+       cosmetic. */
+    .cs-required-star { color: #e05a52; font-weight: 800; line-height: 1; }
     .cs-complete-toggle { display: flex; gap: 0.6rem; }
     .cs-complete-btn {
       background: #17171a; border: 1px solid rgba(255,255,255,0.14); border-radius: 20px;
@@ -121,8 +125,12 @@
       display: block; font-family: 'Inter', sans-serif; font-size: 0.72rem; font-weight: 700;
       letter-spacing: 0.16em; text-transform: uppercase; color: var(--rose, #d97a72); margin-bottom: 0.35rem;
     }
+    /* Bubbly Fredoka + a soft cool-blue spotlight glow -- same recipe as
+       the Creator Hub's "My Creator Hub" heading and the homepage's
+       Featured card titles. */
     .wiki-editing-indicator-title {
-      font-family: 'Cinzel', serif; font-size: 2.1rem; font-weight: 700; color: #f0f0f0;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 2.1rem; font-weight: 700; color: #7fa8d9;
+      text-shadow: 0 0 18px rgba(127,168,217,0.55), 0 1px 3px rgba(0,0,0,0.5);
       margin: 0; line-height: 1.2;
     }
 
@@ -648,12 +656,13 @@
         <div class="se-details-form-col">
           <div class="cs-panel">
             <div class="cs-field-block">
-              <div class="cs-field-title-row"><span class="cs-field-title">Title</span></div>
+              <div class="cs-field-title-row"><span class="cs-required-star">★</span><span class="cs-field-title">Title</span></div>
               <input class="cs-input-lg" id="site-title-input" maxlength="60" />
             </div>
 
             <div class="cs-field-block">
               <div class="cs-field-title-row">
+                <span class="cs-required-star">★</span>
                 <span class="cs-field-title">Description</span>
                 <span class="cs-field-hint">Descriptions will appear in italics!</span>
               </div>
@@ -662,12 +671,13 @@
 
             <div class="cs-field-block">
               <div class="cs-field-title-row">
+                <span class="cs-required-star">★</span>
                 <span class="cs-field-title">Rating</span>
                 <button class="wiki-tags-tip-icon" id="rating-tip-icon" type="button" aria-label="Rating help">💡</button>
                 <div class="wiki-tags-tip-popover" id="rating-tip-popover" hidden>
                   <p><strong>General</strong> — Suitable for everyone</p>
-                  <p><strong>Mature</strong> — Light themes of violence, language, or other mature elements that don't teeter into explicit.</p>
-                  <p><strong>Explicit</strong> — Porn, graphic violence, or explicitly adult themes</p>
+                  <p><strong>Mature</strong> — Erotica smut, light themes of violence, language, or other mature elements that don't teeter into strictly explicit.</p>
+                  <p><strong>Explicit</strong> — Direct porn, graphical violence, and/or strictly adult content</p>
                 </div>
               </div>
               <select class="cs-select-lg" id="rating-select">
@@ -680,7 +690,10 @@
             <div class="cs-field-block">
               <div class="cs-field-title-row">
                 <span class="cs-field-title" id="bio-field-label">Notes From the Author</span>
-                <span class="cs-field-hint">Use *text* for italics, **text** for bold.</span>
+                <button class="wiki-tags-tip-icon" id="notes-tip-icon" type="button" aria-label="Notes help">💡</button>
+                <div class="wiki-tags-tip-popover" id="notes-tip-popover" hidden>
+                  <p>Add any additional notes, inspirations, comments, or "words of wisdom" you'd like to share! Use *text* for italics, **text** for bold.</p>
+                </div>
               </div>
               <textarea class="cs-textarea-lg" id="site-bio-input"></textarea>
             </div>
@@ -688,8 +701,11 @@
             <div class="cs-field-block">
               <div class="cs-field-title-row">
                 <span class="cs-field-title">Complete?</span>
+                <button class="wiki-tags-tip-icon" id="complete-tip-icon" type="button" aria-label="Complete help">💡</button>
+                <div class="wiki-tags-tip-popover" id="complete-tip-popover" hidden>
+                  <p>Is this story completed? One-shots can be marked as complete when published, as well as novels with every chapter posted! (Note: You can change this status whenever you'd like, so feel free to come back after everything is finished)</p>
+                </div>
               </div>
-              <span class="cs-field-hint" style="display:block; margin-bottom:0.6rem;">Is your story completed?</span>
               <div class="cs-complete-toggle" id="cs-complete-toggle">
                 <button type="button" class="cs-complete-btn active" data-value="no">No</button>
                 <button type="button" class="cs-complete-btn" data-value="yes">Yes</button>
@@ -1072,17 +1088,18 @@ function applyTheme(themeId, customBgUrl) {
   document.body.style.setProperty('--mod-accent2-bg', hexToRgba(theme.c2, 0.06));
   document.body.style.setProperty('--mod-accent2-bg-hover', hexToRgba(theme.c2, 0.12));
 
+  // The Story Editor hub is a private, owner-only management page (not the
+  // live story Home tab), so its background is forced to the site's own
+  // blurred box-background-3 wallpaper regardless of the story's own theme
+  // -- same "Home-tab-only" rule the Creator Hub and profile tabs already
+  // follow, rather than previewing whatever custom background the story's
+  // public page happens to be using.
   const bgImg = document.getElementById('page-bg-img');
   const bgOverlay = document.getElementById('page-bg-overlay');
-  if (themeId === 'custom' && customBgUrl) {
-    bgImg.src = customBgUrl;
-    bgImg.style.display = 'block';
-    bgOverlay.style.background = hexToRgba(theme.bg, 0.78);
-    bgOverlay.style.display = 'block';
-  } else {
-    bgImg.style.display = 'none';
-    bgOverlay.style.display = 'none';
-  }
+  bgImg.src = '/images/home/box-background-3.png';
+  bgImg.style.display = 'block';
+  bgOverlay.style.background = 'rgba(10,8,14,0.72)';
+  bgOverlay.style.display = 'block';
 }
 
 function escapeHtml(s) {
@@ -1136,6 +1153,8 @@ function buildCategoryChecks(selected) {
 
 [
   ['rating-tip-icon', 'rating-tip-popover'],
+  ['notes-tip-icon', 'notes-tip-popover'],
+  ['complete-tip-icon', 'complete-tip-popover'],
   ['category-tip-icon', 'category-tip-popover'],
   ['relationships-tip-icon', 'relationships-tip-popover'],
   ['fandom-tip-icon', 'fandom-tip-popover'],
