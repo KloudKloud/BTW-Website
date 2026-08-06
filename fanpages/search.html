@@ -205,7 +205,7 @@
        art (cropped to a couple of alternating regions) + a dark scrim,
        same system as the rest of the site's boxed cards. */
     .fp-profile-card {
-      display: flex; align-items: center; gap: 1.3rem; padding: 1.3rem 1.5rem;
+      display: flex; align-items: center; gap: 1.3rem; padding: 1.3rem 1.5rem; cursor: pointer;
       border-radius: 14px; margin-bottom: 1rem; position: relative; overflow: hidden;
       background: linear-gradient(160deg, rgba(10,8,14,0.82), rgba(10,8,14,0.72)), url('/images/home/box-background-4.jpg');
       background-size: cover; background-position: 40% 85%;
@@ -935,13 +935,14 @@ const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_t
 const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
 window.fpFixLinks();
 
-// Story result cards are clickable anywhere on their (transparent) area,
+// Story/profile cards are clickable anywhere on their (transparent) area,
 // not just the cover/title -- but a click on the cover, title, an author
-// link, a tag pill, or a character chip still goes to THAT destination
-// instead, since those are real nested <a> elements.
+// link, a tag pill, a character chip, or (on profile cards) the Follow
+// button still goes to/does THAT instead, since those are real nested
+// <a>/<button> elements.
 document.addEventListener('click', (e) => {
-  const card = e.target.closest('.fp-result[data-href], .fp-bcard[data-href]');
-  if (!card || e.target.closest('a')) return;
+  const card = e.target.closest('.fp-result[data-href], .fp-bcard[data-href], .fp-profile-card[data-href]');
+  if (!card || e.target.closest('a, button')) return;
   window.location.href = card.dataset.href;
 });
 // Live result count under the "Story" left-panel link, for the current
@@ -1312,7 +1313,7 @@ function accountCardHtml(u) {
     </button>
   `;
   return `
-    <div class="fp-profile-card">
+    <div class="fp-profile-card" data-href="${window.fpUrl(`/${escapeHtml(u.username)}`)}">
       <img class="fp-profile-card-deco" src="/images/home/decoration-8.png" alt="" />
       <a href="${window.fpUrl(`/${escapeHtml(u.username)}`)}">${avatar}</a>
       <div class="fp-profile-info">
