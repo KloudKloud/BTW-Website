@@ -548,20 +548,27 @@
        recent-activity rows as fit, at least one" for free, no JS height
        math needed (the list container just shrinks/clips via flexbox). */
     .fp-home-side-activity { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-    .fp-activity-list { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 0.7rem; }
+    .fp-activity-list { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 0.65rem; }
+    /* Each row is its own glowy little card now instead of a plain divider-
+       separated line -- bigger, poppier, easier to pick out at a glance. */
     .fp-activity-item {
-      display: flex; align-items: flex-start; gap: 0.55rem; font-size: 0.85rem; color: #ddd; line-height: 1.4; text-decoration: none;
-      padding-bottom: 0.7rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+      display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; color: #ddd; line-height: 1.4; text-decoration: none;
+      padding: 0.65rem 0.75rem; border-radius: 12px; border: 1px solid rgba(240,192,96,0.22);
+      background: linear-gradient(160deg, rgba(240,192,96,0.1), rgba(127,168,217,0.05));
+      box-shadow: 0 0 10px rgba(240,192,96,0.12);
+      transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
     }
-    .fp-activity-item:last-child { border-bottom: none; }
+    a.fp-activity-item:hover {
+      border-color: rgba(240,192,96,0.55); box-shadow: 0 0 20px rgba(240,192,96,0.35); transform: translateY(-1px);
+    }
     a.fp-activity-item:hover .fp-activity-item-body { color: #f0c060; }
-    .fp-activity-item-avatar, .fp-activity-item-avatar-fallback { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .fp-activity-item-avatar, .fp-activity-item-avatar-fallback { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
     .fp-activity-item-avatar-fallback {
       display: flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.72rem;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.85rem;
     }
     .fp-activity-item-body { flex: 1; min-width: 0; }
-    .fp-activity-item-time { display: block; font-size: 0.7rem; color: #999; margin-top: 0.2rem; }
+    .fp-activity-item-time { display: block; font-size: 0.74rem; color: #999; margin-top: 0.25rem; }
 
     /* Following preview -- sits below Activity, always fully shown (fixed
        size, not flex:1 like Activity) since it's capped at 5 rows + a
@@ -4011,8 +4018,14 @@
       // Newspaper (Home tab preview)
       loadNewspaperHome();
 
-      // Stories
+      // Stories -- loadProfile() is async and switchTab(initialTab) below
+      // runs synchronously right after it's kicked off (not after it
+      // resolves), so a refresh landing directly on the Stories tab would
+      // call renderStoriesTeaserList() against a still-empty currentStories
+      // and show "No stories yet." Re-render once the real data is in if
+      // that tab is (still) the active one.
       currentStories = data.stories || [];
+      if (activeTabName === 'stories') renderStoriesTeaserList();
 
       // The Home tab's background scrolls with the page now (see
       // syncScrollBgHeight) -- the featured rows/story cards above load
@@ -4038,7 +4051,7 @@
   buildThemeGrid();
   loadProfile();
 
-  const initialTab = ['characters', 'gallery', 'stories'].includes(location.hash.slice(1)) ? location.hash.slice(1) : null;
+  const initialTab = ['characters', 'gallery', 'stories', 'newspaper'].includes(location.hash.slice(1)) ? location.hash.slice(1) : null;
   if (initialTab) switchTab(initialTab);
 
   // Deep-link straight to a specific Featured Character entry (?char=)
