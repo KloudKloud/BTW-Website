@@ -4172,17 +4172,24 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
   const [{ rows: sites }, followerCount, followingCount, clubCount, isFollowing, featuredChars, featuredGallery, featuredStoryIds, activity] = await Promise.all([
     pool.query(
       `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.synopsis,
-              ms.tags, ms.fandoms, ms.view_count,
+              ms.tags, ms.fandoms, ms.view_count, ms.rating, ms.is_complete,
               NOT EXISTS (
                 SELECT 1 FROM moderator_chapters mc
                 WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
               ) AS is_draft_only,
               COALESCE(lc.count, 0) AS like_count,
               COALESCE(bc.count, 0) AS bookmark_count,
-              COALESCE(cc.count, 0) AS comment_count
+              COALESCE(cc.count, 0) AS comment_count,
+              COALESCE(wc.word_count, 0) AS word_count
        FROM moderator_sites ms
        LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_site_likes WHERE site_id = ms.id) lc ON true
        LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_bookmarks WHERE site_id = ms.id) bc ON true
+       LEFT JOIN LATERAL (
+         SELECT COALESCE(SUM(
+           GREATEST(1, array_length(regexp_split_to_array(trim(regexp_replace(mc4.body, '<[^>]+>', ' ', 'g')), '\\s+'), 1))
+         ), 0) AS word_count
+         FROM moderator_chapters mc4 WHERE mc4.site_id = ms.id AND mc4.status = 'published' AND length(trim(mc4.body)) > 0
+       ) wc ON true
        LEFT JOIN LATERAL (
          SELECT COUNT(*)::int AS count FROM content_comments cc2
          JOIN moderator_chapters mc2 ON mc2.id = cc2.target_id AND cc2.target_type = 'chapter_paragraph'
@@ -4401,6 +4408,8 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       slug: s.slug, story_path: s.story_path || s.slug, site_title: s.site_title, cover_url: s.cover_url,
       synopsis: s.synopsis || '', characters: (charsBySite[s.id] || []).slice(0, 4),
       tags: s.tags || [], fandoms: s.fandoms || [], is_draft_only: s.is_draft_only,
+      rating: s.rating, is_complete: !!s.is_complete, word_count: s.word_count,
+      author: author.display_name || author.username, author_username: author.username, author_avatar: author.avatar || null,
       hits: s.view_count || 0, kudos: Number(s.like_count), comments: Number(s.comment_count), bookmarks: Number(s.bookmark_count),
     })),
     follower_count: followerCount.rows[0].n,
