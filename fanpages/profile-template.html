@@ -332,16 +332,14 @@
     }
 
     .fp-tab-view { max-width: 1200px; margin: 0 auto; padding: 2rem; }
-    /* Characters/Gallery reuse the story-context layouts (.chars-layout,
-       .mod-gallery-main), which already carry their own max-width/padding —
-       let them own the spacing instead of double-boxing inside .fp-tab-view. */
-    #fp-characters-view, #fp-gallery-view { max-width: none; margin: 0; padding: 0; }
+    /* Gallery reuses the story-context .mod-gallery-main layout, which
+       already carries its own max-width/padding — let it own the spacing
+       instead of double-boxing inside .fp-tab-view. Characters now uses a
+       plain card grid, so it keeps .fp-tab-view's own box. */
+    #fp-gallery-view { max-width: none; margin: 0; padding: 0; }
     /* .mod-gallery-main has no max-width of its own (it relies on the
        story page's .mod-page-row wrapper for that) — give it an equivalent
        here so the tile grid doesn't stretch edge-to-edge on a wide screen. */
-    /* Match .chars-layout's max-width/padding exactly so the "Browse" box
-       lines up with the "Character Spotlights" box on the Characters tab
-       instead of sitting slightly further left. */
     .fp-gallery-page-row { max-width: 1240px; margin: 0 auto; padding: 0 2rem; }
     /* Tucked under the profile's own tab bar, with a little breathing
        room -- .mod-gallery-main's base 4rem top padding used to leave it
@@ -375,6 +373,69 @@
       text-align: center; color: #999; font-size: 0.9rem; padding: 3rem 1rem;
       border: 1px dashed rgba(255,255,255,0.12); border-radius: 14px; grid-column: 1 / -1;
     }
+
+    /* ── Characters tab — same card grid + single-character detail view as
+       the Fanpage Hub's Characters browse page (fanpages/characters.html),
+       just 4-per-row/20-per-page instead of 5/25 to fit this narrower
+       tab column, and centered under the profile's own tabs instead of
+       hugging a sidebar (this tab has none). ── */
+    .fp-char-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.9rem; }
+    .fp-char-card {
+      position: relative; display: block; text-decoration: none; color: inherit;
+      background: #161616; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+      overflow: hidden; transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+    }
+    .fp-char-card:hover { transform: translateY(-3px); box-shadow: 0 10px 22px rgba(0,0,0,0.45); border-color: rgba(240,192,96,0.4); }
+    .fp-char-card-img-wrap { position: relative; width: 100%; aspect-ratio: 1 / 1; background: #1e1e1e; overflow: hidden; }
+    .fp-char-card-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fp-char-card-locked { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); font-size: 1.6rem; }
+    .fp-char-card-fallback {
+      width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 2rem;
+    }
+    .fp-char-card-body {
+      position: relative; overflow: hidden; height: 72px; padding: 0.45rem 0.55rem 0.55rem;
+      background: linear-gradient(160deg, rgba(10,8,14,0.82), rgba(10,8,14,0.72)), url('/images/home/potential-box-background.png');
+      background-size: cover; background-position: center;
+    }
+    .fp-char-card-body-deco { position: absolute; top: -8px; right: -6px; width: 26px; height: 26px; object-fit: contain; opacity: 0.9; pointer-events: none; }
+    .fp-char-card-name-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; }
+    .fp-char-card-name {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 700; color: #fff;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+    }
+    .fp-char-card-species {
+      display: inline-block; flex-shrink: 0; background: rgba(127,168,217,0.16); color: #a8c6e8; border-radius: 20px;
+      padding: 0.15em 0.6em; font-size: 0.92rem; font-weight: 700;
+    }
+    .fp-char-card-owner { font-size: 0.72rem; color: #999; }
+    .fp-char-like-btn {
+      position: absolute; top: 0.5rem; right: 0.5rem; z-index: 2;
+      display: flex; align-items: center; gap: 0.3rem;
+      background: rgba(10,10,10,0.65); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      border: 1px solid rgba(255,255,255,0.2); border-radius: 20px;
+      padding: 0.28em 0.6em; font-size: 0.78rem; font-weight: 700; color: #fff; cursor: pointer;
+      line-height: 1; transition: color 0.15s, border-color 0.15s, transform 0.1s;
+    }
+    .fp-char-like-btn:hover { border-color: rgba(240,192,96,0.6); transform: scale(1.05); }
+    .fp-char-like-btn.liked { color: #f0708a; }
+    .fp-char-like-btn .fp-char-like-icon { font-size: 0.9rem; }
+
+    #fp-chars-detail-view { max-width: 760px; margin: 0 auto; }
+    .fp-char-back-btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: linear-gradient(160deg, rgba(38,30,16,0.85), rgba(20,16,10,0.85));
+      border: 1px solid rgba(240,192,96,0.6); color: #f7d68a;
+      border-radius: 30px; padding: 0.85em 1.6em; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 700;
+      cursor: pointer; white-space: nowrap; box-shadow: 0 0 20px rgba(240,192,96,0.35);
+      transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
+      margin: 0 0 1.1rem;
+    }
+    .fp-char-back-btn svg { width: 22px; height: 22px; flex-shrink: 0; }
+    .fp-char-back-btn:hover { border-color: #f0c060; color: #fff; box-shadow: 0 0 30px rgba(240,192,96,0.55); transform: translateY(-1px); }
+
+    @media (max-width: 900px) { .fp-char-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 640px) { .fp-char-grid { grid-template-columns: repeat(2, 1fr); } }
 
     /* ── Body: About (~33%) | Stories | Links ── */
     .fp-body {
@@ -964,33 +1025,33 @@
 
 </div>
 
-<!-- Characters tab — same layout as a story's Characters page: a sidebar
-     list of every character (spotlights) next to a full single-character
-     display, instead of the old flat thumbnail grid. View-only for now. -->
+<!-- Characters tab — same card-grid + single-character detail view as the
+     Fanpage Hub's Characters browse page, instead of the old "Character
+     Spotlights" sidebar-nav layout. The tabs above stay visible in both
+     the grid and detail states; only this tab's own content swaps. -->
 <div class="fp-tab-view" id="fp-characters-view" hidden>
-  <div class="chars-layout">
-    <div class="chars-sidebar-col">
-      <aside class="chars-sidebar">
-        <span class="chars-sidebar-label">Character Spotlights</span>
-        <div class="chars-nav-scroller">
-          <div class="chars-nav" id="fp-chars-nav"></div>
-        </div>
-      </aside>
-    </div>
-    <main class="chars-main">
-      <div id="fp-char-profile" class="char-profile"></div>
+  <div id="fp-chars-grid-view">
+    <div class="fp-char-grid" id="fp-chars-grid"><p class="fp-tab-view-empty">Loading…</p></div>
+    <div class="fp-pagination" id="fp-chars-pagination"></div>
+  </div>
 
-      <div id="fp-char-detail-nav" class="art-nav"></div>
+  <div id="fp-chars-detail-view" hidden>
+    <button type="button" class="fp-char-back-btn" id="fp-chars-back-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      Back
+    </button>
+    <div id="fp-char-profile" class="char-profile"></div>
 
-      <div class="cc-section" id="fp-char-detail-comments">
-        <p class="cc-title">💬 Comments</p>
-        <div class="cc-compose" id="fp-char-cc-compose" style="display:none;">
-          <textarea id="fp-char-cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
-          <button class="cc-compose-btn" id="fp-char-cc-compose-btn" type="button">Post</button>
-        </div>
-        <div class="cc-list" id="fp-char-cc-list"><p class="cc-empty">Loading…</p></div>
+    <div id="fp-char-detail-nav" class="art-nav"></div>
+
+    <div class="cc-section" id="fp-char-detail-comments">
+      <p class="cc-title">💬 Comments</p>
+      <div class="cc-compose" id="fp-char-cc-compose" style="display:none;">
+        <textarea id="fp-char-cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
+        <button class="cc-compose-btn" id="fp-char-cc-compose-btn" type="button">Post</button>
       </div>
-    </main>
+      <div class="cc-list" id="fp-char-cc-list"><p class="cc-empty">Loading…</p></div>
+    </div>
   </div>
 </div>
 
@@ -1415,6 +1476,16 @@
       document.getElementById('fp-banner-edit-pencil').hidden = tab !== 'home';
       document.getElementById('fp-theme-picker-wrap').hidden = tab !== 'home';
     }
+    // Characters tab forces the same blurred PotentialBoxBackground the
+    // Fanpage Hub's Characters browse page uses, regardless of whatever
+    // theme this profile has picked for itself (its own theme picker is
+    // already hidden on every non-Home tab, so there's no control fighting
+    // this override) -- restored the moment the viewer leaves the tab.
+    if (tab === 'characters') {
+      applyProfileTheme('custom', '/images/home/potential-box-background.png');
+    } else if (currentAuthor) {
+      applyProfileTheme(currentAuthor.profile_theme, currentAuthor.profile_theme_bg_url);
+    }
     if (tab === 'characters') loadCharactersTab();
     if (tab === 'gallery') loadGalleryTab();
     if (tab === 'stories') renderStoriesTeaserList(document.getElementById('fp-stories-grid'));
@@ -1809,18 +1880,92 @@
     }
   }
 
-  function buildFpCharsNav() {
-    const nav = document.getElementById('fp-chars-nav');
-    nav.innerHTML = '';
-    FP_CHARACTERS.forEach(char => {
-      const btn = document.createElement('button');
-      btn.className = 'chars-tab' + (char.id === fpActiveCharId ? ' active' : '');
-      btn.dataset.id = char.id;
-      btn.textContent = char.name;
-      btn.addEventListener('click', () => selectFpCharacter(char.id));
-      nav.appendChild(btn);
+  // ── Card grid + detail view, same pattern as the Fanpage Hub's
+  // Characters browse page: click a card to open it in-place, Back
+  // returns to the grid (not out of the tab -- the tabs above stay put). ──
+  const FP_CHARS_PAGE_SIZE = 20;
+  let fpCharsPage = 1;
+
+  function fpCharCardHtml(c) {
+    const posX = c.refPosX != null ? c.refPosX : 50;
+    const posY = c.refPosY != null ? c.refPosY : 50;
+    const species = (c.stats && c.stats.Species) ? String(c.stats.Species).trim() : '';
+    const imgHtml = c.ref
+      ? `<img src="${escapeHtml(c.ref)}" alt="" style="object-position:${posX}% ${posY}%;" />`
+      : `<div class="fp-char-card-fallback">${escapeHtml((c.name[0] || '?').toUpperCase())}</div>`;
+    return `
+      <div class="fp-char-card">
+        <a href="#" data-char-id="${c.id}">
+          <div class="fp-char-card-img-wrap">${imgHtml}</div>
+          <div class="fp-char-card-body">
+            <img class="fp-char-card-body-deco" src="/images/home/decoration-8.png" alt="" />
+            <div class="fp-char-card-name-row">
+              <p class="fp-char-card-name">${escapeHtml(c.name)}</p>
+              ${species ? `<span class="fp-char-card-species">${escapeHtml(species)}</span>` : ''}
+            </div>
+            <p class="fp-char-card-owner">by ${escapeHtml(currentAuthor ? (currentAuthor.display_name || USERNAME) : USERNAME)}</p>
+          </div>
+        </a>
+        <button type="button" class="fp-char-like-btn${c.liked ? ' liked' : ''}" data-char-id="${c.id}" aria-label="Like this character">
+          <span class="fp-char-like-icon">${c.liked ? '♥' : '♡'}</span><span class="fp-char-like-count">${c.likeCount || 0}</span>
+        </button>
+      </div>
+    `;
+  }
+
+  function renderCharsGrid(page) {
+    fpCharsPage = page;
+    const gridEl = document.getElementById('fp-chars-grid');
+    const pagEl = document.getElementById('fp-chars-pagination');
+    const totalPages = Math.max(1, Math.ceil(FP_CHARACTERS.length / FP_CHARS_PAGE_SIZE));
+    const start = (page - 1) * FP_CHARS_PAGE_SIZE;
+    const pageItems = FP_CHARACTERS.slice(start, start + FP_CHARS_PAGE_SIZE);
+    gridEl.innerHTML = pageItems.map(fpCharCardHtml).join('');
+    gridEl.querySelectorAll('.fp-char-card > a[data-char-id]').forEach(a => {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        openCharDetail(a.dataset.charId);
+      });
+    });
+    gridEl.querySelectorAll('.fp-char-like-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (!token) { window.fpRequireSignIn('To like a character, you must create an account!'); return; }
+        const id = btn.dataset.charId;
+        const liked = btn.classList.contains('liked');
+        btn.disabled = true;
+        try {
+          const res = await fetch(`/api/moderator/character/${id}/like`, { method: liked ? 'DELETE' : 'POST', headers: authHeaders() });
+          const data = await res.json();
+          btn.classList.toggle('liked', data.liked);
+          btn.querySelector('.fp-char-like-icon').textContent = data.liked ? '♥' : '♡';
+          btn.querySelector('.fp-char-like-count').textContent = data.like_count;
+          const char = FP_CHARACTERS.find(c => c.id === id);
+          if (char) { char.liked = data.liked; char.likeCount = data.like_count; }
+        } catch {}
+        btn.disabled = false;
+      });
+    });
+    pagEl.innerHTML = totalPages > 1 ? fpGalleryPaginationHtml(page, totalPages) : '';
+    pagEl.querySelectorAll('.fp-page-btn').forEach(btn => {
+      if (btn.disabled) return;
+      btn.addEventListener('click', () => {
+        renderCharsGrid(parseInt(btn.dataset.page, 10));
+        document.getElementById('fp-chars-grid-view').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     });
   }
+
+  function openCharDetail(id, scroll) {
+    document.getElementById('fp-chars-grid-view').hidden = true;
+    document.getElementById('fp-chars-detail-view').hidden = false;
+    selectFpCharacter(id, scroll);
+  }
+  function closeCharDetail() {
+    document.getElementById('fp-chars-detail-view').hidden = true;
+    document.getElementById('fp-chars-grid-view').hidden = false;
+  }
+  document.getElementById('fp-chars-back-btn').addEventListener('click', closeCharDetail);
 
   function selectFpCharacter(id, scroll) {
     id = String(id);
@@ -1828,7 +1973,6 @@
     if (!char) return;
     fpActiveCharId = id;
     renderFpCharProfile(char);
-    buildFpCharsNav();
     if (scroll) {
       // On a fresh page load (deep-linked from a story's character chip),
       // web fonts (Cinzel/Georgia) and other async content are still
@@ -1880,24 +2024,21 @@
   function loadCharactersTab() {
     if (fpCharactersPromise) return fpCharactersPromise;
     fpCharactersPromise = (async () => {
-      const nav = document.getElementById('fp-chars-nav');
-      const profile = document.getElementById('fp-char-profile');
-      nav.innerHTML = '';
-      profile.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
+      const gridEl = document.getElementById('fp-chars-grid');
+      gridEl.innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
       try {
         const res = await fetch(`/api/fanpage-profile/${USERNAME}/all-characters`);
         const data = await res.json();
         FP_CHARACTERS = (data.characters || []).map(normalizeFpChar);
+        fpCharactersLoaded = true;
         if (!FP_CHARACTERS.length) {
-          profile.innerHTML = `<p class="fp-tab-view-empty">@${USERNAME} hasn't added any characters yet.</p>`;
+          gridEl.innerHTML = `<p class="fp-tab-view-empty">@${USERNAME} hasn't added any characters yet.</p>`;
+          document.getElementById('fp-chars-pagination').innerHTML = '';
           return;
         }
-        fpCharactersLoaded = true;
-        fpActiveCharId = FP_CHARACTERS[0].id;
-        buildFpCharsNav();
-        renderFpCharProfile(FP_CHARACTERS[0]);
+        renderCharsGrid(1);
       } catch {
-        profile.innerHTML = '<p class="fp-tab-view-empty">Couldn\'t load characters right now.</p>';
+        gridEl.innerHTML = '<p class="fp-tab-view-empty">Couldn\'t load characters right now.</p>';
       }
     })();
     return fpCharactersPromise;
@@ -3403,7 +3544,11 @@
       document.getElementById('fp-following-count').textContent = data.following_count;
       document.getElementById('fp-clubs-count').textContent = data.club_count || 0;
       document.title = `${a.display_name} ✦ BTW`;
-      applyProfileTheme(a.profile_theme, a.profile_theme_bg_url);
+      // Don't clobber the Characters tab's forced background if this
+      // resolves while that tab is already active (e.g. a fresh page load
+      // straight into #characters, where switchTab ran before this fetch
+      // finished).
+      if (activeTabName !== 'characters') applyProfileTheme(a.profile_theme, a.profile_theme_bg_url);
 
       const bannerImg = document.getElementById('fp-banner-img');
       applyBgCrop(
@@ -3497,7 +3642,7 @@
   if (deepGalleryId) {
     window.location.replace(window.fpUrl(`/gallery-post?id=${encodeURIComponent(deepGalleryId)}`));
   } else if (initialTab === 'characters' && deepCharId) {
-    loadCharactersTab().then(() => selectFpCharacter(deepCharId, true));
+    loadCharactersTab().then(() => openCharDetail(deepCharId, true));
   }
 </script>
 
