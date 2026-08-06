@@ -8,6 +8,19 @@
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <style>
+    /* This page always forces the same "Browse > Posts" wallpaper
+       (PotentialBoxBackground, blurred, scrolls *with* the page) instead
+       of whatever theme the story picked for its Home/Chapters/Characters
+       pages -- overrides the shared .mod-page-bg-img's own position:fixed
+       just for this page. */
+    #page-bg-img {
+      position: absolute; top: 0; left: 0; right: 0; bottom: auto;
+      width: 100%; height: 100vh; object-fit: cover;
+      filter: blur(4px) brightness(1);
+    }
+    #page-bg-overlay { position: fixed; inset: 0; background: rgba(8,6,10,0.45); }
+  </style>
 </head>
 <body class="mod-theme">
 
@@ -205,6 +218,8 @@ function renderTiles(items, emptyMsg) {
     a.addEventListener('click', (e) => { e.preventDefault(); openPostDetail(g, true); });
     grid.appendChild(a);
   });
+  syncBgHeight();
+  grid.querySelectorAll('img').forEach(img => img.addEventListener('load', syncBgHeight, { once: true }));
 }
 
 // Every rating shows together now -- SFW/Mature/Explicit are no longer
@@ -391,6 +406,7 @@ function openPostDetail(item, pushHistory) {
   }
 
   if (pushHistory) history.pushState({ post: item.id }, '', `${STORY_BASE}/gallery?post=${item.id}`);
+  syncBgHeight();
 }
 
 function closePostDetail(pushHistory) {
@@ -398,6 +414,7 @@ function closePostDetail(pushHistory) {
   document.getElementById('gallery-detail-view').style.display = 'none';
   document.getElementById('gallery-grid-view').style.display = '';
   if (pushHistory) history.pushState({}, '', `${STORY_BASE}/gallery`);
+  syncBgHeight();
 }
 
 document.getElementById('gallery-detail-back').addEventListener('click', (e) => {
@@ -704,6 +721,19 @@ function applyStoryTheme(theme, bgUrl) {
   }
 }
 
+// Background scrolls *with* the page instead of staying pinned, same
+// treatment as the Fanpage Hub's Characters browse page -- height
+// measured in JS since percentage/inset sizing can't resolve against a
+// wrap whose own height is just "however tall its content is." Reset to
+// 0 before each measurement since the element itself contributes to
+// scrollHeight, or a previously-tall page could never shrink back down.
+function syncBgHeight() {
+  const bgEl = document.getElementById('page-bg-img');
+  bgEl.style.height = '0';
+  bgEl.style.height = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
+}
+window.addEventListener('resize', syncBgHeight);
+
 // Book box — the story's own cover + a follow-the-author row, under the
 // Navigate box, so browsing feels anchored to this specific book instead of
 // a generic gallery feed. No follow control on your own story.
@@ -777,7 +807,14 @@ function renderBookBox(site) {
   ModeratorSite.applyBanner(document.getElementById('page-banner-img'), data && data.site);
   if (data && data.site) renderVipBadge(data.site);
   renderBookBox(data && data.site);
-  applyStoryTheme(data && data.site && data.site.theme, data && data.site && data.site.theme_bg_url);
+  // Forces the same "Browse > Posts" wallpaper the Fanpage Hub uses,
+  // regardless of whatever theme this story picked for its Home/
+  // Chapters/Characters pages -- this page always gets its own look.
+  applyStoryTheme('custom', '/images/home/potential-box-background.png');
+  // applyStoryTheme's own scrim is tuned for the fixed-background pages --
+  // override to match the Characters browse page's lighter scrim exactly.
+  document.getElementById('page-bg-overlay').style.background = 'rgba(8,6,10,0.45)';
+  syncBgHeight();
   if (data && data.site && data.site.site_title) document.title = `Gallery ✦ ${data.site.site_title}`;
   STORY_TITLE = (data && data.site && data.site.site_title) || 'this story';
   STORY_COVER_URL = (data && data.site && data.site.cover_url) || '';
