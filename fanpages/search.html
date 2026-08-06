@@ -27,10 +27,10 @@
     /* Full-bleed wallpaper behind everything, fixed to the viewport
        (unaffected by scrolling) and sitting under the topbar -- z-index:0
        background layers, real content explicitly promoted to z-index:1.
-       Default is the original blurred wallpaper every other tab (Posts,
-       Profiles, a plain Story search) still uses; the unblurred
-       box-background-5 only applies on Browse -> Stories specifically via
-       the --stories modifier, added/removed in JS based on view. */
+       Default is the original blurred wallpaper Profiles/a plain Story
+       search still use; Story tabs get the unblurred box-background-5 and
+       Posts (browse or filtered search) gets browse-background-2 --
+       neither blurred, both added/removed in JS based on view. */
     .fp-bg-video {
       position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; z-index: 0;
       background: url('/images/gallery/kloudsaphbedroom_1.png') center / cover no-repeat;
@@ -40,7 +40,18 @@
       background-image: url('/images/home/box-background-5.png');
       filter: none;
     }
+    .fp-bg-video--posts {
+      background-image: url('/images/home/browse-background-2.jpg');
+      filter: none;
+    }
     .fp-bg-overlay { position: fixed; inset: 0; background: rgba(8,6,10,0.45); z-index: 0; }
+    /* A couple of fixed sparkle accents floating over the Posts wallpaper
+       specifically -- it's one big unblurred image with no cards breaking
+       it up like Stories has, so these are what keep it from reading flat. */
+    .fp-bg-sparkle { display: none; position: fixed; z-index: 0; pointer-events: none; object-fit: contain; opacity: 0.8; }
+    .fp-bg-video--posts ~ .fp-bg-sparkle { display: block; }
+    .fp-bg-sparkle--a { top: 90px; left: 4vw; width: 52px; height: 52px; }
+    .fp-bg-sparkle--b { top: 140px; right: 6vw; width: 34px; height: 34px; }
     .fp-content-z { position: relative; z-index: 1; }
 
     .fp-search-sub { color: #ccc; font-size: 0.95rem; margin: 1.75rem 0 0.85rem; }
@@ -193,7 +204,7 @@
     /* Submissions view -- fixed-size tiles (the exact crop the uploader
        picked in the editor), not a variable-size justified photo wall.
        Bigger than the old justified-grid target height, e621-style. */
-    .fp-results-list--grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+    .fp-results-list--grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
     /* EXPERIMENTAL -- opaque box-background-4 fill instead of the earlier
        transparent-but-bordered treatment, same "dark scrim under busy art"
        pattern as the homepage's box background system. Cards vary a lot in
@@ -580,7 +591,8 @@
       margin-bottom: -5rem; margin-right: -2.5rem;
       height: calc(100vh - 76px);
       flex-direction: column;
-      background: #14121a;
+      background: linear-gradient(175deg, rgba(14,12,20,0.88), rgba(14,12,20,0.82)), url('/images/home/box-background-3.png');
+      background-size: cover; background-position: center;
       border: 1px solid rgba(255,255,255,0.14);
       padding: 1.5rem; max-height: calc(100vh - 76px); overflow-y: auto;
       scrollbar-color: #444 #1a1a1e; /* Firefox */
@@ -664,17 +676,21 @@
         margin-bottom: 0; margin-left: 0;
         padding: 1.5rem 0; border-right: none; border-bottom: 2px solid rgba(255,255,255,0.4);
       }
+      .fp-results-list--grid { grid-template-columns: repeat(3, 1fr); }
     }
     @media (max-width: 720px) {
       .fp-result { flex-direction: column; }
       .fp-result-cover { width: 100%; height: auto; aspect-ratio: 2 / 3; }
       .fp-bcard-grid, .fp-bcard-grid--narrow { grid-template-columns: 1fr; }
+      .fp-results-list--grid { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
 </head>
 <body>
 
 <div class="fp-bg-video"></div>
+<img class="fp-bg-sparkle fp-bg-sparkle--a" src="/images/home/decoration-1.png" alt="" />
+<img class="fp-bg-sparkle fp-bg-sparkle--b" src="/images/home/decoration-8.png" alt="" />
 <div class="fp-bg-overlay"></div>
 
 <div class="fp-content-z">
@@ -811,6 +827,8 @@
        there's nowhere near the amount of fields the Story filter panel
        has to justify one. -->
   <aside class="fp-posts-panel" id="fp-posts-panel">
+    <img class="fp-filter-panel-deco fp-filter-panel-deco--tl" src="/images/home/decoration-1.png" alt="" />
+    <img class="fp-filter-panel-deco fp-filter-panel-deco--br" src="/images/home/decoration-8.png" alt="" />
     <p class="fp-posts-count" id="fp-posts-count"></p>
 
     <div class="fp-filter-query">Current search: <strong id="fp-posts-query-text">Everything</strong></div>
@@ -1183,7 +1201,7 @@ async function runSubmissionsSearch() {
   const ratingsParam = p.get('ratings');
   const ratings = ratingsParam ? ratingsParam.split(',').filter(r => POSTS_RATING_VALUES.includes(r)) : POSTS_RATING_VALUES.slice();
   const exclude = p.get('exclude') || '';
-  const limit = 40;
+  const limit = 30;
 
   wirePostsPanel(q, sort, ratings, exclude);
 
@@ -1596,6 +1614,7 @@ const isBrowseMode = new URLSearchParams(window.location.search).get('browse') =
 const isStoriesView = currentView !== 'submissions' && currentView !== 'profiles';
 const isBrowseStories = isBrowseMode && isStoriesView;
 document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--stories', isStoriesView);
+document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--posts', currentView === 'submissions');
 if (isBrowseMode) {
   fpLayoutEl.classList.add('fp-layout--no-side');
   const headingEl = document.getElementById('fp-browse-heading');
