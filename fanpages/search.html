@@ -40,15 +40,24 @@
       background-image: url('/images/home/box-background-5.png');
       filter: none;
     }
+    /* Posts is the one wallpaper that actually scrolls with the page
+       instead of staying pinned -- a fixed-length grid of cards (unlike
+       Stories, which paginates), so there's no harm letting the art move
+       with it. position:absolute (height set in JS to match the full
+       page height) instead of the fixed/inset:0 every other variant
+       uses. A light blur takes the edge off without flattening it into a
+       pure gradient like the old blurred wallpaper. */
     .fp-bg-video--posts {
-      background-image: url('/images/home/browse-background-2.jpg');
-      filter: none;
+      background-image: url('/images/home/potential-box-background.png');
+      filter: blur(4px);
+      position: absolute; top: 0; left: 0; right: 0; bottom: auto; height: 100vh;
     }
     .fp-bg-overlay { position: fixed; inset: 0; background: rgba(8,6,10,0.45); z-index: 0; }
-    /* A couple of fixed sparkle accents floating over the Posts wallpaper
-       specifically -- it's one big unblurred image with no cards breaking
-       it up like Stories has, so these are what keep it from reading flat. */
-    .fp-bg-sparkle { display: none; position: fixed; z-index: 0; pointer-events: none; object-fit: contain; opacity: 0.8; }
+    /* A couple of sparkle accents floating over the Posts wallpaper
+       specifically -- scroll with it (position:absolute, same as the
+       wallpaper itself) since it's one big image with no cards breaking
+       it up like Stories has. */
+    .fp-bg-sparkle { display: none; position: absolute; z-index: 0; pointer-events: none; object-fit: contain; opacity: 0.8; }
     .fp-bg-video--posts ~ .fp-bg-sparkle { display: block; }
     .fp-bg-sparkle--a { top: 90px; left: 4vw; width: 52px; height: 52px; }
     .fp-bg-sparkle--b { top: 140px; right: 6vw; width: 34px; height: 34px; }
@@ -1219,6 +1228,7 @@ async function runSubmissionsSearch() {
     resultsEl.classList.add('fp-results-list--grid');
     if (!items.length) {
       resultsEl.innerHTML = '<p class="fp-search-empty">No posts match that search.</p>';
+      syncPostsBgHeight();
       return;
     }
 
@@ -1229,6 +1239,9 @@ async function runSubmissionsSearch() {
     const pagHtml = paginationHtml(page, totalPages);
     topEl.hidden = false; topEl.innerHTML = pagHtml; wirePagination(topEl);
     bottomEl.hidden = false; bottomEl.innerHTML = pagHtml; wirePagination(bottomEl);
+    syncPostsBgHeight();
+    // Card thumbnails loading in can grow the page after this point.
+    resultsEl.querySelectorAll('img').forEach(img => img.addEventListener('load', syncPostsBgHeight, { once: true }));
   } catch {
     resultsEl.innerHTML = '<p class="fp-search-empty">Couldn\'t load posts right now.</p>';
   }
@@ -1614,7 +1627,23 @@ const isBrowseMode = new URLSearchParams(window.location.search).get('browse') =
 const isStoriesView = currentView !== 'submissions' && currentView !== 'profiles';
 const isBrowseStories = isBrowseMode && isStoriesView;
 document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--stories', isStoriesView);
-document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--posts', currentView === 'submissions');
+const isPostsView = currentView === 'submissions';
+document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--posts', isPostsView);
+// The Posts wallpaper is position:absolute (scrolls with the page) instead
+// of the fixed/inset:0 every other variant uses, so it needs an explicit
+// pixel height matching the full page -- percentage/inset heights can't
+// resolve against a body whose own height is just "however tall its
+// content is." Re-measured after the grid actually renders (card images
+// loading in can grow the page) and on resize.
+function syncPostsBgHeight() {
+  if (!isPostsView) return;
+  const h = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
+  document.querySelector('.fp-bg-video').style.height = h;
+}
+if (isPostsView) {
+  window.addEventListener('resize', syncPostsBgHeight);
+  window.addEventListener('load', syncPostsBgHeight);
+}
 if (isBrowseMode) {
   fpLayoutEl.classList.add('fp-layout--no-side');
   const headingEl = document.getElementById('fp-browse-heading');
