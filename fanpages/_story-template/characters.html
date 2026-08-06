@@ -8,6 +8,71 @@
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <style>
+    /* ── Card grid + single-character detail view, same pattern as the
+       Fanpage Hub's Characters browse page -- replaces "Explore the
+       Cast!"'s sidebar-nav list. The Cover box (.wiki-side-col) stays put
+       on the right in both states; only the grid/detail column swaps. ── */
+    .fp-char-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.9rem; }
+    .fp-char-card {
+      position: relative; display: block; text-decoration: none; color: inherit;
+      background: #161616; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+      overflow: hidden; transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+    }
+    .fp-char-card:hover { transform: translateY(-3px); box-shadow: 0 10px 22px rgba(0,0,0,0.45); border-color: rgba(240,192,96,0.4); }
+    .fp-char-card-img-wrap { position: relative; width: 100%; aspect-ratio: 1 / 1; background: #1e1e1e; overflow: hidden; }
+    .fp-char-card-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fp-char-card-fallback {
+      width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 2rem;
+    }
+    .fp-char-card-body {
+      position: relative; overflow: hidden; height: 72px; padding: 0.45rem 0.55rem 0.55rem;
+      background: linear-gradient(160deg, rgba(10,8,14,0.82), rgba(10,8,14,0.72)), url('/images/home/potential-box-background.png');
+      background-size: cover; background-position: center;
+    }
+    .fp-char-card-body-deco { position: absolute; top: -8px; right: -6px; width: 26px; height: 26px; object-fit: contain; opacity: 0.9; pointer-events: none; }
+    .fp-char-card-name-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; }
+    .fp-char-card-name {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 700; color: #fff;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+    }
+    .fp-char-card-species {
+      display: inline-block; flex-shrink: 0; background: rgba(127,168,217,0.16); color: #a8c6e8; border-radius: 20px;
+      padding: 0.15em 0.6em; font-size: 0.92rem; font-weight: 700;
+    }
+    .fp-char-card-owner { font-size: 0.72rem; color: #999; }
+
+    #chars-detail-view { max-width: 760px; }
+    .chars-detail-topbar { display: flex; align-items: center; gap: 0.9rem; margin: 0 0 1.1rem; flex-wrap: wrap; }
+    .fp-char-back-btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: linear-gradient(160deg, rgba(38,30,16,0.85), rgba(20,16,10,0.85));
+      border: 1px solid rgba(240,192,96,0.6); color: #f7d68a;
+      border-radius: 30px; padding: 0.85em 1.6em; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 700;
+      cursor: pointer; white-space: nowrap; box-shadow: 0 0 20px rgba(240,192,96,0.35);
+      transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
+    }
+    .fp-char-back-btn svg { width: 22px; height: 22px; flex-shrink: 0; }
+    .fp-char-back-btn:hover { border-color: #f0c060; color: #fff; box-shadow: 0 0 30px rgba(240,192,96,0.55); transform: translateY(-1px); }
+    /* Edit box only ever shows inside the topbar now (next to Back), never
+       in the grid view -- .chars-create-box's own width:100% button needs
+       an explicit width here since it's no longer a full-width sidebar card. */
+    .chars-detail-topbar .chars-create-box { padding: 0; background: none; border: none; backdrop-filter: none; width: auto; }
+    .chars-detail-topbar .chars-create-btn { width: auto; }
+
+    /* Comments on this page keep their guest-name compose card (unlike the
+       login-only Characters browse page/profile tab), but the textarea
+       itself gets the same PotentialBoxBackground/bubbly treatment. */
+    #char-detail-comments .cc-compose-box textarea {
+      background: linear-gradient(160deg, rgba(10,8,14,0.78), rgba(10,8,14,0.68)), url('/images/home/potential-box-background.png');
+      background-size: cover; background-position: center;
+      border-radius: 12px; font-family: 'Fredoka', 'Lato', cursive;
+    }
+
+    @media (max-width: 900px) { .fp-char-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 640px) { .fp-char-grid { grid-template-columns: repeat(2, 1fr); } }
+  </style>
 </head>
 <body class="mod-theme">
 
@@ -47,48 +112,47 @@
        defaults to 1240px, which read visibly narrower/wider than Home. -->
   <!-- padding-top:0 — .chars-layout's own 2.5rem default (style.css) left
        content floating further from the tabs than Home's own rhythm. -->
-  <div class="chars-layout" style="max-width:1300px; padding-top:0;">
-
-    <div class="chars-sidebar-col">
-      <aside class="chars-create-box" id="char-edit-box" style="display:none;">
-        <button class="chars-create-btn chars-create-btn--edit" id="char-edit-btn" type="button"></button>
-      </aside>
-
-      <aside class="chars-sidebar">
-        <span class="chars-sidebar-label" id="chars-sidebar-label">Explore the cast!</span>
-        <div class="chars-nav-scroller" id="chars-nav-scroller">
-          <div class="chars-nav" id="chars-nav"></div>
-        </div>
-      </aside>
-
-      <!-- Shown instead of the box above when the story has no characters
-           linked yet — a plain "browse an empty cast" list read as broken. -->
-      <aside class="chars-create-box" id="chars-empty-box" style="display:none; text-align:center;">
-        <span class="chars-sidebar-label">Add Characters</span>
-        <div class="wiki-rule" style="margin:0.85rem 0;"></div>
-        <button class="chars-create-btn chars-create-btn--edit" id="chars-empty-editor-btn" type="button" style="display:none;">Story Editor</button>
-      </aside>
-    </div>
+  <!-- The left "Explore the Cast!" sidebar-nav column is gone -- .chars-layout
+       is normally 3 columns (200px sidebar / 1fr main / 220px cover, see
+       fanpages.css) so this page narrows it to 2 (main / cover) instead. -->
+  <div class="chars-layout" style="max-width:1300px; padding-top:0; grid-template-columns:1fr 220px;">
 
     <main class="chars-main">
-      <div id="char-profile" class="char-profile"></div>
+      <div id="chars-grid-view">
+        <div class="fp-char-grid" id="chars-grid"></div>
+        <div class="fp-pagination" id="chars-pagination"></div>
+      </div>
 
-      <div id="char-detail-nav" class="art-nav"></div>
-
-      <div class="cc-section" id="char-detail-comments">
-        <p class="cc-title">💬 Comments</p>
-        <div class="cc-compose" id="cc-compose" style="display:none;">
-          <div class="cc-compose-box">
-            <p class="cc-guest-note" id="cc-guest-note" style="display:none;">Guest accounts can still leave comments, and they will display with the chosen name above! Consider <a href="#" id="cc-guest-signin-link">signing in</a> to give the author a real follow and support!</p>
-            <label class="cc-guest-label" id="cc-guest-label" style="display:none;">Guest Name<span class="cc-required-star">*</span></label>
-            <input type="text" id="cc-guest-name" class="cc-guest-name-input" placeholder="Guest name" maxlength="40" style="display:none;" />
-            <textarea id="cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
-          </div>
-          <div class="cc-compose-actions-row">
-          <button class="cc-compose-btn" id="cc-compose-btn" type="button">Post</button>
-          </div>
+      <div id="chars-detail-view" hidden>
+        <div class="chars-detail-topbar">
+          <button type="button" class="fp-char-back-btn" id="chars-back-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            Back
+          </button>
+          <aside class="chars-create-box" id="char-edit-box" style="display:none;">
+            <button class="chars-create-btn chars-create-btn--edit" id="char-edit-btn" type="button"></button>
+          </aside>
         </div>
-        <div class="cc-list" id="cc-list"><p class="cc-empty">Loading…</p></div>
+
+        <div id="char-profile" class="char-profile"></div>
+
+        <div id="char-detail-nav" class="art-nav"></div>
+
+        <div class="cc-section" id="char-detail-comments">
+          <p class="cc-title">💬 Comments</p>
+          <div class="cc-compose" id="cc-compose" style="display:none;">
+            <div class="cc-compose-box">
+              <p class="cc-guest-note" id="cc-guest-note" style="display:none;">Guest accounts can still leave comments, and they will display with the chosen name above! Consider <a href="#" id="cc-guest-signin-link">signing in</a> to give the author a real follow and support!</p>
+              <label class="cc-guest-label" id="cc-guest-label" style="display:none;">Guest Name<span class="cc-required-star">*</span></label>
+              <input type="text" id="cc-guest-name" class="cc-guest-name-input" placeholder="Guest name" maxlength="40" style="display:none;" />
+              <textarea id="cc-compose-input" placeholder="Add a comment…" maxlength="2000"></textarea>
+            </div>
+            <div class="cc-compose-actions-row">
+            <button class="cc-compose-btn" id="cc-compose-btn" type="button">Post</button>
+            </div>
+          </div>
+          <div class="cc-list" id="cc-list"><p class="cc-empty">Loading…</p></div>
+        </div>
       </div>
     </main>
 
@@ -122,10 +186,6 @@ document.getElementById('tab-home').href = STORY_BASE;
 document.getElementById('tab-chapters').href = STORY_BASE + '/chapters';
 document.getElementById('tab-characters').href = STORY_BASE + '/characters';
 document.getElementById('tab-gallery').href = STORY_BASE + '/gallery';
-
-document.getElementById('chars-empty-editor-btn').addEventListener('click', () => {
-  window.location.href = `${STORY_BASE}/edit#characters`;
-});
 
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
 const authHeaders = () => ({ Authorization: `Bearer ${token}`, 'X-Story-Path': SLUG });
@@ -166,16 +226,6 @@ function applyStoryTheme(theme, bgUrl) {
     bgImg.style.display = 'none';
     bgOverlay.style.display = 'none';
   }
-}
-
-function getActiveId() {
-  return new URLSearchParams(window.location.search).get('char') || CHARACTERS[0].id;
-}
-
-function updateActiveTab(id) {
-  document.querySelectorAll('.chars-tab').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.id === id);
-  });
 }
 
 function isBlank(v) { return !v || !v.trim() || v.trim() === NA; }
@@ -606,11 +656,12 @@ function normalizeChar(r) {
   };
 }
 
-// The single navigation entry point for both the persistent sidebar AND
-// relationship links. If the id is part of this story's own cast, it's a
-// normal instant switch. If not, it fetches the character (regardless of
-// owner/story) and shows them via the temporary "ghost slot" instead of
-// leaving the page — replacing whatever ghost was showing before, if any.
+// The single navigation entry point for both the card grid AND relationship
+// links. If the id is part of this story's own cast, it's a normal
+// instant switch. If not, it fetches the character (regardless of owner/
+// story) and shows them via the temporary "ghost slot" instead of leaving
+// the page — replacing whatever ghost was showing before, if any. Either
+// way this opens (or stays in) the single-character detail view.
 async function viewCharacter(id) {
   id = String(id);
   const known = CHARACTERS.find(c => c.id === id);
@@ -618,8 +669,9 @@ async function viewCharacter(id) {
     GHOST_CHAR = null;
     history.pushState(null, '', `?char=${known.id}`);
     document.title = `${known.name} ✦ ${STORY_TITLE}`;
+    document.getElementById('chars-grid-view').hidden = true;
+    document.getElementById('chars-detail-view').hidden = false;
     renderProfile(known);
-    buildNav();
     return;
   }
   try {
@@ -629,76 +681,106 @@ async function viewCharacter(id) {
     GHOST_CHAR = normalizeChar(data.character);
     history.pushState(null, '', `?char=${GHOST_CHAR.id}`);
     document.title = `${GHOST_CHAR.name} ✦ ${STORY_TITLE}`;
+    document.getElementById('chars-grid-view').hidden = true;
+    document.getElementById('chars-detail-view').hidden = false;
     renderProfile(GHOST_CHAR);
-    buildNav();
   } catch {}
 }
 
-function buildNav() {
-  const nav = document.getElementById('chars-nav');
-  nav.innerHTML = '';
-  const activeId = getActiveId();
+function closeCharDetail() {
+  GHOST_CHAR = null;
+  document.getElementById('chars-detail-view').hidden = true;
+  document.getElementById('chars-grid-view').hidden = false;
+  document.title = `Characters ✦ ${STORY_TITLE}`;
+  const usp = new URLSearchParams(window.location.search);
+  usp.delete('char');
+  const qs = usp.toString();
+  history.pushState(null, '', qs ? `?${qs}` : window.location.pathname);
+}
+document.getElementById('chars-back-btn').addEventListener('click', closeCharDetail);
 
-  if (GHOST_CHAR) {
-    const label = document.createElement('span');
-    label.className = 'chars-ghost-label';
-    label.textContent = 'Currently Viewing';
-    nav.appendChild(label);
+// ── Card grid — 4 per row, 20 per page, same card look as the Fanpage
+// Hub's Characters browse page. ──────────────────────────────────────────
+const CHARS_PAGE_SIZE = 20;
+let charsPage = 1;
 
-    const ghostBtn = document.createElement('button');
-    ghostBtn.type = 'button';
-    ghostBtn.className = 'chars-tab--ghost';
-    ghostBtn.textContent = GHOST_CHAR.name;
-    ghostBtn.disabled = true;
-    nav.appendChild(ghostBtn);
+function fpCharCardHtml(c) {
+  const species = (c.stats && c.stats.Species) ? String(c.stats.Species).trim() : '';
+  const imgHtml = c.ref
+    ? `<img src="${escapeHtml(c.ref)}" alt="" style="object-position:${c.refPosX}% ${c.refPosY}%;" />`
+    : `<div class="fp-char-card-fallback">${escapeHtml((c.name[0] || '?').toUpperCase())}</div>`;
+  return `
+    <div class="fp-char-card">
+      <a href="${STORY_BASE}/characters?char=${c.id}" data-char-id="${c.id}">
+        <div class="fp-char-card-img-wrap">${imgHtml}</div>
+        <div class="fp-char-card-body">
+          <img class="fp-char-card-body-deco" src="/images/home/decoration-8.png" alt="" />
+          <div class="fp-char-card-name-row">
+            <p class="fp-char-card-name">${escapeHtml(c.name)}</p>
+            ${species ? `<span class="fp-char-card-species">${escapeHtml(species)}</span>` : ''}
+          </div>
+        </div>
+      </a>
+    </div>
+  `;
+}
 
-    const divider = document.createElement('div');
-    divider.className = 'chars-ghost-divider';
-    nav.appendChild(divider);
-  }
-
-  CHARACTERS.forEach(char => {
-    const btn = document.createElement('button');
-    btn.className = 'chars-tab' + (char.id === activeId ? ' active' : '');
-    btn.dataset.id = char.id;
-    btn.textContent = char.name;
-    btn.addEventListener('click', () => viewCharacter(char.id));
-    nav.appendChild(btn);
+function renderCharsGrid(page) {
+  charsPage = page;
+  const gridEl = document.getElementById('chars-grid');
+  const pagEl = document.getElementById('chars-pagination');
+  const totalPages = Math.max(1, Math.ceil(CHARACTERS.length / CHARS_PAGE_SIZE));
+  const start = (page - 1) * CHARS_PAGE_SIZE;
+  const pageItems = CHARACTERS.slice(start, start + CHARS_PAGE_SIZE);
+  gridEl.innerHTML = pageItems.map(fpCharCardHtml).join('');
+  gridEl.querySelectorAll('.fp-char-card > a[data-char-id]').forEach(a => {
+    a.addEventListener('click', (e) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      viewCharacter(a.dataset.charId);
+    });
   });
+  pagEl.innerHTML = totalPages > 1 ? fpGalleryPaginationHtml(page, totalPages) : '';
+  pagEl.querySelectorAll('.fp-page-btn').forEach(btn => {
+    if (btn.disabled) return;
+    btn.addEventListener('click', () => {
+      renderCharsGrid(parseInt(btn.dataset.page, 10));
+      document.getElementById('chars-grid-view').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
+// Same e621-style numbered pager markup as the Fanpage Hub pages.
+function fpGalleryPaginationHtml(page, totalPages) {
+  const pageSet = new Set([1, totalPages, page]);
+  for (let i = page - 2; i <= page + 2; i++) if (i >= 1 && i <= totalPages) pageSet.add(i);
+  const sorted = [...pageSet].sort((a, b) => a - b);
+  let html = `<button type="button" class="fp-page-btn" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''} aria-label="Previous page">‹</button>`;
+  let prev = 0;
+  sorted.forEach(p => {
+    if (p - prev > 1) html += '<span class="fp-page-ellipsis">…</span>';
+    html += `<button type="button" class="fp-page-btn${p === page ? ' fp-page-btn--active' : ''}" data-page="${p}">${p}</button>`;
+    prev = p;
+  });
+  html += `<button type="button" class="fp-page-btn" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''} aria-label="Next page">›</button>`;
+  return html;
 }
 
 function renderCharList(rows, preferId) {
   GHOST_CHAR = null;
   CHARACTERS = rows.map(normalizeChar);
 
-  document.getElementById('chars-nav').innerHTML = '';
   if (!CHARACTERS.length) {
     document.title = `Characters ✦ ${STORY_TITLE}`;
-    document.getElementById('char-profile').innerHTML =
-      '<p class="gallery-empty-msg">No characters yet! Check back soon~</p>';
-    document.getElementById('char-edit-box').style.display = 'none';
-    // No character means nothing for the Comments section to be about —
-    // it otherwise sat there permanently stuck on "Loading…" since
-    // ccInitSection() (which actually loads it) never runs without a char.
-    document.getElementById('char-detail-comments').style.display = 'none';
-    document.getElementById('char-detail-nav').style.display = 'none';
-    // "Explore the Cast" with an empty cast read as broken — swap it for
-    // an "Add Characters" prompt (owner-only Story Editor shortcut).
-    document.querySelector('.chars-sidebar').style.display = 'none';
-    document.getElementById('chars-empty-box').style.display = '';
-    document.getElementById('chars-empty-editor-btn').style.display = IS_SELF ? '' : 'none';
+    document.getElementById('chars-grid').innerHTML = IS_SELF
+      ? `<p class="gallery-empty-msg">No characters yet! <a href="${STORY_BASE}/edit#characters" style="color:#7fa8d9;">Add some in the Story Editor</a>.</p>`
+      : '<p class="gallery-empty-msg">No characters yet! Check back soon~</p>';
+    document.getElementById('chars-pagination').innerHTML = '';
+    closeCharDetail();
     return;
   }
-  document.getElementById('char-detail-comments').style.display = '';
-  document.getElementById('char-detail-nav').style.display = '';
-  document.querySelector('.chars-sidebar').style.display = '';
-  document.getElementById('chars-empty-box').style.display = 'none';
-  buildNav();
-  const activeChar = CHARACTERS.find(c => c.id === (preferId || getActiveId())) || CHARACTERS[0];
-  if (preferId) history.pushState(null, '', `?char=${activeChar.id}`);
-  document.title = `${activeChar.name} ✦ ${STORY_TITLE}`;
-  renderProfile(activeChar);
-  updateActiveTab(activeChar.id);
+  renderCharsGrid(1);
+  if (preferId) viewCharacter(preferId);
 }
 
 // Book box — the story's own cover + a follow-the-author row, under the
@@ -938,20 +1020,23 @@ document.getElementById('cc-compose-btn').addEventListener('click', async () => 
   STORY_TITLE = (data && data.site && data.site.site_title) || 'Fanpages';
   STORY_COVER_URL = (data && data.site && data.site.cover_url) || '';
   IS_SELF = !!(data && data.site && data.site.is_self);
-  applyStoryTheme(data && data.site && data.site.theme, data && data.site && data.site.theme_bg_url);
+  // Forces the same blurred PotentialBoxBackground the Fanpage Hub's
+  // Characters browse page uses, regardless of whatever theme this story
+  // has picked for its Home/Chapters/Gallery pages -- this page always
+  // gets its own dedicated look.
+  applyStoryTheme('custom', '/images/home/potential-box-background.png');
   const pageTitleEl = document.getElementById('page-title-display');
   pageTitleEl.textContent = STORY_TITLE;
   pageTitleEl.classList.remove('mod-title-loading');
 
   renderCharList((data && data.characters) || []);
 
-  // Direct link to a relationship-linked character not in this story's cast
-  // (e.g. a shared URL) should show them as a ghost slot on load too, same
-  // as arriving there by clicking a relationship tag mid-visit.
+  // A ?char= deep link (a cast member, a relationship-linked "ghost" not
+  // in this story's own cast, or a shared URL) opens straight into the
+  // detail view instead of landing on the grid -- viewCharacter() already
+  // handles both the known-cast and ghost cases.
   const urlCharId = new URLSearchParams(window.location.search).get('char');
-  if (urlCharId && !CHARACTERS.some(c => c.id === urlCharId)) {
-    viewCharacter(urlCharId);
-  }
+  if (urlCharId) viewCharacter(urlCharId);
 })();
 </script>
 
