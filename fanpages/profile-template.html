@@ -390,8 +390,12 @@
        three of Stories/Characters/Gallery. The shared .fp-pagination rule's
        2.5rem margin-top/center justify is meant for a lone *bottom* pager;
        reset both here since this row owns its own spacing/alignment. */
-    .fp-tab-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 0; margin-bottom: 1rem; flex-wrap: wrap; }
-    .fp-tab-toolbar .fp-pagination { justify-content: flex-start; margin: 0; }
+    /* Pager stays visually centered in the row regardless of the Sort By
+       control's width -- absolutely positioned + translateX(-50%) instead
+       of a flex child, since a true flex-centered item would get pushed
+       off-center by the sort control taking up space on one side. */
+    .fp-tab-toolbar { position: relative; display: flex; align-items: center; justify-content: flex-end; min-height: 2.4rem; margin-top: 0; margin-bottom: 1rem; }
+    .fp-tab-toolbar .fp-pagination { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; }
 
     /* Sort By -- a custom button+popover instead of a native <select>, since
        both the closed box and its open option list need the same
@@ -765,10 +769,14 @@
     .fp-newspaper-header-text { display: flex; flex-direction: column; line-height: 1.3; }
     .fp-newspaper-author-name { font-weight: 700; font-size: 0.88rem; }
     .fp-newspaper-time { color: #888; font-size: 0.76rem; }
+    /* Bubbly Fredoka + the same cool-blue "spotlight" glow used by the
+       homepage's spotlight cards (and the Featured Characters/Gallery/
+       Stories card titles) instead of the old gold Cinzel look. */
     .fp-newspaper-title {
-      font-family: 'Cinzel', Georgia, serif; font-size: 1.25rem; font-weight: 700; color: #f0c060;
-      margin-bottom: 0.6rem; text-shadow: 0 0 14px rgba(240,192,96,0.4);
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.3rem; font-weight: 600; color: #7fa8d9;
+      margin-bottom: 0.6rem; text-shadow: 0 0 18px rgba(127,168,217,0.55), 0 1px 3px rgba(0,0,0,0.5);
     }
+    .fp-newspaper-title-deco { width: 18px; height: 18px; object-fit: contain; vertical-align: -3px; margin-left: 0.3rem; }
     .fp-newspaper-excerpt { font-size: 0.92rem; color: #ccc; line-height: 1.7; white-space: pre-line; }
     .fp-newspaper-excerpt p { margin: 0 0 0.7rem; }
     .fp-newspaper-excerpt p:last-child { margin-bottom: 0; }
@@ -789,8 +797,8 @@
       border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 1.75rem; margin-top: 1.5rem;
     }
     .fp-newspaper-post-title {
-      font-family: 'Cinzel', Georgia, serif; font-size: 1.7rem; font-weight: 700; color: #f0c060;
-      margin-bottom: 0.5rem; text-shadow: 0 0 16px rgba(240,192,96,0.45);
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.8rem; font-weight: 600; color: #7fa8d9;
+      margin-bottom: 0.5rem; text-shadow: 0 0 20px rgba(127,168,217,0.55), 0 1px 3px rgba(0,0,0,0.5);
     }
     .fp-newspaper-post-body { font-size: 1rem; color: #ddd; line-height: 1.85; white-space: pre-line; margin-top: 1.25rem; }
     .fp-newspaper-post-body p { margin: 0 0 1rem; }
@@ -1402,9 +1410,10 @@
   // A profile's custom theme is a Home-tab-only thing now -- Characters,
   // Gallery, and Stories always get the same scrolling "Browse > Posts"
   // wallpaper (PotentialBoxBackground, blurred, scrolls with the page)
-  // regardless of what background this profile picked for its Home tab;
-  // Newspapers gets neither (plain default). Only one of the two background
-  // layers is ever visible at a time.
+  // regardless of what background this profile picked for its Home tab.
+  // Newspapers gets its own slightly-blurred box-background-3.png on the
+  // same scrolling layer instead (swapping the <img> src per tab) -- only
+  // one of the two background layers is ever visible at a time.
   function updateTabBackground(tab) {
     if (tab === 'home' && currentAuthor) {
       applyProfileTheme(currentAuthor.profile_theme, currentAuthor.profile_theme_bg_url);
@@ -1413,7 +1422,10 @@
       document.getElementById('fp-bg-img').style.display = 'none';
       document.getElementById('fp-bg-overlay').style.display = 'none';
     }
-    const scrollOn = tab === 'characters' || tab === 'gallery' || tab === 'stories';
+    const scrollOn = tab === 'characters' || tab === 'gallery' || tab === 'stories' || tab === 'newspaper';
+    document.getElementById('fp-bg-img-scroll').src = tab === 'newspaper'
+      ? '/images/home/box-background-3.png'
+      : '/images/home/potential-box-background.png';
     document.getElementById('fp-bg-img-scroll').style.display = scrollOn ? 'block' : 'none';
     document.getElementById('fp-bg-overlay-scroll').style.display = scrollOn ? 'block' : 'none';
     if (scrollOn) syncScrollBgHeight();
@@ -1433,7 +1445,7 @@
     ids.forEach(id => { document.getElementById(id).style.height = h; });
   }
   window.addEventListener('resize', () => {
-    if (activeTabName === 'home' || activeTabName === 'characters' || activeTabName === 'gallery' || activeTabName === 'stories') syncScrollBgHeight();
+    if (activeTabName === 'home' || activeTabName === 'characters' || activeTabName === 'gallery' || activeTabName === 'stories' || activeTabName === 'newspaper') syncScrollBgHeight();
   });
 
   function buildThemeGrid() {
@@ -1661,7 +1673,7 @@
   // currentStories is already fetched by loadProfile() at page-load (default
   // Page Order) -- a fresh /api/fanpage-profile/:username?sort=... call is
   // only needed when the Sort By dropdown actually changes.
-  const FP_STORIES_PAGE_SIZE = 10;
+  const FP_STORIES_PAGE_SIZE = 15;
   let fpStoriesPage = 1;
   let fpStoriesSort = 'page';
 
@@ -3464,7 +3476,7 @@
     const excerpt = truncate((post.body || '').replace(/\[([^\]]+)\]<[^>]+>/g, '$1'), 260);
     card.innerHTML = `
       ${newspaperAuthorHeader(post)}
-      ${post.title ? `<p class="fp-newspaper-title">${escapeHtml(post.title)}</p>` : ''}
+      ${post.title ? `<p class="fp-newspaper-title">${escapeHtml(post.title)}<img class="fp-newspaper-title-deco" src="/images/home/decoration-2.png" alt="" /></p>` : ''}
       <div class="fp-newspaper-excerpt">${richText(excerpt)}</div>
       <div class="fp-newspaper-media-row">${newspaperMediaHtml((post.attachments || []).slice(0, 3), 'fp-newspaper-media-thumb')}</div>
       <div class="fp-newspaper-footer">💬 ${post.comment_count} comment${post.comment_count === 1 ? '' : 's'}</div>
@@ -3511,6 +3523,11 @@
         list.innerHTML = '';
         posts.forEach(p => list.appendChild(newspaperCardEl(p)));
       }
+      // Attachment thumbnails load in async and can grow the page after this
+      // tab's scrolling wallpaper was last measured -- same re-sync pattern
+      // the Characters/Gallery/Stories grids already use.
+      syncScrollBgHeight();
+      list.querySelectorAll('img').forEach(img => img.addEventListener('load', syncScrollBgHeight, { once: true }));
       const deepId = new URLSearchParams(window.location.search).get('news');
       if (deepId) openNewspaperPost(deepId);
     } catch {
