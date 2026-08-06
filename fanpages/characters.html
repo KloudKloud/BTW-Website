@@ -116,6 +116,12 @@
       color: #f0f0f0; font-family: inherit; font-size: 0.9rem; font-weight: 600; padding: 0.55em 0.7em;
     }
     .fp-char-sort-wrap select:focus { outline: none; border-color: #7fa8d9; }
+    /* The dropdown's own popup list is rendered natively by the browser --
+       <option> only accepts background-color (no background-image, no
+       gradient), so this is the closest match to the box-background-2
+       tone the rest of the sidebar uses. Without it the popup falls back
+       to the browser's default white, unreadable against light text. */
+    .fp-char-sort-wrap select option { background-color: #14121a; color: #f0f0f0; }
 
     .fp-char-filter-menu { display: flex; flex-direction: column; gap: 0.4rem; }
     .fp-char-guest-filters { display: flex; flex-direction: column; gap: 0.4rem; }
@@ -219,25 +225,59 @@
 
     /* ── Character detail overlay — opened in-place from a card click,
        replaces the grid in the main column while the sidebar/background
-       stay put. Reuses the profile Characters tab's own .char-*/.art-*/
-       .cc-* classes (loaded from /style.css + /fanpages/fanpages.css) so
-       it looks identical to that view -- just without its "Character
+       stay put. Reuses the profile Characters tab's own char-, art-, and
+       cc- prefixed classes (loaded from /style.css + /fanpages/fanpages.css)
+       so it looks identical to that view -- just without its "Character
        Spotlights" side nav (this page already has its own sidebar), plus
        a Back button, and a prev/next slideshow that walks the current
-       *search results* instead of the same owner's other characters. ── */
+       search results instead of the same owner's other characters. ── */
+    /* overflow-x: visible overrides the shared .chars-main class's own
+       overflow-x: hidden -- without it, the Back button's negative `left`
+       offset (positioned outside this element's own box, in the gutter
+       next to the sidebar) got silently clipped away. */
+    #fp-char-detail-view.chars-main { padding-bottom: 4rem; max-width: 760px; margin: 0 auto; position: relative; overflow-x: visible; }
+
+    /* Golden glowing pill, same chevron used by the chapter editor's own
+       Back button. Sits in the empty gutter to the left of the centered
+       card, vertically centered on the reference image -- positionBackBtn()
+       sets `top` in JS since the image's height depends on its rendered
+       width (aspect-ratio driven). On narrow viewports there's no gutter
+       to sit in, so it falls back to a static pill above the image via
+       the --inline modifier. */
     .fp-char-back-btn {
-      display: inline-flex; align-items: center; gap: 0.4rem;
-      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); color: #ddd;
-      border-radius: 20px; padding: 0.5em 1.1em; font-family: inherit; font-size: 0.88rem; font-weight: 700;
-      cursor: pointer; margin: 1.1rem 0 1rem; transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
+      position: absolute; left: -172px; top: 0;
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: linear-gradient(160deg, rgba(38,30,16,0.85), rgba(20,16,10,0.85));
+      border: 1px solid rgba(240,192,96,0.6); color: #f7d68a;
+      border-radius: 30px; padding: 0.85em 1.6em; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 700;
+      cursor: pointer; white-space: nowrap; box-shadow: 0 0 20px rgba(240,192,96,0.35);
+      transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
     }
-    .fp-char-back-btn:hover { border-color: rgba(240,192,96,0.6); color: #fff; box-shadow: 0 0 16px rgba(240,192,96,0.25); }
-    /* Cap the detail view's width instead of letting it stretch across the
-       entire remaining page -- that's what made the (aspect-ratio 1:1)
-       reference image balloon to a huge size. Matches the width the same
-       card gets on the profile Characters tab, then centered in the space
-       to the right of this page's own sidebar. */
-    #fp-char-detail-view.chars-main { padding-bottom: 4rem; max-width: 900px; margin: 0 auto; }
+    .fp-char-back-btn svg { width: 22px; height: 22px; flex-shrink: 0; }
+    .fp-char-back-btn:hover { border-color: #f0c060; color: #fff; box-shadow: 0 0 30px rgba(240,192,96,0.55); transform: translateY(-1px); }
+    .fp-char-back-btn--inline { position: static; margin: 0 0 1.1rem; }
+
+    /* Characters-browse-page-only background treatment for the card's
+       boxes -- box-background-2, lightly blurred, instead of the flat/
+       glass fills those .char-* classes use everywhere else (profile
+       Characters tab, story Characters page). Scoped to this page's own
+       #fp-char-detail-view so the shared classes stay untouched elsewhere. */
+    #fp-char-detail-view .char-bio-box,
+    #fp-char-detail-view .char-box {
+      background: linear-gradient(160deg, rgba(10,8,14,0.74), rgba(10,8,14,0.64)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+    }
+    #fp-char-detail-view .char-lore-box {
+      background: linear-gradient(160deg, rgba(18,5,12,0.82), rgba(18,5,12,0.72)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+    }
+
+    /* Comments on this page use PotentialBoxBackground instead of the
+       universal dark-modern fill (.cc-compose > textarea in fanpages.css). */
+    #fp-char-detail-comments .cc-compose > textarea {
+      background: linear-gradient(160deg, rgba(10,8,14,0.78), rgba(10,8,14,0.68)), url('/images/home/potential-box-background.png');
+      background-size: cover; background-position: center;
+    }
 
     @media (max-width: 1300px) {
       .fp-char-grid { grid-template-columns: repeat(4, 1fr); }
@@ -317,7 +357,10 @@
     </div>
 
     <div id="fp-char-detail-view" class="chars-main" hidden>
-      <button type="button" class="fp-char-back-btn" id="fp-char-back-btn">← Back to Characters</button>
+      <button type="button" class="fp-char-back-btn" id="fp-char-back-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        Back
+      </button>
       <div id="fp-char-profile" class="char-profile"></div>
 
       <div id="fp-char-detail-nav" class="art-nav"></div>
@@ -925,7 +968,36 @@ function renderCharDetailProfile(char, locked) {
 
   renderCharDetailNav(char);
   ccInitSection(char.id);
+  positionBackBtn();
 }
+
+// The Back button sits in the empty gutter to the left of the centered
+// card, vertically centered on the reference image -- the image's height
+// depends on its rendered width (aspect-ratio driven), so this has to be
+// measured in JS rather than pinned with plain CSS. Falls back to a
+// static pill above the image (.fp-char-back-btn--inline) whenever the
+// gutter isn't wide enough to hold it without overlapping the sidebar.
+function positionBackBtn() {
+  const btn = document.getElementById('fp-char-back-btn');
+  const refWrap = document.querySelector('#fp-char-profile .char-ref-wrap');
+  const detailView = document.getElementById('fp-char-detail-view');
+  if (!btn || !refWrap || detailView.hidden) return;
+  btn.classList.remove('fp-char-back-btn--inline');
+  btn.style.top = '';
+  const btnWidth = btn.getBoundingClientRect().width;
+  const sidebarEl = document.querySelector('.fp-char-sidebar');
+  const sidebarRight = sidebarEl ? sidebarEl.getBoundingClientRect().right : 0;
+  const detailRect = detailView.getBoundingClientRect();
+  const gutter = detailRect.left - sidebarRight;
+  if (gutter < btnWidth + 40) {
+    btn.classList.add('fp-char-back-btn--inline');
+    return;
+  }
+  const refRect = refWrap.getBoundingClientRect();
+  const btnHeight = btn.getBoundingClientRect().height;
+  btn.style.top = `${(refRect.top - detailRect.top) + refRect.height / 2 - btnHeight / 2}px`;
+}
+window.addEventListener('resize', () => { if (!document.getElementById('fp-char-detail-view').hidden) positionBackBtn(); });
 
 // Prev/next "slideshow" -- unlike the profile Characters tab (which cycles
 // through the same owner's other characters), this walks the current
@@ -1006,16 +1078,16 @@ window.addEventListener('popstate', () => {
   }
 });
 
-let searchDebounce = null;
-document.getElementById('fp-char-search-input').addEventListener('input', (e) => {
-  clearTimeout(searchDebounce);
+// Only searches on Enter -- this used to debounce-search on every
+// keystroke, which meant just clicking away from the box after typing
+// (letting the debounce timer elapse) triggered an unwanted page reload.
+document.getElementById('fp-char-search-input').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
   const val = e.target.value;
-  searchDebounce = setTimeout(() => {
-    goToParams(usp => {
-      if (val.trim()) usp.set('q', val.trim()); else usp.delete('q');
-      usp.delete('page');
-    });
-  }, 400);
+  goToParams(usp => {
+    if (val.trim()) usp.set('q', val.trim()); else usp.delete('q');
+    usp.delete('page');
+  });
 });
 
 document.getElementById('fp-char-sort-select').addEventListener('change', (e) => {
