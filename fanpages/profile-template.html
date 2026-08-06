@@ -23,16 +23,20 @@
     body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; }
     a { color: inherit; }
 
-    /* Custom profile theme — the background image is pinned to the viewport
-       (position: fixed) instead of scrolling with the page content, same
-       as the Fanpage Hub's background. .fp-bg-wrap itself stays a normal,
-       non-fixed container so the actual page content inside it still flows
-       and scrolls like everything else. Home-tab-only now (see
-       updateTabBackground) -- Characters/Gallery use their own scrolling
-       wallpaper below instead. */
+    /* Custom/default Home-tab theme background — scrolls *with* the page
+       content instead of staying pinned to the viewport, same trick as the
+       Characters/Gallery wallpaper just below (position:absolute, height
+       measured in JS to match the full page -- percentage/inset heights
+       can't resolve against a body whose height is just "however tall its
+       content is"). .fp-bg-wrap itself stays a normal, non-fixed container
+       so the actual page content inside it still flows and scrolls like
+       everything else. */
     .fp-bg-wrap { position: relative; background: #0d0d0d; }
-    .fp-bg-img { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(8px) brightness(0.95); z-index: 0; display: none; }
-    .fp-bg-overlay { position: fixed; inset: 0; background: rgba(10,10,10,0.72); z-index: 0; display: none; }
+    .fp-bg-img {
+      position: absolute; top: 0; left: 0; right: 0; bottom: auto; width: 100%; height: 100vh;
+      object-fit: cover; filter: blur(8px) brightness(0.95); z-index: 0; display: none;
+    }
+    .fp-bg-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: auto; width: 100%; height: 100vh; background: rgba(10,10,10,0.72); z-index: 0; display: none; }
     /* Characters/Gallery tabs — same "Browse > Posts" wallpaper treatment
        as the Fanpage Hub's Characters browse page: PotentialBoxBackground,
        lightly blurred, scrolling *with* the page instead of staying
@@ -1425,6 +1429,7 @@
   function updateTabBackground(tab) {
     if (tab === 'home' && currentAuthor) {
       applyProfileTheme(currentAuthor.profile_theme, currentAuthor.profile_theme_bg_url);
+      syncScrollBgHeight();
     } else {
       document.getElementById('fp-bg-img').style.display = 'none';
       document.getElementById('fp-bg-overlay').style.display = 'none';
@@ -1438,14 +1443,18 @@
   // before measuring, since the element being measured is itself
   // absolutely positioned and contributes to scrollHeight -- without the
   // reset, a previously-tall page (e.g. before switching into a shorter
-  // view) would never let the measurement shrink back down.
+  // view) would never let the measurement shrink back down. Covers all four
+  // scrolling background layers (Home's fp-bg-img/overlay, Characters/
+  // Gallery's fp-bg-img-scroll/overlay-scroll) -- only one pair is ever
+  // visible at a time, so sizing the hidden pair too is harmless.
   function syncScrollBgHeight() {
-    const bgEl = document.getElementById('fp-bg-img-scroll');
-    bgEl.style.height = '0';
-    bgEl.style.height = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
+    const ids = ['fp-bg-img', 'fp-bg-overlay', 'fp-bg-img-scroll', 'fp-bg-overlay-scroll'];
+    ids.forEach(id => { document.getElementById(id).style.height = '0'; });
+    const h = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
+    ids.forEach(id => { document.getElementById(id).style.height = h; });
   }
   window.addEventListener('resize', () => {
-    if (activeTabName === 'characters' || activeTabName === 'gallery') syncScrollBgHeight();
+    if (activeTabName === 'home' || activeTabName === 'characters' || activeTabName === 'gallery') syncScrollBgHeight();
   });
 
   function buildThemeGrid() {
@@ -3697,6 +3706,17 @@
       // Stories
       currentStories = data.stories || [];
       renderStoriesGrid(document.getElementById('fp-story-grid'));
+
+      // The Home tab's background scrolls with the page now (see
+      // syncScrollBgHeight) -- the featured rows/story grid above load their
+      // own images asynchronously and can grow the page after this initial
+      // measurement, so re-measure once they've settled in.
+      if (activeTabName === 'home') {
+        syncScrollBgHeight();
+        document.getElementById('fp-home-view').querySelectorAll('img').forEach(img => {
+          img.addEventListener('load', syncScrollBgHeight, { once: true });
+        });
+      }
 
       renderActions(a, data.is_following);
 
