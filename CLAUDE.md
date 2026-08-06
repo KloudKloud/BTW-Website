@@ -258,13 +258,24 @@ first before inventing a new one.
   (`<path d="M15 18l-6-6 6-6"/>`), label just "Back". Keep the glow *tight* —
   `box-shadow: 0 0 8px rgba(240,192,96,0.22)` — a wider one (the original
   `0 0 20px/0.35`) reads as a hazy rectangle behind the pill against these
-  pages' busy blurred wallpapers, not a clean ambient glow. Position: `position:
-  absolute; left:<sidebar-width or page-padding>; top:0;` against a `position:
-  relative` ancestor sized to the *whole column* (not the narrower centered
-  detail card) — sits right next to the sidebar (Fanpage Hub Characters page)
-  or the page's own left padding edge (profile tab, no sidebar there), on the
-  same horizontal line as the top of the reference image, which no longer gets
-  pushed down by a button row above it.
+  pages' busy blurred wallpapers, not a clean ambient glow. Position:
+  `position: absolute;` against a `position: relative` ancestor sized to the
+  *whole column* (not the narrower centered detail card) — sits right next
+  to the sidebar (Fanpage Hub Characters page) or the page's own left
+  padding edge (profile tab, no sidebar there), on the same horizontal line
+  as the top of the reference image, which no longer gets pushed down by a
+  button row above it. **Gotcha**: an absolutely positioned child is offset
+  from its containing block's *padding* edge, not its outer/border edge —
+  if that ancestor has its own padding (e.g. `.fp-tab-view`'s `2rem`), both
+  `top` and `left` need to explicitly match that padding value (`top: 2rem;
+  left: 2rem;`) to land where normal in-flow content actually starts;
+  `top: 0` alone lands flush against whatever's *outside* the padding (the
+  tabs row above, in the profile tab's case) even though `left` might
+  already be correctly compensated. When the ancestor has zero padding of
+  its own (e.g. the Fanpage Hub Characters page's plain `#fp-char-main-col`
+  wrapper), add a small explicit `padding-top`/matching button `top` (this
+  session settled on `1.25rem`) instead of `0`, purely so the image/button
+  aren't flush against the very top of the viewport.
 - **A profile's/story's custom "theme" is a Home-tab-only thing now**, not an
   account-wide background — this was an explicit direction change this
   session. Characters and Gallery (profile tabs *and* story pages) always
@@ -286,6 +297,11 @@ first before inventing a new one.
   corner this session (they read as clutter once the page had enough going
   on) — don't re-add them there without being asked; they're still fine/in-use
   elsewhere (card corners, section headings).
+- **Next up**: the plan going into the next session is to keep applying this
+  same bubbly-font/box-background-art/Home-tab-only-theme treatment to the
+  *rest* of the profile tabs (Stories, Newspapers) and other story pages that
+  haven't been touched yet — not a new pattern, just carrying the one above
+  further. Check this section first before redesigning anything else.
 
 ## Between Two Worlds — manually migrated from btwfanfic.net (this session)
 
