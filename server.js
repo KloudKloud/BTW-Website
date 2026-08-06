@@ -879,6 +879,14 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     );
   `).catch(e => console.error('user_featured_items migration:', e.message));
 
+  // Widen the kind CHECK to also allow 'story' -- CREATE TABLE IF NOT EXISTS
+  // above doesn't touch the constraint on an already-existing table, so this
+  // has to be its own explicit migration.
+  await pool.query(`
+    ALTER TABLE user_featured_items DROP CONSTRAINT IF EXISTS user_featured_items_kind_check;
+    ALTER TABLE user_featured_items ADD CONSTRAINT user_featured_items_kind_check CHECK (kind IN ('character','gallery','story'));
+  `).catch(e => console.error('user_featured_items kind widen migration:', e.message));
+
   // Rating overhaul -- "Sketches" is gone and "Spicy" is renamed "Explicit",
   // with a new "Mature" tier added in between. Every existing non-SFW post
   // (sketches or spicy, both) becomes "explicit" for now -- Blue/VeekitPaws
@@ -4078,6 +4086,66 @@ app.delete(['/api/bookmarks/:slug', '/api/bookmarks/by-path/:owner/:story'], req
   res.json({ message: 'Removed.' });
 });
 
+// Shared by a profile's Featured Stories (both the explicit picks and the
+// "no picks yet" default-latest-updated fallback) -- fetches the same
+// bcard-shaped fields the Search page's story cards use (stats/tags/
+// character-teasers), by a specific ordered list of site ids. Order of the
+// input `ids` array is preserved in the output so callers control sort.
+async function fetchStoryCardsById(ids) {
+  if (!ids.length) return [];
+  const { rows } = await pool.query(
+    `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.synopsis,
+            ms.rating, ms.is_complete, ms.view_count,
+            u.username, u.display_name, u.avatar,
+            pubchap.word_count, COALESCE(lc.count, 0) AS like_count,
+            charsj.chars AS characters
+     FROM moderator_sites ms
+     JOIN users u ON u.id = ms.owner_user_id
+     JOIN LATERAL (
+       SELECT COALESCE(SUM(
+         GREATEST(1, array_length(regexp_split_to_array(trim(regexp_replace(mc.body, '<[^>]+>', ' ', 'g')), '\\s+'), 1))
+       ), 0) AS word_count
+       FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+     ) pubchap ON true
+     LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_site_likes WHERE site_id = ms.id) lc ON true
+     LEFT JOIN LATERAL (
+       SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb) AS chars FROM (
+         SELECT mc3.id, mc3.name, mc3.ref_image, u3.username AS owner_username
+         FROM character_story_links csl JOIN moderator_characters mc3 ON mc3.id = csl.character_id
+         JOIN users u3 ON u3.id = mc3.owner_user_id
+         WHERE csl.site_id = ms.id ORDER BY csl.sort_order LIMIT 4
+       ) t
+     ) charsj ON true
+     WHERE ms.id = ANY($1::int[])`,
+    [ids]
+  );
+  const byId = {};
+  rows.forEach(r => { byId[r.id] = r; });
+  return ids.map(id => byId[id]).filter(Boolean).map(r => ({
+    id: r.id, slug: r.slug, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url,
+    synopsis: r.synopsis || '', rating: r.rating, is_complete: !!r.is_complete,
+    author: r.display_name || r.username, author_username: r.username, author_avatar: r.avatar || null,
+    hits: r.view_count || 0, kudos: Number(r.like_count), word_count: r.word_count,
+    characters: r.characters || [],
+  }));
+}
+
+// A user's own latest-updated published stories, for Featured Stories'
+// default (nothing manually featured yet) state.
+async function fetchDefaultStoryCards(ownerId, limit) {
+  const { rows } = await pool.query(
+    `SELECT ms.id FROM moderator_sites ms
+     JOIN LATERAL (
+       SELECT COUNT(*)::int AS published_count, MAX(mc.updated_at) AS last_chapter_update
+       FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+     ) pubchap ON true
+     WHERE ms.owner_user_id = $1 AND pubchap.published_count > 0
+     ORDER BY pubchap.last_chapter_update DESC NULLS LAST LIMIT $2`,
+    [ownerId, limit]
+  );
+  return fetchStoryCardsById(rows.map(r => r.id));
+}
+
 // ── Author profile — /fanpages/:username, Twitter-style header + their stories ──
 app.get('/api/fanpage-profile/:username', async (req, res) => {
   const { rows: [author] } = await pool.query(
@@ -4101,7 +4169,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
   // discoverable" rule used by search/browse/spotlight. The owner still
   // sees them, flagged is_draft_only so the card can read as a draft
   // instead of a real published story.
-  const [{ rows: sites }, followerCount, followingCount, clubCount, isFollowing, featuredChars, featuredGallery] = await Promise.all([
+  const [{ rows: sites }, followerCount, followingCount, clubCount, isFollowing, featuredChars, featuredGallery, featuredStoryIds, activity] = await Promise.all([
     pool.query(
       `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.synopsis,
               ms.tags, ms.fandoms, ms.view_count,
@@ -4160,6 +4228,58 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
        WHERE ufi.user_id = $1 AND ufi.kind = 'gallery' ORDER BY ufi.sort_order LIMIT 3`,
       [author.id]
     ),
+    // Featured Stories just needs the ordered list of chosen site ids here --
+    // the actual card data (stats/tags/characters) is fetched in bulk via
+    // fetchStoryCardsById below, shared with the "no explicit picks yet"
+    // default path so both render identically.
+    pool.query(
+      `SELECT ref_id FROM user_featured_items WHERE user_id = $1 AND kind = 'story' ORDER BY sort_order LIMIT 4`,
+      [author.id]
+    ),
+    // Recent Activity -- no unified activity log exists, so this is a
+    // hand-rolled UNION ALL across every place this user can act. Each
+    // branch normalizes to the same (type, ts, label, context, ref_a) shape;
+    // the JSON response below turns that into a human sentence + link.
+    // "Liked" rows deliberately don't carry enough info to link anywhere
+    // (the liked item may belong to someone else's story) and render as
+    // plain text instead.
+    pool.query(
+      `SELECT * FROM (
+         (SELECT 'chapter' AS type, COALESCE(mc.updated_at, mc.created_at) AS ts,
+                 mc.title AS label, ms.site_title AS context, COALESCE(ms.story_path, ms.slug) AS ref_a
+          FROM moderator_chapters mc JOIN moderator_sites ms ON ms.id = mc.site_id
+          WHERE ms.owner_user_id = $1 AND mc.status = 'published' AND length(trim(mc.body)) > 0
+          ORDER BY ts DESC LIMIT 5)
+         UNION ALL
+         (SELECT 'character', created_at, name, NULL, id::text
+          FROM moderator_characters WHERE owner_user_id = $1 ORDER BY created_at DESC LIMIT 5)
+         UNION ALL
+         (SELECT 'gallery', created_at, title, NULL, id::text
+          FROM moderator_gallery WHERE owner_user_id = $1 ORDER BY created_at DESC LIMIT 5)
+         UNION ALL
+         (SELECT 'newspaper', created_at, title, NULL, id::text
+          FROM newspaper_posts WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5)
+         UNION ALL
+         (SELECT 'like_character', cl.created_at, mc.name, NULL, NULL
+          FROM moderator_character_likes cl JOIN moderator_characters mc ON mc.id = cl.character_id
+          WHERE cl.user_id = $1 ORDER BY cl.created_at DESC LIMIT 5)
+         UNION ALL
+         (SELECT 'like_chapter', chl.created_at, mc2.title, ms2.site_title, NULL
+          FROM chapter_likes chl JOIN moderator_chapters mc2 ON mc2.id = chl.chapter_id
+          JOIN moderator_sites ms2 ON ms2.id = mc2.site_id
+          WHERE chl.user_id = $1 ORDER BY chl.created_at DESC LIMIT 5)
+         UNION ALL
+         (SELECT 'like_gallery', gl.created_at, mg.title, NULL, NULL
+          FROM moderator_gallery_likes gl JOIN moderator_gallery mg ON mg.id = gl.gallery_id
+          WHERE gl.user_id = $1 ORDER BY gl.created_at DESC LIMIT 5)
+         UNION ALL
+         (SELECT 'club_post', cp.created_at, cp.title, c.name, c.slug
+          FROM club_posts cp JOIN clubs c ON c.id = cp.club_id
+          WHERE cp.author_user_id = $1 ORDER BY cp.created_at DESC LIMIT 5)
+       ) combined
+       ORDER BY ts DESC LIMIT 5`,
+      [author.id]
+    ),
   ]);
 
   // A few tagged-character thumbnails per story, for the Stories tab's
@@ -4178,6 +4298,49 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       (charsBySite[c.site_id] = charsBySite[c.site_id] || []).push({ id: c.id, name: c.name, ref_image: c.ref_image, owner_username: c.owner_username });
     });
   }
+
+  // Featured Characters/Gallery/Stories all share the same "default until
+  // manually overridden" behavior: an empty user_featured_items set for that
+  // kind means the user hasn't touched it yet, so fall back to a live
+  // "latest N" query instead of an empty section. The moment they Save that
+  // section's editor (see PUT /api/account/featured), real rows get written
+  // and this fallback stops being reached — permanently "locking" it in,
+  // with no separate locked flag needed.
+  const featuredCharacters = featuredChars.rows.length
+    ? featuredChars.rows
+    : (await pool.query(
+        `SELECT id::text AS ref_id, name AS title, ref_image AS image_url
+         FROM moderator_characters WHERE owner_user_id = $1 ORDER BY created_at DESC LIMIT 3`,
+        [author.id]
+      )).rows;
+  const featuredGalleryItems = featuredGallery.rows.length
+    ? featuredGallery.rows
+    : (await pool.query(
+        `SELECT id::text AS ref_id, title, image_url
+         FROM moderator_gallery WHERE owner_user_id = $1 ORDER BY created_at DESC LIMIT 3`,
+        [author.id]
+      )).rows;
+  const featuredStories = featuredStoryIds.rows.length
+    ? await fetchStoryCardsById(featuredStoryIds.rows.map(r => Number(r.ref_id)))
+    : await fetchDefaultStoryCards(author.id, 4);
+
+  // Recent Activity — turn the normalized (type, ts, label, context, ref_a)
+  // rows into a human sentence + link. "Liked" rows render as plain text
+  // (no link_url) since the liked item may belong to someone else's story
+  // and we didn't fetch enough info here to safely build that link.
+  const recentActivity = activity.rows.map(r => {
+    switch (r.type) {
+      case 'chapter': return { type: r.type, title: `Updated a chapter in "${r.context}"`, timestamp: r.ts, link: `/${r.ref_a}` };
+      case 'character': return { type: r.type, title: `Posted a new character: "${r.label}"`, timestamp: r.ts, link: `/${author.username}?char=${r.ref_a}#characters` };
+      case 'gallery': return { type: r.type, title: `Posted new gallery art: "${r.label}"`, timestamp: r.ts, link: `/gallery-post?id=${r.ref_a}` };
+      case 'newspaper': return { type: r.type, title: `Made a newspaper post: "${r.label}"`, timestamp: r.ts, link: `/${author.username}#newspaper` };
+      case 'like_character': return { type: r.type, title: `Liked a character: "${r.label}"`, timestamp: r.ts, link: null };
+      case 'like_chapter': return { type: r.type, title: `Liked a chapter in "${r.context}"`, timestamp: r.ts, link: null };
+      case 'like_gallery': return { type: r.type, title: `Liked a gallery post: "${r.label}"`, timestamp: r.ts, link: null };
+      case 'club_post': return { type: r.type, title: `Posted in the "${r.context}" club`, timestamp: r.ts, link: `/club?slug=${r.ref_a}` };
+      default: return { type: r.type, title: r.label, timestamp: r.ts, link: null };
+    }
+  });
 
   res.json({
     author: {
@@ -4203,8 +4366,10 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       account_links: author.account_links || [],
       profile_theme: author.profile_theme || 'default',
       profile_theme_bg_url: author.profile_theme_bg_url || '',
-      featured_characters: featuredChars.rows,
-      featured_gallery: featuredGallery.rows,
+      featured_characters: featuredCharacters,
+      featured_gallery: featuredGalleryItems,
+      featured_stories: featuredStories,
+      recent_activity: recentActivity,
       is_self: viewerId === author.id,
     },
     stories: sites.map(s => ({
@@ -4865,7 +5030,7 @@ app.put('/api/account/banner-position', requireAuth, async (req, res) => {
 // can feature a favorite from any community story. Results from the
 // viewer's own site(s) are surfaced first.
 app.get('/api/featured-search', requireAuth, async (req, res) => {
-  const kind = req.query.kind === 'gallery' ? 'gallery' : 'character';
+  const kind = ['gallery', 'story'].includes(req.query.kind) ? req.query.kind : 'character';
   const q = `%${String(req.query.q || '').slice(0, 60)}%`;
   const scope = req.query.scope === 'other' ? 'other' : 'mine';
   const ownerFilter = scope === 'mine' ? '=' : '!=';
@@ -4887,7 +5052,7 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
        WHERE mc.name ILIKE $1 AND mc.owner_user_id ${ownerFilter} $2 ORDER BY mc.name LIMIT 30`,
       [q, req.user.id]
     ));
-  } else {
+  } else if (kind === 'gallery') {
     ({ rows } = await pool.query(
       `SELECT mg.id, mg.title AS title, mg.image_url AS image_url, mg.owner_user_id,
               ms.story_path, ms.slug, u.username AS owner_username
@@ -4900,6 +5065,15 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
        WHERE mg.category = 'sfw' AND mg.title ILIKE $1 AND mg.owner_user_id ${ownerFilter} $2 ORDER BY mg.title LIMIT 30`,
       [q, req.user.id]
     ));
+  } else {
+    ({ rows } = await pool.query(
+      `SELECT ms.id, ms.site_title AS title, ms.cover_url AS image_url, ms.owner_user_id,
+              ms.story_path, ms.slug, u.username AS owner_username
+       FROM moderator_sites ms
+       JOIN users u ON u.id = ms.owner_user_id
+       WHERE ms.site_title ILIKE $1 AND ms.owner_user_id ${ownerFilter} $2 ORDER BY ms.site_title LIMIT 30`,
+      [q, req.user.id]
+    ));
   }
 
   const results = rows
@@ -4907,9 +5081,11 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
       ref_id: String(r.id),
       title: r.title || 'Untitled',
       image_url: r.image_url || '',
-      link_url: r.story_path || r.slug
-        ? `/${r.story_path || r.slug}${kind === 'character' ? '/characters' : '/gallery'}`
-        : `/${r.owner_username}`,
+      link_url: kind === 'story'
+        ? `/${r.story_path || r.slug}`
+        : (r.story_path || r.slug
+          ? `/${r.story_path || r.slug}${kind === 'character' ? '/characters' : '/gallery'}`
+          : `/${r.owner_username}`),
       mine: r.owner_user_id === req.user.id,
       owner_username: r.owner_username,
     }))
@@ -4918,11 +5094,12 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
   res.json({ results });
 });
 
-// PUT /api/account/featured — replaces the caller's featured-characters or
-// featured-gallery set (max 3) in one shot.
+// PUT /api/account/featured — replaces the caller's featured-characters,
+// featured-gallery, or featured-stories set (max 3, 3, or 4 respectively) in
+// one shot.
 app.put('/api/account/featured', requireAuth, async (req, res) => {
-  const kind = req.body.kind === 'gallery' ? 'gallery' : 'character';
-  const items = Array.isArray(req.body.items) ? req.body.items.slice(0, 3) : [];
+  const kind = ['gallery', 'story'].includes(req.body.kind) ? req.body.kind : 'character';
+  const items = Array.isArray(req.body.items) ? req.body.items.slice(0, kind === 'story' ? 4 : 3) : [];
 
   const client = await pool.connect();
   try {
@@ -5488,6 +5665,7 @@ app.delete('/api/moderator/site', requireAuth, requireModerator, async (req, res
   chapters.forEach(c => { unlinkIfUploaded(c.image_url); unlinkIfUploaded(c.file_url); });
 
   await pool.query('DELETE FROM moderator_sites WHERE id = $1', [site.id]);
+  await pool.query(`DELETE FROM user_featured_items WHERE kind = 'story' AND ref_id = $1`, [String(site.id)]);
   res.json({ message: 'Deleted.' });
 });
 

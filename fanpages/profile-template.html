@@ -152,7 +152,7 @@
     .fp-banner-edit-pencil:hover { background: rgba(0,0,0,0.85); }
     body.fp-editing .fp-banner-edit-pencil { display: none !important; }
 
-    .fp-header { max-width: 1200px; margin: 0 auto; padding: 0 2rem; position: relative; }
+    .fp-header { max-width: 1400px; margin: 0 auto; padding: 0 2rem; position: relative; }
     .fp-avatar-wrap { position: absolute; top: -64px; left: 50%; transform: translateX(-50%); width: 128px; height: 128px; }
     .fp-avatar {
       width: 128px; height: 128px; border-radius: 50%;
@@ -360,7 +360,7 @@
       height: 3px; background: #f0c060; border-radius: 2px;
     }
 
-    .fp-tab-view { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    .fp-tab-view { max-width: 1400px; margin: 0 auto; padding: 2rem; }
     /* Gallery reuses the story-context .mod-gallery-main layout, which
        already carries its own max-width/padding — let it own the spacing
        instead of double-boxing inside .fp-tab-view. Characters now uses a
@@ -476,17 +476,46 @@
     @media (max-width: 900px) { .fp-char-grid { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 640px) { .fp-char-grid { grid-template-columns: repeat(2, 1fr); } }
 
-    /* ── Body: About (~33%) | Stories | Links ── */
-    .fp-body {
-      max-width: 1200px; margin: 0 auto; padding: 2rem 2rem 3rem;
-      display: grid; grid-template-columns: 1fr 2fr 220px; gap: 2rem; align-items: start;
+    /* ── Home tab: persistent left info box (About/Links/Recent Activity)
+       next to a right column of Featured Stories/Characters/Gallery/
+       Newspaper. align-items: stretch (not the grid default) is what makes
+       the left box's background always reach the full height of whichever
+       column is taller -- it should always run the full length of the tab,
+       even with barely any content. */
+    .fp-home-grid {
+      max-width: 1400px; margin: 0 auto; padding: 2rem;
+      display: grid; grid-template-columns: 340px 1fr; gap: 2rem; align-items: stretch;
     }
+    .fp-home-main { display: flex; flex-direction: column; gap: 2.5rem; }
 
-    .fp-panel { background: #161616; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 1.25rem 1.1rem; }
-    .fp-panel-label {
-      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #999;
-      display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;
+    .fp-home-side {
+      position: relative; overflow: hidden; display: flex; flex-direction: column;
+      height: 100%; border-radius: 16px; border: 1px solid rgba(255,255,255,0.14);
+      padding: 1.5rem 1.35rem;
+      background: linear-gradient(160deg, rgba(10,8,14,0.86), rgba(10,8,14,0.76)), url('/images/home/box-background-3.png');
+      background-size: cover; background-position: center;
     }
+    .fp-home-side-deco { position: absolute; z-index: 2; pointer-events: none; object-fit: contain; opacity: 0.9; top: -10px; right: -8px; width: 40px; height: 40px; }
+    .fp-home-side-section { position: relative; z-index: 1; }
+    .fp-home-side-divider { position: relative; z-index: 1; height: 1px; background: rgba(255,255,255,0.14); margin: 1.35rem 0; flex-shrink: 0; }
+    .fp-home-side-label {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 600; color: #f0c060;
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;
+      text-shadow: 0 0 12px rgba(240,192,96,0.35);
+    }
+    /* The Activity section is the one that absorbs whatever height is left
+       in the box and clips overflow -- this is what gives "show as many
+       recent-activity rows as fit, at least one" for free, no JS height
+       math needed (the list container just shrinks/clips via flexbox). */
+    .fp-home-side-activity { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .fp-activity-list { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 0.7rem; }
+    .fp-activity-item {
+      display: block; font-size: 0.85rem; color: #ddd; line-height: 1.45; text-decoration: none;
+      padding-bottom: 0.7rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .fp-activity-item:last-child { border-bottom: none; }
+    a.fp-activity-item:hover { color: #f0c060; }
+    .fp-activity-item-time { display: block; font-size: 0.7rem; color: #999; margin-top: 0.2rem; }
 
     /* About stats */
     .fp-about-row { padding: 0.65rem 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
@@ -499,13 +528,9 @@
     }
     .fp-about-row input:focus, .fp-about-row textarea:focus { outline: none; border-color: #7fa8d9; }
 
-    /* Stories */
-    .fp-stories-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.15rem; margin-bottom: 1rem; }
-    .fp-story-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1.25rem; }
-    .fp-story-card { position: relative; text-decoration: none; color: inherit; }
-    .fp-story-card--draft .fp-story-cover { opacity: 0.7; }
-    .fp-story-cover { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; display: block; background: #1e1e1e; border: 1px solid rgba(255,255,255,0.08); transition: transform 0.15s; }
-    .fp-story-card:hover .fp-story-cover { transform: translateY(-4px); }
+    /* Stories TAB's teaser cards still use these -- the Home tab's own
+       cover-grid (.fp-story-grid/.fp-story-card) was removed in favor of
+       the Featured Stories section below. */
     .fp-story-cover--generated {
       position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;
       background: linear-gradient(135deg, #6b3fa0, #c2547a);
@@ -518,11 +543,6 @@
       position: relative; z-index: 1; color: #fff; text-align: center; padding: 0 0.6rem;
       font-family: 'Cinzel', Georgia, serif; font-weight: 700; font-size: 0.92rem; line-height: 1.35;
       text-shadow: 0 2px 10px rgba(0,0,0,0.85);
-    }
-    .fp-story-card-title {
-      font-family: 'Cinzel', Georgia, serif; font-size: 0.9rem; font-weight: 700; margin-top: 0.5rem;
-      color: #7fa8d9; letter-spacing: 0.02em;
-      text-shadow: 0 0 14px rgba(127,168,217,0.5), 0 1px 3px rgba(0,0,0,0.5);
     }
 
     /* Stories TAB — one big teaser card per row instead of a cover grid */
@@ -609,15 +629,75 @@
     }
     .fp-link-add-btn:hover { border-color: #7fa8d9; color: #7fa8d9; }
 
-    /* Featured Characters / Featured Gallery */
-    .fp-featured {
-      max-width: 1200px; margin: 0 auto; padding: 0 2rem 2.5rem;
-    }
+    /* Featured Stories / Featured Characters / Featured Gallery -- these now
+       live stacked inside .fp-home-main (a flex column), so no more of
+       their own max-width/centering, just natural block flow. */
     .fp-featured-title {
-      font-family: 'Cinzel', Georgia, serif; font-size: 1.6rem; font-weight: 700;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.6rem; font-weight: 600;
       color: #f0c060; text-align: left; margin-bottom: 1.25rem;
+      text-shadow: 0 0 14px rgba(240,192,96,0.4);
     }
+    .fp-featured-title-deco { width: 22px; height: 22px; object-fit: contain; vertical-align: -4px; margin-left: 0.35rem; }
     .fp-featured-empty { color: #999; font-size: 0.88rem; }
+
+    /* Featured Stories — the exact same story card as the Search page's
+       Browse/Search results (.fp-bcard*), duplicated here per the site's
+       "duplication over shared components" convention. 2 cards per row. */
+    .fp-bcard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.1rem; }
+    .fp-tag-pill {
+      display: inline-block; border-radius: 20px; padding: 0.32em 0.9em; font-size: 0.82rem; font-weight: 700;
+      text-decoration: none; cursor: pointer; border: 1px solid transparent; white-space: nowrap;
+    }
+    .fp-tag-pill:hover { filter: brightness(1.25); }
+    .fp-bcard {
+      display: flex; flex-direction: row; cursor: pointer; overflow: hidden; position: relative; height: 250px;
+      background: linear-gradient(160deg, rgba(10,8,14,0.86), rgba(10,8,14,0.76)), url('/images/home/potential-box-background.png');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(255,255,255,0.22); border-radius: 14px;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.25); transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .fp-bcard:hover { border-color: rgba(240,192,96,0.5); box-shadow: 0 1px 8px rgba(0,0,0,0.25), 0 0 22px rgba(240,192,96,0.18); }
+    .fp-bcard-cover-link { width: auto; height: 100%; aspect-ratio: 2 / 3; flex-shrink: 0; display: block; overflow: hidden; position: relative; }
+    .fp-bcard-cover-link img, .fp-bcard-cover-link .wiki-generated-cover { width: 100%; height: 100%; border-radius: 0; border: none; box-shadow: none; object-fit: cover; }
+    .fp-bcard-body { min-width: 0; flex: 1; display: flex; flex-direction: column; padding: 0.65rem 0.85rem 0.6rem; overflow: hidden; }
+    .fp-bcard-head { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+    .fp-bcard-title { font-size: 1.22rem; font-weight: 700; color: #fff; line-height: 1.15; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+    .fp-bcard-title:hover { text-shadow: 0 0 6px rgba(255,255,255,0.25), 0 1px 3px rgba(0,0,0,0.4); }
+    .fp-bcard-author { display: inline-flex; align-items: center; gap: 0.35rem; text-decoration: none; }
+    .fp-bcard-author:hover .fp-bcard-author-name { color: #7fa8d9; text-decoration: underline; }
+    .fp-bcard-author-avatar, .fp-bcard-author-avatar-fallback { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .fp-bcard-author-avatar-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.68rem; }
+    .fp-bcard-author-name { font-size: 0.86rem; font-weight: 600; color: #ccc; }
+    .fp-bcard-badges { display: flex; gap: 0.4rem; margin-bottom: 0.6rem; }
+    .fp-bcard-badges .fp-tag-pill { font-size: 0.85rem; padding: 0.36em 0.9em; font-weight: 800; }
+    .fp-bcard-badges .fp-tag-pill--rating-general { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
+    .fp-bcard-badges .fp-tag-pill--rating-teen { background: rgba(240,192,96,0.18); color: #f5cf7c; border-color: rgba(240,192,96,0.5); }
+    .fp-bcard-badges .fp-tag-pill--rating-mature { background: rgba(224,80,74,0.2); color: #ff8079; border-color: rgba(224,80,74,0.55); }
+    .fp-tag-pill--status-ongoing { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
+    .fp-tag-pill--status-complete { background: rgba(127,168,217,0.2); color: #a8c6e8; border-color: rgba(127,168,217,0.5); }
+    .fp-bcard-statpanel { display: flex; justify-content: center; gap: 0.35rem; margin-bottom: 0.4rem; }
+    .fp-bcard-stat {
+      flex: 1; min-width: 0; text-align: center; padding: 0.18rem 0.2rem;
+      background: linear-gradient(160deg, rgba(240,192,96,0.12), rgba(127,168,217,0.08));
+      border: 1px solid rgba(240,192,96,0.28); border-radius: 8px;
+    }
+    .fp-bcard-stat-val { display: block; font-size: 0.86rem; font-weight: 800; color: #f0c060; text-shadow: 0 0 8px rgba(240,192,96,0.4); }
+    .fp-bcard-stat-label { display: block; font-size: 0.68rem; font-weight: 600; color: #ccc; margin-top: 0.02rem; }
+    .fp-bcard-synopsis {
+      font-size: 0.85rem; line-height: 1.42; color: #ddd; margin-bottom: 0.4rem;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+    }
+    .fp-bcard-chars { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: auto; }
+    .fp-bcard-char-chip {
+      display: flex; align-items: center; gap: 0.35rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px; padding: 0.2rem 0.65rem 0.2rem 0.2rem; font-size: 0.74rem; color: #ddd; font-weight: 600;
+      text-decoration: none; transition: border-color 0.15s, color 0.15s;
+    }
+    .fp-bcard-char-chip:hover { border-color: #7fa8d9; color: #fff; }
+    .fp-bcard-char-chip img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+    .fp-bcard-char-chip--empty { color: #888; cursor: default; font-style: italic; }
+    .fp-bcard-char-chip--empty:hover { border-color: rgba(255,255,255,0.1); color: #888; }
+    .fp-bcard-deco--tr { position: absolute; z-index: 2; pointer-events: none; object-fit: contain; opacity: 0.9; top: -10px; right: -8px; width: 32px; height: 32px; }
     /* Fixed 3-column grid (max 3 featured items) so a full row of three
        actually spreads to fill the available width instead of clumping
        left with dead space on the right. */
@@ -853,27 +933,24 @@
     .fp-edit-btn:disabled { opacity: 0.6; cursor: default; }
 
     /* ── Edit-mode layout reorganization — hides everything that isn't
-       actually editable here (handle/follow stats, tabs, the clickable
-       story grid that used to boot you off the page, Featured Characters/
-       Gallery, the disclaimer) and pulls About + Links into a centered,
-       ~2-column layout instead of the normal 3-column About/Stories/Links
-       spread. ── */
+       actually editable here (handle/follow stats, tabs, the Recent
+       Activity feed, Latest Newspaper, the disclaimer). Featured Stories/
+       Characters/Gallery stay visible since their inline picker editors
+       live right there in the same sections. ── */
     body.fp-editing .fp-handle,
     body.fp-editing .fp-stats,
     body.fp-editing .fp-tabs-row,
-    body.fp-editing .fp-stories-panel,
+    body.fp-editing .fp-home-side-activity,
     body.fp-editing .fp-newspaper-home,
     body.fp-editing .fp-disclaimer {
       display: none !important;
-    }
-    body.fp-editing .fp-body {
-      grid-template-columns: 1fr 320px; max-width: 800px;
     }
 
     [hidden] { display: none !important; }
 
     @media (max-width: 800px) {
-      .fp-body { grid-template-columns: 1fr; }
+      .fp-home-grid { grid-template-columns: 1fr; }
+      .fp-home-side { height: auto; }
     }
 
     /* ── Mobile ── first pass: banner/avatar shrink, header actions wrap,
@@ -901,7 +978,7 @@
       .fp-tab-view { padding: 1.25rem 1rem; }
       .fp-gallery-page-row { padding: 0 1rem; }
       .fp-gallery-page-row .mod-gallery-main { grid-template-columns: 1fr; gap: 1.5rem; }
-      .fp-body { padding: 1.25rem 1rem 2.5rem; grid-template-columns: 1fr !important; gap: 1.5rem; }
+      .fp-home-grid { padding: 1.25rem 1rem 2.5rem; grid-template-columns: 1fr !important; gap: 1.5rem; }
       .fp-featured-row { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
       .fp-newspaper-home-header { flex-wrap: wrap; gap: 0.75rem; }
 
@@ -915,7 +992,7 @@
       .fp-avatar, .fp-avatar-fallback { width: 80px; height: 80px; }
       .fp-name { font-size: 1.4rem; }
       .fp-action-btn { font-size: 0.85rem; padding: 0 1rem; height: 40px; }
-      .fp-tab-view-grid, .fp-story-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.85rem; }
+      .fp-tab-view-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.85rem; }
     }
   </style>
 </head>
@@ -1009,47 +1086,65 @@
 
 <div id="fp-home-view">
 
-  <div class="fp-body">
+  <div class="fp-home-grid">
 
-    <div class="fp-panel">
-      <p class="fp-panel-label">About</p>
-      <div id="fp-about-rows"></div>
+    <aside class="fp-home-side">
+      <img class="fp-home-side-deco" src="/images/home/decoration-8.png" alt="" />
+
+      <div class="fp-home-side-section">
+        <p class="fp-home-side-label">About</p>
+        <div id="fp-about-rows"></div>
+      </div>
+
+      <div class="fp-home-side-divider"></div>
+
+      <div class="fp-home-side-section">
+        <p class="fp-home-side-label">
+          Links
+          <button class="fp-share-btn" id="fp-share-btn" type="button" title="Copy link to this page">🔗</button>
+        </p>
+        <ul class="fp-links-list" id="fp-links-list"></ul>
+        <div id="fp-links-editor" hidden></div>
+      </div>
+
+      <div class="fp-home-side-divider"></div>
+
+      <div class="fp-home-side-section fp-home-side-activity">
+        <p class="fp-home-side-label">Recent Activity</p>
+        <div class="fp-activity-list" id="fp-activity-list"><p class="fp-featured-empty">Loading…</p></div>
+      </div>
+    </aside>
+
+    <div class="fp-home-main">
+
+      <section class="fp-featured">
+        <p class="fp-featured-title">Featured Stories<img class="fp-featured-title-deco" src="/images/home/decoration-1.png" alt="" /></p>
+        <div id="fp-featured-stories"></div>
+        <div id="fp-featured-stories-editor" hidden></div>
+      </section>
+
+      <section class="fp-featured">
+        <p class="fp-featured-title">Featured Characters<img class="fp-featured-title-deco" src="/images/home/decoration-2.png" alt="" /></p>
+        <div id="fp-featured-characters"></div>
+        <div id="fp-featured-characters-editor" hidden></div>
+      </section>
+
+      <section class="fp-featured">
+        <p class="fp-featured-title">Featured Gallery<img class="fp-featured-title-deco" src="/images/home/decoration-3.png" alt="" /></p>
+        <div id="fp-featured-gallery"></div>
+        <div id="fp-featured-gallery-editor" hidden></div>
+      </section>
+
+      <section class="fp-featured fp-newspaper-home">
+        <div class="fp-newspaper-home-header">
+          <p class="fp-featured-title" style="margin-bottom:0;">Latest Newspaper<img class="fp-featured-title-deco" src="/images/home/decoration-4.png" alt="" /></p>
+          <button class="fp-newspaper-new-btn" id="fp-newspaper-new-btn-home" type="button" hidden>+ New Post</button>
+        </div>
+        <div id="fp-newspaper-home"><p class="fp-featured-empty">Loading…</p></div>
+      </section>
+
     </div>
 
-    <div class="fp-stories-panel">
-      <p class="fp-stories-title">Stories</p>
-      <div class="fp-story-grid" id="fp-story-grid"></div>
-    </div>
-
-    <div class="fp-panel">
-      <p class="fp-panel-label">
-        Links
-        <button class="fp-share-btn" id="fp-share-btn" type="button" title="Copy link to this page">🔗</button>
-      </p>
-      <ul class="fp-links-list" id="fp-links-list"></ul>
-      <div id="fp-links-editor" hidden></div>
-    </div>
-
-  </div>
-
-  <div class="fp-featured">
-    <p class="fp-featured-title">Featured Characters</p>
-    <div id="fp-featured-characters"></div>
-    <div id="fp-featured-characters-editor" hidden></div>
-  </div>
-
-  <div class="fp-featured">
-    <p class="fp-featured-title">Featured Gallery</p>
-    <div id="fp-featured-gallery"></div>
-    <div id="fp-featured-gallery-editor" hidden></div>
-  </div>
-
-  <div class="fp-featured fp-newspaper-home">
-    <div class="fp-newspaper-home-header">
-      <p class="fp-featured-title" style="margin-bottom:0;">Latest Newspaper</p>
-      <button class="fp-newspaper-new-btn" id="fp-newspaper-new-btn-home" type="button" hidden>+ New Post</button>
-    </div>
-    <div id="fp-newspaper-home"><p class="fp-featured-empty">Loading…</p></div>
   </div>
 
   <div class="fp-disclaimer">
@@ -1206,12 +1301,13 @@
   document.getElementById('fp-disclaimer-domain').textContent = location.hostname.replace(/^www\./, '');
   window.fpFixLinks();
 
-  // Story teaser cards (Stories tab) are clickable anywhere on their
-  // (transparent) area -- but a click on a tag pill or character chip
-  // still goes to THAT destination instead, since those are real <a>s.
+  // Story teaser cards (Stories tab) and Featured Stories bcards are
+  // clickable anywhere on their (transparent) area -- but a click on a tag
+  // pill, author link, or character chip still goes to THAT destination
+  // instead, since those are real <a>s.
   document.addEventListener('click', (e) => {
-    const card = e.target.closest('.fp-story-teaser-card[data-href]');
-    if (!card || e.target.closest('a')) return;
+    const card = e.target.closest('.fp-story-teaser-card[data-href], .fp-bcard[data-href]');
+    if (!card || e.target.closest('a, button')) return;
     window.location.href = card.dataset.href;
   });
 
@@ -1252,57 +1348,16 @@
   let currentStories = [];
   let editMode = false;
   let editLinks = [];
-  let editFeatured = { character: [], gallery: [] };
-
-  function storyCardEl(s) {
-    const card = document.createElement('a');
-    card.className = 'fp-story-card' + (s.is_draft_only ? ' fp-story-card--draft' : '');
-    card.href = window.fpUrl(`/${s.story_path || s.slug}`);
-
-    if (s.is_draft_only) {
-      const badge = document.createElement('span');
-      badge.className = 'fp-story-teaser-draft-badge';
-      badge.textContent = 'Draft';
-      card.appendChild(badge);
-    }
-
-    if (s.cover_url) {
-      const img = document.createElement('img');
-      img.className = 'fp-story-cover';
-      img.src = s.cover_url;
-      img.alt = `${s.site_title} cover`;
-      card.appendChild(img);
-    } else {
-      // No custom cover? Fake one out of a blurred, zoomed-in crop of
-      // this author's own avatar with the story title lettered on it.
-      const wrap = document.createElement('div');
-      wrap.className = 'fp-story-cover fp-story-cover--generated';
-      const bg = document.createElement('div');
-      bg.className = 'fp-story-cover-bg';
-      if (currentAuthor && currentAuthor.avatar) bg.style.backgroundImage = `url(${currentAuthor.avatar})`;
-      wrap.appendChild(bg);
-      const title = document.createElement('span');
-      title.className = 'fp-story-cover-title';
-      title.textContent = s.site_title || 'Untitled Story';
-      wrap.appendChild(title);
-      card.appendChild(wrap);
-    }
-
-    const caption = document.createElement('p');
-    caption.className = 'fp-story-card-title';
-    caption.textContent = s.site_title;
-    card.appendChild(caption);
-    return card;
-  }
-
-  function renderStoriesGrid(grid) {
-    grid.innerHTML = '';
-    if (!currentStories.length) {
-      grid.innerHTML = '<p style="color:#999;font-size:0.9rem;">No stories yet.</p>';
-      return;
-    }
-    currentStories.forEach(s => grid.appendChild(storyCardEl(s)));
-  }
+  let editFeatured = { character: [], gallery: [], story: [] };
+  // Single lookup driving the previously character/gallery-only binary
+  // ternaries in renderFeaturedEditor/openFeaturedPicker/featuredPickerItemEl
+  // -- adding a third featured kind (Stories) meant those needed a real map
+  // instead of a hardcoded A-or-B choice.
+  const FEATURED_KIND_CONFIG = {
+    character: { displayId: 'fp-featured-characters', editorId: 'fp-featured-characters-editor', label: 'Characters', singular: 'Character', max: 3 },
+    gallery:   { displayId: 'fp-featured-gallery',     editorId: 'fp-featured-gallery-editor',     label: 'Gallery',    singular: 'Gallery',   max: 3 },
+    story:     { displayId: 'fp-featured-stories',     editorId: 'fp-featured-stories-editor',     label: 'Stories',    singular: 'Story',     max: 4 },
+  };
 
   // ── Stories tab — one big teaser card per row (cover + synopsis excerpt +
   // a few tagged-character chips), instead of the small cover-only grid
@@ -1586,6 +1641,96 @@
   }
   function escapeHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // ── Featured Stories card — ported from search.html's .fp-bcard /
+  // browseResultCard so a story reads the same on Search as it does when
+  // featured on a profile. ────────────────────────────────────────────────
+  function truncateSynopsis(s) {
+    const text = (s || '').trim();
+    if (!text) return 'No description yet.';
+    return text.length > 500 ? text.slice(0, 500).trim() + '…' : text;
+  }
+  function ratingClass(rating) {
+    if (rating === 'mature') return 'fp-tag-pill--rating-teen';
+    if (rating === 'explicit') return 'fp-tag-pill--rating-mature';
+    return 'fp-tag-pill--rating-general';
+  }
+  function ratingLabel(rating) {
+    if (rating === 'mature') return 'Mature';
+    if (rating === 'explicit') return 'Explicit';
+    return 'General';
+  }
+  function bcardCoverHtml(site) {
+    return window.wikiGeneratedCoverHtml
+      ? window.wikiGeneratedCoverHtml(site, { imgClass: 'fp-result-cover' })
+      : `<img class="fp-result-cover" src="${site.cover_url || '/images/gallery/pixernbath_13.png'}" alt="" />`;
+  }
+  function bcardAuthorHtml(w) {
+    const avatar = w.author_avatar
+      ? `<img class="fp-bcard-author-avatar" src="${escapeHtml(w.author_avatar)}" alt="" />`
+      : `<span class="fp-bcard-author-avatar-fallback">${escapeHtml(((w.author || '?')[0] || '?').toUpperCase())}</span>`;
+    return `
+      <a class="fp-bcard-author" href="${window.fpUrl(`/${escapeHtml(w.author_username || '')}`)}">
+        ${avatar}
+        <span class="fp-bcard-author-name">by ${escapeHtml(w.author || 'Unknown')}</span>
+      </a>
+    `;
+  }
+  function bcardCharsHtml(w) {
+    const chars = w.characters || [];
+    if (!chars.length) {
+      return `
+        <div class="fp-bcard-chars">
+          <span class="fp-bcard-char-chip fp-bcard-char-chip--empty"><img src="/images/defaultchar.jpg" alt="" />No Linked Characters</span>
+        </div>
+      `;
+    }
+    return `
+      <div class="fp-bcard-chars">
+        ${chars.map(c => `<a class="fp-bcard-char-chip" href="${window.fpUrl(`/${encodeURIComponent(c.owner_username)}?char=${c.id}#characters`)}"><img src="${escapeHtml(c.ref_image || '/images/defaultchar.jpg')}" alt="" />${escapeHtml(c.name)}</a>`).join('')}
+      </div>
+    `;
+  }
+  function featuredStoryCardEl(w) {
+    const isComplete = !!w.is_complete;
+    const card = document.createElement('div');
+    card.className = 'fp-bcard';
+    card.dataset.href = window.fpUrl(`/${escapeHtml(w.story_path)}`);
+    card.innerHTML = `
+      <a class="fp-bcard-cover-link" href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">${bcardCoverHtml(w)}</a>
+      <img class="fp-bcard-deco--tr" src="/images/home/decoration-8.png" alt="" />
+      <div class="fp-bcard-body">
+        <div class="fp-bcard-head">
+          <a class="fp-bcard-title" href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">${escapeHtml(w.site_title || 'Untitled Story')}</a>
+          ${bcardAuthorHtml(w)}
+        </div>
+        <div class="fp-bcard-badges">
+          ${w.rating ? `<span class="fp-tag-pill ${ratingClass(w.rating)}">${escapeHtml(ratingLabel(w.rating))}</span>` : ''}
+          <span class="fp-tag-pill ${isComplete ? 'fp-tag-pill--status-complete' : 'fp-tag-pill--status-ongoing'}">${isComplete ? 'Complete' : 'Ongoing'}</span>
+        </div>
+        <div class="fp-bcard-statpanel">
+          <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${(w.hits || 0).toLocaleString()}</span><span class="fp-bcard-stat-label">👁 Reads</span></div>
+          <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${(w.kudos || 0).toLocaleString()}</span><span class="fp-bcard-stat-label">❤️ Likes</span></div>
+          <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${w.word_count != null ? Number(w.word_count).toLocaleString() : '—'}</span><span class="fp-bcard-stat-label">📖 Words</span></div>
+        </div>
+        <p class="fp-bcard-synopsis">${escapeHtml(truncateSynopsis(w.synopsis))}</p>
+        ${bcardCharsHtml(w)}
+      </div>
+    `;
+    return card;
+  }
+  function renderFeaturedStories(containerId, items) {
+    const wrap = document.getElementById(containerId);
+    wrap.innerHTML = '';
+    if (!items || !items.length) {
+      wrap.innerHTML = `<p class="fp-featured-empty">No featured stories to showcase.</p>`;
+      return;
+    }
+    const grid = document.createElement('div');
+    grid.className = 'fp-bcard-grid';
+    items.forEach(w => grid.appendChild(featuredStoryCardEl(w)));
+    wrap.appendChild(grid);
   }
   function richText(s) {
     let out = escapeHtml(s || '');
@@ -2594,6 +2739,28 @@
     wrap.appendChild(row);
   }
 
+  // ── Recent Activity (left info box) ─────────────────────────────────────
+  // Rows without a link (the "liked" types) render as plain text instead of
+  // an <a> -- see the recent_activity shaping comment in server.js for why.
+  function renderRecentActivity(items, displayName) {
+    const wrap = document.getElementById('fp-activity-list');
+    wrap.innerHTML = '';
+    if (!items || !items.length) {
+      wrap.innerHTML = `<p class="fp-featured-empty">No recent activity by ${escapeHtml(displayName)}</p>`;
+      return;
+    }
+    items.forEach(item => {
+      const el = document.createElement(item.link ? 'a' : 'div');
+      el.className = 'fp-activity-item';
+      if (item.link) el.href = window.fpUrl(item.link);
+      el.innerHTML = `
+        ${escapeHtml(item.title)}
+        <span class="fp-activity-item-time">${timeAgo(item.timestamp)}</span>
+      `;
+      wrap.appendChild(el);
+    });
+  }
+
   // ── Header action button ────────────────────────────────────────────────
   function renderActions(author, isFollowing) {
     const wrap = document.getElementById('fp-header-actions');
@@ -2754,6 +2921,12 @@
     editLinks = (currentAuthor.account_links || []).map(l => ({ ...l }));
     editFeatured.character = (currentAuthor.featured_characters || []).map(it => ({ ...it }));
     editFeatured.gallery = (currentAuthor.featured_gallery || []).map(it => ({ ...it }));
+    // Seeded from the (possibly default-computed, unlocked) list the server
+    // returned -- Saving without changing anything still writes real rows
+    // and permanently locks the category from then on, which is intended.
+    editFeatured.story = (currentAuthor.featured_stories || []).map(it => ({
+      ref_id: String(it.id), title: it.site_title, image_url: it.cover_url, link_url: `/${it.story_path}`,
+    }));
 
     document.body.classList.add('fp-editing');
     document.getElementById('fp-edit-bar').hidden = false;
@@ -2770,6 +2943,7 @@
 
     renderAboutEditor();
     renderLinksEditor();
+    renderFeaturedEditor('story', 'Feature up to four of your favorite stories! Defaults to your own latest-updated stories until you pick your own set here -- once you Save this section, your picks are locked in for good (they won\'t auto-update anymore, even if you post new stories).');
     renderFeaturedEditor('character', 'Feature your top three favorite characters! Can be your own characters, if you\'ve made them, or three characters from stories/art/people you love! Feel free to search for those that stand out to you~');
     renderFeaturedEditor('gallery', 'Feature your top three favorite gallery pieces! Can be your own artwork, if you\'ve posted your commissions/art here, or three art pieces from stories/artists you love on the site! Feel free to search for those that stand out to you~');
   }
@@ -2786,6 +2960,8 @@
     document.getElementById('fp-avatar-recrop-btn').hidden = true;
     document.getElementById('fp-links-editor').hidden = true;
     document.getElementById('fp-links-list').hidden = false;
+    document.getElementById('fp-featured-stories-editor').hidden = true;
+    document.getElementById('fp-featured-stories').hidden = false;
     document.getElementById('fp-featured-characters-editor').hidden = true;
     document.getElementById('fp-featured-characters').hidden = false;
     document.getElementById('fp-featured-gallery-editor').hidden = true;
@@ -2932,7 +3108,7 @@
         body: JSON.stringify(fields),
       });
 
-      await Promise.all(['character', 'gallery'].map(kind =>
+      await Promise.all(['character', 'gallery', 'story'].map(kind =>
         fetch('/api/account/featured', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -3002,25 +3178,24 @@
   // (toggle cards in an overlay picker, "+ " add-tile, max 3) as the
   // "Link To:" sections on the character/gallery editors.
   function renderFeaturedEditor(kind, note) {
-    const displayId = kind === 'character' ? 'fp-featured-characters' : 'fp-featured-gallery';
-    const editorId = kind === 'character' ? 'fp-featured-characters-editor' : 'fp-featured-gallery-editor';
-    document.getElementById(displayId).hidden = true;
-    const wrap = document.getElementById(editorId);
+    const cfg = FEATURED_KIND_CONFIG[kind];
+    document.getElementById(cfg.displayId).hidden = true;
+    const wrap = document.getElementById(cfg.editorId);
     wrap.hidden = false;
 
     wrap.innerHTML = `
       <p class="fp-featured-editor-note">${note}</p>
-      <div class="gallery-linkto-grid" id="${editorId}-grid"></div>
+      <div class="gallery-linkto-grid" id="${cfg.editorId}-grid"></div>
     `;
 
     function paintSelected() {
-      const grid = wrap.querySelector(`#${editorId}-grid`);
+      const grid = wrap.querySelector(`#${cfg.editorId}-grid`);
       grid.innerHTML = '';
-      if (editFeatured[kind].length < 3) {
+      if (editFeatured[kind].length < cfg.max) {
         const tile = document.createElement('button');
         tile.type = 'button';
         tile.className = 'gallery-linkto-add-tile';
-        tile.innerHTML = `<span class="gallery-linkto-add-tile-icon">+</span> ${kind === 'character' ? 'Character' : 'Gallery'}`;
+        tile.innerHTML = `<span class="gallery-linkto-add-tile-icon">+</span> ${cfg.singular}`;
         tile.addEventListener('click', () => openFeaturedPicker(kind, paintSelected));
         grid.appendChild(tile);
       }
@@ -3049,7 +3224,7 @@
   function openFeaturedPicker(kind, onChange) {
     featuredPickerKind = kind;
     featuredPickerOnChange = onChange;
-    const label = kind === 'character' ? 'Characters' : 'Gallery';
+    const label = FEATURED_KIND_CONFIG[kind].label;
     document.getElementById('fp-featured-picker-title').textContent = `Feature ${label}`;
     document.getElementById('fp-featured-tab-mine').textContent = `Your ${label}`;
     document.getElementById('fp-featured-tab-other').textContent = `Other ${label}`;
@@ -3091,7 +3266,7 @@
         arr.splice(idx, 1);
         item.classList.remove('selected');
       } else {
-        if (arr.length >= 3) return;
+        if (arr.length >= FEATURED_KIND_CONFIG[featuredPickerKind].max) return;
         arr.push({ ref_id: r.ref_id, title: r.title, image_url: r.image_url, link_url: r.link_url, site_slug: r.slug || null });
         item.classList.add('selected');
       }
@@ -3699,21 +3874,24 @@
         linksList.appendChild(li);
       });
 
-      // Featured Characters / Featured Gallery
+      // Featured Stories / Featured Characters / Featured Gallery
+      renderFeaturedStories('fp-featured-stories', a.featured_stories);
       renderFeaturedRow('fp-featured-characters', a.featured_characters, 'No featured characters.', 'character');
       renderFeaturedRow('fp-featured-gallery', a.featured_gallery, 'No featured gallery.', 'gallery');
+
+      // Recent Activity (Home tab's left info box)
+      renderRecentActivity(a.recent_activity, a.display_name || a.username);
 
       // Newspaper (Home tab preview)
       loadNewspaperHome();
 
       // Stories
       currentStories = data.stories || [];
-      renderStoriesGrid(document.getElementById('fp-story-grid'));
 
       // The Home tab's background scrolls with the page now (see
-      // syncScrollBgHeight) -- the featured rows/story grid above load their
-      // own images asynchronously and can grow the page after this initial
-      // measurement, so re-measure once they've settled in.
+      // syncScrollBgHeight) -- the featured rows/story cards above load
+      // their own images asynchronously and can grow the page after this
+      // initial measurement, so re-measure once they've settled in.
       if (activeTabName === 'home') {
         syncScrollBgHeight();
         document.getElementById('fp-home-view').querySelectorAll('img').forEach(img => {
