@@ -276,10 +276,14 @@ first before inventing a new one.
   wrapper), add a small explicit `padding-top`/matching button `top` (this
   session settled on `1.25rem`) instead of `0`, purely so the image/button
   aren't flush against the very top of the viewport.
-- **A profile's/story's custom "theme" is a Home-tab-only thing now**, not an
-  account-wide background — this was an explicit direction change this
-  session. Characters and Gallery (profile tabs *and* story pages) always
-  force the same scrolling "Browse > Posts" wallpaper
+- **A profile's/story's custom "theme" is a Home-tab-only thing, full stop —
+  users cannot pick a theme anywhere else.** Home may show either a custom
+  uploaded background or the default (owner's choice); every other tab/page
+  (Characters, Gallery, Stories, Newspapers — on both profile pages *and* a
+  story's own pages) is **default-only, forced, not user-selectable**, until a
+  future redesign pass explicitly overrides that page's look. Characters/
+  Gallery/Stories/Newspapers (profile tabs *and* story pages) all force the
+  same scrolling "Browse > Posts" wallpaper
   (`/images/home/potential-box-background.png`, `blur(4px)`, position:absolute
   with JS-measured height so it scrolls *with* the page — see `syncBgHeight`/
   `syncScrollBgHeight` in each file) regardless of what background was picked
@@ -287,8 +291,9 @@ first before inventing a new one.
   place that decides which of the two background layers (real theme vs.
   forced Posts wallpaper) is visible; story pages hardcode the forced call
   directly since Home/Chapters/Gallery/Characters are separate page loads
-  there, not JS tab-switches. Stories/Newspapers tabs get neither (plain
-  default) — extend this same three-way split to any new profile tab.
+  there, not JS tab-switches. (A per-tab wallpaper swap — e.g. Newspapers
+  briefly got its own `box-background-3.png` — was tried and reverted; all
+  four non-Home tabs share the identical wallpaper again.)
 - **Pagination**: reuse the exact `fpGalleryPaginationHtml`/`.fp-page-btn`
   e621-style numbered-pager markup already in `fanpages.css` — don't invent a
   new pager.
@@ -297,11 +302,34 @@ first before inventing a new one.
   corner this session (they read as clutter once the page had enough going
   on) — don't re-add them there without being asked; they're still fine/in-use
   elsewhere (card corners, section headings).
-- **Next up**: the plan going into the next session is to keep applying this
-  same bubbly-font/box-background-art/Home-tab-only-theme treatment to the
-  *rest* of the profile tabs (Stories, Newspapers) and other story pages that
-  haven't been touched yet — not a new pattern, just carrying the one above
-  further. Check this section first before redesigning anything else.
+- **Status**: Stories and Newspapers (profile tabs) are now done too — all
+  five profile tabs (Home/Characters/Gallery/Stories/Newspapers) share the
+  bubbly-font/box-background-art/Home-tab-only-theme treatment. **This is
+  still an ongoing pattern, not finished** — the plan is to keep carrying it
+  into whatever page comes next (story pages' own Characters/Gallery/
+  Chapters/Newspaper views, other still-unstyled pages). Check this section
+  first before redesigning anything else. Newspaper cards specifically:
+  Fredoka title + the same cool-blue spotlight glow (`color:#7fa8d9;
+  text-shadow:0 0 18px rgba(127,168,217,0.55), 0 1px 3px rgba(0,0,0,0.5);`)
+  used by Featured Characters/Gallery/Stories card titles, not the old gold
+  Cinzel look — applies to both the card list (`.fp-newspaper-title`) and the
+  single-post detail view (`.fp-newspaper-post-title`), keep both in sync.
+- **Gotcha — initial-tab restore + tabs fed by `loadProfile()`'s data**: the
+  hash-based "which tab was I on" restore on page load (the
+  `['characters','gallery','stories','newspaper'].includes(location.hash.slice(1))`
+  whitelist near the bottom of `profile-template.html`) must list *every*
+  deep-linkable tab name — Newspaper was missing once and refreshing on
+  `#newspaper` silently fell back to Home. Separately, `switchTab(initialTab)`
+  runs synchronously right after `loadProfile()` is kicked off, **not** after
+  it resolves — any tab whose content comes from `loadProfile()`'s payload
+  (Stories' `currentStories`) rather than its own dedicated fetch (like
+  Characters/Gallery's `loadCharactersTab()`/`loadGalleryTab()`) will render
+  against stale/empty data on a direct refresh unless `loadProfile()` itself
+  re-renders that tab once its real data arrives (`if (activeTabName ===
+  'stories') renderStoriesTeaserList();` after `currentStories = data.stories`).
+  Any *new* tab whose data rides along in the main profile fetch needs this
+  same re-render-if-still-active check, not just an initial render call in
+  `switchTab()`.
 
 ## Between Two Worlds — manually migrated from btwfanfic.net (this session)
 
