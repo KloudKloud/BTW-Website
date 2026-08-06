@@ -27,11 +27,24 @@
        (position: fixed) instead of scrolling with the page content, same
        as the Fanpage Hub's background. .fp-bg-wrap itself stays a normal,
        non-fixed container so the actual page content inside it still flows
-       and scrolls like everything else. */
+       and scrolls like everything else. Home-tab-only now (see
+       updateTabBackground) -- Characters/Gallery use their own scrolling
+       wallpaper below instead. */
     .fp-bg-wrap { position: relative; background: #0d0d0d; }
     .fp-bg-img { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(14px) brightness(0.95); z-index: 0; display: none; }
     .fp-bg-overlay { position: fixed; inset: 0; background: rgba(10,10,10,0.72); z-index: 0; display: none; }
-    .fp-bg-wrap > *:not(.fp-bg-img):not(.fp-bg-overlay) { position: relative; z-index: 1; }
+    /* Characters/Gallery tabs — same "Browse > Posts" wallpaper treatment
+       as the Fanpage Hub's Characters browse page: PotentialBoxBackground,
+       lightly blurred, scrolling *with* the page instead of staying
+       pinned (position:absolute, height measured in JS to match the full
+       page — percentage/inset heights can't resolve against a body whose
+       height is just "however tall its content is"). */
+    .fp-bg-img-scroll {
+      position: absolute; top: 0; left: 0; right: 0; bottom: auto; width: 100%; height: 100vh;
+      object-fit: cover; filter: blur(4px); z-index: 0; display: none;
+    }
+    .fp-bg-overlay-scroll { position: fixed; inset: 0; background: rgba(8,6,10,0.45); z-index: 0; display: none; }
+    .fp-bg-wrap > *:not(.fp-bg-img):not(.fp-bg-overlay):not(.fp-bg-img-scroll):not(.fp-bg-overlay-scroll) { position: relative; z-index: 1; }
 
     .fp-theme-picker { position: relative; }
     /* Floats top-right of the whole below-the-banner content area (see
@@ -421,15 +434,18 @@
     .fp-char-like-btn.liked { color: #f0708a; }
     .fp-char-like-btn .fp-char-like-icon { font-size: 0.9rem; }
 
-    #fp-chars-detail-view { max-width: 760px; margin: 0 auto; }
+    /* Back button floats over the top-left corner of the reference image
+       instead of sitting in its own row above it -- the image now starts
+       right under the tabs, on the same horizontal line as the button. */
+    #fp-chars-detail-view { max-width: 760px; margin: 0 auto; position: relative; }
     .fp-char-back-btn {
+      position: absolute; top: 1rem; left: 1rem; z-index: 3;
       display: inline-flex; align-items: center; gap: 0.5rem;
       background: linear-gradient(160deg, rgba(38,30,16,0.85), rgba(20,16,10,0.85));
       border: 1px solid rgba(240,192,96,0.6); color: #f7d68a;
       border-radius: 30px; padding: 0.85em 1.6em; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 700;
       cursor: pointer; white-space: nowrap; box-shadow: 0 0 20px rgba(240,192,96,0.35);
       transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
-      margin: 0 0 1.1rem;
     }
     .fp-char-back-btn svg { width: 22px; height: 22px; flex-shrink: 0; }
     .fp-char-back-btn:hover { border-color: #f0c060; color: #fff; box-shadow: 0 0 30px rgba(240,192,96,0.55); transform: translateY(-1px); }
@@ -899,6 +915,8 @@
 <div class="fp-bg-wrap">
   <img class="fp-bg-img" id="fp-bg-img" alt="" />
   <div class="fp-bg-overlay" id="fp-bg-overlay"></div>
+  <img class="fp-bg-img-scroll" id="fp-bg-img-scroll" src="/images/home/potential-box-background.png" alt="" />
+  <div class="fp-bg-overlay-scroll" id="fp-bg-overlay-scroll"></div>
 
 <div class="fp-banner-wrap" id="fp-banner-wrap">
   <div id="fp-banner-img"></div>
@@ -1381,6 +1399,38 @@
     document.querySelectorAll('.fp-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
   }
 
+  // A profile's custom theme is a Home-tab-only thing now -- Characters and
+  // Gallery always get the same scrolling "Browse > Posts" wallpaper
+  // (PotentialBoxBackground, blurred, scrolls with the page) regardless of
+  // what background this profile picked for its Home tab; Stories/
+  // Newspapers get neither (plain default). Only one of the two background
+  // layers is ever visible at a time.
+  function updateTabBackground(tab) {
+    if (tab === 'home' && currentAuthor) {
+      applyProfileTheme(currentAuthor.profile_theme, currentAuthor.profile_theme_bg_url);
+    } else {
+      document.getElementById('fp-bg-img').style.display = 'none';
+      document.getElementById('fp-bg-overlay').style.display = 'none';
+    }
+    const scrollOn = tab === 'characters' || tab === 'gallery';
+    document.getElementById('fp-bg-img-scroll').style.display = scrollOn ? 'block' : 'none';
+    document.getElementById('fp-bg-overlay-scroll').style.display = scrollOn ? 'block' : 'none';
+    if (scrollOn) syncScrollBgHeight();
+  }
+  // Same trick as the Fanpage Hub's Characters browse page: reset to 0
+  // before measuring, since the element being measured is itself
+  // absolutely positioned and contributes to scrollHeight -- without the
+  // reset, a previously-tall page (e.g. before switching into a shorter
+  // view) would never let the measurement shrink back down.
+  function syncScrollBgHeight() {
+    const bgEl = document.getElementById('fp-bg-img-scroll');
+    bgEl.style.height = '0';
+    bgEl.style.height = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
+  }
+  window.addEventListener('resize', () => {
+    if (activeTabName === 'characters' || activeTabName === 'gallery') syncScrollBgHeight();
+  });
+
   function buildThemeGrid() {
     const grid = document.getElementById('fp-theme-grid');
     grid.innerHTML = '';
@@ -1476,17 +1526,8 @@
       document.getElementById('fp-banner-edit-pencil').hidden = tab !== 'home';
       document.getElementById('fp-theme-picker-wrap').hidden = tab !== 'home';
     }
-    // Characters tab forces the same blurred PotentialBoxBackground the
-    // Fanpage Hub's Characters browse page uses, regardless of whatever
-    // theme this profile has picked for itself (its own theme picker is
-    // already hidden on every non-Home tab, so there's no control fighting
-    // this override) -- restored the moment the viewer leaves the tab.
-    if (tab === 'characters') {
-      applyProfileTheme('custom', '/images/home/potential-box-background.png');
-    } else if (currentAuthor) {
-      applyProfileTheme(currentAuthor.profile_theme, currentAuthor.profile_theme_bg_url);
-      clearTimeout(pendingViewTimer);
-    }
+    updateTabBackground(tab);
+    if (tab !== 'characters') clearTimeout(pendingViewTimer);
     if (tab === 'characters') loadCharactersTab();
     if (tab === 'gallery') loadGalleryTab();
     if (tab === 'stories') renderStoriesTeaserList(document.getElementById('fp-stories-grid'));
@@ -1969,17 +2010,21 @@
         document.getElementById('fp-chars-grid-view').scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
+    syncScrollBgHeight();
+    gridEl.querySelectorAll('img').forEach(img => img.addEventListener('load', syncScrollBgHeight, { once: true }));
   }
 
   function openCharDetail(id, scroll) {
     document.getElementById('fp-chars-grid-view').hidden = true;
     document.getElementById('fp-chars-detail-view').hidden = false;
     selectFpCharacter(id, scroll);
+    syncScrollBgHeight();
   }
   function closeCharDetail() {
     clearTimeout(pendingViewTimer);
     document.getElementById('fp-chars-detail-view').hidden = true;
     document.getElementById('fp-chars-grid-view').hidden = false;
+    syncScrollBgHeight();
   }
   document.getElementById('fp-chars-back-btn').addEventListener('click', closeCharDetail);
 
@@ -2150,6 +2195,8 @@
       `);
       grid.appendChild(wrap);
     });
+    syncScrollBgHeight();
+    grid.querySelectorAll('img').forEach(img => img.addEventListener('load', syncScrollBgHeight, { once: true }));
   }
 
   // ── Universal comments (target_type/target_id) — one level of replies,
@@ -3560,11 +3607,11 @@
       document.getElementById('fp-following-count').textContent = data.following_count;
       document.getElementById('fp-clubs-count').textContent = data.club_count || 0;
       document.title = `${a.display_name} ✦ BTW`;
-      // Don't clobber the Characters tab's forced background if this
-      // resolves while that tab is already active (e.g. a fresh page load
-      // straight into #characters, where switchTab ran before this fetch
-      // finished).
-      if (activeTabName !== 'characters') applyProfileTheme(a.profile_theme, a.profile_theme_bg_url);
+      // Re-derive the background for whichever tab is already active (e.g.
+      // a fresh page load straight into #characters/#gallery, where
+      // switchTab ran before this fetch resolved and couldn't know this
+      // profile's real theme yet) instead of assuming Home.
+      updateTabBackground(activeTabName);
 
       const bannerImg = document.getElementById('fp-banner-img');
       applyBgCrop(

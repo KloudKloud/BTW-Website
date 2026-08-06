@@ -43,18 +43,25 @@
     }
     .fp-char-card-owner { font-size: 0.72rem; color: #999; }
 
-    #chars-detail-view { max-width: 760px; }
+    /* Centered in the main column instead of hugging the left edge -- reads
+       closer to the Cover box on the right this way. */
+    #chars-detail-view { max-width: 760px; margin: 0 auto; }
     .chars-detail-topbar { display: flex; align-items: center; gap: 0.9rem; margin: 0 0 1.1rem; flex-wrap: wrap; }
     .fp-char-back-btn {
       display: inline-flex; align-items: center; gap: 0.5rem;
       background: linear-gradient(160deg, rgba(38,30,16,0.85), rgba(20,16,10,0.85));
       border: 1px solid rgba(240,192,96,0.6); color: #f7d68a;
       border-radius: 30px; padding: 0.85em 1.6em; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 700;
-      cursor: pointer; white-space: nowrap; box-shadow: 0 0 20px rgba(240,192,96,0.35);
+      cursor: pointer; white-space: nowrap;
+      /* Softer/tighter than the plain Characters browse page's version --
+         against this page's own busy blurred wallpaper (rather than a
+         mostly-flat dark area) a wide 20px glow read as a hazy rectangle
+         behind the pill instead of a clean ambient glow. */
+      box-shadow: 0 0 8px rgba(240,192,96,0.22);
       transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
     }
     .fp-char-back-btn svg { width: 22px; height: 22px; flex-shrink: 0; }
-    .fp-char-back-btn:hover { border-color: #f0c060; color: #fff; box-shadow: 0 0 30px rgba(240,192,96,0.55); transform: translateY(-1px); }
+    .fp-char-back-btn:hover { border-color: #f0c060; color: #fff; box-shadow: 0 0 16px rgba(240,192,96,0.4); transform: translateY(-1px); }
     /* Edit box only ever shows inside the topbar now (next to Back), never
        in the grid view -- .chars-create-box's own width:100% button needs
        an explicit width here since it's no longer a full-width sidebar card. */
@@ -69,6 +76,19 @@
       background-size: cover; background-position: center;
       border-radius: 12px; font-family: 'Fredoka', 'Lato', cursive;
     }
+
+    /* This page always forces PotentialBoxBackground (applyStoryTheme call
+       below) instead of whatever theme the story picked for its Home/
+       Chapters/Gallery pages -- and unlike those pages, it scrolls *with*
+       the content instead of staying pinned to the viewport, same as the
+       Fanpage Hub's Characters browse page. Overrides the shared
+       .mod-page-bg-img's own position:fixed just for this page. */
+    #page-bg-img {
+      position: absolute; top: 0; left: 0; right: 0; bottom: auto;
+      width: 100%; height: 100vh; object-fit: cover;
+      filter: blur(4px) brightness(1);
+    }
+    #page-bg-overlay { position: fixed; inset: 0; background: rgba(8,6,10,0.45); }
 
     @media (max-width: 900px) { .fp-char-grid { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 640px) { .fp-char-grid { grid-template-columns: repeat(2, 1fr); } }
@@ -242,6 +262,20 @@ function applyStoryTheme(theme, bgUrl) {
     bgOverlay.style.display = 'none';
   }
 }
+
+// Background scrolls *with* the page instead of staying pinned, same
+// treatment as the Fanpage Hub's Characters browse page -- needs its
+// height measured in JS since percentage/inset sizing can't resolve
+// against a wrap whose own height is just "however tall its content is."
+// Reset to 0 before each measurement, since the element being measured is
+// itself absolutely positioned and contributes to scrollHeight -- without
+// that reset a previously-tall page could never report shrinking back down.
+function syncBgHeight() {
+  const bgEl = document.getElementById('page-bg-img');
+  bgEl.style.height = '0';
+  bgEl.style.height = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
+}
+window.addEventListener('resize', syncBgHeight);
 
 function isBlank(v) { return !v || !v.trim() || v.trim() === NA; }
 
@@ -687,6 +721,7 @@ async function viewCharacter(id) {
     document.getElementById('chars-grid-view').hidden = true;
     document.getElementById('chars-detail-view').hidden = false;
     renderProfile(known);
+    syncBgHeight();
     return;
   }
   try {
@@ -699,6 +734,7 @@ async function viewCharacter(id) {
     document.getElementById('chars-grid-view').hidden = true;
     document.getElementById('chars-detail-view').hidden = false;
     renderProfile(GHOST_CHAR);
+    syncBgHeight();
   } catch {}
 }
 
@@ -712,6 +748,7 @@ function closeCharDetail() {
   usp.delete('char');
   const qs = usp.toString();
   history.pushState(null, '', qs ? `?${qs}` : window.location.pathname);
+  syncBgHeight();
 }
 document.getElementById('chars-back-btn').addEventListener('click', closeCharDetail);
 
@@ -764,6 +801,8 @@ function renderCharsGrid(page) {
       document.getElementById('chars-grid-view').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
+  syncBgHeight();
+  gridEl.querySelectorAll('img').forEach(img => img.addEventListener('load', syncBgHeight, { once: true }));
 }
 
 // Same e621-style numbered pager markup as the Fanpage Hub pages.
@@ -1041,11 +1080,16 @@ document.getElementById('cc-compose-btn').addEventListener('click', async () => 
   // has picked for its Home/Chapters/Gallery pages -- this page always
   // gets its own dedicated look.
   applyStoryTheme('custom', '/images/home/potential-box-background.png');
+  // applyStoryTheme's own scrim is tuned for the fixed-background pages
+  // (Home/Chapters/Gallery) -- override to match the Characters browse
+  // page's lighter scrim exactly.
+  document.getElementById('page-bg-overlay').style.background = 'rgba(8,6,10,0.45)';
   const pageTitleEl = document.getElementById('page-title-display');
   pageTitleEl.textContent = STORY_TITLE;
   pageTitleEl.classList.remove('mod-title-loading');
 
   renderCharList((data && data.characters) || []);
+  syncBgHeight();
 
   // A ?char= deep link (a cast member, a relationship-linked "ghost" not
   // in this story's own cast, or a shared URL) opens straight into the
