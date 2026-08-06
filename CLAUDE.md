@@ -143,6 +143,101 @@ pages as they get redesigned:
   eligible for the normal shuffle everywhere else too (independent random pick per slot,
   not round-robin).
 
+## Browse/Search page redesign (this session) — visual language
+
+After the homepage remodel, the same "box-background art instead of flat dark fill"
+language got carried into `search.html` (Stories/Posts/Profiles tabs), `characters.html`,
+and `fandoms.html`. This is an **ongoing pattern, not a one-off** — expect to keep
+applying it to whatever page comes next (Gallery browse, club pages, etc.), so the
+conventions below should be the default starting point rather than something to
+re-derive each time.
+
+- **Per-tab identity via background + card system** — each major browse/search context
+  now has its own paired (background, card) treatment rather than one shared look:
+  - **Stories** (`search.html`, both Browse's own feed and a filtered tag/keyword
+    search): flat, unblurred `box-background-5.png` page background (locked, doesn't
+    scroll). Cards are the `fp-bcard-*` family — cover at its natural 2:3 ratio sized off
+    a *fixed* card height (never cropped/zoomed), Rating + Ongoing/Complete badges (green/
+    yellow/red traffic-light for rating, green/blue for status — deliberately different
+    from the rating colors used elsewhere on the site), a 3-tile stat panel (Reads/❤
+    Likes/Words), description, then a character-teaser row that always renders
+    *something* (real chips or a non-clickable "No Linked Characters" placeholder) so the
+    slot's height never depends on whether a story has characters linked. Browse's own
+    feed is 3-per-row (`fp-bcard-grid`, no side filter panel eating width); a filtered
+    search is 2-per-row (`fp-bcard-grid--narrow`, side panel present).
+  - **Posts** (Browse and filtered search alike): `potential-box-background.png`,
+    lightly blurred (`blur(4px)`, not the old heavy `blur(18px)` wallpaper), and — since
+    Posts is a fixed-length grid rather than something that paginates in place — the
+    background is allowed to **scroll with the page** instead of staying pinned. Exactly
+    5 per row, 30 per page.
+  - **Profiles**: the actual `main-background-4.mp4` video, genuinely locked in place.
+    Achieved by making *only* the results column scroll (`position:sticky` +
+    `overflow-y:auto`, same self-contained-scroll trick the side panel already used) so
+    the page itself never scrolls, meaning the video never needs the "scrolls with
+    content" treatment Posts has. Cards are boxed (`box-background-4.jpg`, one fixed crop
+    for every card) and clickable anywhere, not just the username link.
+  - **Characters** (`characters.html`, same page for both the top-nav "Characters" link
+    and Browse → Characters): same Posts-style scrolling `potential-box-background.png`
+    wallpaper. 5-per-row grid, 25 per page. Card info-box background needed a *fixed
+    height* (not just padding-driven) to crop consistently — a variable-height box against
+    a big background image crops a different slice per instance even with identical
+    `background-position`, which reads as "randomly cropped" even though the CSS is
+    deterministic.
+  - **Fandoms** (`fandoms.html`): `main-background.mp4`, `object-fit:cover` (an earlier
+    `contain` attempt left visible letterbox bars down the sides — cover-with-slight-crop
+    reads better than a fully-uncropped-but-bordered video), anchored `object-position:
+    center bottom` so the crop trims the top (hidden under the topbar anyway) rather than
+    the bottom. Page/category titles switched to the bubbly Fredoka font with decoration
+    sprites next to them, matching the homepage's heading convention.
+  - Side/filter panels across all of these (Story search's "Sort and Filter", Posts'
+    filter panel, Characters' sidebar, Profiles' side nav) get `box-background-3.png` +
+    scrim instead of a flat `#14121a` fill, with `decoration-1`/`decoration-8` corner
+    sparkles (negative `z-index` on the sticky/positioned ancestor so they sit above the
+    art but below the real controls, never blocking a click).
+- **"Scrolls with the page" implementation** — a background that should move with content
+  (Posts, Characters) can't just be `position:fixed` (that stays pinned) or use percentage/
+  `inset:0` sizing under `position:absolute` (percentage heights don't resolve against a
+  body whose own height is just "however tall its content is"). The working pattern:
+  `position:absolute; top:0; height:<js-set-px>`, with a small `syncBgHeight()`-style
+  helper that sets `el.style.height = document.documentElement.scrollHeight + 'px'`,
+  re-run after the grid renders, after each thumbnail's `load` event (images loading in
+  can grow the page after the initial measurement), and on `resize`.
+- **"Starts after the side panel" implementation** — when a background shouldn't run
+  full-bleed *underneath* a sidebar (Profiles' video, Characters' wallpaper), offset it
+  with `left: calc(<column-width>px + 2.5rem)` — the extra `2.5rem` accounts for the
+  sidebar's own `margin-left: -2.5rem` trick (pulls it flush against the page edge,
+  canceling `.fp-layout`'s padding), so the sidebar's actual rendered width is wider than just
+  its grid-column width. Needs a mobile override resetting to `left:0; width:100%` once
+  the layout collapses to one column and the sidebar stops occupying a fixed column.
+- **Whole-card clickability** — any card meant to be clickable anywhere (not just its
+  title link) needs: `cursor:pointer` + `data-href` on the card, and the single delegated
+  `document.addEventListener('click', ...)` handler (shared across `.fp-result`,
+  `.fp-bcard`, `.fp-profile-card`) bails via `e.target.closest('a, button')` — easy to
+  forget the `button` half and end up with a Follow/Expand/etc. button also triggering
+  navigation underneath it.
+- **"· <Tab Name>" page label**: every tab's top "X found — sorted by Y" line
+  (`pageLabelHtml()` in search.html) ends with a small gold `· Stories`/`· Posts`/
+  `· Profiles` tag, so which section you're on is unambiguous without checking the side
+  nav — extend this to any new tab/view added to that page.
+- **Active-nav-item glow**: the "you are here" indicator (search.html's left nav,
+  characters.html's filter menu) is a gold border + glow layered over the same
+  box-background art every item shares, not a flat solid-color fill swap — the fill is
+  art now, not a color, so "active" has to be communicated via border/shadow instead.
+
+## Between Two Worlds — manually migrated from btwfanfic.net (this session)
+
+VeekitPaws' own book got manually inserted into the `moderator_sites`/`moderator_characters`
+/`moderator_gallery` tables (id 133 / owner_user_id 104) by transforming data scraped from
+btwfanfic.net — assets for this were already sitting locally under `images/characters/`,
+`images/gallery/`, `images/sketches/`, `images/spicy/`, `images/layout/cover.png`; no
+re-scraping needed if this ever has to be redone or extended. Notable gotcha: both the
+profile Characters/Gallery tabs (`/api/fanpage-profile/:username/all-*`) and a story's own
+roster (`character_story_links`/`gallery_story_links`) each have independent ordering —
+the profile tabs sort by `created_at DESC`, the roster by `sort_order ASC` — so matching a
+specific desired display order on *both* at once means setting `created_at` explicitly per
+row (not relying on literal insertion sequence) while independently setting `sort_order`,
+rather than trying to get one single insertion order to satisfy both.
+
 ## Feedback / working style
 
 - Deploy and verify live *before* committing, every batch — not just at session end.
