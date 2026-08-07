@@ -64,6 +64,7 @@
       text-decoration: none; font-size: 0.9rem;
     }
     .soc-sidebar-user-menu-item:hover { background: rgba(255,255,255,0.08); }
+    .soc-sidebar-user-menu-divider { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 0.35rem 0.4rem; }
     .soc-sidebar-nav {
       display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;
       gap: 0.2rem; position: static; height: auto; padding: 0; background: none; border: none; backdrop-filter: none;
@@ -437,17 +438,22 @@
 
     /* "•••" post-actions menu -- own posts get Delete; club owners/admins
        get it on every post, not just their own (mirrors the server-side
-       permission check). Hover-reveal, same recipe as the DM bubble menu. */
-    .cl-post-menu-wrap { position: absolute; top: 0.7rem; right: 0.5rem; z-index: 5; opacity: 0; transition: opacity 0.15s; }
+       permission check). Hover-reveal. Centered vertically on the row
+       (not a fixed top offset, which sat noticeably high on a 2-3 line
+       compact row) -- a transparent bubble instead of a dark boxed circle,
+       matching the site's plain "•••" buttons elsewhere (e.g. the Creator
+       Hub cards), with a soft blue glow on hover instead of a hard border. */
+    .cl-post-menu-wrap { position: absolute; top: 50%; right: 0.5rem; transform: translateY(-50%); z-index: 5; opacity: 0; transition: opacity 0.15s; }
     .cl-admin-post:hover .cl-post-menu-wrap,
     .cl-post-menu-wrap.cl-post-menu-open { opacity: 1; }
-    .cl-admin-post--card .cl-post-menu-wrap { top: 0.85rem; right: 0.85rem; }
+    .cl-admin-post--card .cl-post-menu-wrap { top: 0.85rem; right: 0.85rem; transform: none; }
     .cl-post-menu-btn {
-      width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.25); color: #ccc;
-      font-size: 0.7rem; letter-spacing: 0.04em; cursor: pointer; font-family: inherit; padding: 0;
+      width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      background: transparent; border: none; color: #bbb;
+      font-size: 0.75rem; letter-spacing: 0.04em; cursor: pointer; font-family: inherit; padding: 0;
+      transition: color 0.15s, background 0.15s, box-shadow 0.15s;
     }
-    .cl-post-menu-btn:hover { border-color: #7fa8d9; color: #7fa8d9; background: rgba(127,168,217,0.18); }
+    .cl-post-menu-btn:hover { color: #7fa8d9; background: rgba(127,168,217,0.12); box-shadow: 0 0 12px rgba(127,168,217,0.5); }
     .cl-post-menu-dropdown {
       position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; min-width: 150px;
       background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
@@ -2058,13 +2064,13 @@ if (token && currentUser) {
         <span class="soc-sidebar-username">${escapeHtml(currentUser.display_name || currentUser.username)}</span>
       </button>
       <div class="soc-sidebar-user-menu" id="soc-sidebar-user-menu" hidden>
-        <p class="soc-sidebar-user-menu-status-text" id="soc-sidebar-nsfw-label"></p>
+        <a class="soc-sidebar-user-menu-item" href="${window.fpUrl('/your-posts')}">Your Posts</a>
+        <hr class="soc-sidebar-user-menu-divider" />
         <a class="soc-sidebar-user-menu-item" href="${window.fpUrl(`/${encodeURIComponent(currentUser.username)}`)}">View Profile</a>
         <a class="soc-sidebar-user-menu-item" href="${window.fpUrl('/account-settings')}">Account Settings</a>
       </div>
     </div>
   `;
-  setSidebarNsfwState(currentUser.nsfw_enabled !== false);
   const sidebarMenuBtn = document.getElementById('soc-sidebar-user-btn');
   const sidebarMenu = document.getElementById('soc-sidebar-user-menu');
   sidebarMenuBtn.addEventListener('click', (e) => { e.stopPropagation(); sidebarMenu.hidden = !sidebarMenu.hidden; });
@@ -2073,13 +2079,6 @@ if (token && currentUser) {
   });
 } else {
   sidebarUserSlot.innerHTML = `<a class="soc-sidebar-login" href="${window.fpUrl(`/login?from=${encodeURIComponent(location.pathname + location.search)}`)}">Sign In</a>`;
-}
-function setSidebarNsfwState(enabled) {
-  const label = document.getElementById('soc-sidebar-nsfw-label');
-  if (!label) return;
-  label.innerHTML = enabled
-    ? 'You are in: <strong class="nsfw-toggle-label">NSFW Mode</strong> <span class="soc-sidebar-user-menu-status-hint">(Change preferences in Account Settings)</span>'
-    : 'You are in: <strong class="nsfw-toggle-label nsfw-toggle-label--sfw">SFW Mode</strong> <span class="soc-sidebar-user-menu-status-hint">(Change preferences in Account Settings)</span>';
 }
 
 function clubIconHtml(c, sizeClass) {

@@ -131,8 +131,15 @@
     .fp-layout--no-side .fp-filter-fab { display: none; }
     .fp-layout--no-side .fp-results-col { grid-column: 1; }
     /* Same bubbly-glow treatment as the homepage Spotlight titles
-       (fp-spotlight-row .fp-shine-title in index.html). */
-    .fp-browse-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 1.75rem 0 0.2rem; }
+       (fp-spotlight-row .fp-shine-title in index.html). :not([hidden]) is
+       required here -- a bare `.fp-browse-heading-row { display:flex }`
+       beats the browser's own `[hidden]{display:none}` at equal
+       specificity once it's declared later in the cascade (this page's own
+       stylesheet loads after the UA one), so the row/sort-box rendered
+       even on the normal Search Query page where isBrowseMode is false and
+       the `hidden` attribute is never removed. Same fix as the guest-blur
+       overlay gotcha elsewhere on the site. */
+    .fp-browse-heading-row:not([hidden]) { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 1.75rem 0 0.2rem; }
     .fp-browse-heading {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 1.7rem; font-weight: 700; color: #cfe0f5;
       margin: 0; display: flex; align-items: center; gap: 0.5rem;
@@ -140,10 +147,17 @@
     }
     .fp-browse-heading .fp-title-deco { width: 24px; height: 24px; object-fit: contain; flex-shrink: 0; }
     /* Browse's own Sort By -- only shown for the Stories feed (Posts browse
-       already sorts by "updated" with no dropdown of its own). Reuses the
-       same .fp-sort-select look as the filter panel's Sort by field. */
-    .fp-browse-sort-wrap { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
-    .fp-browse-sort-wrap label { font-size: 0.85rem; color: #bbb; font-weight: 600; }
+       already sorts by "updated" with no dropdown of its own). A boxed
+       pill (box-background-2 art) instead of a bare label+select, with a
+       bigger/bolder label that actually sits level with the select now
+       that the hidden-attribute bug above is fixed. */
+    .fp-browse-sort-wrap:not([hidden]) {
+      display: flex; align-items: center; gap: 0.7rem; flex-shrink: 0;
+      padding: 0.55rem 1rem; border-radius: 14px; border: 1px solid rgba(255,255,255,0.16);
+      background: linear-gradient(160deg, rgba(10,8,14,0.78), rgba(10,8,14,0.68)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+    }
+    .fp-browse-sort-wrap label { font-size: 1.02rem; color: #f0f0f0; font-weight: 700; font-family: 'Fredoka', 'Lato', cursive; }
 
     /* Justified photo-wall grid — ported from the Fanpage Hub's "Recent
        Submissions" box (fanpages/index.html: rs-grid/rs-row/rs-card),

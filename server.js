@@ -9714,11 +9714,17 @@ app.delete('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => 
 app.get('/api/clubs-feed', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
   const sort = ['best', 'top', 'new'].includes(req.query.sort) ? req.query.sort : 'best';
+  // "Your Posts" reuses this same feed/endpoint rather than a separate
+  // route -- same shape, same sort options, just narrowed to the viewer's
+  // own posts across every club (and never NSFW-filtered against their own
+  // SFW Mode setting, since these are posts they wrote themselves).
+  const mineOnly = req.query.mine === '1';
   let viewerId = null;
   const auth = req.headers.authorization;
   if (auth && auth.startsWith('Bearer ')) {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
+  if (mineOnly && !viewerId) return res.status(401).json({ error: 'Sign in required.' });
   let nsfwAllowed = true; // guests see everything now; only SFW Mode filters
   if (viewerId) {
     const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
@@ -9749,13 +9755,13 @@ app.get('/api/clubs-feed', async (req, res) => {
      JOIN clubs c ON c.id = cp.club_id
      LEFT JOIN club_members cm ON cm.club_id = cp.club_id AND cm.user_id = $2
      LEFT JOIN club_visits cv ON cv.club_id = cp.club_id AND cv.user_id = $2
-     ${nsfwAllowed ? '' : 'WHERE c.is_nsfw = FALSE'}
+     ${mineOnly ? 'WHERE cp.author_user_id = $2' : (nsfwAllowed ? '' : 'WHERE c.is_nsfw = FALSE')}
      ORDER BY ${orderBy}
      LIMIT $1`,
     [limit, viewerId || 0]
   );
   res.json({ posts: rows.map(p => ({
-    id: p.id, title: p.title, body: p.body, created_at: p.created_at,
+    id: p.id, title: p.title, body: p.body, created_at: p.created_at, is_admin_post: p.is_admin_post,
     image_url: p.image_url || '', preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
     preview_image_url: p.preview_image_url || '',
     like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_liked: !!p.user_liked,

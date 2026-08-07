@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Posts ✦ BTW</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <style>
+    /* No body background override here on purpose — style.css sets
+       body { background: transparent } specifically so the fixed
+       .page-bg image shows through underneath. */
+    .soc-layout { position: relative; z-index: 1; }
+
+    /* ── Sidebar ──
+       True position:fixed (not sticky) so it stays glued to the screen
+       edge no matter how far the page scrolls, spanning the full height
+       below the topbar. Same glass-card treatment as the hub's Character/
+       Gallery/Story Spotlight boxes (.fp-shine-card). */
+    .soc-sidebar {
+      position: fixed; top: 64px; left: 0; bottom: 0; width: 250px; z-index: 5;
+      display: flex; flex-direction: column; overflow-y: auto;
+      padding: 1.1rem 1.25rem; box-sizing: border-box;
+      background: linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015));
+      border-right: 1px solid rgba(255,255,255,0.12);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      box-shadow: 4px 0 30px rgba(0,0,0,0.35);
+      transition: width 0.2s ease;
+    }
+    /* Same gradient as the sidebar itself, so the button reads as part of
+       the same box instead of a separate dark chip floating on top of it. */
+    .soc-sidebar-toggle {
+      width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; align-self: flex-end; margin-bottom: 1rem;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: linear-gradient(160deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02));
+      color: #ccc; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s, color 0.15s;
+    }
+    .soc-sidebar-toggle:hover { background: linear-gradient(160deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04)); color: #fff; }
+    /* Collapsed: sidebar shrinks to just the toggle button's width, and the
+       main content's left margin shrinks to match, filling the freed space. */
+    .soc-layout.soc-collapsed .soc-sidebar { width: 56px; padding-left: 0.6rem; padding-right: 0.6rem; }
+    .soc-layout.soc-collapsed .soc-sidebar-content { display: none; }
+    .soc-layout.soc-collapsed .soc-main { margin-left: 56px; }
+    .soc-sidebar-user-wrap { position: relative; margin-bottom: 0.5rem; }
+    .soc-sidebar-user {
+      display: flex; align-items: center; gap: 0.65rem; text-decoration: none; color: inherit;
+      padding: 0.4rem 0.4rem 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+      width: 100%; background: none; border-left: none; border-right: none; border-top: none;
+      cursor: pointer; font-family: inherit; text-align: left;
+    }
+    .soc-sidebar-avatar, .soc-sidebar-avatar-fallback { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .soc-sidebar-avatar-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 1.25rem; }
+    .soc-sidebar-username { font-weight: 700; font-size: 1.1rem; color: #f0f0f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .soc-sidebar-login { font-size: 1rem; color: #7fa8d9; text-decoration: none; display: block; padding: 0.4rem 0.4rem 0.9rem; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .soc-sidebar-guest-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+      padding: 0.75rem 0.4rem 1.1rem; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .soc-sidebar-guest-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; }
+    .soc-sidebar-guest-tag { font-weight: 700; font-size: 1rem; color: #f0f0f0; }
+    .soc-sidebar-guest-signin-btn {
+      background: #93b8e2; color: #0a0a0a; border: none; border-radius: 16px; padding: 0.4rem 1.1rem;
+      font-weight: 700; font-size: 0.85rem; cursor: pointer; font-family: inherit;
+    }
+    .soc-sidebar-guest-signin-btn:hover { background: #a8c6e8; }
+    .soc-sidebar-note-signin-btn {
+      display: inline-block; margin-top: 0.4rem; background: #93b8e2; color: #0a0a0a; border: none;
+      border-radius: 14px; padding: 0.35rem 0.9rem; font-weight: 700; font-size: 0.8rem; cursor: pointer; font-family: inherit;
+    }
+    .soc-sidebar-note-signin-btn:hover { background: #a8c6e8; }
+    /* Popup menu off the sidebar profile block: SFW/NSFW status up top,
+       then plain nav links — closes on any click outside it. */
+    .soc-sidebar-user-menu {
+      position: absolute; top: 100%; left: 0.2rem; right: 0.2rem; margin-top: 0.35rem;
+      background: #1c1c1e; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.45); padding: 0.5rem; z-index: 60;
+    }
+    .soc-sidebar-user-menu-status-text {
+      font-size: 0.82rem; color: #ccc; line-height: 1.5; margin: 0;
+      padding: 0.5rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 0.3rem;
+    }
+    .soc-sidebar-user-menu-status-hint { color: #888; font-weight: 400; }
+    .soc-sidebar-user-menu-item {
+      display: block; padding: 0.55rem 0.6rem; border-radius: 6px; color: #ddd;
+      text-decoration: none; font-size: 0.9rem;
+    }
+    .soc-sidebar-user-menu-item:hover { background: rgba(255,255,255,0.08); }
+
+    /* style.css has a bare `nav { display:flex; ... }` rule meant for the
+       site's topbar — since this is also a <nav> element, that rule was
+       leaking in and forcing the links into a horizontal row. Reset it
+       back to a plain vertical stack. */
+    .soc-sidebar-nav {
+      display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;
+      gap: 0.2rem; position: static; height: auto; padding: 0; background: none; border: none; backdrop-filter: none;
+    }
+
+    .soc-nav-link {
+      display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem 0.5rem; border-radius: 8px;
+      color: #ccc; text-decoration: none; font-size: 1.05rem; font-weight: 600; transition: background 0.15s, color 0.15s;
+    }
+    .soc-nav-link:hover { background: rgba(255,255,255,0.06); color: #fff; }
+    .soc-nav-link.active { color: #f0c060; background: rgba(240,192,96,0.1); }
+    .soc-nav-icon { width: 1.3em; text-align: center; font-size: 1.1rem; }
+
+    /* Same gradient as the topbar's "BTW Homepage" button
+       (.fpnav-home-btn in fanpages-nav.css), toned down: plain body font
+       instead of the bubbly display face, and a much softer glow. */
+    .soc-nav-create-btn {
+      display: flex; align-items: center; gap: 0.5rem; width: 100%; margin-top: 0.4rem;
+      background: linear-gradient(135deg, #3d3a52, #5a4f78); border: none; color: #f0f0f0;
+      font-family: 'Lato', Arial, sans-serif; font-weight: 600;
+      font-size: 1.05rem; padding: 0.65rem 0.75rem; border-radius: 20px; cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25); transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+    }
+    .soc-nav-create-btn:hover {
+      transform: translateY(-1px); background: linear-gradient(135deg, #47435f, #665887);
+      box-shadow: 0 3px 9px rgba(0,0,0,0.3);
+    }
+
+    .soc-sidebar-rule { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 0.9rem 0; }
+    .soc-sidebar-label { font-size: 0.88rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #999; padding: 0 0.5rem; margin-bottom: 0.5rem; }
+    .soc-sidebar-clubs { display: flex; flex-direction: column; gap: 0.15rem; }
+    .soc-sidebar-club-link {
+      display: flex; align-items: center; gap: 0.7rem; padding: 0.5rem 0.5rem; border-radius: 8px;
+      color: #ddd; text-decoration: none; font-size: 1rem; transition: background 0.15s;
+    }
+    .soc-sidebar-club-link:hover { background: rgba(255,255,255,0.06); }
+    .soc-sidebar-club-icon, .soc-sidebar-club-icon-fallback { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .soc-sidebar-club-icon-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.82rem; }
+    .soc-sidebar-club-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .soc-sidebar-club-owner-rose { flex-shrink: 0; font-size: 0.85rem; }
+    .soc-sidebar-empty, .soc-sidebar-note { font-size: 0.9rem; color: #888; padding: 0.4rem 0.5rem; line-height: 1.5; }
+
+    /* Moderation section — label row with a collapse arrow (screenshot
+       reference: Discord's "COMMUNITIES ⌃" header), a Manage button that
+       opens the full-list modal, and an inline preview of up to 5 clubs. */
+    .soc-sidebar-label-row { display: flex; align-items: center; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.5rem; }
+    .soc-sidebar-label-row .soc-sidebar-label { padding: 0; margin-bottom: 0; }
+    .soc-sidebar-collapse-btn {
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
+      color: #ccc; cursor: pointer; width: 22px; height: 22px; padding: 0;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      transition: transform 0.2s, color 0.15s, background 0.15s;
+    }
+    .soc-sidebar-collapse-btn svg { width: 15px; height: 15px; }
+    .soc-sidebar-collapse-btn:hover { color: #fff; background: rgba(255,255,255,0.12); }
+    .soc-sidebar-collapse-btn.soc-collapsed { transform: rotate(180deg); }
+    #soc-mod-content { transition: none; }
+    #soc-mod-content.soc-collapsed { display: none; }
+    .soc-sidebar-manage-btn {
+      display: flex; align-items: center; gap: 0.6rem; width: 100%; box-sizing: border-box;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+      color: #ddd; font-family: inherit; font-size: 0.95rem; font-weight: 600; text-align: left;
+      padding: 0.55rem 0.6rem; cursor: pointer; transition: background 0.15s; margin-bottom: 0.35rem;
+    }
+    .soc-sidebar-manage-btn:hover { background: rgba(255,255,255,0.08); }
+    .soc-sidebar-showall-btn {
+      background: none; border: none; color: #7fa8d9; font-family: inherit; font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; padding: 0.4rem 0.5rem; text-align: left;
+    }
+    .soc-sidebar-showall-btn:hover { text-decoration: underline; }
+    .soc-sidebar-club-role-badge {
+      flex-shrink: 0; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+      color: #f0c060; background: rgba(240,192,96,0.12); border: 1px solid rgba(240,192,96,0.3);
+      border-radius: 10px; padding: 0.1em 0.5em;
+    }
+    .soc-manage-list { display: flex; flex-direction: column; gap: 0.3rem; max-height: 50vh; overflow-y: auto; margin-bottom: 1rem; }
+    .soc-manage-row { display: flex; align-items: center; gap: 0.5rem; }
+    .soc-manage-row .soc-sidebar-club-link { flex: 1; min-width: 0; }
+    .soc-manage-delete-btn {
+      flex-shrink: 0; background: none; border: 1px solid rgba(217,90,90,0.35); color: #d97a72;
+      border-radius: 8px; font-size: 0.78rem; font-weight: 600; padding: 0.4em 0.7em; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .soc-manage-delete-btn:hover { background: rgba(217,90,90,0.12); border-color: rgba(217,90,90,0.6); }
+
+    /* ── Main content ──
+       Offset by the fixed sidebar's width on the left and the fixed
+       Popular Posts panel's width on the right, since both are taken out
+       of normal flow now. */
+    .soc-main {
+      margin-left: 250px; margin-right: 336px; padding: 1.5rem 2.5rem 5rem;
+      transition: margin-left 0.2s ease;
+    }
+
+    /* Shared glass-card look — same recipe as the sidebar / .fp-shine-card. */
+    .soc-placeholder-box, .soc-right-panel {
+      background: linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015));
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 20px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+    .soc-placeholder-box {
+      min-height: 420px; display: flex; align-items: center; justify-content: center;
+      color: rgba(255,255,255,0.3); font-size: 1.4rem; font-weight: 700; font-family: 'Cinzel', Georgia, serif;
+    }
+    /* Fixed, like the left sidebar, but floats as a proper rounded card —
+       inset from the right edge and from the top/bottom instead of
+       running flush edge-to-edge. */
+    .soc-right-panel {
+      position: fixed; top: 84px; right: 20px; bottom: 20px; width: 300px; z-index: 5;
+      overflow-y: auto; padding: 1.25rem; box-sizing: border-box;
+      scrollbar-color: #444 #1a1a1e; /* Firefox */
+    }
+    .soc-right-panel::-webkit-scrollbar { width: 8px; }
+    .soc-right-panel::-webkit-scrollbar-track { background: #1a1a1e; border-radius: 8px; }
+    .soc-right-panel::-webkit-scrollbar-thumb { background: #444; border-radius: 8px; }
+    .soc-right-panel::-webkit-scrollbar-thumb:hover { background: #555; }
+    .soc-right-panel-title { font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 1.15rem; color: #f0f0f0; }
+
+    /* Topics picker — its own little glowing box so it "pops" instead of
+       blending into the rest of the plain form fields. */
+    .soc-create-types-box {
+      background: linear-gradient(160deg, rgba(240,192,96,0.1), rgba(107,63,160,0.06));
+      border: 1px solid rgba(240,192,96,0.3); border-radius: 14px;
+      padding: 0.9rem; box-shadow: 0 0 20px rgba(240,192,96,0.08);
+    }
+
+    .yp-intro-title { font-family: 'Fredoka', 'Lato', Arial, sans-serif; font-size: 1.3rem; font-weight: 700; color: #f0f0f0; margin-bottom: 0.3rem; }
+    .yp-intro-text { color: #999; font-size: 0.9rem; margin: 0 0 1.25rem; }
+
+    /* ── Home feed — Best/Recent/Top, Reddit-style ── */
+    .soc-feed-header { display: flex; align-items: center; margin-bottom: 1.25rem; }
+    .soc-sort-wrap { position: relative; }
+    .soc-sort-btn {
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #ccc;
+      border-radius: 20px; padding: 0.5em 1.1em; font-size: 0.9rem; font-weight: 700;
+      cursor: pointer; font-family: inherit;
+    }
+    .soc-sort-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .soc-sort-caret { font-size: 0.7rem; }
+    .soc-sort-menu {
+      position: absolute; top: calc(100% + 0.4rem); left: 0; z-index: 20; min-width: 150px;
+      background: #141018; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.55); overflow: hidden;
+    }
+    .soc-sort-item {
+      display: block; width: 100%; text-align: left; background: none; border: none;
+      color: #ccc; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600;
+      padding: 0.6rem 0.9rem; cursor: pointer;
+    }
+    .soc-sort-item:hover { background: rgba(127,168,217,0.12); color: #fff; }
+    .soc-sort-item.active { color: #f0c060; }
+
+    .soc-feed-list { display: flex; flex-direction: column; gap: 0.85rem; }
+    .soc-feed-empty { color: rgba(255,255,255,0.4); text-align: center; padding: 2rem 0; }
+    /* Same "card" recipe as a club's own post rows (.cl-admin-post in
+       club.html) — square thumbnail + title + teaser stats — just with a
+       club icon/name badge added since this feed spans every club. */
+    .soc-feed-card {
+      position: relative;
+      display: flex; gap: 0.9rem; text-decoration: none; color: inherit;
+      background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 1rem 1.1rem;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .soc-feed-card:hover { border-color: rgba(240,192,96,0.4); background: rgba(255,255,255,0.08); }
+
+    /* "•••" delete menu -- every post on this page is the viewer's own, so
+       it's always shown, not conditional the way club.html's version is.
+       Same transparent-bubble-with-glow recipe. */
+    .soc-post-menu-wrap { position: absolute; top: 50%; right: 0.6rem; transform: translateY(-50%); z-index: 5; opacity: 0; transition: opacity 0.15s; }
+    .soc-feed-card:hover .soc-post-menu-wrap,
+    .soc-post-menu-wrap.soc-post-menu-open { opacity: 1; }
+    .soc-feed-card--card .soc-post-menu-wrap { top: 0.85rem; right: 0.85rem; transform: none; }
+    .soc-post-menu-btn {
+      width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      background: transparent; border: none; color: #bbb;
+      font-size: 0.75rem; letter-spacing: 0.04em; cursor: pointer; font-family: inherit; padding: 0;
+      transition: color 0.15s, background 0.15s, box-shadow 0.15s;
+    }
+    .soc-post-menu-btn:hover { color: #7fa8d9; background: rgba(127,168,217,0.12); box-shadow: 0 0 12px rgba(127,168,217,0.5); }
+    .soc-post-menu-dropdown {
+      position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; min-width: 150px;
+      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.5); overflow: hidden; padding: 0.35rem;
+    }
+    .soc-post-menu-dropdown button {
+      display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+      color: #e8849e; font-family: inherit; font-size: 0.85rem; padding: 0.55rem 0.7rem; border-radius: 8px;
+      white-space: nowrap;
+    }
+    .soc-post-menu-dropdown button:hover { background: rgba(194,84,122,0.12); }
+    .soc-feed-card-thumb {
+      width: 64px; height: 64px; border-radius: 10px; object-fit: cover; flex-shrink: 0;
+      background: #161616; border: 1px solid rgba(255,255,255,0.1);
+    }
+    .soc-feed-card-body { flex: 1; min-width: 0; }
+    .soc-feed-card-club {
+      display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: #f0c060;
+      font-weight: 700; margin-bottom: 0.3rem; flex-wrap: wrap;
+    }
+    .soc-feed-card-club-icon, .soc-feed-card-club-icon-fallback { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .soc-feed-card-club-icon-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.6rem; }
+    .soc-feed-card-club-dot { color: #666; }
+    .soc-feed-card-meta { font-size: 0.78rem; color: #888; font-weight: 400; }
+    .soc-feed-card-title {
+      font-size: 1rem; font-weight: 600; color: #e8e8e8; margin: 0; line-height: 1.4;
+      overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+      -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    }
+    .soc-feed-card-stats { display: flex; gap: 1rem; font-size: 0.76rem; color: #888; margin-top: 0.4rem; }
+    .soc-feed-card-stat--liked { color: #d97a72; }
+
+    /* ── Card view -- image (when there is one) opens up full-width instead
+       of a small square thumbnail; text-only posts drop the thumbnail
+       entirely and get a body preview instead, both a step up from
+       Compact's "row" reading toward something closer to a real post. ── */
+    .soc-feed-card--card { flex-direction: column; padding: 0; overflow: hidden; }
+    /* padding-top aspect-ratio trick instead of the `aspect-ratio` property
+       directly on the <img> -- combined with max-height and object-fit that
+       property was leaving the image at its own intrinsic size in some
+       cases (unfilled space showing the wrap's background as bars down the
+       sides) instead of actually filling/cropping to the box. A sized
+       wrapper with the image absolutely positioned inside it is the old,
+       bulletproof way to guarantee a fixed-ratio crop regardless. */
+    .soc-feed-card--card .soc-feed-card-thumb-wrap {
+      position: relative; width: 100%; padding-top: 56.25%; background: #161616; overflow: hidden;
+    }
+    .soc-feed-card--card .soc-feed-card-thumb {
+      position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 0; object-fit: cover;
+    }
+    /* A real baked preview crop (preview_image_url) is already square and
+       already framed exactly the way the poster wanted -- forcing it into
+       the 16:9 box above would crop it again. Swap the wrap to match the
+       image's own 1:1 shape instead so Card view shows it in full. */
+    .soc-feed-card--card .soc-feed-card-thumb-wrap--square { padding-top: 100%; }
+    /* Club/author/title sit in their own header block above the image now
+       (Reddit-style), instead of below it in the same body block used for
+       the preview/stats. */
+    .soc-feed-card-header { padding: 1rem 1.1rem 0.75rem; }
+    .soc-feed-card--card .soc-feed-card-body { padding: 0.85rem 1.1rem 1.1rem; }
+    .soc-feed-card--card .soc-feed-card-title { font-size: 1.15rem; -webkit-line-clamp: 3; }
+    .soc-feed-card-preview {
+      font-size: 0.88rem; color: #bbb; line-height: 1.6; margin: 0.5rem 0 0;
+      overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
+    }
+
+    /* ── Card/Compact view toggle -- small square icon button, dropdown
+       with the two options, Compact selected by default. ── */
+    .view-toggle-wrap { position: relative; margin-left: 0.75rem; }
+    .view-toggle-btn {
+      width: 38px; height: 34px; border-radius: 8px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); color: #ccc;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s, color 0.15s;
+    }
+    .view-toggle-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+    .view-toggle-menu {
+      position: absolute; top: calc(100% + 0.4rem); left: 0; z-index: 20; min-width: 140px;
+      background: #141018; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.55); overflow: hidden; padding: 0.4rem 0;
+    }
+    .view-toggle-menu-label {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #888;
+      padding: 0.4rem 0.9rem;
+    }
+    .view-toggle-menu-item {
+      display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left; background: none; border: none;
+      color: #ccc; font-family: 'Inter', sans-serif; font-size: 0.88rem; font-weight: 600;
+      padding: 0.55rem 0.9rem; cursor: pointer;
+    }
+    .view-toggle-menu-item:hover { background: rgba(127,168,217,0.12); color: #fff; }
+    .view-toggle-menu-item.active { color: #f0c060; }
+
+    /* Same .soc-feed-card component as the main feed, scaled way down
+       here — the big square thumbnail and full-size padding/text made
+       each card so tall only 2 fit in the panel at once. No thumbnail,
+       tighter padding, smaller/single-line text so ~8 fit without
+       scrolling. */
+    .soc-popular-list { display: flex; flex-direction: column; gap: 0.4rem; }
+    .soc-popular-list .soc-feed-card { padding: 0.6rem 0.7rem; border-radius: 12px; gap: 0; }
+    .soc-popular-list .soc-feed-card-thumb { display: none; }
+    .soc-popular-list .soc-feed-card-club { font-size: 0.76rem; margin-bottom: 0.15rem; }
+    .soc-popular-list .soc-feed-card-club-icon, .soc-popular-list .soc-feed-card-club-icon-fallback { width: 16px; height: 16px; }
+    .soc-popular-list .soc-feed-card-meta { font-size: 0.68rem; }
+    .soc-popular-list .soc-feed-card-title {
+      font-size: 0.82rem; margin-bottom: 0.2rem;
+      -webkit-line-clamp: 1;
+    }
+    .soc-popular-list .soc-feed-card-stats { font-size: 0.68rem; gap: 0.7rem; margin-top: 0; }
+    .soc-popular-list .soc-rec-join-btn { padding: 0.1em 0.6em; font-size: 0.66rem; }
+    .soc-rec-visited-tag {
+      font-size: 0.66rem; font-weight: 700; color: #f0c060; background: rgba(240,192,96,0.12);
+      border: 1px solid rgba(240,192,96,0.3); border-radius: 8px; padding: 0.1em 0.45em; margin-left: 0.4rem;
+    }
+    .soc-rec-join-btn {
+      /* Lives inline in the stats row (margin-left:auto pushes it to the
+         end) instead of its own line below — otherwise it adds a whole
+         extra row of height and the card ends up taller than a plain
+         home-feed card, which this is supposed to match. */
+      display: inline-block; margin-left: auto; background: rgba(127,168,217,0.15);
+      border: 1px solid rgba(127,168,217,0.5); color: #cfe0f5; border-radius: 14px;
+      padding: 0.15em 0.7em; font-size: 0.72rem; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .soc-rec-join-btn:hover { background: rgba(127,168,217,0.28); }
+    .soc-rec-join-btn.soc-joined { background: rgba(127,168,217,0.3); color: #fff; cursor: default; }
+
+    @media (max-width: 1100px) {
+      /* Not enough room for both fixed side panels plus real content —
+         drop the right panel back into normal flow, stacked below. */
+      .soc-right-panel { position: static; width: auto; height: auto; margin-top: 2rem; }
+      .soc-main { margin-right: 0; }
+    }
+    @media (max-width: 860px) {
+      /* Fixed sidebar doesn't make sense on a narrow screen — drop it back
+         into normal flow, stacked above the main content. */
+      .soc-sidebar { position: static; width: auto; height: auto; border-right: none; }
+      .soc-main { margin-left: 0; padding: 1.5rem 1.25rem 4rem; }
+      .soc-layout.soc-collapsed .soc-main { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="fanpages-topbar-root"></div>
+<script src="/fanpages/fanpages-nav.js"></script>
+
+<div class="page-bg">
+  <img src="/images/gallery/solusgarnet_17.png" alt="" />
+  <div class="page-bg-overlay"></div>
+</div>
+
+<div class="soc-layout" id="soc-layout">
+
+  <aside class="soc-sidebar">
+    <button class="soc-sidebar-toggle" id="soc-sidebar-toggle" type="button" title="Collapse sidebar" aria-label="Collapse sidebar">☰</button>
+
+    <div class="soc-sidebar-content" id="soc-sidebar-content">
+      <div id="soc-sidebar-user-slot"></div>
+
+      <nav class="soc-sidebar-nav">
+        <a class="soc-nav-link" id="soc-nav-home" href="/fanpages/social"><span class="soc-nav-icon">🏠</span> Home</a>
+        <a class="soc-nav-link" id="soc-nav-recent" href="/fanpages/clubs-recent"><span class="soc-nav-icon">🕓</span> Recent</a>
+        <a class="soc-nav-link" id="soc-nav-explore" href="/fanpages/clubs-explore"><span class="soc-nav-icon">🧭</span> Explore</a>
+        <button class="soc-nav-create-btn" id="soc-create-club-btn" type="button"><span>+</span> Start a Club</button>
+      </nav>
+
+      <hr class="soc-sidebar-rule" />
+      <p class="soc-sidebar-label">Your Clubs</p>
+      <hr class="soc-sidebar-rule" />
+      <div class="soc-sidebar-clubs" id="soc-sidebar-clubs"><p class="soc-sidebar-empty">Loading…</p></div>
+
+      <div id="soc-sidebar-moderation-section" style="display:none;">
+        <hr class="soc-sidebar-rule" />
+        <div class="soc-sidebar-label-row">
+          <p class="soc-sidebar-label">Moderation</p>
+          <button class="soc-sidebar-collapse-btn" id="soc-mod-collapse-btn" type="button" title="Collapse" aria-label="Collapse Moderation section">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"></polyline></svg>
+          </button>
+        </div>
+        <hr class="soc-sidebar-rule" />
+        <div id="soc-mod-content">
+          <button class="soc-sidebar-manage-btn" id="soc-mod-manage-btn" type="button"><span>⚙️</span> Manage</button>
+          <div class="soc-sidebar-clubs" id="soc-sidebar-mod-clubs"></div>
+          <button class="soc-sidebar-showall-btn" id="soc-mod-showall-btn" type="button" style="display:none;">Show All</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="soc-main">
+    <p class="yp-intro-title">Your Posts</p>
+    <p class="yp-intro-text">Every post you've made across every club, in one place.</p>
+    <div class="soc-feed-header">
+      <div class="soc-sort-wrap" id="soc-sort-wrap">
+        <button class="soc-sort-btn" id="soc-sort-btn" type="button">🔥 Best <span class="soc-sort-caret">▾</span></button>
+        <div class="soc-sort-menu" id="soc-sort-menu" hidden>
+          <button type="button" class="soc-sort-item active" data-sort="best">🔥 Best</button>
+          <button type="button" class="soc-sort-item" data-sort="new">🕓 Recent</button>
+          <button type="button" class="soc-sort-item" data-sort="top">🏆 Top</button>
+        </div>
+      </div>
+      <div class="view-toggle-wrap" id="soc-view-toggle-wrap">
+        <button class="view-toggle-btn" id="soc-view-toggle-btn" type="button" title="Change view" aria-label="Change view">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="3" rx="1"/><rect x="3" y="19" width="18" height="3" rx="1"/></svg>
+        </button>
+        <div class="view-toggle-menu" id="soc-view-toggle-menu" hidden>
+          <p class="view-toggle-menu-label">View</p>
+          <button type="button" class="view-toggle-menu-item" data-mode="card">Card</button>
+          <button type="button" class="view-toggle-menu-item active" data-mode="compact">Compact</button>
+        </div>
+      </div>
+    </div>
+    <div class="soc-feed-list" id="soc-feed-list">
+      <p class="soc-feed-empty">Loading…</p>
+    </div>
+  </main>
+
+  <aside class="soc-right-panel">
+    <p class="soc-right-panel-title">✨ Recommended Clubs</p>
+    <div class="soc-popular-list" id="soc-popular-list"><p class="soc-feed-empty">Loading…</p></div>
+  </aside>
+
+</div>
+
+<!-- Manage Communities modal — every club the viewer owns or moderates -->
+<div class="char-editor-overlay" id="soc-manage-overlay" hidden>
+  <div class="char-editor-modal">
+    <h2 class="char-editor-title">Manage Communities</h2>
+    <div class="soc-manage-list" id="soc-manage-list"></div>
+    <div class="char-editor-actions">
+      <button class="mod-btn" id="soc-manage-close" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete-club confirm — only shown for clubs the viewer owns. -->
+<div class="mod-confirm-overlay" id="soc-club-delete-confirm-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title" id="soc-club-delete-confirm-title">Delete this club?</p>
+    <p class="mod-confirm-text">This permanently deletes the club, its posts, and its members. This can't be undone.</p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="soc-club-delete-confirm-cancel" type="button">Cancel</button>
+      <button class="mod-btn mod-btn--danger" id="soc-club-delete-confirm-yes" type="button">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Club modal -->
+<div class="char-editor-overlay" id="soc-create-overlay" hidden>
+  <div class="char-editor-modal">
+    <h2 class="char-editor-title">Create a Club</h2>
+    <div class="mod-field">
+      <label for="soc-create-name">Club Name</label>
+      <input class="mod-input" id="soc-create-name" maxlength="60" placeholder="e.g. Cafe Plaisir" />
+    </div>
+    <div class="mod-field">
+      <label>Topics <span style="font-weight:400;color:#888;">(pick 1 to 3 — required, helps people find your club)</span></label>
+      <div class="soc-create-types-box">
+        <div class="wiki-meta-check-row" id="soc-create-types"></div>
+      </div>
+    </div>
+    <div class="mod-field" style="margin-bottom:0;">
+      <label>NSFW?</label>
+      <div class="nsfw-toggle-row">
+        <label class="nsfw-toggle-switch">
+          <input type="checkbox" id="soc-create-nsfw-toggle" />
+          <span class="nsfw-toggle-slider"></span>
+        </label>
+        <span class="nsfw-toggle-label nsfw-toggle-label--sfw" id="soc-create-nsfw-label">SFW</span>
+      </div>
+      <p class="nsfw-toggle-note">If this club features adult discussions, posts, or media, please label it as NSFW :3</p>
+    </div>
+    <p class="mod-panel-msg" id="soc-create-msg"></p>
+    <div class="char-editor-actions">
+      <button class="mod-btn" id="soc-create-cancel" type="button">Cancel</button>
+      <button class="mod-btn" id="soc-create-save" type="button">Create</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api';
+const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+if (!token) window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname)}`);
+const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
+window.fpFixLinks();
+document.getElementById('soc-nav-home').href = window.fpUrl('/social');
+document.getElementById('soc-nav-recent').href = window.fpUrl('/clubs-recent');
+document.getElementById('soc-nav-explore').href = window.fpUrl('/clubs-explore');
+let currentUser = null;
+try {
+  const raw = localStorage.getItem('btw_user') || sessionStorage.getItem('btw_user');
+  if (raw) currentUser = JSON.parse(raw);
+} catch {}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── Sidebar: user block ─────────────────────────────────────────────────
+// Clicking the profile block opens a small popup (SFW/NSFW status + View
+// Profile + Account Settings) instead of navigating straight to the
+// profile page — closes on any click outside the wrap.
+const sidebarUserSlot = document.getElementById('soc-sidebar-user-slot');
+if (token && currentUser) {
+  const avatarHtml = currentUser.avatar
+    ? `<img class="soc-sidebar-avatar" src="${currentUser.avatar}" alt="" />`
+    : `<span class="soc-sidebar-avatar-fallback">${escapeHtml((currentUser.display_name || currentUser.username || '?').charAt(0).toUpperCase())}</span>`;
+  sidebarUserSlot.innerHTML = `
+    <div class="soc-sidebar-user-wrap">
+      <button type="button" class="soc-sidebar-user" id="soc-sidebar-user-btn">
+        ${avatarHtml}
+        <span class="soc-sidebar-username">${escapeHtml(currentUser.display_name || currentUser.username)}</span>
+      </button>
+      <div class="soc-sidebar-user-menu" id="soc-sidebar-user-menu" hidden>
+        <p class="soc-sidebar-user-menu-status-text" id="soc-sidebar-nsfw-label"></p>
+        <a class="soc-sidebar-user-menu-item" href="${window.fpUrl(`/${encodeURIComponent(currentUser.username)}`)}">View Profile</a>
+        <a class="soc-sidebar-user-menu-item" href="${window.fpUrl('/account-settings')}">Account Settings</a>
+      </div>
+    </div>
+  `;
+  setSidebarNsfwState(currentUser.nsfw_enabled !== false);
+  const menuBtn = document.getElementById('soc-sidebar-user-btn');
+  const menu = document.getElementById('soc-sidebar-user-menu');
+  menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+  document.addEventListener('click', (e) => {
+    if (!menu.hidden && !e.target.closest('.soc-sidebar-user-wrap')) menu.hidden = true;
+  });
+} else {
+  sidebarUserSlot.innerHTML = `
+    <div class="soc-sidebar-guest-wrap">
+      <img class="soc-sidebar-guest-avatar" src="/images/defaultchar.jpg" alt="" />
+      <span class="soc-sidebar-guest-tag">Guest</span>
+      <button type="button" class="soc-sidebar-guest-signin-btn" id="soc-sidebar-guest-signin-btn">Sign In</button>
+    </div>
+  `;
+  document.getElementById('soc-sidebar-guest-signin-btn').addEventListener('click', () => window.fpOpenLoginModal());
+}
+function setSidebarNsfwState(enabled) {
+  const label = document.getElementById('soc-sidebar-nsfw-label');
+  if (!label) return;
+  label.innerHTML = enabled
+    ? 'You are in: <strong class="nsfw-toggle-label">NSFW Mode</strong> <span class="soc-sidebar-user-menu-status-hint">(Change preferences in Account Settings)</span>'
+    : 'You are in: <strong class="nsfw-toggle-label nsfw-toggle-label--sfw">SFW Mode</strong> <span class="soc-sidebar-user-menu-status-hint">(Change preferences in Account Settings)</span>';
+}
+
+function clubIconHtml(club, sizeClass) {
+  if (club.icon_url) return `<img class="${sizeClass}" src="${club.icon_url}" alt="" />`;
+  const letter = escapeHtml((club.name || '?').charAt(0).toUpperCase());
+  return `<span class="${sizeClass}-fallback">${letter}</span>`;
+}
+
+// ── Sidebar: Moderation (owned/admin) + Your Clubs (every membership) ────
+let modClubsCache = [];
+async function loadSidebarClubs() {
+  const wrap = document.getElementById('soc-sidebar-clubs');
+  const modSection = document.getElementById('soc-sidebar-moderation-section');
+  if (!token) {
+    wrap.innerHTML = '<p class="soc-sidebar-note">Sign in to see your clubs~ <button type="button" class="soc-sidebar-note-signin-btn" id="soc-sidebar-clubs-signin-btn">Sign In</button></p>';
+    document.getElementById('soc-sidebar-clubs-signin-btn').addEventListener('click', () => window.fpOpenLoginModal());
+    modSection.style.display = 'none';
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/clubs?mine=1&limit=50`, { headers: authHeaders() });
+    const data = await res.json();
+    const clubs = data.clubs || [];
+
+    modClubsCache = clubs.filter(c => c.viewer_role === 'owner' || c.viewer_role === 'admin');
+    modSection.style.display = modClubsCache.length ? '' : 'none';
+    renderModClubsPreview();
+
+    if (!clubs.length) {
+      wrap.innerHTML = '<p class="soc-sidebar-note">You haven\'t joined any clubs yet.</p>';
+      return;
+    }
+    wrap.innerHTML = '';
+    clubs.forEach(c => wrap.appendChild(sidebarClubLink(c, c.viewer_role === 'owner')));
+  } catch {
+    wrap.innerHTML = '<p class="soc-sidebar-note">Couldn\'t load your clubs.</p>';
+    modSection.style.display = 'none';
+  }
+}
+function sidebarClubLink(c, showOwnerRose) {
+  const a = document.createElement('a');
+  a.className = 'soc-sidebar-club-link';
+  a.href = window.fpUrl(`/club?slug=${encodeURIComponent(c.slug)}`);
+  a.innerHTML = `${clubIconHtml(c, 'soc-sidebar-club-icon')}<span class="soc-sidebar-club-name">${escapeHtml(c.name)}</span>${showOwnerRose ? '<span class="soc-sidebar-club-owner-rose" title="You own this club">🌹</span>' : ''}`;
+  return a;
+}
+function sidebarModClubLink(c) {
+  const a = document.createElement('a');
+  a.className = 'soc-sidebar-club-link';
+  a.href = window.fpUrl(`/club?slug=${encodeURIComponent(c.slug)}`);
+  a.innerHTML = `${clubIconHtml(c, 'soc-sidebar-club-icon')}<span class="soc-sidebar-club-name">${escapeHtml(c.name)}</span><span class="soc-sidebar-club-role-badge">${c.viewer_role}</span>`;
+  return a;
+}
+
+// Preview: up to 5 inline, "Show All" reveals the rest without opening
+// the modal — the modal (Manage button) is for the full browsable list.
+let modPreviewExpanded = false;
+function renderModClubsPreview() {
+  const wrap = document.getElementById('soc-sidebar-mod-clubs');
+  const showAllBtn = document.getElementById('soc-mod-showall-btn');
+  wrap.innerHTML = '';
+  const shown = modPreviewExpanded ? modClubsCache : modClubsCache.slice(0, 5);
+  shown.forEach(c => wrap.appendChild(sidebarModClubLink(c)));
+  showAllBtn.style.display = (!modPreviewExpanded && modClubsCache.length > 5) ? 'block' : 'none';
+}
+document.getElementById('soc-mod-showall-btn').addEventListener('click', () => {
+  modPreviewExpanded = true;
+  renderModClubsPreview();
+});
+
+// Collapse arrow — persisted the same way as the whole-sidebar toggle.
+const modCollapseBtn = document.getElementById('soc-mod-collapse-btn');
+function setModCollapsed(collapsed) {
+  modCollapseBtn.classList.toggle('soc-collapsed', collapsed);
+  document.getElementById('soc-mod-content').classList.toggle('soc-collapsed', collapsed);
+  localStorage.setItem('soc_mod_collapsed', collapsed ? '1' : '0');
+}
+modCollapseBtn.addEventListener('click', () => setModCollapsed(!modCollapseBtn.classList.contains('soc-collapsed')));
+if (localStorage.getItem('soc_mod_collapsed') === '1') setModCollapsed(true);
+
+// "⚙️ Manage" — the full list in a modal, same clubs as the preview, but
+// each row for a club the viewer OWNS also gets a Delete button (only the
+// owner can delete — enforced server-side too).
+function manageClubRowEl(c) {
+  const row = document.createElement('div');
+  row.className = 'soc-manage-row';
+  row.appendChild(sidebarModClubLink(c));
+  if (c.viewer_role === 'owner') {
+    const delBtn = document.createElement('button');
+    delBtn.className = 'soc-manage-delete-btn';
+    delBtn.type = 'button';
+    delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', () => openClubDeleteConfirm(c));
+    row.appendChild(delBtn);
+  }
+  return row;
+}
+function renderManageList() {
+  const list = document.getElementById('soc-manage-list');
+  list.innerHTML = modClubsCache.length
+    ? ''
+    : '<p class="soc-sidebar-note">Nothing to manage yet.</p>';
+  modClubsCache.forEach(c => list.appendChild(manageClubRowEl(c)));
+}
+document.getElementById('soc-mod-manage-btn').addEventListener('click', () => {
+  renderManageList();
+  document.getElementById('soc-manage-overlay').hidden = false;
+});
+
+// Delete-club confirm.
+let clubPendingDelete = null;
+function openClubDeleteConfirm(c) {
+  clubPendingDelete = c;
+  document.getElementById('soc-club-delete-confirm-title').textContent = `Delete "${c.name}"?`;
+  document.getElementById('soc-club-delete-confirm-overlay').hidden = false;
+}
+document.getElementById('soc-club-delete-confirm-cancel').addEventListener('click', () => {
+  clubPendingDelete = null;
+  document.getElementById('soc-club-delete-confirm-overlay').hidden = true;
+});
+document.getElementById('soc-club-delete-confirm-yes').addEventListener('click', async () => {
+  if (!clubPendingDelete) return;
+  const btn = document.getElementById('soc-club-delete-confirm-yes');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(clubPendingDelete.slug)}`, {
+      method: 'DELETE', headers: authHeaders(),
+    });
+    if (res.ok) {
+      modClubsCache = modClubsCache.filter(c => c.slug !== clubPendingDelete.slug);
+      renderManageList();
+      renderModClubsPreview();
+      document.getElementById('soc-club-delete-confirm-overlay').hidden = true;
+    }
+  } catch {} finally {
+    btn.disabled = false;
+    btn.textContent = 'Delete';
+    clubPendingDelete = null;
+  }
+});
+document.getElementById('soc-manage-close').addEventListener('click', () => {
+  document.getElementById('soc-manage-overlay').hidden = true;
+});
+
+// ── Create Club modal ────────────────────────────────────────────────────
+let clubTypesCatalog = [];
+async function loadClubTypesCatalog() {
+  if (clubTypesCatalog.length) return clubTypesCatalog;
+  try {
+    const res = await fetch(`${API}/club-types`);
+    if (res.ok) clubTypesCatalog = (await res.json()).types || [];
+  } catch {}
+  return clubTypesCatalog;
+}
+function buildTypeChecks(selected) {
+  const wrap = document.getElementById('soc-create-types');
+  wrap.innerHTML = '';
+  clubTypesCatalog.forEach(({ name, emoji }) => {
+    const isChecked = selected.includes(name);
+    const label = document.createElement('label');
+    label.className = 'wiki-meta-check-item' + (isChecked ? ' wiki-meta-check-item--checked' : '');
+    label.innerHTML = `<input type="checkbox" value="${escapeHtml(name)}" ${isChecked ? 'checked' : ''} /> <span>${emoji} ${escapeHtml(name)}</span>`;
+    const input = label.querySelector('input');
+    input.addEventListener('change', () => {
+      const checkedCount = wrap.querySelectorAll('input:checked').length;
+      // Cap at 3 — same convention as Reddit's per-community topic count.
+      if (input.checked && checkedCount > 3) { input.checked = false; return; }
+      label.classList.toggle('wiki-meta-check-item--checked', input.checked);
+    });
+    wrap.appendChild(label);
+  });
+}
+document.getElementById('soc-create-club-btn').addEventListener('click', async () => {
+  if (!token) { window.fpRequireSignIn('To start a club, you must create an account!'); return; }
+  document.getElementById('soc-create-name').value = '';
+  document.getElementById('soc-create-nsfw-toggle').checked = false;
+  document.getElementById('soc-create-nsfw-label').textContent = 'SFW';
+  document.getElementById('soc-create-nsfw-label').classList.add('nsfw-toggle-label--sfw');
+  document.getElementById('soc-create-msg').textContent = '';
+  await loadClubTypesCatalog();
+  buildTypeChecks([]);
+  document.getElementById('soc-create-overlay').hidden = false;
+});
+document.getElementById('soc-create-cancel').addEventListener('click', () => {
+  document.getElementById('soc-create-overlay').hidden = true;
+});
+// Deep link from other pages' "Start a Club" link (e.g. club.html, which
+// has no modal of its own — it just navigates here) — ?create=1 opens the
+// modal immediately instead of dumping the user on the plain hub view.
+if (new URLSearchParams(location.search).get('create') === '1') {
+  document.getElementById('soc-create-club-btn').click();
+  history.replaceState({}, '', window.fpUrl('/social'));
+}
+document.getElementById('soc-create-nsfw-toggle').addEventListener('change', function () {
+  const label = document.getElementById('soc-create-nsfw-label');
+  label.textContent = this.checked ? 'NSFW' : 'SFW';
+  label.classList.toggle('nsfw-toggle-label--sfw', !this.checked);
+});
+document.getElementById('soc-create-save').addEventListener('click', async () => {
+  const msgEl = document.getElementById('soc-create-msg');
+  const name = document.getElementById('soc-create-name').value.trim();
+  if (!name) { msgEl.className = 'mod-panel-msg mod-panel-msg--error'; msgEl.textContent = 'A club name is required.'; return; }
+  const isNsfw = document.getElementById('soc-create-nsfw-toggle').checked;
+  const clubTypes = Array.from(document.querySelectorAll('#soc-create-types input:checked')).map(c => c.value);
+  if (!clubTypes.length) { msgEl.className = 'mod-panel-msg mod-panel-msg--error'; msgEl.textContent = 'Pick at least one Topic for your club.'; return; }
+
+  const btn = document.getElementById('soc-create-save');
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+  try {
+    const res = await fetch(`${API}/clubs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ name, is_nsfw: isNsfw, club_types: clubTypes }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+      msgEl.textContent = data.error || 'Something went wrong. Please try again.';
+      return;
+    }
+    window.location.href = window.fpUrl(`/club?slug=${encodeURIComponent(data.club.slug)}`);
+  } catch {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Network error. Please try again.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Create';
+  }
+});
+
+loadSidebarClubs();
+
+// ── Home feed — Best/Recent/Top across every club ────────────────────────
+function timeAgo(dateStr) {
+  const sec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  const units = [['year', 31536000], ['month', 2592000], ['week', 604800], ['day', 86400], ['hour', 3600], ['minute', 60]];
+  for (const [name, secs] of units) {
+    const val = Math.floor(sec / secs);
+    if (val >= 1) return `${val} ${name}${val > 1 ? 's' : ''} ago`;
+  }
+  return 'just now';
+}
+function clubIconHtmlFor(club) {
+  return club.icon_url
+    ? `<img class="soc-feed-card-club-icon" src="${club.icon_url}" alt="" />`
+    : `<span class="soc-feed-card-club-icon-fallback">${escapeHtml((club.name || '?').charAt(0).toUpperCase())}</span>`;
+}
+function feedPostUrl(p) {
+  return window.fpUrl(`/club?slug=${encodeURIComponent(p.club.slug)}&tab=social&post=${p.id}`);
+}
+function truncateText(s, n) {
+  return s.length > n ? s.slice(0, n).trim() + '…' : s;
+}
+// Card mode opens images up full-width instead of a small square
+// thumbnail, and drops the thumbnail entirely for text-only posts in
+// favor of a bigger title + a body preview -- Compact (the default) stays
+// exactly what it always was.
+function feedCard(p, mode) {
+  const isCard = mode === 'card';
+  const a = document.createElement('a');
+  a.className = 'soc-feed-card' + (isCard ? ' soc-feed-card--card' : '');
+  a.href = feedPostUrl(p);
+  const titleText = p.title || p.body || 'Untitled post';
+  const previewX = p.preview_position_x != null ? p.preview_position_x : 50;
+  const previewY = p.preview_position_y != null ? p.preview_position_y : 50;
+  const hasImage = !!p.image_url;
+  // A real baked preview crop (preview_image_url) wins when the post has
+  // one -- already the right shape, no position math needed. Falls back to
+  // the old pan-position-on-the-full-image approach for older posts.
+  const thumbImg = p.preview_image_url
+    ? `<img class="soc-feed-card-thumb" src="${p.preview_image_url}" alt="" />`
+    : `<img class="soc-feed-card-thumb" src="${p.image_url || '/images/noimage.png'}" alt="" style="object-position:${previewX}% ${previewY}%;" />`;
+  const thumbWrapClass = p.preview_image_url ? 'soc-feed-card-thumb-wrap soc-feed-card-thumb-wrap--square' : 'soc-feed-card-thumb-wrap';
+  const thumbHtml = (isCard && !hasImage) ? '' : (isCard ? `<div class="${thumbWrapClass}">${thumbImg}</div>` : thumbImg);
+  const showPreview = isCard && !hasImage && p.title && p.body;
+  const previewHtml = showPreview ? `<p class="soc-feed-card-preview">${escapeHtml(truncateText(p.body, 220))}</p>` : '';
+  const clubRowHtml = `
+    <div class="soc-feed-card-club">
+      ${clubIconHtmlFor(p.club)}
+      <span>${escapeHtml(p.club.name)}</span>
+      <span class="soc-feed-card-club-dot">·</span>
+      <span class="soc-feed-card-meta">${escapeHtml(p.author.display_name)} · ${timeAgo(p.created_at)}</span>
+    </div>`;
+  const statsHtml = `
+    <div class="soc-feed-card-stats">
+      <span class="${p.user_liked ? 'soc-feed-card-stat--liked' : ''}">🤍 ${p.like_count}</span>
+      <span>💬 ${p.comment_count}</span>
+    </div>`;
+  // Card mode reads top-to-bottom like Reddit's own card view -- club/
+  // author/title sit above the image, not below it, with the image
+  // opening up full-width in between and the stats row underneath.
+  a.innerHTML = isCard ? `
+    <div class="soc-feed-card-header">
+      ${clubRowHtml}
+      <p class="soc-feed-card-title">${escapeHtml(titleText)}</p>
+    </div>
+    ${thumbHtml}
+    <div class="soc-feed-card-body">
+      ${previewHtml}
+      ${statsHtml}
+    </div>
+  ` : `
+    ${thumbHtml}
+    <div class="soc-feed-card-body">
+      ${clubRowHtml}
+      <p class="soc-feed-card-title">${escapeHtml(titleText)}</p>
+      ${statsHtml}
+    </div>
+  `;
+  return a;
+}
+
+// "•••" -- Delete only, every post on this page is the viewer's own.
+function yourPostMenu(p) {
+  const wrap = document.createElement('div');
+  wrap.className = 'soc-post-menu-wrap';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'soc-post-menu-btn';
+  btn.textContent = '•••';
+  btn.setAttribute('aria-label', 'Post actions');
+  const dropdown = document.createElement('div');
+  dropdown.className = 'soc-post-menu-dropdown';
+  dropdown.hidden = true;
+
+  const delBtn = document.createElement('button');
+  delBtn.type = 'button';
+  delBtn.textContent = 'Delete';
+  delBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropdown.hidden = true;
+    wrap.classList.remove('soc-post-menu-open');
+    if (!confirm('Delete this post? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`${API}/clubs/${encodeURIComponent(p.club.slug)}/posts/${p.id}`, { method: 'DELETE', headers: authHeaders() });
+      if (res.ok) loadFeed();
+    } catch {}
+  });
+  dropdown.appendChild(delBtn);
+
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const opening = dropdown.hidden;
+    document.querySelectorAll('.soc-post-menu-dropdown').forEach(d => { d.hidden = true; });
+    document.querySelectorAll('.soc-post-menu-open').forEach(w => w.classList.remove('soc-post-menu-open'));
+    dropdown.hidden = !opening;
+    wrap.classList.toggle('soc-post-menu-open', opening);
+  });
+  wrap.appendChild(btn);
+  wrap.appendChild(dropdown);
+  return wrap;
+}
+document.addEventListener('click', () => {
+  document.querySelectorAll('.soc-post-menu-dropdown').forEach(d => { d.hidden = true; });
+  document.querySelectorAll('.soc-post-menu-open').forEach(w => w.classList.remove('soc-post-menu-open'));
+});
+
+// ── Card/Compact view toggle -- shared preference across Home, Recent, and
+// every club's Social tab (localStorage key is the same on all three). ────
+let viewMode = localStorage.getItem('btw_feed_view_mode') || 'compact';
+function setViewMode(mode) {
+  viewMode = mode;
+  localStorage.setItem('btw_feed_view_mode', mode);
+  document.querySelectorAll('.view-toggle-menu-item').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  loadFeed();
+}
+function wireViewToggle() {
+  const btn = document.getElementById('soc-view-toggle-btn');
+  const menu = document.getElementById('soc-view-toggle-menu');
+  btn.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+  document.addEventListener('click', (e) => {
+    if (!menu.hidden && !e.target.closest('#soc-view-toggle-wrap')) menu.hidden = true;
+  });
+  document.querySelectorAll('.view-toggle-menu-item').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === viewMode);
+    b.addEventListener('click', () => { setViewMode(b.dataset.mode); menu.hidden = true; });
+  });
+}
+wireViewToggle();
+
+let feedSort = 'best';
+async function loadFeed() {
+  const list = document.getElementById('soc-feed-list');
+  try {
+    const res = await fetch(`${API}/clubs-feed?mine=1&sort=${feedSort}&limit=25`, { headers: authHeaders() });
+    const data = await res.json();
+    const posts = data.posts || [];
+    if (!posts.length) {
+      list.innerHTML = '<p class="soc-feed-empty">You haven\'t posted in any clubs yet — head into one and share something!</p>';
+      return;
+    }
+    list.innerHTML = '';
+    posts.forEach(p => {
+      const card = feedCard(p, viewMode);
+      card.appendChild(yourPostMenu(p));
+      list.appendChild(card);
+    });
+  } catch {
+    list.innerHTML = '<p class="soc-feed-empty">Couldn\'t load your posts right now.</p>';
+  }
+}
+// "Recommended Clubs" — a discovery panel, not another ranked-posts list
+// (which is what Best/Top already are). One post per club, only clubs the
+// viewer hasn't joined, clubs they've visited-but-not-joined bubble up
+// first — the whole point is nudging them toward joining something. Always
+// compact regardless of the main feed's view mode -- this panel's own CSS
+// assumes the compact shape (thumbnail hidden, single-line title) to stay
+// small enough that ~8 fit without scrolling.
+function recommendedCard(p) {
+  const card = feedCard(p, 'compact');
+  if (p.recently_visited && !p.already_joined) {
+    const clubRow = card.querySelector('.soc-feed-card-club');
+    if (clubRow) clubRow.insertAdjacentHTML('beforeend', '<span class="soc-rec-visited-tag">Visited</span>');
+  }
+  // Already a member — no need to sell them on joining, no "+ Join" button
+  // (fills out the panel instead of going empty when they've joined every
+  // club with posts).
+  if (p.already_joined) return card;
+  const joinBtn = document.createElement('button');
+  joinBtn.type = 'button';
+  joinBtn.className = 'soc-rec-join-btn';
+  joinBtn.textContent = '+ Join';
+  joinBtn.addEventListener('click', async (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (!token) { window.fpOpenLoginModal(); return; }
+    joinBtn.disabled = true;
+    try {
+      const res = await fetch(`${API}/clubs/${encodeURIComponent(p.club.slug)}/join`, { method: 'POST', headers: authHeaders() });
+      if (res.ok) { joinBtn.textContent = '✓ Joined'; joinBtn.classList.add('soc-joined'); }
+    } catch {}
+    joinBtn.disabled = false;
+  });
+  card.querySelector('.soc-feed-card-stats').appendChild(joinBtn);
+  return card;
+}
+async function loadPopular() {
+  const list = document.getElementById('soc-popular-list');
+  try {
+    const res = await fetch(`${API}/clubs-recommended?limit=10`, { headers: authHeaders() });
+    const data = await res.json();
+    const posts = data.posts || [];
+    if (!posts.length) { list.innerHTML = '<p class="soc-feed-empty">Nothing to recommend yet.</p>'; return; }
+    list.innerHTML = '';
+    posts.forEach(p => list.appendChild(recommendedCard(p)));
+  } catch {
+    list.innerHTML = '<p class="soc-feed-empty">Couldn\'t load right now.</p>';
+  }
+}
+
+const SOC_SORT_LABEL = { best: '🔥 Best', new: '🕓 Recent', top: '🏆 Top' };
+document.getElementById('soc-sort-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('soc-sort-menu').hidden = !document.getElementById('soc-sort-menu').hidden;
+});
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('soc-sort-wrap');
+  if (!wrap.contains(e.target)) document.getElementById('soc-sort-menu').hidden = true;
+});
+document.querySelectorAll('.soc-sort-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    feedSort = btn.dataset.sort;
+    document.querySelectorAll('.soc-sort-item').forEach(b => b.classList.toggle('active', b === btn));
+    document.getElementById('soc-sort-btn').innerHTML = `${SOC_SORT_LABEL[feedSort]} <span class="soc-sort-caret">▾</span>`;
+    document.getElementById('soc-sort-menu').hidden = true;
+    loadFeed();
+  });
+});
+
+loadFeed();
+loadPopular();
+
+// ── Collapsible sidebar (persisted, Reddit-style) ────────────────────────
+const socLayout = document.getElementById('soc-layout');
+const sidebarToggleBtn = document.getElementById('soc-sidebar-toggle');
+function setSidebarCollapsed(collapsed) {
+  socLayout.classList.toggle('soc-collapsed', collapsed);
+  const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+  sidebarToggleBtn.title = label;
+  sidebarToggleBtn.setAttribute('aria-label', label);
+  localStorage.setItem('soc_sidebar_collapsed', collapsed ? '1' : '0');
+}
+sidebarToggleBtn.addEventListener('click', () => setSidebarCollapsed(!socLayout.classList.contains('soc-collapsed')));
+if (localStorage.getItem('soc_sidebar_collapsed') === '1') setSidebarCollapsed(true);
+</script>
+
+</body>
+</html>
