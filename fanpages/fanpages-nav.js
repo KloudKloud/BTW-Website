@@ -474,7 +474,9 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
           <a href="${fpUrl('/discord')}">Discord</a>
           <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donations</a>
+          <div class="fpnav-dropdown-divider"></div>
           <a href="${fpUrl('/tos')}">BTW Tos</a>
+          <a href="${homeHref}">BTW Homepage</a>
         </div>
       </div>
 
@@ -527,7 +529,6 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
             <a href="${fpUrl('/notifications')}" id="fpnav-notif-link">Updates <span class="fpnav-notif-badge" id="fpnav-notif-badge" hidden></span></a>
             <a href="${fpUrl('/notifications#inbox')}" id="fpnav-updates-link">Inbox</a>
             <div class="fpnav-dropdown-divider"></div>
-            <a href="${homeHref}">BTW Homepage</a>
             <a href="#" id="fpnav-edit-profile-link">Account Settings</a>
             <a href="${fpUrl('/admin')}" id="fpnav-admin-link" style="display:none;">Admin</a>
             <a href="#" id="fpnav-logout-link">Logout</a>
