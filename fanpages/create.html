@@ -796,16 +796,21 @@ const pendingNavCardBlobs = {};
 const qnFileInput = document.getElementById('qn-file-input');
 let qnUploadKind = null;
 ['characters', 'chapters', 'gallery'].forEach(kind => {
-  // The cards are just a canvas for the camera button here — never let a
+  // The cards are just a canvas for picking an image here — never let a
   // click on them navigate away like they do on the story's own page.
-  document.getElementById(`qn-${kind}`).addEventListener('click', (e) => e.preventDefault());
-  document.getElementById(`qn-${kind}-edit-btn`).style.display = 'flex';
-  document.getElementById(`qn-${kind}-edit-btn`).addEventListener('click', (e) => {
+  // Unlike the Story Editor's version of these cards (which only reacts to
+  // the camera icon), clicking ANYWHERE on the card opens the file picker
+  // -- the camera icon stays as a visible affordance, not the only hit
+  // target. blur+darken (.mod-editing) matches the Story Editor's own
+  // quick-nav card treatment.
+  const card = document.getElementById(`qn-${kind}`);
+  card.classList.add('mod-editing');
+  card.addEventListener('click', (e) => {
     e.preventDefault();
-    e.stopPropagation();
     qnUploadKind = kind;
     qnFileInput.click();
   });
+  document.getElementById(`qn-${kind}-edit-btn`).style.display = 'flex';
 });
 qnFileInput.addEventListener('change', (e) => {
   const file = e.target.files[0];

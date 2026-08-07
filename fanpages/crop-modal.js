@@ -19,7 +19,7 @@
     .crop-modal-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.15rem; font-weight: 700; color: #f0f0f0; margin: 0 0 1rem; }
     .crop-modal-img-wrap {
       position: relative; width: 100%; max-height: 60vh; background: #0a0a0a; border-radius: 10px;
-      overflow: hidden; touch-action: none;
+      overflow: hidden; touch-action: none; margin: 0 auto;
     }
     .crop-modal-img-wrap.crop-modal-img-wrap--round { border-radius: 10px; }
     .crop-modal-img-wrap.crop-modal-img-wrap--round::after {
@@ -90,12 +90,14 @@
       // Export at a real resolution, not just the on-screen viewport's CSS
       // pixel size — the viewport is capped to fit the modal, which on a
       // small window would otherwise bake a blurry low-res crop into the
-      // upload. 1000px on the long edge is plenty for every use on this
-      // site (avatars, covers, banners, cards).
+      // upload. 1600px on the long edge covers every use on this site,
+      // including the club banner (which renders at a native 1600x280 --
+      // 1000px was softening it noticeably once actually displayed at
+      // full width, since it had to be upscaled ~1.4x).
       const wrap = overlay.querySelector('#crop-modal-img-wrap');
       const ratio = wrap.clientWidth / wrap.clientHeight;
-      const outW = ratio >= 1 ? 1000 : Math.round(1000 * ratio);
-      const outH = ratio >= 1 ? Math.round(1000 / ratio) : 1000;
+      const outW = ratio >= 1 ? 1600 : Math.round(1600 * ratio);
+      const outH = ratio >= 1 ? Math.round(1600 / ratio) : 1600;
       const canvas = btwCropper.getCanvas(outW, outH);
       await new Promise((resolve, reject) => {
         canvas.toBlob(async (blob) => {
