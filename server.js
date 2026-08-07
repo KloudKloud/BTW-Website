@@ -2216,10 +2216,11 @@ app.get('/api/auth/confirm-email', async (req, res) => {
 
 app.get('/api/auth/profile', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
-    'SELECT id, username, display_name, email, avatar, avatar_original_url, email_newsletter, nsfw_enabled FROM users WHERE id = $1', [req.user.id]
+    'SELECT id, username, display_name, email, avatar, avatar_original_url, email_newsletter, nsfw_enabled, pending_email FROM users WHERE id = $1', [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
-  res.json({ user: { ...user, email: decryptEmail(user.email) } });
+  const { pending_email, ...rest } = user;
+  res.json({ user: { ...rest, email: decryptEmail(user.email), email_change_pending: !!pending_email } });
 });
 
 // ── Protected spicy image delivery ────────────────────────────────────────────

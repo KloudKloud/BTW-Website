@@ -13,8 +13,27 @@
     body { background: #0d0d0d; }
     .profile-wrapper { padding-top: 6.5rem; }
     .profile-card-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1rem; letter-spacing: 0.04em; text-transform: none; }
-    #change-email-panel { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; margin-top: -0.25rem; }
     .profile-field input[readonly] { opacity: 0.55; cursor: default; }
+    .email-pending-badge {
+      display: inline-block; margin-left: 0.5rem; padding: 0.1rem 0.5rem;
+      background: rgba(240,192,96,0.15); border: 1px solid rgba(240,192,96,0.4);
+      color: #f0c060; border-radius: 20px; font-size: 0.68rem; letter-spacing: 0.06em;
+      text-transform: uppercase; font-family: 'Lato', sans-serif; vertical-align: middle;
+    }
+
+    /* Change Email modal — same fixed-overlay + blurred-backdrop pattern as
+       the character/gallery editor modals, not an inline panel that just
+       sits on top of the page content. */
+    .email-modal-overlay {
+      position: fixed; inset: 0; z-index: 300;
+      background: rgba(8,6,14,0.72); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center; padding: 2rem 1.25rem;
+    }
+    .email-modal {
+      width: 100%; max-width: 420px;
+      background: #141018; border: 1px solid rgba(240,192,96,0.25); border-radius: 18px;
+      padding: 2rem 2.25rem; box-shadow: 0 30px 90px rgba(0,0,0,0.6);
+    }
   </style>
 </head>
 <body>
@@ -49,28 +68,9 @@
         <input type="text" id="prof-displayname" maxlength="20" placeholder="Display name" />
       </div>
       <div class="profile-field">
-        <label for="prof-email">Email</label>
+        <label for="prof-email">Email <span id="email-pending-badge" class="email-pending-badge" hidden>Pending</span></label>
         <input type="email" id="prof-email" placeholder="Email address" readonly />
         <button class="profile-avatar-btn profile-avatar-btn--ghost" id="change-email-btn" type="button" style="align-self:flex-start;margin-top:0.5rem;">Change Email</button>
-      </div>
-      <div id="change-email-panel" hidden>
-        <div class="profile-field">
-          <label for="new-email">New Email</label>
-          <input type="email" id="new-email" placeholder="New email address" />
-        </div>
-        <div class="profile-field" style="margin-top:0.75rem;">
-          <label for="new-email-confirm">Confirm New Email</label>
-          <input type="email" id="new-email-confirm" placeholder="Confirm new email address" />
-        </div>
-        <div class="profile-field" style="margin-top:0.75rem;">
-          <label for="change-email-pw">Current Password</label>
-          <input type="password" id="change-email-pw" placeholder="Enter current password" />
-        </div>
-        <div id="change-email-alert" class="profile-alert" hidden></div>
-        <div style="display:flex;gap:.75rem;margin-top:.75rem;">
-          <button class="profile-save-btn" id="change-email-save-btn" type="button">Save</button>
-          <button class="profile-save-btn" id="change-email-back-btn" type="button" style="background:rgba(255,255,255,0.07);color:var(--mist);">Back</button>
-        </div>
       </div>
       <div class="profile-field profile-field--checkbox">
         <label class="profile-checkbox-label">
@@ -136,6 +136,32 @@
 
 </main>
 
+<!-- Change Email modal -->
+<div class="email-modal-overlay" id="change-email-overlay" hidden>
+  <div class="email-modal">
+    <p class="char-editor-title" style="font-family:'Fredoka','Lato',cursive;">Change Email</p>
+    <div class="profile-fields">
+      <div class="profile-field">
+        <label for="new-email">New Email</label>
+        <input type="email" id="new-email" placeholder="New email address" />
+      </div>
+      <div class="profile-field">
+        <label for="new-email-confirm">Confirm New Email</label>
+        <input type="email" id="new-email-confirm" placeholder="Confirm new email address" />
+      </div>
+      <div class="profile-field">
+        <label for="change-email-pw">Current Password</label>
+        <input type="password" id="change-email-pw" placeholder="Enter current password" />
+      </div>
+      <div id="change-email-alert" class="profile-alert" hidden></div>
+      <div style="display:flex;gap:.75rem;margin-top:.5rem;">
+        <button class="profile-save-btn" id="change-email-save-btn" type="button">Save</button>
+        <button class="profile-save-btn" id="change-email-back-btn" type="button" style="background:rgba(255,255,255,0.07);color:var(--mist);">Back</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Redirect to login if not logged in -->
 <div id="profile-gate" hidden style="min-height:calc(100vh - 64px);display:flex;align-items:center;justify-content:center;padding:3rem 1.5rem;">
   <div style="text-align:center;">
@@ -183,6 +209,7 @@
       document.getElementById('prof-displayname').value    = u.display_name || '';
       document.getElementById('prof-email').value          = u.email || '';
       document.getElementById('prof-newsletter').checked   = u.email_newsletter !== false;
+      setEmailPending(!!u.email_change_pending);
       setNsfwToggleState(u.nsfw_enabled !== false);
 
       if (u.avatar) {
@@ -204,6 +231,10 @@
         window._emailVerifiedSuccess = false;
       }
     } catch { window.location.href = window.fpUrl('/login'); }
+  }
+
+  function setEmailPending(pending) {
+    document.getElementById('email-pending-badge').hidden = !pending;
   }
 
   // NSFW / SFW Mode toggle — saves immediately on flip, same as the avatar
@@ -235,17 +266,19 @@
   // the registration flow: saving doesn't change `email` right away, it
   // sends a confirm link to the new address (see /api/auth/confirm-email)
   // and the account keeps using the current email until that's clicked.
-  document.getElementById('change-email-btn').addEventListener('click', () => {
-    document.getElementById('change-email-panel').hidden = false;
-    document.getElementById('change-email-btn').hidden   = true;
-  });
-  document.getElementById('change-email-back-btn').addEventListener('click', () => {
-    document.getElementById('change-email-panel').hidden = true;
-    document.getElementById('change-email-btn').hidden   = false;
+  function closeChangeEmailModal() {
+    document.getElementById('change-email-overlay').hidden = true;
     document.getElementById('new-email').value         = '';
     document.getElementById('new-email-confirm').value = '';
     document.getElementById('change-email-pw').value    = '';
     document.getElementById('change-email-alert').hidden = true;
+  }
+  document.getElementById('change-email-btn').addEventListener('click', () => {
+    document.getElementById('change-email-overlay').hidden = false;
+  });
+  document.getElementById('change-email-back-btn').addEventListener('click', closeChangeEmailModal);
+  document.getElementById('change-email-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'change-email-overlay') closeChangeEmailModal();
   });
   document.getElementById('change-email-save-btn').addEventListener('click', async () => {
     const btn     = document.getElementById('change-email-save-btn');
@@ -269,11 +302,8 @@
       const data = await res.json();
       if (!res.ok) { showAlert('change-email-alert', data.error, 'error'); return; }
 
-      document.getElementById('change-email-panel').hidden = true;
-      document.getElementById('change-email-btn').hidden   = false;
-      document.getElementById('new-email').value         = '';
-      document.getElementById('new-email-confirm').value = '';
-      document.getElementById('change-email-pw').value    = '';
+      closeChangeEmailModal();
+      setEmailPending(true);
       showAlert('profile-alert', data.message, 'success', 9000);
     } catch { showAlert('change-email-alert', 'Network error. Please try again.', 'error'); }
     finally { btn.disabled = false; }
