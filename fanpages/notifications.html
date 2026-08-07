@@ -24,61 +24,28 @@
     }
     a { color: inherit; }
 
-    /* Reduced banner — slightly taller than the Chapter/Gallery banners on a
-       story page (320px), full-bleed under the topbar. */
-    .notif-banner { position: relative; width: 100%; height: 380px; overflow: hidden; background: #000; }
-    .notif-banner-bg { position: absolute; inset: 0; background-repeat: no-repeat; }
-    .notif-banner-edit-btn {
-      position: absolute; top: 1rem; right: 1rem; z-index: 5;
-      width: 38px; height: 38px; border-radius: 50%;
-      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.25); color: #fff;
-      font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
-      transition: background 0.15s;
-    }
-    .notif-banner-edit-btn:hover { background: rgba(0,0,0,0.78); }
-    @media (max-width: 640px) { .notif-banner { height: 230px; } }
+    /* Full-bleed, fixed video background -- anchored to the bottom of the
+       frame (object-position) same as fandoms.html's use of this same
+       video-crop convention elsewhere on the site. Sits at z-index:0 (not
+       negative) so it paints above body's own opaque background per CSS
+       painting order, same fix this session already needed on the
+       Bookmarks page. The existing custom notif-theme-picker upload (if a
+       user sets one) still layers on top of this via .notif-bg-img/
+       .notif-bg-overlay, which come later in the DOM. */
+    .notif-video-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; }
+    .notif-video-bg video { width: 100%; height: 100%; object-fit: cover; object-position: center bottom; display: block; }
+    .notif-video-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.45); }
 
-    /* Admin banner-position editor modal */
-    .notif-banner-preview-wrap {
-      position: relative; width: 100%; max-width: 440px; aspect-ratio: 3.6 / 1;
-      margin: 0 auto 1.25rem; border-radius: 10px; overflow: hidden; background: #000;
-    }
-    .notif-banner-preview-bg { position: absolute; inset: 0; background-repeat: no-repeat; }
-    .notif-banner-sliders { display: flex; flex-wrap: wrap; gap: 1.25rem; margin-bottom: 1.5rem; justify-content: center; }
-    .notif-banner-sliders label { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; font-size: 0.75rem; color: #999; }
-    .notif-banner-sliders input[type="range"] { width: 130px; }
+    /* Same 1400px width as the Home/Profile/Bookmarks pages. */
+    .notif-main { max-width: 1400px; margin: 0 auto; padding: 3rem 2rem 5rem; }
 
-    .notif-main { max-width: 1500px; margin: 0 auto; padding: 3rem 2rem 5rem; }
-    .notif-layout { display: flex; gap: 2.5rem; align-items: flex-start; }
-
-    /* Long box on the left — a stagnant placeholder image (was an
-       auto-cycling ad-style billboard, removed per request; swap the src
-       above whenever there's real art for this spot). */
-    .notif-billboard {
-      position: relative;
-      width: 400px;
-      flex-shrink: 0;
-      min-height: 640px;
-      border-radius: 18px;
-      overflow: hidden;
-      background: #141018;
-      border: 1px solid rgba(255,255,255,0.08);
-      box-shadow: 0 24px 70px rgba(0,0,0,0.55);
-    }
-    .notif-billboard-static-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-    .notif-content { flex: 1; min-width: 0; }
+    .notif-content { min-width: 0; }
 
     .notif-tabs {
       display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem;
       border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 1.75rem;
     }
-    .notif-tabs-group { display: flex; gap: 2rem; transition: margin-left 0.15s; }
-    /* On the Inbox tab the billboard is hidden and .notif-content spans full
-       width, so without this the tabs sit above the sidebar too — this lines
-       them back up with just the chats/messages box, matching the sidebar's
-       own width + gap. */
-    .notif-tabs-group--inbox-offset { margin-left: 240px; }
+    .notif-tabs-group { display: flex; gap: 2rem; }
 
     .notif-theme-picker { position: relative; padding-bottom: 0.6rem; }
     .notif-theme-btn {
@@ -545,13 +512,10 @@
     .dm-following-item-name { font-size: 0.88rem; font-weight: 600; }
 
     @media (max-width: 720px) {
-      .notif-layout { flex-direction: column; }
-      .notif-billboard { width: 100%; min-height: 260px; }
       .dm-app { flex-direction: column; height: auto; }
       .dm-sidebar { width: 100%; height: auto; flex-direction: row; flex-wrap: wrap; }
       .dm-content { height: 500px; }
       .dm-sidebar-rule { display: none; }
-      .notif-tabs-group--inbox-offset { margin-left: 0; }
     }
   </style>
 </head>
@@ -559,34 +523,11 @@
 
 <div id="fanpages-topbar-root"></div>
 
-<section class="notif-banner" id="notif-banner">
-  <div class="notif-banner-bg" id="notif-banner-bg"></div>
-  <button class="notif-banner-edit-btn" id="notif-banner-edit-btn" type="button" title="Adjust banner" style="display:none;">✏️</button>
-</section>
-
-<div class="char-editor-overlay" id="notif-banner-editor-overlay" hidden>
-  <div class="char-editor-modal" style="max-width: 480px;">
-    <h2 class="char-editor-title">Adjust Banner</h2>
-
-    <div class="char-editor-ref-wrap notif-banner-preview-wrap" id="notif-banner-preview-wrap">
-      <div class="notif-banner-preview-bg" id="notif-banner-preview-bg"></div>
-      <div class="char-editor-ref-overlay">📷 Change Image</div>
-    </div>
-    <input type="file" id="notif-banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-
-    <div class="notif-banner-sliders">
-      <label>Horizontal <input type="range" id="notif-banner-pos-x" min="0" max="100" value="50" /></label>
-      <label>Vertical <input type="range" id="notif-banner-pos-y" min="0" max="100" value="40" /></label>
-      <label>Zoom <input type="range" id="notif-banner-zoom" min="100" max="400" value="100" /></label>
-    </div>
-
-    <p class="mod-panel-msg" id="notif-banner-editor-msg"></p>
-
-    <div class="char-editor-actions">
-      <button class="mod-btn" id="notif-banner-editor-cancel" type="button">Cancel</button>
-      <button class="mod-btn" id="notif-banner-editor-save" type="button">Save</button>
-    </div>
-  </div>
+<div class="notif-video-bg">
+  <video autoplay muted loop playsinline>
+    <source src="/images/home/main-background-4.mp4" type="video/mp4" />
+  </video>
+  <div class="notif-video-bg-overlay"></div>
 </div>
 
 <div class="dm-lightbox-overlay" id="dm-lightbox-overlay" hidden>
@@ -612,11 +553,6 @@
   <div class="notif-bg-overlay" id="notif-theme-bg-overlay"></div>
 
 <main class="notif-main">
-  <div class="notif-layout">
-
-    <aside class="notif-billboard" id="notif-billboard">
-      <img class="notif-billboard-static-img" src="/images/gallery/solusgarnet_17.png" alt="" />
-    </aside>
 
     <section class="notif-content">
       <div class="notif-tabs">
@@ -693,7 +629,6 @@
       </div>
     </section>
 
-  </div>
 </main>
 
 </div> <!-- /.notif-bg-wrap -->
@@ -808,154 +743,11 @@
       .catch(() => {});
   }
 
-  const billboardImgDims = {};
-  function loadImageDims(url) {
-    if (billboardImgDims[url]) return Promise.resolve(billboardImgDims[url]);
-    return new Promise(resolve => {
-      const probe = new Image();
-      probe.onload = () => { const d = { w: probe.naturalWidth || 1, h: probe.naturalHeight || 1 }; billboardImgDims[url] = d; resolve(d); };
-      probe.onerror = () => resolve({ w: 1, h: 1 });
-      probe.src = url;
-    });
-  }
-  function coverBgSize(dims, boxW, boxH, zoomPercent) {
-    const scale = Math.max(boxW / dims.w, boxH / dims.h) || 1;
-    const renderedW = dims.w * scale, renderedH = dims.h * scale;
-    const factor = (zoomPercent || 100) / 100;
-    return { w: (renderedW / (boxW || 1)) * 100 * factor, h: (renderedH / (boxH || 1)) * 100 * factor };
-  }
-
-  // ── Reduced banner (admin-adjustable crop) ────────────────────────────────
-  let bannerData = null;
-
-  function renderBannerBg(el, dims, banner) {
-    if (!dims) return;
-    const boxW = el.clientWidth, boxH = el.clientHeight;
-    const size = coverBgSize(dims, boxW, boxH, banner.zoom);
-    el.style.backgroundImage = `url(${banner.image_url})`;
-    el.style.backgroundSize = `${size.w}% ${size.h}%`;
-    el.style.backgroundPosition = `${banner.position_x}% ${banner.position_y}%`;
-  }
-
-  async function loadBanner() {
-    try {
-      const res = await fetch('/api/notifications-banner');
-      const data = await res.json();
-      bannerData = data.banner;
-      if (!bannerData) return;
-      const dims = await loadImageDims(bannerData.image_url);
-      renderBannerBg(document.getElementById('notif-banner-bg'), dims, bannerData);
-    } catch {}
-  }
-  window.addEventListener('resize', () => {
-    if (bannerData) renderBannerBg(document.getElementById('notif-banner-bg'), billboardImgDims[bannerData.image_url], bannerData);
-  });
-  loadBanner();
-
-  // ── Admin banner editor — pencil icon only shows for the admin account ───
-  const bannerEditBtn = document.getElementById('notif-banner-edit-btn');
-  const bannerEditorOverlay = document.getElementById('notif-banner-editor-overlay');
-  const bannerPreviewWrap = document.getElementById('notif-banner-preview-wrap');
-  const bannerPreviewBg = document.getElementById('notif-banner-preview-bg');
-  const bannerFileInput = document.getElementById('notif-banner-file-input');
-  const bannerPosXInput = document.getElementById('notif-banner-pos-x');
-  const bannerPosYInput = document.getElementById('notif-banner-pos-y');
-  const bannerZoomInput = document.getElementById('notif-banner-zoom');
-  const bannerEditorMsg = document.getElementById('notif-banner-editor-msg');
-  const bannerEditorSave = document.getElementById('notif-banner-editor-save');
-
-  // While the modal is open, the preview shows either the saved image or a
-  // freshly-picked one (not yet uploaded) — pendingFile/pendingImageUrl track
-  // that swap so Save knows whether to send a new image along with the crop.
-  let pendingFile = null;
-  let pendingImageUrl = null;
-
-  function updateBannerPreview() {
-    if (!bannerData) return;
-    const url = pendingImageUrl || bannerData.image_url;
-    renderBannerBg(bannerPreviewBg, billboardImgDims[url], {
-      image_url: url,
-      position_x: bannerPosXInput.value,
-      position_y: bannerPosYInput.value,
-      zoom: bannerZoomInput.value,
-    });
-  }
-  [bannerPosXInput, bannerPosYInput, bannerZoomInput].forEach(input => {
-    input.addEventListener('input', updateBannerPreview);
-  });
-
-  bannerPreviewWrap.addEventListener('click', () => bannerFileInput.click());
-  bannerFileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    pendingFile = file;
-    pendingImageUrl = URL.createObjectURL(file);
-    const dims = await loadImageDims(pendingImageUrl);
-    billboardImgDims[pendingImageUrl] = dims;
-    updateBannerPreview();
-  });
-
-  bannerEditBtn.addEventListener('click', () => {
-    if (!bannerData) return;
-    pendingFile = null;
-    pendingImageUrl = null;
-    bannerFileInput.value = '';
-    bannerPosXInput.value = bannerData.position_x;
-    bannerPosYInput.value = bannerData.position_y;
-    bannerZoomInput.value = bannerData.zoom;
-    bannerEditorMsg.textContent = '';
-    bannerEditorOverlay.hidden = false;
-    requestAnimationFrame(updateBannerPreview);
-  });
-  document.getElementById('notif-banner-editor-cancel').addEventListener('click', () => { bannerEditorOverlay.hidden = true; });
-
-  bannerEditorSave.addEventListener('click', async () => {
-    bannerEditorSave.disabled = true;
-    bannerEditorMsg.className = 'mod-panel-msg';
-    bannerEditorMsg.textContent = '';
-    try {
-      const formData = new FormData();
-      formData.append('position_x', bannerPosXInput.value);
-      formData.append('position_y', bannerPosYInput.value);
-      formData.append('zoom', bannerZoomInput.value);
-      if (pendingFile) formData.append('image', pendingFile);
-
-      const res = await fetch('/api/admin/notifications-banner', {
-        method: 'PUT',
-        headers: authHeaders(),
-        body: formData,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to save.');
-      bannerData = data.banner;
-      pendingFile = null;
-      pendingImageUrl = null;
-      const dims = await loadImageDims(bannerData.image_url);
-      renderBannerBg(document.getElementById('notif-banner-bg'), dims, bannerData);
-      bannerEditorOverlay.hidden = true;
-    } catch (err) {
-      bannerEditorMsg.className = 'mod-panel-msg mod-panel-msg--error';
-      bannerEditorMsg.textContent = err.message || 'Something went wrong.';
-    } finally {
-      bannerEditorSave.disabled = false;
-    }
-  });
-
-  if (token) {
-    fetch('/api/auth/me', { headers: authHeaders() })
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        if (data && data.user && data.user.is_admin) bannerEditBtn.style.display = 'flex';
-      })
-      .catch(() => {});
-  }
-
   // ── Notifications / Inbox tabs ────────────────────────────────────────────
   const notifTabNotifications = document.getElementById('notif-tab-notifications');
   const notifTabInbox = document.getElementById('notif-tab-inbox');
   const notifListEl = document.getElementById('notif-list');
   const notifInboxEl = document.getElementById('notif-inbox');
-  const notifBillboardEl = document.getElementById('notif-billboard');
 
   function switchNotifTab(tab, pushHash) {
     const isInbox = tab === 'inbox';
@@ -963,8 +755,6 @@
     notifTabNotifications.classList.toggle('active', !isInbox);
     notifInboxEl.style.display = isInbox ? '' : 'none';
     notifListEl.style.display = isInbox ? 'none' : '';
-    notifBillboardEl.style.display = isInbox ? 'none' : '';
-    document.querySelector('.notif-tabs-group').classList.toggle('notif-tabs-group--inbox-offset', isInbox);
     if (isInbox) initDmAppOnce();
     if (pushHash !== false) location.hash = tab;
   }
