@@ -1356,6 +1356,32 @@
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
   const here = window.location.pathname;
+
+  // ── Scroll restore for "Back" from a gallery post's own page ────────────
+  // gallery-post.html's Back button is a plain history.back(), which should
+  // restore scroll position natively -- but this page's tab content
+  // (Gallery in particular) loads in asynchronously, so the browser can
+  // restore scroll before the grid has actually grown tall enough to
+  // scroll to, silently clamping back to the top. Saving/restoring
+  // ourselves, keyed to the tab hash so a restore never lands in the wrong
+  // tab, sidesteps that race instead of relying on the browser's timing.
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  window.addEventListener('pagehide', () => {
+    try { sessionStorage.setItem(`fp_scroll_${USERNAME}`, JSON.stringify({ hash: location.hash, y: window.scrollY })); } catch {}
+  });
+  function restoreSavedScroll() {
+    let saved;
+    try { saved = JSON.parse(sessionStorage.getItem(`fp_scroll_${USERNAME}`) || 'null'); } catch { saved = null; }
+    if (!saved || saved.hash !== location.hash) return;
+    sessionStorage.removeItem(`fp_scroll_${USERNAME}`);
+    // Tile images loading in can still grow the page after this first
+    // frame -- a couple of delayed re-attempts catches that without having
+    // to track every image's individual load event.
+    const tryScroll = () => window.scrollTo(0, saved.y);
+    requestAnimationFrame(tryScroll);
+    setTimeout(tryScroll, 150);
+    setTimeout(tryScroll, 500);
+  }
   document.getElementById('fp-disclaimer-domain').textContent = location.hostname.replace(/^www\./, '');
   window.fpFixLinks();
 
@@ -2632,6 +2658,7 @@
         FP_GALLERY_ITEMS = data.gallery || [];
         fpGalleryLoaded = true;
         renderFpGalleryTiles();
+        restoreSavedScroll();
       } catch {
         grid.innerHTML = '<p class="fp-tab-view-empty">Couldn\'t load gallery art right now.</p>';
       }
