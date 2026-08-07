@@ -533,6 +533,15 @@
       </div>
     </div>
 
+    <div class="mod-field gallery-linkto-box">
+      <label>Link Gallery</label>
+      <p class="gallery-linkto-note">Got art of this character? Link any gallery post here — yours or someone else's! Linking it here also links this character back to that gallery post automatically.</p>
+      <div class="gallery-linkto-section">
+        <p class="gallery-linkto-section-label">Gallery</p>
+        <div class="gallery-linkto-grid" id="char-linkto-gallery-grid"></div>
+      </div>
+    </div>
+
     <p class="mod-panel-msg" id="char-editor-msg"></p>
 
     <div class="char-editor-actions">
@@ -561,6 +570,27 @@
       <div class="char-link-picker-scroll" id="char-link-picker-other-list"></div>
     </div>
     <button class="mod-btn mod-btn--small" id="char-link-picker-close" type="button" style="margin-top:0.75rem;">Close</button>
+  </div>
+</div>
+
+<!-- "Link Gallery" picker — multi-select, stays open until Done. Mirrors
+     the general character editor's (create-character.html) picker exactly. -->
+<div class="char-link-picker-overlay" id="char-gallery-picker-overlay" hidden>
+  <div class="char-link-picker-modal" style="max-width:480px;">
+    <h3 class="char-link-picker-title">Link Gallery</h3>
+    <div class="char-link-picker-tabs">
+      <button type="button" class="char-link-picker-tab active" id="char-gallery-tab-mine">Your Gallery</button>
+      <button type="button" class="char-link-picker-tab" id="char-gallery-tab-other">Other Gallery</button>
+    </div>
+    <div id="char-gallery-picker-mine">
+      <input class="mod-input" id="char-gallery-mine-search" placeholder="Search your gallery…" style="margin-bottom:0.75rem;" />
+      <div class="char-link-picker-scroll" id="char-gallery-picker-mine-list"></div>
+    </div>
+    <div id="char-gallery-picker-other" hidden>
+      <input class="mod-input" id="char-gallery-other-search" placeholder="Search gallery by title…" style="margin-bottom:0.75rem;" />
+      <div class="char-link-picker-scroll" id="char-gallery-picker-other-list"></div>
+    </div>
+    <button class="mod-btn mod-btn--small" id="char-gallery-picker-done" type="button" style="margin-top:0.75rem;">Done</button>
   </div>
 </div>
 
@@ -2174,6 +2204,12 @@ document.getElementById('se-char-reorder-save').addEventListener('click', async 
 // Opens in place over this hub so editing a character never navigates away.
 let uploadedRefUrl = '';
 let editingCharId = null;
+// Link Gallery -- via gallery_character_links, the same join table
+// create-gallery.html's own "Link Characters" section reads/writes, so
+// linking from either side is automatically visible on the other. Mirrors
+// create-character.html's picker exactly.
+let selectedLinkGallery = new Map();
+let existingLinkedGallery = [];
 let editingCharName = '';
 
 function addFactRow(value, removable) {
@@ -2361,6 +2397,130 @@ function renderLockedStoryCard() {
     'To add more stories or unlink added novels, you can manage your characters through the character editor on your account.';
 }
 
+function makeGalleryLinkCard(entry, onRemove) {
+  const wrap = document.createElement('div');
+  wrap.className = 'gallery-linkto-card gallery-linkto-card--locked';
+  wrap.dataset.id = entry.id;
+  const imgEl = document.createElement('img');
+  imgEl.className = 'gallery-linkto-card-img';
+  imgEl.src = entry.image || '/images/characters/noreference.png';
+  imgEl.alt = '';
+  wrap.appendChild(imgEl);
+  const nameEl = document.createElement('p');
+  nameEl.className = 'gallery-linkto-card-name';
+  nameEl.textContent = entry.title || 'Untitled';
+  wrap.appendChild(nameEl);
+  if (onRemove) {
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'gallery-linkto-card-remove';
+    removeBtn.textContent = '✕';
+    removeBtn.addEventListener('click', onRemove);
+    wrap.appendChild(removeBtn);
+  }
+  return wrap;
+}
+function renderLinkToGalleryCards() {
+  const grid = document.getElementById('char-linkto-gallery-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const addTile = document.createElement('button');
+  addTile.type = 'button';
+  addTile.className = 'gallery-linkto-add-tile';
+  addTile.innerHTML = `<span class="gallery-linkto-add-tile-icon">+</span> Gallery`;
+  addTile.addEventListener('click', openGalleryLinkPicker);
+  grid.appendChild(addTile);
+  existingLinkedGallery.forEach(g => {
+    const card = makeGalleryLinkCard(g, async () => {
+      if (!editingCharId) return;
+      card.querySelector('.gallery-linkto-card-remove').disabled = true;
+      try {
+        await fetch(`/api/characters/${editingCharId}/link-gallery/${g.id}`, { method: 'DELETE', headers: authHeaders() });
+        existingLinkedGallery = existingLinkedGallery.filter(x => x.id !== g.id);
+        renderLinkToGalleryCards();
+      } catch {}
+    });
+    grid.appendChild(card);
+  });
+  selectedLinkGallery.forEach(g => grid.appendChild(makeGalleryLinkCard(g, () => {
+    selectedLinkGallery.delete(g.id);
+    renderLinkToGalleryCards();
+    document.querySelectorAll(`#char-gallery-picker-mine-list [data-id="${g.id}"], #char-gallery-picker-other-list [data-id="${g.id}"]`).forEach(el => el.classList.remove('selected'));
+  })));
+}
+function galleryLinkPickerToggleItem(entry, ownerLabel) {
+  const item = document.createElement('button');
+  item.type = 'button';
+  item.dataset.id = entry.id;
+  item.className = 'char-link-picker-item--big' + (selectedLinkGallery.has(entry.id) ? ' selected' : '');
+  item.innerHTML = `
+    <img src="${entry.image}" alt="" />
+    <span>
+      <span class="char-link-picker-item-name">${entry.title || 'Untitled'}</span>
+      ${ownerLabel ? `<span class="char-link-picker-item-owner">${ownerLabel}</span>` : ''}
+    </span>
+    <span class="char-link-picker-item-check">✓</span>
+  `;
+  item.addEventListener('click', () => {
+    if (selectedLinkGallery.has(entry.id)) selectedLinkGallery.delete(entry.id);
+    else selectedLinkGallery.set(entry.id, entry);
+    item.classList.toggle('selected');
+    renderLinkToGalleryCards();
+  });
+  return item;
+}
+function switchGalleryPickerTab(tab) {
+  document.getElementById('char-gallery-tab-mine').classList.toggle('active', tab === 'mine');
+  document.getElementById('char-gallery-tab-other').classList.toggle('active', tab === 'other');
+  document.getElementById('char-gallery-picker-mine').hidden = tab !== 'mine';
+  document.getElementById('char-gallery-picker-other').hidden = tab !== 'other';
+  if (tab === 'mine') { document.getElementById('char-gallery-mine-search').value = ''; loadMyGalleryForLink(''); }
+  else { document.getElementById('char-gallery-other-search').value = ''; searchOtherGalleryForLink(''); }
+}
+let galleryLinkMineDebounce;
+async function loadMyGalleryForLink(q) {
+  const list = document.getElementById('char-gallery-picker-mine-list');
+  list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
+  try {
+    const res = await fetch(`/api/gallery/mine?q=${encodeURIComponent(q || '')}`, { headers: authHeaders() });
+    const data = await res.json();
+    const gallery = data.gallery || [];
+    if (!gallery.length) { list.innerHTML = `<p class="char-link-picker-empty">${q ? 'No matching gallery posts found.' : 'You don\'t have any gallery posts yet.'}</p>`; return; }
+    list.innerHTML = '';
+    gallery.forEach(g => list.appendChild(galleryLinkPickerToggleItem(g, null)));
+  } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t load your gallery right now.</p>'; }
+}
+let galleryLinkOtherDebounce;
+async function searchOtherGalleryForLink(q) {
+  const list = document.getElementById('char-gallery-picker-other-list');
+  list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
+  try {
+    const res = await fetch(`/api/gallery/search?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+    const data = await res.json();
+    const gallery = data.gallery || [];
+    if (!gallery.length) { list.innerHTML = '<p class="char-link-picker-empty">No matching gallery posts found.</p>'; return; }
+    list.innerHTML = '';
+    gallery.forEach(g => list.appendChild(galleryLinkPickerToggleItem(g, g.owner_display_name || g.owner_username)));
+  } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t search right now.</p>'; }
+}
+function openGalleryLinkPicker() {
+  document.getElementById('char-gallery-picker-overlay').hidden = false;
+  switchGalleryPickerTab('mine');
+}
+document.getElementById('char-gallery-tab-mine').addEventListener('click', () => switchGalleryPickerTab('mine'));
+document.getElementById('char-gallery-tab-other').addEventListener('click', () => switchGalleryPickerTab('other'));
+document.getElementById('char-gallery-mine-search').addEventListener('input', (e) => {
+  clearTimeout(galleryLinkMineDebounce);
+  galleryLinkMineDebounce = setTimeout(() => loadMyGalleryForLink(e.target.value.trim()), 300);
+});
+document.getElementById('char-gallery-other-search').addEventListener('input', (e) => {
+  clearTimeout(galleryLinkOtherDebounce);
+  galleryLinkOtherDebounce = setTimeout(() => searchOtherGalleryForLink(e.target.value.trim()), 300);
+});
+document.getElementById('char-gallery-picker-done').addEventListener('click', () => {
+  document.getElementById('char-gallery-picker-overlay').hidden = true;
+});
+
 function openCharEditor(char) {
   editingCharId = char ? char.id : null;
   editingCharName = char ? char.name : '';
@@ -2415,6 +2575,15 @@ function openCharEditor(char) {
   document.getElementById('char-editor-lore').value = char ? (char.lore || []).join('\n\n') : '';
 
   renderLockedStoryCard();
+  selectedLinkGallery = new Map();
+  existingLinkedGallery = [];
+  renderLinkToGalleryCards();
+  if (char) {
+    fetch(`/api/characters/${char.id}/gallery`).then(r => r.ok ? r.json() : { gallery: [] }).then(d => {
+      existingLinkedGallery = d.gallery || [];
+      renderLinkToGalleryCards();
+    }).catch(() => {});
+  }
 
   document.getElementById('char-editor-msg').textContent = '';
   document.getElementById('char-editor-overlay').hidden = false;
@@ -2586,6 +2755,14 @@ document.getElementById('char-editor-save').addEventListener('click', async () =
       msgEl.className = 'mod-panel-msg mod-panel-msg--error';
       msgEl.textContent = data.error || 'Something went wrong. Please try again.';
       return;
+    }
+    const { character } = await res.json();
+    if (selectedLinkGallery.size) {
+      await fetch(`/api/characters/${character.id}/link-gallery-many`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gallery_ids: [...selectedLinkGallery.keys()] }),
+      }).catch(() => {});
     }
     closeCharEditor();
     loadSeCharacters();
