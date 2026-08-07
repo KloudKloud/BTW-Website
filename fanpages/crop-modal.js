@@ -127,7 +127,15 @@
     // modal's available width/height (60vh) — recomputed on open since the
     // window may have been resized since last time.
     const ratio = opts.aspectRatio || 1;
-    const maxW = wrap.parentElement.clientWidth;
+    // clientWidth includes the parent's own left/right padding, which isn't
+    // actually available to a normal-flow child laid out inside it -- using
+    // it directly as maxW made the wrap (and the crop box it draws) ~48px
+    // too wide, spilling past the modal's padded edge. Wide aspect ratios
+    // (banners) hit this every time since nothing else constrains their
+    // width; narrower ratios usually got saved by the maxH cap kicking in
+    // first, which is why this went unnoticed until now.
+    const boxStyle = window.getComputedStyle(wrap.parentElement);
+    const maxW = wrap.parentElement.clientWidth - parseFloat(boxStyle.paddingLeft || 0) - parseFloat(boxStyle.paddingRight || 0);
     const maxH = window.innerHeight * 0.6;
     let w = maxW, h = w / ratio;
     if (h > maxH) { h = maxH; w = h * ratio; }

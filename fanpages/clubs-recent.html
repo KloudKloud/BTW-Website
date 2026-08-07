@@ -201,6 +201,11 @@
     .soc-feed-card--card .soc-feed-card-thumb {
       position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 0; object-fit: cover;
     }
+    /* A real baked preview crop (preview_image_url) is already square and
+       already framed exactly the way the poster wanted -- forcing it into
+       the 16:9 box above would crop it again. Swap the wrap to match the
+       image's own 1:1 shape instead so Card view shows it in full. */
+    .soc-feed-card--card .soc-feed-card-thumb-wrap--square { padding-top: 100%; }
     .soc-feed-card-header { padding: 1rem 1.1rem 0.75rem; }
     .soc-feed-card--card .soc-feed-card-body { padding: 0.85rem 1.1rem 1.1rem; }
     .soc-feed-card--card .soc-feed-card-title { font-size: 1.15rem; -webkit-line-clamp: 3; }
@@ -637,7 +642,8 @@ function feedCard(p, mode) {
   const thumbImg = p.preview_image_url
     ? `<img class="soc-feed-card-thumb" src="${p.preview_image_url}" alt="" />`
     : `<img class="soc-feed-card-thumb" src="${p.image_url || '/images/noimage.png'}" alt="" style="object-position:${previewX}% ${previewY}%;" />`;
-  const thumbHtml = (isCard && !hasImage) ? '' : (isCard ? `<div class="soc-feed-card-thumb-wrap">${thumbImg}</div>` : thumbImg);
+  const thumbWrapClass = p.preview_image_url ? 'soc-feed-card-thumb-wrap soc-feed-card-thumb-wrap--square' : 'soc-feed-card-thumb-wrap';
+  const thumbHtml = (isCard && !hasImage) ? '' : (isCard ? `<div class="${thumbWrapClass}">${thumbImg}</div>` : thumbImg);
   const showPreview = isCard && !hasImage && p.title && p.body;
   const previewHtml = showPreview ? `<p class="soc-feed-card-preview">${escapeHtml(truncateText(p.body, 220))}</p>` : '';
   const clubRowHtml = `

@@ -171,13 +171,19 @@
       width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
       background: linear-gradient(135deg, #2a1a3a, #3a1f2a); color: rgba(255,255,255,0.2); font-size: 3rem;
     }
-    /* Join/Joined — bottom-right of the banner, Reddit-style: outlined pill
-       to join, filled blue once you have (a soft glow, not a bright one).
-       Owner never sees this (can't leave their own club — see DELETE
-       .../leave). Offset further right than the banner recrop pencil so
-       the two don't overlap when an admin sees both. */
-    .cl-banner-join-btn {
+    /* +Post / Join wrapper — a real flex row instead of two independently
+       position:absolute buttons with hand-tuned "right" offsets, which
+       drifted out of sync and started overlapping once Join became
+       visible for every role (owner/admin included, not just members).
+       Flex + gap sizes each button to its own text, so "Join" vs.
+       "✓ Joined" (different widths) never collides with +Post again.
+       Offset further right than the banner recrop pencil so the two don't
+       overlap when an admin sees both. */
+    .cl-banner-actions {
       position: absolute; bottom: 1.1rem; right: 4.3rem; z-index: 3;
+      display: flex; align-items: center; gap: 0.6rem;
+    }
+    .cl-banner-join-btn {
       background: rgba(0,0,0,0.55); border: 1.5px solid #7fa8d9; color: #7fa8d9;
       border-radius: 20px; padding: 0.5em 1.3em; font-size: 0.9rem; font-weight: 700;
       cursor: pointer; font-family: 'Inter', sans-serif; transition: background 0.15s, box-shadow 0.2s, transform 0.15s;
@@ -190,20 +196,17 @@
     .cl-banner-join-btn.cl-joined:hover { background: #6f97c8; }
     .cl-banner-join-btn:disabled { cursor: default; transform: none; }
     .cl-banner-join-btn:disabled:hover { background: rgba(127,168,217,0.28); }
-    /* +Post — sits just left of Join/Joined, same pill recipe but filled
-       gold (matches the site's other "+Create"-style buttons) so it reads
-       as an action, not a status toggle. Fixed offset tuned against
-       "✓ Joined" (the wider of the two Join-button states) so it never
-       overlaps; leaves a slightly bigger gap when the shorter "Join" shows. */
+    /* +Post — same pill recipe as Join but filled gold (matches the site's
+       other "+Create"-style buttons) so it reads as an action, not a
+       status toggle. */
     .cl-banner-post-btn {
-      position: absolute; bottom: 1.1rem; right: 9.8rem; z-index: 3;
       background: rgba(240,192,96,0.16); border: 1.5px solid rgba(240,192,96,0.75); color: #f0c060;
       border-radius: 20px; padding: 0.5em 1.3em; font-size: 0.9rem; font-weight: 700;
       cursor: pointer; font-family: 'Fredoka', 'Lato', cursive; transition: background 0.15s, box-shadow 0.2s, transform 0.15s;
     }
     .cl-banner-post-btn:hover { background: rgba(240,192,96,0.3); transform: translateY(-1px); box-shadow: 0 0 10px rgba(240,192,96,0.35); }
     @media (max-width: 560px) {
-      .cl-banner-post-btn { right: auto; left: 1.1rem; }
+      .cl-banner-actions { right: auto; left: 1.1rem; }
     }
     /* .cl-body-row lays out the main column and the right sidebar as actual
        flex siblings — the sidebar's horizontal position (far right) comes
@@ -255,7 +258,8 @@
        glass-card About box (right) are confined to the main column so
        neither ever reaches under the fixed sidebar. */
     .cl-name {
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 2.6rem; font-weight: 700; color: #fff;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 2.6rem; font-weight: 700; color: #7fa8d9;
+      text-shadow: 0 0 18px rgba(127,168,217,0.55), 0 1px 3px rgba(0,0,0,0.5);
       margin: 0 0 1.25rem; text-align: center;
     }
 
@@ -424,11 +428,39 @@
        shown, including under the very last post, so the box's floor never
        looks unfinished with just one post in it. */
     .cl-admin-post {
+      position: relative;
       display: flex; gap: 0.85rem; padding: 0.95rem 0; border-bottom: 1px solid rgba(255,255,255,0.08);
       text-decoration: none; color: inherit; margin: 0 -0.5rem; padding-left: 0.5rem; padding-right: 0.5rem;
       border-radius: 8px; transition: background 0.15s;
     }
     .cl-admin-post:hover { background: rgba(255,255,255,0.04); }
+
+    /* "•••" post-actions menu -- own posts get Delete; club owners/admins
+       get it on every post, not just their own (mirrors the server-side
+       permission check). Hover-reveal, same recipe as the DM bubble menu. */
+    .cl-post-menu-wrap { position: absolute; top: 0.7rem; right: 0.5rem; z-index: 5; opacity: 0; transition: opacity 0.15s; }
+    .cl-admin-post:hover .cl-post-menu-wrap,
+    .cl-post-menu-wrap.cl-post-menu-open { opacity: 1; }
+    .cl-admin-post--card .cl-post-menu-wrap { top: 0.85rem; right: 0.85rem; }
+    .cl-post-menu-btn {
+      width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.25); color: #ccc;
+      font-size: 0.7rem; letter-spacing: 0.04em; cursor: pointer; font-family: inherit; padding: 0;
+    }
+    .cl-post-menu-btn:hover { border-color: #7fa8d9; color: #7fa8d9; background: rgba(127,168,217,0.18); }
+    .cl-post-menu-dropdown {
+      position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; min-width: 150px;
+      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.5); overflow: hidden; padding: 0.35rem;
+    }
+    .cl-post-menu-dropdown button {
+      display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+      color: #e0e0e0; font-family: inherit; font-size: 0.85rem; padding: 0.55rem 0.7rem; border-radius: 8px;
+      white-space: nowrap;
+    }
+    .cl-post-menu-dropdown button:hover { background: rgba(255,255,255,0.08); }
+    .cl-post-menu-dropdown button.cl-menu-danger { color: #e8849e; }
+    .cl-post-menu-dropdown button.cl-menu-danger:hover { background: rgba(194,84,122,0.12); }
     .cl-admin-post-thumb {
       width: 56px; height: 56px; border-radius: 8px; object-fit: cover; flex-shrink: 0;
       background: #161616; border: 1px solid rgba(255,255,255,0.1);
@@ -463,6 +495,11 @@
     .cl-admin-post--card .cl-admin-post-thumb {
       position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 0; object-fit: cover;
     }
+    /* A real baked preview crop (preview_image_url) is already square and
+       already framed exactly the way the poster wanted -- forcing it into
+       the 16:9 box above would crop it again. Swap the wrap to match the
+       image's own 1:1 shape instead so Card view shows it in full. */
+    .cl-admin-post--card .cl-admin-post-thumb-wrap--square { padding-top: 100%; }
     .cl-admin-post-header { padding: 1rem 1.1rem 0.75rem; }
     .cl-admin-post--card .cl-admin-post-body { padding: 0.85rem 1.1rem 1.1rem; }
     .cl-admin-post--card .cl-admin-post-title { font-size: 1.15rem; -webkit-line-clamp: 3; }
@@ -1183,8 +1220,10 @@
     <div class="cl-banner-img-slot" id="cl-banner-img-slot"></div>
     <button class="cl-banner-recrop-btn" id="cl-banner-recrop-btn" type="button" style="display:none;" title="Change banner image">✏️</button>
     <input type="file" id="cl-banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-    <button class="cl-banner-join-btn" id="cl-banner-join-btn" type="button" style="display:none;">Join</button>
-    <button class="cl-banner-post-btn" id="cl-banner-post-btn" type="button" style="display:none;">+ Post</button>
+    <div class="cl-banner-actions" id="cl-banner-actions">
+      <button class="cl-banner-post-btn" id="cl-banner-post-btn" type="button" style="display:none;">+ Post</button>
+      <button class="cl-banner-join-btn" id="cl-banner-join-btn" type="button" style="display:none;">Join</button>
+    </div>
   </div>
 
   <div class="cl-body-row" id="cl-body-row">
@@ -2647,7 +2686,8 @@ function adminPostRow(post, mode) {
   const thumbImg = post.preview_image_url
     ? `<img class="cl-admin-post-thumb" src="${post.preview_image_url}" alt="" />`
     : `<img class="cl-admin-post-thumb" src="${post.image_url || '/images/noimage.png'}" alt="" style="object-position:${previewX}% ${previewY}%;" />`;
-  const thumbHtml = (isCard && !hasImage) ? '' : (isCard ? `<div class="cl-admin-post-thumb-wrap">${thumbImg}</div>` : thumbImg);
+  const thumbWrapClass = post.preview_image_url ? 'cl-admin-post-thumb-wrap cl-admin-post-thumb-wrap--square' : 'cl-admin-post-thumb-wrap';
+  const thumbHtml = (isCard && !hasImage) ? '' : (isCard ? `<div class="${thumbWrapClass}">${thumbImg}</div>` : thumbImg);
   const showPreview = isCard && !hasImage && post.title && post.body;
   const previewHtml = showPreview ? `<p class="cl-admin-post-preview">${escapeHtml(truncateText(post.body, 220))}</p>` : '';
   const metaHtml = `
@@ -2682,8 +2722,72 @@ function adminPostRow(post, mode) {
       ${teaserHtml}
     </div>
   `;
+  const menu = clPostMenu(post);
+  if (menu) row.appendChild(menu);
   return row;
 }
+
+// "•••" post-actions menu -- the post's own author, or a club owner/admin
+// (matches the server-side check in DELETE /api/clubs/:slug/posts/:postId
+// exactly). Returns null (no menu rendered) if the viewer can't delete.
+function clPostMenu(post) {
+  const isOwnerOrAdmin = currentClub && (currentClub.viewer_role === 'owner' || currentClub.viewer_role === 'admin');
+  const canDelete = currentUser && (post.author.id === currentUser.id || isOwnerOrAdmin);
+  if (!canDelete) return null;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'cl-post-menu-wrap';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'cl-post-menu-btn';
+  btn.textContent = '•••';
+  btn.setAttribute('aria-label', 'Post actions');
+  const dropdown = document.createElement('div');
+  dropdown.className = 'cl-post-menu-dropdown';
+  dropdown.hidden = true;
+
+  const delBtn = document.createElement('button');
+  delBtn.type = 'button';
+  delBtn.className = 'cl-menu-danger';
+  delBtn.textContent = 'Delete';
+  delBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropdown.hidden = true;
+    wrap.classList.remove('cl-post-menu-open');
+    if (!confirm('Delete this post? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${post.id}`, { method: 'DELETE', headers: authHeaders() });
+      if (res.ok) {
+        if (post.is_admin_post) loadAdminPosts();
+        else { socialPostsCache = null; loadSocialPosts(); }
+        if (currentClub) {
+          currentClub.post_count = Math.max(0, (currentClub.post_count || 0) - 1);
+          const el = document.getElementById('cl-side-post-count');
+          if (el) el.textContent = currentClub.post_count;
+        }
+      }
+    } catch {}
+  });
+  dropdown.appendChild(delBtn);
+
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const opening = dropdown.hidden;
+    document.querySelectorAll('.cl-post-menu-dropdown').forEach(d => { d.hidden = true; });
+    document.querySelectorAll('.cl-post-menu-open').forEach(w => w.classList.remove('cl-post-menu-open'));
+    dropdown.hidden = !opening;
+    wrap.classList.toggle('cl-post-menu-open', opening);
+  });
+  wrap.appendChild(btn);
+  wrap.appendChild(dropdown);
+  return wrap;
+}
+document.addEventListener('click', () => {
+  document.querySelectorAll('.cl-post-menu-dropdown').forEach(d => { d.hidden = true; });
+  document.querySelectorAll('.cl-post-menu-open').forEach(w => w.classList.remove('cl-post-menu-open'));
+});
 
 // ── Create Post modal — shared by "Create News Post" (Club News) and
 // "+ Create Post" (Social). Images/preview-crop/poll are all built up

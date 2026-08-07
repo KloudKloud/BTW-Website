@@ -544,9 +544,11 @@
 
   // ── "..." menu — View as Reader / Unpublish Story / Delete ─────────────────
   let openMoreMenuStoryId = null;
+  let openCardMoreMenuId = null;
   function closeAllMoreMenus() {
     document.querySelectorAll('.ed-more-menu').forEach(m => m.remove());
     openMoreMenuStoryId = null;
+    openCardMoreMenuId = null;
   }
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.ed-more-wrap')) closeAllMoreMenus();
@@ -599,6 +601,37 @@
     });
   }
 
+  // Same "..." menu recipe as Stories -- View on Profile / Delete, for the
+  // Characters and Gallery tabs' cards (replaces the old plain "→" arrow,
+  // which didn't offer either action without a full navigate into the
+  // editor first).
+  function toggleCardMoreMenu(btn, moreMenu) {
+    const wrap = btn.closest('.ed-more-wrap');
+    const key = `${moreMenu.label}-${moreMenu.id}`;
+    if (openCardMoreMenuId === key) { closeAllMoreMenus(); return; }
+    closeAllMoreMenus();
+    closeAllContinueDropdowns();
+    openCardMoreMenuId = key;
+    const menu = document.createElement('div');
+    menu.className = 'ed-more-menu';
+    menu.innerHTML = `
+      <button type="button" class="ed-more-menu-item" data-action="view">View on Profile</button>
+      <button type="button" class="ed-more-menu-item ed-more-menu-item--danger" data-action="delete">Delete ${moreMenu.label}</button>
+    `;
+    wrap.appendChild(menu);
+    menu.querySelector('[data-action="view"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.open(moreMenu.profileHref, '_blank');
+      closeAllMoreMenus();
+    });
+    menu.querySelector('[data-action="delete"]').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      closeAllMoreMenus();
+      if (!confirm(`Delete this ${moreMenu.label.toLowerCase()}? This can't be undone.`)) return;
+      await moreMenu.onDelete();
+    });
+  }
+
   function edStoryCard(s) {
     const storyPath = s.story_path || s.slug;
     const editUrl = window.fpUrl(`/${storyPath}/edit?from=hub`);
@@ -635,19 +668,29 @@
     return row;
   }
 
-  function edCard(href, coverHtml, title, sub, id) {
+  function edCard(href, coverHtml, title, sub, id, moreMenu) {
     const a = document.createElement('a');
     a.className = 'ed-card';
     a.href = href;
     a.dataset.id = id;
+    const rightHtml = moreMenu
+      ? `<div class="ed-more-wrap"><button class="ed-more-btn" type="button" title="More options">•••</button></div>`
+      : `<span class="ed-card-arrow">→</span>`;
     a.innerHTML = `
       ${coverHtml}
       <div class="ed-card-info">
         <p class="ed-card-title">${escapeHtml(title)}</p>
         <p class="ed-card-sub">${escapeHtml(sub)}</p>
       </div>
-      <span class="ed-card-arrow">→</span>
+      ${rightHtml}
     `;
+    if (moreMenu) {
+      a.querySelector('.ed-more-btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleCardMoreMenu(e.currentTarget, moreMenu);
+      });
+    }
     return a;
   }
 
@@ -713,13 +756,37 @@
       items.forEach(c => list.appendChild(edCard(
         window.fpUrl(`/create-character?id=${c.id}`),
         `<img class="ed-card-img" src="${c.ref_image || '/images/defaultchar.jpg'}" alt="" />`,
-        c.name, 'Click to edit or delete', c.id
+        c.name, 'Click to edit or delete', c.id,
+        {
+          id: c.id, label: 'Character',
+          profileHref: window.fpUrl(`/${USERNAME}?char=${c.id}#characters`),
+          onDelete: async () => {
+            try {
+              const res = await fetch(`/api/characters/${c.id}`, { method: 'DELETE', headers: authHeaders() });
+              if (!res.ok) throw new Error();
+              cache.characters = (cache.characters || []).filter(x => x.id !== c.id);
+              renderItems('characters', cache.characters, false);
+            } catch { alert('Could not delete this character — please try again.'); }
+          },
+        }
       )));
     } else {
       items.forEach(g => list.appendChild(edCard(
         window.fpUrl(`/create-gallery?id=${g.id}`),
-        `<img class="ed-card-img" src="${g.image}" alt="" />`,
-        g.title || 'Untitled', `${galleryRatingLabel(g.category)} — Click to edit or delete`, g.id
+        `<img class="ed-card-img" src="${g.preview_image || g.image}" alt="" />`,
+        g.title || 'Untitled', `${galleryRatingLabel(g.category)} — Click to edit or delete`, g.id,
+        {
+          id: g.id, label: 'Gallery Post',
+          profileHref: window.fpUrl(`/gallery-post?id=${g.id}`),
+          onDelete: async () => {
+            try {
+              const res = await fetch(`/api/gallery/${g.id}`, { method: 'DELETE', headers: authHeaders() });
+              if (!res.ok) throw new Error();
+              cache.gallery = (cache.gallery || []).filter(x => x.id !== g.id);
+              renderItems('gallery', cache.gallery, false);
+            } catch { alert('Could not delete this post — please try again.'); }
+          },
+        }
       )));
     }
   }

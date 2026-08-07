@@ -510,7 +510,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
           <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donations</a>
           <div class="fpnav-dropdown-divider"></div>
           <a href="${homeHref}">BTW Homepage</a>
-          <a href="${fpUrl('/tos')}">BTW Tos</a>
+          <a href="${fpUrl('/tos')}">Terms of Service</a>
         </div>
       </div>
 
