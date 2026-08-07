@@ -534,10 +534,6 @@
       font-size: 0.85rem; line-height: 1.8; color: #999; text-align: center; font-style: italic;
     }
     .fp-disclaimer-box strong { color: #ccc; font-weight: 700; }
-    .fp-disclaimer-img {
-      display: block; width: 100%; height: 420px; object-fit: cover;
-      border-radius: 12px; margin: 0 auto 1.25rem; opacity: 0.85;
-    }
     .fp-disclaimer-box a { color: #7fa8d9; text-decoration: underline; }
     .fp-disclaimer-box .fp-disclaimer-highlight { color: #f0c060; }
     .fp-disclaimer-box p { margin-bottom: 0; }
@@ -693,6 +689,11 @@
           <p class="fp-row-title">Your Bookmarked Stories</p>
           <div id="fp-saved-row"><p class="fp-row-empty">Log in to bookmark stories to your shelf.</p></div>
         </div>
+
+        <div class="fp-row">
+          <p class="fp-row-title" id="fp-tag-row-title">Since you love…</p>
+          <div id="fp-tag-row"><p class="fp-row-empty">Loading…</p></div>
+        </div>
       </div>
 
       <aside class="fp-followers-panel">
@@ -706,7 +707,6 @@
 
     <div class="fp-disclaimer">
       <div class="fp-disclaimer-box">
-        <img class="fp-disclaimer-img" src="/images/home/box-background-3.png" alt="" />
         <p>
           <span class="fp-disclaimer-highlight" id="fp-disclaimer-domain">this site</span> is a website made by <a href="https://btwfics.net/veekitpaws">VeekitPaws</a>, the author of <strong>Between Two Worlds</strong>.
           Consider supporting our website and keeping us sparkling by <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donating Here</a>.
@@ -1157,6 +1157,31 @@
     } catch { row.innerHTML = '<p class="fp-row-empty">Couldn\'t load stories right now.</p>'; }
   }
 
+  // "Since you love <tag>" -- picks one tag the viewer seems into (bookmarks/
+  // likes/their own uploads, live-derived server-side) and shows stories
+  // carrying it. Guests/brand-new accounts get a random in-use tag instead
+  // of an empty row.
+  async function loadTagRow() {
+    const titleEl = document.getElementById('fp-tag-row-title');
+    const row = document.getElementById('fp-tag-row');
+    try {
+      const res = await fetch('/api/recommendations/by-tag?limit=12', { headers: authHeaders() });
+      const data = await res.json();
+      const stories = data.stories || [];
+      if (!data.tag || !stories.length) {
+        titleEl.textContent = 'Since you love…';
+        row.innerHTML = '<p class="fp-row-empty">No stories yet — check back soon!</p>';
+        return;
+      }
+      titleEl.textContent = `Since you love ${data.tag}`;
+      const scroller = document.createElement('div');
+      scroller.className = 'fp-row-scroll';
+      stories.forEach(s => scroller.appendChild(storyCard(s, { showBookmark: true })));
+      row.innerHTML = '';
+      mountRowScroller(row, scroller);
+    } catch { row.innerHTML = '<p class="fp-row-empty">Couldn\'t load stories right now.</p>'; }
+  }
+
   // ── Recommended Followers — VeekitPaws is always the pinned first pick
   // until you actually follow her (server excludes anyone already
   // followed), never includes the BTW Team system account. Any registered
@@ -1229,7 +1254,7 @@
       list.innerHTML = `
         <div class="fp-guest-blur-wrap">
           <div class="fp-guest-blur-content" style="display:flex;flex-direction:column;gap:0.65rem;">
-            ${Array.from({ length: 4 }).map(() => `
+            ${Array.from({ length: 6 }).map(() => `
               <div class="fp-followers-panel-item">
                 <div class="fp-followers-panel-item-top">
                   <span class="fp-followers-panel-avatar-fallback">?</span>
@@ -1245,7 +1270,11 @@
       return;
     }
     try {
-      const res  = await fetch('/api/recommended-followers?limit=6', { headers: authHeaders() });
+      // Bumped from 6 -- the panel now stretches to match a 3-row
+      // .fp-below-main (Recommended/Bookmarked/Since You Love) instead of
+      // 2, so there's real extra height to fill before the list needs its
+      // own scroll.
+      const res  = await fetch('/api/recommended-followers?limit=9', { headers: authHeaders() });
       const data = await res.json();
       const users = data.users || [];
       if (!users.length) { list.innerHTML = '<p class="fp-row-empty">No one to recommend just yet!</p>'; return; }
@@ -1732,6 +1761,7 @@
 
   (async () => {
     loadRecommended();
+    loadTagRow();
     loadRecommendedFollowers();
     loadHeroDonors();
     loadCharacterSpotlight();

@@ -4073,6 +4073,81 @@ app.get('/api/recommendations/stories', async (req, res) => {
   res.json({ stories: recDiversify(scored, limit, 3) });
 });
 
+// ── "Since you love <tag>" homepage row — picks ONE tag the viewer seems
+// to actually be into (from what they've bookmarked/liked/posted
+// themselves, in that rough priority) and returns stories carrying it.
+// Guests and brand-new accounts with no signal yet get a random
+// currently-in-use tag instead of an empty row -- their very engagement
+// with it here is itself the first data point toward a real pick next
+// time, since this always derives live from bookmarks/likes/uploads
+// rather than a separate tracked history table. ────────────────────────────
+app.get('/api/recommendations/by-tag', async (req, res) => {
+  const limit = Math.min(20, Math.max(1, parseInt(req.query.limit, 10) || 8));
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+
+  let tag = null;
+  if (viewerId) {
+    const { rows } = await pool.query(`
+      SELECT tag, COUNT(*)::int AS c FROM (
+        SELECT jsonb_array_elements_text(ms.tags) AS tag
+        FROM moderator_bookmarks mb JOIN moderator_sites ms ON ms.id = mb.site_id WHERE mb.user_id = $1
+        UNION ALL
+        SELECT jsonb_array_elements_text(ms2.tags) AS tag
+        FROM moderator_site_likes msl JOIN moderator_sites ms2 ON ms2.id = msl.site_id WHERE msl.user_id = $1
+        UNION ALL
+        SELECT jsonb_array_elements_text(ms3.tags) AS tag
+        FROM moderator_sites ms3 WHERE ms3.owner_user_id = $1
+        UNION ALL
+        SELECT jsonb_array_elements_text(mg.tags) AS tag
+        FROM moderator_gallery mg WHERE mg.owner_user_id = $1
+      ) t
+      GROUP BY tag ORDER BY c DESC, random() LIMIT 1
+    `, [viewerId]);
+    if (rows.length) tag = rows[0].tag;
+  }
+
+  if (!tag) {
+    const { rows } = await pool.query(`
+      SELECT tag FROM moderator_sites ms, jsonb_array_elements_text(ms.tags) AS tag
+      WHERE EXISTS (
+        SELECT 1 FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+      )
+      GROUP BY tag ORDER BY random() LIMIT 1
+    `);
+    if (rows.length) tag = rows[0].tag;
+  }
+
+  if (!tag) return res.json({ tag: null, stories: [] });
+
+  const { rows } = await pool.query(`
+    SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.synopsis, ms.tags,
+           u.username, u.display_name, u.avatar,
+           (SELECT COUNT(*)::int FROM moderator_bookmarks WHERE site_id = ms.id AND user_id = $2) > 0 AS bookmarked
+    FROM moderator_sites ms
+    JOIN users u ON u.id = ms.owner_user_id
+    JOIN LATERAL (
+      SELECT COUNT(*)::int AS published_count FROM moderator_chapters mc
+      WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+    ) pubchap ON true
+    WHERE pubchap.published_count > 0 AND ms.tags ? $1
+    ORDER BY random()
+    LIMIT $3
+  `, [tag, viewerId || 0, limit]);
+
+  res.json({
+    tag,
+    stories: rows.map(s => ({
+      slug: s.slug, story_path: s.story_path || s.slug, site_title: s.site_title, cover_url: s.cover_url,
+      synopsis: s.synopsis || '', tags: s.tags || [], author: s.display_name || s.username, author_username: s.username,
+      author_avatar: s.avatar || null, bookmarked: !!s.bookmarked,
+    })),
+  });
+});
+
 // ── Recommended Followers — for the Fanpage Hub's "Recommended Followers"
 // row (and its "See More" expanded list). Recommends any registered user
 // — having an actual fanpage/story isn't required, since a brand new
