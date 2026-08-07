@@ -17,20 +17,37 @@
     }
     a { color: inherit; }
 
-    .lib-bg-wrap { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: #0d0d0d; }
-    .lib-bg-img { width: 100%; height: 100%; object-fit: cover; filter: blur(20px); transform: scale(1.1); opacity: 0.4; }
-    .lib-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.78); }
+    /* Unblurred, full-bleed video -- .page-bg (style.css, not even loaded
+       on this page) always blurs its <img>; this page gets its own
+       background layer instead, same recipe as Discord/BTW Homepage. */
+    .lib-bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; }
+    .lib-bg video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .lib-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.55); }
 
-    .lib-main { max-width: 1100px; margin: 0 auto; padding: 3rem 2rem 5rem; }
-    .lib-header-row { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 2rem; }
+    /* Same 1400px width as the Home/Profile pages. */
+    .lib-main { max-width: 1400px; margin: 0 auto; padding: 3rem 2rem 5rem; }
+    .lib-header-row { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 1.5rem; }
     .lib-title { font-family: 'Cinzel', Georgia, serif; font-size: 2.2rem; }
     .lib-private { display: flex; align-items: center; gap: 0.4rem; color: #999; font-size: 0.85rem; }
 
-    /* Sidebar (left) + active section (right) — same "Browse"/"Explore the
-       Cast" boxed-nav pattern used on the character/gallery pages, reusing
-       those exact classes for visual consistency instead of tabs. */
-    .lib-layout { display: grid; grid-template-columns: 200px 1fr; gap: 2.5rem; align-items: start; }
-    .lib-sidebar { position: sticky; top: 90px; }
+    /* Big centered pill tabs -- same recipe as the Creator Hub's
+       Stories/Characters/Gallery tabs -- instead of the old boxed
+       "Browse" sidebar. */
+    .lib-tabs { display: flex; justify-content: center; gap: 1.25rem; margin-bottom: 2.5rem; }
+    .lib-tab {
+      background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.14); border-radius: 30px; cursor: pointer; color: #bbb;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.25rem; font-weight: 700;
+      padding: 0.75rem 2.2rem; position: relative;
+      transition: color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+    }
+    .lib-tab:hover { color: #fff; border-color: rgba(240,192,96,0.5); box-shadow: 0 0 18px rgba(240,192,96,0.25); transform: translateY(-1px); }
+    .lib-tab.active {
+      color: #1a1408; border-color: #f0c060;
+      background: linear-gradient(135deg, #b8863a, #f0c060);
+      box-shadow: 0 0 24px rgba(240,192,96,0.55);
+    }
+    .lib-tab.active:hover { transform: none; }
 
     .lib-section-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 1.25rem; }
     .lib-empty { color: #999; font-size: 0.92rem; padding: 2rem 0; }
@@ -79,16 +96,18 @@
       .lib-main { padding: 2rem 1.1rem 3.5rem; }
       .lib-header-row { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
       .lib-title { font-size: 1.7rem; }
-      .lib-layout { grid-template-columns: 1fr; gap: 1.25rem; }
-      .lib-sidebar { position: static; }
+      .lib-tabs { gap: 0.6rem; }
+      .lib-tab { font-size: 1.02rem; padding: 0.6rem 1.2rem; }
       .lib-story-grid, .lib-gallery-grid { grid-template-columns: repeat(auto-fill, minmax(115px, 1fr)); gap: 0.85rem; }
     }
   </style>
 </head>
 <body>
 
-<div class="lib-bg-wrap">
-  <img class="lib-bg-img" src="/images/gallery/close_6.png" alt="" />
+<div class="lib-bg">
+  <video autoplay muted loop playsinline>
+    <source src="/images/home/top-background.webm" type="video/webm" />
+  </video>
   <div class="lib-bg-overlay"></div>
 </div>
 
@@ -100,15 +119,13 @@
     <span class="lib-private">🔒 Private</span>
   </div>
 
-  <div class="lib-layout">
-    <aside class="chars-create-box lib-sidebar">
-      <p class="mod-gallery-sidebar-label">Browse</p>
-      <button class="mod-gallery-cat active" id="lib-tab-stories" type="button">Stories</button>
-      <button class="mod-gallery-cat" id="lib-tab-gallery" type="button">Galleries</button>
-      <button class="mod-gallery-cat" id="lib-tab-characters" type="button">Characters</button>
-    </aside>
+  <nav class="lib-tabs">
+    <button class="lib-tab active" id="lib-tab-stories" type="button">Stories</button>
+    <button class="lib-tab" id="lib-tab-gallery" type="button">Galleries</button>
+    <button class="lib-tab" id="lib-tab-characters" type="button">Characters</button>
+  </nav>
 
-    <div>
+  <div>
       <section id="lib-stories-section">
         <p class="lib-section-title">Bookmarked Stories</p>
         <div id="lib-stories-grid"><p class="lib-empty">Loading…</p></div>
@@ -123,7 +140,6 @@
         <p class="lib-section-title">Bookmarked Characters</p>
         <div id="lib-characters-grid"><p class="lib-empty">Loading…</p></div>
       </section>
-    </div>
   </div>
 </main>
 
