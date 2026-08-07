@@ -461,9 +461,10 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
   const here = window.location.pathname;
-  // Already on the "you're leaving Fanpages" confirm screen — send straight
-  // through instead of looping back to another confirm screen.
-  const homeHref = here === fpUrl('/leaving') ? '/' : fpUrl(`/leaving?from=${encodeURIComponent(here)}`);
+  // Already on the "BTW Homepage" confirm screen — clicking the nav item
+  // again should just reload this same page (keeping whatever `from` it
+  // already had), not jump straight to this site's own home page.
+  const homeHref = here === fpUrl('/leaving') ? window.location.href : fpUrl(`/leaving?from=${encodeURIComponent(here)}`);
 
   root.innerHTML = `
     <div class="fpnav-bar">
@@ -475,8 +476,8 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
           <a href="${fpUrl('/discord')}">Discord</a>
           <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donations</a>
           <div class="fpnav-dropdown-divider"></div>
-          <a href="${fpUrl('/tos')}">BTW Tos</a>
           <a href="${homeHref}">BTW Homepage</a>
+          <a href="${fpUrl('/tos')}">BTW Tos</a>
         </div>
       </div>
 
