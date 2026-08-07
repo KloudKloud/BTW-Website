@@ -251,7 +251,7 @@
     }
     .fp-more-menu-dropdown button:hover { background: rgba(194,84,122,0.12); }
 
-    .fp-name-row { display: flex; align-items: center; justify-content: center; margin-top: 0.75rem; }
+    .fp-name-row { display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-top: 0.75rem; flex-wrap: wrap; }
     .fp-name {
       font-family: 'Fredoka', 'Lato', Arial, sans-serif; font-weight: 700;
       font-size: 2.3rem; text-align: center;
@@ -271,13 +271,15 @@
     .fp-handle {
       font-family: 'Fredoka', 'Lato', Arial, sans-serif;
       color: #999; font-size: 1.1rem; margin-top: 0.2rem; text-align: center;
-      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
     }
+    /* Sits next to the display name itself now (not the @handle) -- bigger
+       and bolder so it reads as a real badge, not a small caption tag. */
     .fp-follows-you-badge {
-      font-family: 'Lato', Arial, sans-serif; font-size: 0.68rem; font-weight: 700;
+      font-family: 'Lato', Arial, sans-serif; font-size: 0.85rem; font-weight: 800;
       letter-spacing: 0.05em; text-transform: uppercase; color: #ccc;
-      background: rgba(255,255,255,0.12); border-radius: 20px; padding: 0.22rem 0.6rem;
-      white-space: nowrap;
+      background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 24px; padding: 0.4em 0.9em;
+      white-space: nowrap; flex-shrink: 0;
     }
 
     .fp-stats {
@@ -1090,6 +1092,7 @@
 
   <div class="fp-name-row">
     <h1 class="fp-name" id="fp-name">Loading…</h1>
+    <span class="fp-follows-you-badge" id="fp-follows-you-badge" hidden>Follows You</span>
     <div class="fp-name-edit-box" id="fp-name-edit-box" hidden>
       <span class="fp-name-edit-label">Name</span>
       <input type="text" class="fp-name-edit-input" id="fp-name-edit-input" maxlength="20" placeholder="Display name" />
@@ -3960,17 +3963,8 @@
       currentAuthor = a;
 
       document.getElementById('fp-name').textContent = a.display_name;
-      const handleEl = document.getElementById('fp-handle');
-      handleEl.innerHTML = '';
-      const handleText = document.createElement('span');
-      handleText.textContent = `@${a.username}`;
-      handleEl.appendChild(handleText);
-      if (!a.is_self && data.follows_viewer) {
-        const badge = document.createElement('span');
-        badge.className = 'fp-follows-you-badge';
-        badge.textContent = 'Follows You';
-        handleEl.appendChild(badge);
-      }
+      document.getElementById('fp-handle').textContent = `@${a.username}`;
+      document.getElementById('fp-follows-you-badge').hidden = a.is_self || !data.follows_viewer;
       document.getElementById('fp-follower-count').textContent = data.follower_count;
       document.getElementById('fp-following-count').textContent = data.following_count;
       document.getElementById('fp-clubs-count').textContent = data.club_count || 0;
