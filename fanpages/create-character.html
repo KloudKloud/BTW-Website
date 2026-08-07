@@ -19,23 +19,23 @@
        and a stray nav click can't carry someone off the page unconfirmed. */
     #fanpages-topbar-root { display: none; }
     .cc-topbar {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 150; height: 68px; box-sizing: border-box;
+      position: fixed; top: 0; left: 0; right: 0; z-index: 150; height: 84px; box-sizing: border-box;
       display: flex; align-items: center; justify-content: space-between;
       background: #161616; border-bottom: 1px solid rgba(255,255,255,0.1);
       padding: 0 1.5rem;
     }
-    .cc-topbar-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.08rem; font-weight: 700; color: #f0f0f0; }
-    .cc-topbar-actions { display: flex; align-items: center; gap: 0.85rem; }
+    .cc-topbar-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.2rem; font-weight: 700; color: #f0f0f0; }
+    .cc-topbar-actions { display: flex; align-items: center; gap: 1rem; }
     .cc-topbar-cancel {
-      color: #ccc; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.9rem; font-weight: 600; text-decoration: none;
-      border: 1px solid rgba(255,255,255,0.25); border-radius: 22px; padding: 0.6em 1.4em; cursor: pointer; background: none;
+      color: #ccc; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.02rem; font-weight: 600; text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.25); border-radius: 26px; padding: 0.8em 1.8em; cursor: pointer; background: none;
       transition: border-color 0.15s, color 0.15s;
     }
     .cc-topbar-cancel:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
     .cc-topbar-create {
       background: #1fb6a8; color: #fff; border: none;
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.94rem; font-weight: 700;
-      padding: 0.65em 1.7em; border-radius: 22px; cursor: pointer;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.06rem; font-weight: 700;
+      padding: 0.85em 2.2em; border-radius: 26px; cursor: pointer;
       box-shadow: 0 0 16px rgba(31,182,168,0.55); transition: background 0.15s, box-shadow 0.15s;
     }
     .cc-topbar-create:hover { background: #1a9d91; box-shadow: 0 0 22px rgba(31,182,168,0.75); }
@@ -57,7 +57,7 @@
       padding: 0.75rem 1.05rem; cursor: pointer;
     }
     .wiki-fandom-suggest-item:hover, .wiki-fandom-suggest-item.active { background: rgba(127,168,217,0.15); }
-    .cc-page { max-width: 880px; margin: 0 auto; padding: calc(68px + 2.5rem) 1.25rem 4rem; }
+    .cc-page { max-width: 880px; margin: 0 auto; padding: calc(84px + 2.5rem) 1.25rem 4rem; }
     .cc-eyebrow {
       font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
       color: #f0c060; margin-bottom: 0.5rem; text-align: center;
@@ -113,7 +113,7 @@
 
 <main class="cc-page">
   <p class="cc-eyebrow">Create</p>
-  <p class="cc-sub">This character lives on your profile — no story required. You can link it into any of your stories later from that story's Characters screen.</p>
+  <p class="cc-sub">Create a character to feature on your account and tag inside of stories/art!</p>
 
   <div class="char-editor-modal">
     <h2 class="char-editor-title editor-title-glow">New Character</h2>
@@ -415,14 +415,13 @@
   // .cs-topbar, replacing the site nav so a stray nav click can't carry
   // someone off this page. Just triggers the real (bottom) buttons so all
   // the actual save/validation logic stays in one place. ─────────────────
+  // Just the browser's own native "leave site?" prompt (beforeunload) --
+  // Cancel is a plain navigation, so that alone already fires it once
+  // when the form's dirty. A second, custom confirm() on the Cancel click
+  // itself used to stack a duplicate prompt on top of that; removed.
   let ccDirty = false;
   document.querySelector('.char-editor-modal').addEventListener('input', () => { ccDirty = true; }, true);
   document.querySelector('.char-editor-modal').addEventListener('change', () => { ccDirty = true; }, true);
-
-  function ccConfirmLeave() {
-    if (!ccDirty) return true;
-    return confirm('You will lose all unsaved progress. Are you sure you wish to exit?');
-  }
   window.addEventListener('beforeunload', (e) => {
     if (!ccDirty) return;
     e.preventDefault();
@@ -433,10 +432,7 @@
     document.getElementById('char-editor-save').click();
   });
   document.getElementById('cc-topbar-cancel').addEventListener('click', () => {
-    if (ccConfirmLeave()) document.getElementById('char-editor-cancel').click();
-  });
-  document.getElementById('char-editor-cancel').addEventListener('click', (e) => {
-    if (!ccConfirmLeave()) e.preventDefault();
+    document.getElementById('char-editor-cancel').click();
   });
 
   // Lightbulb hint popovers -- generic wiring for every .wiki-tags-tip-icon

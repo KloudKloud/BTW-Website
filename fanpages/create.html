@@ -117,6 +117,13 @@
        Editor's own cover-beside-cards row. */
     .cs-main-row { display: flex; gap: 3rem; align-items: flex-start; }
     .cs-cover-col { flex-shrink: 0; width: 220px; position: sticky; top: calc(68px + 1.5rem); }
+    /* .mod-cover-wrap's own base width is a hardcoded 220px (fanpages.css)
+       -- inside this column's .cs-panel (1.25rem padding + border), that
+       left the cover (and its centered "Change Cover" button) overflowing
+       past the panel's edges by exactly the padding amount. Same fix the
+       Story Editor's own narrow cover column already uses: let it fill its
+       container instead of forcing its own fixed width. */
+    .cs-cover-col .mod-cover-wrap { width: 100%; height: auto; aspect-ratio: 2 / 3; }
     .cs-form-col { flex: 1; min-width: 0; }
     .cs-cards-panel-title {
       font-family: 'Baloo 2', 'Georgia', serif; font-size: 0.92rem; font-weight: 700; color: #ccc;
@@ -235,26 +242,32 @@
       </div>
       </div>
       <!-- Same Characters/Chapters/Gallery quick-nav cards as the Story
-           Editor's cover column -- purely a preview here (nothing to
-           attach an upload to until the story actually exists), same
-           default art the live story would start with. -->
+           Editor's cover column, and just as changeable -- staged locally
+           as blobs (same pattern as the banner/cover above) and uploaded
+           for real right after the story is created. Same 16:10 crop as
+           the live page/editor use, so what's picked here is exactly what
+           the card shows once the story actually exists. -->
       <div class="cs-panel" style="padding: 1rem;">
         <p class="cs-cards-panel-title">Quick-Nav Cards</p>
         <div class="mod-quick-nav">
           <div class="mod-quick-nav-row" style="grid-template-columns: 1fr; gap: 0.85rem;">
-            <div class="mod-quick-nav-card">
-              <img src="/images/characters/kloudreference.png" alt="Characters" draggable="false" />
+            <a class="mod-quick-nav-card" id="qn-characters" href="#">
+              <img id="qn-characters-img" src="/images/characters/kloudreference.png" alt="Characters" draggable="false" />
               <div class="mod-quick-nav-card-overlay"><span class="mod-quick-nav-card-label">Characters</span></div>
-            </div>
-            <div class="mod-quick-nav-card">
-              <img src="/images/gallery/autumnleave_11.png" alt="Chapters" draggable="false" />
+              <button class="mod-quick-nav-card-edit-btn" id="qn-characters-edit-btn" type="button" title="Change card image">📷</button>
+            </a>
+            <a class="mod-quick-nav-card" id="qn-chapters" href="#">
+              <img id="qn-chapters-img" src="/images/gallery/autumnleave_11.png" alt="Chapters" draggable="false" />
               <div class="mod-quick-nav-card-overlay"><span class="mod-quick-nav-card-label">Chapters</span></div>
-            </div>
-            <div class="mod-quick-nav-card">
-              <img src="/images/gallery/apolloref_10.png" alt="Gallery" draggable="false" />
+              <button class="mod-quick-nav-card-edit-btn" id="qn-chapters-edit-btn" type="button" title="Change card image">📷</button>
+            </a>
+            <a class="mod-quick-nav-card" id="qn-gallery" href="#">
+              <img id="qn-gallery-img" src="/images/gallery/apolloref_10.png" alt="Gallery" draggable="false" />
               <div class="mod-quick-nav-card-overlay"><span class="mod-quick-nav-card-label">Gallery</span></div>
-            </div>
+              <button class="mod-quick-nav-card-edit-btn" id="qn-gallery-edit-btn" type="button" title="Change card image">📷</button>
+            </a>
           </div>
+          <input type="file" id="qn-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
         </div>
       </div>
     </div>
@@ -774,6 +787,42 @@ document.getElementById('cover-file-input').addEventListener('change', (e) => {
   e.target.value = '';
 });
 
+// ── Quick-nav card art (Characters/Chapters/Gallery) — same staged-blob
+// pattern as the banner/cover above, uploaded for real right after the
+// story is created (see NAV_CARD_FIELD's upload loop in Save and Continue
+// below). 16:10 crop, matching the live page's own card shape exactly.
+const NAV_CARD_LABEL = { characters: 'Characters', chapters: 'Chapters', gallery: 'Gallery' };
+const pendingNavCardBlobs = {};
+const qnFileInput = document.getElementById('qn-file-input');
+let qnUploadKind = null;
+['characters', 'chapters', 'gallery'].forEach(kind => {
+  // The cards are just a canvas for the camera button here — never let a
+  // click on them navigate away like they do on the story's own page.
+  document.getElementById(`qn-${kind}`).addEventListener('click', (e) => e.preventDefault());
+  document.getElementById(`qn-${kind}-edit-btn`).style.display = 'flex';
+  document.getElementById(`qn-${kind}-edit-btn`).addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    qnUploadKind = kind;
+    qnFileInput.click();
+  });
+});
+qnFileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  const kind = qnUploadKind;
+  qnFileInput.value = '';
+  qnUploadKind = null;
+  if (!file || !kind) return;
+  openCropModal({
+    title: `Crop ${NAV_CARD_LABEL[kind]} Card`, imageSrc: URL.createObjectURL(file), aspectRatio: 16 / 10, round: false,
+    onSave: async (blob) => {
+      pendingNavCardBlobs[kind] = blob;
+      const img = document.getElementById(`qn-${kind}-img`);
+      img.src = URL.createObjectURL(blob);
+    },
+  });
+});
+
 document.querySelectorAll('#cs-complete-toggle .cs-complete-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('#cs-complete-toggle .cs-complete-btn').forEach(b => b.classList.toggle('active', b === btn));
@@ -848,6 +897,11 @@ document.getElementById('cs-submit-btn').addEventListener('click', async () => {
       fd.append('position_x', 50);
       fd.append('position_y', 50);
       await fetch('/api/moderator/site/cover', { method: 'PUT', headers, body: fd }).catch(() => {});
+    }
+    for (const kind of Object.keys(pendingNavCardBlobs)) {
+      const fd = new FormData();
+      fd.append('image', pendingNavCardBlobs[kind], `${kind}.jpg`);
+      await fetch(`/api/moderator/site/nav-card/${kind}`, { method: 'PUT', headers, body: fd }).catch(() => {});
     }
 
     // Straight into the "link existing Characters/Art?" step, carrying the
