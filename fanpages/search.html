@@ -697,6 +697,28 @@
     .fp-filter-word-row input { flex: 1; min-width: 0; }
     .fp-filter-word-row span { color: #888; }
 
+    /* Fandoms/Relationships/Additional Tags smart typeahead -- replaces the
+       native <datalist> popup, which dumped the entire catalog open on
+       click/focus. Same body-appended, fixed-position dropdown pattern as
+       the Story Editor's own tag/fandom typeahead (create.html /
+       _story-template/edit.html) -- these fields sit inside a <details>
+       panel, so position:absolute scoped to the field would get clipped by
+       the panel's own scroll/stacking context. Suggestions only render once
+       there's an actual query (see the JS), so nothing appears until the
+       user starts typing. */
+    .wiki-suggest-input-wrap { position: relative; }
+    .wiki-fandom-suggest {
+      position: fixed; z-index: 3000;
+      background: #141018; border: 1px solid rgba(255,255,255,0.14); border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.55); overflow: hidden;
+    }
+    .wiki-fandom-suggest-item {
+      display: block; width: 100%; text-align: left; background: none; border: none;
+      color: #f0f0f0; font-family: 'Inter', sans-serif; font-size: 0.88rem;
+      padding: 0.65rem 0.9rem; cursor: pointer;
+    }
+    .wiki-fandom-suggest-item:hover, .wiki-fandom-suggest-item.active { background: rgba(127,168,217,0.15); }
+
     /* Same blue gradient + white Inter text as the story view's own
        "Edit <character name>" button. */
     .fp-filter-apply-btn {
@@ -816,10 +838,9 @@
       <details class="fp-filter-details">
         <summary>Ratings</summary>
         <div class="fp-filter-options" id="f-rating-options">
-          <label><input type="radio" name="f-rating" value="" checked /> Any</label>
-          <label><input type="radio" name="f-rating" value="sfw" /> General</label>
-          <label><input type="radio" name="f-rating" value="mature" /> Mature</label>
-          <label><input type="radio" name="f-rating" value="explicit" /> Explicit</label>
+          <label><input type="checkbox" value="sfw" checked /> General</label>
+          <label><input type="checkbox" value="mature" checked /> Mature</label>
+          <label><input type="checkbox" value="explicit" checked /> Explicit</label>
         </div>
       </details>
       <details class="fp-filter-details">
@@ -835,18 +856,24 @@
       </details>
       <details class="fp-filter-details">
         <summary>Fandoms</summary>
-        <input type="text" id="f-fandoms" placeholder="e.g. Pokémon" list="fp-fandom-list" style="margin-top:0.7rem;" />
-        <datalist id="fp-fandom-list"></datalist>
+        <div class="wiki-suggest-input-wrap" id="f-fandoms-wrap">
+          <input type="text" id="f-fandoms" placeholder="e.g. Pokémon" autocomplete="off" style="margin-top:0.7rem;" />
+          <div class="wiki-fandom-suggest" id="f-fandoms-suggest" hidden></div>
+        </div>
       </details>
       <details class="fp-filter-details">
         <summary>Relationships</summary>
-        <input type="text" id="f-relationships" placeholder="Comma-separated" list="fp-relationship-list" style="margin-top:0.7rem;" />
-        <datalist id="fp-relationship-list"></datalist>
+        <div class="wiki-suggest-input-wrap" id="f-relationships-wrap">
+          <input type="text" id="f-relationships" placeholder="Comma-separated" autocomplete="off" style="margin-top:0.7rem;" />
+          <div class="wiki-fandom-suggest" id="f-relationships-suggest" hidden></div>
+        </div>
       </details>
       <details class="fp-filter-details">
         <summary>Additional Tags</summary>
-        <input type="text" id="f-tags-include" placeholder="e.g. Espeon, Fluff" list="fp-tag-list" style="margin-top:0.7rem;" />
-        <datalist id="fp-tag-list"></datalist>
+        <div class="wiki-suggest-input-wrap" id="f-tags-include-wrap">
+          <input type="text" id="f-tags-include" placeholder="e.g. Espeon, Fluff" autocomplete="off" style="margin-top:0.7rem;" />
+          <div class="wiki-fandom-suggest" id="f-tags-include-suggest" hidden></div>
+        </div>
       </details>
       <details class="fp-filter-details">
         <summary>Word Count</summary>
@@ -859,9 +886,8 @@
       <details class="fp-filter-details">
         <summary>Completion Status</summary>
         <div class="fp-filter-options" id="f-completion">
-          <label><input type="radio" name="f-completion" value="all" checked /> All works</label>
-          <label><input type="radio" name="f-completion" value="complete" /> Complete only</label>
-          <label><input type="radio" name="f-completion" value="wip" /> Work in progress</label>
+          <label><input type="checkbox" value="complete" checked /> Complete</label>
+          <label><input type="checkbox" value="wip" checked /> Ongoing</label>
         </div>
       </details>
     </div>
@@ -870,7 +896,10 @@
       <p class="fp-filter-section-title">Exclude</p>
       <details class="fp-filter-details">
         <summary>Additional Tags</summary>
-        <input type="text" id="f-tags-exclude" placeholder="Comma-separated" list="fp-tag-list" style="margin-top:0.7rem;" />
+        <div class="wiki-suggest-input-wrap" id="f-tags-exclude-wrap">
+          <input type="text" id="f-tags-exclude" placeholder="Comma-separated" autocomplete="off" style="margin-top:0.7rem;" />
+          <div class="wiki-fandom-suggest" id="f-tags-exclude-suggest" hidden></div>
+        </div>
       </details>
     </div>
 
@@ -1402,19 +1431,27 @@ function pageLabelHtml(name) {
   return `<span class="fp-search-page-label">· ${escapeHtml(name)}</span>`;
 }
 
+const STORY_RATING_VALUES = ['sfw', 'mature', 'explicit'];
+const STORY_COMPLETION_VALUES = ['complete', 'wip'];
+
 function readParamsFromUrl() {
   const p = new URLSearchParams(window.location.search);
+  const ratingsParam = p.get('ratings');
+  const completionParam = p.get('completion');
   return {
     q: p.get('q') || '',
     fandoms: p.get('fandoms') || '',
     relationships: p.get('relationships') || '',
-    rating: p.get('rating') || '',
+    // All three ratings checked (the default) reads the same as no filter
+    // at all -- an omitted param means "show everything", same convention
+    // the Posts panel's ratings checklist already uses.
+    ratings: ratingsParam ? ratingsParam.split(',').filter(r => STORY_RATING_VALUES.includes(r)) : STORY_RATING_VALUES.slice(),
     tags_include: p.get('tags_include') || '',
     tags_exclude: p.get('tags_exclude') || '',
     categories: p.get('categories') || '',
     word_min: p.get('word_min') || '',
     word_max: p.get('word_max') || '',
-    completion: p.get('completion') || 'all',
+    completion: completionParam ? completionParam.split(',').filter(c => STORY_COMPLETION_VALUES.includes(c)) : STORY_COMPLETION_VALUES.slice(),
     sort: p.get('sort') || '',
     page: parseInt(p.get('page'), 10) || 1,
   };
@@ -1429,13 +1466,12 @@ function applyParamsToPanel(f) {
   document.getElementById('f-tags-exclude').value = f.tags_exclude;
   document.getElementById('f-word-min').value = f.word_min;
   document.getElementById('f-word-max').value = f.word_max;
-  const ratingInput = document.querySelector(`#f-rating-options input[value="${CSS.escape(f.rating)}"]`);
-  if (ratingInput) ratingInput.checked = true;
+  document.querySelectorAll('#f-rating-options input').forEach(cb => { cb.checked = f.ratings.includes(cb.value); });
   const cats = f.categories ? f.categories.split(',') : [];
   document.querySelectorAll('#f-categories input').forEach(cb => { cb.checked = cats.includes(cb.value); });
-  document.querySelectorAll('#f-completion input').forEach(r => { r.checked = r.value === f.completion; });
+  document.querySelectorAll('#f-completion input').forEach(cb => { cb.checked = f.completion.includes(cb.value); });
 
-  // Exact-tag filters (fandoms/tags/relationships/categories/rating) get a
+  // Exact-tag filters (fandoms/tags/relationships/categories/ratings) get a
   // "<tag> @X" marker so it's obvious this is a narrowed exact-match search,
   // not the fuzzy keyword search a plain "X" would imply.
   const queryBits = [];
@@ -1443,7 +1479,7 @@ function applyParamsToPanel(f) {
   ['fandoms', 'tags_include', 'relationships', 'categories'].forEach(key => {
     if (f[key]) f[key].split(',').filter(Boolean).forEach(v => queryBits.push(`<tag> @${v}`));
   });
-  if (f.rating) queryBits.push(`<tag> @${f.rating}`);
+  if (f.ratings.length < STORY_RATING_VALUES.length) f.ratings.forEach(v => queryBits.push(`<tag> @${v}`));
   const queryText = queryBits.length ? queryBits.join(', ') : 'Everything';
   document.getElementById('fp-filter-query-text').textContent = queryText;
 }
@@ -1457,8 +1493,8 @@ function collectPanelParams() {
   if (fandoms) params.fandoms = fandoms;
   const relationships = document.getElementById('f-relationships').value.trim();
   if (relationships) params.relationships = relationships;
-  const rating = document.querySelector('#f-rating-options input:checked').value;
-  if (rating) params.rating = rating;
+  const ratings = [...document.querySelectorAll('#f-rating-options input:checked')].map(c => c.value);
+  if (ratings.length < STORY_RATING_VALUES.length) params.ratings = ratings.join(',');
   const tagsInclude = document.getElementById('f-tags-include').value.trim();
   if (tagsInclude) params.tags_include = tagsInclude;
   const tagsExclude = document.getElementById('f-tags-exclude').value.trim();
@@ -1469,28 +1505,128 @@ function collectPanelParams() {
   if (wordMin) params.word_min = wordMin;
   const wordMax = document.getElementById('f-word-max').value;
   if (wordMax) params.word_max = wordMax;
-  const completion = document.querySelector('#f-completion input:checked').value;
-  if (completion !== 'all') params.completion = completion;
+  const completion = [...document.querySelectorAll('#f-completion input:checked')].map(c => c.value);
+  if (completion.length < STORY_COMPLETION_VALUES.length) params.completion = completion.join(',');
   return params;
 }
 
+let fpTagCatalog = [];
+let fpFandomCatalog = [];
+let fpRelationshipCatalog = [];
 async function loadCatalogsForAutocomplete() {
   try {
     const res = await fetch('/api/tag-catalog');
     const data = await res.json();
-    document.getElementById('fp-tag-list').innerHTML = (data.tags || []).map(t => `<option value="${escapeHtml(t)}"></option>`).join('');
+    fpTagCatalog = data.tags || [];
   } catch {}
   try {
     const res = await fetch('/api/fandom-catalog');
     const data = await res.json();
-    document.getElementById('fp-fandom-list').innerHTML = (data.fandoms || []).map(f => `<option value="${escapeHtml(f)}"></option>`).join('');
+    fpFandomCatalog = data.fandoms || [];
   } catch {}
   try {
     const res = await fetch('/api/relationship-catalog');
     const data = await res.json();
-    document.getElementById('fp-relationship-list').innerHTML = (data.relationships || []).map(r => `<option value="${escapeHtml(r)}"></option>`).join('');
+    fpRelationshipCatalog = data.relationships || [];
   } catch {}
 }
+
+// ── Fandoms/Relationships/Additional Tags -- smart typeahead ───────────────
+// Body-appended, fixed-position dropdown (see the .wiki-fandom-suggest CSS
+// comment above for why) that only shows once there's a query -- no
+// dropdown at all until the user actually starts typing.
+function fpPositionSuggest(wrap, anchorEl) {
+  const rect = anchorEl.getBoundingClientRect();
+  wrap.style.top = `${rect.bottom + 6}px`;
+  wrap.style.left = `${rect.left}px`;
+  wrap.style.width = `${rect.width}px`;
+}
+function fpRepositionOpenSuggests() {
+  document.querySelectorAll('.wiki-fandom-suggest').forEach(wrap => {
+    if (!wrap.hidden && wrap.dataset.anchorId) fpPositionSuggest(wrap, document.getElementById(wrap.dataset.anchorId));
+  });
+}
+window.addEventListener('scroll', fpRepositionOpenSuggests, true);
+window.addEventListener('resize', fpRepositionOpenSuggests);
+
+function fpRenderSuggest(dropdownId, inputId, matches) {
+  const wrap = document.getElementById(dropdownId);
+  const input = document.getElementById(inputId);
+  if (wrap.parentElement !== document.body) document.body.appendChild(wrap);
+  wrap.dataset.anchorId = inputId;
+  if (!matches.length) { wrap.hidden = true; wrap.innerHTML = ''; return; }
+  fpPositionSuggest(wrap, input);
+  wrap.innerHTML = matches.map(m => `<button type="button" class="wiki-fandom-suggest-item">${escapeHtml(m)}</button>`).join('');
+  wrap.hidden = false;
+}
+
+// These fields are still plain comma-separated text (not bubble-tag
+// inputs) -- the typeahead matches against whatever's being typed after
+// the last comma, and picking a suggestion replaces just that segment.
+function wireFilterTypeahead(inputId, dropdownId, getCatalog) {
+  const input = document.getElementById(inputId);
+  let activeIndex = -1;
+
+  function currentSegment() {
+    const parts = input.value.split(',');
+    return parts[parts.length - 1].trim();
+  }
+  function pickSuggestion(val) {
+    const parts = input.value.split(',');
+    parts[parts.length - 1] = ` ${val}`;
+    const cleaned = parts.map(p => p.trim()).filter(Boolean);
+    input.value = cleaned.join(', ') + ', ';
+    fpRenderSuggest(dropdownId, inputId, []);
+    activeIndex = -1;
+    input.focus();
+  }
+
+  input.addEventListener('input', () => {
+    const q = currentSegment().toLowerCase();
+    activeIndex = -1;
+    if (!q) { fpRenderSuggest(dropdownId, inputId, []); return; }
+    const already = input.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    const matches = getCatalog().filter(c => c.toLowerCase().includes(q) && !already.includes(c.toLowerCase())).slice(0, 6);
+    fpRenderSuggest(dropdownId, inputId, matches);
+    document.querySelectorAll(`#${dropdownId} .wiki-fandom-suggest-item`).forEach(btn => {
+      btn.addEventListener('mousedown', (e) => { e.preventDefault(); pickSuggestion(btn.textContent); });
+    });
+  });
+
+  input.addEventListener('keydown', (e) => {
+    const items = document.querySelectorAll(`#${dropdownId} .wiki-fandom-suggest-item`);
+    if (e.key === 'ArrowDown' && items.length) {
+      e.preventDefault();
+      activeIndex = Math.min(activeIndex + 1, items.length - 1);
+      items.forEach((el, i) => el.classList.toggle('active', i === activeIndex));
+    } else if (e.key === 'ArrowUp' && items.length) {
+      e.preventDefault();
+      activeIndex = Math.max(activeIndex - 1, 0);
+      items.forEach((el, i) => el.classList.toggle('active', i === activeIndex));
+    } else if (e.key === 'Enter') {
+      if (items.length) {
+        e.preventDefault();
+        const picked = activeIndex >= 0 && items[activeIndex] ? items[activeIndex].textContent : items[0].textContent;
+        pickSuggestion(picked);
+      } else {
+        // No suggestions open -- Enter snapshots the whole panel and
+        // searches immediately, same as the Quick Search box.
+        applyFiltersAndSearch();
+      }
+    } else if (e.key === 'Escape') {
+      fpRenderSuggest(dropdownId, inputId, []);
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    const wrap = document.getElementById(dropdownId);
+    if (!input.contains(e.target) && !wrap.contains(e.target)) fpRenderSuggest(dropdownId, inputId, []);
+  });
+}
+wireFilterTypeahead('f-fandoms', 'f-fandoms-suggest', () => fpFandomCatalog);
+wireFilterTypeahead('f-relationships', 'f-relationships-suggest', () => fpRelationshipCatalog);
+wireFilterTypeahead('f-tags-include', 'f-tags-include-suggest', () => fpTagCatalog);
+wireFilterTypeahead('f-tags-exclude', 'f-tags-exclude-suggest', () => fpTagCatalog);
 
 async function runSearch() {
   const resultsEl = document.getElementById('fp-search-results');
@@ -1521,13 +1657,13 @@ async function runSearch() {
   if (f.q) apiParams.set('q', f.q);
   if (f.fandoms) apiParams.set('fandoms', f.fandoms);
   if (f.relationships) apiParams.set('relationships', f.relationships);
-  if (f.rating) apiParams.set('rating', f.rating);
+  if (f.ratings.length < STORY_RATING_VALUES.length) apiParams.set('ratings', f.ratings.join(','));
   if (f.tags_include) apiParams.set('tags_include', f.tags_include);
   if (f.tags_exclude) apiParams.set('tags_exclude', f.tags_exclude);
   if (f.categories) apiParams.set('categories', f.categories);
   if (f.word_min) apiParams.set('word_min', f.word_min);
   if (f.word_max) apiParams.set('word_max', f.word_max);
-  if (f.completion !== 'all') apiParams.set('completion', f.completion);
+  if (f.completion.length < STORY_COMPLETION_VALUES.length) apiParams.set('completion', f.completion.join(','));
   if (f.sort) apiParams.set('sort', f.sort);
   apiParams.set('page', f.page);
   // Browse mode is a plain "recent updates" feed, AO3-style — 6 per page
@@ -1580,6 +1716,17 @@ document.getElementById('fp-filter-apply-top').addEventListener('click', applyFi
 document.getElementById('fp-filter-apply').addEventListener('click', applyFiltersAndSearch);
 document.getElementById('fp-story-search-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') applyFiltersAndSearch();
+});
+// Enter in the word-count fields snapshots the whole panel (not just that
+// one field) and searches immediately, same as the Quick Search box -- no
+// need to also go click "Sort and Filter" separately. The Fandoms/
+// Relationships/Tags fields get the same Enter-to-search behavior too, but
+// it's wired below as part of their typeahead (Enter there either picks a
+// suggestion or searches, depending on whether the dropdown's open).
+['f-word-min', 'f-word-max'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') applyFiltersAndSearch();
+  });
 });
 
 // Filter panel collapse/expand — the floating arrow fab (right edge of the

@@ -3760,10 +3760,19 @@ app.get('/api/search/works', async (req, res) => {
   const tagsExclude   = csvParam(req.query.tags_exclude);
   const categories    = csvParam(req.query.categories);
   const relationships = csvParam(req.query.relationships);
-  const rating = RATING_OPTIONS.includes(req.query.rating) ? req.query.rating : '';
+  // Plural, comma-separated -- mirrors the Posts tab's own `ratings`
+  // checklist param. All three checked (the default) reads the same as no
+  // filter, same as an omitted param, so the caller just leaves this off
+  // rather than sending the full list every time.
+  const ratings = csvParam(req.query.ratings).filter(r => RATING_OPTIONS.includes(r));
   const wordMin = Number.isFinite(parseInt(req.query.word_min, 10)) ? parseInt(req.query.word_min, 10) : null;
   const wordMax = Number.isFinite(parseInt(req.query.word_max, 10)) ? parseInt(req.query.word_max, 10) : null;
-  const completion = ['complete', 'wip'].includes(req.query.completion) ? req.query.completion : 'all';
+  // Also comma-separated (Complete/Ongoing checkboxes) -- but since there
+  // are only two possible values, only the case where exactly one is
+  // checked actually narrows anything; both-or-neither collapse to the
+  // same "no filter" the single-value SQL below already handles.
+  const completionList = csvParam(req.query.completion).filter(c => ['complete', 'wip'].includes(c));
+  const completion = completionList.length === 1 ? completionList[0] : 'all';
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
   const offset = (page - 1) * limit;
@@ -3787,7 +3796,7 @@ app.get('/api/search/works', async (req, res) => {
 
   const params = [
     q, fandoms, tagsInclude, tagsExclude, categories, relationships,
-    rating, wordMin, wordMax, completion, limit, offset,
+    ratings, wordMin, wordMax, completion, limit, offset,
   ];
 
   const { rows } = await pool.query(`
@@ -3842,7 +3851,7 @@ app.get('/api/search/works', async (req, res) => {
       AND (cardinality($4::text[]) = 0 OR NOT (ms.tags ?| $4))
       AND (cardinality($5::text[]) = 0 OR ms.categories ?& $5)
       AND (cardinality($6::text[]) = 0 OR ms.relationships ?& $6)
-      AND ($7 = '' OR ms.rating = $7)
+      AND (cardinality($7::text[]) = 0 OR ms.rating = ANY($7::text[]))
       AND ($8::int IS NULL OR pubchap.word_count >= $8)
       AND ($9::int IS NULL OR pubchap.word_count <= $9)
       AND ($10 = 'all' OR ($10 = 'complete' AND ms.is_complete) OR ($10 = 'wip' AND NOT ms.is_complete))
