@@ -474,7 +474,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
           <a href="${fpUrl('/discord')}">Discord</a>
           <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donations</a>
-          <a href="${fpUrl('/tos')}">Btw Tos</a>
+          <a href="${fpUrl('/tos')}">BTW Tos</a>
         </div>
       </div>
 
