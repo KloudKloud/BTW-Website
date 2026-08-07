@@ -215,9 +215,12 @@ function renderTiles(items, emptyMsg) {
     const a = document.createElement('a');
     a.className = 'gallery-tile';
     a.href = '#';
-    const posX = g.position_x != null ? g.position_x : 50;
-    const posY = g.position_y != null ? g.position_y : 50;
-    a.innerHTML = `<img src="${g.image_url}" alt="${g.title || 'Gallery image'}" loading="lazy" draggable="false" style="object-position: ${posX}% ${posY}%;" />`;
+    // A real baked tile crop (preview_image_url) wins when the post has
+    // one -- already the right shape, no position math needed. Falls back
+    // to the old pan-position-on-the-full-image approach for older posts.
+    a.innerHTML = g.preview_image_url
+      ? `<img src="${g.preview_image_url}" alt="${g.title || 'Gallery image'}" loading="lazy" draggable="false" />`
+      : `<img src="${g.image_url}" alt="${g.title || 'Gallery image'}" loading="lazy" draggable="false" style="object-position: ${g.position_x != null ? g.position_x : 50}% ${g.position_y != null ? g.position_y : 50}%;" />`;
     a.addEventListener('click', (e) => { e.preventDefault(); openPostDetail(g, true); });
     grid.appendChild(a);
   });

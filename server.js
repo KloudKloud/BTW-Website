@@ -973,6 +973,18 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS position_y INTEGER NOT NULL DEFAULT 50;
   `).catch(e => console.error('moderator_gallery position migration:', e.message));
 
+  // Real baked tile-preview crop (via BtwCropper's getCanvas -- see
+  // btw-cropper.js) instead of just a pan position applied at render time
+  // with object-position -- a genuinely separate, pre-cropped image, so
+  // any grid tile anywhere on the site can just show it straight with
+  // object-fit:cover, no position math needed. Empty string (not set)
+  // means "no preview crop picked yet" -- callers fall back to the plain
+  // image_url + position_x/position_y pair for those legacy/untouched rows.
+  await pool.query(`
+    ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS preview_image_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS preview_image_url TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('preview_image_url migration:', e.message));
+
   // Characters and gallery posts become independent of any single story:
   // ownership moves to the creating user (site_id becomes optional/legacy),
   // and a junction table tracks which stories a character/gallery post is
@@ -4785,7 +4797,7 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
   const galleryOrderBy = GALLERY_SORTS[req.query.sort] || GALLERY_SORTS.page;
 
   const { rows } = await pool.query(
-    `SELECT mg.id, mg.image_url, mg.title, mg.description, mg.category, mg.position_x, mg.position_y,
+    `SELECT mg.id, mg.image_url, mg.preview_image_url, mg.title, mg.description, mg.category, mg.position_x, mg.position_y,
             mg.tags, mg.view_count,
             ms.story_path, ms.slug, ms.site_title,
             (SELECT COUNT(*)::int FROM moderator_gallery_likes WHERE gallery_id = mg.id) AS like_count,
@@ -4803,7 +4815,7 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
   );
   res.json({
     gallery: rows.map(r => ({
-      id: r.id, image: r.image_url, title: r.title, description: r.description, category: r.category,
+      id: r.id, image: r.image_url, preview_image: r.preview_image_url || '', title: r.title, description: r.description, category: r.category,
       position_x: r.position_x, position_y: r.position_y, tags: r.tags || [], view_count: r.view_count || 0,
       like_count: r.like_count, comment_count: r.comment_count, liked: r.liked, bookmarked: r.bookmarked,
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
@@ -5518,7 +5530,7 @@ async function sendSiteLookup(query, params, req, res) {
       WHERE csl.site_id = $1 ORDER BY csl.sort_order, mc.id
     `, [site.id, viewerId]),
     pool.query(`
-      SELECT mg.id, mg.category, mg.image_url, mg.title, mg.description, mg.position_x, mg.position_y,
+      SELECT mg.id, mg.category, mg.image_url, mg.preview_image_url, mg.title, mg.description, mg.position_x, mg.position_y,
              mg.tags, mg.view_count,
              (SELECT count(*) FROM moderator_gallery_likes WHERE gallery_id = mg.id) AS like_count,
              (SELECT count(*)::int FROM content_comments WHERE target_type = 'gallery' AND target_id = mg.id) AS comment_count
@@ -6693,12 +6705,15 @@ async function parseGalleryTags(raw) {
 }
 
 // Instant "create + attach to this story" — mirrors the character flow.
-app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage.single('image'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage.fields([{ name: 'image', maxCount: 1 }, { name: 'preview_image', maxCount: 1 }]), async (req, res) => {
+  const imageFile = req.files && req.files.image && req.files.image[0];
+  if (!imageFile) return res.status(400).json({ error: 'Image is required.' });
   const { category, title, description } = req.body;
   if (!GALLERY_CATEGORIES.includes(category)) return res.status(400).json({ error: 'Category must be sfw, mature, or explicit.' });
 
-  const imageUrl = `/images/moderators/${req.file.filename}`;
+  const imageUrl = `/images/moderators/${imageFile.filename}`;
+  const previewFile = req.files && req.files.preview_image && req.files.preview_image[0];
+  const previewImageUrl = previewFile ? `/images/moderators/${previewFile.filename}` : '';
   const positionX = clampPosition(req.body.position_x);
   const positionY = clampPosition(req.body.position_y);
   const tags = (await parseGalleryTags(req.body.tags)) || [];
@@ -6707,9 +6722,9 @@ app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage
     'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_gallery WHERE owner_user_id = $1', [req.user.id]
   );
   const { rows: [item] } = await pool.query(
-    `INSERT INTO moderator_gallery (owner_user_id, category, image_url, title, description, position_x, position_y, tags, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-    [req.user.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY, JSON.stringify(tags), galleryProfileMinOrder]
+    `INSERT INTO moderator_gallery (owner_user_id, category, image_url, preview_image_url, title, description, position_x, position_y, tags, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+    [req.user.id, category, imageUrl, previewImageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY, JSON.stringify(tags), galleryProfileMinOrder]
   );
   const { rows: [{ maxOrder }] } = await pool.query(
     'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM gallery_story_links WHERE site_id = $1', [req.modSite.id]
@@ -6772,7 +6787,7 @@ app.put('/api/moderator/gallery/profile-order', requireAuth, async (req, res) =>
 
 // Editing/deleting a gallery post is about owning it, same as characters —
 // works from any context, story-linked or standalone.
-app.put('/api/moderator/gallery/:id', requireAuth, uploadModImage.single('image'), async (req, res) => {
+app.put('/api/moderator/gallery/:id', requireAuth, uploadModImage.fields([{ name: 'image', maxCount: 1 }, { name: 'preview_image', maxCount: 1 }]), async (req, res) => {
   const { rows: [existing] } = await pool.query(
     'SELECT * FROM moderator_gallery WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
   );
@@ -6781,13 +6796,23 @@ app.put('/api/moderator/gallery/:id', requireAuth, uploadModImage.single('image'
   const { category, title, description } = req.body;
   if (category && !GALLERY_CATEGORIES.includes(category)) return res.status(400).json({ error: 'Category must be sfw, mature, or explicit.' });
 
+  const imageFile = req.files && req.files.image && req.files.image[0];
   let imageUrl = existing.image_url;
-  if (req.file) {
-    imageUrl = `/images/moderators/${req.file.filename}`;
+  if (imageFile) {
+    imageUrl = `/images/moderators/${imageFile.filename}`;
     // Migrated posts can point image_url at a shared site asset — never unlink those.
     if (existing.image_url.startsWith('/images/moderators/')) {
       const oldPath = path.join('/var/www/btw', existing.image_url);
       if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+  }
+  const previewFile = req.files && req.files.preview_image && req.files.preview_image[0];
+  let previewImageUrl = existing.preview_image_url;
+  if (previewFile) {
+    previewImageUrl = `/images/moderators/${previewFile.filename}`;
+    if (existing.preview_image_url && existing.preview_image_url.startsWith('/images/moderators/')) {
+      const oldPreviewPath = path.join('/var/www/btw', existing.preview_image_url);
+      if (fs.existsSync(oldPreviewPath)) fs.unlinkSync(oldPreviewPath);
     }
   }
   const positionX = req.body.position_x !== undefined ? clampPosition(req.body.position_x) : existing.position_x;
@@ -6796,15 +6821,16 @@ app.put('/api/moderator/gallery/:id', requireAuth, uploadModImage.single('image'
 
   const { rows: [item] } = await pool.query(
     `UPDATE moderator_gallery SET
-       category    = COALESCE($1, category),
-       title       = COALESCE($2, title),
-       description = COALESCE($3, description),
-       image_url   = $4,
-       position_x  = $5,
-       position_y  = $6,
-       tags        = COALESCE($7, tags)
-     WHERE id = $8 RETURNING *`,
-    [category || null, title != null ? title.trim() : null, description != null ? description.trim() : null, imageUrl, positionX, positionY, tags !== undefined ? JSON.stringify(tags) : null, existing.id]
+       category          = COALESCE($1, category),
+       title             = COALESCE($2, title),
+       description       = COALESCE($3, description),
+       image_url         = $4,
+       preview_image_url = $5,
+       position_x        = $6,
+       position_y        = $7,
+       tags              = COALESCE($8, tags)
+     WHERE id = $9 RETURNING *`,
+    [category || null, title != null ? title.trim() : null, description != null ? description.trim() : null, imageUrl, previewImageUrl, positionX, positionY, tags !== undefined ? JSON.stringify(tags) : null, existing.id]
   );
   res.json({ item });
 });
@@ -6961,11 +6987,14 @@ app.delete('/api/gallery/:id/link-character/:characterId', requireAuth, async (r
   res.json({ message: 'Unlinked.' });
 });
 
-app.post('/api/gallery', requireAuth, uploadModImage.single('image'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+app.post('/api/gallery', requireAuth, uploadModImage.fields([{ name: 'image', maxCount: 1 }, { name: 'preview_image', maxCount: 1 }]), async (req, res) => {
+  const imageFile = req.files && req.files.image && req.files.image[0];
+  if (!imageFile) return res.status(400).json({ error: 'Image is required.' });
   const { category, title, description } = req.body;
   if (!GALLERY_CATEGORIES.includes(category)) return res.status(400).json({ error: 'Category must be sfw, mature, or explicit.' });
-  const imageUrl = `/images/moderators/${req.file.filename}`;
+  const imageUrl = `/images/moderators/${imageFile.filename}`;
+  const previewFile = req.files && req.files.preview_image && req.files.preview_image[0];
+  const previewImageUrl = previewFile ? `/images/moderators/${previewFile.filename}` : '';
   const positionX = clampPosition(req.body.position_x);
   const positionY = clampPosition(req.body.position_y);
   const tags = (await parseGalleryTags(req.body.tags)) || [];
@@ -6973,9 +7002,9 @@ app.post('/api/gallery', requireAuth, uploadModImage.single('image'), async (req
     'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_gallery WHERE owner_user_id = $1', [req.user.id]
   );
   const { rows: [item] } = await pool.query(
-    `INSERT INTO moderator_gallery (owner_user_id, category, image_url, title, description, position_x, position_y, tags, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-    [req.user.id, category, imageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY, JSON.stringify(tags), galleryProfileMinOrder]
+    `INSERT INTO moderator_gallery (owner_user_id, category, image_url, preview_image_url, title, description, position_x, position_y, tags, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+    [req.user.id, category, imageUrl, previewImageUrl, (title || '').trim(), (description || '').trim(), positionX, positionY, JSON.stringify(tags), galleryProfileMinOrder]
   );
   const { rows: [actor2] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
   await notifyFollowers(req.user.id, 'new_gallery',
@@ -7792,7 +7821,7 @@ app.get('/api/search/submissions', async (req, res) => {
   const { rows } = await pool.query(
     `SELECT * FROM (
        SELECT 'chapter' AS type, mc.id AS item_id, mc.updated_at AS created_at,
-              mc.title, ms.cover_url AS image,
+              mc.title, ms.cover_url AS image, NULL::text AS preview_image,
               ms.cover_position_x AS position_x, ms.cover_position_y AS position_y,
               ms.story_path, ms.site_title AS site_title,
               u.username, u.display_name, u.avatar,
@@ -7807,7 +7836,7 @@ app.get('/api/search/submissions', async (req, res) => {
        UNION ALL
 
        SELECT 'art', mg.id, mg.created_at,
-              mg.title, mg.image_url,
+              mg.title, mg.image_url, NULLIF(mg.preview_image_url, ''),
               mg.position_x, mg.position_y,
               ms.story_path, ms.site_title,
               u.username, u.display_name, u.avatar,
@@ -7875,6 +7904,7 @@ app.get('/api/search/submissions', async (req, res) => {
       created_at: r.created_at,
       title: r.title,
       image: r.image || null,
+      preview_image: r.preview_image || '',
       position_x: r.position_x, position_y: r.position_y,
       story_path: r.story_path,
       site_title: r.site_title,

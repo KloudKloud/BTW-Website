@@ -137,6 +137,11 @@
       <div class="gallery-preview-crop-wrap">
         <img id="gallery-editor-preview-img" alt="" draggable="false" />
       </div>
+      <div class="crop-modal-zoom-row gallery-preview-zoom-row">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+        <input type="range" class="crop-modal-zoom" id="gallery-editor-preview-zoom" />
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+      </div>
     </div>
 
     <div class="gallery-cat-field">
@@ -407,12 +412,13 @@
   });
   fetch('/api/tag-catalog').then(r => r.ok ? r.json() : { tags: [] }).then(d => { galleryTagsCatalog = d.tags || []; }).catch(() => {});
 
-  // Live drag-to-pan crop box (6:7, matching the gallery tile shape), fixed
-  // size/non-resizable/non-zoomable since there's no zoom concept here —
-  // dragging moves the ART underneath a stationary frame (see BtwCropper in
-  // btw-cropper.js). This only ever adjusts the TILE preview crop metadata
-  // (position_x/position_y); the full-size art itself is never re-cropped
-  // or re-uploaded.
+  // Live drag-to-pan-and-zoom crop box (6:7, matching the gallery tile
+  // shape) — the user picks the exact framing for the tile preview here,
+  // and on save we bake it into a real cropped image (getCanvas) uploaded
+  // as preview_image_url, rather than just storing a pan position applied
+  // to the full-size art at render time (the old behavior). position_x/
+  // position_y are still tracked/sent for legacy fallback rendering on
+  // older posts that predate this.
   let galleryPreviewCropper = null;
   function showGalleryPreview(src) {
     const previewImg = document.getElementById('gallery-editor-preview-img');
@@ -427,12 +433,12 @@
       // before its aspect-ratio-driven CSS size has settled.
       requestAnimationFrame(() => {
         galleryPreviewCropper = new BtwCropper(previewImg, wrap, {
-          zoomable: false,
           onChange(pos) {
             galleryPos.x = Math.round(pos.x * 100);
             galleryPos.y = Math.round(pos.y * 100);
           },
         });
+        galleryPreviewCropper.setZoomInput(document.getElementById('gallery-editor-preview-zoom'));
         galleryPreviewCropper.setPositionFraction({ x: galleryPos.x / 100, y: galleryPos.y / 100 });
       });
     };
@@ -738,6 +744,16 @@
     fd.append('position_x', galleryPos.x);
     fd.append('position_y', galleryPos.y);
     fd.append('tags', JSON.stringify(workingGalleryTags));
+
+    // Bake the crop the user framed in the preview box into a real image
+    // and upload it as the tile thumbnail (6:7, matches .gallery-tile
+    // everywhere it's displayed) instead of only storing a pan position.
+    if (galleryPreviewCropper && galleryPreviewCropper.isReady()) {
+      const previewBlob = await new Promise((resolve) => {
+        galleryPreviewCropper.getCanvas(600, 700).toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
+      });
+      if (previewBlob) fd.append('preview_image', previewBlob, 'preview.jpg');
+    }
 
     const saveBtn = document.getElementById('gallery-editor-save');
     saveBtn.disabled = true;

@@ -2447,9 +2447,14 @@
       // system entirely, so it gets its own full page instead of hiding
       // this grid behind a detail view stapled onto the same URL.
       a.href = window.fpUrl(`/gallery-post?id=${g.id}`);
-      const posX = g.position_x != null ? g.position_x : 50;
-      const posY = g.position_y != null ? g.position_y : 50;
-      a.innerHTML = `<img src="${g.image}" alt="${g.title || 'Gallery image'}" loading="lazy" draggable="false" style="object-position: ${posX}% ${posY}%;" />`;
+      // A real baked tile crop (preview_image) wins when the post has one --
+      // it's already the right shape, no position math needed. Falls back
+      // to the old pan-position-on-the-full-image approach for posts made
+      // before that existed.
+      const tileImg = g.preview_image
+        ? `<img src="${g.preview_image}" alt="${g.title || 'Gallery image'}" loading="lazy" draggable="false" />`
+        : `<img src="${g.image}" alt="${g.title || 'Gallery image'}" loading="lazy" draggable="false" style="object-position: ${g.position_x != null ? g.position_x : 50}% ${g.position_y != null ? g.position_y : 50}%;" />`;
+      a.innerHTML = tileImg;
       wrap.appendChild(a);
       // No emoji badge here (unlike the search/browse submission tiles) --
       // every tile on a profile's own Gallery tab is already art, no need

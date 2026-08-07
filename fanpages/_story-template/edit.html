@@ -948,6 +948,11 @@
           <div class="gallery-preview-crop-wrap">
             <img id="se-gallery-editor-preview-img" alt="" draggable="false" />
           </div>
+          <div class="crop-modal-zoom-row gallery-preview-zoom-row">
+            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+            <input type="range" class="crop-modal-zoom" id="se-gallery-editor-preview-zoom" />
+            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+          </div>
         </div>
 
         <div class="gallery-cat-field">
@@ -2679,11 +2684,13 @@ function seGetSelectedCategory() {
   return document.querySelector('input[name="se-gallery-editor-category"]:checked').value;
 }
 
-// Live drag-to-pan crop box for the tile preview only (see BtwCropper in
-// btw-cropper.js) — same idea as the Creator Hub's gallery editor
-// (create-gallery.html / the story's own gallery.html). The full-size art
-// itself is never re-cropped or re-uploaded, only position_x/position_y
-// (seGalleryPos).
+// Live drag-to-pan-and-zoom crop box for the tile preview (see BtwCropper
+// in btw-cropper.js) — same idea as the Creator Hub's gallery editor
+// (create-gallery.html / the story's own gallery.html). On save this gets
+// baked into a real cropped image (getCanvas) uploaded as preview_image_url
+// rather than only storing a pan position; position_x/position_y
+// (seGalleryPos) are still tracked/sent for legacy fallback rendering on
+// older posts that predate this.
 let seGalleryPos = { x: 50, y: 50 };
 let seGalleryPreviewCropper = null;
 function seShowGalleryPreview(src) {
@@ -2695,12 +2702,12 @@ function seShowGalleryPreview(src) {
   previewImg.onload = () => {
     requestAnimationFrame(() => {
       seGalleryPreviewCropper = new BtwCropper(previewImg, wrap, {
-        zoomable: false,
         onChange(pos) {
           seGalleryPos.x = Math.round(pos.x * 100);
           seGalleryPos.y = Math.round(pos.y * 100);
         },
       });
+      seGalleryPreviewCropper.setZoomInput(document.getElementById('se-gallery-editor-preview-zoom'));
       seGalleryPreviewCropper.setPositionFraction({ x: seGalleryPos.x / 100, y: seGalleryPos.y / 100 });
     });
   };
@@ -2838,6 +2845,13 @@ document.getElementById('se-gallery-editor-save').addEventListener('click', asyn
   fd.append('description', document.getElementById('se-gallery-editor-desc').value.trim());
   fd.append('position_x', seGalleryPos.x);
   fd.append('position_y', seGalleryPos.y);
+
+  if (seGalleryPreviewCropper && seGalleryPreviewCropper.isReady()) {
+    const previewBlob = await new Promise((resolve) => {
+      seGalleryPreviewCropper.getCanvas(600, 700).toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
+    });
+    if (previewBlob) fd.append('preview_image', previewBlob, 'preview.jpg');
+  }
 
   const saveBtn = document.getElementById('se-gallery-editor-save');
   saveBtn.disabled = true;
