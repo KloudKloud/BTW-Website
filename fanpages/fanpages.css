@@ -824,8 +824,31 @@ body.mod-editing-active .fp-share-icon-btn { display: none; }
    (profile-template.html), just reused here so the whole site's tab
    language stays consistent. Used both on the story home page (inline,
    above Story Description) and as the top-of-page nav on Characters/
-   Chapters/Gallery (via .wiki-story-tabs--top). ── */
+   Chapters/Gallery (via .wiki-story-tabs--top).
+
+   FOUND (finally) via live DevTools inspection: this is a real <nav>
+   element, and style.css (loaded on every one of these pages for the main
+   site's own chrome) has a completely unscoped `nav { ... }` element
+   selector meant only for the main site's own top bar --
+   position:sticky, background:rgba(0,0,0,0.85), backdrop-filter:blur(16px),
+   height:64px, justify-content:space-between, z-index:100. .wiki-story-tabs
+   is a CLASS selector so it beats that element selector for whatever
+   properties it explicitly sets (background, display, align-items, gap,
+   border-bottom, margin-bottom) -- but backdrop-filter/position/top/
+   z-index/height/justify-content were never among them, so those kept
+   leaking straight through from style.css's nav rule. That's the blurry
+   rectangle sitting behind the tab row (and never went away from a
+   fixed-position-background angle no matter how many times that got
+   "fixed" -- it was never the page background at all). .fp-tabs-row on the
+   profile page never had this problem because it's a plain <div>, not a
+   <nav>, so the bare element selector never matched it in the first
+   place. Explicitly resetting every property that bare rule sets, not
+   just backdrop-filter, since position:sticky/z-index:100/height:64px/
+   justify-content:space-between were silently leaking through too. */
 .wiki-story-tabs {
+  position: static; top: auto; z-index: auto; height: auto; padding: 0;
+  justify-content: flex-start;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
   display: flex; align-items: baseline; gap: 2.1rem; background: transparent;
   border-bottom: 1px solid rgba(255,255,255,0.08);
   margin-bottom: 2.75rem;
