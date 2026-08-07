@@ -271,6 +271,13 @@
     .fp-handle {
       font-family: 'Fredoka', 'Lato', Arial, sans-serif;
       color: #999; font-size: 1.1rem; margin-top: 0.2rem; text-align: center;
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    }
+    .fp-follows-you-badge {
+      font-family: 'Lato', Arial, sans-serif; font-size: 0.68rem; font-weight: 700;
+      letter-spacing: 0.05em; text-transform: uppercase; color: #ccc;
+      background: rgba(255,255,255,0.12); border-radius: 20px; padding: 0.22rem 0.6rem;
+      white-space: nowrap;
     }
 
     .fp-stats {
@@ -2993,7 +3000,7 @@
     wrap.appendChild(buildMoreMenu(author));
   }
 
-  // "•••" menu next to Follow — just "Report User" for now, a spot to hang
+  // "•••" menu next to Follow — Report User and Block User, a spot to hang
   // more per-profile moderation actions off of later.
   function buildMoreMenu(author) {
     const moreWrap = document.createElement('div');
@@ -3014,6 +3021,19 @@
       reportContent('user', author.id);
     });
     dropdown.appendChild(reportItem);
+    const blockItem = document.createElement('button');
+    blockItem.type = 'button';
+    blockItem.textContent = 'Block User';
+    blockItem.addEventListener('click', async () => {
+      dropdown.hidden = true;
+      if (!token) { window.fpRequireSignIn('To block this user, you must create an account!'); return; }
+      const name = author.display_name || author.username || USERNAME;
+      if (!confirm(`Block ${name}? They won't be able to message you, and you won't be able to message them, until you unblock them in Account Settings.`)) return;
+      try {
+        await fetch(`/api/blocks/${USERNAME}`, { method: 'POST', headers: authHeaders() });
+      } catch {}
+    });
+    dropdown.appendChild(blockItem);
     moreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       dropdown.hidden = !dropdown.hidden;
@@ -3940,7 +3960,17 @@
       currentAuthor = a;
 
       document.getElementById('fp-name').textContent = a.display_name;
-      document.getElementById('fp-handle').textContent = `@${a.username}`;
+      const handleEl = document.getElementById('fp-handle');
+      handleEl.innerHTML = '';
+      const handleText = document.createElement('span');
+      handleText.textContent = `@${a.username}`;
+      handleEl.appendChild(handleText);
+      if (!a.is_self && data.follows_viewer) {
+        const badge = document.createElement('span');
+        badge.className = 'fp-follows-you-badge';
+        badge.textContent = 'Follows You';
+        handleEl.appendChild(badge);
+      }
       document.getElementById('fp-follower-count').textContent = data.follower_count;
       document.getElementById('fp-following-count').textContent = data.following_count;
       document.getElementById('fp-clubs-count').textContent = data.club_count || 0;

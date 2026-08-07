@@ -4254,7 +4254,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
   };
   const storyOrderBy = STORY_SORTS[req.query.sort] || STORY_SORTS.page;
 
-  const [{ rows: sites }, followerCount, followingCount, clubCount, isFollowing, featuredChars, featuredGallery, featuredStoryIds, activity] = await Promise.all([
+  const [{ rows: sites }, followerCount, followingCount, clubCount, isFollowing, followsViewer, featuredChars, featuredGallery, featuredStoryIds, activity] = await Promise.all([
     pool.query(
       `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.synopsis,
               ms.tags, ms.fandoms, ms.view_count, ms.rating, ms.is_complete,
@@ -4297,6 +4297,11 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     ),
     viewerId
       ? pool.query('SELECT 1 FROM user_follows WHERE follower_id = $1 AND followed_id = $2', [viewerId, author.id])
+      : Promise.resolve({ rows: [] }),
+    // Reverse of the above -- does THIS profile's owner follow the viewer
+    // back, for the "Follows You" badge next to their name.
+    viewerId
+      ? pool.query('SELECT 1 FROM user_follows WHERE follower_id = $1 AND followed_id = $2', [author.id, viewerId])
       : Promise.resolve({ rows: [] }),
     // Featured items store a title/image_url *snapshot* from when they were
     // picked (see the user_featured_items migration comment above), but in
@@ -4502,6 +4507,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     following_count: followingCount.rows[0].n,
     club_count: clubCount.rows[0].n,
     is_following: isFollowing.rows.length > 0,
+    follows_viewer: followsViewer.rows.length > 0,
   });
 });
 
