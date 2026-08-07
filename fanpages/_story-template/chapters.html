@@ -9,6 +9,17 @@
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <style>
+    /* Background scrolls *with* the page instead of staying pinned, same
+       treatment as the Characters/Gallery tabs -- overrides the shared
+       .mod-page-bg-img's own position:fixed just for this page. Height is
+       measured in JS (see syncBgHeight below) since percentage/inset sizing
+       can't resolve against a wrap whose own height is just "however tall
+       its content is." */
+    #page-bg-img {
+      position: absolute; top: 0; left: 0; right: 0; bottom: auto;
+      width: 100%; height: 100vh; object-fit: cover;
+    }
+
     /* ── Chapter cards — thumbnail (chapter art, or a YouTube thumbnail if
        the chapter's cover is a video instead of an image), title, a
        colored Published/Draft + date line, and a mini stat row. Replaces
@@ -166,6 +177,19 @@ function applyStoryTheme(theme, bgUrl) {
   }
 }
 
+// Background scrolls *with* the page instead of staying pinned -- needs its
+// height measured in JS since percentage/inset sizing can't resolve against
+// a wrap whose own height is just "however tall its content is." Reset to 0
+// before each measurement (the element being measured is itself absolutely
+// positioned and contributes to scrollHeight) so a previously-tall page can
+// still report shrinking back down.
+function syncBgHeight() {
+  const bgEl = document.getElementById('page-bg-img');
+  bgEl.style.height = '0';
+  bgEl.style.height = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
+}
+window.addEventListener('resize', syncBgHeight);
+
 function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -203,6 +227,7 @@ function renderChapterList() {
   const list = document.getElementById('chapters-list');
   if (!CHAPTERS.length) {
     list.innerHTML = '<p class="gallery-empty-msg">No chapters yet — check back soon.</p>';
+    syncBgHeight();
     return;
   }
   list.innerHTML = '';
@@ -242,6 +267,8 @@ function renderChapterList() {
       </div>`;
     list.appendChild(card);
   });
+  syncBgHeight();
+  list.querySelectorAll('img').forEach(img => img.addEventListener('load', syncBgHeight, { once: true }));
 }
 
 (async () => {
@@ -253,6 +280,7 @@ function renderChapterList() {
   // theme the story picked for its Home page -- a fixed, deliberately
   // chosen "browse" wallpaper instead of a per-story customizable one.
   applyStoryTheme('custom', '/images/home/browse-background-4.png');
+  syncBgHeight();
   if (SITE && SITE.site_title) document.title = `Chapters ✦ ${SITE.site_title}`;
   const pageTitleEl = document.getElementById('page-title-display');
   pageTitleEl.textContent = (SITE && SITE.site_title) || 'Fanpages';

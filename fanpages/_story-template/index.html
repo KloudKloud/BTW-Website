@@ -10,6 +10,18 @@
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&display=swap" />
+  <style>
+    /* Background scrolls *with* the page instead of staying pinned, same
+       treatment as the Characters/Gallery tabs -- overrides the shared
+       .mod-page-bg-img's own position:fixed just for this page. Height is
+       measured in JS (see syncBgHeight) since percentage/inset sizing can't
+       resolve against a wrap whose own height is just "however tall its
+       content is." */
+    #page-bg-img {
+      position: absolute; top: 0; left: 0; right: 0; bottom: auto;
+      width: 100%; height: 100vh; object-fit: cover;
+    }
+  </style>
 </head>
 <body class="mod-theme">
 
@@ -409,7 +421,21 @@ function applyTheme(themeId, customBgUrl) {
   }
 
   document.querySelectorAll('.mod-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
+  syncBgHeight();
 }
+
+// Background scrolls *with* the page instead of staying pinned -- needs its
+// height measured in JS since percentage/inset sizing can't resolve against
+// a wrap whose own height is just "however tall its content is." Reset to 0
+// before each measurement (the element being measured is itself absolutely
+// positioned and contributes to scrollHeight) so a previously-tall page can
+// still report shrinking back down.
+function syncBgHeight() {
+  const bgEl = document.getElementById('page-bg-img');
+  bgEl.style.height = '0';
+  bgEl.style.height = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
+}
+window.addEventListener('resize', syncBgHeight);
 
 function buildThemeGrid() {
   const grid = document.getElementById('theme-grid');
@@ -561,6 +587,7 @@ document.getElementById('wiki-hero-tagcloud-expand').addEventListener('click', (
   expandBtn.classList.toggle('expanded', heroTagCloudExpanded);
   expandBtn.textContent = heroTagCloudExpanded ? '−' : '+';
   expandBtn.title = heroTagCloudExpanded ? 'Show fewer tags' : 'Show all tags';
+  syncBgHeight();
 });
 
 function buildCategoryChecks(selected) {
@@ -1240,6 +1267,9 @@ function renderPartsStatus(s, chapters) {
       window.location.href = STORY_BASE + '/edit';
     }
   }
+
+  syncBgHeight();
+  document.querySelectorAll('img').forEach(img => img.addEventListener('load', syncBgHeight, { once: true }));
 })();
 </script>
 </body>
