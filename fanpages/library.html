@@ -116,12 +116,18 @@
     .fp-bcard-char-chip--empty:hover { border-color: rgba(255,255,255,0.1); color: #888; }
     .fp-bcard-deco--tr { position: absolute; z-index: 2; pointer-events: none; object-fit: contain; opacity: 0.9; top: -10px; right: -8px; width: 32px; height: 32px; }
 
-    /* ── Gallery tab — same .gallery-tile-card/.gallery-grid--4up tiles as
-       the profile Gallery tab, 4-per-row. .gallery-grid/.gallery-tile
-       base rules live in style.css (not loaded here); the modifiers
-       (.gallery-tile-card/.gallery-tile-caption*/.gallery-grid--4up) are
-       already in fanpages.css, which this page does load. ── */
-    .gallery-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; text-align: left; align-items: start; }
+    /* ── Gallery tab — same .gallery-tile-card tiles as the profile Gallery
+       tab (.gallery-tile-card/.gallery-tile-caption* come from
+       fanpages.css, which this page does load), 4-per-row. The grid
+       container is its own dedicated local class instead of reusing
+       fanpages.css's .gallery-grid--4up modifier -- combining that with a
+       same-named .gallery-grid base rule defined here (this page doesn't
+       load style.css, which is where .gallery-grid/.gallery-tile actually
+       live) meant this file's own rule, loading after fanpages.css, was
+       silently winning the grid-template-columns fight and shrinking it to
+       3 columns. One self-contained rule removes the cross-file ordering
+       dependency entirely. ── */
+    .lib-gallery-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; text-align: left; align-items: start; }
     .gallery-tile {
       display: block; position: relative; padding-top: 116.67%; border-radius: 10px; overflow: hidden;
       cursor: pointer; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.07);
@@ -169,7 +175,7 @@
       .lib-title { font-size: 1.7rem; }
       .lib-tabs { gap: 0.6rem; }
       .lib-tab { font-size: 1.02rem; padding: 0.6rem 1.2rem; }
-      .gallery-grid, .fp-char-grid { grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
+      .lib-gallery-tiles, .fp-char-grid { grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
       .fp-bcard { height: auto; flex-direction: column; }
       .fp-bcard-cover-link { width: 100%; height: auto; aspect-ratio: 2 / 3; }
     }
@@ -308,7 +314,7 @@
   });
 
   // ── Gallery tab — the same .gallery-tile-card tiles as the profile
-  // Gallery tab (gallery-grid--4up, 4 per row). ───────────────────────────
+  // Gallery tab, laid out in .lib-gallery-tiles (4 per row). ─────────────
   function galleryCard(item) {
     const wrap = document.createElement('div');
     wrap.className = 'gallery-tile-card';
@@ -374,7 +380,7 @@
     const el = document.getElementById(elId);
     if (!items.length) { el.innerHTML = `<p class="lib-empty">${emptyMsg}</p>`; return; }
     const grid = document.createElement('div');
-    grid.className = 'gallery-grid gallery-grid--4up';
+    grid.className = 'lib-gallery-tiles';
     items.forEach(g => grid.appendChild(galleryCard(g)));
     el.innerHTML = '';
     el.appendChild(grid);
