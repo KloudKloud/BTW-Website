@@ -7208,11 +7208,24 @@ app.delete('/api/content-comments/:id', requireAuth, async (req, res) => {
 // story, for the avatar dropdown's "Library" page.
 app.get('/api/library', requireAuth, async (req, res) => {
   const [{ rows: stories }, { rows: gallery }, { rows: bookmarkedGallery }, { rows: bookmarkedCharacters }] = await Promise.all([
+    // Same rating/completion/stat-panel/synopsis fields the Stories tab's
+    // own .fp-bcard needs elsewhere (profile Stories tab, Creator Hub) --
+    // the Bookmarks page's Stories tab uses that same card.
     pool.query(`
-      SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.username, u.display_name, u.avatar
+      SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.synopsis, ms.rating, ms.is_complete,
+        ms.view_count, u.username, u.display_name, u.avatar,
+        COALESCE(lc.count, 0) AS like_count,
+        COALESCE(wc.word_count, 0) AS word_count
       FROM moderator_bookmarks mb
       JOIN moderator_sites ms ON ms.id = mb.site_id
       JOIN users u ON u.id = ms.owner_user_id
+      LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_site_likes WHERE site_id = ms.id) lc ON true
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(SUM(
+          GREATEST(1, array_length(regexp_split_to_array(trim(regexp_replace(mc4.body, '<[^>]+>', ' ', 'g')), '\\s+'), 1))
+        ), 0) AS word_count
+        FROM moderator_chapters mc4 WHERE mc4.site_id = ms.id AND mc4.status = 'published' AND length(trim(mc4.body)) > 0
+      ) wc ON true
       WHERE mb.user_id = $1
       ORDER BY mb.created_at DESC
     `, [req.user.id]),
@@ -7253,10 +7266,32 @@ app.get('/api/library', requireAuth, async (req, res) => {
       ORDER BY mcb.created_at DESC
     `, [req.user.id]),
   ]);
+
+  // A few tagged-character thumbnails per bookmarked story, for the same
+  // .fp-bcard teaser row used elsewhere -- batched into one query instead
+  // of one per story.
+  const siteIds = stories.map(s => s.id);
+  const charsBySite = {};
+  if (siteIds.length) {
+    const { rows: siteChars } = await pool.query(
+      `SELECT csl.site_id, mc.id, mc.name, mc.ref_image, u.username AS owner_username FROM character_story_links csl
+       JOIN moderator_characters mc ON mc.id = csl.character_id
+       JOIN users u ON u.id = mc.owner_user_id
+       WHERE csl.site_id = ANY($1::int[]) ORDER BY csl.sort_order LIMIT 200`,
+      [siteIds]
+    );
+    siteChars.forEach(c => {
+      (charsBySite[c.site_id] = charsBySite[c.site_id] || []).push({ id: c.id, name: c.name, ref_image: c.ref_image, owner_username: c.owner_username });
+    });
+  }
+
   res.json({
     stories: stories.map(r => ({
       slug: r.slug, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url,
       author: r.display_name || r.username, author_username: r.username, author_avatar: r.avatar || null,
+      synopsis: r.synopsis || '', rating: r.rating, is_complete: !!r.is_complete,
+      hits: r.view_count || 0, kudos: Number(r.like_count), word_count: r.word_count,
+      characters: (charsBySite[r.id] || []).slice(0, 4),
     })),
     gallery: gallery.map(r => ({
       id: r.id, image_url: r.image_url, title: r.title, category: r.category,
