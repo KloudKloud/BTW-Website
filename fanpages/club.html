@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
-  <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
   <style>
     /* No body background override here on purpose — style.css sets
        body { background: transparent } specifically so the fixed
@@ -1083,7 +1082,7 @@
 
 <div id="fanpages-topbar-root"></div>
 <script src="/fanpages/fanpages-nav.js"></script>
-<script src="/fanpages/vendor/cropper.min.js"></script>
+<script src="/fanpages/btw-cropper.js"></script>
 <script src="/fanpages/crop-modal.js"></script>
 
 <div class="page-bg">
@@ -2720,55 +2719,21 @@ function updatePostPreviewField() {
   postPreviewPos = { x: 50, y: 50 };
   showPostPreviewCrop(postCreateImages[0].objectUrl);
 }
-// Guards the crop handler against Cropper's own setup calls in ready()
-// below (each fires its own 'crop' event) recomputing postPreviewPos from
-// an intermediate, not-yet-final state — see create-gallery.html's
-// showGalleryPreview for the full explanation.
-let postCreateCropperInitializing = false;
 function showPostPreviewCrop(src) {
   const previewImg = document.getElementById('cl-post-preview-img');
+  const wrap = document.getElementById('cl-post-preview-wrap');
   if (postCreateCropper) { postCreateCropper.destroy(); postCreateCropper = null; }
   previewImg.removeAttribute('src');
   previewImg.onload = () => {
-    postCreateCropperInitializing = true;
-    postCreateCropper = new Cropper(previewImg, {
-      aspectRatio: 1, viewMode: 1, dragMode: 'move', autoCropArea: 1,
-      cropBoxResizable: false, cropBoxMovable: false, background: false, responsive: true,
-      ready() {
-        // Order matters: viewMode:1 clamps the crop box to whatever the
-        // CANVAS size is at the moment it's set, so fit the canvas
-        // ("cover") FIRST, then size the crop box to the container.
-        const containerData = postCreateCropper.getContainerData();
-        const imgDataForFit = postCreateCropper.getImageData();
-        const coverScale = Math.max(containerData.width / imgDataForFit.naturalWidth, containerData.height / imgDataForFit.naturalHeight);
-        const canvasWidth = imgDataForFit.naturalWidth * coverScale;
-        const canvasHeight = imgDataForFit.naturalHeight * coverScale;
-        postCreateCropper.setCanvasData({
-          width: canvasWidth, height: canvasHeight,
-          left: (containerData.width - canvasWidth) / 2,
-          top: (containerData.height - canvasHeight) / 2,
-        });
-        postCreateCropper.setCropBoxData({ left: 0, top: 0, width: containerData.width, height: containerData.height });
-
-        const data = postCreateCropper.getData();
-        const imgData = postCreateCropper.getImageData();
-        const maxX = imgData.naturalWidth - data.width;
-        const maxY = imgData.naturalHeight - data.height;
-        postCreateCropper.setData({
-          x: maxX > 0 ? (postPreviewPos.x / 100) * maxX : data.x,
-          y: maxY > 0 ? (postPreviewPos.y / 100) * maxY : data.y,
-        });
-        postCreateCropperInitializing = false;
-      },
-      crop(event) {
-        if (postCreateCropperInitializing) return;
-        const data = event.detail;
-        const imgData = postCreateCropper.getImageData();
-        const maxX = imgData.naturalWidth - data.width;
-        const maxY = imgData.naturalHeight - data.height;
-        postPreviewPos.x = maxX > 0 ? Math.round((data.x / maxX) * 100) : 50;
-        postPreviewPos.y = maxY > 0 ? Math.round((data.y / maxY) * 100) : 50;
-      },
+    requestAnimationFrame(() => {
+      postCreateCropper = new BtwCropper(previewImg, wrap, {
+        zoomable: false,
+        onChange(pos) {
+          postPreviewPos.x = Math.round(pos.x * 100);
+          postPreviewPos.y = Math.round(pos.y * 100);
+        },
+      });
+      postCreateCropper.setPositionFraction({ x: postPreviewPos.x / 100, y: postPreviewPos.y / 100 });
     });
   };
   previewImg.src = src;
@@ -4505,8 +4470,6 @@ document.getElementById('cl-page-text-field-add-btn').addEventListener('click', 
 let editPageGalleryCache = [];
 let galleryPreviewCropper = null;
 let galleryItemPos = { x: 50, y: 50 };
-// See create-gallery.html's showGalleryPreview for why this guard exists.
-let galleryPreviewCropperInitializing = false;
 let editingGalleryItemId = null;
 let pendingGalleryItemFile = null;
 
@@ -4589,50 +4552,26 @@ function renderGalleryReorderGrid() {
 }
 
 // Same locked-preview-crop recipe as the Fanpage gallery system
-// (gallery-preview-crop-wrap): viewMode:1, non-resizable/non-movable crop
-// box that always fills the square container; the user only drags to
-// reposition the focal point, saved as x/y percentages. The source image
-// itself is never re-cropped.
+// (gallery-preview-crop-wrap, see BtwCropper in btw-cropper.js): a fixed,
+// non-resizable/non-movable crop viewport that always fills the square
+// container; the user only drags to reposition the focal point, saved as
+// x/y percentages. The source image itself is never re-cropped.
 function showPageGalleryPreview(src) {
   document.getElementById('cl-gallery-item-full-preview').src = src;
   const previewImg = document.getElementById('cl-gallery-item-preview-img');
+  const wrap = document.getElementById('cl-gallery-item-preview-wrap');
   if (galleryPreviewCropper) { galleryPreviewCropper.destroy(); galleryPreviewCropper = null; }
   previewImg.removeAttribute('src');
   previewImg.onload = () => {
-    galleryPreviewCropperInitializing = true;
-    galleryPreviewCropper = new Cropper(previewImg, {
-      aspectRatio: 1, viewMode: 1, dragMode: 'move', autoCropArea: 1,
-      cropBoxResizable: false, cropBoxMovable: false, background: false, responsive: true,
-      ready() {
-        const containerData = galleryPreviewCropper.getContainerData();
-        const imgDataForFit = galleryPreviewCropper.getImageData();
-        const coverScale = Math.max(containerData.width / imgDataForFit.naturalWidth, containerData.height / imgDataForFit.naturalHeight);
-        const canvasWidth = imgDataForFit.naturalWidth * coverScale;
-        const canvasHeight = imgDataForFit.naturalHeight * coverScale;
-        galleryPreviewCropper.setCanvasData({
-          width: canvasWidth, height: canvasHeight,
-          left: (containerData.width - canvasWidth) / 2, top: (containerData.height - canvasHeight) / 2,
-        });
-        galleryPreviewCropper.setCropBoxData({ left: 0, top: 0, width: containerData.width, height: containerData.height });
-        const data = galleryPreviewCropper.getData();
-        const imgData = galleryPreviewCropper.getImageData();
-        const maxX = imgData.naturalWidth - data.width;
-        const maxY = imgData.naturalHeight - data.height;
-        galleryPreviewCropper.setData({
-          x: maxX > 0 ? (galleryItemPos.x / 100) * maxX : data.x,
-          y: maxY > 0 ? (galleryItemPos.y / 100) * maxY : data.y,
-        });
-        galleryPreviewCropperInitializing = false;
-      },
-      crop(event) {
-        if (galleryPreviewCropperInitializing) return;
-        const data = event.detail;
-        const imgData = galleryPreviewCropper.getImageData();
-        const maxX = imgData.naturalWidth - data.width;
-        const maxY = imgData.naturalHeight - data.height;
-        galleryItemPos.x = maxX > 0 ? Math.round((data.x / maxX) * 100) : 50;
-        galleryItemPos.y = maxY > 0 ? Math.round((data.y / maxY) * 100) : 50;
-      },
+    requestAnimationFrame(() => {
+      galleryPreviewCropper = new BtwCropper(previewImg, wrap, {
+        zoomable: false,
+        onChange(pos) {
+          galleryItemPos.x = Math.round(pos.x * 100);
+          galleryItemPos.y = Math.round(pos.y * 100);
+        },
+      });
+      galleryPreviewCropper.setPositionFraction({ x: galleryItemPos.x / 100, y: galleryItemPos.y / 100 });
     });
   };
   previewImg.src = src;
@@ -4657,7 +4596,7 @@ function openGalleryItemForm(item) {
   document.getElementById('cl-gallery-item-form').hidden = false;
   document.getElementById('cl-gallery-upload-tab').hidden = true;
   setEditMainActionsLocked(true);
-  // Overlay must be visible before Cropper measures the container, and the
+  // Overlay must be visible before the cropper measures the container, and the
   // form was just unhidden this same tick — defer a frame so layout settles.
   requestAnimationFrame(() => showPageGalleryPreview(item.image_url));
 }

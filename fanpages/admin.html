@@ -8,9 +8,17 @@
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
-  <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
   <style>
     body { background: #0d0d0d; }
+    /* Hub Image Builder's crop box -- .char-editor-ref-wrap is a shared
+       class (plain "click to upload" preview elsewhere), so this overrides
+       just its own image positioning for BtwCropper's pan/zoom contract
+       (see btw-cropper.js) via the wrap's own ID instead of touching the
+       shared rule. */
+    #hb-editor-img-wrap img {
+      width: auto; height: auto; max-width: none; object-fit: none;
+      position: absolute; top: 0; left: 0; transform-origin: 0 0;
+    }
     .adm-wrap { max-width: 1000px; margin: 0 auto; padding: 3rem 2rem 5rem; }
     .adm-title { font-family: 'Cinzel', serif; font-size: 1.8rem; color: #f0f0f0; margin-bottom: 1.5rem; }
 
@@ -138,7 +146,7 @@
      genuinely separate sites, not just a nav skin). -->
 <div id="fanpages-topbar-root"></div>
 <script src="/fanpages/fanpages-nav.js"></script>
-<script src="/fanpages/vendor/cropper.min.js"></script>
+<script src="/fanpages/btw-cropper.js"></script>
 
 <div class="adm-wrap" id="adm-wrap" style="display:none;">
   <h1 class="adm-title">Admin</h1>
@@ -430,30 +438,22 @@ const HB_ASPECT = 21 / 9;
 let hbCropper = null;
 let hbActiveFrame = 'start';
 
+// zoom is stored as a 100-400 percentage, same scale BtwCropper's own
+// getZoom()/getMinZoom() naturally produce (100% = fully zoomed out/cover-
+// fit, 400% = BtwCropper's default max) — just expressed relative to
+// getMinZoom() instead of an absolute CSS scale, so it stays meaningful
+// regardless of how big the on-screen crop box happens to render.
 function hbCropperToPosition(cropper) {
-  const data = cropper.getData();
-  const imgData = cropper.getImageData();
-  const maxX = imgData.naturalWidth - data.width;
-  const maxY = imgData.naturalHeight - data.height;
-  const referenceCropWidth = Math.min(imgData.naturalWidth, imgData.naturalHeight * HB_ASPECT);
+  const pos = cropper.getPositionFraction();
   return {
-    x: maxX > 0 ? Math.round((data.x / maxX) * 100) : 50,
-    y: maxY > 0 ? Math.round((data.y / maxY) * 100) : 50,
-    zoom: Math.max(100, Math.min(400, Math.round((referenceCropWidth / data.width) * 100))),
+    x: Math.round(pos.x * 100),
+    y: Math.round(pos.y * 100),
+    zoom: Math.max(100, Math.min(400, Math.round((cropper.getZoom() / cropper.getMinZoom()) * 100))),
   };
 }
-function hbPositionToCropBox(cropper, pos) {
-  const imgData = cropper.getImageData();
-  const referenceCropWidth = Math.min(imgData.naturalWidth, imgData.naturalHeight * HB_ASPECT);
-  const width = referenceCropWidth / ((pos.zoom || 100) / 100);
-  const height = width / HB_ASPECT;
-  const maxX = imgData.naturalWidth - width;
-  const maxY = imgData.naturalHeight - height;
-  return {
-    x: maxX > 0 ? (pos.x / 100) * maxX : 0,
-    y: maxY > 0 ? (pos.y / 100) * maxY : 0,
-    width, height,
-  };
+function hbApplyPositionToCropper(cropper, pos) {
+  cropper.setZoom(cropper.getMinZoom() * ((pos.zoom || 100) / 100));
+  cropper.setPositionFraction({ x: (pos.x || 50) / 100, y: (pos.y || 50) / 100 });
 }
 let hbSuppressCropSave = false;
 function hbSaveCropperToFrame() {
@@ -468,7 +468,7 @@ function hbApplyFrameToCropper() {
     ? { x: slidePos.x, y: slidePos.y, zoom: slidePos.zoom }
     : { x: slidePos.endX, y: slidePos.endY, zoom: slidePos.endZoom };
   hbSuppressCropSave = true;
-  hbCropper.setData(hbPositionToCropBox(hbCropper, pos));
+  hbApplyPositionToCropper(hbCropper, pos);
   hbSuppressCropSave = false;
 }
 function hbUpdateLockState() {
@@ -477,7 +477,7 @@ function hbUpdateLockState() {
   if (locked) hbCropper.disable(); else hbCropper.enable();
   document.getElementById('hb-crop-hint').textContent = locked
     ? 'Start Frame is locked once an animation is picked — switch to End Frame to adjust the animation target.'
-    : 'Drag to move, scroll or pinch to zoom, drag the corners to resize the crop box.';
+    : 'Drag to move, scroll or pinch to zoom.';
 }
 function hbSwitchFrame(frame) {
   hbSaveCropperToFrame();
@@ -492,16 +492,17 @@ document.getElementById('hb-frame-tab-end').addEventListener('click', () => hbSw
 
 function hbInitCropper(imageSrc) {
   const img = document.getElementById('hb-editor-crop-img');
+  const wrap = document.getElementById('hb-editor-img-wrap');
   if (hbCropper) { hbCropper.destroy(); hbCropper = null; }
   img.removeAttribute('src');
   img.style.display = 'block';
   document.getElementById('hb-editor-img-placeholder').style.display = 'none';
   document.getElementById('hb-editor-change-img-btn').style.display = 'block';
   img.onload = () => {
-    hbCropper = new Cropper(img, {
-      aspectRatio: HB_ASPECT, viewMode: 0, dragMode: 'move', autoCropArea: 1, background: false, responsive: true,
-      ready() { hbApplyFrameToCropper(); hbUpdateLockState(); },
-      crop() { hbSaveCropperToFrame(); },
+    requestAnimationFrame(() => {
+      hbCropper = new BtwCropper(img, wrap, { onChange: hbSaveCropperToFrame });
+      hbApplyFrameToCropper();
+      hbUpdateLockState();
     });
   };
   img.src = imageSrc;

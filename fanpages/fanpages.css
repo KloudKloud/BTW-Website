@@ -372,7 +372,7 @@ body.mod-theme {
 .mod-quick-nav-card.mod-editing img { filter: blur(4px) brightness(0.7); }
 .mod-quick-nav-card.mod-editing:hover img { transform: none; }
 
-/* Recrop shortcut — reopens the Cropper.js modal on the existing card
+/* Recrop shortcut — reopens the crop modal on the existing card
    image, only shown once a custom (non-default) image is set. Sits at the
    bottom of the card, away from the camera "change image" button up in the
    top-right corner — on the compact editor-sized cards, the pill's text is
@@ -1588,28 +1588,16 @@ a.wiki-tag-bubble:hover { background: rgba(127,168,217,0.3); border-color: #7fa8
 /* Live crop preview for the gallery tile thumbnail — same 6:7 portrait ratio
    as .gallery-tile so what you see here matches what shows on the grid. */
 .gallery-preview-crop-wrap {
-  width: 150px; aspect-ratio: 6 / 7; border-radius: 10px; overflow: hidden;
-  background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1);
+  position: relative; width: 150px; aspect-ratio: 6 / 7; border-radius: 10px; overflow: hidden;
+  background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1); touch-action: none;
 }
-/* Deliberately NOT width/height:100%+object-fit:cover here — that's a
-   leftover from the pre-Cropper.js slider version, and it fights with
-   Cropper's own container-size measurement (it wraps/measures the raw img
-   at its natural rendered box, so forcing a stretched/cropped box on the
-   img itself makes Cropper's crop box come out mismatched with what's
-   actually visible, like the modal's img wrap already gets right). */
+/* BtwCropper positions the image itself with a CSS transform (see
+   btw-cropper.js) — absolute + top/left 0 + transform-origin 0 0 is the
+   contract it expects the mounted <img> to already have. */
 .gallery-preview-crop-wrap img {
-  display: block; max-width: 100%;
+  position: absolute; top: 0; left: 0; transform-origin: 0 0; max-width: none;
   -webkit-user-drag: none; user-select: none; -webkit-user-select: none;
 }
-/* The crop box here is locked (non-resizable/non-movable) and always
-   meant to cover the whole preview, so there's no reason to ever actually
-   see it — the black .gallery-preview-crop-wrap box already shows the
-   boundary. Several targeted attempts to hide just its border/grid/focus-
-   ring kept leaving some part of it visibly mispositioned, so this just
-   makes the entire crop box fully transparent instead. opacity (not
-   display:none/visibility:hidden) is deliberate — a fully transparent
-   element still receives pointer events, so drag-to-pan keeps working. */
-.gallery-preview-crop-wrap .cropper-crop-box { opacity: 0 !important; }
 
 .gallery-cat-field { margin: 0.5rem 0 1.5rem; }
 .gallery-cat-label { font-size: 0.85rem; font-weight: 600; color: #ccc; margin: 0 0 0.5rem; }
@@ -2019,7 +2007,7 @@ a.wiki-tag-bubble:hover { background: rgba(127,168,217,0.3); border-color: #7fa8
 }
 .art-view-bookmark-btn.bookmarked path, .mod-bookmark-btn.bookmarked path { fill: currentColor; }
 
-/* Recrop shortcut — reopens the shared Cropper.js modal (see
+/* Recrop shortcut — reopens the shared crop modal (see
    fanpages/crop-modal.js) on an already-uploaded image, without needing to
    pick a new file. Positioning is left to each page's own usage. */
 .fp-recrop-btn {

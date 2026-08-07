@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css?v=20260804a" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
-  <link rel="stylesheet" href="/fanpages/vendor/cropper.min.css" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&display=swap" />
   <style>
     /* Editor-page-only tweaks — this dedicated page wants Notes/Find Me
@@ -367,7 +366,7 @@
 <body class="mod-theme mod-editing-active se-section-details">
 
 <script src="/fanpages/fanpages-nav.js"></script>
-<script src="/fanpages/vendor/cropper.min.js"></script>
+<script src="/fanpages/btw-cropper.js"></script>
 <script src="/fanpages/crop-modal.js"></script>
 
 <!-- Edit bar -->
@@ -1704,7 +1703,7 @@ document.getElementById('save-edit-btn').addEventListener('click', async () => {
   }
 });
 
-// ── Banner image — crop-and-upload via the shared Cropper.js modal. The
+// ── Banner image — crop-and-upload via the shared crop modal. The
 // original (pre-crop) file is kept server-side as banner_original_url
 // alongside the baked-in crop (banner_url), so Recrop always has the full
 // image to work from instead of re-cropping an already-cropped image and
@@ -1754,7 +1753,7 @@ async function uploadBanner(blob, originalFile) {
   }
 }
 
-// ── Book cover — crop-and-upload via the shared Cropper.js modal ───────────
+// ── Book cover — crop-and-upload via the shared crop modal ───────────
 // cover_original is only sent the first time a NEW source photo is picked --
 // Recrop re-sends just cover (a fresh bake) from the existing original, so
 // cover_original_url stays untouched. Same pattern as the banner/nav-cards.
@@ -2672,7 +2671,7 @@ async function unlinkSeGalleryItem(item) {
 }
 
 // ── Create / Edit modal — plain image upload (gallery posts were never run
-// through the Cropper.js flow, just an optional focal-point reposition that
+// through the crop-and-position flow, just an optional focal-point reposition that
 // this hub skips for now, same as everywhere else that defaults to 50/50).
 let seGalleryEditingId = null;
 let seGallerySelectedFile = null;
@@ -2680,62 +2679,29 @@ function seGetSelectedCategory() {
   return document.querySelector('input[name="se-gallery-editor-category"]:checked').value;
 }
 
-// Live drag-to-pan Cropper.js crop box for the tile preview only — stolen
-// straight from the Creator Hub's gallery editor (create-gallery.html /
-// the story's own gallery.html). The full-size art itself is never
-// re-cropped or re-uploaded, only position_x/position_y (galleryPos).
+// Live drag-to-pan crop box for the tile preview only (see BtwCropper in
+// btw-cropper.js) — same idea as the Creator Hub's gallery editor
+// (create-gallery.html / the story's own gallery.html). The full-size art
+// itself is never re-cropped or re-uploaded, only position_x/position_y
+// (seGalleryPos).
 let seGalleryPos = { x: 50, y: 50 };
 let seGalleryPreviewCropper = null;
-// See create-gallery.html's showGalleryPreview for why this flag exists —
-// Cropper's own setup calls below each fire a 'crop' event, and without
-// this guard the crop handler recomputes seGalleryPos from an intermediate
-// (not-yet-final) state, clobbering the deliberate centered value even on
-// a brand-new upload with zero user interaction.
-let seGalleryPreviewInitializing = false;
 function seShowGalleryPreview(src) {
   const previewImg = document.getElementById('se-gallery-editor-preview-img');
+  const wrap = previewImg.closest('.gallery-preview-crop-wrap');
   document.getElementById('se-gallery-editor-preview-field').style.display = 'block';
   if (seGalleryPreviewCropper) { seGalleryPreviewCropper.destroy(); seGalleryPreviewCropper = null; }
   previewImg.removeAttribute('src');
   previewImg.onload = () => {
     requestAnimationFrame(() => {
-      seGalleryPreviewInitializing = true;
-      seGalleryPreviewCropper = new Cropper(previewImg, {
-        aspectRatio: 6 / 7, viewMode: 1, dragMode: 'move', autoCropArea: 1,
-        cropBoxResizable: false, cropBoxMovable: false, background: false, responsive: true,
-        ready() {
-          const containerData = seGalleryPreviewCropper.getContainerData();
-          const imgDataForFit = seGalleryPreviewCropper.getImageData();
-          const coverScale = Math.max(containerData.width / imgDataForFit.naturalWidth, containerData.height / imgDataForFit.naturalHeight);
-          const canvasWidth = imgDataForFit.naturalWidth * coverScale;
-          const canvasHeight = imgDataForFit.naturalHeight * coverScale;
-          seGalleryPreviewCropper.setCanvasData({
-            width: canvasWidth, height: canvasHeight,
-            left: (containerData.width - canvasWidth) / 2,
-            top: (containerData.height - canvasHeight) / 2,
-          });
-          seGalleryPreviewCropper.setCropBoxData({ left: 0, top: 0, width: containerData.width, height: containerData.height });
-
-          const data = seGalleryPreviewCropper.getData();
-          const imgData = seGalleryPreviewCropper.getImageData();
-          const maxX = imgData.naturalWidth - data.width;
-          const maxY = imgData.naturalHeight - data.height;
-          seGalleryPreviewCropper.setData({
-            x: maxX > 0 ? (seGalleryPos.x / 100) * maxX : data.x,
-            y: maxY > 0 ? (seGalleryPos.y / 100) * maxY : data.y,
-          });
-          seGalleryPreviewInitializing = false;
-        },
-        crop(event) {
-          if (seGalleryPreviewInitializing) return;
-          const data = event.detail;
-          const imgData = seGalleryPreviewCropper.getImageData();
-          const maxX = imgData.naturalWidth - data.width;
-          const maxY = imgData.naturalHeight - data.height;
-          seGalleryPos.x = maxX > 0 ? Math.round((data.x / maxX) * 100) : 50;
-          seGalleryPos.y = maxY > 0 ? Math.round((data.y / maxY) * 100) : 50;
+      seGalleryPreviewCropper = new BtwCropper(previewImg, wrap, {
+        zoomable: false,
+        onChange(pos) {
+          seGalleryPos.x = Math.round(pos.x * 100);
+          seGalleryPos.y = Math.round(pos.y * 100);
         },
       });
+      seGalleryPreviewCropper.setPositionFraction({ x: seGalleryPos.x / 100, y: seGalleryPos.y / 100 });
     });
   };
   previewImg.src = src;
