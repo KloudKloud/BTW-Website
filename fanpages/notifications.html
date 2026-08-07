@@ -400,6 +400,22 @@
     .dm-thread-reply { padding: 0.85rem 1.1rem; border-top: 1px solid rgba(255,255,255,0.08); }
     .dm-reply-msg { font-size: 0.78rem; color: #d97a72; margin-bottom: 0.4rem; }
 
+    .dm-typing-indicator {
+      padding: 0 1.1rem 0.4rem; font-size: 0.8rem; font-style: italic; color: #999;
+      display: flex; align-items: center; gap: 0.4rem;
+    }
+    .dm-typing-dots { display: inline-flex; gap: 2px; }
+    .dm-typing-dots span {
+      width: 4px; height: 4px; border-radius: 50%; background: #999;
+      animation: dm-typing-bounce 1.2s infinite ease-in-out;
+    }
+    .dm-typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .dm-typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes dm-typing-bounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+      30% { transform: translateY(-3px); opacity: 1; }
+    }
+
     /* Unified typing box — same feel as the main BTW Inbox's compose/reply box */
     .dm-input-box {
       border: 1px solid rgba(180,140,255,0.25); border-radius: 14px;
@@ -576,6 +592,10 @@
                 <button class="dm-thread-dismiss-btn" id="dm-thread-dismiss-btn" type="button" title="Dismiss" hidden>🗑️</button>
               </div>
               <div class="dm-thread-messages" id="dm-thread-messages"></div>
+              <p class="dm-typing-indicator" id="dm-typing-indicator" hidden>
+                <span id="dm-typing-indicator-text"></span>
+                <span class="dm-typing-dots"><span></span><span></span><span></span></span>
+              </p>
               <div class="dm-thread-reply">
                 <p class="dm-reply-msg" id="dm-reply-msg" hidden></p>
                 <div class="dm-input-box">
@@ -631,6 +651,7 @@
     notifInboxEl.style.display = isInbox ? '' : 'none';
     notifListEl.style.display = isInbox ? 'none' : '';
     if (isInbox) initDmAppOnce();
+    else dmStopThreadPolling();
     if (pushHash !== false) location.hash = tab;
   }
 
@@ -658,6 +679,7 @@
     if (which !== 'thread') {
       dmTabChats.classList.toggle('active', which === 'chats');
       dmTabRequests.classList.toggle('active', which === 'requests');
+      dmStopThreadPolling();
     }
   }
 
@@ -883,6 +905,67 @@
   let dmPendingTargetUser = null; // set while composing a brand-new chat (no thread yet)
   let dmReplyFiles = [];
   let dmLastRenderedDay = null; // tracks the day of the last message appended, for day dividers
+
+  // ── Live polling (new messages + "is typing") while a thread is open ────
+  // No websocket infra on this server, so this is a plain short-interval
+  // poll -- started when a thread opens, stopped the moment its panel is
+  // no longer the visible one (dmShowPanel handles that centrally).
+  let dmPollTimer = null;
+  let dmLastMessageId = 0;
+  let dmOtherDisplayName = '';
+
+  function dmStopThreadPolling() {
+    if (dmPollTimer) { clearInterval(dmPollTimer); dmPollTimer = null; }
+    document.getElementById('dm-typing-indicator').hidden = true;
+  }
+
+  function dmStartThreadPolling(threadId) {
+    dmStopThreadPolling();
+    dmPollTimer = setInterval(() => dmPollThread(threadId), 2500);
+  }
+
+  async function dmPollThread(threadId) {
+    if (dmActiveThreadId !== threadId) return;
+    try {
+      const [msgRes, typingRes] = await Promise.all([
+        fetch(`/api/dm/${threadId}/messages?after=${dmLastMessageId}`, { headers: authHeaders() }),
+        fetch(`/api/dm/${threadId}/typing`, { headers: authHeaders() }),
+      ]);
+      if (dmActiveThreadId !== threadId) return; // switched away while these were in flight
+
+      if (msgRes.ok) {
+        const data = await msgRes.json();
+        const msgs = data.messages || [];
+        if (msgs.length) {
+          const msgWrap = document.getElementById('dm-thread-messages');
+          msgs.forEach(m => dmAppendMessage(msgWrap, m));
+          dmLastMessageId = msgs[msgs.length - 1].id;
+          dmScrollToBottom(msgWrap);
+          dmRefreshRequestBadge();
+        }
+      }
+
+      const typingEl = document.getElementById('dm-typing-indicator');
+      if (typingRes.ok) {
+        const { typing } = await typingRes.json();
+        document.getElementById('dm-typing-indicator-text').textContent = `${dmOtherDisplayName} is typing`;
+        typingEl.hidden = !typing;
+      }
+    } catch { /* transient network hiccup -- just try again next tick */ }
+  }
+
+  // Pings the server at most once every 2s while the user keeps typing --
+  // the 4s server-side TTL (see DM_TYPING_TTL_MS) means the indicator on
+  // the other end clears itself a couple seconds after typing stops,
+  // without needing an explicit "stopped typing" call.
+  let dmTypingLastSentAt = 0;
+  document.getElementById('dm-reply-input').addEventListener('input', () => {
+    if (!dmActiveThreadId) return;
+    const now = Date.now();
+    if (now - dmTypingLastSentAt < 2000) return;
+    dmTypingLastSentAt = now;
+    fetch(`/api/dm/${dmActiveThreadId}/typing`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+  });
 
   function dmDayKey(dateStr) { return new Date(dateStr).toDateString(); }
 
@@ -1244,6 +1327,10 @@
         dmScrollToBottom(msgWrap);
       }
       dmRefreshRequestBadge();
+
+      dmLastMessageId = msgs.length ? msgs[msgs.length - 1].id : 0;
+      dmOtherDisplayName = resolvedName;
+      dmStartThreadPolling(threadId);
     } catch {
       msgWrap.innerHTML = '<p class="notif-empty">Couldn\'t load this chat right now.</p>';
     }
@@ -1319,6 +1406,8 @@
         const msgWrap = document.getElementById('dm-thread-messages');
         dmAppendMessage(msgWrap, data.message);
         dmScrollToBottom(msgWrap);
+        dmLastMessageId = data.message.id;
+        document.getElementById('dm-typing-indicator').hidden = true;
       }
     } catch (err) {
       msgEl.textContent = err.message || 'Something went wrong.';

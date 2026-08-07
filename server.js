@@ -4972,9 +4972,16 @@ app.get('/api/dm/:id/messages', requireAuth, async (req, res) => {
     'SELECT username, display_name, avatar FROM users WHERE id = $1', [otherId]
   );
 
+  // `after` turns this into an incremental poll for the open thread view
+  // (see dmPollActiveThread in notifications.html) -- only rows newer than
+  // the last one already rendered, so a live update doesn't re-fetch/
+  // re-render the whole conversation every few seconds.
+  const after = parseInt(req.query.after, 10);
   const { rows } = await pool.query(
-    'SELECT id, sender_id, body, attachments, created_at FROM dm_messages WHERE thread_id = $1 ORDER BY created_at ASC',
-    [thread.id]
+    Number.isFinite(after)
+      ? 'SELECT id, sender_id, body, attachments, created_at FROM dm_messages WHERE thread_id = $1 AND id > $2 ORDER BY created_at ASC'
+      : 'SELECT id, sender_id, body, attachments, created_at FROM dm_messages WHERE thread_id = $1 ORDER BY created_at ASC',
+    Number.isFinite(after) ? [thread.id, after] : [thread.id]
   );
   await pool.query(
     'UPDATE dm_messages SET read_at = NOW() WHERE thread_id = $1 AND sender_id <> $2 AND read_at IS NULL',
@@ -4992,6 +4999,30 @@ app.get('/api/dm/:id/messages', requireAuth, async (req, res) => {
       created_at: m.created_at, is_mine: m.sender_id === req.user.id,
     })),
   });
+});
+
+// ── DM typing indicator ────────────────────────────────────────────────────
+// In-memory only, deliberately not persisted -- "so-and-so is typing" is
+// throwaway, high-frequency state, not something that belongs in Postgres.
+// A single entry per thread is enough since these are 1:1 DMs, not group
+// chats. Entries expire on their own (checked at read time) so a tab closed
+// mid-type doesn't leave a stale "is typing" stuck on the other side.
+const dmTypingState = new Map();
+const DM_TYPING_TTL_MS = 4000;
+
+app.post('/api/dm/:id/typing', requireAuth, async (req, res) => {
+  const thread = await findDmThread(req.params.id, req.user.id);
+  if (!thread) return res.status(404).json({ error: 'Not found.' });
+  dmTypingState.set(thread.id, { userId: req.user.id, expiresAt: Date.now() + DM_TYPING_TTL_MS });
+  res.json({ ok: true });
+});
+
+app.get('/api/dm/:id/typing', requireAuth, async (req, res) => {
+  const thread = await findDmThread(req.params.id, req.user.id);
+  if (!thread) return res.status(404).json({ error: 'Not found.' });
+  const entry = dmTypingState.get(thread.id);
+  const typing = !!entry && entry.userId !== req.user.id && entry.expiresAt > Date.now();
+  res.json({ typing });
 });
 
 app.post('/api/dm/:id/messages', requireAuth, uploadInbox.array('attachments', 4), async (req, res) => {
