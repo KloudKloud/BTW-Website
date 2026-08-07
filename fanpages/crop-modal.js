@@ -87,17 +87,31 @@
     btn.disabled = true;
     btn.textContent = 'Saving…';
     try {
-      // Export at a real resolution, not just the on-screen viewport's CSS
-      // pixel size — the viewport is capped to fit the modal, which on a
-      // small window would otherwise bake a blurry low-res crop into the
-      // upload. 1600px on the long edge covers every use on this site,
-      // including the club banner (which renders at a native 1600x280 --
-      // 1000px was softening it noticeably once actually displayed at
-      // full width, since it had to be upscaled ~1.4x).
+      // Export at the crop's actual NATIVE pixel count instead of a fixed
+      // target size -- vpW/vpH (the on-screen viewport) divided by the
+      // current zoom level gives exactly how many real source pixels are
+      // visible inside the crop box right now. That's the only way to
+      // guarantee zero quality loss from resizing: any fixed export size
+      // either upscales (blurry, what the old 1000px/1600px caps did to
+      // wide crops like the club banner) or needlessly downscales relative
+      // to what the source image actually offers. The only unavoidable
+      // resolution loss is from zooming IN past 1:1, which is inherent to
+      // "crop tighter than the source has pixels for" and true of any
+      // cropper, not a bug.
       const wrap = overlay.querySelector('#crop-modal-img-wrap');
-      const ratio = wrap.clientWidth / wrap.clientHeight;
-      const outW = ratio >= 1 ? 1600 : Math.round(1600 * ratio);
-      const outH = ratio >= 1 ? Math.round(1600 / ratio) : 1600;
+      const scale = btwCropper.getZoom();
+      let outW = Math.round(wrap.clientWidth / scale);
+      let outH = Math.round(wrap.clientHeight / scale);
+      // Safety cap -- only ever clamps DOWN from the native pixel count
+      // (never up, so this can't reintroduce blur), just keeps a
+      // zoomed-way-out crop on a huge source photo from baking an
+      // unreasonably large file.
+      const MAX_EDGE = 2400;
+      if (Math.max(outW, outH) > MAX_EDGE) {
+        const shrink = MAX_EDGE / Math.max(outW, outH);
+        outW = Math.round(outW * shrink);
+        outH = Math.round(outH * shrink);
+      }
       const canvas = btwCropper.getCanvas(outW, outH);
       await new Promise((resolve, reject) => {
         canvas.toBlob(async (blob) => {
