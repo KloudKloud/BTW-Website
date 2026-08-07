@@ -188,6 +188,21 @@
       box-shadow: 0 0 8px rgba(127,168,217,0.35);
     }
     .cl-banner-join-btn.cl-joined:hover { background: #6f97c8; }
+    /* +Post — sits just left of Join/Joined, same pill recipe but filled
+       gold (matches the site's other "+Create"-style buttons) so it reads
+       as an action, not a status toggle. Fixed offset tuned against
+       "✓ Joined" (the wider of the two Join-button states) so it never
+       overlaps; leaves a slightly bigger gap when the shorter "Join" shows. */
+    .cl-banner-post-btn {
+      position: absolute; bottom: 1.1rem; right: 9.8rem; z-index: 3;
+      background: rgba(240,192,96,0.16); border: 1.5px solid rgba(240,192,96,0.75); color: #f0c060;
+      border-radius: 20px; padding: 0.5em 1.3em; font-size: 0.9rem; font-weight: 700;
+      cursor: pointer; font-family: 'Fredoka', 'Lato', cursive; transition: background 0.15s, box-shadow 0.2s, transform 0.15s;
+    }
+    .cl-banner-post-btn:hover { background: rgba(240,192,96,0.3); transform: translateY(-1px); box-shadow: 0 0 10px rgba(240,192,96,0.35); }
+    @media (max-width: 560px) {
+      .cl-banner-post-btn { right: auto; left: 1.1rem; }
+    }
     /* .cl-body-row lays out the main column and the right sidebar as actual
        flex siblings — the sidebar's horizontal position (far right) comes
        from being LAST in a flex row, not from position:fixed, which is
@@ -388,7 +403,7 @@
       overflow-y: auto;
     }
     .cl-admin-posts-title {
-      font-family: 'Cinzel', Georgia, serif; font-size: 1.3rem; font-weight: 700; letter-spacing: 0.03em;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.3rem; font-weight: 700; letter-spacing: 0.03em;
       color: #7fa8d9; text-shadow: 0 0 16px rgba(127,168,217,0.6);
       margin: 0 0 1.1rem; display: inline-block; position: relative; padding-bottom: 0.5rem;
     }
@@ -650,6 +665,22 @@
       .cl-post-create-rules-col { width: auto; position: static; border-left: none; border-top: 1px solid rgba(255,255,255,0.1); padding-left: 0; padding-top: 1.25rem; margin-top: 0.5rem; }
     }
 
+    /* Bubbly Fredoka pass on the Create Post modal, matching +Story/
+       +Character/+Gallery's onboarding look -- scoped to the modal so it
+       doesn't touch the shared .char-editor-title/.mod-field classes used
+       elsewhere on this page (Edit Club, Manage Communities, etc). */
+    #cl-post-create-overlay .char-editor-title,
+    #cl-post-create-overlay .mod-field label,
+    #cl-post-create-overlay .mod-field-label-standalone {
+      font-family: 'Fredoka', 'Lato', cursive;
+    }
+    #cl-post-create-overlay .mod-field label,
+    #cl-post-create-overlay .mod-field-label-standalone {
+      font-size: 1.08rem; color: #f0f0f0;
+    }
+    #cl-post-create-overlay .cl-post-field-title-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; position: relative; }
+    #cl-post-create-overlay .cl-post-field-title-row label { margin-bottom: 0; }
+
     /* ── Create Post modal: poll builder ── */
     .cl-post-poll-box { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 1.1rem; }
     .cl-post-poll-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
@@ -725,7 +756,7 @@
       background: rgba(127,168,217,0.65);
     }
     .cl-side-name {
-      font-family: 'Cinzel', Georgia, serif; font-weight: 700; font-size: 1.2rem; color: #fff;
+      font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 1.2rem; color: #fff;
       margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
 
@@ -750,7 +781,7 @@
     /* ── User-written title + splash message — every club's own "front
        page" pitch, clamped to ~3 lines with a Show More toggle. ── */
     .cl-side-title-row { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.6rem; }
-    .cl-side-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.05rem; font-weight: 700; color: #f0f0f0; margin: 0; flex: 1; min-width: 0; }
+    .cl-side-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 700; color: #f0f0f0; margin: 0; flex: 1; min-width: 0; }
     .cl-side-splash-edit-btn {
       flex-shrink: 0; background: none; border: none; color: #888; font-size: 0.85rem;
       cursor: pointer; padding: 0.15rem; line-height: 1; transition: color 0.15s;
@@ -1151,6 +1182,7 @@
     <button class="cl-banner-recrop-btn" id="cl-banner-recrop-btn" type="button" style="display:none;" title="Change banner image">✏️</button>
     <input type="file" id="cl-banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
     <button class="cl-banner-join-btn" id="cl-banner-join-btn" type="button" style="display:none;">Join</button>
+    <button class="cl-banner-post-btn" id="cl-banner-post-btn" type="button" style="display:none;">+ Post</button>
   </div>
 
   <div class="cl-body-row" id="cl-body-row">
@@ -1864,28 +1896,37 @@
         </div>
 
         <div class="mod-field">
-          <label>Images</label>
-          <p class="char-editor-facts-hint" style="margin-top:0;">
-            Wanna attach an image to your post? Or multiple images? Add them here! It is good practice to credit sources you use, if the art/images aren't yours.<br><br>
-            (Note: Images are optional! If your post is a discussion, you can skip adding an image, and no image slot will generate on your post whatsoever~)
-          </p>
+          <div class="cl-post-field-title-row">
+            <label>Images</label>
+            <button class="wiki-tags-tip-icon" type="button" aria-label="Images help">💡</button>
+            <div class="wiki-tags-tip-popover" hidden><p>Wanna attach an image to your post? Or multiple images? Add them here! It is good practice to credit sources you use, if the art/images aren't yours.<br><br>(Note: Images are optional! If your post is a discussion, you can skip adding an image, and no image slot will generate on your post whatsoever~)</p></div>
+          </div>
           <div class="cl-edit-slideshow-stack" id="cl-post-images-stack"></div>
           <input type="file" id="cl-post-images-file-input" accept="image/png,image/jpeg,image/webp,image/gif" multiple style="display:none;" />
         </div>
 
         <div class="mod-field" id="cl-post-preview-field" hidden>
-          <label>Post Preview</label>
-          <p class="char-editor-facts-hint" style="margin-top:0; margin-bottom:0.6rem;">This is how your first image shows up in the feed. Drag to pick the best part to show off! Your full-size image is never cropped, only this preview.</p>
+          <div class="cl-post-field-title-row">
+            <label>Post Preview</label>
+            <button class="wiki-tags-tip-icon" type="button" aria-label="Post Preview help">💡</button>
+            <div class="wiki-tags-tip-popover" hidden><p>This is how your first image shows up in the feed. Drag to pick the best part to show off, and use the slider to zoom in! Your full-size image is never cropped, only this preview.</p></div>
+          </div>
           <div class="gallery-preview-crop-wrap" id="cl-post-preview-wrap" style="aspect-ratio: 1 / 1;">
             <img id="cl-post-preview-img" alt="" draggable="false" />
+          </div>
+          <div class="crop-modal-zoom-row gallery-preview-zoom-row">
+            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+            <input type="range" class="crop-modal-zoom" id="cl-post-preview-zoom" />
+            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
           </div>
         </div>
 
         <div class="mod-field">
-          <label for="cl-post-body-input">Body Text</label>
-          <p class="char-editor-facts-hint" style="margin-top:0;">
-            Add a description/details to your post~ (Note: Bold text with: **text**. Italicize text with: *text*. Embed a link into a phrase/or word with: [text]&lt;URL Link&gt; — All polls will appear under whatever body text you write.
-          </p>
+          <div class="cl-post-field-title-row">
+            <label for="cl-post-body-input">Body Text</label>
+            <button class="wiki-tags-tip-icon" type="button" aria-label="Body Text help">💡</button>
+            <div class="wiki-tags-tip-popover" hidden><p>Add a description/details to your post~ (Note: Bold text with: **text**. Italicize text with: *text*. Embed a link into a phrase/or word with: [text]&lt;URL Link&gt;) — All polls will appear under whatever body text you write.</p></div>
+          </div>
           <textarea class="mod-textarea" id="cl-post-body-input" rows="6" maxlength="5000"></textarea>
         </div>
 
@@ -2137,6 +2178,7 @@ async function loadClub() {
 
 // ── Join/Joined button — top-right of the banner ─────────────────────────
 function renderJoinBtn(club) {
+  document.getElementById('cl-banner-post-btn').style.display = 'block';
   const btn = document.getElementById('cl-banner-join-btn');
   if (club.viewer_role === 'owner') { btn.style.display = 'none'; return; }
   btn.style.display = 'block';
@@ -2145,6 +2187,10 @@ function renderJoinBtn(club) {
   btn.classList.toggle('cl-joined', joined);
   btn.title = joined ? 'Click to leave' : 'Join this club';
 }
+document.getElementById('cl-banner-post-btn').addEventListener('click', () => {
+  navigateTo({ tab: 'social', page: null, post: null });
+  document.getElementById('cl-create-social-post-btn').click();
+});
 document.getElementById('cl-banner-join-btn').addEventListener('click', async () => {
   if (!token) { window.fpOpenLoginModal(); return; }
   if (!currentClub) return;
@@ -2590,7 +2636,12 @@ function adminPostRow(post, mode) {
   const previewX = post.preview_position_x != null ? post.preview_position_x : 50;
   const previewY = post.preview_position_y != null ? post.preview_position_y : 50;
   const hasImage = !!post.image_url;
-  const thumbImg = `<img class="cl-admin-post-thumb" src="${post.image_url || '/images/noimage.png'}" alt="" style="object-position:${previewX}% ${previewY}%;" />`;
+  // A real baked preview crop (preview_image_url) wins when the post has
+  // one -- already the right shape, no position math needed. Falls back to
+  // the old pan-position-on-the-full-image approach for older posts.
+  const thumbImg = post.preview_image_url
+    ? `<img class="cl-admin-post-thumb" src="${post.preview_image_url}" alt="" />`
+    : `<img class="cl-admin-post-thumb" src="${post.image_url || '/images/noimage.png'}" alt="" style="object-position:${previewX}% ${previewY}%;" />`;
   const thumbHtml = (isCard && !hasImage) ? '' : (isCard ? `<div class="cl-admin-post-thumb-wrap">${thumbImg}</div>` : thumbImg);
   const showPreview = isCard && !hasImage && post.title && post.body;
   const previewHtml = showPreview ? `<p class="cl-admin-post-preview">${escapeHtml(truncateText(post.body, 220))}</p>` : '';
@@ -2704,10 +2755,12 @@ document.getElementById('cl-post-images-file-input').addEventListener('change', 
   e.target.value = '';
 });
 
-// Post Preview — the exact same locked-crop-box technique as the gallery
-// tile preview: nothing is ever actually cropped/re-uploaded, this just
-// tracks a focal-point (x/y %) applied via object-position when the first
-// image is shown small in the feed.
+// Post Preview — the same drag-to-pan-and-zoom crop box as the gallery tile
+// preview. On save this gets baked into a real cropped image (getCanvas)
+// uploaded as preview_image_url, rather than only storing a pan position
+// applied to the full-size image at render time; position_x/position_y
+// (postPreviewPos) are still tracked/sent for legacy fallback rendering on
+// older posts that predate this.
 function updatePostPreviewField() {
   const field = document.getElementById('cl-post-preview-field');
   if (!postCreateImages.length) {
@@ -2727,17 +2780,31 @@ function showPostPreviewCrop(src) {
   previewImg.onload = () => {
     requestAnimationFrame(() => {
       postCreateCropper = new BtwCropper(previewImg, wrap, {
-        zoomable: false,
         onChange(pos) {
           postPreviewPos.x = Math.round(pos.x * 100);
           postPreviewPos.y = Math.round(pos.y * 100);
         },
       });
+      postCreateCropper.setZoomInput(document.getElementById('cl-post-preview-zoom'));
       postCreateCropper.setPositionFraction({ x: postPreviewPos.x / 100, y: postPreviewPos.y / 100 });
     });
   };
   previewImg.src = src;
 }
+
+// Lightbulb hint popovers -- generic wiring, same pattern as +Gallery/
+// +Character.
+document.querySelectorAll('#cl-post-create-overlay .wiki-tags-tip-icon').forEach(icon => {
+  const pop = icon.nextElementSibling;
+  if (!pop || !pop.classList.contains('wiki-tags-tip-popover')) return;
+  icon.addEventListener('click', (e) => {
+    e.stopPropagation();
+    pop.hidden = !pop.hidden;
+  });
+  document.addEventListener('click', (e) => {
+    if (!pop.hidden && !pop.contains(e.target) && e.target !== icon) pop.hidden = true;
+  });
+});
 
 // Poll builder
 document.getElementById('cl-post-add-poll-btn').addEventListener('click', () => {
@@ -2799,6 +2866,12 @@ document.getElementById('cl-post-create-submit-btn').addEventListener('click', a
     if (postCreateMode === 'news') fd.append('is_admin_post', '1');
     fd.append('preview_position_x', postPreviewPos.x);
     fd.append('preview_position_y', postPreviewPos.y);
+    if (postCreateCropper && postCreateCropper.isReady()) {
+      const previewBlob = await new Promise((resolve) => {
+        postCreateCropper.getCanvas(700, 700).toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
+      });
+      if (previewBlob) fd.append('preview_image', previewBlob, 'preview.jpg');
+    }
     postCreateImages.forEach(img => fd.append('images', img.file, img.file.name));
     if (postPollActive) {
       const question = document.getElementById('cl-post-poll-question').value.trim();

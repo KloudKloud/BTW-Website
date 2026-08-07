@@ -8549,6 +8549,7 @@ function clubPostPublicShape(p, voteRows, viewerId) {
     id: p.id, title: p.title, body: p.body,
     image_url: p.image_url, image_urls: p.image_urls || [],
     preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
+    preview_image_url: p.preview_image_url || '',
     poll,
     created_at: p.created_at, is_admin_post: p.is_admin_post,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
@@ -8735,7 +8736,7 @@ app.delete('/api/clubs/:slug/posts/:postId/like', async (req, res) => {
 // post's own page) — only the FEED THUMBNAIL gets a focal-point
 // reposition (preview_position_x/y), same idea as the gallery preview crop:
 // the source image itself is untouched.
-app.post('/api/clubs/:slug/posts', requireAuth, uploadModImage.array('images', 10), async (req, res) => {
+app.post('/api/clubs/:slug/posts', requireAuth, uploadModImage.fields([{ name: 'images', maxCount: 10 }, { name: 'preview_image', maxCount: 1 }]), async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id, name, slug FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const role = await getClubRole(club.id, req.user.id);
@@ -8760,12 +8761,14 @@ app.post('/api/clubs/:slug/posts', requireAuth, uploadModImage.array('images', 1
     } catch {}
   }
 
-  const imageUrls = (req.files || []).map(f => `/images/moderators/${f.filename}`);
+  const imageUrls = (req.files.images || []).map(f => `/images/moderators/${f.filename}`);
+  const previewImageUrl = req.files.preview_image && req.files.preview_image[0]
+    ? `/images/moderators/${req.files.preview_image[0].filename}` : '';
 
   const { rows: [post] } = await pool.query(
-    `INSERT INTO club_posts (club_id, author_user_id, title, body, image_url, image_urls, preview_position_x, preview_position_y, poll, is_admin_post)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-    [club.id, req.user.id, title, body, imageUrls[0] || '', JSON.stringify(imageUrls), previewX, previewY, poll ? JSON.stringify(poll) : null, isAdminPost]
+    `INSERT INTO club_posts (club_id, author_user_id, title, body, image_url, image_urls, preview_position_x, preview_position_y, preview_image_url, poll, is_admin_post)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+    [club.id, req.user.id, title, body, imageUrls[0] || '', JSON.stringify(imageUrls), previewX, previewY, previewImageUrl, poll ? JSON.stringify(poll) : null, isAdminPost]
   );
   const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
   const { rows: members } = await pool.query('SELECT user_id FROM club_members WHERE club_id = $1', [club.id]);
@@ -9596,6 +9599,7 @@ app.get('/api/clubs-feed', async (req, res) => {
   res.json({ posts: rows.map(p => ({
     id: p.id, title: p.title, body: p.body, created_at: p.created_at,
     image_url: p.image_url || '', preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
+    preview_image_url: p.preview_image_url || '',
     like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_liked: !!p.user_liked,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
     club: { slug: p.club_slug, name: p.club_name, icon_url: p.club_icon || null },
@@ -9648,6 +9652,7 @@ app.get('/api/clubs-recommended', async (req, res) => {
   res.json({ posts: rows.map(p => ({
     id: p.id, title: p.title, body: p.body, created_at: p.created_at,
     image_url: p.image_url || '', preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
+    preview_image_url: p.preview_image_url || '',
     like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_liked: !!p.user_liked,
     already_joined: !!p.already_joined, recently_visited: !!p.recently_visited,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },

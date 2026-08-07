@@ -631,7 +631,12 @@ function feedCard(p, mode) {
   const previewX = p.preview_position_x != null ? p.preview_position_x : 50;
   const previewY = p.preview_position_y != null ? p.preview_position_y : 50;
   const hasImage = !!p.image_url;
-  const thumbImg = `<img class="soc-feed-card-thumb" src="${p.image_url || '/images/noimage.png'}" alt="" style="object-position:${previewX}% ${previewY}%;" />`;
+  // A real baked preview crop (preview_image_url) wins when the post has
+  // one -- already the right shape, no position math needed. Falls back to
+  // the old pan-position-on-the-full-image approach for older posts.
+  const thumbImg = p.preview_image_url
+    ? `<img class="soc-feed-card-thumb" src="${p.preview_image_url}" alt="" />`
+    : `<img class="soc-feed-card-thumb" src="${p.image_url || '/images/noimage.png'}" alt="" style="object-position:${previewX}% ${previewY}%;" />`;
   const thumbHtml = (isCard && !hasImage) ? '' : (isCard ? `<div class="soc-feed-card-thumb-wrap">${thumbImg}</div>` : thumbImg);
   const showPreview = isCard && !hasImage && p.title && p.body;
   const previewHtml = showPreview ? `<p class="soc-feed-card-preview">${escapeHtml(truncateText(p.body, 220))}</p>` : '';
