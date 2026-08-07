@@ -14,6 +14,35 @@
     a { color: inherit; }
     [hidden] { display: none !important; }
 
+    /* Sticky top bar — trumps the site's own nav entirely, same idea as
+       +Story's .cs-topbar / the Story Editor's .mod-edit-bar. Fixed,
+       always visible, so Cancel/Create are reachable without scrolling
+       and a stray nav click can't carry someone off the page unconfirmed. */
+    #fanpages-topbar-root { display: none; }
+    .cc-topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 150; height: 68px; box-sizing: border-box;
+      display: flex; align-items: center; justify-content: space-between;
+      background: #161616; border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding: 0 1.5rem;
+    }
+    .cc-topbar-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.08rem; font-weight: 700; color: #f0f0f0; }
+    .cc-topbar-actions { display: flex; align-items: center; gap: 0.85rem; }
+    .cc-topbar-cancel {
+      color: #ccc; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.9rem; font-weight: 600; text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.25); border-radius: 22px; padding: 0.6em 1.4em; cursor: pointer; background: none;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .cc-topbar-cancel:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+    .cc-topbar-create {
+      background: #1fb6a8; color: #fff; border: none;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.94rem; font-weight: 700;
+      padding: 0.65em 1.7em; border-radius: 22px; cursor: pointer;
+      box-shadow: 0 0 16px rgba(31,182,168,0.55); transition: background 0.15s, box-shadow 0.15s;
+    }
+    .cc-topbar-create:hover { background: #1a9d91; box-shadow: 0 0 22px rgba(31,182,168,0.75); }
+    .cc-field-title-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; position: relative; }
+    .cc-field-title-row label { margin-bottom: 0; }
+
     /* Species suggest dropdown -- body-appended + fixed-position (see
        renderSuggestDropdown), same pattern as create.html's tag suggest
        boxes, instead of rendering inline where it used to show up as an
@@ -29,7 +58,7 @@
       padding: 0.75rem 1.05rem; cursor: pointer;
     }
     .wiki-fandom-suggest-item:hover, .wiki-fandom-suggest-item.active { background: rgba(127,168,217,0.15); }
-    .cc-page { max-width: 880px; margin: 0 auto; padding: 6rem 1.25rem 4rem; }
+    .cc-page { max-width: 880px; margin: 0 auto; padding: calc(68px + 2.5rem) 1.25rem 4rem; }
     .cc-eyebrow {
       font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
       color: #f0c060; margin-bottom: 0.5rem; text-align: center;
@@ -41,11 +70,42 @@
        overlay use-case — here the page itself scrolls, so the box should
        just grow to fit its content instead of being capped mid-form. */
     .char-editor-modal { margin: 0 auto; max-height: none; overflow-y: visible; }
+
+    /* Bubbly Fredoka everywhere on this page -- .char-editor-title/
+       .mod-field/.mod-input etc. are shared classes used by modals all
+       over the site, so these overrides are scoped under .cc-page rather
+       than touching the shared rules themselves. */
+    .cc-page .char-editor-title,
+    .cc-page .cc-eyebrow,
+    .cc-page .mod-field label,
+    .cc-page .mod-field-label-standalone,
+    .cc-page .gallery-linkto-section-label,
+    .cc-page .char-editor-ref-placeholder,
+    .cc-page .char-editor-ref-overlay,
+    .cc-page .mod-btn {
+      font-family: 'Fredoka', 'Lato', cursive;
+    }
+    .cc-page .cc-sub,
+    .cc-page .mod-input,
+    .cc-page .mod-textarea,
+    .cc-page .mod-select,
+    .cc-page .mod-tip-box,
+    .cc-page .wiki-tags-tip-popover {
+      font-family: 'Fredoka', 'Lato', cursive;
+    }
   </style>
 </head>
 <body>
 
 <div id="fanpages-topbar-root"></div>
+
+<div class="cc-topbar">
+  <span class="cc-topbar-title">New Character</span>
+  <div class="cc-topbar-actions">
+    <button class="cc-topbar-cancel" id="cc-topbar-cancel" type="button">Cancel</button>
+    <button class="cc-topbar-create" id="cc-topbar-create" type="button">Create</button>
+  </div>
+</div>
 
 <div class="mod-page-bg-wrap-static">
   <img class="mod-page-bg-img-static" src="/images/gallery/kloudsaphbedroom_1.png" alt="" />
@@ -89,7 +149,11 @@
     </div>
 
     <div class="mod-field">
-      <label for="char-editor-desc">Description <span style="font-weight:400;color:#888;">(use *word* for italics, **word** for bold)</span></label>
+      <div class="cc-field-title-row">
+        <label for="char-editor-desc">Description</label>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Description help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>One paragraph per line — each becomes its own line on the character's page. Use *word* for italics, **word** for bold.</p></div>
+      </div>
       <textarea class="mod-textarea" id="char-editor-desc" placeholder="One paragraph per line. Each becomes its own line on the character's page."></textarea>
     </div>
 
@@ -109,24 +173,35 @@
     </div>
 
     <div class="mod-field">
-      <label for="char-editor-interests">Interests <span style="font-weight:400;color:#888;">(use *word* for italics, **word** for bold)</span></label>
+      <div class="cc-field-title-row">
+        <label for="char-editor-interests">Interests</label>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Interests help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Use *word* for italics, **word** for bold.</p></div>
+      </div>
       <textarea class="mod-textarea" id="char-editor-interests" placeholder="N/A"></textarea>
     </div>
 
     <div class="mod-field gallery-linkto-box">
-      <label>Relationships</label>
+      <div class="cc-field-title-row">
+        <label>Relationships</label>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Relationships help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden>
+          <p>Just fill in the name and how they relate! The page will automatically show it as "Name — Type" for you. If you'd like to directly link another character (yours or someone else's) to a particular relationship, select the <strong>+</strong> button on the avatar above and find that character specifically! You can have as many relationships as you'd like~</p>
+          <p style="margin-top:0.6rem; opacity:0.85;">(e.g. Kloud belongs to you. Saphero belongs to you. When building Kloud's relationships, insert Saphero into the name field, and "Best Friends" into the type field. If Saphero has a page that exists, click the "+" button and select Saphero from your characters to allow for auto-click onto their pages. Alternatively, if you roleplay with someone else's characters, you can link their specific character pages with the "+" button as well!)</p>
+        </div>
+      </div>
       <div class="gallery-linkto-section">
         <p class="gallery-linkto-section-label">Linked Characters <span class="gallery-linkto-section-note">(Include important relationships for your characters. e.g. Friends, parents, lovers, enemies...)</span></p>
         <div class="gallery-linkto-grid" id="char-editor-relationships-rows"></div>
       </div>
-      <div class="mod-tip-box">
-        <p>💡 Just fill in the name and how they relate! The page will automatically show it as "Name — Type" for you. If you'd like to directly link another character (yours or someone else's) to a particular relationship, select the <strong>+</strong> button on the avatar above and find that character specifically! You can have as many relationships as you'd like~</p>
-        <p style="margin-top:0.6rem; opacity:0.85;">(e.g. Kloud belongs to you. Saphero belongs to you. When building Kloud's relationships, insert Saphero into the name field, and "Best Friends" into the type field. If Saphero has a page that exists, click the "+" button and select Saphero from your characters to allow for auto-click onto their pages. Alternatively, if you roleplay with someone else's characters, you can link their specific character pages with the "+" button as well!)</p>
-      </div>
     </div>
 
     <div class="mod-field">
-      <label for="char-editor-theme-song">Theme Song <span style="font-weight:400;color:#888;">(Spotify or YouTube link)</span></label>
+      <div class="cc-field-title-row">
+        <label for="char-editor-theme-song">Theme Song</label>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Theme Song help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Spotify or YouTube link.</p></div>
+      </div>
       <input class="mod-input" id="char-editor-theme-song" placeholder="https://open.spotify.com/track/… or https://youtube.com/…" />
     </div>
 
@@ -137,7 +212,11 @@
     </div>
 
     <div class="mod-field">
-      <label for="char-editor-lore">Lore <span style="font-weight:400;color:#888;">(spoilered on the page! Click to reveal — *italic*/**bold** work here too)</span></label>
+      <div class="cc-field-title-row">
+        <label for="char-editor-lore">Lore</label>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Lore help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Spoilered on the page! Click to reveal — *italic*/**bold** work here too. One paragraph per line, each becomes its own line on the character's page.</p></div>
+      </div>
       <textarea class="mod-textarea" id="char-editor-lore" placeholder="One paragraph per line. Each becomes its own line on the character's page."></textarea>
     </div>
 
@@ -332,6 +411,49 @@
   if (document.referrer && document.referrer.startsWith(window.location.origin)) {
     document.getElementById('char-editor-cancel').href = document.referrer;
   }
+
+  // ── Top bar Cancel/Create — same big always-visible pair as +Story's
+  // .cs-topbar, replacing the site nav so a stray nav click can't carry
+  // someone off this page. Just triggers the real (bottom) buttons so all
+  // the actual save/validation logic stays in one place. ─────────────────
+  let ccDirty = false;
+  document.querySelector('.char-editor-modal').addEventListener('input', () => { ccDirty = true; }, true);
+  document.querySelector('.char-editor-modal').addEventListener('change', () => { ccDirty = true; }, true);
+
+  function ccConfirmLeave() {
+    if (!ccDirty) return true;
+    return confirm('You will lose all unsaved progress. Are you sure you wish to exit?');
+  }
+  window.addEventListener('beforeunload', (e) => {
+    if (!ccDirty) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+
+  document.getElementById('cc-topbar-create').addEventListener('click', () => {
+    document.getElementById('char-editor-save').click();
+  });
+  document.getElementById('cc-topbar-cancel').addEventListener('click', () => {
+    if (ccConfirmLeave()) document.getElementById('char-editor-cancel').click();
+  });
+  document.getElementById('char-editor-cancel').addEventListener('click', (e) => {
+    if (!ccConfirmLeave()) e.preventDefault();
+  });
+
+  // Lightbulb hint popovers -- generic wiring for every .wiki-tags-tip-icon
+  // on this page (each one's popover is its own next sibling), instead of
+  // hardcoding a click handler per field.
+  document.querySelectorAll('.wiki-tags-tip-icon').forEach(icon => {
+    const pop = icon.nextElementSibling;
+    if (!pop || !pop.classList.contains('wiki-tags-tip-popover')) return;
+    icon.addEventListener('click', (e) => {
+      e.stopPropagation();
+      pop.hidden = !pop.hidden;
+    });
+    document.addEventListener('click', (e) => {
+      if (!pop.hidden && !pop.contains(e.target) && e.target !== icon) pop.hidden = true;
+    });
+  });
 
   function setCharNsfwToggleLabel(isNsfw) {
     const label = document.getElementById('char-editor-nsfw-toggle-label');
@@ -780,6 +902,7 @@
         }).catch(() => {});
       }
 
+      ccDirty = false;
       if (editingCharacterId) {
         window.location.href = window.fpUrl('/editor#characters');
         return;
@@ -830,6 +953,8 @@
       document.querySelector('.cc-eyebrow').textContent = 'Edit';
       document.querySelector('.cc-sub').textContent = `Editing ${character.name}. Changes save directly to this character.`;
       document.getElementById('char-editor-save').textContent = 'Save Changes';
+      document.getElementById('cc-topbar-create').textContent = 'Save Changes';
+      document.querySelector('.cc-topbar-title').textContent = `Edit ${character.name}`;
       document.getElementById('char-editor-delete-forever').style.display = '';
 
       document.getElementById('char-editor-name').value = character.name || '';
