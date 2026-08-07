@@ -6597,6 +6597,34 @@ app.get('/api/stories/search', requireAuth, async (req, res) => {
   });
 });
 
+// Same "You Own" / "Other" split, for a character's new "Link Gallery"
+// picker (mirrors /api/stories/mine and /api/stories/search exactly).
+app.get('/api/gallery/mine', requireAuth, async (req, res) => {
+  const q = `%${(req.query.q || '').trim()}%`;
+  const { rows } = await pool.query(
+    `SELECT id, title, image_url, preview_image_url FROM moderator_gallery WHERE owner_user_id = $1 AND title ILIKE $2 ORDER BY title LIMIT 30`,
+    [req.user.id, q]
+  );
+  res.json({ gallery: rows.map(r => ({ id: r.id, title: r.title, image: r.preview_image_url || r.image_url })) });
+});
+app.get('/api/gallery/search', requireAuth, async (req, res) => {
+  const q = `%${(req.query.q || '').trim()}%`;
+  const { rows } = await pool.query(
+    `SELECT mg.id, mg.title, mg.image_url, mg.preview_image_url, u.username AS owner_username, u.display_name AS owner_display_name
+     FROM moderator_gallery mg
+     JOIN users u ON u.id = mg.owner_user_id
+     WHERE mg.owner_user_id <> $1 AND mg.title ILIKE $2
+     ORDER BY mg.title LIMIT 30`,
+    [req.user.id, q]
+  );
+  res.json({
+    gallery: rows.map(r => ({
+      id: r.id, title: r.title, image: r.preview_image_url || r.image_url,
+      owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
+    })),
+  });
+});
+
 app.get('/api/moderator/characters/linkable', requireAuth, requireModerator, async (req, res) => {
   const q = `%${(req.query.q || '').trim()}%`;
   const { rows } = await pool.query(
@@ -6694,6 +6722,52 @@ app.delete('/api/characters/:id/link/:siteId', requireAuth, async (req, res) => 
   if (!character) return res.status(404).json({ error: 'Not found.' });
   await pool.query(
     'DELETE FROM character_story_links WHERE character_id = $1 AND site_id = $2', [character.id, req.params.siteId]
+  );
+  res.json({ message: 'Unlinked.' });
+});
+
+// A character's Linked Gallery — reuses gallery_character_links, the exact
+// same join table create-gallery.html's own "Link Characters" section
+// already reads/writes. Linking from either side is inherently
+// bidirectional this way: no separate sync step, both editors are just
+// reading/writing the same rows.
+app.get('/api/characters/:id/gallery', async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT mg.id, mg.title, mg.image_url, mg.preview_image_url, u.username AS owner_username, u.display_name AS owner_display_name
+     FROM gallery_character_links gcl
+     JOIN moderator_gallery mg ON mg.id = gcl.gallery_id
+     JOIN users u ON u.id = mg.owner_user_id
+     WHERE gcl.character_id = $1
+     ORDER BY mg.id`,
+    [req.params.id]
+  );
+  res.json({
+    gallery: rows.map(r => ({
+      id: r.id, title: r.title, image: r.preview_image_url || r.image_url,
+      owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
+    })),
+  });
+});
+// Additive-only, mirrors /api/characters/:id/link-many.
+app.post('/api/characters/:id/link-gallery-many', requireAuth, async (req, res) => {
+  const { rows: [item] } = await pool.query(
+    'SELECT id FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
+  );
+  if (!item) return res.status(404).json({ error: 'Not found.' });
+  const galleryIds = Array.isArray(req.body.gallery_ids) ? req.body.gallery_ids.filter(Number.isFinite) : [];
+  await Promise.all(galleryIds.map(galleryId => pool.query(
+    'INSERT INTO gallery_character_links (gallery_id, character_id) VALUES ($1, $2) ON CONFLICT (gallery_id, character_id) DO NOTHING',
+    [galleryId, item.id]
+  )));
+  res.json({ message: 'Linked.' });
+});
+app.delete('/api/characters/:id/link-gallery/:galleryId', requireAuth, async (req, res) => {
+  const { rows: [character] } = await pool.query(
+    'SELECT id FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
+  );
+  if (!character) return res.status(404).json({ error: 'Not found.' });
+  await pool.query(
+    'DELETE FROM gallery_character_links WHERE character_id = $1 AND gallery_id = $2', [character.id, req.params.galleryId]
   );
   res.json({ message: 'Unlinked.' });
 });
