@@ -12,6 +12,9 @@
   <style>
     body { background: #0d0d0d; }
     .profile-wrapper { padding-top: 6.5rem; }
+    .profile-card-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1rem; letter-spacing: 0.04em; text-transform: none; }
+    #change-email-panel { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; margin-top: -0.25rem; }
+    .profile-field input[readonly] { opacity: 0.55; cursor: default; }
   </style>
 </head>
 <body>
@@ -47,16 +50,32 @@
       </div>
       <div class="profile-field">
         <label for="prof-email">Email</label>
-        <input type="email" id="prof-email" placeholder="Email address" />
+        <input type="email" id="prof-email" placeholder="Email address" readonly />
+        <button class="profile-avatar-btn profile-avatar-btn--ghost" id="change-email-btn" type="button" style="align-self:flex-start;margin-top:0.5rem;">Change Email</button>
       </div>
-      <div class="profile-field" id="email-pw-field" hidden>
-        <label for="prof-email-pw">Current Password <small style="text-transform:none;letter-spacing:0;opacity:.6">(required to change email)</small></label>
-        <input type="password" id="prof-email-pw" placeholder="Enter current password" />
+      <div id="change-email-panel" hidden>
+        <div class="profile-field">
+          <label for="new-email">New Email</label>
+          <input type="email" id="new-email" placeholder="New email address" />
+        </div>
+        <div class="profile-field" style="margin-top:0.75rem;">
+          <label for="new-email-confirm">Confirm New Email</label>
+          <input type="email" id="new-email-confirm" placeholder="Confirm new email address" />
+        </div>
+        <div class="profile-field" style="margin-top:0.75rem;">
+          <label for="change-email-pw">Current Password</label>
+          <input type="password" id="change-email-pw" placeholder="Enter current password" />
+        </div>
+        <div id="change-email-alert" class="profile-alert" hidden></div>
+        <div style="display:flex;gap:.75rem;margin-top:.75rem;">
+          <button class="profile-save-btn" id="change-email-save-btn" type="button">Save</button>
+          <button class="profile-save-btn" id="change-email-back-btn" type="button" style="background:rgba(255,255,255,0.07);color:var(--mist);">Back</button>
+        </div>
       </div>
       <div class="profile-field profile-field--checkbox">
         <label class="profile-checkbox-label">
           <input type="checkbox" id="prof-newsletter" checked />
-          <span>Receive monthly emails about my newsletters, book updates, and giveaways?</span>
+          <span>Receive monthly newsletters about our community, this website, and giveaways?</span>
         </label>
       </div>
       <div class="profile-field profile-field--checkbox">
@@ -68,7 +87,7 @@
           <span class="nsfw-toggle-label" id="nsfw-toggle-label">NSFW</span>
         </div>
         <p class="nsfw-toggle-note">
-          On by default for every account — this site's spicy/mature content is shown to you. Flip this off to opt into SFW Mode, which blurs and locks all NSFW content until you turn it back on.
+          On by default. If you'd like to browse this site in safe mode, and turn off all mature/explicit clubs, stories, and posts, flick this on! (You can go between modes all you wish)
         </p>
       </div>
       <div id="profile-alert" class="profile-alert" hidden></div>
@@ -211,9 +230,53 @@
     }
   });
 
-  // Show password field when email changes
-  document.getElementById('prof-email').addEventListener('input', function () {
-    document.getElementById('email-pw-field').hidden = this.value.trim() === currentEmail;
+  // Change Email flow — separate mini-form (new email / confirm / current
+  // password) instead of editing the readonly email box directly. Mirrors
+  // the registration flow: saving doesn't change `email` right away, it
+  // sends a confirm link to the new address (see /api/auth/confirm-email)
+  // and the account keeps using the current email until that's clicked.
+  document.getElementById('change-email-btn').addEventListener('click', () => {
+    document.getElementById('change-email-panel').hidden = false;
+    document.getElementById('change-email-btn').hidden   = true;
+  });
+  document.getElementById('change-email-back-btn').addEventListener('click', () => {
+    document.getElementById('change-email-panel').hidden = true;
+    document.getElementById('change-email-btn').hidden   = false;
+    document.getElementById('new-email').value         = '';
+    document.getElementById('new-email-confirm').value = '';
+    document.getElementById('change-email-pw').value    = '';
+    document.getElementById('change-email-alert').hidden = true;
+  });
+  document.getElementById('change-email-save-btn').addEventListener('click', async () => {
+    const btn     = document.getElementById('change-email-save-btn');
+    const email   = document.getElementById('new-email').value.trim();
+    const confirm = document.getElementById('new-email-confirm').value.trim();
+    const pw      = document.getElementById('change-email-pw').value;
+
+    if (!email || !confirm) { showAlert('change-email-alert', 'Please fill in both email fields.', 'error'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showAlert('change-email-alert', 'Please enter a valid email address.', 'error'); return; }
+    if (email.toLowerCase() !== confirm.toLowerCase()) { showAlert('change-email-alert', 'Emails do not match.', 'error'); return; }
+    if (email.toLowerCase() === currentEmail.toLowerCase()) { showAlert('change-email-alert', 'That is already your current email.', 'error'); return; }
+    if (!pw) { showAlert('change-email-alert', 'Please enter your current password.', 'error'); return; }
+
+    btn.disabled = true;
+    try {
+      const res  = await fetch(`${API}/auth/profile`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ email, current_password: pw }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showAlert('change-email-alert', data.error, 'error'); return; }
+
+      document.getElementById('change-email-panel').hidden = true;
+      document.getElementById('change-email-btn').hidden   = false;
+      document.getElementById('new-email').value         = '';
+      document.getElementById('new-email-confirm').value = '';
+      document.getElementById('change-email-pw').value    = '';
+      showAlert('profile-alert', data.message, 'success', 9000);
+    } catch { showAlert('change-email-alert', 'Network error. Please try again.', 'error'); }
+    finally { btn.disabled = false; }
   });
 
   // Avatar upload — routed through the shared Cropper.js modal (see
@@ -289,8 +352,6 @@
   document.getElementById('profile-save-btn').addEventListener('click', async () => {
     const btn         = document.getElementById('profile-save-btn');
     const displayName = document.getElementById('prof-displayname').value.trim();
-    const email       = document.getElementById('prof-email').value.trim();
-    const emailPw     = document.getElementById('prof-email-pw').value;
 
     if (!displayName) { showAlert('profile-alert', 'Display name cannot be empty.', 'error'); return; }
 
@@ -298,7 +359,6 @@
       display_name:     displayName,
       email_newsletter: document.getElementById('prof-newsletter').checked,
     };
-    if (email !== currentEmail) { body.email = email; body.current_password = emailPw; }
 
     btn.disabled = true;
     try {
@@ -310,15 +370,8 @@
       const data = await res.json();
       if (!res.ok) { showAlert('profile-alert', data.error, 'error'); return; }
 
-      currentEmail = data.user?.email || currentEmail;
-      document.getElementById('email-pw-field').hidden = true;
-      document.getElementById('prof-email-pw').value  = '';
       updateStoredUser({ display_name: displayName });
-      if (data.emailPending) {
-        showAlert('profile-alert', data.message, 'success');
-      } else {
-        showAlert('profile-alert', 'Profile saved!', 'success');
-      }
+      showAlert('profile-alert', 'Profile saved!', 'success');
     } catch { showAlert('profile-alert', 'Network error. Please try again.', 'error'); }
     finally { btn.disabled = false; }
   });
@@ -388,12 +441,12 @@
     finally { btn.disabled = false; }
   });
 
-  function showAlert(id, message, type) {
+  function showAlert(id, message, type, duration) {
     const el = document.getElementById(id);
     el.textContent = message;
     el.className   = `profile-alert profile-alert--${type}`;
     el.hidden      = false;
-    setTimeout(() => { if (type === 'success') el.hidden = true; }, 4000);
+    setTimeout(() => { if (type === 'success') el.hidden = true; }, duration || 4000);
   }
 
   function updateStoredUser(patch) {

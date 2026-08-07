@@ -1994,7 +1994,7 @@ app.put('/api/auth/profile', requireAuth, async (req, res) => {
       if (updates.display_name) {
         await pool.query('UPDATE users SET display_name = $1 WHERE id = $2', [updates.display_name, user.id]);
       }
-      return res.json({ message: `Verification email sent to ${email}. Click the link to confirm your new address.`, emailPending: true });
+      return res.json({ message: `A confirm request has been sent to your new email: ${email}. DON'T FORGET TO CHECK SPAM! IT IS PROBABLY THERE!`, emailPending: true });
     }
 
     if (Object.keys(updates).length === 0)
@@ -2142,28 +2142,54 @@ app.put('/api/auth/avatar-position', requireAuth, async (req, res) => {
 });
 
 app.delete('/api/auth/account', requireAuth, async (req, res) => {
+  const { password } = req.body;
+  if (!password) return res.status(400).json({ error: 'Password is required.' });
+
+  const { rows: [user] } = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+
+  const valid = await bcrypt.compare(password, user.password_hash);
+  if (!valid) return res.status(401).json({ error: 'Incorrect password.' });
+
+  if (user.avatar) {
+    const filePath = path.join('/var/www/btw', user.avatar);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
+
+  // Most content (stories/clubs/characters/gallery/DMs/notifications/likes/
+  // follows/etc.) cascades automatically via ON DELETE CASCADE FKs to
+  // users(id) once the row below is deleted. A handful of legacy tables
+  // (comments, community_posts + their likes/comments, inbox_messages,
+  // password_resets) were never given a FK to users(id) at all, so they'd
+  // otherwise survive as orphaned rows instead of being wiped -- clean
+  // those explicitly first.
+  const client = await pool.connect();
   try {
-    const { password } = req.body;
-    if (!password) return res.status(400).json({ error: 'Password is required.' });
+    await client.query('BEGIN');
 
-    const { rows: [user] } = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
-    if (!user) return res.status(404).json({ error: 'User not found.' });
-
-    const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) return res.status(401).json({ error: 'Incorrect password.' });
-
-    if (user.avatar) {
-      const filePath = path.join('/var/www/btw', user.avatar);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    const { rows: ownPosts } = await client.query('SELECT id FROM community_posts WHERE user_id = $1', [user.id]);
+    const postIds = ownPosts.map(p => p.id);
+    if (postIds.length) {
+      await client.query('DELETE FROM community_likes WHERE post_id = ANY($1)', [postIds]);
+      await client.query('DELETE FROM community_comments WHERE post_id = ANY($1)', [postIds]);
     }
+    await client.query('DELETE FROM community_posts WHERE user_id = $1', [user.id]);
+    await client.query('DELETE FROM community_likes WHERE user_id = $1', [user.id]);
+    await client.query('DELETE FROM community_comments WHERE user_id = $1', [user.id]);
+    await client.query('DELETE FROM comments WHERE user_id = $1', [user.id]);
+    await client.query('DELETE FROM inbox_messages WHERE from_user_id = $1 OR to_user_id = $1', [user.id]);
+    await client.query('DELETE FROM password_resets WHERE user_id = $1', [user.id]);
 
-    await pool.query('DELETE FROM comments WHERE user_id = $1', [user.id]);
-    await pool.query('DELETE FROM users WHERE id = $1', [user.id]);
+    await client.query('DELETE FROM users WHERE id = $1', [user.id]);
 
+    await client.query('COMMIT');
     res.json({ message: 'Account deleted.' });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Delete account error:', err);
     res.status(500).json({ error: 'Something went wrong.' });
+  } finally {
+    client.release();
   }
 });
 
