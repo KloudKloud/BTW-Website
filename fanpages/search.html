@@ -132,12 +132,18 @@
     .fp-layout--no-side .fp-results-col { grid-column: 1; }
     /* Same bubbly-glow treatment as the homepage Spotlight titles
        (fp-spotlight-row .fp-shine-title in index.html). */
+    .fp-browse-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 1.75rem 0 0.2rem; }
     .fp-browse-heading {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 1.7rem; font-weight: 700; color: #cfe0f5;
-      margin: 1.75rem 0 0.2rem; display: flex; align-items: center; gap: 0.5rem;
+      margin: 0; display: flex; align-items: center; gap: 0.5rem;
       text-shadow: 0 2px 6px rgba(0,0,0,0.55), 0 0 6px rgba(127,168,217,0.4);
     }
     .fp-browse-heading .fp-title-deco { width: 24px; height: 24px; object-fit: contain; flex-shrink: 0; }
+    /* Browse's own Sort By -- only shown for the Stories feed (Posts browse
+       already sorts by "updated" with no dropdown of its own). Reuses the
+       same .fp-sort-select look as the filter panel's Sort by field. */
+    .fp-browse-sort-wrap { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
+    .fp-browse-sort-wrap label { font-size: 0.85rem; color: #bbb; font-weight: 600; }
 
     /* Justified photo-wall grid — ported from the Fanpage Hub's "Recent
        Submissions" box (fanpages/index.html: rs-grid/rs-row/rs-card),
@@ -804,7 +810,18 @@
   </aside>
 
   <div class="fp-results-col">
-    <h1 class="fp-browse-heading" id="fp-browse-heading" hidden></h1>
+    <div class="fp-browse-heading-row" id="fp-browse-heading-row" hidden>
+      <h1 class="fp-browse-heading" id="fp-browse-heading"></h1>
+      <div class="fp-browse-sort-wrap" id="fp-browse-sort-wrap" hidden>
+        <label for="fp-browse-sort">Sort By</label>
+        <select id="fp-browse-sort" class="fp-sort-select">
+          <option value="updated">Date Updated</option>
+          <option value="best_match">Best Match</option>
+          <option value="kudos">Likes</option>
+          <option value="hits">Reads</option>
+        </select>
+      </div>
+    </div>
     <p class="fp-search-sub" id="fp-search-sub"></p>
     <div class="fp-pagination" id="fp-pagination-top" hidden></div>
     <div class="fp-results-list" id="fp-search-results"><p class="fp-search-empty">Loading…</p></div>
@@ -1676,7 +1693,12 @@ async function runSearch() {
     const data = await res.json();
     const works = data.works || [];
     if (isBrowseMode) {
-      subEl.innerHTML = `These are some of the latest stories updated in our community. To find more stories, <a href="${window.fpUrl('/fandoms')}">choose a fandom</a> or enter a specific tag into the search bar above.`;
+      // Wording tracks whatever the Sort By dropdown is actually set to,
+      // not just a generic "latest" blurb -- Browse's Stories feed can now
+      // be sorted the same 4 ways the filtered search can.
+      const BROWSE_SORT_PHRASE = { updated: 'latest updated', best_match: 'recommended', kudos: 'most liked', hits: 'most read' };
+      const phrase = BROWSE_SORT_PHRASE[data.sort] || 'latest updated';
+      subEl.innerHTML = `These are some of the ${phrase} stories in our community. To find more stories, <a href="${window.fpUrl('/fandoms')}">choose a fandom</a> or enter a specific tag into the search bar above and perform a filtered search.`;
     } else {
       subEl.innerHTML = `<strong>${data.total || 0}</strong> work${data.total === 1 ? '' : 's'} found — sorted by ${escapeHtml(SORT_LABELS[data.sort] || 'Best Match')}. ${pageLabelHtml('Stories')}`;
     }
@@ -1851,10 +1873,28 @@ if (isBrowseMode) {
   const headingEl = document.getElementById('fp-browse-heading');
   const headingText = currentView === 'submissions' ? 'Recent Submissions' : 'Recent Stories';
   headingEl.innerHTML = `${headingText} <img class="fp-title-deco" src="/images/home/decoration-2.png" alt="" />`;
-  headingEl.hidden = false;
+  document.getElementById('fp-browse-heading-row').hidden = false;
   const subEl = document.getElementById('fp-search-sub');
   subEl.style.marginTop = '0';
   subEl.style.marginBottom = '0.2rem';
+
+  // Browse's own Sort By -- Stories feed only (Posts browse stays a plain
+  // newest-first feed, no dropdown). Defaults to Date Updated (the
+  // "Recent Stories" view this already was), same 4 options the normal
+  // Story search filter panel's Sort by field offers.
+  if (isBrowseStories) {
+    const sortWrap = document.getElementById('fp-browse-sort-wrap');
+    sortWrap.hidden = false;
+    const sortSelect = document.getElementById('fp-browse-sort');
+    const usp = new URLSearchParams(window.location.search);
+    sortSelect.value = usp.get('sort') || 'updated';
+    sortSelect.addEventListener('change', () => {
+      const next = new URLSearchParams(window.location.search);
+      next.set('sort', sortSelect.value);
+      next.delete('page');
+      window.location.search = next.toString();
+    });
+  }
 }
 if (currentView === 'submissions' || currentView === 'profiles') {
   fpLayoutEl.classList.add(currentView === 'submissions' ? 'fp-layout--submissions' : 'fp-layout--profiles');
