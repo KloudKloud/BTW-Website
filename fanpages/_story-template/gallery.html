@@ -21,6 +21,16 @@
     #page-bg-img {
       position: absolute; top: 0; left: 0; right: 0; bottom: auto;
       width: 100%; height: 100vh; object-fit: cover;
+      /* The shared .mod-page-bg-img rule (fanpages.css) sets
+         filter: blur(9px) brightness(0.95) -- overriding position/width/
+         height above via this ID selector does NOT touch that filter
+         property, since CSS cascades per-property, not per-rule. The "no
+         blur" comment above describes intent that was never actually
+         backed by a real override -- the wallpaper never actually stopped
+         being blurred, which is exactly the hazy rectangle behind the tab
+         row it was trying to fix. Re-declaring filter here (brightness
+         only, no blur) is the real fix. */
+      filter: brightness(0.95);
     }
     #page-bg-overlay { position: fixed; inset: 0; background: rgba(8,6,10,0.68); }
     /* .wiki-page-title-block's margin-top:4.5rem (fanpages.css) collapses
@@ -122,7 +132,8 @@
         </div>
 
         <aside class="art-view-stats-box" id="gallery-detail-stats">
-          <p class="art-view-stats-title">Stats</p>
+          <div class="art-view-quickstats" id="gallery-detail-quickstats"></div>
+          <p class="art-view-stats-title">Info</p>
           <div class="art-view-stats-rows" id="gallery-detail-stats-rows"></div>
           <hr class="art-view-stats-hr" />
           <p class="art-view-stats-title">Tags</p>
@@ -261,14 +272,17 @@ function ratingLabelFor(cat) {
 // which stays inside the description box). Tag pills reuse the Submissions
 // search machinery so clicking one behaves exactly like a story tag pill.
 function renderStatsBox(item) {
+  const quickstats = document.getElementById('gallery-detail-quickstats');
+  quickstats.innerHTML = `
+    <div class="art-view-quickstat"><span class="art-view-quickstat-val">${item.view_count || 0}</span><span class="art-view-quickstat-label">👁 Views</span></div>
+    <div class="art-view-quickstat"><span class="art-view-quickstat-val">${item.like_count || 0}</span><span class="art-view-quickstat-label">❤️ Likes</span></div>
+    <div class="art-view-quickstat"><span class="art-view-quickstat-val">${item.comment_count || 0}</span><span class="art-view-quickstat-label">💬 Comments</span></div>
+  `;
   const rows = document.getElementById('gallery-detail-stats-rows');
   const uploadedDate = item.created_at
     ? new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : '';
   rows.innerHTML = `
-    <div class="art-view-stat-row"><span>👁 Views</span><span>${item.view_count || 0}</span></div>
-    <div class="art-view-stat-row"><span>❤️ Likes</span><span>${item.like_count || 0}</span></div>
-    <div class="art-view-stat-row"><span>💬 Comments</span><span>${item.comment_count || 0}</span></div>
     <div class="art-view-stat-row"><span>Rating</span><span>${ratingLabelFor(item.category)}</span></div>
     <div class="art-view-stat-row"><span>Uploaded by</span><span><a href="${window.fpUrl(`/${encodeURIComponent(STORY_AUTHOR_USERNAME)}`)}">${escapeHtml(STORY_AUTHOR_DISPLAY)}</a></span></div>
     ${uploadedDate ? `<div class="art-view-stat-row"><span>Date Uploaded</span><span>${uploadedDate}</span></div>` : ''}
@@ -511,7 +525,7 @@ async function loadGalleryTagsSection(item) {
     const stories = data.stories || [];
 
     const charsBlock = document.createElement('div');
-    charsBlock.innerHTML = '<p class="art-view-tags-label">Characters Featured:</p>';
+    charsBlock.innerHTML = '<p class="art-view-tags-label">Characters Featured: <img src="/images/home/decoration-2.png" alt="" /></p>';
     if (!chars.length) {
       charsBlock.innerHTML += '<p class="art-view-tags-empty">No tagged characters</p>';
     } else {
@@ -524,7 +538,7 @@ async function loadGalleryTagsSection(item) {
 
     if (stories.length) {
       const storiesBlock = document.createElement('div');
-      storiesBlock.innerHTML = '<p class="art-view-tags-label">Relevant Stories</p>';
+      storiesBlock.innerHTML = '<p class="art-view-tags-label">Relevant Stories <img src="/images/home/decoration-2.png" alt="" /></p>';
       const row = document.createElement('div');
       row.className = 'art-view-tags-row';
       stories.forEach(s => row.appendChild(galleryStoryTagCard(s)));

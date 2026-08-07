@@ -126,7 +126,8 @@
       </div>
 
       <aside class="art-view-stats-box" id="fp-gallery-detail-stats">
-        <p class="art-view-stats-title">Stats</p>
+        <div class="art-view-quickstats" id="fp-gallery-detail-quickstats"></div>
+        <p class="art-view-stats-title">Info</p>
         <div class="art-view-stats-rows" id="fp-gallery-detail-stats-rows"></div>
         <hr class="art-view-stats-hr" />
         <p class="art-view-stats-title">Tags</p>
@@ -192,14 +193,17 @@ const GALLERY_ID = new URLSearchParams(window.location.search).get('id');
 let currentItem = null;
 
 function renderStatsBox(item) {
+  const quickstats = document.getElementById('fp-gallery-detail-quickstats');
+  quickstats.innerHTML = `
+    <div class="art-view-quickstat"><span class="art-view-quickstat-val">${item.view_count || 0}</span><span class="art-view-quickstat-label">👁 Views</span></div>
+    <div class="art-view-quickstat"><span class="art-view-quickstat-val">${item.like_count || 0}</span><span class="art-view-quickstat-label">❤️ Likes</span></div>
+    <div class="art-view-quickstat"><span class="art-view-quickstat-val">${item.comment_count || 0}</span><span class="art-view-quickstat-label">💬 Comments</span></div>
+  `;
   const rows = document.getElementById('fp-gallery-detail-stats-rows');
   const uploadedDate = item.created_at
     ? new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : '';
   rows.innerHTML = `
-    <div class="art-view-stat-row"><span>👁 Views</span><span>${item.view_count || 0}</span></div>
-    <div class="art-view-stat-row"><span>❤️ Likes</span><span>${item.like_count || 0}</span></div>
-    <div class="art-view-stat-row"><span>💬 Comments</span><span>${item.comment_count || 0}</span></div>
     <div class="art-view-stat-row"><span>Rating</span><span>${ratingLabelFor(item.category)}</span></div>
     <div class="art-view-stat-row"><span>Uploaded by</span><span><a href="${window.fpUrl(`/${encodeURIComponent(item.owner_username)}`)}">${escapeHtml(item.owner_display_name || item.owner_username)}</a></span></div>
     ${uploadedDate ? `<div class="art-view-stat-row"><span>Date Uploaded</span><span>${uploadedDate}</span></div>` : ''}
@@ -288,7 +292,7 @@ async function loadTagsSection(item) {
     const stories = data.stories || [];
 
     const charsBlock = document.createElement('div');
-    charsBlock.innerHTML = '<p class="art-view-tags-label">Characters Featured:</p>';
+    charsBlock.innerHTML = '<p class="art-view-tags-label">Characters Featured: <img src="/images/home/decoration-2.png" alt="" /></p>';
     if (!chars.length) {
       charsBlock.innerHTML += '<p class="art-view-tags-empty">No tagged characters</p>';
     } else {
@@ -301,7 +305,7 @@ async function loadTagsSection(item) {
 
     if (stories.length) {
       const storiesBlock = document.createElement('div');
-      storiesBlock.innerHTML = '<p class="art-view-tags-label">Relevant Stories</p>';
+      storiesBlock.innerHTML = '<p class="art-view-tags-label">Relevant Stories <img src="/images/home/decoration-2.png" alt="" /></p>';
       const row = document.createElement('div');
       row.className = 'art-view-tags-row';
       stories.forEach(s => row.appendChild(galleryStoryTagCard(s)));
