@@ -61,14 +61,30 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   localStorage.removeItem('btw_show_welcome');
   const welcomeToken = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const welcomeAuthHeaders = welcomeToken ? { Authorization: `Bearer ${welcomeToken}` } : {};
-  fetch('/api/fanpage-profile/btwteam', { headers: welcomeAuthHeaders }).then(r => r.ok ? r.json() : null).then(data => {
+  Promise.all([
+    fetch('/api/fanpage-profile/btwteam', { headers: welcomeAuthHeaders }).then(r => r.ok ? r.json() : null),
+    fetch('/api/clubs/btwclub', { headers: welcomeAuthHeaders }).then(r => r.ok ? r.json() : null),
+  ]).then(([data, clubData]) => {
     const team = data && data.author;
     let following = !!(data && data.is_following);
+    const club = clubData && clubData.club;
+    let joined = !!(club && club.viewer_role);
     const wrap = document.createElement('div');
     wrap.innerHTML = `
       <div class="fpnav-modal-overlay" id="fp-welcome-overlay">
         <div class="fpnav-modal-card fp-welcome-card">
           <p class="fp-welcome-title">Welcome to Between Two Worlds!</p>
+          <p class="fpnav-modal-text fp-welcome-clubs-intro">Connect with your fellow community members about artwork, writing, games, and more by joining some clubs. We've featured you in our club to get started!</p>
+          <div class="fp-welcome-club-row">
+            <img class="fp-welcome-club-icon" src="${(club && club.icon_url) || '/images/gallery/kloudselfie_7.png'}" alt="" />
+            <div class="fp-welcome-club-info">
+              <span class="fp-welcome-club-name">${(club && club.name) || 'BTW Clubhouse'}</span>
+              <span class="fp-welcome-club-stats">${(club && club.member_count) || 0} member${(club && club.member_count) === 1 ? '' : 's'} &middot; ${(club && club.post_count) || 0} post${(club && club.post_count) === 1 ? '' : 's'}</span>
+            </div>
+            <button type="button" class="fp-welcome-club-join-btn${joined ? ' joined' : ''}" id="fp-welcome-club-join-btn">
+              ${joined ? '&#10003; Joined' : 'Join'}
+            </button>
+          </div>
           <p class="fpnav-modal-text">You can follow other users, and customize your profile page to sparkle big! &#10024; We've followed ourselves to get you started, and don't be afraid to make new friends!</p>
           <div class="fp-welcome-team-row">
             <img class="fp-welcome-team-avatar" src="${(team && team.avatar) || '/images/gallery/pixiegarden_5.png'}" alt="" />
@@ -102,6 +118,23 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
           }
         } catch {}
         followBtn.disabled = false;
+      });
+    }
+    const clubJoinBtn = document.getElementById('fp-welcome-club-join-btn');
+    if (club) {
+      clubJoinBtn.addEventListener('click', async () => {
+        clubJoinBtn.disabled = true;
+        try {
+          const res = await fetch(`/api/clubs/${club.slug}/${joined ? 'leave' : 'join'}`, {
+            method: joined ? 'DELETE' : 'POST', headers: welcomeAuthHeaders,
+          });
+          if (res.ok) {
+            joined = !joined;
+            clubJoinBtn.classList.toggle('joined', joined);
+            clubJoinBtn.innerHTML = joined ? '&#10003; Joined' : 'Join';
+          }
+        } catch {}
+        clubJoinBtn.disabled = false;
       });
     }
     document.getElementById('fp-welcome-next').addEventListener('click', () => {
