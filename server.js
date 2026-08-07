@@ -836,6 +836,40 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]';
   `).catch(e => console.error('dm_messages attachments migration:', e.message));
 
+  // Blocking, per-viewer message hiding, and a deletion log for DMs.
+  // Deleting your own message removes the dm_messages row outright (it's
+  // gone for both sides) -- dm_message_deletions exists purely so a thread
+  // that's open on the OTHER person's screen can learn a message vanished
+  // the next time it polls (see deleted_after on GET /api/dm/:id/messages),
+  // since the row itself no longer exists to diff against.
+  // Hiding someone else's message is the opposite: the row stays, but is
+  // filtered out of that one viewer's own queries via dm_message_hides.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_blocks (
+      id         SERIAL      PRIMARY KEY,
+      blocker_id INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      blocked_id INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(blocker_id, blocked_id),
+      CHECK (blocker_id <> blocked_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS dm_message_hides (
+      user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      message_id INTEGER     NOT NULL REFERENCES dm_messages(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id, message_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS dm_message_deletions (
+      id         SERIAL      PRIMARY KEY,
+      thread_id  INTEGER     NOT NULL REFERENCES dm_threads(id) ON DELETE CASCADE,
+      message_id INTEGER     NOT NULL,
+      deleted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_dm_message_deletions_thread ON dm_message_deletions(thread_id, id);
+  `).catch(e => console.error('user_blocks/dm_message_hides/dm_message_deletions migration:', e.message));
+
   // Newspaper — a lightweight journal/blog an account owner can post to
   // (story updates, shout-outs, hellos to followers). Attachments reuse the
   // same {url,name} shape as DM attachments, since it supports the same
@@ -4801,6 +4835,47 @@ async function findDmThread(id, userId) {
   return thread || null;
 }
 
+async function isBlockedEitherWay(userIdA, userIdB) {
+  const { rows: [row] } = await pool.query(
+    `SELECT 1 FROM user_blocks
+     WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1)
+     LIMIT 1`,
+    [userIdA, userIdB]
+  );
+  return !!row;
+}
+
+// ── User blocking ────────────────────────────────────────────────────────────
+app.get('/api/blocks', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT u.username, u.display_name, u.avatar, b.created_at AS blocked_at
+     FROM user_blocks b JOIN users u ON u.id = b.blocked_id
+     WHERE b.blocker_id = $1 ORDER BY b.created_at DESC`,
+    [req.user.id]
+  );
+  res.json({
+    blocked: rows.map(r => ({
+      username: r.username, display_name: r.display_name || r.username,
+      avatar: r.avatar || null, blocked_at: r.blocked_at,
+    })),
+  });
+});
+
+app.post('/api/blocks/:username', requireAuth, async (req, res) => {
+  const { rows: [target] } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]);
+  if (!target) return res.status(404).json({ error: 'Not found.' });
+  if (target.id === req.user.id) return res.status(400).json({ error: "You can't block yourself." });
+  await pool.query('INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, target.id]);
+  res.json({ message: 'Blocked.' });
+});
+
+app.delete('/api/blocks/:username', requireAuth, async (req, res) => {
+  const { rows: [target] } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]);
+  if (!target) return res.status(404).json({ error: 'Not found.' });
+  await pool.query('DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2', [req.user.id, target.id]);
+  res.json({ message: 'Unblocked.' });
+});
+
 // Chats = accepted conversations, plus my own pending sent requests (so I can
 // see them awaiting the other person's response instead of them vanishing).
 app.get('/api/dm/chats', requireAuth, async (req, res) => {
@@ -4827,7 +4902,7 @@ app.get('/api/dm/chats', requireAuth, async (req, res) => {
     id: r.id,
     status: r.status,
     is_priority: r.is_priority,
-    other_user: { username: r.other_username, display_name: r.other_display_name || r.other_username, avatar: r.other_avatar || null },
+    other_user: { id: r.other_id, username: r.other_username, display_name: r.other_display_name || r.other_username, avatar: r.other_avatar || null },
     last_message: r.last_at
       ? { body: r.last_body || (r.last_attachments && r.last_attachments.length ? '📎 Attachment' : ''), created_at: r.last_at, is_mine: r.last_sender_id === req.user.id }
       : null,
@@ -4848,7 +4923,7 @@ app.get('/api/dm/requests', requireAuth, async (req, res) => {
   const meCol    = sent ? 't.user_a_id' : 't.user_b_id';
   const { rows } = await pool.query(
     `SELECT t.id, t.created_at,
-            u.username AS other_username, u.display_name AS other_display_name, u.avatar AS other_avatar,
+            u.id AS other_id, u.username AS other_username, u.display_name AS other_display_name, u.avatar AS other_avatar,
             m.body AS first_body
      FROM dm_threads t
      JOIN users u ON u.id = ${otherCol}
@@ -4863,7 +4938,7 @@ app.get('/api/dm/requests', requireAuth, async (req, res) => {
     requests: rows.map(r => ({
       id: r.id,
       created_at: r.created_at,
-      other_user: { username: r.other_username, display_name: r.other_display_name || r.other_username, avatar: r.other_avatar || null },
+      other_user: { id: r.other_id, username: r.other_username, display_name: r.other_display_name || r.other_username, avatar: r.other_avatar || null },
       first_message: r.first_body || '',
     })),
   });
@@ -4895,6 +4970,7 @@ app.post('/api/dm/start', requireAuth, uploadInbox.array('attachments', 4), asyn
   const { rows: [target] } = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
   if (!target) return res.status(404).json({ error: 'User not found.' });
   if (target.id === req.user.id) return res.status(400).json({ error: "You can't chat with yourself." });
+  if (await isBlockedEitherWay(req.user.id, target.id)) return res.status(403).json({ error: 'You can\'t message this user.' });
 
   const { rows: [isFollowing] } = await pool.query(
     'SELECT 1 FROM user_follows WHERE follower_id = $1 AND followed_id = $2', [req.user.id, target.id]
@@ -4969,36 +5045,98 @@ app.get('/api/dm/:id/messages', requireAuth, async (req, res) => {
   // hash on refresh) without the caller already knowing who's on the other end.
   const otherId = thread.user_a_id === req.user.id ? thread.user_b_id : thread.user_a_id;
   const { rows: [otherUser] } = await pool.query(
-    'SELECT username, display_name, avatar FROM users WHERE id = $1', [otherId]
+    'SELECT id, username, display_name, avatar FROM users WHERE id = $1', [otherId]
   );
 
   // `after` turns this into an incremental poll for the open thread view
-  // (see dmPollActiveThread in notifications.html) -- only rows newer than
+  // (see dmPollThread in notifications.html) -- only rows newer than
   // the last one already rendered, so a live update doesn't re-fetch/
-  // re-render the whole conversation every few seconds.
+  // re-render the whole conversation every few seconds. Hidden messages
+  // (this viewer's own "Hide Message" picks) are filtered out of both the
+  // initial load and every poll.
   const after = parseInt(req.query.after, 10);
+  const hasAfter = Number.isFinite(after);
   const { rows } = await pool.query(
-    Number.isFinite(after)
-      ? 'SELECT id, sender_id, body, attachments, created_at FROM dm_messages WHERE thread_id = $1 AND id > $2 ORDER BY created_at ASC'
-      : 'SELECT id, sender_id, body, attachments, created_at FROM dm_messages WHERE thread_id = $1 ORDER BY created_at ASC',
-    Number.isFinite(after) ? [thread.id, after] : [thread.id]
+    `SELECT dm.id, dm.sender_id, dm.body, dm.attachments, dm.created_at
+     FROM dm_messages dm
+     WHERE dm.thread_id = $1 ${hasAfter ? 'AND dm.id > $2' : ''}
+       AND NOT EXISTS (SELECT 1 FROM dm_message_hides h WHERE h.message_id = dm.id AND h.user_id = $${hasAfter ? 3 : 2})
+     ORDER BY dm.created_at ASC`,
+    hasAfter ? [thread.id, after, req.user.id] : [thread.id, req.user.id]
   );
   await pool.query(
     'UPDATE dm_messages SET read_at = NOW() WHERE thread_id = $1 AND sender_id <> $2 AND read_at IS NULL',
     [thread.id, req.user.id]
   );
+
+  // `deleted_after` (only meaningful alongside `after`, on a poll) reports
+  // which messages vanished since the last check -- the deleted row itself
+  // is gone, so this log is the only way the OTHER person's open thread can
+  // learn to remove a bubble it already rendered.
+  const deletedAfter = parseInt(req.query.deleted_after, 10);
+  let deletions = [];
+  if (Number.isFinite(deletedAfter)) {
+    const { rows: delRows } = await pool.query(
+      'SELECT id, message_id FROM dm_message_deletions WHERE thread_id = $1 AND id > $2 ORDER BY id ASC',
+      [thread.id, deletedAfter]
+    );
+    deletions = delRows;
+  }
+
   res.json({
     thread: {
       id: thread.id, status: thread.status, is_priority: thread.is_priority,
       other_user: otherUser
-        ? { username: otherUser.username, display_name: otherUser.display_name || otherUser.username, avatar: otherUser.avatar || null }
+        ? { id: otherUser.id, username: otherUser.username, display_name: otherUser.display_name || otherUser.username, avatar: otherUser.avatar || null }
         : null,
     },
     messages: rows.map(m => ({
       id: m.id, body: m.body, attachments: m.attachments || [],
       created_at: m.created_at, is_mine: m.sender_id === req.user.id,
     })),
+    deletions,
   });
+});
+
+app.delete('/api/dm/:id/messages/:messageId', requireAuth, async (req, res) => {
+  const thread = await findDmThread(req.params.id, req.user.id);
+  if (!thread) return res.status(404).json({ error: 'Not found.' });
+  const { rows: [msg] } = await pool.query(
+    'SELECT id FROM dm_messages WHERE id = $1 AND thread_id = $2 AND sender_id = $3',
+    [req.params.messageId, thread.id, req.user.id]
+  );
+  if (!msg) return res.status(404).json({ error: 'Message not found.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('INSERT INTO dm_message_deletions (thread_id, message_id) VALUES ($1, $2)', [thread.id, msg.id]);
+    await client.query('DELETE FROM dm_messages WHERE id = $1', [msg.id]);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('DM message delete error:', err);
+    return res.status(500).json({ error: 'Something went wrong.' });
+  } finally {
+    client.release();
+  }
+  res.json({ message: 'Deleted.' });
+});
+
+// Hides a message from this viewer's own conversation only -- the row
+// stays intact for the sender and anyone else who can see the thread.
+app.post('/api/dm/:id/messages/:messageId/hide', requireAuth, async (req, res) => {
+  const thread = await findDmThread(req.params.id, req.user.id);
+  if (!thread) return res.status(404).json({ error: 'Not found.' });
+  const { rows: [msg] } = await pool.query(
+    'SELECT id FROM dm_messages WHERE id = $1 AND thread_id = $2', [req.params.messageId, thread.id]
+  );
+  if (!msg) return res.status(404).json({ error: 'Message not found.' });
+  await pool.query(
+    'INSERT INTO dm_message_hides (user_id, message_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [req.user.id, msg.id]
+  );
+  res.json({ message: 'Hidden.' });
 });
 
 // ── DM typing indicator ────────────────────────────────────────────────────
@@ -5028,6 +5166,8 @@ app.get('/api/dm/:id/typing', requireAuth, async (req, res) => {
 app.post('/api/dm/:id/messages', requireAuth, uploadInbox.array('attachments', 4), async (req, res) => {
   const thread = await findDmThread(req.params.id, req.user.id);
   if (!thread) return res.status(404).json({ error: 'Not found.' });
+  const otherUserId = thread.user_a_id === req.user.id ? thread.user_b_id : thread.user_a_id;
+  if (await isBlockedEitherWay(req.user.id, otherUserId)) return res.status(403).json({ error: 'You can\'t message this user.' });
   const body = String(req.body.body || '').trim().slice(0, 4000);
   const files = req.files || [];
   const attachments = files.map(f => ({ url: '/images/inbox/' + f.filename, name: f.originalname }));

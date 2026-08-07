@@ -309,6 +309,25 @@
       cursor: pointer; font-family: inherit;
     }
     .dm-thread-dismiss-btn:hover { background: rgba(217,90,90,0.3); }
+    .dm-thread-menu-wrap { position: relative; margin-left: auto; flex-shrink: 0; }
+    .dm-thread-menu-btn {
+      width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); color: #ccc;
+      font-size: 0.75rem; letter-spacing: 0.04em; cursor: pointer; font-family: inherit; padding: 0;
+    }
+    .dm-thread-menu-btn:hover { border-color: #7fa8d9; color: #7fa8d9; }
+    .dm-thread-menu-dropdown {
+      position: absolute; top: calc(100% + 8px); right: 0; z-index: 20; min-width: 160px;
+      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.5); overflow: hidden; padding: 0.35rem;
+    }
+    .dm-thread-menu-dropdown button {
+      display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+      color: #e0e0e0; font-family: inherit; font-size: 0.88rem; padding: 0.6rem 0.75rem; border-radius: 8px;
+    }
+    .dm-thread-menu-dropdown button:hover { background: rgba(255,255,255,0.08); }
+    .dm-thread-menu-dropdown button.dm-menu-danger { color: #e8849e; }
+    .dm-thread-menu-dropdown button.dm-menu-danger:hover { background: rgba(194,84,122,0.12); }
     .dm-thread-messages {
       flex: 1; overflow-y: auto; overflow-x: hidden; padding: 1rem 1.1rem;
       display: flex; flex-direction: column; gap: 0.55rem; min-height: 300px;
@@ -354,8 +373,15 @@
       letter-spacing: 0.02em; margin: 0.65rem 0 0.15rem; padding: 0.3rem 0.9rem;
       background: rgba(255,255,255,0.06); border-radius: 20px;
     }
+    /* Each message is a [menu-button, bubble] row (order swaps by side) so
+       the "•••" sits beside the bubble rather than needing to be absolutely
+       positioned over it -- the row itself carries the mine/theirs side
+       alignment that used to live directly on .dm-bubble. */
+    .dm-bubble-row { display: flex; align-items: center; gap: 0.35rem; max-width: 78%; }
+    .dm-bubble-row--mine { align-self: flex-end; }
+    .dm-bubble-row--theirs { align-self: flex-start; }
     .dm-bubble {
-      max-width: 68%; min-width: 0; padding: 0.6rem 0.9rem; border-radius: 14px;
+      min-width: 0; padding: 0.6rem 0.9rem; border-radius: 14px;
       font-size: 0.88rem; line-height: 1.45; box-sizing: border-box;
     }
     .dm-bubble-time {
@@ -363,16 +389,35 @@
     }
     .dm-bubble--mine .dm-bubble-time { color: #3d2e08; }
     .dm-bubble--theirs .dm-bubble-time { color: rgba(255,255,255,0.45); }
-    .dm-bubble-report-btn {
-      display: block; margin-left: auto; margin-top: 0.2rem; background: none; border: none; cursor: pointer;
-      font-size: 0.68rem; font-weight: 600; text-decoration: underline; padding: 0; opacity: 0.55;
-    }
-    .dm-bubble-report-btn:hover { opacity: 1; }
-    .dm-bubble--mine .dm-bubble-report-btn { color: #3d2e08; }
-    .dm-bubble--theirs .dm-bubble-report-btn { color: rgba(255,255,255,0.65); }
     .dm-bubble p { margin: 0; white-space: pre-wrap; }
-    .dm-bubble--mine { align-self: flex-end; background: #f0c060; color: #0d0d0d; border-bottom-right-radius: 4px; }
-    .dm-bubble--theirs { align-self: flex-start; background: rgba(255,255,255,0.07); border-bottom-left-radius: 4px; }
+    .dm-bubble--mine { background: #f0c060; color: #0d0d0d; border-bottom-right-radius: 4px; }
+    .dm-bubble--theirs { background: rgba(255,255,255,0.07); border-bottom-left-radius: 4px; }
+
+    /* "•••" hover menu — only visible while hovering the row it belongs to. */
+    .dm-bubble-menu-wrap { position: relative; flex-shrink: 0; opacity: 0; transition: opacity 0.15s; }
+    .dm-bubble-row:hover .dm-bubble-menu-wrap,
+    .dm-bubble-menu-wrap.dm-bubble-menu-open { opacity: 1; }
+    .dm-bubble-menu-btn {
+      width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: #ccc;
+      font-size: 0.7rem; letter-spacing: 0.04em; cursor: pointer; font-family: inherit; padding: 0;
+    }
+    .dm-bubble-menu-btn:hover { border-color: #7fa8d9; color: #7fa8d9; background: rgba(127,168,217,0.12); }
+    .dm-bubble-menu-dropdown {
+      position: absolute; top: calc(100% + 6px); z-index: 20; min-width: 150px;
+      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.5); overflow: hidden; padding: 0.35rem;
+    }
+    .dm-bubble-row--mine .dm-bubble-menu-dropdown { right: 0; }
+    .dm-bubble-row--theirs .dm-bubble-menu-dropdown { left: 0; }
+    .dm-bubble-menu-dropdown button {
+      display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+      color: #e0e0e0; font-family: inherit; font-size: 0.85rem; padding: 0.55rem 0.7rem; border-radius: 8px;
+      white-space: nowrap;
+    }
+    .dm-bubble-menu-dropdown button:hover { background: rgba(255,255,255,0.08); }
+    .dm-bubble-menu-dropdown button.dm-menu-danger { color: #e8849e; }
+    .dm-bubble-menu-dropdown button.dm-menu-danger:hover { background: rgba(194,84,122,0.12); }
     .dm-bubble-attach-grid { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
     .dm-bubble-attach-img {
       max-height: 260px; max-width: 280px; width: auto; height: auto;
@@ -590,6 +635,13 @@
                   <span class="dm-thread-title" id="dm-thread-title"></span>
                 </a>
                 <button class="dm-thread-dismiss-btn" id="dm-thread-dismiss-btn" type="button" title="Dismiss" hidden>🗑️</button>
+                <div class="dm-thread-menu-wrap" id="dm-thread-menu-wrap">
+                  <button class="dm-thread-menu-btn" id="dm-thread-menu-btn" type="button" aria-label="More actions">&#8226;&#8226;&#8226;</button>
+                  <div class="dm-thread-menu-dropdown" id="dm-thread-menu-dropdown" hidden>
+                    <button type="button" id="dm-thread-menu-report">Report User</button>
+                    <button type="button" id="dm-thread-menu-block" class="dm-menu-danger">Block User</button>
+                  </div>
+                </div>
               </div>
               <div class="dm-thread-messages" id="dm-thread-messages"></div>
               <p class="dm-typing-indicator" id="dm-typing-indicator" hidden>
@@ -662,6 +714,7 @@
   // the admin-only /inbox note system. Starting a chat requires following
   // the other person first; it stays a pending "request" until they accept.
   let dmActiveThreadId = null;
+  let dmActiveOtherUser = null; // { id, username, display_name, avatar } of whoever's on the other end of the open thread
 
   const dmTabChats = document.getElementById('dm-tab-chats');
   const dmTabRequests = document.getElementById('dm-tab-requests');
@@ -912,6 +965,7 @@
   // no longer the visible one (dmShowPanel handles that centrally).
   let dmPollTimer = null;
   let dmLastMessageId = 0;
+  let dmLastDeletionId = 0;
   let dmOtherDisplayName = '';
 
   function dmStopThreadPolling() {
@@ -928,7 +982,7 @@
     if (dmActiveThreadId !== threadId) return;
     try {
       const [msgRes, typingRes] = await Promise.all([
-        fetch(`/api/dm/${threadId}/messages?after=${dmLastMessageId}`, { headers: authHeaders() }),
+        fetch(`/api/dm/${threadId}/messages?after=${dmLastMessageId}&deleted_after=${dmLastDeletionId}`, { headers: authHeaders() }),
         fetch(`/api/dm/${threadId}/typing`, { headers: authHeaders() }),
       ]);
       if (dmActiveThreadId !== threadId) return; // switched away while these were in flight
@@ -943,6 +997,11 @@
           dmScrollToBottom(msgWrap);
           dmRefreshRequestBadge();
         }
+        const deletions = data.deletions || [];
+        if (deletions.length) {
+          deletions.forEach(d => dmRemoveBubble(d.message_id));
+          dmLastDeletionId = deletions[deletions.length - 1].id;
+        }
       }
 
       const typingEl = document.getElementById('dm-typing-indicator');
@@ -952,6 +1011,14 @@
         typingEl.hidden = !typing;
       }
     } catch { /* transient network hiccup -- just try again next tick */ }
+  }
+
+  // Removes a bubble (and its row wrapper) whether it was just deleted by
+  // me locally or reported as gone by a poll -- looked up by the message id
+  // stamped on the row in dmBubble().
+  function dmRemoveBubble(messageId) {
+    const row = document.querySelector(`.dm-bubble-row[data-message-id="${messageId}"]`);
+    if (row) row.remove();
   }
 
   // Pings the server at most once every 2s while the user keeps typing --
@@ -1066,17 +1133,81 @@
     time.className = 'dm-bubble-time';
     time.textContent = dmTimeLabel(m.created_at);
     div.appendChild(time);
-    if (!m.is_mine) {
-      const reportBtn = document.createElement('button');
-      reportBtn.type = 'button';
-      reportBtn.className = 'dm-bubble-report-btn cc-action-btn--flag';
-      reportBtn.title = 'Report';
-      reportBtn.innerHTML = '&#127987;&#65039;';
-      reportBtn.addEventListener('click', () => reportContent('dm_message', m.id));
-      div.appendChild(reportBtn);
+
+    const row = document.createElement('div');
+    row.className = 'dm-bubble-row ' + (m.is_mine ? 'dm-bubble-row--mine' : 'dm-bubble-row--theirs');
+    row.dataset.messageId = m.id;
+    const menuWrap = dmBubbleMenu(m);
+    if (m.is_mine) {
+      // Own message — menu sits to the LEFT of the bubble.
+      row.appendChild(menuWrap);
+      row.appendChild(div);
+    } else {
+      // Their message — menu sits to the RIGHT of the bubble.
+      row.appendChild(div);
+      row.appendChild(menuWrap);
     }
-    return div;
+    return row;
   }
+
+  // "•••" hover menu beside a bubble. Own messages: just Delete (removes it
+  // for both sides). Someone else's: Report (shared modal) and Hide Message
+  // (removes it from my own view only, via dm_message_hides).
+  function dmBubbleMenu(m) {
+    const wrap = document.createElement('div');
+    wrap.className = 'dm-bubble-menu-wrap';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'dm-bubble-menu-btn';
+    btn.textContent = '•••';
+    btn.setAttribute('aria-label', 'Message actions');
+    const dropdown = document.createElement('div');
+    dropdown.className = 'dm-bubble-menu-dropdown';
+    dropdown.hidden = true;
+
+    function addItem(label, handler, danger) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.textContent = label;
+      if (danger) item.className = 'dm-menu-danger';
+      item.addEventListener('click', () => { dropdown.hidden = true; wrap.classList.remove('dm-bubble-menu-open'); handler(); });
+      dropdown.appendChild(item);
+    }
+
+    if (m.is_mine) {
+      addItem('Delete', async () => {
+        if (!confirm('Delete this message? It will be removed for both of you.')) return;
+        try {
+          const res = await fetch(`/api/dm/${dmActiveThreadId}/messages/${m.id}`, { method: 'DELETE', headers: authHeaders() });
+          if (res.ok) dmRemoveBubble(m.id);
+        } catch {}
+      }, true);
+    } else {
+      addItem('Report', () => reportContent('dm_message', m.id));
+      addItem('Hide Message', async () => {
+        try {
+          const res = await fetch(`/api/dm/${dmActiveThreadId}/messages/${m.id}/hide`, { method: 'POST', headers: authHeaders() });
+          if (res.ok) dmRemoveBubble(m.id);
+        } catch {}
+      });
+    }
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const opening = dropdown.hidden;
+      document.querySelectorAll('.dm-bubble-menu-dropdown').forEach(d => { d.hidden = true; });
+      document.querySelectorAll('.dm-bubble-menu-open').forEach(w => w.classList.remove('dm-bubble-menu-open'));
+      dropdown.hidden = !opening;
+      wrap.classList.toggle('dm-bubble-menu-open', opening);
+    });
+    wrap.appendChild(btn);
+    wrap.appendChild(dropdown);
+    return wrap;
+  }
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.dm-bubble-menu-dropdown').forEach(d => { d.hidden = true; });
+    document.querySelectorAll('.dm-bubble-menu-open').forEach(w => w.classList.remove('dm-bubble-menu-open'));
+  });
 
   let dmSelectedGifUrl = null;
 
@@ -1277,12 +1408,16 @@
     const avatarWrap = document.getElementById('dm-thread-avatar-wrap');
     avatarWrap.innerHTML = user ? dmAvatarHtml(user, 'dm-thread-avatar', 'dm-thread-avatar-fallback') : '';
     const userLink = document.getElementById('dm-thread-user-link');
-    // The BTW Team system account has no real profile page — leave it inert there.
-    if (user && user.username && user.username !== 'btwteam') {
+    dmActiveOtherUser = user || null;
+    // The BTW Team system account has no real profile page, and can't be
+    // reported/blocked like a normal user — leave both inert there.
+    const isSystemAccount = !user || !user.username || user.username === 'btwteam';
+    if (!isSystemAccount) {
       userLink.href = window.fpUrl(`/${user.username}`);
     } else {
       userLink.removeAttribute('href');
     }
+    document.getElementById('dm-thread-menu-wrap').hidden = isSystemAccount;
     document.getElementById('dm-thread-dismiss-btn').hidden = !isPriority;
   }
 
@@ -1329,6 +1464,7 @@
       dmRefreshRequestBadge();
 
       dmLastMessageId = msgs.length ? msgs[msgs.length - 1].id : 0;
+      dmLastDeletionId = 0;
       dmOtherDisplayName = resolvedName;
       dmStartThreadPolling(threadId);
     } catch {
@@ -1371,6 +1507,35 @@
     dmShowPanel('chats');
     loadDmChats();
     location.hash = 'inbox';
+  });
+
+  // Thread header "•••" — Report User (shared modal) / Block User (stops
+  // either of you from messaging the other; see /api/blocks/:username).
+  const dmThreadMenuBtn = document.getElementById('dm-thread-menu-btn');
+  const dmThreadMenuDropdown = document.getElementById('dm-thread-menu-dropdown');
+  dmThreadMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dmThreadMenuDropdown.hidden = !dmThreadMenuDropdown.hidden;
+  });
+  document.addEventListener('click', () => { dmThreadMenuDropdown.hidden = true; });
+  document.getElementById('dm-thread-menu-report').addEventListener('click', () => {
+    dmThreadMenuDropdown.hidden = true;
+    if (dmActiveOtherUser) reportContent('user', dmActiveOtherUser.id);
+  });
+  document.getElementById('dm-thread-menu-block').addEventListener('click', async () => {
+    dmThreadMenuDropdown.hidden = true;
+    if (!dmActiveOtherUser) return;
+    const name = dmActiveOtherUser.display_name || dmActiveOtherUser.username;
+    if (!confirm(`Block ${name}? They won't be able to message you, and you won't be able to message them, until you unblock them in Account Settings.`)) return;
+    try {
+      const res = await fetch(`/api/blocks/${dmActiveOtherUser.username}`, { method: 'POST', headers: authHeaders() });
+      if (res.ok) {
+        dmActiveThreadId = null;
+        dmShowPanel('chats');
+        loadDmChats();
+        location.hash = 'inbox';
+      }
+    } catch {}
   });
 
   document.getElementById('dm-reply-send').addEventListener('click', async () => {

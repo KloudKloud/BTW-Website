@@ -34,6 +34,30 @@
       background: #141018; border: 1px solid rgba(240,192,96,0.25); border-radius: 18px;
       padding: 2rem 2.25rem; box-shadow: 0 30px 90px rgba(0,0,0,0.6);
     }
+
+    .blocked-users-list { display: flex; flex-direction: column; }
+    .blocked-user-row {
+      display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .blocked-user-row:last-child { border-bottom: none; }
+    .blocked-user-avatar, .blocked-user-avatar-fallback {
+      width: 38px; height: 38px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    }
+    .blocked-user-avatar-fallback {
+      background: linear-gradient(135deg, #7fa8d9, #d97a72); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem;
+    }
+    .blocked-user-name {
+      font-weight: 700; font-size: 0.9rem; flex: 1; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .blocked-user-unblock-btn {
+      flex-shrink: 0; background: rgba(194,84,122,0.12); border: 1px solid rgba(194,84,122,0.35);
+      color: var(--rose); border-radius: 8px; padding: 0.35rem 0.85rem; font-size: 0.78rem;
+      font-weight: 700; cursor: pointer; font-family: 'Lato', sans-serif; transition: background 0.2s;
+    }
+    .blocked-user-unblock-btn:hover { background: rgba(194,84,122,0.22); }
   </style>
 </head>
 <body>
@@ -116,6 +140,14 @@
     </div>
   </div>
 
+  <!-- Blocked users -->
+  <div class="profile-card">
+    <p class="profile-card-title">Blocked Users</p>
+    <p class="danger-text" style="margin-bottom:1rem;">Blocked users can't message you, and you can't message them. Unblock anyone here if you change your mind.</p>
+    <div id="blocked-users-preview" class="blocked-users-list"></div>
+    <button class="profile-avatar-btn profile-avatar-btn--ghost" id="blocked-users-viewall-btn" type="button" style="margin-top:0.75rem;" hidden>View All</button>
+  </div>
+
   <!-- Danger zone -->
   <div class="profile-card profile-card--danger">
     <p class="profile-card-title">Danger Zone</p>
@@ -162,6 +194,15 @@
   </div>
 </div>
 
+<!-- Blocked Users (full list) modal -->
+<div class="email-modal-overlay" id="blocked-users-overlay" hidden>
+  <div class="email-modal" style="max-width:480px;max-height:80vh;overflow-y:auto;">
+    <p class="char-editor-title" style="font-family:'Fredoka','Lato',cursive;">Blocked Users</p>
+    <div id="blocked-users-full-list" class="blocked-users-list"></div>
+    <button class="profile-save-btn" id="blocked-users-close-btn" type="button" style="background:rgba(255,255,255,0.07);color:var(--mist);margin-top:1.25rem;">Close</button>
+  </div>
+</div>
+
 <!-- Redirect to login if not logged in -->
 <div id="profile-gate" hidden style="min-height:calc(100vh - 64px);display:flex;align-items:center;justify-content:center;padding:3rem 1.5rem;">
   <div style="text-align:center;">
@@ -194,6 +235,7 @@
     document.getElementById('profile-main').hidden   = false;
     document.getElementById('profile-gate').hidden   = true;
     loadProfile();
+    loadBlockedUsers();
   }
 
   let currentEmail = '';
@@ -236,6 +278,97 @@
   function setEmailPending(pending) {
     document.getElementById('email-pending-badge').hidden = !pending;
   }
+
+  // ── Blocked Users ──────────────────────────────────────────────────────
+  // Preview shows the first few inline; "View All" opens the full list in a
+  // modal (same blurred-overlay pattern as Change Email) once there's more
+  // than fits comfortably in the card.
+  const BLOCKED_PREVIEW_COUNT = 4;
+  let blockedUsers = [];
+
+  function blockedUserRow(u) {
+    const row = document.createElement('div');
+    row.className = 'blocked-user-row';
+
+    if (u.avatar) {
+      const img = document.createElement('img');
+      img.className = 'blocked-user-avatar';
+      img.src = u.avatar;
+      img.alt = '';
+      row.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'blocked-user-avatar-fallback';
+      ph.textContent = (u.display_name || u.username).charAt(0).toUpperCase();
+      row.appendChild(ph);
+    }
+
+    const name = document.createElement('span');
+    name.className = 'blocked-user-name';
+    name.textContent = u.display_name || u.username;
+    row.appendChild(name);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'blocked-user-unblock-btn';
+    btn.textContent = 'Unblock';
+    btn.addEventListener('click', () => unblockUser(u.username));
+    row.appendChild(btn);
+
+    return row;
+  }
+
+  function renderBlockedUsers() {
+    const preview = document.getElementById('blocked-users-preview');
+    const viewAllBtn = document.getElementById('blocked-users-viewall-btn');
+    preview.innerHTML = '';
+    if (!blockedUsers.length) {
+      const empty = document.createElement('p');
+      empty.className = 'danger-text';
+      empty.style.opacity = '0.5';
+      empty.textContent = "You haven't blocked anyone.";
+      preview.appendChild(empty);
+      viewAllBtn.hidden = true;
+    } else {
+      blockedUsers.slice(0, BLOCKED_PREVIEW_COUNT).forEach(u => preview.appendChild(blockedUserRow(u)));
+      viewAllBtn.hidden = blockedUsers.length <= BLOCKED_PREVIEW_COUNT;
+    }
+
+    const fullList = document.getElementById('blocked-users-full-list');
+    fullList.innerHTML = '';
+    blockedUsers.forEach(u => fullList.appendChild(blockedUserRow(u)));
+  }
+
+  async function loadBlockedUsers() {
+    try {
+      const res = await fetch(`${API}/blocks`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      blockedUsers = data.blocked || [];
+      renderBlockedUsers();
+    } catch {}
+  }
+
+  async function unblockUser(username) {
+    try {
+      const res = await fetch(`${API}/blocks/${username}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        blockedUsers = blockedUsers.filter(u => u.username !== username);
+        renderBlockedUsers();
+      }
+    } catch {}
+  }
+
+  document.getElementById('blocked-users-viewall-btn').addEventListener('click', () => {
+    document.getElementById('blocked-users-overlay').hidden = false;
+  });
+  document.getElementById('blocked-users-close-btn').addEventListener('click', () => {
+    document.getElementById('blocked-users-overlay').hidden = true;
+  });
+  document.getElementById('blocked-users-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'blocked-users-overlay') document.getElementById('blocked-users-overlay').hidden = true;
+  });
 
   // NSFW / SFW Mode toggle — saves immediately on flip, same as the avatar
   // upload, rather than waiting on the big "Save Changes" button.
