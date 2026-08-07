@@ -3094,9 +3094,22 @@ document.getElementById('se-gallery-editor-save').addEventListener('click', asyn
   fd.append('position_x', seGalleryPos.x);
   fd.append('position_y', seGalleryPos.y);
 
+  // Exported at the crop's actual native pixel count (viewport size ÷
+  // zoom), not a fixed 600x700 -- see crop-modal.js's own export for why a
+  // fixed size upscales/blurs once someone zooms in past what it covers.
   if (seGalleryPreviewCropper && seGalleryPreviewCropper.isReady()) {
+    const wrap = document.querySelector('#se-gallery-editor-preview-field .gallery-preview-crop-wrap');
+    const scale = seGalleryPreviewCropper.getZoom();
+    let outW = Math.round(wrap.clientWidth / scale);
+    let outH = Math.round(wrap.clientHeight / scale);
+    const MAX_EDGE = 2400;
+    if (Math.max(outW, outH) > MAX_EDGE) {
+      const shrink = MAX_EDGE / Math.max(outW, outH);
+      outW = Math.round(outW * shrink);
+      outH = Math.round(outH * shrink);
+    }
     const previewBlob = await new Promise((resolve) => {
-      seGalleryPreviewCropper.getCanvas(600, 700).toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
+      seGalleryPreviewCropper.getCanvas(outW, outH).toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
     });
     if (previewBlob) fd.append('preview_image', previewBlob, 'preview.jpg');
   }

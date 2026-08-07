@@ -2974,9 +2974,23 @@ document.getElementById('cl-post-create-submit-btn').addEventListener('click', a
     if (postCreateMode === 'news') fd.append('is_admin_post', '1');
     fd.append('preview_position_x', postPreviewPos.x);
     fd.append('preview_position_y', postPreviewPos.y);
+    // Exported at the crop's actual native pixel count (viewport size ÷
+    // zoom), not a fixed 700x700 -- see crop-modal.js's own export for why
+    // a fixed size upscales/blurs once someone zooms in past what it
+    // covers, which is exactly why Card view's post previews looked soft.
     if (postCreateCropper && postCreateCropper.isReady()) {
+      const wrap = document.getElementById('cl-post-preview-wrap');
+      const scale = postCreateCropper.getZoom();
+      let outW = Math.round(wrap.clientWidth / scale);
+      let outH = Math.round(wrap.clientHeight / scale);
+      const MAX_EDGE = 2400;
+      if (Math.max(outW, outH) > MAX_EDGE) {
+        const shrink = MAX_EDGE / Math.max(outW, outH);
+        outW = Math.round(outW * shrink);
+        outH = Math.round(outH * shrink);
+      }
       const previewBlob = await new Promise((resolve) => {
-        postCreateCropper.getCanvas(700, 700).toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
+        postCreateCropper.getCanvas(outW, outH).toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
       });
       if (previewBlob) fd.append('preview_image', previewBlob, 'preview.jpg');
     }

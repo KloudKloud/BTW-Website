@@ -5615,7 +5615,7 @@ async function sendSiteLookup(query, params, req, res) {
     `, [site.id, viewerId]),
     pool.query(`
       SELECT mg.id, mg.category, mg.image_url, mg.preview_image_url, mg.title, mg.description, mg.position_x, mg.position_y,
-             mg.tags, mg.view_count,
+             mg.tags, mg.view_count, mg.created_at,
              (SELECT count(*) FROM moderator_gallery_likes WHERE gallery_id = mg.id) AS like_count,
              (SELECT count(*)::int FROM content_comments WHERE target_type = 'gallery' AND target_id = mg.id) AS comment_count
       FROM gallery_story_links gsl JOIN moderator_gallery mg ON mg.id = gsl.gallery_id

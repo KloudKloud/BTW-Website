@@ -763,9 +763,24 @@
     // Bake the crop the user framed in the preview box into a real image
     // and upload it as the tile thumbnail (6:7, matches .gallery-tile
     // everywhere it's displayed) instead of only storing a pan position.
+    // Exported at the crop's actual native pixel count (viewport size ÷
+    // zoom), not a fixed 600x700 -- a fixed size upscales (blurs) whenever
+    // someone zooms in past what 600x700 covers, which is exactly why tile
+    // previews looked soft in Card view while the full-size image (never
+    // resampled) looked fine. Same fix as crop-modal.js's own export.
     if (galleryPreviewCropper && galleryPreviewCropper.isReady()) {
+      const wrap = document.querySelector('.gallery-preview-crop-wrap');
+      const scale = galleryPreviewCropper.getZoom();
+      let outW = Math.round(wrap.clientWidth / scale);
+      let outH = Math.round(wrap.clientHeight / scale);
+      const MAX_EDGE = 2400;
+      if (Math.max(outW, outH) > MAX_EDGE) {
+        const shrink = MAX_EDGE / Math.max(outW, outH);
+        outW = Math.round(outW * shrink);
+        outH = Math.round(outH * shrink);
+      }
       const previewBlob = await new Promise((resolve) => {
-        galleryPreviewCropper.getCanvas(600, 700).toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
+        galleryPreviewCropper.getCanvas(outW, outH).toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
       });
       if (previewBlob) fd.append('preview_image', previewBlob, 'preview.jpg');
     }
