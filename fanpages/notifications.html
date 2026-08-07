@@ -580,7 +580,7 @@
   <div class="char-editor-modal" style="max-width: 440px;">
     <h2 class="char-editor-title" id="dm-new-chat-title">New Chat</h2>
 
-    <input class="mod-input" id="dm-new-chat-search" placeholder="Search accounts you follow…" />
+    <input class="mod-input" id="dm-new-chat-search" placeholder="Search for anyone…" />
     <div id="dm-new-chat-results" class="dm-following-list"><p class="notif-empty">Loading…</p></div>
 
     <div class="char-editor-actions">
@@ -1613,13 +1613,15 @@
       const data = await res.json();
       const users = data.users || [];
       if (!users.length) {
-        dmNewChatResults.innerHTML = '<p class="notif-empty">Follow someone first to start a chat with them.</p>';
+        dmNewChatResults.innerHTML = q
+          ? '<p class="notif-empty">No accounts found.</p>'
+          : '<p class="notif-empty">Follow someone to see them here right away — or just start typing a username to find anyone.</p>';
       } else {
         dmNewChatResults.innerHTML = '';
         users.forEach(u => dmNewChatResults.appendChild(dmFollowingItem(u)));
       }
     } catch {
-      dmNewChatResults.innerHTML = '<p class="notif-empty">Couldn\'t load your follows right now.</p>';
+      dmNewChatResults.innerHTML = '<p class="notif-empty">Couldn\'t load results right now.</p>';
     }
   }
 
@@ -1717,9 +1719,24 @@
   // initDmAppOnce/openDmThread touch is already defined.
   function applyHashTab() {
     const notifThreadHashMatch = location.hash.match(/^#inbox\/(\d+)$/);
+    const notifNewDmHashMatch = location.hash.match(/^#inbox\/new\/([^/]+)$/);
     if (notifThreadHashMatch) {
       switchNotifTab('inbox', false);
       if (token) openDmThread(parseInt(notifThreadHashMatch[1], 10));
+    } else if (notifNewDmHashMatch) {
+      // Deep link from a profile page's message icon (or the homepage
+      // Feedback button, pointed at VeekitPaws) -- straight into the
+      // composer for that person, same as picking them from "+ New Chat".
+      switchNotifTab('inbox', false);
+      if (token) {
+        const targetUsername = decodeURIComponent(notifNewDmHashMatch[1]);
+        fetch(`/api/fanpage-profile/${targetUsername}`, { headers: authHeaders() })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data && data.author) startDmWithUser(data.author);
+          })
+          .catch(() => {});
+      }
     } else {
       switchNotifTab(location.hash === '#inbox' ? 'inbox' : 'notifications', false);
     }

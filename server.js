@@ -4951,15 +4951,35 @@ app.get('/api/dm/requests', requireAuth, async (req, res) => {
 });
 
 // Who can I start a new chat with — accounts I follow, optionally filtered.
+// GET /api/dm/following — the "+ New Chat" picker's people list. With no
+// query, just who you follow (a familiar starting point). Once you type,
+// it broadens into a real search across every account (nobody has to be
+// followed to be found/messaged anymore -- see /api/dm/start), with
+// accounts you already follow still sorting first.
 app.get('/api/dm/following', requireAuth, async (req, res) => {
   const q = (req.query.q || '').trim().toLowerCase();
+  if (!q) {
+    const { rows } = await pool.query(
+      `SELECT u.username, u.display_name, u.avatar
+       FROM user_follows f JOIN users u ON u.id = f.followed_id
+       WHERE f.follower_id = $1
+       ORDER BY u.username ASC LIMIT 30`,
+      [req.user.id]
+    );
+    return res.json({ users: rows });
+  }
   const { rows } = await pool.query(
-    `SELECT u.username, u.display_name, u.avatar
-     FROM user_follows f
-     JOIN users u ON u.id = f.followed_id
-     WHERE f.follower_id = $1 ${q ? 'AND (LOWER(u.username) LIKE $2 OR LOWER(u.display_name) LIKE $2)' : ''}
-     ORDER BY u.username ASC LIMIT 30`,
-    q ? [req.user.id, `%${q}%`] : [req.user.id]
+    `SELECT u.username, u.display_name, u.avatar,
+            EXISTS(SELECT 1 FROM user_follows f WHERE f.follower_id = $1 AND f.followed_id = u.id) AS is_following
+     FROM users u
+     WHERE u.id <> $1
+       AND (LOWER(u.username) LIKE $2 OR LOWER(u.display_name) LIKE $2)
+       AND NOT EXISTS (
+         SELECT 1 FROM user_blocks b
+         WHERE (b.blocker_id = $1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $1)
+       )
+     ORDER BY is_following DESC, u.username ASC LIMIT 30`,
+    [req.user.id, `%${q}%`]
   );
   res.json({ users: rows });
 });
@@ -4977,11 +4997,6 @@ app.post('/api/dm/start', requireAuth, uploadInbox.array('attachments', 4), asyn
   if (!target) return res.status(404).json({ error: 'User not found.' });
   if (target.id === req.user.id) return res.status(400).json({ error: "You can't chat with yourself." });
   if (await isBlockedEitherWay(req.user.id, target.id)) return res.status(403).json({ error: 'You can\'t message this user.' });
-
-  const { rows: [isFollowing] } = await pool.query(
-    'SELECT 1 FROM user_follows WHERE follower_id = $1 AND followed_id = $2', [req.user.id, target.id]
-  );
-  if (!isFollowing) return res.status(403).json({ error: 'You can only start a chat with someone you follow.' });
 
   let { rows: [thread] } = await pool.query(
     'SELECT * FROM dm_threads WHERE (user_a_id = $1 AND user_b_id = $2) OR (user_a_id = $2 AND user_b_id = $1)',
