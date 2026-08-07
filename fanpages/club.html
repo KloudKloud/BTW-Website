@@ -188,6 +188,8 @@
       box-shadow: 0 0 8px rgba(127,168,217,0.35);
     }
     .cl-banner-join-btn.cl-joined:hover { background: #6f97c8; }
+    .cl-banner-join-btn:disabled { cursor: default; transform: none; }
+    .cl-banner-join-btn:disabled:hover { background: rgba(127,168,217,0.28); }
     /* +Post — sits just left of Join/Joined, same pill recipe but filled
        gold (matches the site's other "+Create"-style buttons) so it reads
        as an action, not a status toggle. Fixed offset tuned against
@@ -253,7 +255,7 @@
        glass-card About box (right) are confined to the main column so
        neither ever reaches under the fixed sidebar. */
     .cl-name {
-      font-family: 'Cinzel', Georgia, serif; font-size: 2.6rem; font-weight: 700; color: #fff;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 2.6rem; font-weight: 700; color: #fff;
       margin: 0 0 1.25rem; text-align: center;
     }
 
@@ -2180,12 +2182,15 @@ async function loadClub() {
 function renderJoinBtn(club) {
   document.getElementById('cl-banner-post-btn').style.display = 'block';
   const btn = document.getElementById('cl-banner-join-btn');
-  if (club.viewer_role === 'owner') { btn.style.display = 'none'; return; }
   btn.style.display = 'block';
+  const isOwner = club.viewer_role === 'owner';
   const joined = !!club.viewer_role;
   btn.textContent = joined ? '✓ Joined' : 'Join';
   btn.classList.toggle('cl-joined', joined);
-  btn.title = joined ? 'Click to leave' : 'Join this club';
+  // Owners can't leave their own club (see DELETE .../leave) -- still shown
+  // as "✓ Joined" per the user's request, just not clickable to leave.
+  btn.disabled = isOwner;
+  btn.title = isOwner ? 'You own this club' : (joined ? 'Click to leave' : 'Join this club');
 }
 document.getElementById('cl-banner-post-btn').addEventListener('click', () => {
   navigateTo({ tab: 'social', page: null, post: null });
@@ -2193,7 +2198,7 @@ document.getElementById('cl-banner-post-btn').addEventListener('click', () => {
 });
 document.getElementById('cl-banner-join-btn').addEventListener('click', async () => {
   if (!token) { window.fpOpenLoginModal(); return; }
-  if (!currentClub) return;
+  if (!currentClub || currentClub.viewer_role === 'owner') return;
   const btn = document.getElementById('cl-banner-join-btn');
   const wasJoined = !!currentClub.viewer_role;
   btn.disabled = true;
