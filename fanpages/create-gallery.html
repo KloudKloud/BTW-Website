@@ -13,7 +13,7 @@
     body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; margin: 0; padding: 0; }
     a { color: inherit; }
     [hidden] { display: none !important; }
-    .cg-page { max-width: 880px; margin: 0 auto; padding: 6rem 1.25rem 4rem; }
+    .cg-page { max-width: 880px; margin: 0 auto; padding: calc(68px + 2.5rem) 1.25rem 4rem; }
     .cg-eyebrow {
       font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
       color: #f0c060; margin-bottom: 0.5rem; text-align: center;
@@ -23,6 +23,57 @@
        overlay use-case — here the page itself scrolls, so the box should
        just grow to fit its content instead of being capped mid-form. */
     .char-editor-modal { margin: 0 auto; max-height: none; overflow-y: visible; }
+
+    /* Sticky top bar — same pattern as +Character's .cc-topbar / +Story's
+       .cs-topbar. Fixed, always visible, replaces the site nav. */
+    #fanpages-topbar-root { display: none; }
+    .cg-topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 150; height: 68px; box-sizing: border-box;
+      display: flex; align-items: center; justify-content: space-between;
+      background: #161616; border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding: 0 1.5rem;
+    }
+    .cg-topbar-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.08rem; font-weight: 700; color: #f0f0f0; }
+    .cg-topbar-actions { display: flex; align-items: center; gap: 0.85rem; }
+    .cg-topbar-cancel {
+      color: #ccc; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.9rem; font-weight: 600; text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.25); border-radius: 22px; padding: 0.6em 1.4em; cursor: pointer; background: none;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .cg-topbar-cancel:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+    .cg-topbar-create {
+      background: #1fb6a8; color: #fff; border: none;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.94rem; font-weight: 700;
+      padding: 0.65em 1.7em; border-radius: 22px; cursor: pointer;
+      box-shadow: 0 0 16px rgba(31,182,168,0.55); transition: background 0.15s, box-shadow 0.15s;
+    }
+    .cg-topbar-create:hover { background: #1a9d91; box-shadow: 0 0 22px rgba(31,182,168,0.75); }
+    .cg-field-title-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; position: relative; }
+    .cg-field-title-row label,
+    .cg-field-title-row p { margin-bottom: 0; }
+
+    /* Bubbly Fredoka everywhere on this page -- shared classes used by
+       modals across the site, so scoped under .cg-page instead of touching
+       the shared rules. */
+    .cg-page .char-editor-title,
+    .cg-page .mod-field label,
+    .cg-page .mod-field-label-standalone,
+    .cg-page .gallery-cat-label,
+    .cg-page .gallery-linkto-section-label,
+    .cg-page .char-editor-ref-placeholder,
+    .cg-page .char-editor-ref-overlay,
+    .cg-page .mod-btn {
+      font-family: 'Fredoka', 'Lato', cursive;
+    }
+    .cg-page .mod-input,
+    .cg-page .mod-textarea,
+    .cg-page .mod-select,
+    .cg-page .mod-tip-box,
+    .cg-page .char-editor-facts-hint,
+    .cg-page .wiki-tags-tip-popover,
+    .cg-page .gallery-consent-row {
+      font-family: 'Fredoka', 'Lato', cursive;
+    }
 
     /* Tag suggestion dropdown -- same convention as the story editor's
        fandom/tags autocomplete (fanpages/_story-template/edit.html), which
@@ -44,6 +95,14 @@
 <body>
 
 <div id="fanpages-topbar-root"></div>
+
+<div class="cg-topbar">
+  <span class="cg-topbar-title">New Gallery Post</span>
+  <div class="cg-topbar-actions">
+    <button class="cg-topbar-cancel" id="cg-topbar-cancel" type="button">Cancel</button>
+    <button class="cg-topbar-create" id="cg-topbar-create" type="button">Post</button>
+  </div>
+</div>
 
 <div class="mod-page-bg-wrap-static">
   <img class="mod-page-bg-img-static" src="/images/gallery/kloudsaphbedroom_1.png" alt="" />
@@ -71,15 +130,22 @@
     <input type="file" id="gallery-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
 
     <div class="mod-field" id="gallery-editor-preview-field" style="display:none;">
-      <label>Gallery Preview Crop</label>
-      <p class="char-editor-facts-hint" style="margin-top:0; margin-bottom:0.6rem;">Gallery previews are smaller and display as a "cover". Drag to pick the best part of your art to show off! Your full-size art is never cropped, only the tile preview.</p>
+      <div class="cg-field-title-row">
+        <label>Gallery Preview Crop</label>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Gallery Preview Crop help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Gallery previews are smaller and display as a "cover". Drag to pick the best part of your art to show off! Your full-size art is never cropped, only the tile preview.</p></div>
+      </div>
       <div class="gallery-preview-crop-wrap">
         <img id="gallery-editor-preview-img" alt="" draggable="false" />
       </div>
     </div>
 
     <div class="gallery-cat-field">
-      <p class="gallery-cat-label">Rating</p>
+      <div class="cg-field-title-row">
+        <p class="gallery-cat-label">Rating</p>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Rating help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>All NSFW (18+) artwork must be labeled as Mature/Explicit. Visit our <a href="/fanpages/tos#ratings-and-tags" target="_blank" style="color:#7fa8d9;">ratings and tags</a> to learn more if needed~</p></div>
+      </div>
       <div class="gallery-cat-row" id="gallery-editor-cat-row">
         <label class="gallery-cat-option">
           <input type="radio" name="gallery-editor-category" value="sfw" checked />
@@ -94,7 +160,6 @@
           <span>Explicit</span>
         </label>
       </div>
-      <p class="char-editor-facts-hint">All NSFW (18+) artwork must be labeled as Mature/Explicit. Visit our <a href="/fanpages/tos#ratings-and-tags" target="_blank" style="color:#7fa8d9;">ratings and tags</a> to learn more if needed~</p>
     </div>
 
     <div class="mod-field">
@@ -103,20 +168,26 @@
     </div>
 
     <div class="mod-field">
-      <label for="gallery-editor-desc">Description <span style="font-weight:400;color:#888;">(use *word* for italics, **word** for bold)</span></label>
+      <div class="cg-field-title-row">
+        <label for="gallery-editor-desc">Description</label>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Description help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Use *word* for italics, **word** for bold. To credit an artist, write it like this: [Artist Name]&lt;https://link-to-artist&gt;</p></div>
+      </div>
       <textarea class="mod-textarea" id="gallery-editor-desc" placeholder="No description provided"></textarea>
-      <p class="mod-tip-box">💡 To credit an artist, write it like this: [Artist Name]&lt;https://link-to-artist&gt;</p>
     </div>
 
     <div class="mod-field">
-      <label for="gallery-tags-text-input">Tags <span class="wiki-tags-count" id="gallery-tags-count" style="margin-left:0.4em;">0/100</span></label>
+      <div class="cg-field-title-row">
+        <label for="gallery-tags-text-input">Tags <span class="wiki-tags-count" id="gallery-tags-count" style="margin-left:0.4em;">0/100</span></label>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Tags help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Tag what's in the piece — characters, species, themes — to help people find it.</p></div>
+      </div>
       <div class="wiki-tags-editor" id="gallery-tags-editor">
         <div class="wiki-tags-input-box wiki-suggest-input-wrap" id="gallery-tags-input-box">
           <input type="text" class="wiki-tags-input" id="gallery-tags-text-input" placeholder="Type a tag and press Enter…" autocomplete="off" />
           <div class="wiki-fandom-suggest" id="gallery-tags-suggest" hidden></div>
         </div>
       </div>
-      <p class="mod-tip-box">💡 Tag what's in the piece — characters, species, themes — to help people find it.</p>
     </div>
 
     <div class="mod-field gallery-linkto-box">
@@ -201,6 +272,45 @@
   if (document.referrer && document.referrer.startsWith(window.location.origin)) {
     document.getElementById('gallery-editor-cancel').href = document.referrer;
   }
+
+  // ── Top bar Cancel/Create + unsaved-changes guard — same pattern as
+  // +Character's .cc-topbar. ──────────────────────────────────────────────
+  let cgDirty = false;
+  document.querySelector('.char-editor-modal').addEventListener('input', () => { cgDirty = true; }, true);
+  document.querySelector('.char-editor-modal').addEventListener('change', () => { cgDirty = true; }, true);
+
+  function cgConfirmLeave() {
+    if (!cgDirty) return true;
+    return confirm('You will lose all unsaved progress. Are you sure you wish to exit?');
+  }
+  window.addEventListener('beforeunload', (e) => {
+    if (!cgDirty) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+
+  document.getElementById('cg-topbar-create').addEventListener('click', () => {
+    document.getElementById('gallery-editor-save').click();
+  });
+  document.getElementById('cg-topbar-cancel').addEventListener('click', () => {
+    if (cgConfirmLeave()) document.getElementById('gallery-editor-cancel').click();
+  });
+  document.getElementById('gallery-editor-cancel').addEventListener('click', (e) => {
+    if (!cgConfirmLeave()) e.preventDefault();
+  });
+
+  // Lightbulb hint popovers -- generic wiring, same pattern as +Character.
+  document.querySelectorAll('.wiki-tags-tip-icon').forEach(icon => {
+    const pop = icon.nextElementSibling;
+    if (!pop || !pop.classList.contains('wiki-tags-tip-popover')) return;
+    icon.addEventListener('click', (e) => {
+      e.stopPropagation();
+      pop.hidden = !pop.hidden;
+    });
+    document.addEventListener('click', (e) => {
+      if (!pop.hidden && !pop.contains(e.target) && e.target !== icon) pop.hidden = true;
+    });
+  });
 
   let selectedFile = null;
   let galleryPos = { x: 50, y: 50 };
@@ -736,6 +846,7 @@
         }).catch(() => {});
       }
 
+      cgDirty = false;
       if (editingGalleryId) {
         window.location.href = window.fpUrl('/editor#gallery');
         return;
@@ -786,6 +897,8 @@
       document.querySelector('.cg-eyebrow').textContent = 'Edit';
       document.querySelector('.cg-sub').textContent = 'Editing this gallery post. Changes save directly to it.';
       document.getElementById('gallery-editor-save').textContent = 'Save Changes';
+      document.getElementById('cg-topbar-create').textContent = 'Save Changes';
+      document.querySelector('.cg-topbar-title').textContent = 'Edit Gallery Post';
       document.getElementById('gallery-editor-delete-forever').style.display = '';
       // Consent was already given when the post was first created — only a
       // brand-new post needs it (re)checked.
