@@ -157,12 +157,12 @@
         </span>
       </div>
 
-      <div class="nsfw-toggle-row nsfw-toggle-row--official" style="margin-top:0.85rem;">
+      <div class="nsfw-toggle-row" style="margin-top:0.85rem;">
         <label class="nsfw-toggle-switch">
-          <input type="checkbox" id="char-editor-official-toggle" checked />
+          <input type="checkbox" id="char-editor-official-toggle" />
           <span class="nsfw-toggle-slider"></span>
         </label>
-        <span class="nsfw-toggle-label nsfw-toggle-label--official" id="char-editor-official-toggle-label">Official Art</span>
+        <span class="nsfw-toggle-label nsfw-toggle-label--sfw" id="char-editor-official-toggle-label">Official Art</span>
         <span class="tip-icon-wrap">
           <button class="wiki-tags-tip-icon" type="button" aria-label="Official art help">💡</button>
           <div class="wiki-tags-tip-popover" hidden><p>Is this official art of your character that you own, or is it a reference you found online/elsewhere?</p></div>
@@ -531,17 +531,17 @@
     setCharNsfwToggleLabel(this.checked);
   });
 
-  // Official Art toggle -- defaults to "Yes" (most refs people upload are
-  // their own/commissioned art); flipping to "No" reveals an optional
-  // source-link field instead of forcing one.
+  // Official Art toggle -- unchecked (left, like the SFW switch's default
+  // side) means "Yes"; checking it flips to "Found Elsewhere" and reveals
+  // an optional source-link field instead of forcing one.
   function setCharOfficialToggleLabel(isOfficial) {
     const label = document.getElementById('char-editor-official-toggle-label');
     label.textContent = isOfficial ? 'Official Art' : 'Found Elsewhere';
-    label.classList.toggle('nsfw-toggle-label--official', isOfficial);
+    label.classList.toggle('nsfw-toggle-label--sfw', isOfficial);
     document.getElementById('char-editor-art-source-field').style.display = isOfficial ? 'none' : '';
   }
   document.getElementById('char-editor-official-toggle').addEventListener('change', function () {
-    setCharOfficialToggleLabel(this.checked);
+    setCharOfficialToggleLabel(!this.checked);
   });
 
   const NA = 'N/A';
@@ -992,7 +992,7 @@
       document.getElementById('char-editor-ref-placeholder').style.display = 'none';
       document.getElementById('char-editor-ref-recrop-btn').style.display = 'block';
       document.getElementById('char-editor-nsfw-field').style.display = 'block';
-      document.getElementById('char-editor-official-toggle').checked = true;
+      document.getElementById('char-editor-official-toggle').checked = false;
       document.getElementById('char-editor-art-source').value = '';
       setCharOfficialToggleLabel(true);
     } else {
@@ -1049,7 +1049,7 @@
       }))
       .filter(r => r.name);
 
-    const isOfficialArt = document.getElementById('char-editor-official-toggle').checked;
+    const isOfficialArt = !document.getElementById('char-editor-official-toggle').checked;
     const body = {
       name,
       ref_image: uploadedRefUrl,
@@ -1180,7 +1180,7 @@
           document.getElementById('char-editor-nsfw-toggle').checked = !!character.ref_is_nsfw;
           setCharNsfwToggleLabel(!!character.ref_is_nsfw);
           const isOfficial = character.is_official_art !== false;
-          document.getElementById('char-editor-official-toggle').checked = isOfficial;
+          document.getElementById('char-editor-official-toggle').checked = !isOfficial;
           document.getElementById('char-editor-art-source').value = character.official_art_source_url || '';
           setCharOfficialToggleLabel(isOfficial);
         }
