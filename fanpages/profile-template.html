@@ -1789,6 +1789,44 @@
     out = out.replace(/\*(.+?)\*/g, '<em>$1</em>');
     return out;
   }
+
+  // "Official Ref" -- last row in the Fun Facts box, only for characters
+  // with a real (non-default) reference image. Green check when the owner
+  // marked the art as their own/commissioned; otherwise a found-elsewhere
+  // note that links out to the source if one was given.
+  function officialRefFactRow(char) {
+    if (!char.ref_image || char.ref_image === '/images/defaultchar.jpg') return null;
+    const fact = document.createElement('div');
+    fact.className = 'char-fact';
+    const bullet = document.createElement('span');
+    bullet.className = 'char-fact-bullet';
+    bullet.textContent = '✦';
+    fact.appendChild(bullet);
+    const content = document.createElement('div');
+    content.style.cssText = 'flex:1; min-width:0;';
+    const heading = document.createElement('span');
+    heading.style.cssText = 'color:#f0c060; font-weight:700; text-shadow:0 0 12px rgba(240,192,96,0.6);';
+    heading.textContent = 'Official Ref';
+    content.appendChild(heading);
+    const line = document.createElement('div');
+    line.style.cssText = 'margin-top:0.4rem;';
+    if (char.is_official_art !== false) {
+      line.innerHTML = '<span style="color:#2fbf5f; font-weight:600;">Official ✅</span>';
+    } else if (char.official_art_source_url) {
+      const a = document.createElement('a');
+      a.href = char.official_art_source_url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.style.cssText = 'color:#d9a13a; font-weight:600; text-decoration:underline;';
+      a.textContent = 'Unofficial 🎨';
+      line.appendChild(a);
+    } else {
+      line.innerHTML = '<span style="color:#d9a13a; font-weight:600;">Unofficial 🎨</span>';
+    }
+    content.appendChild(line);
+    fact.appendChild(content);
+    return fact;
+  }
   function renderGalleryText(s) {
     if (!s) return '<span style="color:#888;">No description provided</span>';
     const tokens = [];
@@ -2053,6 +2091,8 @@
       fact.appendChild(content);
       factsBox.appendChild(fact);
     });
+    const officialFact = officialRefFactRow(char);
+    if (officialFact) factsBox.appendChild(officialFact);
     row.appendChild(factsBox);
     profile.appendChild(row);
 

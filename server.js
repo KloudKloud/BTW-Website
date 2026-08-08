@@ -512,6 +512,23 @@ async function initDb() {
     ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
   `).catch(e => console.error('moderator_characters updated_at migration:', e.message));
 
+  // Official Art toggle -- whether the ref image is art the character's
+  // owner made/commissioned themselves vs. a found reference, plus an
+  // optional link to that reference's source. Defaults true (official) so
+  // existing characters read as "yes" until someone explicitly flips it;
+  // any character still on the site default pfp gets backfilled to true
+  // too since the toggle never applied to them in the first place.
+  await pool.query(`
+    ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS is_official_art BOOLEAN NOT NULL DEFAULT true;
+  `).catch(e => console.error('moderator_characters is_official_art migration:', e.message));
+  await pool.query(`
+    ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS official_art_source_url TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('moderator_characters official_art_source_url migration:', e.message));
+  await pool.query(`
+    UPDATE moderator_characters SET is_official_art = true
+    WHERE ref_image IS NOT NULL AND ref_image != '' AND ref_image != '/images/defaultchar.jpg';
+  `).catch(e => console.error('moderator_characters is_official_art backfill:', e.message));
+
   // Same naive per-load view counter as stories/gallery -- and its own
   // Bookmarks table, deliberately separate from moderator_character_likes:
   // "Like" is the quick heart-toggle scattered across every card; "Bookmark"
@@ -4841,6 +4858,7 @@ app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
   const { rows } = await pool.query(
     `SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.view_count,
             mc.description, mc.stats, mc.facts, mc.lore, mc.relationships,
+            mc.is_official_art, mc.official_art_source_url,
             ms.story_path, ms.slug, ms.site_title,
             (SELECT COUNT(*)::int FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id) AS like_count,
             EXISTS(SELECT 1 FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id AND mcl.user_id = $2) AS liked,
@@ -4863,6 +4881,7 @@ app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
       ref_image: r.ref_image || null, ref_position_x: r.ref_position_x, ref_position_y: r.ref_position_y,
       description: r.description, stats: r.stats || {}, facts: r.facts || [],
       lore: r.lore || [], relationships: r.relationships || [],
+      is_official_art: r.is_official_art !== false, official_art_source_url: r.official_art_source_url || '',
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
       like_count: r.like_count, liked: r.liked, bookmarked: r.bookmarked, view_count: r.view_count || 0,
     })),
@@ -5618,6 +5637,7 @@ async function sendSiteLookup(query, params, req, res) {
     ),
     pool.query(`
       SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.description, mc.stats, mc.facts, mc.lore, mc.relationships, mc.owner_user_id, mc.ref_is_nsfw, mc.view_count,
+             mc.is_official_art, mc.official_art_source_url,
              ou.display_name AS owner_display_name, ou.username AS owner_username,
              (SELECT COUNT(*)::int FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id) AS like_count,
              EXISTS(SELECT 1 FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id AND mcl.user_id = $2) AS liked,
@@ -6456,7 +6476,7 @@ app.put('/api/moderator/characters/profile-order', requireAuth, async (req, res)
 // link to this story is a separate row, so the same character can later be
 // linked into other stories too without being duplicated.
 app.post('/api/moderator/characters', requireAuth, requireModerator, async (req, res) => {
-  const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw } = req.body;
+  const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
   const cleanStats = await sanitizeCharacterStats(stats || {});
   // New characters jump to the top of the owner's profile Page Order.
@@ -6464,11 +6484,12 @@ app.post('/api/moderator/characters', requireAuth, requireModerator, async (req,
     'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_characters WHERE owner_user_id = $1', [req.user.id]
   );
   const { rows: [character] } = await pool.query(
-    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
-     JSON.stringify(relationships || []), !!ref_is_nsfw, profileMinOrder]
+     JSON.stringify(relationships || []), !!ref_is_nsfw,
+     is_official_art !== undefined ? !!is_official_art : true, official_art_source_url || '', profileMinOrder]
   );
   const { rows: [{ maxOrder }] } = await pool.query(
     'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM character_story_links WHERE site_id = $1', [req.modSite.id]
@@ -6487,27 +6508,32 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
     'SELECT * FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
   );
   if (!existing) return res.status(404).json({ error: 'Not found.' });
-  const { name, ref_image, description, stats, facts, lore, relationships, sort_order, ref_is_nsfw } = req.body;
+  const { name, ref_image, description, stats, facts, lore, relationships, sort_order, ref_is_nsfw, is_official_art, official_art_source_url } = req.body;
   const cleanStats = stats !== undefined ? await sanitizeCharacterStats(stats) : undefined;
   const { rows: [character] } = await pool.query(
     `UPDATE moderator_characters SET
-       name          = COALESCE($1, name),
-       ref_image     = COALESCE($2, ref_image),
-       description   = COALESCE($3, description),
-       stats         = COALESCE($4, stats),
-       facts         = COALESCE($5, facts),
-       lore          = COALESCE($6, lore),
-       relationships = COALESCE($7, relationships),
-       sort_order    = COALESCE($8, sort_order),
-       ref_is_nsfw   = COALESCE($9, ref_is_nsfw),
-       updated_at    = NOW()
-     WHERE id = $10 RETURNING *`,
+       name                    = COALESCE($1, name),
+       ref_image               = COALESCE($2, ref_image),
+       description             = COALESCE($3, description),
+       stats                   = COALESCE($4, stats),
+       facts                   = COALESCE($5, facts),
+       lore                    = COALESCE($6, lore),
+       relationships           = COALESCE($7, relationships),
+       sort_order              = COALESCE($8, sort_order),
+       ref_is_nsfw             = COALESCE($9, ref_is_nsfw),
+       is_official_art         = COALESCE($10, is_official_art),
+       official_art_source_url = COALESCE($11, official_art_source_url),
+       updated_at              = NOW()
+     WHERE id = $12 RETURNING *`,
     [name, ref_image, description,
      cleanStats !== undefined ? JSON.stringify(cleanStats) : null,
      facts !== undefined ? JSON.stringify(facts) : null,
      lore !== undefined ? JSON.stringify(lore) : null,
      relationships !== undefined ? JSON.stringify(relationships) : null,
-     sort_order, ref_is_nsfw !== undefined ? !!ref_is_nsfw : null, existing.id]
+     sort_order, ref_is_nsfw !== undefined ? !!ref_is_nsfw : null,
+     is_official_art !== undefined ? !!is_official_art : null,
+     official_art_source_url !== undefined ? official_art_source_url : null,
+     existing.id]
   );
   res.json({ character });
 });
@@ -6791,18 +6817,19 @@ app.delete('/api/characters/:id/link-gallery/:galleryId', requireAuth, async (re
 // requireModerator — RPers/artists with zero stories should still be able
 // to make characters).
 app.post('/api/characters', requireAuth, async (req, res) => {
-  const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw } = req.body;
+  const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
   const cleanStats = await sanitizeCharacterStats(stats || {});
   const { rows: [{ minOrder: profileMinOrder }] } = await pool.query(
     'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_characters WHERE owner_user_id = $1', [req.user.id]
   );
   const { rows: [character] } = await pool.query(
-    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
-     JSON.stringify(relationships || []), !!ref_is_nsfw, profileMinOrder]
+     JSON.stringify(relationships || []), !!ref_is_nsfw,
+     is_official_art !== undefined ? !!is_official_art : true, official_art_source_url || '', profileMinOrder]
   );
   const { rows: [actor] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
   await notifyFollowers(req.user.id, 'new_character',

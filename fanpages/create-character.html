@@ -151,9 +151,27 @@
           <span class="nsfw-toggle-slider"></span>
         </label>
         <span class="nsfw-toggle-label nsfw-toggle-label--sfw" id="char-editor-nsfw-toggle-label">Safe For Work</span>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="NSFW image help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Is your character reference image NSFW? If so, please label it above! :3</p></div>
       </div>
-      <p class="mod-tip-box" style="margin-top:0.5rem;">Is your character reference image NSFW? If so, please label it above! :3</p>
+
+      <div class="nsfw-toggle-row nsfw-toggle-row--official" style="margin-top:0.85rem;">
+        <label class="nsfw-toggle-switch">
+          <input type="checkbox" id="char-editor-official-toggle" checked />
+          <span class="nsfw-toggle-slider"></span>
+        </label>
+        <span class="nsfw-toggle-label nsfw-toggle-label--official" id="char-editor-official-toggle-label">Official Art</span>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Official art help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Is this official art of your character that you own, or is it a reference you found online/elsewhere?</p></div>
+      </div>
+
+      <div class="mod-field" id="char-editor-art-source-field" style="display:none; margin-top:0.75rem;">
+        <label for="char-editor-art-source">Link the source you found this image from? <span style="color:#888; font-weight:400; font-size:0.85em;">(Optional)</span></label>
+        <input class="mod-input" id="char-editor-art-source" placeholder="https://..." />
+      </div>
     </div>
+
+    <hr class="char-editor-field-hr" />
 
     <div class="mod-field">
       <label for="char-editor-name">Name <span class="mod-required-star">*</span></label>
@@ -507,6 +525,19 @@
   }
   document.getElementById('char-editor-nsfw-toggle').addEventListener('change', function () {
     setCharNsfwToggleLabel(this.checked);
+  });
+
+  // Official Art toggle -- defaults to "Yes" (most refs people upload are
+  // their own/commissioned art); flipping to "No" reveals an optional
+  // source-link field instead of forcing one.
+  function setCharOfficialToggleLabel(isOfficial) {
+    const label = document.getElementById('char-editor-official-toggle-label');
+    label.textContent = isOfficial ? 'Official Art' : 'Found Elsewhere';
+    label.classList.toggle('nsfw-toggle-label--official', isOfficial);
+    document.getElementById('char-editor-art-source-field').style.display = isOfficial ? 'none' : '';
+  }
+  document.getElementById('char-editor-official-toggle').addEventListener('change', function () {
+    setCharOfficialToggleLabel(this.checked);
   });
 
   const NA = 'N/A';
@@ -957,6 +988,9 @@
       document.getElementById('char-editor-ref-placeholder').style.display = 'none';
       document.getElementById('char-editor-ref-recrop-btn').style.display = 'block';
       document.getElementById('char-editor-nsfw-field').style.display = 'block';
+      document.getElementById('char-editor-official-toggle').checked = true;
+      document.getElementById('char-editor-art-source').value = '';
+      setCharOfficialToggleLabel(true);
     } else {
       document.getElementById('char-editor-msg').className = 'mod-panel-msg mod-panel-msg--error';
       document.getElementById('char-editor-msg').textContent = 'Image upload failed. Please try again.';
@@ -1011,10 +1045,13 @@
       }))
       .filter(r => r.name);
 
+    const isOfficialArt = document.getElementById('char-editor-official-toggle').checked;
     const body = {
       name,
       ref_image: uploadedRefUrl,
       ref_is_nsfw: document.getElementById('char-editor-nsfw-toggle').checked,
+      is_official_art: isOfficialArt,
+      official_art_source_url: isOfficialArt ? '' : document.getElementById('char-editor-art-source').value.trim(),
       description: document.getElementById('char-editor-desc').value.trim(),
       stats,
       facts,
@@ -1138,6 +1175,10 @@
           document.getElementById('char-editor-nsfw-field').style.display = 'block';
           document.getElementById('char-editor-nsfw-toggle').checked = !!character.ref_is_nsfw;
           setCharNsfwToggleLabel(!!character.ref_is_nsfw);
+          const isOfficial = character.is_official_art !== false;
+          document.getElementById('char-editor-official-toggle').checked = isOfficial;
+          document.getElementById('char-editor-art-source').value = character.official_art_source_url || '';
+          setCharOfficialToggleLabel(isOfficial);
         }
       }
 

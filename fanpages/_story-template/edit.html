@@ -482,9 +482,27 @@
           <span class="nsfw-toggle-slider"></span>
         </label>
         <span class="nsfw-toggle-label nsfw-toggle-label--sfw" id="char-editor-nsfw-toggle-label">Safe For Work</span>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="NSFW image help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Is your character reference image NSFW? If so, please label it above! :3</p></div>
       </div>
-      <p class="mod-tip-box" style="margin-top:0.5rem;">Is your character reference image NSFW? If so, please label it above! :3</p>
+
+      <div class="nsfw-toggle-row nsfw-toggle-row--official" style="margin-top:0.85rem;">
+        <label class="nsfw-toggle-switch">
+          <input type="checkbox" id="char-editor-official-toggle" checked />
+          <span class="nsfw-toggle-slider"></span>
+        </label>
+        <span class="nsfw-toggle-label nsfw-toggle-label--official" id="char-editor-official-toggle-label">Official Art</span>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Official art help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Is this official art of your character that you own, or is it a reference you found online/elsewhere?</p></div>
+      </div>
+
+      <div class="mod-field" id="char-editor-art-source-field" style="display:none; margin-top:0.75rem;">
+        <label for="char-editor-art-source">Link the source you found this image from? <span style="color:#888; font-weight:400; font-size:0.85em;">(Optional)</span></label>
+        <input class="mod-input" id="char-editor-art-source" placeholder="https://..." />
+      </div>
     </div>
+
+    <hr class="char-editor-field-hr" />
 
     <div class="mod-field">
       <label for="char-editor-name">Name <span class="mod-required-star">*</span></label>
@@ -1035,7 +1053,11 @@
           <div class="cs-field-title-row">
             <p class="gallery-cat-label">Rating</p>
             <button class="wiki-tags-tip-icon" type="button" aria-label="Rating help">💡</button>
-            <div class="wiki-tags-tip-popover" hidden><p>All NSFW (18+) artwork must be labeled as Mature/Explicit. Visit our <a href="/fanpages/tos#ratings-and-tags" target="_blank" style="color:#7fa8d9;">ratings and tags</a> to learn more if needed~</p></div>
+            <div class="wiki-tags-tip-popover" hidden>
+              <p><strong>General</strong> — Suitable for everyone</p>
+              <p><strong>Mature</strong> — Erotica smut, light themes of violence, language, or other mature elements that don't teeter into strictly explicit.</p>
+              <p><strong>Explicit</strong> — Direct porn, graphical violence, and/or strictly adult content</p>
+            </div>
           </div>
           <div class="gallery-cat-row" id="se-gallery-editor-cat-row">
             <label class="gallery-cat-option">
@@ -2033,6 +2055,8 @@ function normalizeChar(r) {
     lore: r.lore || [],
     relationships: r.relationships || [],
     refIsNsfw: !!r.ref_is_nsfw,
+    isOfficialArt: r.is_official_art !== false,
+    officialArtSourceUrl: r.official_art_source_url || '',
     isMine: !!r.is_mine,
     ownerName: r.owner_display_name || r.owner_username || null,
   };
@@ -2622,6 +2646,10 @@ function openCharEditor(char) {
   nsfwField.style.display = isCustomRef ? 'block' : 'none';
   nsfwToggle.checked = isCustomRef && char ? !!char.refIsNsfw : false;
   setCharNsfwToggleLabel(nsfwToggle.checked);
+  const isOfficial = isCustomRef && char ? char.isOfficialArt !== false : true;
+  document.getElementById('char-editor-official-toggle').checked = isOfficial;
+  document.getElementById('char-editor-art-source').value = (isCustomRef && char) ? (char.officialArtSourceUrl || '') : '';
+  setCharOfficialToggleLabel(isOfficial);
 
   document.getElementById('char-editor-name').value = char ? char.name : '';
   document.getElementById('char-editor-desc').value = char ? char.desc.join('\n\n') : '';
@@ -2671,6 +2699,18 @@ function setCharNsfwToggleLabel(isNsfw) {
 }
 document.getElementById('char-editor-nsfw-toggle').addEventListener('change', function () {
   setCharNsfwToggleLabel(this.checked);
+});
+
+// Official Art toggle -- defaults to "Yes"; flipping to "No" reveals an
+// optional source-link field instead of forcing one.
+function setCharOfficialToggleLabel(isOfficial) {
+  const label = document.getElementById('char-editor-official-toggle-label');
+  label.textContent = isOfficial ? 'Official Art' : 'Found Elsewhere';
+  label.classList.toggle('nsfw-toggle-label--official', isOfficial);
+  document.getElementById('char-editor-art-source-field').style.display = isOfficial ? 'none' : '';
+}
+document.getElementById('char-editor-official-toggle').addEventListener('change', function () {
+  setCharOfficialToggleLabel(this.checked);
 });
 
 document.getElementById('char-editor-delete-forever').addEventListener('click', async () => {
@@ -2746,6 +2786,9 @@ async function uploadRefImage(blob) {
     document.getElementById('char-editor-ref-placeholder').style.display = 'none';
     document.getElementById('char-editor-ref-recrop-btn').style.display = 'block';
     document.getElementById('char-editor-nsfw-field').style.display = 'block';
+    document.getElementById('char-editor-official-toggle').checked = true;
+    document.getElementById('char-editor-art-source').value = '';
+    setCharOfficialToggleLabel(true);
   } else {
     document.getElementById('char-editor-msg').className = 'mod-panel-msg mod-panel-msg--error';
     document.getElementById('char-editor-msg').textContent = 'Image upload failed. Please try again.';
@@ -2799,10 +2842,13 @@ document.getElementById('char-editor-save').addEventListener('click', async () =
     }))
     .filter(r => r.name);
 
+  const isOfficialArt = document.getElementById('char-editor-official-toggle').checked;
   const body = {
     name,
     ref_image: uploadedRefUrl,
     ref_is_nsfw: document.getElementById('char-editor-nsfw-toggle').checked,
+    is_official_art: isOfficialArt,
+    official_art_source_url: isOfficialArt ? '' : document.getElementById('char-editor-art-source').value.trim(),
     description: document.getElementById('char-editor-desc').value.trim(),
     stats,
     facts,
