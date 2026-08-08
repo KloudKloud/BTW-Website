@@ -152,12 +152,18 @@
        bigger/bolder label that actually sits level with the select now
        that the hidden-attribute bug above is fixed. */
     .fp-browse-sort-wrap:not([hidden]) {
-      display: flex; align-items: center; gap: 0.7rem; flex-shrink: 0;
+      display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0;
+    }
+    .fp-browse-sort-wrap label {
+      font-size: 1.02rem; color: #f0f0f0; font-weight: 700; font-family: 'Fredoka', 'Lato', cursive;
+      white-space: nowrap;
+    }
+    .fp-browse-sort-box {
+      display: flex; align-items: center;
       padding: 0.55rem 1rem; border-radius: 14px; border: 1px solid rgba(255,255,255,0.16);
       background: linear-gradient(160deg, rgba(10,8,14,0.78), rgba(10,8,14,0.68)), url('/images/home/box-background-2.png');
       background-size: cover; background-position: center;
     }
-    .fp-browse-sort-wrap label { font-size: 1.02rem; color: #f0f0f0; font-weight: 700; font-family: 'Fredoka', 'Lato', cursive; }
 
     /* Justified photo-wall grid — ported from the Fanpage Hub's "Recent
        Submissions" box (fanpages/index.html: rs-grid/rs-row/rs-card),
@@ -717,7 +723,7 @@
     .fp-filter-word-row input { flex: 1; min-width: 0; }
     .fp-filter-word-row span { color: #888; }
 
-    /* Fandoms/Relationships/Additional Tags smart typeahead -- replaces the
+    /* Fandoms/Additional Tags smart typeahead -- replaces the
        native <datalist> popup, which dumped the entire catalog open on
        click/focus. Same body-appended, fixed-position dropdown pattern as
        the Story Editor's own tag/fandom typeahead (create.html /
@@ -828,12 +834,14 @@
       <h1 class="fp-browse-heading" id="fp-browse-heading"></h1>
       <div class="fp-browse-sort-wrap" id="fp-browse-sort-wrap" hidden>
         <label for="fp-browse-sort">Sort By</label>
-        <select id="fp-browse-sort" class="fp-sort-select">
-          <option value="updated">Date Updated</option>
-          <option value="best_match">Best Match</option>
-          <option value="kudos">Likes</option>
-          <option value="hits">Reads</option>
-        </select>
+        <div class="fp-browse-sort-box">
+          <select id="fp-browse-sort" class="fp-sort-select">
+            <option value="updated">Date Updated</option>
+            <option value="best_match">Best Match</option>
+            <option value="kudos">Likes</option>
+            <option value="hits">Reads</option>
+          </select>
+        </div>
       </div>
     </div>
     <p class="fp-search-sub" id="fp-search-sub"></p>
@@ -890,13 +898,6 @@
         <div class="wiki-suggest-input-wrap" id="f-fandoms-wrap">
           <input type="text" id="f-fandoms" placeholder="e.g. Pokémon" autocomplete="off" style="margin-top:0.7rem;" />
           <div class="wiki-fandom-suggest" id="f-fandoms-suggest" hidden></div>
-        </div>
-      </details>
-      <details class="fp-filter-details">
-        <summary>Relationships</summary>
-        <div class="wiki-suggest-input-wrap" id="f-relationships-wrap">
-          <input type="text" id="f-relationships" placeholder="Comma-separated" autocomplete="off" style="margin-top:0.7rem;" />
-          <div class="wiki-fandom-suggest" id="f-relationships-suggest" hidden></div>
         </div>
       </details>
       <details class="fp-filter-details">
@@ -1492,7 +1493,6 @@ function applyParamsToPanel(f) {
   document.getElementById('fp-story-search-input').value = f.q || '';
   document.getElementById('f-sort').value = f.sort || 'best_match';
   document.getElementById('f-fandoms').value = f.fandoms;
-  document.getElementById('f-relationships').value = f.relationships;
   document.getElementById('f-tags-include').value = f.tags_include;
   document.getElementById('f-tags-exclude').value = f.tags_exclude;
   document.getElementById('f-word-min').value = f.word_min;
@@ -1522,8 +1522,6 @@ function collectPanelParams() {
   params.sort = document.getElementById('f-sort').value;
   const fandoms = document.getElementById('f-fandoms').value.trim();
   if (fandoms) params.fandoms = fandoms;
-  const relationships = document.getElementById('f-relationships').value.trim();
-  if (relationships) params.relationships = relationships;
   const ratings = [...document.querySelectorAll('#f-rating-options input:checked')].map(c => c.value);
   if (ratings.length < STORY_RATING_VALUES.length) params.ratings = ratings.join(',');
   const tagsInclude = document.getElementById('f-tags-include').value.trim();
@@ -1543,7 +1541,6 @@ function collectPanelParams() {
 
 let fpTagCatalog = [];
 let fpFandomCatalog = [];
-let fpRelationshipCatalog = [];
 async function loadCatalogsForAutocomplete() {
   try {
     const res = await fetch('/api/tag-catalog');
@@ -1555,14 +1552,9 @@ async function loadCatalogsForAutocomplete() {
     const data = await res.json();
     fpFandomCatalog = data.fandoms || [];
   } catch {}
-  try {
-    const res = await fetch('/api/relationship-catalog');
-    const data = await res.json();
-    fpRelationshipCatalog = data.relationships || [];
-  } catch {}
 }
 
-// ── Fandoms/Relationships/Additional Tags -- smart typeahead ───────────────
+// ── Fandoms/Additional Tags -- smart typeahead ───────────────
 // Body-appended, fixed-position dropdown (see the .wiki-fandom-suggest CSS
 // comment above for why) that only shows once there's a query -- no
 // dropdown at all until the user actually starts typing.
@@ -1655,7 +1647,6 @@ function wireFilterTypeahead(inputId, dropdownId, getCatalog) {
   });
 }
 wireFilterTypeahead('f-fandoms', 'f-fandoms-suggest', () => fpFandomCatalog);
-wireFilterTypeahead('f-relationships', 'f-relationships-suggest', () => fpRelationshipCatalog);
 wireFilterTypeahead('f-tags-include', 'f-tags-include-suggest', () => fpTagCatalog);
 wireFilterTypeahead('f-tags-exclude', 'f-tags-exclude-suggest', () => fpTagCatalog);
 
@@ -1755,8 +1746,8 @@ document.getElementById('fp-story-search-input').addEventListener('keydown', (e)
 });
 // Enter in the word-count fields snapshots the whole panel (not just that
 // one field) and searches immediately, same as the Quick Search box -- no
-// need to also go click "Sort and Filter" separately. The Fandoms/
-// Relationships/Tags fields get the same Enter-to-search behavior too, but
+// need to also go click "Sort and Filter" separately. The Fandoms/Tags
+// fields get the same Enter-to-search behavior too, but
 // it's wired below as part of their typeahead (Enter there either picks a
 // suggestion or searches, depending on whether the dropdown's open).
 ['f-word-min', 'f-word-max'].forEach(id => {

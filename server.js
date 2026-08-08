@@ -3846,11 +3846,25 @@ app.get('/api/search/works', async (req, res) => {
         OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.fandoms) t WHERE t ILIKE '%' || $1 || '%')
         OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.relationships) t WHERE t ILIKE '%' || $1 || '%')
       ))
-      AND (cardinality($2::text[]) = 0 OR ms.fandoms ?& $2)
-      AND (cardinality($3::text[]) = 0 OR ms.tags ?& $3)
-      AND (cardinality($4::text[]) = 0 OR NOT (ms.tags ?| $4))
-      AND (cardinality($5::text[]) = 0 OR ms.categories ?& $5)
-      AND (cardinality($6::text[]) = 0 OR ms.relationships ?& $6)
+      AND (cardinality($2::text[]) = 0 OR NOT EXISTS (
+        SELECT 1 FROM unnest($2::text[]) want
+        WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.fandoms) t WHERE lower(t) = lower(want))
+      ))
+      AND (cardinality($3::text[]) = 0 OR NOT EXISTS (
+        SELECT 1 FROM unnest($3::text[]) want
+        WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.tags) t WHERE lower(t) = lower(want))
+      ))
+      AND (cardinality($4::text[]) = 0 OR NOT EXISTS (
+        SELECT 1 FROM jsonb_array_elements_text(ms.tags) t, unnest($4::text[]) ex WHERE lower(t) = lower(ex)
+      ))
+      AND (cardinality($5::text[]) = 0 OR NOT EXISTS (
+        SELECT 1 FROM unnest($5::text[]) want
+        WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.categories) t WHERE lower(t) = lower(want))
+      ))
+      AND (cardinality($6::text[]) = 0 OR NOT EXISTS (
+        SELECT 1 FROM unnest($6::text[]) want
+        WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.relationships) t WHERE lower(t) = lower(want))
+      ))
       AND (cardinality($7::text[]) = 0 OR ms.rating = ANY($7::text[]))
       AND ($8::int IS NULL OR pubchap.word_count >= $8)
       AND ($9::int IS NULL OR pubchap.word_count <= $9)
