@@ -620,11 +620,18 @@
     `;
     wrap.appendChild(menu);
     menu.querySelector('[data-action="view"]').addEventListener('click', (e) => {
+      e.preventDefault();
       e.stopPropagation();
       window.open(moreMenu.profileHref, '_blank');
       closeAllMoreMenus();
     });
     menu.querySelector('[data-action="delete"]').addEventListener('click', async (e) => {
+      // These buttons live inside the card's own <a href>, so without
+      // preventDefault the browser still follows that link the instant this
+      // handler returns (stopPropagation alone doesn't stop it) -- racing
+      // the in-flight DELETE request and navigating to the edit page for a
+      // character that may have just been (or is about to be) removed.
+      e.preventDefault();
       e.stopPropagation();
       closeAllMoreMenus();
       if (!confirm(`Delete this ${moreMenu.label.toLowerCase()}? This can't be undone.`)) return;
