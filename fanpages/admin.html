@@ -84,6 +84,13 @@
     .adm-catalog-card-label { display: block; font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-top: 0.4rem; text-transform: uppercase; letter-spacing: 0.12em; }
 
     /* Tag Dictionary tab */
+    .adm-pending-merge-divider {
+      display: flex; align-items: center; gap: 0.75rem; margin: 1.25rem 0;
+      color: #666; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .adm-pending-merge-divider::before, .adm-pending-merge-divider::after {
+      content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.1);
+    }
     .adm-dict-section { margin-bottom: 2.5rem; }
     .adm-dict-heading { font-family: 'Cinzel', serif; font-size: 1.2rem; color: #f0f0f0; margin: 0 0 0.35rem; }
     .adm-dict-sub { color: #888; font-size: 0.82rem; margin: 0 0 1rem; }
@@ -352,6 +359,19 @@
     <div class="char-editor-actions">
       <button class="mod-btn" id="adm-pending-cancel" type="button">Cancel</button>
       <button class="mod-btn" id="adm-pending-save" type="button" style="background:#1fb6a8;color:#fff;">Add to Dictionary</button>
+    </div>
+
+    <div class="adm-pending-merge-divider"><span>or</span></div>
+
+    <div class="mod-field">
+      <label for="adm-pending-merge-input">Merge into an existing tag instead</label>
+      <input class="mod-input" id="adm-pending-merge-input" list="adm-pending-merge-list" placeholder="Start typing an existing tag…" autocomplete="off" />
+      <datalist id="adm-pending-merge-list"></datalist>
+      <p class="char-editor-facts-hint">Deny this as its own entry and fold it into an existing one — every post already using "<span id="adm-pending-merge-alias-label"></span>" gets rewritten to match, and anyone who types it in the future gets nudged toward the tag you pick here.</p>
+    </div>
+    <p class="mod-panel-msg" id="adm-pending-merge-msg"></p>
+    <div class="char-editor-actions">
+      <button class="mod-btn" id="adm-pending-merge-btn" type="button">Merge</button>
     </div>
   </div>
 </div>
@@ -1065,19 +1085,27 @@ async function togglePendingSection(kind) {
 document.getElementById('dict-tag-pending-btn').addEventListener('click', () => togglePendingSection('tag'));
 document.getElementById('dict-species-pending-btn').addEventListener('click', () => togglePendingSection('species'));
 
+let activePendingAlias = null;
 function openPendingModal(kind, name, count) {
   activePendingKind = kind;
+  activePendingAlias = name;
   const cfg = PENDING_KINDS[kind];
   document.getElementById('adm-pending-title').textContent = kind === 'species' ? 'Add Character Species' : 'Add Additional Tag';
   document.getElementById('adm-pending-usage').textContent = `Currently used ${count} time${count === 1 ? '' : 's'} on ${kind === 'species' ? 'characters' : 'stories/gallery posts'}.`;
   document.getElementById('adm-pending-input').value = name;
   document.getElementById('adm-pending-msg').textContent = '';
+  document.getElementById('adm-pending-merge-input').value = '';
+  document.getElementById('adm-pending-merge-msg').textContent = '';
+  document.getElementById('adm-pending-merge-alias-label').textContent = name;
+  const datalist = document.getElementById('adm-pending-merge-list');
+  datalist.innerHTML = dictData[cfg.dictKey].map(t => `<option value="${escapeHtml(t)}"></option>`).join('');
   document.getElementById('adm-pending-overlay').hidden = false;
   document.getElementById('adm-pending-input').focus();
 }
 function closePendingModal() {
   document.getElementById('adm-pending-overlay').hidden = true;
   activePendingKind = null;
+  activePendingAlias = null;
 }
 document.getElementById('adm-pending-cancel').addEventListener('click', closePendingModal);
 document.getElementById('adm-pending-save').addEventListener('click', async () => {
@@ -1122,6 +1150,48 @@ document.getElementById('adm-pending-save').addEventListener('click', async () =
   } finally {
     btn.disabled = false;
     btn.textContent = 'Add to Dictionary';
+  }
+});
+
+// Merge — denies the pending entry as its own dictionary addition and
+// folds it into an existing tag/species instead (real AO3-style tag
+// wrangling). Rewrites every row already using it and records the alias
+// so future submissions of it snap straight to the canonical entry.
+document.getElementById('adm-pending-merge-btn').addEventListener('click', async () => {
+  if (!activePendingKind) return;
+  const kind = activePendingKind;
+  const alias = activePendingAlias;
+  const msgEl = document.getElementById('adm-pending-merge-msg');
+  const canonical = document.getElementById('adm-pending-merge-input').value.trim();
+  if (!canonical) {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Pick an existing tag to merge into.';
+    return;
+  }
+  const btn = document.getElementById('adm-pending-merge-btn');
+  btn.disabled = true;
+  btn.textContent = 'Merging…';
+  try {
+    const res = await fetch('/api/admin/dictionary-synonyms', {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, alias, canonical }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+      msgEl.textContent = data.error || 'Something went wrong. Please try again.';
+      return;
+    }
+    pendingCache[kind] = (pendingCache[kind] || []).filter(r => r.name.toLowerCase() !== alias.toLowerCase());
+    renderPendingList(kind);
+    closePendingModal();
+  } catch {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Network error. Please try again.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Merge';
   }
 });
 

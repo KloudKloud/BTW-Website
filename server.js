@@ -492,6 +492,24 @@ async function initDb() {
     ON CONFLICT (name) DO NOTHING
   `).catch(e => console.error('character_species_catalog seed:', e.message));
 
+  // Dictionary synonyms — real AO3-style tag wrangling: an admin reviewing a
+  // pending tag/species can "merge" it into an existing catalog entry
+  // instead of adding it as its own new entry (e.g. someone typed "Male/Male"
+  // when the dictionary already has "M/M"). `kind` scopes the alias to
+  // whichever catalog it belongs to ('tag' or 'species' today) since the two
+  // vocabularies are otherwise independent. Both `snapToCatalogCasing` (the
+  // server-side save path) and the client typeahead consult this table so a
+  // future "Male/Male" both saves as, and gets suggested as, "M/M".
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS dictionary_synonyms (
+      id SERIAL PRIMARY KEY,
+      kind TEXT NOT NULL,
+      alias TEXT NOT NULL,
+      canonical TEXT NOT NULL,
+      UNIQUE (kind, alias)
+    );
+  `).catch(e => console.error('dictionary_synonyms migration:', e.message));
+
   // Structured relationships — replaces the old free-text stats.Relationships
   // string. Each entry is { name, type, character_id }, where character_id
   // (nullable) lets one character's relationship list link straight to
@@ -5957,16 +5975,28 @@ app.put('/api/moderator/site/nav-card/:kind/position', requireAuth, requireModer
 // trust boundary — the client-side tag inputs already do this snap for a
 // good UX, but a hand-crafted request could still send anything, so it
 // has to be enforced again here.
+// Which dictionary_synonyms `kind` backs each catalog table -- only tables
+// with a wrangling flow in the admin UI need a lookup here.
+const SYNONYM_KIND_BY_TABLE = { tag_catalog: 'tag', character_species_catalog: 'species' };
+
 async function snapToCatalogCasing(tableName, values, maxLen, maxCount) {
   const { rows } = await pool.query(`SELECT name FROM ${tableName}`);
   const catalogMap = new Map(rows.map(r => [r.name.toLowerCase(), r.name]));
+  const kind = SYNONYM_KIND_BY_TABLE[tableName];
+  let synonymMap = new Map();
+  if (kind) {
+    const { rows: synRows } = await pool.query('SELECT alias, canonical FROM dictionary_synonyms WHERE kind = $1', [kind]);
+    synonymMap = new Map(synRows.map(r => [r.alias.toLowerCase(), r.canonical]));
+  }
   const seen = new Set();
   const out = [];
   for (const v of values) {
     if (typeof v !== 'string') continue;
     const collapsed = v.trim().replace(/\s+/g, ' ').slice(0, maxLen);
     if (!collapsed) continue;
-    const clean = catalogMap.get(collapsed.toLowerCase()) || collapsed;
+    // A merged alias (e.g. "Male/Male" -> "M/M") wins over a plain casing
+    // snap -- it's a deliberate wrangling decision, not just a case fix.
+    const clean = synonymMap.get(collapsed.toLowerCase()) || catalogMap.get(collapsed.toLowerCase()) || collapsed;
     const key = clean.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
@@ -6174,6 +6204,7 @@ app.get('/api/admin/pending-tags', requireAuth, requireAdmin, async (req, res) =
       SELECT jsonb_array_elements_text(tags) AS t FROM moderator_gallery
     ) all_tags
     WHERE NOT EXISTS (SELECT 1 FROM tag_catalog tc WHERE lower(tc.name) = lower(all_tags.t))
+      AND NOT EXISTS (SELECT 1 FROM dictionary_synonyms ds WHERE ds.kind = 'tag' AND lower(ds.alias) = lower(all_tags.t))
     GROUP BY t ORDER BY count DESC, t ASC
   `);
   res.json({ pending: rows });
@@ -6188,9 +6219,87 @@ app.get('/api/admin/pending-species', requireAuth, requireAdmin, async (req, res
       WHERE stats ? 'Species' AND trim(COALESCE(stats->>'Species', '')) <> ''
     ) all_species
     WHERE NOT EXISTS (SELECT 1 FROM character_species_catalog csc WHERE lower(csc.name) = lower(all_species.s))
+      AND NOT EXISTS (SELECT 1 FROM dictionary_synonyms ds WHERE ds.kind = 'species' AND lower(ds.alias) = lower(all_species.s))
     GROUP BY s ORDER BY count DESC, s ASC
   `);
   res.json({ pending: rows });
+});
+
+// POST /api/admin/dictionary-synonyms — real tag-wrangling: merges a pending
+// freeform value ("Male/Male") into an existing catalog entry ("M/M")
+// instead of admitting it as its own new entry. Retroactively rewrites
+// every row currently using the alias (not just a forward-looking
+// suggestion), and records the alias so snapToCatalogCasing() snaps future
+// submissions of it straight to the canonical entry too, and the client
+// typeahead can nudge writers toward it as they type.
+app.post('/api/admin/dictionary-synonyms', requireAuth, requireAdmin, async (req, res) => {
+  const kind = req.body.kind;
+  const alias = String(req.body.alias || '').trim();
+  const canonicalInput = String(req.body.canonical || '').trim();
+  if (!['tag', 'species'].includes(kind) || !alias || !canonicalInput) {
+    return res.status(400).json({ error: 'kind, alias, and canonical are required.' });
+  }
+  const catalogTable = kind === 'tag' ? 'tag_catalog' : 'character_species_catalog';
+  const { rows: [catalogRow] } = await pool.query(
+    `SELECT name FROM ${catalogTable} WHERE lower(name) = lower($1)`, [canonicalInput]
+  );
+  if (!catalogRow) return res.status(400).json({ error: "That target isn't in the dictionary yet." });
+  const canonical = catalogRow.name;
+  if (canonical.toLowerCase() === alias.toLowerCase()) {
+    return res.status(400).json({ error: "Can't merge a tag into itself." });
+  }
+
+  await pool.query(
+    `INSERT INTO dictionary_synonyms (kind, alias, canonical) VALUES ($1, $2, $3)
+     ON CONFLICT (kind, alias) DO UPDATE SET canonical = EXCLUDED.canonical`,
+    [kind, alias, canonical]
+  );
+
+  let updated = 0;
+  if (kind === 'tag') {
+    for (const table of ['moderator_sites', 'moderator_gallery']) {
+      const { rows } = await pool.query(
+        `SELECT id, tags FROM ${table}
+         WHERE EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) t WHERE lower(t) = lower($1))`,
+        [alias]
+      );
+      for (const row of rows) {
+        const seen = new Set();
+        const nextTags = [];
+        for (const t of row.tags) {
+          const mapped = t.toLowerCase() === alias.toLowerCase() ? canonical : t;
+          const key = mapped.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          nextTags.push(mapped);
+        }
+        await pool.query(`UPDATE ${table} SET tags = $1 WHERE id = $2`, [JSON.stringify(nextTags), row.id]);
+        updated++;
+      }
+    }
+  } else {
+    const { rows } = await pool.query(
+      `SELECT id FROM moderator_characters WHERE lower(stats->>'Species') = lower($1)`, [alias]
+    );
+    for (const row of rows) {
+      await pool.query(
+        `UPDATE moderator_characters SET stats = jsonb_set(stats, '{Species}', to_jsonb($1::text)) WHERE id = $2`,
+        [canonical, row.id]
+      );
+      updated++;
+    }
+  }
+
+  res.json({ canonical, updated });
+});
+
+// GET /api/dictionary-synonyms?kind=tag|species — public, powers the
+// typeahead's "did you mean the canonical tag?" nudge for whatever an admin
+// has already wrangled (e.g. typing "Male/Male" surfaces "M/M").
+app.get('/api/dictionary-synonyms', async (req, res) => {
+  const kind = ['tag', 'species'].includes(req.query.kind) ? req.query.kind : 'tag';
+  const { rows } = await pool.query('SELECT alias, canonical FROM dictionary_synonyms WHERE kind = $1', [kind]);
+  res.json({ synonyms: rows });
 });
 
 // DELETE /api/moderator/site — permanently deletes the whole story. Characters/

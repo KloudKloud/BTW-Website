@@ -46,6 +46,18 @@
       padding: 0.6rem 0.9rem; cursor: pointer;
     }
     .wiki-fandom-suggest-item:hover, .wiki-fandom-suggest-item.active { background: rgba(127,168,217,0.15); }
+    /* A wrangled synonym match (e.g. typing "Male/Male" when the dictionary
+       already has "M/M") gets shown bigger and gold-accented so it's the
+       obvious, tempting click over adding yet another near-duplicate. */
+    .wiki-fandom-suggest-item--merge {
+      background: rgba(240,192,96,0.08); border-left: 3px solid #f0c060;
+      padding-left: calc(0.9rem - 3px); font-size: 0.95rem; font-weight: 700;
+    }
+    .wiki-fandom-suggest-item--merge:hover, .wiki-fandom-suggest-item--merge.active { background: rgba(240,192,96,0.18); }
+    .wiki-fandom-suggest-item-hint {
+      display: block; font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #f0c060; margin-bottom: 0.15rem;
+    }
 
     /* ── Story Details tab — cover + quick-nav cards glued to the left in
        their own sticky box (small, out of the way), fields on the right in
@@ -1359,7 +1371,7 @@ relationshipsTextInput.addEventListener('keydown', (e) => {
     items.forEach((el, i) => el.classList.toggle('active', i === relationshipsSuggestIndex));
   } else if (e.key === 'Enter' || e.key === ',') {
     e.preventDefault();
-    const picked = relationshipsSuggestIndex >= 0 && items[relationshipsSuggestIndex] ? items[relationshipsSuggestIndex].textContent : relationshipsTextInput.value;
+    const picked = relationshipsSuggestIndex >= 0 && items[relationshipsSuggestIndex] ? items[relationshipsSuggestIndex].dataset.name : relationshipsTextInput.value;
     addWorkingRelationship(picked);
     relationshipsTextInput.value = '';
     renderSuggestDropdown('relationships-suggest', [], () => {});
@@ -1468,7 +1480,7 @@ fandomTextInput.addEventListener('keydown', (e) => {
     items.forEach((el, i) => el.classList.toggle('active', i === fandomSuggestIndex));
   } else if (e.key === 'Enter' || e.key === ',') {
     e.preventDefault();
-    const picked = fandomSuggestIndex >= 0 && items[fandomSuggestIndex] ? items[fandomSuggestIndex].textContent : fandomTextInput.value;
+    const picked = fandomSuggestIndex >= 0 && items[fandomSuggestIndex] ? items[fandomSuggestIndex].dataset.name : fandomTextInput.value;
     addWorkingFandom(picked);
     fandomTextInput.value = '';
     renderFandomSuggest([]);
@@ -1488,6 +1500,11 @@ document.addEventListener('click', (e) => {
 // enough to reuse for all three instead of tripling the same block. Their
 // anchor boxes follow two different id conventions ("-input-box" for
 // Relationships/Tags, plain "-box" for Species), so both are tried.
+// Each entry in `matches` is either a plain string, or (for a wrangled
+// synonym nudge, e.g. typing "Male/Male" surfacing "M/M") an
+// { name, merge: true } object rendered bigger/gold-accented with a "Did
+// you mean" hint. `data-name` is always the real value to commit —
+// .textContent isn't safe to read back once a hint label is involved.
 function renderSuggestDropdown(wrapId, matches, onPick) {
   const wrap = document.getElementById(wrapId);
   const anchorId = [wrapId.replace('-suggest', '-input-box'), wrapId.replace('-suggest', '-box')]
@@ -1496,10 +1513,16 @@ function renderSuggestDropdown(wrapId, matches, onPick) {
   wrap.dataset.anchor = anchorId;
   if (!matches.length) { wrap.hidden = true; wrap.innerHTML = ''; return; }
   positionSuggestDropdown(wrap, anchorId);
-  wrap.innerHTML = matches.map(m => `<button type="button" class="wiki-fandom-suggest-item">${escapeHtml(m)}</button>`).join('');
+  wrap.innerHTML = matches.map(m => {
+    const name = typeof m === 'string' ? m : m.name;
+    const isMerge = typeof m === 'object' && m.merge;
+    const cls = isMerge ? 'wiki-fandom-suggest-item wiki-fandom-suggest-item--merge' : 'wiki-fandom-suggest-item';
+    const label = isMerge ? `<span class="wiki-fandom-suggest-item-hint">Did you mean</span>${escapeHtml(name)}` : escapeHtml(name);
+    return `<button type="button" class="${cls}" data-name="${escapeHtml(name)}">${label}</button>`;
+  }).join('');
   wrap.hidden = false;
   wrap.querySelectorAll('.wiki-fandom-suggest-item').forEach(btn => {
-    btn.addEventListener('mousedown', (e) => { e.preventDefault(); onPick(btn.textContent); });
+    btn.addEventListener('mousedown', (e) => { e.preventDefault(); onPick(btn.dataset.name); });
   });
 }
 
@@ -1508,6 +1531,8 @@ function renderSuggestDropdown(wrapId, matches, onPick) {
 // capped at one value, since a character only has a single species. ──────
 let workingSpecies = '';
 let speciesCatalog = [];
+// alias (lowercase) -> canonical, from admin-wrangled species merges.
+let speciesSynonyms = new Map();
 
 function renderSpeciesEditor() {
   const box = document.getElementById('char-editor-species-box');
@@ -1541,7 +1566,11 @@ let speciesSuggestIndex = -1;
 speciesInput.addEventListener('input', () => {
   const q = speciesInput.value.trim().toLowerCase();
   if (!q) { renderSuggestDropdown('char-editor-species-suggest', [], () => {}); return; }
-  const matches = speciesCatalog.filter(s => s.toLowerCase().includes(q)).slice(0, 6);
+  let matches = speciesCatalog.filter(s => s.toLowerCase().includes(q)).slice(0, 6);
+  const aliasEntry = [...speciesSynonyms.entries()].find(([alias]) => alias.includes(q));
+  if (aliasEntry) {
+    matches = [{ name: aliasEntry[1], merge: true }, ...matches.filter(s => s.toLowerCase() !== aliasEntry[1].toLowerCase())].slice(0, 6);
+  }
   speciesSuggestIndex = -1;
   renderSuggestDropdown('char-editor-species-suggest', matches, (val) => {
     setWorkingSpecies(val);
@@ -1561,7 +1590,7 @@ speciesInput.addEventListener('keydown', (e) => {
     items.forEach((el, i) => el.classList.toggle('active', i === speciesSuggestIndex));
   } else if (e.key === 'Enter') {
     e.preventDefault();
-    const picked = speciesSuggestIndex >= 0 && items[speciesSuggestIndex] ? items[speciesSuggestIndex].textContent : speciesInput.value;
+    const picked = speciesSuggestIndex >= 0 && items[speciesSuggestIndex] ? items[speciesSuggestIndex].dataset.name : speciesInput.value;
     setWorkingSpecies(picked);
     speciesInput.value = '';
     renderSuggestDropdown('char-editor-species-suggest', [], () => {});
@@ -1580,10 +1609,14 @@ document.addEventListener('click', (e) => {
   }
 });
 fetch('/api/character-species-catalog').then(r => r.ok ? r.json() : { species: [] }).then(d => { speciesCatalog = d.species || []; }).catch(() => {});
+fetch('/api/dictionary-synonyms?kind=species').then(r => r.ok ? r.json() : { synonyms: [] })
+  .then(d => { speciesSynonyms = new Map(d.synonyms.map(s => [s.alias.toLowerCase(), s.canonical])); }).catch(() => {});
 
 // ── Additional Tags — e621/Wattpad-style bubble input ───────────────────────
 let workingTags = [];
 let tagsCatalog = [];
+// alias (lowercase) -> canonical, from admin-wrangled tag merges.
+let tagSynonyms = new Map();
 
 function renderTagsEditor() {
   const box = document.getElementById('tags-input-box');
@@ -1624,7 +1657,13 @@ let tagsSuggestIndex = -1;
 tagsTextInput.addEventListener('input', () => {
   const q = tagsTextInput.value.trim().toLowerCase();
   if (!q) { renderSuggestDropdown('tags-suggest', [], () => {}); return; }
-  const matches = tagsCatalog.filter(t => t.toLowerCase().includes(q) && !workingTags.some(w => w.toLowerCase() === t.toLowerCase())).slice(0, 6);
+  let matches = tagsCatalog.filter(t => t.toLowerCase().includes(q) && !workingTags.some(w => w.toLowerCase() === t.toLowerCase())).slice(0, 6);
+  // If what's typed matches a wrangled alias (e.g. "Male/Male"), lead with
+  // its canonical tag ("M/M") as a big, obvious "Did you mean" pick.
+  const aliasEntry = [...tagSynonyms.entries()].find(([alias]) => alias.includes(q));
+  if (aliasEntry && !workingTags.some(w => w.toLowerCase() === aliasEntry[1].toLowerCase())) {
+    matches = [{ name: aliasEntry[1], merge: true }, ...matches.filter(t => t.toLowerCase() !== aliasEntry[1].toLowerCase())].slice(0, 6);
+  }
   tagsSuggestIndex = -1;
   renderSuggestDropdown('tags-suggest', matches, (val) => {
     addWorkingTag(val);
@@ -1644,7 +1683,7 @@ tagsTextInput.addEventListener('keydown', (e) => {
     items.forEach((el, i) => el.classList.toggle('active', i === tagsSuggestIndex));
   } else if (e.key === 'Enter') {
     e.preventDefault();
-    const picked = tagsSuggestIndex >= 0 && items[tagsSuggestIndex] ? items[tagsSuggestIndex].textContent : tagsTextInput.value;
+    const picked = tagsSuggestIndex >= 0 && items[tagsSuggestIndex] ? items[tagsSuggestIndex].dataset.name : tagsTextInput.value;
     addWorkingTag(picked);
     tagsTextInput.value = '';
     renderSuggestDropdown('tags-suggest', [], () => {});
@@ -3556,6 +3595,10 @@ document.getElementById('ce-congrats-btn').addEventListener('click', () => {
   try {
     const tagRes = await fetch('/api/tag-catalog');
     if (tagRes.ok) tagsCatalog = (await tagRes.json()).tags || [];
+  } catch {}
+  try {
+    const tagSynRes = await fetch('/api/dictionary-synonyms?kind=tag');
+    if (tagSynRes.ok) tagSynonyms = new Map((await tagSynRes.json()).synonyms.map(s => [s.alias.toLowerCase(), s.canonical]));
   } catch {}
   try {
     const relRes = await fetch('/api/relationship-catalog');

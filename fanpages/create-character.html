@@ -69,6 +69,18 @@
       padding: 0.75rem 1.05rem; cursor: pointer;
     }
     .wiki-fandom-suggest-item:hover, .wiki-fandom-suggest-item.active { background: rgba(127,168,217,0.15); }
+    /* A wrangled synonym match (e.g. typing "Male/Male" when the dictionary
+       already has "M/M") gets shown bigger and gold-accented so it's the
+       obvious, tempting click over adding yet another near-duplicate. */
+    .wiki-fandom-suggest-item--merge {
+      background: rgba(240,192,96,0.08); border-left: 3px solid #f0c060;
+      padding-left: calc(0.9rem - 3px); font-size: 0.95rem; font-weight: 700;
+    }
+    .wiki-fandom-suggest-item--merge:hover, .wiki-fandom-suggest-item--merge.active { background: rgba(240,192,96,0.18); }
+    .wiki-fandom-suggest-item-hint {
+      display: block; font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #f0c060; margin-bottom: 0.15rem;
+    }
     .cc-page { max-width: 880px; margin: 0 auto; padding: calc(84px + 2.5rem) 1.25rem 4rem; }
     .cc-eyebrow {
       font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
@@ -363,6 +375,8 @@
   // one value, since a character only has a single species. ──────────────
   let workingSpecies = '';
   let speciesCatalog = [];
+  // alias (lowercase) -> canonical, from admin-wrangled species merges.
+  let speciesSynonyms = new Map();
 
   // Body-appended, fixed-position dropdown -- same pattern as the story/
   // gallery tag suggest boxes (see create.html's positionSuggestDropdown),
@@ -383,6 +397,11 @@
   window.addEventListener('scroll', repositionOpenSuggestDropdowns, true);
   window.addEventListener('resize', repositionOpenSuggestDropdowns);
 
+  // Each entry in `matches` is either a plain string, or (for a wrangled
+  // synonym nudge, e.g. typing "Male/Male" surfacing "M/M") an
+  // { name, merge: true } object rendered bigger/gold-accented with a "Did
+  // you mean" hint. `data-name` is always the real value to commit —
+  // .textContent isn't safe to read back once a hint label is involved.
   function renderSuggestDropdown(wrapId, matches, onPick) {
     const wrap = document.getElementById(wrapId);
     const anchorId = 'char-editor-species-box';
@@ -390,10 +409,16 @@
     wrap.dataset.anchor = anchorId;
     if (!matches.length) { wrap.hidden = true; wrap.innerHTML = ''; return; }
     positionSuggestDropdown(wrap, anchorId);
-    wrap.innerHTML = matches.map(m => `<button type="button" class="wiki-fandom-suggest-item">${escapeHtml(m)}</button>`).join('');
+    wrap.innerHTML = matches.map(m => {
+      const name = typeof m === 'string' ? m : m.name;
+      const isMerge = typeof m === 'object' && m.merge;
+      const cls = isMerge ? 'wiki-fandom-suggest-item wiki-fandom-suggest-item--merge' : 'wiki-fandom-suggest-item';
+      const label = isMerge ? `<span class="wiki-fandom-suggest-item-hint">Did you mean</span>${escapeHtml(name)}` : escapeHtml(name);
+      return `<button type="button" class="${cls}" data-name="${escapeHtml(name)}">${label}</button>`;
+    }).join('');
     wrap.hidden = false;
     wrap.querySelectorAll('.wiki-fandom-suggest-item').forEach(btn => {
-      btn.addEventListener('mousedown', (e) => { e.preventDefault(); onPick(btn.textContent); });
+      btn.addEventListener('mousedown', (e) => { e.preventDefault(); onPick(btn.dataset.name); });
     });
   }
 
@@ -434,7 +459,11 @@
   speciesInput.addEventListener('input', () => {
     const q = speciesInput.value.trim().toLowerCase();
     if (!q) { renderSuggestDropdown('char-editor-species-suggest', [], () => {}); return; }
-    const matches = speciesCatalog.filter(s => s.toLowerCase().includes(q)).slice(0, 6);
+    let matches = speciesCatalog.filter(s => s.toLowerCase().includes(q)).slice(0, 6);
+    const aliasEntry = [...speciesSynonyms.entries()].find(([alias]) => alias.includes(q));
+    if (aliasEntry) {
+      matches = [{ name: aliasEntry[1], merge: true }, ...matches.filter(s => s.toLowerCase() !== aliasEntry[1].toLowerCase())].slice(0, 6);
+    }
     speciesSuggestIndex = -1;
     renderSuggestDropdown('char-editor-species-suggest', matches, (val) => {
       setWorkingSpecies(val);
@@ -454,7 +483,7 @@
       items.forEach((el, i) => el.classList.toggle('active', i === speciesSuggestIndex));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const picked = speciesSuggestIndex >= 0 && items[speciesSuggestIndex] ? items[speciesSuggestIndex].textContent : speciesInput.value;
+      const picked = speciesSuggestIndex >= 0 && items[speciesSuggestIndex] ? items[speciesSuggestIndex].dataset.name : speciesInput.value;
       setWorkingSpecies(picked);
       speciesInput.value = '';
       renderSuggestDropdown('char-editor-species-suggest', [], () => {});
@@ -473,6 +502,8 @@
     }
   });
   fetch('/api/character-species-catalog').then(r => r.ok ? r.json() : { species: [] }).then(d => { speciesCatalog = d.species || []; }).catch(() => {});
+  fetch('/api/dictionary-synonyms?kind=species').then(r => r.ok ? r.json() : { synonyms: [] })
+    .then(d => { speciesSynonyms = new Map(d.synonyms.map(s => [s.alias.toLowerCase(), s.canonical])); }).catch(() => {});
 
   // Cancel returns to whatever page you were actually on when you clicked
   // "+ Character", instead of always dumping you at the Fanpage Hub.
