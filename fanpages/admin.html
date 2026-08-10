@@ -95,6 +95,18 @@
     .adm-dict-heading { font-family: 'Cinzel', serif; font-size: 1.2rem; color: #f0f0f0; margin: 0 0 0.35rem; }
     .adm-dict-sub { color: #888; font-size: 0.82rem; margin: 0 0 1rem; }
     .adm-dict-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    /* Long dictionaries (Additional Tags especially) used to run the page
+       on forever -- capping the default view to a random sample with a
+       blurred fade + "Show All" keeps every category scannable in one
+       scroll, with the full list still one click away. */
+    .adm-dict-list-wrap { position: relative; }
+    .adm-dict-list-wrap--limited .adm-dict-list {
+      max-height: 6.5rem; overflow: hidden; filter: blur(3px); pointer-events: none; user-select: none;
+    }
+    .adm-dict-list-showall {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(to bottom, rgba(13,13,13,0) 0%, rgba(13,13,13,0.75) 40%);
+    }
     .adm-dict-search { margin-bottom: 2rem; }
     .adm-dict-search input {
       width: 100%; max-width: 360px; box-sizing: border-box;
@@ -291,13 +303,23 @@
         <p class="adm-dict-pending-hint">Used on stories/gallery posts but not yet in the dictionary. Click one to review and add it.</p>
         <div class="adm-dict-list" id="dict-tag-pending-list"></div>
       </div>
-      <div class="adm-dict-list" id="dict-tag-list"></div>
+      <div class="adm-dict-list-wrap" id="dict-tag-list-wrap">
+        <div class="adm-dict-list" id="dict-tag-list"></div>
+        <div class="adm-dict-list-showall" id="dict-tag-showall" hidden>
+          <button class="mod-btn" type="button">Show All</button>
+        </div>
+      </div>
     </div>
 
     <div class="adm-dict-section">
       <h2 class="adm-dict-heading">Relationships</h2>
       <p class="adm-dict-sub" id="dict-relationship-sub"></p>
-      <div class="adm-dict-list" id="dict-relationship-list"></div>
+      <div class="adm-dict-list-wrap" id="dict-relationship-list-wrap">
+        <div class="adm-dict-list" id="dict-relationship-list"></div>
+        <div class="adm-dict-list-showall" id="dict-relationship-showall" hidden>
+          <button class="mod-btn" type="button">Show All</button>
+        </div>
+      </div>
     </div>
 
     <div class="adm-dict-section">
@@ -312,7 +334,12 @@
         <p class="adm-dict-pending-hint">Used on characters but not yet in the species dictionary. Click one to review and add it.</p>
         <div class="adm-dict-list" id="dict-species-pending-list"></div>
       </div>
-      <div class="adm-dict-list" id="dict-species-list"></div>
+      <div class="adm-dict-list-wrap" id="dict-species-list-wrap">
+        <div class="adm-dict-list" id="dict-species-list"></div>
+        <div class="adm-dict-list-showall" id="dict-species-showall" hidden>
+          <button class="mod-btn" type="button">Show All</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -364,10 +391,10 @@
     <div class="adm-pending-merge-divider"><span>or</span></div>
 
     <div class="mod-field">
-      <label for="adm-pending-merge-input">Merge into an existing tag instead</label>
+      <label for="adm-pending-merge-input">Recommend an existing tag instead</label>
       <input class="mod-input" id="adm-pending-merge-input" list="adm-pending-merge-list" placeholder="Start typing an existing tag…" autocomplete="off" />
       <datalist id="adm-pending-merge-list"></datalist>
-      <p class="char-editor-facts-hint">Deny this as its own entry and fold it into an existing one — every post already using "<span id="adm-pending-merge-alias-label"></span>" gets rewritten to match, and anyone who types it in the future gets nudged toward the tag you pick here.</p>
+      <p class="char-editor-facts-hint">Denies this as its own dictionary entry and links it to an existing one instead — anyone who types "<span id="adm-pending-merge-alias-label"></span>" from now on gets nudged toward the tag you pick here, but it's just a suggestion. Nothing already tagged this way gets touched, and it still saves as-is for anyone who ignores the nudge.</p>
     </div>
     <p class="mod-panel-msg" id="adm-pending-merge-msg"></p>
     <div class="char-editor-actions">
@@ -987,19 +1014,57 @@ function currentDictItems(section) {
   return q ? arr.filter(x => x.toLowerCase().includes(q)) : arr;
 }
 
+// Additional Tags/Relationships/Species can run into the hundreds of
+// entries, which used to make the whole tab an endless scroll. Sections
+// with a -list-wrap/-showall pair in the DOM (everything but Fandoms) cap
+// the default view to a random sample of 50, blurred, with a "Show All"
+// reveal -- so every category header is reachable in one scroll, and the
+// full list is still one click away. Search bypasses the cap entirely
+// (you're looking for something specific, not browsing).
+const DICT_PREVIEW_LIMIT = 50;
+const dictExpanded = new Set(); // sections the admin has clicked "Show All" on this session
+const dictSampleCache = {}; // section -> { sourceLength, sample } -- stable across re-renders until the underlying list actually changes size
+function getDictSample(section, items) {
+  const cached = dictSampleCache[section];
+  if (cached && cached.sourceLength === items.length) return cached.sample;
+  const sample = [...items].sort(() => Math.random() - 0.5).slice(0, DICT_PREVIEW_LIMIT);
+  dictSampleCache[section] = { sourceLength: items.length, sample };
+  return sample;
+}
+
 function renderDictList(section, items) {
   const { noun } = DICT_SECTIONS[section];
   const plural = noun === 'species' ? noun : `${noun}${items.length === 1 ? '' : 's'}`;
   document.getElementById(`dict-${section}-sub`).textContent = `${items.length} ${plural}`;
   const wrap = document.getElementById(`dict-${section}-list`);
   const pending = pendingDeletes[section];
-  wrap.innerHTML = items.length
-    ? items.map(t => `<span class="wiki-tag-bubble wiki-tag-bubble--editable${pending.has(t) ? ' wiki-tag-bubble--pending-delete' : ''}">${escapeHtml(t)} <button type="button" class="wiki-tag-bubble-remove" aria-label="${pending.has(t) ? 'Undo remove' : 'Remove'} ${escapeHtml(noun)}" data-name="${escapeHtml(t)}">${pending.has(t) ? '↺' : '✕'}</button></span>`).join('')
+
+  const searching = !!document.getElementById('adm-dict-search-input').value.trim();
+  const wrapEl = document.getElementById(`dict-${section}-list-wrap`);
+  const showAllEl = document.getElementById(`dict-${section}-showall`);
+  const shouldLimit = !!wrapEl && !searching && !dictExpanded.has(section) && items.length > DICT_PREVIEW_LIMIT;
+  const displayItems = shouldLimit ? getDictSample(section, items) : items;
+
+  if (wrapEl) {
+    wrapEl.classList.toggle('adm-dict-list-wrap--limited', shouldLimit);
+    showAllEl.hidden = !shouldLimit;
+    if (shouldLimit) showAllEl.querySelector('button').textContent = `Show All (${items.length})`;
+  }
+
+  wrap.innerHTML = displayItems.length
+    ? displayItems.map(t => `<span class="wiki-tag-bubble wiki-tag-bubble--editable${pending.has(t) ? ' wiki-tag-bubble--pending-delete' : ''}">${escapeHtml(t)} <button type="button" class="wiki-tag-bubble-remove" aria-label="${pending.has(t) ? 'Undo remove' : 'Remove'} ${escapeHtml(noun)}" data-name="${escapeHtml(t)}">${pending.has(t) ? '↺' : '✕'}</button></span>`).join('')
     : '<span class="wiki-tags-empty">None yet.</span>';
   wrap.querySelectorAll('.wiki-tag-bubble-remove').forEach(btn => {
     btn.addEventListener('click', () => toggleDictEntry(section, btn.dataset.name));
   });
 }
+['tag', 'relationship', 'species'].forEach(section => {
+  const btn = document.querySelector(`#dict-${section}-showall button`);
+  btn.addEventListener('click', () => {
+    dictExpanded.add(section);
+    renderDictList(section, currentDictItems(section));
+  });
+});
 function renderDictionary(filter) {
   DICT_SECTION_NAMES.forEach(section => renderDictList(section, currentDictItems(section)));
 }
