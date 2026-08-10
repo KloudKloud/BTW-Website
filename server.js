@@ -3277,7 +3277,7 @@ app.get('/api/admin/newsletter/count', requireAuth, async (req, res) => {
 app.get('/api/admin/stats', requireAuth, async (req, res) => {
   if (!await checkAdmin(req)) return res.status(403).json({ error: 'Forbidden.' });
   try {
-    const [users, signups, topPages, pagesByDay, viewTotal, donations, community] = await Promise.all([
+    const [users, signups, topPages, pagesByDay, viewTotal, donations, community, characters] = await Promise.all([
       pool.query(`SELECT username, display_name, created_at FROM users ORDER BY created_at DESC`),
       pool.query(`
         SELECT DATE(created_at) AS date, COUNT(*)::int AS count
@@ -3304,13 +3304,15 @@ app.get('/api/admin/stats', requireAuth, async (req, res) => {
           (SELECT COUNT(*)::int FROM community_posts) AS posts,
           (SELECT COUNT(*)::int FROM community_comments) AS comments
       `),
+      pool.query(`SELECT COUNT(*)::int AS total FROM moderator_characters`),
     ]);
     res.json({
-      users:     { total: users.rows.length, list: users.rows },
-      signups:   signups.rows,
-      pageViews: { total: viewTotal.rows[0].total, byPath: topPages.rows, byDay: pagesByDay.rows },
-      donations: donations.rows,
-      community: community.rows[0],
+      users:      { total: users.rows.length, list: users.rows },
+      signups:    signups.rows,
+      pageViews:  { total: viewTotal.rows[0].total, byPath: topPages.rows, byDay: pagesByDay.rows },
+      donations:  donations.rows,
+      community:  community.rows[0],
+      characters: { total: characters.rows[0].total },
     });
   } catch (err) {
     console.error('Stats error:', err);
@@ -6129,6 +6131,66 @@ app.delete('/api/admin/tag-catalog/:name', requireAuth, requireAdmin, async (req
 app.delete('/api/admin/relationship-catalog/:name', requireAuth, requireAdmin, async (req, res) => {
   await pool.query('DELETE FROM relationship_catalog WHERE name = $1', [req.params.name]);
   res.json({ message: 'Deleted.' });
+});
+app.delete('/api/admin/character-species-catalog/:name', requireAuth, requireAdmin, async (req, res) => {
+  await pool.query('DELETE FROM character_species_catalog WHERE name = $1', [req.params.name]);
+  res.json({ message: 'Deleted.' });
+});
+
+// POST /api/admin/tag-catalog + /api/admin/character-species-catalog — hand-add
+// a single entry (used by the Tag Dictionary's "pending tags/species" flow,
+// where an admin reviews a freeform value already in use on real content and
+// promotes it into the catalog, optionally tidying its casing/spelling first).
+// Case-insensitive de-dupe against the existing catalog, same rule
+// snapToCatalogCasing() already enforces on story/gallery/character saves.
+app.post('/api/admin/tag-catalog', requireAuth, requireAdmin, async (req, res) => {
+  const name = String(req.body.name || '').trim().replace(/\s+/g, ' ').slice(0, 40);
+  if (!name) return res.status(400).json({ error: 'Name is required.' });
+  const { rows } = await pool.query(
+    'INSERT INTO tag_catalog (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING name',
+    [name]
+  );
+  res.json({ name: rows[0]?.name || name });
+});
+app.post('/api/admin/character-species-catalog', requireAuth, requireAdmin, async (req, res) => {
+  const name = String(req.body.name || '').trim().replace(/\s+/g, ' ').slice(0, 60);
+  if (!name) return res.status(400).json({ error: 'Name is required.' });
+  const { rows } = await pool.query(
+    'INSERT INTO character_species_catalog (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING name',
+    [name]
+  );
+  res.json({ name: rows[0]?.name || name });
+});
+
+// GET /api/admin/pending-tags — every distinct Additional Tag actually in use
+// on a story or gallery post whose casing has no match in tag_catalog yet,
+// with a usage count, so new-user freeform tags can be reviewed and promoted
+// into the dictionary instead of just sitting unrecognized forever.
+app.get('/api/admin/pending-tags', requireAuth, requireAdmin, async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT t AS name, count(*)::int AS count FROM (
+      SELECT jsonb_array_elements_text(tags) AS t FROM moderator_sites
+      UNION ALL
+      SELECT jsonb_array_elements_text(tags) AS t FROM moderator_gallery
+    ) all_tags
+    WHERE NOT EXISTS (SELECT 1 FROM tag_catalog tc WHERE lower(tc.name) = lower(all_tags.t))
+    GROUP BY t ORDER BY count DESC, t ASC
+  `);
+  res.json({ pending: rows });
+});
+
+// GET /api/admin/pending-species — same idea, but sourced from characters'
+// freeform stats.Species value instead of story/gallery tags.
+app.get('/api/admin/pending-species', requireAuth, requireAdmin, async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT s AS name, count(*)::int AS count FROM (
+      SELECT trim(stats->>'Species') AS s FROM moderator_characters
+      WHERE stats ? 'Species' AND trim(COALESCE(stats->>'Species', '')) <> ''
+    ) all_species
+    WHERE NOT EXISTS (SELECT 1 FROM character_species_catalog csc WHERE lower(csc.name) = lower(all_species.s))
+    GROUP BY s ORDER BY count DESC, s ASC
+  `);
+  res.json({ pending: rows });
 });
 
 // DELETE /api/moderator/site — permanently deletes the whole story. Characters/
