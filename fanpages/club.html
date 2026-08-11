@@ -315,15 +315,13 @@
        button, just widened into a pill so the label fits. */
     .cl-tabs-edit-btn {
       position: absolute; right: 0; top: calc(50% - 4px); transform: translateY(-50%);
-      height: 44px; padding: 0 1.1rem; border-radius: 22px; flex-shrink: 0;
-      border: 1px solid rgba(31,182,168,0.55);
-      background: linear-gradient(160deg, rgba(31,182,168,0.18), rgba(31,182,168,0.05));
-      color: #b9f0e8; cursor: pointer; font-size: 0.95rem; font-weight: 700; font-family: inherit;
+      height: 44px; padding: 0 1.4rem; border-radius: 22px; flex-shrink: 0;
+      border: 1px solid #1fb6a8; background: #1fb6a8;
+      color: #04211d; cursor: pointer; font-size: 0.95rem; font-weight: 700; font-family: inherit;
       display: flex; align-items: center; justify-content: center; gap: 0.4rem; white-space: nowrap;
-      box-shadow: 0 0 12px rgba(31,182,168,0.4);
-      transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
+      transition: background 0.15s, border-color 0.15s;
     }
-    .cl-tabs-edit-btn:hover { border-color: #1fb6a8; color: #fff; background: rgba(31,182,168,0.24); box-shadow: 0 0 20px rgba(31,182,168,0.7); }
+    .cl-tabs-edit-btn:hover { background: #29d0c0; border-color: #29d0c0; }
     .cl-theme-popover-label { font-size: 0.75rem; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; }
     .cl-theme-grid { display: flex; gap: 0.75rem; }
     .cl-theme-swatch {
@@ -1002,8 +1000,17 @@
     }
     .cl-edit-layout { display: flex; align-items: flex-start; }
     .cl-edit-main { flex: 1; min-width: 0; }
+    /* Groups each Home-editor section (Cover Image, Club Icon, NSFW,
+       Welcome Message, Featured Cards) into its own boxed card, same
+       recipe as the Creator Hub's .cs-panel -- reads as distinct, tidy
+       blocks instead of one long unbroken scroll of stacked fields. */
+    .cl-edit-panel {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px; padding: 1.75rem 2rem; margin-bottom: 1.75rem;
+    }
+    .cl-edit-panel:last-child { margin-bottom: 0; }
     .cl-edit-section-title {
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 700; color: #f0f0f0;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.25rem; font-weight: 700; color: #fff;
       margin: 0 0 1.1rem; padding-bottom: 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.1);
     }
     /* Section titles that carry a lightbulb hint (Welcome Message, Featured
@@ -1016,15 +1023,28 @@
       margin: 0 0 1.1rem; padding-bottom: 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.1);
     }
     .cl-edit-section-title-row .cl-edit-section-title { margin: 0; padding-bottom: 0; border-bottom: none; }
+    /* Bigger, brighter field labels (Welcome Title, Club Description, Page
+       Title, card Title/Description, etc.) -- the base .mod-field label
+       (fanpages.css) is a small dim 0.8rem/#bbb caption, easy to miss above
+       a big input box. Scoped to this overlay only. */
+    #cl-edit-overlay .mod-field label,
+    #cl-edit-overlay .mod-field-label-standalone {
+      font-size: 1.05rem; color: #f0f0f0; margin-bottom: 0.5rem;
+    }
     .cl-edit-divider { width: 1px; background: rgba(255,255,255,0.12); flex-shrink: 0; margin: 0 1.75rem; }
     /* Sticky within the modal's own scroll (the modal itself is the
        overflow-y:auto container, not the page) — follows along instead of
        scrolling away with the rest of the form. align-items was switched
        from stretch to flex-start on .cl-edit-layout above so this can take
        its own height instead of being stretched to match .cl-edit-main. */
+    /* Was position:sticky + its own capped-height self-scroll, made for the
+       old centered-card modal where .cl-edit-modal itself was the only
+       scroll container. Now that the whole page scrolls (#cl-edit-overlay),
+       sticky top:0 stuck this column at the scrollport's true top -- behind
+       the fixed 84px top bar -- instead of following the page down. Just a
+       normal flowing column now, so it scrolls the same as everything else. */
     .cl-edit-pages-col {
       width: 180px; flex-shrink: 0; display: flex; flex-direction: column;
-      position: sticky; top: 0; max-height: 80vh; overflow-y: auto;
     }
     .cl-edit-pages-title {
       font-family: 'Cinzel', serif; font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase;
@@ -1119,7 +1139,7 @@
     @media (max-width: 700px) {
       .cl-edit-layout { flex-direction: column; }
       .cl-edit-divider { display: none; }
-      .cl-edit-pages-col { width: auto; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); position: static; max-height: none; overflow-y: visible; }
+      .cl-edit-pages-col { width: auto; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); }
     }
 
     /* Generic reusable image-upload box — same recipe as
@@ -1623,10 +1643,12 @@
         <span class="mod-edit-bar-label">Editing Community</span>
         <span class="mod-edit-bar-title" id="cl-edit-topbar-title">Edit Club</span>
       </div>
+      <div class="mod-edit-bar-actions" id="cl-edit-delete-actions">
+        <button class="mod-edit-bar-delete" id="cl-edit-page-delete-btn" type="button" hidden>Delete Page</button>
+        <button class="mod-edit-bar-delete" id="cl-edit-club-delete-btn" type="button" hidden>Delete Club</button>
+      </div>
     </div>
     <div class="mod-edit-bar-actions" id="cl-edit-main-actions">
-      <button class="mod-edit-bar-delete" id="cl-edit-page-delete-btn" type="button" style="margin-right:auto;" hidden>Delete Page</button>
-      <button class="mod-edit-bar-delete" id="cl-edit-club-delete-btn" type="button" style="margin-right:auto;" hidden>Delete Club</button>
       <button class="mod-edit-bar-cancel" id="cl-edit-cancel" type="button">Cancel</button>
       <button class="mod-edit-bar-save" id="cl-edit-save" type="button">Save</button>
     </div>
@@ -1638,75 +1660,85 @@
 
         <!-- ── HOME (built-in page) ── -->
         <div id="cl-edit-home-view">
-          <h3 class="cl-edit-section-title">Cover Image</h3>
-          <div class="cl-edit-mode-toggle">
-            <button class="cl-edit-mode-btn active" id="cl-edit-mode-static" type="button">Static Image</button>
-            <button class="cl-edit-mode-btn" id="cl-edit-mode-slideshow" type="button">Slideshow</button>
-          </div>
-
-          <div id="cl-edit-cover-static">
-            <div class="cl-edit-imgbox" id="cl-edit-cover-wrap" style="aspect-ratio: 16 / 9;">
-              <img id="cl-edit-cover-preview" alt="" />
-              <div class="cl-edit-imgbox-overlay">📷 Change Cover Image</div>
-              <button type="button" class="fp-recrop-btn" id="cl-edit-cover-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
+          <div class="cl-edit-panel">
+            <h3 class="cl-edit-section-title">Cover Image</h3>
+            <div class="cl-edit-mode-toggle">
+              <button class="cl-edit-mode-btn active" id="cl-edit-mode-static" type="button">Static Image</button>
+              <button class="cl-edit-mode-btn" id="cl-edit-mode-slideshow" type="button">Slideshow</button>
             </div>
-            <input type="file" id="cl-edit-cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-          </div>
 
-          <div id="cl-edit-cover-slideshow" hidden>
-            <div class="cl-edit-slideshow-stack" id="cl-edit-slideshow-stack"></div>
-            <input type="file" id="cl-edit-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-            <p class="cl-edit-hint">Cycles randomly on your Hub. Drag thumbnails to reorder.</p>
-          </div>
-
-          <h3 class="cl-edit-section-title" style="margin-top: 2.25rem;">Club Icon (PFP)</h3>
-          <div class="cl-edit-imgbox" id="cl-edit-icon-wrap" style="aspect-ratio: 1 / 1; width: 120px; position: relative;">
-            <img id="cl-edit-icon-preview" alt="" />
-            <div class="cl-edit-imgbox-overlay">📷 Change Icon</div>
-            <button type="button" class="fp-recrop-btn" id="cl-edit-icon-recrop-btn" style="display:none; position:absolute; bottom:4px; right:4px; z-index:3; font-size:0.68rem; padding:0.3rem 0.5rem;">✏️ Recrop</button>
-          </div>
-          <input type="file" id="cl-edit-icon-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-
-          <h3 class="cl-edit-section-title" style="margin-top: 2.25rem;">NSFW?</h3>
-          <div class="nsfw-toggle-row">
-            <label class="nsfw-toggle-switch">
-              <input type="checkbox" id="cl-edit-nsfw-toggle" />
-              <span class="nsfw-toggle-slider"></span>
-            </label>
-            <span class="nsfw-toggle-label nsfw-toggle-label--sfw" id="cl-edit-nsfw-label">SFW</span>
-          </div>
-          <p class="nsfw-toggle-note">If this club features adult discussions, posts, or media, please label it as NSFW :3</p>
-
-          <div class="cl-edit-section-title-row" style="margin-top: 2.25rem;">
-            <h3 class="cl-edit-section-title">Welcome Message</h3>
-            <button class="wiki-tags-tip-icon" type="button" aria-label="Welcome Message help">💡</button>
-            <div class="wiki-tags-tip-popover" hidden>
-              <p>Write a welcome message for your club! Describe what your club is about, what to expect, the inspiration behind it, or whatever you want! This can be brief, or longer if you'd prefer!<br><br>To make bold text, wrap words around: **words**. To make italics text, wrap words around: *italics*. To embed links, such as to other websites, profiles on the page, etc., use: [words to embed]&lt;URL link&gt;</p>
+            <div id="cl-edit-cover-static">
+              <div class="cl-edit-imgbox" id="cl-edit-cover-wrap" style="aspect-ratio: 16 / 9;">
+                <img id="cl-edit-cover-preview" alt="" />
+                <div class="cl-edit-imgbox-overlay">📷 Change Cover Image</div>
+                <button type="button" class="fp-recrop-btn" id="cl-edit-cover-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
+              </div>
+              <input type="file" id="cl-edit-cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
             </div>
-          </div>
-          <div class="mod-field">
-            <label for="cl-edit-welcome-title">Welcome Title</label>
-            <input class="mod-input" id="cl-edit-welcome-title" maxlength="100" />
-          </div>
-          <div class="mod-field">
-            <label for="cl-edit-description">Club Description</label>
-            <textarea class="mod-textarea" id="cl-edit-description" rows="6" maxlength="1000"></textarea>
-          </div>
 
-          <div class="cl-edit-section-title-row" style="margin-top: 2.25rem;">
-            <h3 class="cl-edit-section-title">Featured Cards</h3>
-            <button class="wiki-tags-tip-icon" type="button" aria-label="Featured Cards help">💡</button>
-            <div class="wiki-tags-tip-popover" hidden>
-              <p>Make special cards to feature fun/important/useful resources, characters, moderators, themes, or anything you find helpful to members!<br><br>Maybe your club is for PMD, and you'd like to make cards going over the specific games most chatted about? Or, a social club where the hand-picked admins wanna make a personal card for themselves? Or, a writing group with key characters that shine in the universe and you'd like to make a card for?<br><br>The possibilities are yours. Have fun with it!<br><br>(Same text options, with bold, italics, and embedding as found in the club description for the card descriptions!)</p>
+            <div id="cl-edit-cover-slideshow" hidden>
+              <div class="cl-edit-slideshow-stack" id="cl-edit-slideshow-stack"></div>
+              <input type="file" id="cl-edit-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+              <p class="cl-edit-hint">Cycles randomly on your Hub. Drag thumbnails to reorder.</p>
             </div>
           </div>
 
-          <div class="gallery-linkto-box">
-            <button class="gallery-linkto-add-tile" id="cl-edit-card-create-btn" type="button">
-              <span class="gallery-linkto-add-tile-icon">➕</span> Cards
-            </button>
+          <div class="cl-edit-panel">
+            <h3 class="cl-edit-section-title">Club Icon (PFP)</h3>
+            <div class="cl-edit-imgbox" id="cl-edit-icon-wrap" style="aspect-ratio: 1 / 1; width: 120px; position: relative;">
+              <img id="cl-edit-icon-preview" alt="" />
+              <div class="cl-edit-imgbox-overlay">📷 Change Icon</div>
+              <button type="button" class="fp-recrop-btn" id="cl-edit-icon-recrop-btn" style="display:none; position:absolute; bottom:4px; right:4px; z-index:3; font-size:0.68rem; padding:0.3rem 0.5rem;">✏️ Recrop</button>
+            </div>
+            <input type="file" id="cl-edit-icon-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+          </div>
 
-            <div class="cl-edit-cards-list" id="cl-edit-cards-list"></div>
+          <div class="cl-edit-panel">
+            <h3 class="cl-edit-section-title">NSFW?</h3>
+            <div class="nsfw-toggle-row">
+              <label class="nsfw-toggle-switch">
+                <input type="checkbox" id="cl-edit-nsfw-toggle" />
+                <span class="nsfw-toggle-slider"></span>
+              </label>
+              <span class="nsfw-toggle-label nsfw-toggle-label--sfw" id="cl-edit-nsfw-label">SFW</span>
+            </div>
+            <p class="nsfw-toggle-note">If this club features adult discussions, posts, or media, please label it as NSFW :3</p>
+          </div>
+
+          <div class="cl-edit-panel">
+            <div class="cl-edit-section-title-row">
+              <h3 class="cl-edit-section-title">Welcome Message</h3>
+              <button class="wiki-tags-tip-icon" type="button" aria-label="Welcome Message help">💡</button>
+              <div class="wiki-tags-tip-popover" hidden>
+                <p>Write a welcome message for your club! Describe what your club is about, what to expect, the inspiration behind it, or whatever you want! This can be brief, or longer if you'd prefer!<br><br>To make bold text, wrap words around: **words**. To make italics text, wrap words around: *italics*. To embed links, such as to other websites, profiles on the page, etc., use: [words to embed]&lt;URL link&gt;</p>
+              </div>
+            </div>
+            <div class="mod-field">
+              <label for="cl-edit-welcome-title">Welcome Title</label>
+              <input class="mod-input" id="cl-edit-welcome-title" maxlength="100" />
+            </div>
+            <div class="mod-field" style="margin-bottom:0;">
+              <label for="cl-edit-description">Club Description</label>
+              <textarea class="mod-textarea" id="cl-edit-description" rows="6" maxlength="1000"></textarea>
+            </div>
+          </div>
+
+          <div class="cl-edit-panel">
+            <div class="cl-edit-section-title-row">
+              <h3 class="cl-edit-section-title">Featured Cards</h3>
+              <button class="wiki-tags-tip-icon" type="button" aria-label="Featured Cards help">💡</button>
+              <div class="wiki-tags-tip-popover" hidden>
+                <p>Make special cards to feature fun/important/useful resources, characters, moderators, themes, or anything you find helpful to members!<br><br>Maybe your club is for PMD, and you'd like to make cards going over the specific games most chatted about? Or, a social club where the hand-picked admins wanna make a personal card for themselves? Or, a writing group with key characters that shine in the universe and you'd like to make a card for?<br><br>The possibilities are yours. Have fun with it!<br><br>(Same text options, with bold, italics, and embedding as found in the club description for the card descriptions!)</p>
+              </div>
+            </div>
+
+            <div class="gallery-linkto-box">
+              <button class="gallery-linkto-add-tile" id="cl-edit-card-create-btn" type="button">
+                <span class="gallery-linkto-add-tile-icon">➕</span> Cards
+              </button>
+
+              <div class="cl-edit-cards-list" id="cl-edit-cards-list"></div>
+            </div>
           </div>
 
           <div class="cl-edit-card-form" id="cl-edit-card-form" hidden>
@@ -4951,6 +4983,7 @@ function showPageGalleryPreview(src) {
 // locked out while a gallery item is being worked on.
 function setEditMainActionsLocked(locked) {
   document.getElementById('cl-edit-main-actions').classList.toggle('cl-edit-main-actions-locked', locked);
+  document.getElementById('cl-edit-delete-actions').classList.toggle('cl-edit-main-actions-locked', locked);
 }
 function openGalleryItemForm(item) {
   editingGalleryItemId = item.id;
@@ -5250,6 +5283,13 @@ function openCreatePageTemplateView() {
   document.getElementById('cl-edit-page-view').hidden = true;
   document.getElementById('cl-edit-template-view').hidden = false;
   document.getElementById('cl-edit-main-actions').style.display = 'none';
+  // The delete buttons now live in the top bar's left side (outside
+  // #cl-edit-main-actions), so hiding that container alone no longer hides
+  // them too -- picking a template isn't a context where deleting the club/
+  // page makes sense, so hide them explicitly. switchEditView() (every exit
+  // path from this view routes through it) resets their visibility again.
+  document.getElementById('cl-edit-page-delete-btn').hidden = true;
+  document.getElementById('cl-edit-club-delete-btn').hidden = true;
   editActiveView = 'template';
   highlightEditPagesList();
 }
