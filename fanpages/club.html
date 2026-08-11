@@ -957,25 +957,64 @@
 
     .cl-gate { max-width: 500px; margin: 8rem auto; text-align: center; color: #999; padding: 0 1.5rem; }
 
-    /* ── Edit Club modal ── */
+    /* ── Edit Club: full-page takeover ──
+       Same idea as +Create Story/Character/Gallery in the Creator Hub and
+       the Story Editor itself (_story-template/edit.html) — a solid,
+       full-bleed page with a pinned top bar, not a dimmed/blurred modal
+       card floating over the club. Overrides the shared
+       .char-editor-overlay's centered-flex/backdrop-blur layout entirely;
+       #cl-edit-topbar (reusing the site's own .mod-edit-bar, same class the
+       Story Editor's bar uses) replaces the persistent nav rather than
+       stacking below it, same pattern as body.mod-editing-active elsewhere. */
+    #cl-edit-overlay {
+      display: block; padding: 0; overflow-y: auto;
+      background: #0d0a12; backdrop-filter: none; -webkit-backdrop-filter: none;
+    }
+    body.cl-editing-active #fanpages-topbar-root { display: none; }
+    #cl-edit-topbar { z-index: 10; }
+    /* .mod-edit-bar-back is normally an <a> (Story Editor's "back to
+       Creator Hub" link) which needs no reset -- this one's a <button>
+       (there's nowhere to navigate "back" to, it just closes the overlay),
+       so it needs the usual button-chrome strip to look identical. */
+    #cl-edit-topbar-close { background: none; border: none; cursor: pointer; }
+    /* Red outline pill, sized to match .mod-edit-bar-save/-cancel exactly
+       (same font-family/size/padding/radius) so Delete/Cancel/Save read as
+       one consistent button family instead of Delete looking like an
+       afterthought. */
+    .mod-edit-bar-delete {
+      border: 1px solid rgba(217,122,114,0.5); background: transparent; color: #d97a72;
+      cursor: pointer; font-family: 'Fredoka', 'Inter', sans-serif; font-size: 1.02rem; font-weight: 600;
+      padding: 0.8rem 1.85rem; border-radius: 26px; transition: background 0.15s, color 0.15s;
+    }
+    .mod-edit-bar-delete:hover { background: rgba(217,122,114,0.14); color: #f5b3ac; }
+
     /* Wider than the base .char-editor-modal — this one has a Pages nav
        column sitting alongside the actual editing area, not just a single
-       stacked form. */
-    .cl-edit-modal { max-width: 980px; }
-    /* Same thin, translucent-blue scrollbar as .cl-side/.cl-admin-posts,
-       instead of the default OS scrollbar the base .char-editor-modal
-       (shared across every editor site-wide) otherwise leaves in place. */
-    .cl-edit-modal { scrollbar-width: thin; scrollbar-color: rgba(127,168,217,0.4) transparent; }
-    .cl-edit-modal::-webkit-scrollbar { width: 6px; }
-    .cl-edit-modal::-webkit-scrollbar-track { background: transparent; }
-    .cl-edit-modal::-webkit-scrollbar-thumb { background: rgba(127,168,217,0.4); border-radius: 3px; }
-    .cl-edit-modal::-webkit-scrollbar-thumb:hover { background: rgba(127,168,217,0.65); }
+       stacked form. No longer a floating card (background/border/shadow/
+       max-height cleared above the cascade point where .char-editor-modal
+       sets them) — just the page's own content column, pushed down clear
+       of the fixed 84px top bar. */
+    .cl-edit-modal {
+      max-width: 1100px; width: 100%; box-sizing: border-box; margin: 0 auto;
+      max-height: none; overflow-y: visible; background: transparent; border: none;
+      box-shadow: none; border-radius: 0; padding: calc(84px + 2.5rem) 3rem 5rem;
+    }
     .cl-edit-layout { display: flex; align-items: flex-start; }
     .cl-edit-main { flex: 1; min-width: 0; }
     .cl-edit-section-title {
-      font-family: 'Cinzel', Georgia, serif; font-size: 1.05rem; font-weight: 700; color: #f0f0f0;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 700; color: #f0f0f0;
       margin: 0 0 1.1rem; padding-bottom: 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.1);
     }
+    /* Section titles that carry a lightbulb hint (Welcome Message, Featured
+       Cards) instead of an always-visible paragraph below them — the
+       heading's own border-bottom/spacing moves up onto this row so the two
+       still read as one identical-looking header once the hint is tucked
+       behind the icon. */
+    .cl-edit-section-title-row {
+      display: flex; align-items: center; gap: 0.5rem; position: relative;
+      margin: 0 0 1.1rem; padding-bottom: 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .cl-edit-section-title-row .cl-edit-section-title { margin: 0; padding-bottom: 0; border-bottom: none; }
     .cl-edit-divider { width: 1px; background: rgba(255,255,255,0.12); flex-shrink: 0; margin: 0 1.75rem; }
     /* Sticky within the modal's own scroll (the modal itself is the
        overflow-y:auto container, not the page) — follows along instead of
@@ -1187,6 +1226,32 @@
     .cl-edit-template-icon { font-size: 1.6rem; flex-shrink: 0; }
     .cl-edit-template-name { display: block; font-weight: 700; color: #f0f0f0; font-size: 0.95rem; margin-bottom: 0.3rem; }
     .cl-edit-template-desc { display: block; color: #999; font-size: 0.82rem; line-height: 1.55; }
+
+    /* Bubbly Fredoka pass on the Edit Club page — every heading/label/
+       button reads as the site's "friendly/fun" display font now, matching
+       the homepage/onboarding look, instead of the old Cinzel serif. Scoped
+       to #cl-edit-overlay so it doesn't touch the shared .char-editor-title/
+       .mod-field/.mod-btn classes used elsewhere on this page (Manage
+       Communities, Edit Splash, Club Rules, Create Post). Long-form hint/
+       instruction paragraphs stay in Inter — Fredoka is a headings font,
+       not a body-copy one, same rule the homepage remodel established. */
+    #cl-edit-overlay .mod-edit-bar-title,
+    #cl-edit-overlay .cl-edit-section-title,
+    #cl-edit-overlay .cl-edit-pages-title,
+    #cl-edit-overlay .cl-edit-pages-create-btn,
+    #cl-edit-overlay .cl-edit-pages-item,
+    #cl-edit-overlay .cl-edit-mode-btn,
+    #cl-edit-overlay .cl-edit-template-name,
+    #cl-edit-overlay .cl-edit-card-row-name,
+    #cl-edit-overlay .cl-edit-card-row-btn,
+    #cl-edit-overlay .cl-page-text-field-num,
+    #cl-edit-overlay .nsfw-toggle-label,
+    #cl-edit-overlay .gallery-linkto-add-tile,
+    #cl-edit-overlay .mod-field label,
+    #cl-edit-overlay .mod-btn,
+    #cl-edit-overlay .cl-splash-rules-link {
+      font-family: 'Fredoka', 'Lato', cursive;
+    }
   </style>
 </head>
 <body>
@@ -1543,11 +1608,30 @@
 
 </div> <!-- /.soc-layout -->
 
-<!-- Edit Club modal — owners/admins only. -->
+<!-- Edit Club "page" — owners/admins only. Full takeover like +Create
+     Story/Character/Gallery and the Story Editor itself: a pinned top bar
+     (same .mod-edit-bar the Story Editor uses) replaces the site nav
+     entirely instead of a dimmed, centered modal card. -->
 <div class="char-editor-overlay" id="cl-edit-overlay" hidden>
-  <div class="char-editor-modal cl-edit-modal">
-    <h2 class="char-editor-title">Edit Club</h2>
+  <div class="mod-edit-bar" id="cl-edit-topbar" style="display:flex;">
+    <div class="mod-edit-bar-left">
+      <button class="mod-edit-bar-back" id="cl-edit-topbar-close" type="button" title="Close">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="mod-edit-bar-titles">
+        <span class="mod-edit-bar-label">Editing Community</span>
+        <span class="mod-edit-bar-title" id="cl-edit-topbar-title">Edit Club</span>
+      </div>
+    </div>
+    <div class="mod-edit-bar-actions" id="cl-edit-main-actions">
+      <button class="mod-edit-bar-delete" id="cl-edit-page-delete-btn" type="button" style="margin-right:auto;" hidden>Delete Page</button>
+      <button class="mod-edit-bar-delete" id="cl-edit-club-delete-btn" type="button" style="margin-right:auto;" hidden>Delete Club</button>
+      <button class="mod-edit-bar-cancel" id="cl-edit-cancel" type="button">Cancel</button>
+      <button class="mod-edit-bar-save" id="cl-edit-save" type="button">Save</button>
+    </div>
+  </div>
 
+  <div class="char-editor-modal cl-edit-modal">
     <div class="cl-edit-layout">
       <div class="cl-edit-main">
 
@@ -1592,11 +1676,13 @@
           </div>
           <p class="nsfw-toggle-note">If this club features adult discussions, posts, or media, please label it as NSFW :3</p>
 
-          <h3 class="cl-edit-section-title" style="margin-top: 2.25rem;">Welcome Message</h3>
-          <p class="cl-edit-hint-block">
-            Write a welcome message for your club! Describe what your club is about, what to expect, the inspiration behind it, or whatever you want! This can be brief, or longer if you'd prefer!<br><br>
-            To make bold text, wrap words around: **words**. To make italics text, wrap words around: *italics*. To embed links, such as to other websites, profiles on the page, etc., use: [words to embed]&lt;URL link&gt;
-          </p>
+          <div class="cl-edit-section-title-row" style="margin-top: 2.25rem;">
+            <h3 class="cl-edit-section-title">Welcome Message</h3>
+            <button class="wiki-tags-tip-icon" type="button" aria-label="Welcome Message help">💡</button>
+            <div class="wiki-tags-tip-popover" hidden>
+              <p>Write a welcome message for your club! Describe what your club is about, what to expect, the inspiration behind it, or whatever you want! This can be brief, or longer if you'd prefer!<br><br>To make bold text, wrap words around: **words**. To make italics text, wrap words around: *italics*. To embed links, such as to other websites, profiles on the page, etc., use: [words to embed]&lt;URL link&gt;</p>
+            </div>
+          </div>
           <div class="mod-field">
             <label for="cl-edit-welcome-title">Welcome Title</label>
             <input class="mod-input" id="cl-edit-welcome-title" maxlength="100" />
@@ -1606,16 +1692,15 @@
             <textarea class="mod-textarea" id="cl-edit-description" rows="6" maxlength="1000"></textarea>
           </div>
 
-          <h3 class="cl-edit-section-title" style="margin-top: 2.25rem;">Featured Cards</h3>
+          <div class="cl-edit-section-title-row" style="margin-top: 2.25rem;">
+            <h3 class="cl-edit-section-title">Featured Cards</h3>
+            <button class="wiki-tags-tip-icon" type="button" aria-label="Featured Cards help">💡</button>
+            <div class="wiki-tags-tip-popover" hidden>
+              <p>Make special cards to feature fun/important/useful resources, characters, moderators, themes, or anything you find helpful to members!<br><br>Maybe your club is for PMD, and you'd like to make cards going over the specific games most chatted about? Or, a social club where the hand-picked admins wanna make a personal card for themselves? Or, a writing group with key characters that shine in the universe and you'd like to make a card for?<br><br>The possibilities are yours. Have fun with it!<br><br>(Same text options, with bold, italics, and embedding as found in the club description for the card descriptions!)</p>
+            </div>
+          </div>
 
           <div class="gallery-linkto-box">
-            <div class="gallery-linkto-note">
-              Make special cards to feature fun/important/useful resources, characters, moderators, themes, or anything you find helpful to members!<br><br>
-              Maybe your club is for PMD, and you'd like to make cards going over the specific games most chatted about? Or, a social club where the hand-picked admins wanna make a personal card for themselves? Or, a writing group with key characters that shine in the universe and you'd like to make a card for?<br><br>
-              The possibilities are yours. Have fun with it!<br><br>
-              (Same text options, with bold, italics, and embedding as found in the club description for the card descriptions!)
-            </div>
-
             <button class="gallery-linkto-add-tile" id="cl-edit-card-create-btn" type="button">
               <span class="gallery-linkto-add-tile-icon">➕</span> Cards
             </button>
@@ -1851,12 +1936,6 @@
         </div>
 
         <p class="mod-panel-msg" id="cl-edit-msg"></p>
-        <div class="char-editor-actions" id="cl-edit-main-actions">
-          <button class="mod-btn mod-btn--danger" id="cl-edit-page-delete-btn" type="button" style="margin-right:auto;" hidden>Delete Page</button>
-          <button class="mod-btn mod-btn--danger" id="cl-edit-club-delete-btn" type="button" style="margin-right:auto;" hidden>Delete Club</button>
-          <button class="mod-btn mod-btn--cancel" id="cl-edit-cancel" type="button">Cancel</button>
-          <button class="mod-btn" id="cl-edit-save" type="button">Save</button>
-        </div>
       </div>
 
       <div class="cl-edit-divider"></div>
@@ -2939,7 +3018,7 @@ function showPostPreviewCrop(src) {
 
 // Lightbulb hint popovers -- generic wiring, same pattern as +Gallery/
 // +Character.
-document.querySelectorAll('#cl-post-create-overlay .wiki-tags-tip-icon').forEach(icon => {
+document.querySelectorAll('#cl-post-create-overlay .wiki-tags-tip-icon, #cl-edit-overlay .wiki-tags-tip-icon').forEach(icon => {
   const pop = icon.nextElementSibling;
   if (!pop || !pop.classList.contains('wiki-tags-tip-popover')) return;
   icon.addEventListener('click', (e) => {
@@ -4053,13 +4132,19 @@ async function openEditClubModal(opts) {
   if (!currentClub) return;
   editDirty = false;
   document.getElementById('cl-edit-msg').textContent = '';
+  document.getElementById('cl-edit-topbar-title').textContent = currentClub.name || 'Edit Club';
   document.getElementById('cl-edit-overlay').hidden = false;
   document.getElementById('cl-edit-main-actions').style.display = 'flex';
-  // Always land at the top of the modal — it's tall enough (Cover Image,
+  // Full-page takeover, same as +Create Story/Character/Gallery and the
+  // Story Editor — hides the persistent nav (the pinned top bar replaces
+  // it) and locks the club page underneath from scrolling along with it.
+  document.body.classList.add('cl-editing-active');
+  document.body.style.overflow = 'hidden';
+  // Always land at the top of the page — it's tall enough (Cover Image,
   // Icon, NSFW, Welcome Message, Description...) that opening it while
   // scrolled from a previous session left you staring at the middle of
   // the form with no idea how you got there.
-  document.querySelector('.cl-edit-modal').scrollTop = 0;
+  document.getElementById('cl-edit-overlay').scrollTop = 0;
   // Jump straight to whatever page/Home you're currently viewing, instead
   // of always landing on Home — loadEditPages() must resolve first since
   // switchEditView('page', ...) looks the slug up in editPagesCache.
@@ -4077,12 +4162,18 @@ async function openEditClubModal(opts) {
 }
 function closeEditClubModal() {
   document.getElementById('cl-edit-overlay').hidden = true;
+  document.body.classList.remove('cl-editing-active');
+  document.body.style.overflow = '';
   closeCardForm();
 }
 document.getElementById('cl-side-edit-btn').addEventListener('click', () => openEditClubModal());
 document.getElementById('cl-tabs-edit-btn').addEventListener('click', () => openEditClubModal());
 document.getElementById('cl-side-add-page-btn').addEventListener('click', () => openEditClubModal({ createPage: true }));
 document.getElementById('cl-edit-cancel').addEventListener('click', () => {
+  if (!confirmDiscardIfDirty()) return;
+  closeEditClubModal();
+});
+document.getElementById('cl-edit-topbar-close').addEventListener('click', () => {
   if (!confirmDiscardIfDirty()) return;
   closeEditClubModal();
 });
@@ -4297,6 +4388,22 @@ async function saveCoverImage(blob) {
     const data = await res.json();
     document.getElementById('cl-edit-cover-preview').src = data.cover_image_url;
     if (currentClub) { currentClub.cover_image_url = data.cover_image_url; renderClubCover(currentClub); }
+    // QOL: a freshly-set Cover Image is auto-added to the Slideshow tab's
+    // image pool too, so switching over to Slideshow later isn't starting
+    // from a blank stack -- same crop, stored as its own independent
+    // slideshow entry (uploaded separately since the two live in different
+    // tables server-side).
+    addCoverImageToSlideshow(blob);
+  }
+}
+async function addCoverImageToSlideshow(blob) {
+  const fd = new FormData();
+  fd.append('image', blob, 'slide.jpg');
+  const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/slideshow`, { method: 'POST', headers: authHeaders(), body: fd });
+  if (res.ok) {
+    const data = await res.json();
+    editSlideshowCache.push(data.image);
+    renderEditSlideshow();
   }
 }
 
