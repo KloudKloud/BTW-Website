@@ -3889,10 +3889,26 @@ app.get('/api/search/works', async (req, res) => {
       ))
       AND (cardinality($3::text[]) = 0 OR NOT EXISTS (
         SELECT 1 FROM unnest($3::text[]) want
-        WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.tags) t WHERE lower(t) = lower(want))
+        WHERE NOT EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(ms.tags) t
+          WHERE lower(t) = lower(want)
+             OR EXISTS (
+               SELECT 1 FROM dictionary_synonyms ds
+               WHERE ds.kind = 'tag'
+                 AND ((lower(ds.alias) = lower(t) AND lower(ds.canonical) = lower(want))
+                   OR (lower(ds.canonical) = lower(t) AND lower(ds.alias) = lower(want)))
+             )
+        )
       ))
       AND (cardinality($4::text[]) = 0 OR NOT EXISTS (
-        SELECT 1 FROM jsonb_array_elements_text(ms.tags) t, unnest($4::text[]) ex WHERE lower(t) = lower(ex)
+        SELECT 1 FROM jsonb_array_elements_text(ms.tags) t, unnest($4::text[]) ex
+        WHERE lower(t) = lower(ex)
+           OR EXISTS (
+             SELECT 1 FROM dictionary_synonyms ds
+             WHERE ds.kind = 'tag'
+               AND ((lower(ds.alias) = lower(t) AND lower(ds.canonical) = lower(ex))
+                 OR (lower(ds.canonical) = lower(t) AND lower(ds.alias) = lower(ex)))
+           )
       ))
       AND (cardinality($5::text[]) = 0 OR NOT EXISTS (
         SELECT 1 FROM unnest($5::text[]) want
@@ -6130,17 +6146,29 @@ app.get('/api/relationship-catalog', async (req, res) => {
 // How many posts (stories + gallery submissions, combined) carry each of
 // the given tags -- powers the e621-style "tag: count" rows on a gallery
 // post's stats box.
+// A wrangled alias counts toward its canonical's total here too (and vice
+// versa) -- same "alias and canonical are interchangeable" rule the search
+// filter uses, so the stats box doesn't undercount "M/M" just because some
+// posts are tagged "Male/Male" instead.
 app.get('/api/tag-usage', async (req, res) => {
   const tags = String(req.query.tags || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 50);
   if (!tags.length) return res.json({ counts: {} });
   const { rows } = await pool.query(`
-    SELECT t AS tag, count(*)::int AS count FROM (
+    SELECT req.tag AS tag, count(all_tags.t)::int AS count
+    FROM unnest($1::text[]) AS req(tag)
+    LEFT JOIN (
       SELECT jsonb_array_elements_text(tags) AS t FROM moderator_sites
       UNION ALL
       SELECT jsonb_array_elements_text(tags) AS t FROM moderator_gallery
     ) all_tags
-    WHERE t = ANY($1::text[])
-    GROUP BY t
+      ON lower(all_tags.t) = lower(req.tag)
+      OR EXISTS (
+        SELECT 1 FROM dictionary_synonyms ds
+        WHERE ds.kind = 'tag'
+          AND ((lower(ds.alias) = lower(all_tags.t) AND lower(ds.canonical) = lower(req.tag))
+            OR (lower(ds.canonical) = lower(all_tags.t) AND lower(ds.alias) = lower(req.tag)))
+      )
+    GROUP BY req.tag
   `, [tags]);
   const counts = {};
   tags.forEach(t => { counts[t] = 0; });
