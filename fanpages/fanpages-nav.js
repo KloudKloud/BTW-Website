@@ -538,7 +538,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
 
         <a class="fpnav-link fpnav-link--clubs${here === fpUrl('/social') ? ' active' : ''}" href="${fpUrl('/social')}">Clubs</a>
 
-        <div class="fpnav-dropdown-wrap">
+        <div class="fpnav-dropdown-wrap fpnav-desktop-only-action">
           <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
           <div class="fpnav-dropdown" id="fpnav-upload-dropdown" hidden>
             <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
@@ -569,10 +569,167 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
           </div>
         </div>
 
+        <button class="fpnav-hamburger-btn" id="fpnav-hamburger-btn" type="button" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+
       </div>
     </div>
 
   `;
+
+  // ── Mobile hamburger drawer (Community / Characters / Browse / Clubs) ────
+  // Reuses the same links already computed above for the desktop dropdowns.
+  // Built and appended once, straight to <body> (not #fanpages-topbar-root)
+  // so it isn't constrained by that root's fixed 76px height.
+  const drawerWrap = document.createElement('div');
+  drawerWrap.innerHTML = `
+    <div class="fpnav-drawer-overlay" id="fpnav-drawer-overlay" hidden>
+      <div class="fpnav-drawer-panel" id="fpnav-drawer-panel" role="dialog" aria-label="Menu">
+        <button class="fpnav-drawer-close" id="fpnav-drawer-close" type="button" aria-label="Close">&#10005;</button>
+        <div class="fpnav-drawer-section-title">Community</div>
+        <a href="${fpUrl('/discord')}">Discord</a>
+        <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donations</a>
+        <a href="${homeHref}">BTW Homepage</a>
+        <a href="${fpUrl('/tos')}">Terms of Service</a>
+        <div class="fpnav-drawer-section-title">Browse</div>
+        <a href="${fpUrl('/search?sort=updated&browse=1')}">Stories</a>
+        <a href="${fpUrl('/search?view=submissions&browse=1')}">Posts</a>
+        <a href="${fpUrl('/characters')}">Characters</a>
+        <a href="${fpUrl('/fandoms')}">Fandoms</a>
+        <div class="fpnav-drawer-divider"></div>
+        <a href="${fpUrl('/social')}">Clubs</a>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(drawerWrap.firstElementChild);
+  const hamburgerOverlay = document.getElementById('fpnav-drawer-overlay');
+  function openHamburgerDrawer() {
+    closeMobileSheet();
+    hamburgerOverlay.hidden = false;
+    requestAnimationFrame(() => hamburgerOverlay.classList.add('fpnav-drawer--open'));
+  }
+  function closeHamburgerDrawer() {
+    hamburgerOverlay.classList.remove('fpnav-drawer--open');
+    setTimeout(() => { hamburgerOverlay.hidden = true; }, 220);
+  }
+  document.getElementById('fpnav-hamburger-btn').addEventListener('click', openHamburgerDrawer);
+  document.getElementById('fpnav-drawer-close').addEventListener('click', closeHamburgerDrawer);
+  hamburgerOverlay.addEventListener('click', (e) => { if (e.target === hamburgerOverlay) closeHamburgerDrawer(); });
+
+  // ── Generic mobile bottom sheet (Create / Profile menus off the bottom bar) ──
+  const sheetWrap = document.createElement('div');
+  sheetWrap.innerHTML = `
+    <div class="fpnav-drawer-overlay" id="fpnav-sheet-overlay" hidden>
+      <div class="fpnav-sheet-panel" id="fpnav-sheet-panel" role="dialog"></div>
+    </div>
+  `;
+  document.body.appendChild(sheetWrap.firstElementChild);
+  const sheetOverlay = document.getElementById('fpnav-sheet-overlay');
+  const sheetPanel = document.getElementById('fpnav-sheet-panel');
+  function openMobileSheet(itemsHtml) {
+    closeHamburgerDrawer();
+    sheetPanel.innerHTML = `<div class="fpnav-sheet-handle"></div>${itemsHtml}`;
+    sheetOverlay.hidden = false;
+    requestAnimationFrame(() => sheetOverlay.classList.add('fpnav-drawer--open'));
+  }
+  function closeMobileSheet() {
+    sheetOverlay.classList.remove('fpnav-drawer--open');
+    setTimeout(() => { sheetOverlay.hidden = true; }, 220);
+  }
+  sheetOverlay.addEventListener('click', (e) => { if (e.target === sheetOverlay) closeMobileSheet(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!hamburgerOverlay.hidden) closeHamburgerDrawer();
+    if (!sheetOverlay.hidden) closeMobileSheet();
+  });
+
+  // ── Fixed bottom icon bar — Home / Search / Create / Notifications / Profile.
+  // Appended straight to <body>, mobile-only via CSS (hidden entirely above
+  // 720px). Create and Profile open the generic bottom sheet above; Search
+  // and Home are plain navigation, matching Wattpad's own bottom nav.
+  document.body.classList.add('fpnav-has-bottombar');
+  const bottombarWrap = document.createElement('div');
+  bottombarWrap.innerHTML = `
+    <nav class="fpnav-bottombar" id="fpnav-bottombar" aria-label="Primary">
+      <a class="fpnav-bottombar-item" href="${FP_BASE || '/'}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+        <span>Home</span>
+      </a>
+      <a class="fpnav-bottombar-item" href="${fpUrl('/search')}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <span>Search</span>
+      </a>
+      <button class="fpnav-bottombar-item" id="fpnav-bb-create" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+        <span>Create</span>
+      </button>
+      <button class="fpnav-bottombar-item" id="fpnav-bb-notif" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span id="fpnav-bb-notif-badge" class="fpnav-bottombar-badge" hidden></span>
+        <span>Updates</span>
+      </button>
+      <button class="fpnav-bottombar-item fpnav-bottombar-item--profile" id="fpnav-bb-profile" type="button">
+        <span id="fpnav-bb-profile-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+        </span>
+        <span>Profile</span>
+      </button>
+    </nav>
+  `;
+  document.body.appendChild(bottombarWrap.firstElementChild);
+
+  document.getElementById('fpnav-bb-create').addEventListener('click', () => {
+    if (!token) { window.fpOpenLoginModal({ from: fpUrl('/create'), redirectOnSuccess: fpUrl('/create') }); return; }
+    openMobileSheet(`
+      <a href="${fpUrl('/editor')}">Creator Hub</a>
+      <div class="fpnav-drawer-divider"></div>
+      <a href="${fpUrl('/create')}"><span class="fpnav-plus-badge">+</span> Story</a>
+      <a href="${fpUrl('/create-character')}"><span class="fpnav-plus-badge">+</span> Character</a>
+      <a href="${fpUrl('/create-gallery')}"><span class="fpnav-plus-badge">+</span> Gallery</a>
+    `);
+  });
+  document.getElementById('fpnav-bb-notif').addEventListener('click', () => {
+    if (!token) { window.fpOpenLoginModal(); return; }
+    window.location.href = fpUrl('/notifications');
+  });
+  document.getElementById('fpnav-bb-profile').addEventListener('click', () => {
+    if (!token) { window.fpOpenLoginModal(); return; }
+    let me = null;
+    try { me = JSON.parse(localStorage.getItem('btw_user') || sessionStorage.getItem('btw_user') || 'null'); } catch {}
+    const isAdmin = me && me.is_admin;
+    openMobileSheet(`
+      <a href="${me ? fpUrl(`/${me.username}`) : fpUrl('/')}">My Profile</a>
+      <div class="fpnav-drawer-divider"></div>
+      <a href="${fpUrl('/library')}">Bookmarks</a>
+      <a href="${fpUrl('/notifications')}">Updates</a>
+      <a href="${fpUrl('/notifications#inbox')}">Inbox</a>
+      <div class="fpnav-drawer-divider"></div>
+      <a href="${fpUrl(`/account-settings?from=${encodeURIComponent(here)}`)}">Account Settings</a>
+      ${isAdmin ? `<a href="${fpUrl('/admin')}">Admin</a>` : ''}
+      <button type="button" class="fpnav-drawer-item" id="fpnav-bb-logout-item">Logout</button>
+    `);
+    const logoutItem = document.getElementById('fpnav-bb-logout-item');
+    if (logoutItem) logoutItem.addEventListener('click', () => document.getElementById('fpnav-logout-link').click());
+  });
+
+  // ── Hide top bar on scroll-down / show on scroll-up — mobile only. The
+  // matchMedia gate means this listener does nothing at all on desktop, not
+  // just "the CSS effect doesn't show" — no per-scroll work happens there. ──
+  (function () {
+    const bar = document.querySelector('.fpnav-bar');
+    const mq = window.matchMedia('(max-width: 720px)');
+    let lastY = window.scrollY;
+    function onScroll() {
+      if (!mq.matches) { bar.classList.remove('fpnav-bar--hidden'); return; }
+      const y = window.scrollY;
+      if (Math.abs(y - lastY) < 6) return;
+      if (y > lastY && y > 76) bar.classList.add('fpnav-bar--hidden');
+      else bar.classList.remove('fpnav-bar--hidden');
+      lastY = y;
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+  })();
 
   // ── Search ───────────────────────────────────────────────────────────────
   const searchInput = document.getElementById('fpnav-search-input');
@@ -706,19 +863,25 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         fetch('/api/dm/requests', { headers: authHeaders() }).then(r => r.ok ? r.json() : { requests: [] }).catch(() => ({ requests: [] })),
       ]).then(([notifData, dmData, reqData]) => {
         const badge = document.getElementById('fpnav-notif-badge');
+        const bbBadge = document.getElementById('fpnav-bb-notif-badge');
         const count = (notifData.count || 0) + (dmData.count || 0) + (reqData.requests || []).length;
-        if (count > 0) {
-          badge.textContent = count > 99 ? '99+' : count;
-          badge.hidden = false;
-        } else {
-          badge.hidden = true;
-        }
+        [badge, bbBadge].forEach(el => {
+          if (!el) return;
+          if (count > 0) { el.textContent = count > 99 ? '99+' : count; el.hidden = false; }
+          else el.hidden = true;
+        });
       }).catch(() => {});
 
       document.getElementById('fpnav-avatar-img-wrap').innerHTML = u.avatar
         ? `<img src="${u.avatar}" alt="" />`
         : `<span class="fpnav-avatar-fallback">${initial}</span>`;
       document.getElementById('fpnav-avatar-name').textContent = name;
+      const bbProfileIcon = document.getElementById('fpnav-bb-profile-icon');
+      if (bbProfileIcon) {
+        bbProfileIcon.innerHTML = u.avatar
+          ? `<img src="${u.avatar}" alt="" />`
+          : `<span class="fpnav-avatar-fallback">${initial}</span>`;
+      }
 
       document.getElementById('fpnav-my-profile-link').href = fpUrl(`/${u.username}`);
       document.getElementById('fpnav-edit-profile-link').href = fpUrl(`/account-settings?from=${encodeURIComponent(here)}`);
