@@ -3900,7 +3900,16 @@ app.get('/api/search/works', async (req, res) => {
       ))
       AND (cardinality($6::text[]) = 0 OR NOT EXISTS (
         SELECT 1 FROM unnest($6::text[]) want
-        WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements_text(ms.relationships) t WHERE lower(t) = lower(want))
+        WHERE NOT EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(ms.relationships) t
+          WHERE lower(t) = lower(want)
+             OR EXISTS (
+               SELECT 1 FROM dictionary_synonyms ds
+               WHERE ds.kind = 'relationship'
+                 AND ((lower(ds.alias) = lower(t) AND lower(ds.canonical) = lower(want))
+                   OR (lower(ds.canonical) = lower(t) AND lower(ds.alias) = lower(want)))
+             )
+        )
       ))
       AND (cardinality($7::text[]) = 0 OR ms.rating = ANY($7::text[]))
       AND ($8::int IS NULL OR pubchap.word_count >= $8)
@@ -6184,6 +6193,15 @@ app.post('/api/admin/character-species-catalog', requireAuth, requireAdmin, asyn
   );
   res.json({ name: rows[0]?.name || name });
 });
+app.post('/api/admin/relationship-catalog', requireAuth, requireAdmin, async (req, res) => {
+  const name = String(req.body.name || '').trim().replace(/\s+/g, ' ').slice(0, 150);
+  if (!name) return res.status(400).json({ error: 'Name is required.' });
+  const { rows } = await pool.query(
+    'INSERT INTO relationship_catalog (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING name',
+    [name]
+  );
+  res.json({ name: rows[0]?.name || name });
+});
 
 // GET /api/admin/pending-tags — every distinct Additional Tag actually in use
 // on a story or gallery post whose casing has no match in tag_catalog yet,
@@ -6218,6 +6236,20 @@ app.get('/api/admin/pending-species', requireAuth, requireAdmin, async (req, res
   res.json({ pending: rows });
 });
 
+// GET /api/admin/pending-relationships — same idea, but sourced from
+// stories' freeform relationships array.
+app.get('/api/admin/pending-relationships', requireAuth, requireAdmin, async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT r AS name, count(*)::int AS count FROM (
+      SELECT jsonb_array_elements_text(relationships) AS r FROM moderator_sites
+    ) all_relationships
+    WHERE NOT EXISTS (SELECT 1 FROM relationship_catalog rc WHERE lower(rc.name) = lower(all_relationships.r))
+      AND NOT EXISTS (SELECT 1 FROM dictionary_synonyms ds WHERE ds.kind = 'relationship' AND lower(ds.alias) = lower(all_relationships.r))
+    GROUP BY r ORDER BY count DESC, r ASC
+  `);
+  res.json({ pending: rows });
+});
+
 // POST /api/admin/dictionary-synonyms — tag wrangling as a *recommendation*,
 // not a rewrite: records that a pending freeform value ("Male/Male") maps to
 // an existing catalog entry ("M/M") so the client typeahead can nudge
@@ -6226,14 +6258,20 @@ app.get('/api/admin/pending-species', requireAuth, requireAdmin, async (req, res
 // typed "Male/Male" keeps their tag exactly as they wrote it; a synonym only
 // steers *future* typing, and only if the writer actually picks the
 // suggestion instead of ignoring it.
+// Relationships are the one exception to "doesn't touch existing data" in
+// spirit, though not in storage: a story tagged "Espeon/Umbreon" still shows
+// that exact text, but /api/search/works' relationship filter treats an
+// alias and its canonical as interchangeable, so clicking either one
+// surfaces stories tagged with the other (see the relationship filter
+// clause below).
 app.post('/api/admin/dictionary-synonyms', requireAuth, requireAdmin, async (req, res) => {
   const kind = req.body.kind;
   const alias = String(req.body.alias || '').trim();
   const canonicalInput = String(req.body.canonical || '').trim();
-  if (!['tag', 'species'].includes(kind) || !alias || !canonicalInput) {
+  if (!['tag', 'species', 'relationship'].includes(kind) || !alias || !canonicalInput) {
     return res.status(400).json({ error: 'kind, alias, and canonical are required.' });
   }
-  const catalogTable = kind === 'tag' ? 'tag_catalog' : 'character_species_catalog';
+  const catalogTable = kind === 'tag' ? 'tag_catalog' : kind === 'species' ? 'character_species_catalog' : 'relationship_catalog';
   const { rows: [catalogRow] } = await pool.query(
     `SELECT name FROM ${catalogTable} WHERE lower(name) = lower($1)`, [canonicalInput]
   );
@@ -6256,7 +6294,7 @@ app.post('/api/admin/dictionary-synonyms', requireAuth, requireAdmin, async (req
 // typeahead's "did you mean the canonical tag?" nudge for whatever an admin
 // has already wrangled (e.g. typing "Male/Male" surfaces "M/M").
 app.get('/api/dictionary-synonyms', async (req, res) => {
-  const kind = ['tag', 'species'].includes(req.query.kind) ? req.query.kind : 'tag';
+  const kind = ['tag', 'species', 'relationship'].includes(req.query.kind) ? req.query.kind : 'tag';
   const { rows } = await pool.query('SELECT alias, canonical FROM dictionary_synonyms WHERE kind = $1', [kind]);
   res.json({ synonyms: rows });
 });
