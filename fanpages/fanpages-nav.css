@@ -290,6 +290,11 @@
   .fpnav-icon-btn--labeled { padding: 0.6rem; border-radius: 50%; }
   .fpnav-right { display: none; }
   .fpnav-search { display: flex; flex: 1 1 auto; width: auto; }
+  /* While the hamburger drawer is open, it's the only thing in the top bar
+     — search and the pfp button hide themselves so the hamburger is the
+     one and only visible control (and the one thing that closes it again). */
+  .fpnav-bar--drawer-open .fpnav-search,
+  .fpnav-bar--drawer-open .fpnav-mobile-pfp-btn { display: none; }
 }
 
 /* ── Mobile hamburger (top bar, LEFT side) — opens the full-width drawer
@@ -331,30 +336,27 @@
   .fpnav-mobile-pfp-btn { display: flex; }
 }
 
-/* ── Hamburger drawer — drops down from under the top bar, full mobile
-   width, 4/5 of the viewport tall (the dimmed overlay below fills the
-   remaining fifth so it's still clear there's page content underneath). ── */
-.fpnav-drawer-overlay {
-  position: fixed; inset: 0; z-index: 400;
-  background: rgba(0,0,0,0.55);
+/* ── Hamburger drawer — an in-flow expanding panel (NOT a fixed overlay).
+   .fpnav-drawer-grid is the height-animation driver: grid-template-rows
+   0fr→1fr is what lets it grow to exactly whatever content is expanded
+   inside it (no JS-measured max-height, no fixed/capped height, no internal
+   scrolling) while still animating smoothly — the classic CSS-grid
+   "animate to auto height" trick. .fpnav-drawer-clip is the overflow:hidden
+   layer that actually clips the 0fr collapsed state (grid tracks alone
+   don't clip their content); .fpnav-drawer-panel just holds the padding/
+   content so the clip layer's own box isn't fighting the padding during
+   the animation. It's inserted directly after #fanpages-topbar-root in the
+   DOM (see fanpages-nav.js), so growing it pushes real page content down,
+   and collapsing it lets that content slide back up — not an overlay
+   floating on top of the page. */
+.fpnav-drawer-grid {
+  display: grid; grid-template-rows: 0fr;
+  transition: grid-template-rows 0.28s ease;
+  background: #161616;
 }
-.fpnav-drawer-panel {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 401;
-  width: 100%; height: 80vh;
-  background: #161616; border-bottom: 1px solid rgba(255,255,255,0.1);
-  border-radius: 0 0 18px 18px;
-  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
-  padding: 1.3rem 1rem; overflow-y: auto;
-  transform: translateY(-100%);
-  transition: transform 0.22s ease;
-}
-.fpnav-drawer-overlay.fpnav-drawer--open .fpnav-drawer-panel { transform: translateY(0); }
-.fpnav-drawer-close {
-  display: flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; margin: 0 0 0.8rem auto;
-  background: none; border: none; color: #999; font-size: 1.2rem; cursor: pointer; border-radius: 50%;
-}
-.fpnav-drawer-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.fpnav-drawer-grid.fpnav-drawer--open { grid-template-rows: 1fr; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.fpnav-drawer-clip { overflow: hidden; min-height: 0; }
+.fpnav-drawer-panel { padding: 0.8rem 1rem 1.3rem; }
 .fpnav-drawer-panel a, .fpnav-drawer-panel button.fpnav-drawer-item, .fpnav-drawer-panel button.fpnav-drawer-toggle {
   display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
   color: #f0f0f0; font-family: 'Fredoka', 'Lato', Arial, sans-serif; font-size: 1.22rem; font-weight: 600;

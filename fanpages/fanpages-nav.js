@@ -584,10 +584,17 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
 
   `;
 
-  // ── Mobile hamburger drawer — full-width, drops down 4/5 of the viewport.
-  // Reuses the same links already computed above for the desktop dropdowns.
-  // Built and appended once, straight to <body> (not #fanpages-topbar-root)
-  // so it isn't constrained by that root's fixed 76px height. Browse/Create/
+  // ── Mobile hamburger drawer — an in-flow expanding panel, not a fixed
+  // overlay. Inserted right after #fanpages-topbar-root (which reserves the
+  // fixed top bar's 76px of space at the top of the document), so it opens
+  // directly under the visible bar and pushes the rest of the page's real
+  // content down as it grows — no internal scrolling, no backdrop, no fixed
+  // height. Closing it collapses back to zero height and the page content
+  // slides back up. Height animation is the CSS grid-template-rows 0fr/1fr
+  // trick (.fpnav-drawer-grid) rather than a JS-measured max-height, so it
+  // always fits exactly what's expanded inside it (e.g. opening Browse AND
+  // Settings at once just makes the whole panel taller). Reuses the same
+  // links already computed above for the desktop dropdowns. Browse/Create/
   // Community/Settings are collapsible accordion sections (data-drawer-target
   // pairs a toggle button with its #fpnav-drawer-sub-<target> submenu);
   // Search/Clubs/Characters/Bookmarks are flat top-level links.
@@ -603,74 +610,82 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
 
   const drawerWrap = document.createElement('div');
   drawerWrap.innerHTML = `
-    <div class="fpnav-drawer-overlay" id="fpnav-drawer-overlay" hidden>
-      <div class="fpnav-drawer-panel" id="fpnav-drawer-panel" role="dialog" aria-label="Menu">
-        <button class="fpnav-drawer-close" id="fpnav-drawer-close" type="button" aria-label="Close">&#10005;</button>
+    <div class="fpnav-drawer-grid" id="fpnav-drawer-grid">
+      <div class="fpnav-drawer-clip">
+        <div class="fpnav-drawer-panel" id="fpnav-drawer-panel" role="dialog" aria-label="Menu">
+          <button class="fpnav-drawer-profile-row" id="fpnav-drawer-profile-row" type="button">
+            <span class="fpnav-drawer-profile-icon" id="fpnav-drawer-profile-icon">${drawerProfileIconHtml}</span>
+            <span class="fpnav-drawer-profile-name" id="fpnav-drawer-profile-name">${drawerProfileNameText}</span>
+          </button>
 
-        <button class="fpnav-drawer-profile-row" id="fpnav-drawer-profile-row" type="button">
-          <span class="fpnav-drawer-profile-icon" id="fpnav-drawer-profile-icon">${drawerProfileIconHtml}</span>
-          <span class="fpnav-drawer-profile-name" id="fpnav-drawer-profile-name">${drawerProfileNameText}</span>
-        </button>
-
-        <div class="fpnav-drawer-accordion">
-          <button class="fpnav-drawer-toggle" data-drawer-target="browse" type="button">Browse <span class="fpnav-caret">&#9662;</span></button>
-          <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-browse" hidden>
-            <a href="${fpUrl('/search?sort=updated&browse=1')}">Stories</a>
-            <a href="${fpUrl('/search?view=submissions&browse=1')}">Posts</a>
-            <a href="${fpUrl('/characters')}">Characters</a>
-            <a href="${fpUrl('/fandoms')}">Fandoms</a>
+          <div class="fpnav-drawer-accordion">
+            <button class="fpnav-drawer-toggle" data-drawer-target="browse" type="button">Browse <span class="fpnav-caret">&#9662;</span></button>
+            <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-browse" hidden>
+              <a href="${fpUrl('/search?sort=updated&browse=1')}">Stories</a>
+              <a href="${fpUrl('/search?view=submissions&browse=1')}">Posts</a>
+              <a href="${fpUrl('/characters')}">Characters</a>
+              <a href="${fpUrl('/fandoms')}">Fandoms</a>
+            </div>
           </div>
-        </div>
 
-        <a href="${fpUrl('/search')}">Search</a>
+          <a href="${fpUrl('/search')}">Search</a>
 
-        <div class="fpnav-drawer-accordion">
-          <button class="fpnav-drawer-toggle" data-drawer-target="create" type="button">Create <span class="fpnav-caret">&#9662;</span></button>
-          <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-create" hidden>
-            <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
-            <a href="${fpUrl('/create')}" data-gate="${fpUrl('/create')}"><span class="fpnav-plus-badge">+</span> Story</a>
-            <a href="${fpUrl('/create-character')}" data-gate="${fpUrl('/create-character')}"><span class="fpnav-plus-badge">+</span> Character</a>
-            <a href="${fpUrl('/create-gallery')}" data-gate="${fpUrl('/create-gallery')}"><span class="fpnav-plus-badge">+</span> Gallery</a>
+          <div class="fpnav-drawer-accordion">
+            <button class="fpnav-drawer-toggle" data-drawer-target="create" type="button">Create <span class="fpnav-caret">&#9662;</span></button>
+            <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-create" hidden>
+              <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
+              <a href="${fpUrl('/create')}" data-gate="${fpUrl('/create')}"><span class="fpnav-plus-badge">+</span> Story</a>
+              <a href="${fpUrl('/create-character')}" data-gate="${fpUrl('/create-character')}"><span class="fpnav-plus-badge">+</span> Character</a>
+              <a href="${fpUrl('/create-gallery')}" data-gate="${fpUrl('/create-gallery')}"><span class="fpnav-plus-badge">+</span> Gallery</a>
+            </div>
           </div>
-        </div>
 
-        <a href="${fpUrl('/social')}">Clubs</a>
-        <a href="${fpUrl('/characters')}">Characters</a>
-        <a href="${fpUrl('/library')}">Bookmarks</a>
+          <a href="${fpUrl('/social')}">Clubs</a>
+          <a href="${fpUrl('/characters')}">Characters</a>
+          <a href="${fpUrl('/library')}">Bookmarks</a>
 
-        <div class="fpnav-drawer-accordion">
-          <button class="fpnav-drawer-toggle" data-drawer-target="community" type="button">Community <span class="fpnav-caret">&#9662;</span></button>
-          <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-community" hidden>
-            <a href="${fpUrl('/discord')}">Discord</a>
-            <a href="${homeHref}">BTW Homepage</a>
+          <div class="fpnav-drawer-accordion">
+            <button class="fpnav-drawer-toggle" data-drawer-target="community" type="button">Community <span class="fpnav-caret">&#9662;</span></button>
+            <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-community" hidden>
+              <a href="${fpUrl('/discord')}">Discord</a>
+              <a href="${homeHref}">BTW Homepage</a>
+            </div>
           </div>
-        </div>
 
-        <div class="fpnav-drawer-accordion">
-          <button class="fpnav-drawer-toggle" data-drawer-target="settings" type="button">Settings <span class="fpnav-caret">&#9662;</span></button>
-          <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-settings" hidden>
-            <a href="${fpUrl(`/account-settings?from=${encodeURIComponent(here)}`)}">Account Settings</a>
-            <a href="${fpUrl('/tos')}">Terms of Service</a>
+          <div class="fpnav-drawer-accordion">
+            <button class="fpnav-drawer-toggle" data-drawer-target="settings" type="button">Settings <span class="fpnav-caret">&#9662;</span></button>
+            <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-settings" hidden>
+              <a href="${fpUrl(`/account-settings?from=${encodeURIComponent(here)}`)}">Account Settings</a>
+              <a href="${fpUrl('/tos')}">Terms of Service</a>
+            </div>
           </div>
         </div>
       </div>
     </div>
   `;
-  document.body.appendChild(drawerWrap.firstElementChild);
-  const hamburgerOverlay = document.getElementById('fpnav-drawer-overlay');
+  // Inserted right after the topbar root (not appended to <body>) so it
+  // lands in normal document flow directly under the fixed top bar, instead
+  // of floating on top of / independent from the rest of the page.
+  root.insertAdjacentElement('afterend', drawerWrap.firstElementChild);
+  const drawerGrid = document.getElementById('fpnav-drawer-grid');
+  const bar = document.querySelector('.fpnav-bar');
   function openHamburgerDrawer() {
-    hamburgerOverlay.hidden = false;
-    requestAnimationFrame(() => hamburgerOverlay.classList.add('fpnav-drawer--open'));
+    drawerGrid.classList.add('fpnav-drawer--open');
+    bar.classList.add('fpnav-bar--drawer-open');
   }
   function closeHamburgerDrawer() {
-    hamburgerOverlay.classList.remove('fpnav-drawer--open');
-    setTimeout(() => { hamburgerOverlay.hidden = true; }, 220);
+    drawerGrid.classList.remove('fpnav-drawer--open');
+    bar.classList.remove('fpnav-bar--drawer-open');
   }
-  document.getElementById('fpnav-hamburger-btn').addEventListener('click', openHamburgerDrawer);
-  document.getElementById('fpnav-drawer-close').addEventListener('click', closeHamburgerDrawer);
-  hamburgerOverlay.addEventListener('click', (e) => { if (e.target === hamburgerOverlay) closeHamburgerDrawer(); });
+  // The hamburger button is the only way in or out now (no separate X) —
+  // every other top-bar mobile control (search, pfp) hides itself via the
+  // .fpnav-bar--drawer-open class above while it's open.
+  document.getElementById('fpnav-hamburger-btn').addEventListener('click', () => {
+    if (drawerGrid.classList.contains('fpnav-drawer--open')) closeHamburgerDrawer();
+    else openHamburgerDrawer();
+  });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !hamburgerOverlay.hidden) closeHamburgerDrawer();
+    if (e.key === 'Escape' && drawerGrid.classList.contains('fpnav-drawer--open')) closeHamburgerDrawer();
   });
 
   document.querySelectorAll('.fpnav-drawer-toggle').forEach((btn) => {
