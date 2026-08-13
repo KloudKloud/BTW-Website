@@ -749,10 +749,12 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
     window.location.href = fpUrl('/notifications');
   });
 
-  // ── Hide top bar AND bottom bar on scroll-down / show both on scroll-up —
-  // mobile only. The matchMedia gate means this listener does nothing at
-  // all on desktop, not just "the CSS effect doesn't show" — no per-scroll
-  // work happens there. ──
+  // ── Top bar: hide as soon as the page is scrolled at all, only come back
+  // once scrolled back up to the very top — no reappearing mid-page on
+  // scroll-up. Bottom bar: still the old Twitter-style direction-based
+  // hide-on-scroll-down/show-on-scroll-up. Mobile only in both cases — the
+  // matchMedia gate means this listener does nothing at all on desktop, not
+  // just "the CSS effect doesn't show" — no per-scroll work happens there. ──
   (function () {
     const bar = document.querySelector('.fpnav-bar');
     const bottombar = document.getElementById('fpnav-bottombar');
@@ -765,14 +767,11 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         return;
       }
       const y = window.scrollY;
+      bar.classList.toggle('fpnav-bar--hidden', y > 40);
+
       if (Math.abs(y - lastY) < 6) return;
-      if (y > lastY && y > 76) {
-        bar.classList.add('fpnav-bar--hidden');
-        bottombar.classList.add('fpnav-bottombar--hidden');
-      } else {
-        bar.classList.remove('fpnav-bar--hidden');
-        bottombar.classList.remove('fpnav-bottombar--hidden');
-      }
+      if (y > lastY && y > 76) bottombar.classList.add('fpnav-bottombar--hidden');
+      else bottombar.classList.remove('fpnav-bottombar--hidden');
       lastY = y;
     }
     window.addEventListener('scroll', onScroll, { passive: true });
