@@ -112,8 +112,14 @@
         <div id="panel-thread" class="inbox-panel" hidden>
           <div class="inbox-thread-wrap">
             <div class="inbox-thread-header">
-              <button class="inbox-thread-back" id="thread-back">← Back</button>
-              <h2 class="inbox-thread-subject" id="thread-subject"></h2>
+              <button class="inbox-thread-back" id="thread-back" aria-label="Back">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <div class="inbox-thread-header-avatar" id="thread-header-avatar"></div>
+              <div class="inbox-thread-header-info">
+                <span class="inbox-thread-header-name" id="thread-header-name"></span>
+                <h2 class="inbox-thread-subject" id="thread-subject"></h2>
+              </div>
             </div>
             <div class="inbox-thread-messages" id="thread-messages"></div>
             <div class="inbox-thread-reply" id="thread-reply-wrap">
@@ -198,6 +204,33 @@ function timeAgo(dateStr) {
 
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Avatar helper (used by user block + thread bubbles/header) ─────────────────
+function makeAvatarEl(avatarUrl, name, size) {
+  let el;
+  if (avatarUrl) {
+    el = document.createElement('img');
+    el.src = avatarUrl;
+    el.alt = name;
+    el.className = 'inbox-pfp-sm';
+    el.style.width = el.style.height = size + 'px';
+    el.onerror = function() {
+      const fb = makeAvatarFallback(name, size);
+      this.replaceWith(fb);
+    };
+  } else {
+    el = makeAvatarFallback(name, size);
+  }
+  return el;
+}
+function makeAvatarFallback(name, size) {
+  const fb = document.createElement('div');
+  fb.className = 'inbox-pfp-fallback-sm';
+  fb.style.width = fb.style.height = size + 'px';
+  fb.style.fontSize = Math.round(size * 0.45) + 'px';
+  fb.textContent = (name || 'U').charAt(0).toUpperCase();
+  return fb;
 }
 
 // ── User block ───────────────────────────────────────────────────────────────
@@ -289,27 +322,74 @@ async function openThread(threadId, backTab, uptoId) {
     const isNewsletter = msgs[0].is_admin && !msgs[0].from_user_id;
     document.getElementById('thread-reply-wrap').style.display = isNewsletter ? 'none' : '';
 
-    msgs.forEach(m => {
+    // Header: avatar + name of the OTHER party in this conversation
+    const otherMsg = msgs.find(m => (_isAdmin ? !m.is_admin : m.is_admin)) || msgs[0];
+    const otherIsAdmin = _isAdmin ? false : true;
+    const otherName = otherIsAdmin
+      ? 'VeekitPaw ✨'
+      : (otherMsg.display_name || otherMsg.username || 'User');
+    document.getElementById('thread-header-name').textContent = otherName;
+    const hAvatarWrap = document.getElementById('thread-header-avatar');
+    hAvatarWrap.innerHTML = '';
+    hAvatarWrap.appendChild(makeAvatarEl(otherIsAdmin ? null : otherMsg.avatar, otherName, 36));
+
+    const BIG = '18px', SMALL = '6px';
+    const GROUP_GAP_MS = 5 * 60 * 1000;
+
+    msgs.forEach((m, i) => {
       const isAdminMsg = m.is_admin;
+      const isOwn = _isAdmin ? isAdminMsg : !isAdminMsg;
+      const prev = msgs[i - 1];
+      const next = msgs[i + 1];
+      const groupedWithPrev = prev && prev.is_admin === m.is_admin &&
+        (new Date(m.created_at) - new Date(prev.created_at)) < GROUP_GAP_MS;
+      const groupedWithNext = next && next.is_admin === m.is_admin &&
+        (new Date(next.created_at) - new Date(m.created_at)) < GROUP_GAP_MS;
+      const isFirstInGroup = !groupedWithPrev;
+      const isLastInGroup  = !groupedWithNext;
+
+      // Date divider when jumping to a new day / a large time gap since the previous message
+      if (!prev || (new Date(m.created_at) - new Date(prev.created_at)) > 30 * 60 * 1000 ||
+          new Date(m.created_at).toDateString() !== new Date(prev.created_at).toDateString()) {
+        const divider = document.createElement('div');
+        divider.className = 'inbox-msg-date-divider';
+        divider.textContent = fmtDate(m.created_at);
+        msgWrap.appendChild(divider);
+      }
+
+      const row = document.createElement('div');
+      row.className = 'inbox-msg-row ' + (isOwn ? 'inbox-msg-row--own' : 'inbox-msg-row--other');
+      row.style.marginBottom = groupedWithNext ? '2px' : '14px';
+
+      if (!isOwn) {
+        const avatarSlot = document.createElement('div');
+        avatarSlot.className = 'inbox-msg-avatar-slot';
+        if (isLastInGroup) {
+          avatarSlot.appendChild(makeAvatarEl(isAdminMsg ? null : m.avatar,
+            isAdminMsg ? 'VeekitPaw ✨' : (m.display_name || m.username || 'User'), 28));
+        }
+        row.appendChild(avatarSlot);
+      }
+
+      const col = document.createElement('div');
+      col.className = 'inbox-bubble-col';
+
       const bubble = document.createElement('div');
-      bubble.className = 'inbox-bubble ' + (isAdminMsg ? 'inbox-bubble--admin' : 'inbox-bubble--user');
+      bubble.className = 'inbox-bubble ' + (isOwn ? 'inbox-bubble--own' : 'inbox-bubble--other');
 
-      const senderName = isAdminMsg
-        ? 'VeekitPaw ✨'
-        : (m.display_name || m.username || currentUser.display_name || currentUser.username || 'You');
-
-      bubble.innerHTML = `
-        <div class="inbox-bubble-header">
-          <span class="inbox-bubble-sender">${esc(senderName)}</span>
-          <span class="inbox-bubble-date">${fmtDate(m.created_at)}</span>
-        </div>
-        <p class="inbox-bubble-body">${esc(m.body)}</p>
-      `;
+      const outerTop    = isFirstInGroup ? BIG : SMALL;
+      const outerBottom = isLastInGroup  ? BIG : SMALL;
+      if (isOwn) {
+        bubble.style.borderRadius = `${BIG} ${outerTop} ${outerBottom} ${BIG}`;
+      } else {
+        bubble.style.borderRadius = `${outerTop} ${BIG} ${BIG} ${outerBottom}`;
+      }
 
       // Attachments: new JSON array OR legacy single field
       const attList = (m.attachments && m.attachments.length)
         ? m.attachments
         : (m.attachment_url ? [{ url: m.attachment_url, name: m.attachment_name }] : []);
+
       if (attList.length) {
         const wrap = document.createElement('div');
         wrap.className = 'inbox-msg-attach-grid';
@@ -335,9 +415,27 @@ async function openThread(threadId, backTab, uptoId) {
           }
         });
         bubble.appendChild(wrap);
+        if (!m.body) bubble.classList.add('inbox-bubble--media-only');
       }
 
-      msgWrap.appendChild(bubble);
+      if (m.body) {
+        const p = document.createElement('p');
+        p.className = 'inbox-bubble-body';
+        p.textContent = m.body;
+        bubble.appendChild(p);
+      }
+
+      col.appendChild(bubble);
+
+      if (isLastInGroup) {
+        const time = document.createElement('span');
+        time.className = 'inbox-msg-time';
+        time.textContent = fmtDate(m.created_at).split(' · ')[1] || fmtDate(m.created_at);
+        col.appendChild(time);
+      }
+
+      row.appendChild(col);
+      msgWrap.appendChild(row);
     });
 
     // Scroll to bottom after layout is computed
