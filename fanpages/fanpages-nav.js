@@ -764,26 +764,21 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
     window.location.href = fpUrl('/notifications');
   });
 
-  // ── Top bar: hide as soon as the page is scrolled at all, only come back
-  // once scrolled back up to the very top — no reappearing mid-page on
-  // scroll-up. Bottom bar: still the old Twitter-style direction-based
-  // hide-on-scroll-down/show-on-scroll-up. Mobile only in both cases — the
-  // matchMedia gate means this listener does nothing at all on desktop, not
-  // just "the CSS effect doesn't show" — no per-scroll work happens there. ──
+  // ── Bottom bar: Twitter-style direction-based hide-on-scroll-down/show-on-
+  // scroll-up, mobile only — the matchMedia gate means this listener does
+  // nothing at all on desktop, not just "the CSS effect doesn't show" — no
+  // per-scroll work happens there. The top bar is NOT part of this anymore —
+  // it's a normal in-flow element on mobile now (see the mobile override on
+  // .fpnav-bar in fanpages-nav.css), not fixed/sticky, so it just scrolls
+  // away with the rest of the page like any other box instead of hiding/
+  // reappearing. ──
   (function () {
-    const bar = document.querySelector('.fpnav-bar');
     const bottombar = document.getElementById('fpnav-bottombar');
     const mq = window.matchMedia('(max-width: 720px)');
     let lastY = window.scrollY;
     function onScroll() {
-      if (!mq.matches) {
-        bar.classList.remove('fpnav-bar--hidden');
-        bottombar.classList.remove('fpnav-bottombar--hidden');
-        return;
-      }
+      if (!mq.matches) { bottombar.classList.remove('fpnav-bottombar--hidden'); return; }
       const y = window.scrollY;
-      bar.classList.toggle('fpnav-bar--hidden', y > 40);
-
       if (Math.abs(y - lastY) < 6) return;
       if (y > lastY && y > 76) bottombar.classList.add('fpnav-bottombar--hidden');
       else bottombar.classList.remove('fpnav-bottombar--hidden');
