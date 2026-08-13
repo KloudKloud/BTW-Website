@@ -55,6 +55,10 @@
         <button class="inbox-tab active" data-tab="received">📬 Inbox</button>
         <button class="inbox-tab" data-tab="sent">📤 Sent</button>
         <button class="inbox-tab" data-tab="trash">🗑️ Trash</button>
+        <div class="inbox-sidebar-rule"></div>
+        <div class="inbox-sidebar-chats" id="inbox-sidebar-chats">
+          <div class="inbox-loading">Loading…</div>
+        </div>
       </aside>
 
       <!-- ── Content ─────────────────────────────────────────────── -->
@@ -262,6 +266,63 @@ function renderUserBlock() {
   block.appendChild(nameEl);
 }
 
+// ── Sidebar chat list (quick thread switcher) ──────────────────────────────────
+async function loadSidebarChats() {
+  const list = document.getElementById('inbox-sidebar-chats');
+  try {
+    const res  = await fetch(`${API}/inbox/threads`, { headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json();
+    list.innerHTML = '';
+    if (!data.threads || !data.threads.length) {
+      const empty = document.createElement('div');
+      empty.className = 'inbox-sidebar-chats-empty';
+      empty.textContent = 'No chats yet';
+      list.appendChild(empty);
+      return;
+    }
+    data.threads.forEach(t => list.appendChild(renderSidebarChatItem(t)));
+  } catch {
+    list.innerHTML = '';
+  }
+}
+
+function renderSidebarChatItem(t) {
+  const item = document.createElement('div');
+  const unread = t.unread_count > 0;
+  item.className = 'inbox-sidebar-chat' + (unread ? ' inbox-sidebar-chat--unread' : '') +
+    (_threadId === t.thread_id ? ' inbox-sidebar-chat--active' : '');
+  item.setAttribute('role', 'button');
+  item.tabIndex = 0;
+
+  const otherName = _isAdmin ? (t.display_name || t.username || 'User') : 'VeekitPaw ✨';
+  const avatarWrap = document.createElement('div');
+  avatarWrap.appendChild(makeAvatarEl(_isAdmin ? t.avatar : null, otherName, 34));
+  item.appendChild(avatarWrap);
+
+  const info = document.createElement('div');
+  info.className = 'inbox-sidebar-chat-info';
+  const preview = t.preview || '';
+  info.innerHTML = `
+    <div class="inbox-sidebar-chat-top">
+      <span class="inbox-sidebar-chat-name">${esc(otherName)}</span>
+      <span class="inbox-sidebar-chat-time">${timeAgo(t.latest_at)}</span>
+    </div>
+    <div class="inbox-sidebar-chat-preview">${esc((t.latest_is_admin === false ? 'You: ' : '') + preview.slice(0, 50))}${preview.length > 50 ? '…' : ''}</div>
+  `;
+  item.appendChild(info);
+
+  if (unread) {
+    const dot = document.createElement('span');
+    dot.className = 'inbox-sidebar-chat-dot';
+    item.appendChild(dot);
+  }
+
+  const openTab = _isAdmin ? 'admin' : 'received';
+  item.addEventListener('click', () => openThread(t.thread_id, openTab));
+  item.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') openThread(t.thread_id, openTab); });
+  return item;
+}
+
 // ── Tab switching ────────────────────────────────────────────────────────────
 const VALID_TABS = ['received', 'sent', 'compose', 'admin', 'trash'];
 let _prevTab = 'received';
@@ -443,6 +504,7 @@ async function openThread(threadId, backTab, uptoId) {
 
     // Refresh nav badge — opening a thread marks messages as read
     if (!_isAdmin) refreshInboxBadge();
+    loadSidebarChats();
   } catch {
     msgWrap.innerHTML = '<div class="inbox-empty">Could not load thread.</div>';
   }
@@ -862,6 +924,7 @@ function initCompose() {
         okEl.textContent = 'Message sent! VeekitPaw will get back to you soon 🌸';
         okEl.hidden = false;
         loadSent();
+        loadSidebarChats();
       }
     } catch {
       errEl.textContent = 'Network error. Please try again.';
@@ -1052,6 +1115,8 @@ function initGuest() {
   }
   guestNote('received-list');
   guestNote('sent-list');
+  document.getElementById('inbox-sidebar-chats').hidden = true;
+  document.querySelectorAll('#inbox-tab-bar .inbox-sidebar-rule')[1].hidden = true;
 
   document.getElementById('inbox-tab-bar').addEventListener('click', e => {
     const tab = e.target.closest('.inbox-tab');
@@ -1091,6 +1156,7 @@ async function init() {
 
   if (_isAdmin) loadAdminInbox(); else loadReceived();
   if (!_isAdmin && startTab === 'sent') { _sentLoaded = true; loadSent(); }
+  loadSidebarChats();
   switchTab(startTab);
 
   document.getElementById('inbox-tab-bar').addEventListener('click', e => {

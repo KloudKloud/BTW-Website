@@ -2592,6 +2592,55 @@ app.get('/api/inbox/received', requireAuth, async (req, res) => {
   res.json({ messages: rows });
 });
 
+// ── Inbox: threads — one row per thread, latest activity first (sidebar quick-switch list) ──
+app.get('/api/inbox/threads', requireAuth, async (req, res) => {
+  const isAdmin = await checkAdmin(req);
+  try {
+    if (isAdmin) {
+      const { rows } = await pool.query(`
+        SELECT * FROM (
+          SELECT DISTINCT ON (m.thread_id)
+            m.thread_id, r.subject, r.from_user_id,
+            u.username, u.display_name, u.avatar,
+            m.body AS preview, m.created_at AS latest_at, m.is_admin AS latest_is_admin,
+            (SELECT COUNT(*)::int FROM inbox_messages um
+              WHERE um.thread_id = m.thread_id AND um.is_admin = false
+                AND um.from_user_id IS NOT NULL AND um.read_at IS NULL) AS unread_count
+          FROM inbox_messages m
+          JOIN inbox_messages r ON r.id = m.thread_id
+          LEFT JOIN users u ON r.from_user_id = u.id
+          WHERE r.from_user_id IS NOT NULL AND m.user_deleted_at IS NULL
+          ORDER BY m.thread_id, m.created_at DESC
+        ) sub
+        ORDER BY latest_at DESC
+        LIMIT 50
+      `);
+      res.json({ threads: rows });
+    } else {
+      const { rows } = await pool.query(`
+        SELECT * FROM (
+          SELECT DISTINCT ON (m.thread_id)
+            m.thread_id, r.subject,
+            m.body AS preview, m.created_at AS latest_at, m.is_admin AS latest_is_admin,
+            (SELECT COUNT(*)::int FROM inbox_messages um
+              WHERE um.thread_id = m.thread_id AND um.is_admin = true
+                AND um.to_user_id = $1 AND um.read_at IS NULL) AS unread_count
+          FROM inbox_messages m
+          JOIN inbox_messages r ON r.id = m.thread_id
+          WHERE (m.to_user_id = $1 OR m.from_user_id = $1) AND m.user_deleted_at IS NULL
+          ORDER BY m.thread_id, m.created_at DESC
+        ) sub
+        ORDER BY latest_at DESC
+        LIMIT 50
+      `, [req.user.id]);
+      res.json({ threads: rows });
+    }
+  } catch (e) {
+    console.error('inbox/threads error:', e);
+    res.json({ threads: [] });
+  }
+});
+
 // ── Inbox: unread count for nav badge ────────────────────────────────────────
 app.get('/api/inbox/unread-count', requireAuth, async (req, res) => {
   const isAdmin = await checkAdmin(req);
