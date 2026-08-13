@@ -360,3 +360,18 @@ rather than trying to get one single insertion order to satisfy both.
   elsewhere) instead of picking an emoji that seems thematically close — got corrected
   once this session for using 🔖 where the site already has a specific bookmark ribbon
   SVG in use elsewhere (`_story-template/reader.html`'s `#rd-bookmark-btn`).
+- **Mobile-only changes must not touch desktop — verify both, every time.** When a
+  request is scoped to mobile ("on mobile, do X"), the fix must live inside a
+  `max-width` media query (or equivalent JS `matchMedia`/`innerWidth` gate); desktop
+  output must be byte-for-byte the same behavior after the change as before it.
+  Concretely: **CSS cascade order matters** — a `@media (max-width: …)` block placed
+  *before* an unconditional base rule for the same selector/property gets silently
+  overridden by that later base rule at every viewport width, including mobile (the
+  mobile override never actually applies). This happened repeatedly in one session
+  (spotlight cards, hero box, story-row cards, recent-submissions grid all had mobile
+  blocks inserted ahead of their own base declarations). The fix: always add mobile
+  overrides **after** every base rule they target, and after making *any* mobile-scoped
+  edit, screenshot/verify **both** a mobile-width view and a desktop-width view (not
+  just mobile) before calling it done — a fetch-limit or row-cap change made "for
+  mobile" can just as easily change desktop's item count/layout too if it isn't
+  actually gated by viewport.

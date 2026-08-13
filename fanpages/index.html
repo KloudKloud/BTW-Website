@@ -24,9 +24,26 @@
       opacity: 0.55;
     }
     .fp-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.72); }
+    /* Mobile only: one single fixed, static, non-animated background for the
+       whole page (this same fp-bg-wrap layer that already sits behind
+       everything) instead of the desktop's blurred photo here plus two more
+       independent video-area backgrounds further down -- swap the photo for
+       box-background-2.png and let every section below just stay transparent
+       so this one image shows through continuously, with no per-section
+       seam to blend since there's only ever one image now. Desktop keeps
+       the blurred photo + its two distinct looping videos untouched. */
+    @media (max-width: 720px) {
+      .fp-bg-img { display: none; }
+      .fp-bg-wrap {
+        background-image: url('/images/home/box-background-2.png');
+        background-size: cover;
+        background-position: center;
+      }
+    }
 
     /* ── Main ── */
     .fp-main { max-width: 1400px; margin: 0 auto; padding: 2.5rem 2rem 5rem; }
+    @media (max-width: 720px) { .fp-main { padding: 1.5rem 0.4rem 3rem; } }
 
     /* ── Hero banner — full-bleed strip right under the topbar. Looping
        TopBackground video fills the whole viewport width; the Bulletin
@@ -75,7 +92,6 @@
       .fp-hero-inner { order: 2; }
       .fp-hero-side--right { order: 3; }
     }
-
     .fp-hero-box {
       position: relative; width: 100%; height: 100%; box-sizing: border-box;
       display: flex; flex-direction: column; padding: 1rem 0.9rem;
@@ -127,6 +143,36 @@
     .fp-hero-donate-btn--kofi { background: linear-gradient(135deg, #29abe0, #1a7fae); }
     .fp-hero-donate-btn--paypal { background: linear-gradient(135deg, #2a9fd6, #0b3d91); }
 
+    /* True phone widths: Feedback moves into the hamburger drawer's Settings
+       submenu on mobile (see fanpages-nav.js), so it's dropped from the hero
+       entirely here -- no more squeezing a 210px-floor side box into a phone
+       viewport. Bulletin is all that's left in the hero. Donations gets
+       re-parented by JS (placeDonationsForViewport) out of the hero and
+       down into #fp-mobile-donations-slot, underneath Recommended
+       Followers -- hidden here at its original spot so there's no flash of
+       it in the wrong place before that JS runs. */
+    @media (max-width: 720px) {
+      .fp-hero-banner { flex-direction: column; }
+      /* Equal top/bottom padding -- previously 0 on the bottom, which left
+         the billboard hugging the very bottom edge of the video/scrim
+         instead of sitting centered in it. */
+      .fp-hero-inner { padding: 1.25rem 1rem; }
+      .fp-hero-side--left, .fp-hero-side--right { display: none; }
+      #fp-mobile-donations-slot .fp-hero-side--left {
+        display: block; position: static; width: 100%; margin-top: 2rem;
+      }
+      /* Transparent, not boxed -- no background art/border/shadow, just the
+         content floating on the page like everything else below it. */
+      #fp-mobile-donations-slot .fp-hero-box {
+        width: 100%; min-height: 0; padding: 0;
+        background: none; border: none; box-shadow: none;
+      }
+      .fp-hero-label { font-size: 1.15rem; }
+      .fp-hero-box-deco { width: 20px; height: 20px; }
+      .fp-hero-donors { max-height: 160px; }
+      .fp-hero-donate-btns { gap: 0.5rem; }
+    }
+
     /* ── Feedback box — two blurb lines + a big game-UI style CTA button
        pinned to the bottom regardless of text length. ── */
     .fp-hero-feedback-text { flex: 1 1 auto; display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem; }
@@ -161,6 +207,27 @@
       pointer-events: none;
     }
     .fp-video-area-inner { position: relative; z-index: 2; padding-top: 2.5rem; padding-bottom: 3rem; }
+
+    /* Mobile only: drop both looping videos (autoplay video on a phone is
+       just battery/bandwidth for a background nobody's watching move) and
+       leave both sections fully transparent -- they no longer paint their
+       own background at all, so the single shared, static, non-animated
+       box-background-2.png set on the page-wide fixed .fp-bg-wrap layer
+       (further up) shows through continuously across the whole page, not
+       just these two sections. That also means the crossfade seam built to
+       blend two *different* videos has nothing left to blend, so it's
+       switched off too instead of leaving a pointless darkening band across
+       one continuous image. Desktop keeps its two distinct videos. */
+    @media (max-width: 720px) {
+      .fp-video-area-bg { display: none; }
+      .fp-video-area--seam::after { display: none; }
+      /* The page-wide .fp-bg-overlay (rgba(10,10,10,0.72)) now shows through
+         these transparent sections too -- stacking the old per-section
+         scrim (0.55) on top of that would compound to ~87% black and bury
+         the shared background almost entirely, so it's dropped down to a
+         much lighter touch here, just enough to keep card text legible. */
+      .fp-video-area-scrim { background: rgba(8,6,14,0.2); }
+    }
 
     /* Billboard — the big "theater" banner, crossfades between promo slides */
     .fp-billboard {
@@ -265,7 +332,6 @@
     /* ── Row of four: Character | Gallery | Story | Club Spotlight ── */
     .fp-spotlight-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; margin-bottom: 1.5rem; align-items: stretch; }
     @media (max-width: 1150px) { .fp-spotlight-row { grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width: 640px) { .fp-spotlight-row { grid-template-columns: 1fr; } }
     .fp-spotlight-row .fp-shine-card { padding: 1.4rem 1.2rem; }
     .fp-spotlight-row .fp-shine-title--big { font-size: 1.3rem; }
 
@@ -303,6 +369,27 @@
     .fp-spotlight-from-link { color: #f0c060; }
     .fp-spotlight-from-link:hover { color: #ffd97a; text-decoration: underline; }
     .fp-spotlight-loading, .fp-spotlight-empty { color: rgba(255,255,255,0.45); font-size: 0.88rem; text-align: center; padding: 3rem 0; }
+
+    /* Phone widths keep the 2-per-row grid (Character/Gallery top,
+       Story/Club underneath, matching DOM order) instead of collapsing to a
+       single huge column -- just shrink the cards down so two fit neatly.
+       The image itself switches from a 1:1 square to a wider, shorter 4:3
+       crop so the whole card reads as squarish rather than a tall
+       rectangle -- was previously still a 1:1 image stacked under a title
+       row plus name/credit text, which added up taller than it was wide.
+       The corner moon decoration is dropped here too -- at this card size
+       it just ate into the preview image instead of reading as an accent. */
+    @media (max-width: 720px) {
+      .fp-spotlight-row { gap: 0.5rem; }
+      .fp-spotlight-row .fp-shine-card { padding: 0.65rem 0.5rem; }
+      .fp-spotlight-row .fp-card-deco--tr { display: none; }
+      .fp-spotlight-row .fp-shine-title--big { font-size: 0.95rem; gap: 0.3rem; }
+      .fp-spotlight-row .fp-title-deco { width: 16px; height: 16px; }
+      .fp-spotlight-display { min-height: 0; }
+      .fp-spotlight-img-wrap { aspect-ratio: 4 / 3; margin-bottom: 0.45rem; border-radius: 10px; }
+      .fp-spotlight-name { font-size: 0.82rem; }
+      .fp-spotlight-from { font-size: 0.68rem; }
+    }
 
     /* ── Below Recent Submissions: Recommended Stories + Bookmarked Stories
        (left, transparent rows over the same video background) beside a
@@ -465,6 +552,19 @@
     }
     .fp-bookmark-btn.saved { color: #d97a72; }
 
+    /* Phones: shrink cards so ~3.5 fit across the viewport -- the halfway
+       card is the visual cue that the row scrolls for more, Wattpad-style,
+       instead of stretching to fewer/bigger full cards. */
+    @media (max-width: 720px) {
+      .fp-row-scroll { gap: 0.6rem; }
+      .fp-card { flex: 0 0 96px; }
+      .fp-card-cover { width: 96px; height: 144px; border-radius: 8px; }
+      .fp-card-title { font-size: 0.74rem; margin-top: 0.35rem; }
+      .fp-card-author { font-size: 0.64rem; }
+      .fp-card-cover-title { font-size: 0.68rem; }
+      .fp-bookmark-btn { width: 24px; height: 24px; font-size: 0.75rem; top: 5px; right: 5px; }
+    }
+
     /* ── Recent Submissions — a FurAffinity-style feed mixing story/chapter/
        art/character posts, newest first, trapped inside a visible bordered
        box. Every tile shares a fixed HEIGHT but keeps its own natural
@@ -527,6 +627,18 @@
     .rs-card-caption-author a { color: #a8c6e8; text-decoration: none; }
     .rs-card-caption-author a:hover { text-decoration: underline; }
 
+    /* Force exactly 3 tiles per row on phones (auto-fill would otherwise
+       settle on 2 at this width) and show 15 of the fetched items (5 rows)
+       instead of the desktop's 3-visible-row cap. */
+    @media (max-width: 720px) {
+      .rs-box-header { padding: 0.9rem 1rem; }
+      .rs-box-body { padding: 1rem; }
+      .rs-grid { grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+      .rs-card-caption-title { font-size: 0.7rem; }
+      .rs-card-caption-author { font-size: 0.62rem; }
+      .rs-card-badge { font-size: 1.1rem; }
+    }
+
     /* Disclaimer — same box used at the bottom of every user's profile page */
     .fp-disclaimer { max-width: 1400px; margin: 3rem auto 0; padding: 0 2rem; }
     .fp-disclaimer-box {
@@ -537,6 +649,22 @@
     .fp-disclaimer-box a { color: #7fa8d9; text-decoration: underline; }
     .fp-disclaimer-box .fp-disclaimer-highlight { color: #f0c060; }
     .fp-disclaimer-box p { margin-bottom: 0; }
+
+    /* Mobile-only: Recommended Followers picks up the same box-background.png
+       art the Spotlight cards use, instead of its desktop box-background-2.png,
+       so it reads as part of the same card family as the rest of the mobile
+       page. Desktop is untouched -- this block is scoped to max-width:720px
+       and placed last in the stylesheet on purpose so it wins the cascade
+       without needing !important. (Donations lost its box entirely on mobile
+       -- see the transparent override further up -- so it's not included
+       here anymore.) */
+    @media (max-width: 720px) {
+      .fp-followers-panel {
+        background-image: linear-gradient(160deg, rgba(10,8,16,0.62), rgba(10,8,16,0.8)), url('/images/home/box-background.png');
+        background-position: 50% 55%;
+        background-size: cover;
+      }
+    }
   </style>
 </head>
 <body>
@@ -705,6 +833,13 @@
       </aside>
     </section>
 
+    <!-- Mobile-only landing spot for the Donations box -- on phones the
+         real .fp-hero-side--left node gets re-parented in here by JS
+         (see placeDonationsForViewport below) so it sits at the very
+         bottom of the page, underneath Recommended Followers, instead of
+         flanking the bulletin. Empty/unused on desktop. -->
+    <div class="fp-mobile-donations-slot" id="fp-mobile-donations-slot"></div>
+
     <div class="fp-disclaimer">
       <div class="fp-disclaimer-box">
         <p>
@@ -732,6 +867,58 @@
 <script>
   document.getElementById('fp-disclaimer-domain').textContent = location.hostname.replace(/^www\./, '');
   window.fpFixLinks();
+
+  // ── Video-area backgrounds — the CSS hides these <video> elements on
+  // mobile (see .fp-video-area-bg { display:none }) in favor of a shared
+  // static image, but a hidden video can still keep decoding/playing in the
+  // background in some browsers. Explicitly pause them so the "static
+  // background" is real, not just visually hidden -- and resume if the
+  // viewport grows back past the mobile breakpoint.
+  (function () {
+    const videos = document.querySelectorAll('.fp-video-area-bg');
+    if (!videos.length) return;
+    function syncVideoAreaBg() {
+      const isMobile = window.innerWidth <= 720;
+      videos.forEach((v) => {
+        if (isMobile) v.pause();
+        else if (v.paused) v.play().catch(() => {});
+      });
+    }
+    syncVideoAreaBg();
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(syncVideoAreaBg, 150);
+    });
+  })();
+
+  // ── Donations box re-parenting — on phones it physically moves out of the
+  // hero banner and down into #fp-mobile-donations-slot (underneath
+  // Recommended Followers) instead of just being reordered via CSS, since
+  // that slot lives in a completely different section of the DOM. Runs on
+  // load and on resize/rotate so it lands back beside the bulletin if the
+  // viewport grows past the mobile breakpoint again.
+  (function () {
+    const donationsBox = document.querySelector('.fp-hero-side--left');
+    const mobileSlot = document.getElementById('fp-mobile-donations-slot');
+    const heroBanner = document.querySelector('.fp-hero-banner');
+    const heroInner = document.querySelector('.fp-hero-inner');
+    if (!donationsBox || !mobileSlot || !heroBanner || !heroInner) return;
+    function placeDonationsForViewport() {
+      const isMobile = window.innerWidth <= 720;
+      if (isMobile && donationsBox.parentElement !== mobileSlot) {
+        mobileSlot.appendChild(donationsBox);
+      } else if (!isMobile && donationsBox.parentElement !== heroBanner) {
+        heroBanner.insertBefore(donationsBox, heroInner);
+      }
+    }
+    placeDonationsForViewport();
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(placeDonationsForViewport, 150);
+    });
+  })();
 
   // ── Billboard — slides come from the DB now (managed via Hub Image Builder) ──
   let billboardSlides = [];
@@ -1748,11 +1935,14 @@
 
       wrap.innerHTML = '';
       items.forEach(it => wrap.appendChild(activityCard(it)));
-      capGridToRows(wrap, 3);
+      // Phones force a fixed 3-per-row grid capped to 5 rows (15 items)
+      // instead of the desktop 3-visible-row cap.
+      const rsMaxRows = () => window.innerWidth <= 720 ? 5 : 3;
+      capGridToRows(wrap, rsMaxRows());
       let resizeTimer = null;
       window.addEventListener('resize', () => {
         clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => capGridToRows(wrap, 3), 150);
+        resizeTimer = setTimeout(() => capGridToRows(wrap, rsMaxRows()), 150);
       });
     } catch {
       wrap.innerHTML = '<p class="fp-row-empty">Couldn\'t load recent activity right now.</p>';

@@ -656,6 +656,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
             <button class="fpnav-drawer-toggle" data-drawer-target="settings" type="button">Settings <span class="fpnav-caret">&#9662;</span></button>
             <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-settings" hidden>
               <a href="${fpUrl(`/account-settings?from=${encodeURIComponent(here)}`)}">Account Settings</a>
+              <a href="/fanpages/notifications#inbox/new/veekitpaws">Feedback</a>
               <a href="${fpUrl('/tos')}">Terms of Service</a>
             </div>
           </div>
