@@ -276,35 +276,33 @@
 .fpnav-modal-cta:hover { background: #93b8e2; }
 
 @media (max-width: 720px) {
-  .fpnav-bar { gap: 0.7rem; padding: 0 0.85rem; transition: transform 0.25s ease; }
+  .fpnav-bar { gap: 0.6rem; padding: 0 0.7rem; transition: transform 0.25s ease; }
   /* Slid up out of view on scroll-down, mobile only — see fpnav-hide-on-scroll
      wiring in fanpages-nav.js (matchMedia-gated, never runs on desktop). */
   .fpnav-bar.fpnav-bar--hidden { transform: translateY(-100%); }
-  .fpnav-search { display: none; }
+  /* Mobile top bar is exactly 3 items in DOM order: hamburger (first child),
+     the search bar (grows to fill the middle), the pfp button (last child).
+     Brand/Community/Characters/Browse/the desktop-only right-side cluster
+     all get hidden entirely rather than squeezed in. */
+  .fpnav-brand { display: none; }
   .fpnav-link { display: none; }
-  .fpnav-brand-logo { height: 36px; }
   .fpnav-icon-btn-label { display: none; }
   .fpnav-icon-btn--labeled { padding: 0.6rem; border-radius: 50%; }
-  /* Everything that used to live in the top-bar's right side (Clubs link is
-     already gone via .fpnav-link above) now lives in .fpnav-bottombar
-     instead — Create/Sign-in/avatar stay in the DOM (auth-state JS still
-     targets them) but are visually replaced by their bottom-bar mirrors. */
-  .fpnav-desktop-only-action,
-  .fpnav-login-btn,
-  #fpnav-avatar-wrap { display: none; }
-  .fpnav-right { margin-left: auto; gap: 0.5rem; }
+  .fpnav-right { display: none; }
+  .fpnav-search { display: flex; flex: 1 1 auto; width: auto; }
 }
 
-/* ── Mobile hamburger (top bar, right side) — opens .fpnav-drawer holding
-   Community / Characters / Browse / Clubs, the links that don't fit in the
-   5-icon bottom bar. The button is always in the DOM (JS builds it as part
-   of the shared topbar markup) but stays display:none until the <720px
-   query below turns it on, so desktop never actually shows it. */
+/* ── Mobile hamburger (top bar, LEFT side) — opens the full-width drawer
+   below, holding every nav destination that doesn't fit in the top bar's
+   3-item mobile layout (hamburger / search / pfp) or the 5-icon bottom bar.
+   The button is always in the DOM (JS builds it as part of the shared
+   topbar markup) but stays display:none until the <720px query below turns
+   it on, so desktop never actually shows it. */
 .fpnav-hamburger-btn {
   display: none; align-items: center; justify-content: center;
   width: 40px; height: 40px; flex-shrink: 0;
   background: none; border: none; cursor: pointer; border-radius: 50%;
-  color: #ccc; margin-left: 0.3rem;
+  color: #ccc; margin-right: 0.3rem;
 }
 .fpnav-hamburger-btn:hover { background: rgba(255,255,255,0.08); color: #f0f0f0; }
 .fpnav-hamburger-btn svg { width: 24px; height: 24px; }
@@ -312,34 +310,51 @@
   .fpnav-hamburger-btn { display: flex; }
 }
 
-/* ── Slide-out drawer (hamburger menu) + bottom sheets (Create / Profile) —
-   share the same overlay+panel recipe, just anchored to a different edge. ── */
+/* ── Mobile pfp button (top bar, right side) — direct link to your own
+   profile, no dropdown (unlike the desktop avatar button). Same treatment
+   as .fpnav-hamburger-btn: always in the DOM, only shown under 720px. */
+.fpnav-mobile-pfp-btn {
+  display: none; align-items: center; justify-content: center;
+  width: 38px; height: 38px; flex-shrink: 0; padding: 0;
+  background: none; border: none; cursor: pointer; border-radius: 50%;
+  color: #ccc;
+}
+.fpnav-mobile-pfp-btn svg { width: 24px; height: 24px; }
+.fpnav-mobile-pfp-btn img, .fpnav-mobile-pfp-btn .fpnav-avatar-fallback {
+  width: 34px; height: 34px; border-radius: 50%; object-fit: cover; display: block;
+}
+.fpnav-mobile-pfp-btn .fpnav-avatar-fallback {
+  background: linear-gradient(135deg, #7fa8d9, #d97a72); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 700;
+}
+@media (max-width: 720px) {
+  .fpnav-mobile-pfp-btn { display: flex; }
+}
+
+/* ── Hamburger drawer — drops down from under the top bar, full mobile
+   width, 4/5 of the viewport tall (the dimmed overlay below fills the
+   remaining fifth so it's still clear there's page content underneath). ── */
 .fpnav-drawer-overlay {
   position: fixed; inset: 0; z-index: 400;
   background: rgba(0,0,0,0.55);
 }
 .fpnav-drawer-panel {
-  position: fixed; top: 0; right: 0; bottom: 0; z-index: 401;
-  width: 78vw; max-width: 320px;
-  background: #161616; border-left: 1px solid rgba(255,255,255,0.1);
-  box-shadow: -12px 0 32px rgba(0,0,0,0.5);
+  position: fixed; top: 0; left: 0; right: 0; z-index: 401;
+  width: 100%; height: 80vh;
+  background: #161616; border-bottom: 1px solid rgba(255,255,255,0.1);
+  border-radius: 0 0 18px 18px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
   padding: 1.3rem 1rem; overflow-y: auto;
-  transform: translateX(100%);
+  transform: translateY(-100%);
   transition: transform 0.22s ease;
 }
-.fpnav-drawer-overlay.fpnav-drawer--open .fpnav-drawer-panel { transform: translateX(0); }
+.fpnav-drawer-overlay.fpnav-drawer--open .fpnav-drawer-panel { transform: translateY(0); }
 .fpnav-drawer-close {
   display: flex; align-items: center; justify-content: center;
   width: 36px; height: 36px; margin: 0 0 0.8rem auto;
   background: none; border: none; color: #999; font-size: 1.2rem; cursor: pointer; border-radius: 50%;
 }
 .fpnav-drawer-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
-.fpnav-drawer-section-title {
-  font-family: 'Fredoka', 'Lato', Arial, sans-serif;
-  font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-  color: #7fa8d9; margin: 1.1rem 0 0.4rem; padding: 0 0.3rem;
-}
-.fpnav-drawer-section-title:first-of-type { margin-top: 0; }
 .fpnav-drawer-panel a, .fpnav-drawer-panel button.fpnav-drawer-item {
   display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
   color: #f0f0f0; font-family: 'Fredoka', 'Lato', Arial, sans-serif; font-size: 1.02rem; font-weight: 600;
@@ -348,23 +363,40 @@
 .fpnav-drawer-panel a:hover, .fpnav-drawer-panel button.fpnav-drawer-item:hover { background: rgba(127,168,217,0.12); color: #7fa8d9; }
 .fpnav-drawer-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 0.5rem 0.6rem; }
 
-/* Bottom-sheet variant (Create / Profile menus) — same panel look, anchored
-   to the bottom edge and sliding up instead of in from the side. */
-.fpnav-sheet-panel {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 401;
-  max-height: 70vh; overflow-y: auto;
-  background: #161616; border-top: 1px solid rgba(255,255,255,0.1);
-  border-radius: 18px 18px 0 0;
-  box-shadow: 0 -12px 32px rgba(0,0,0,0.5);
-  padding: 0.6rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
-  transform: translateY(100%);
-  transition: transform 0.22s ease;
+/* Profile row — pfp + name/"Sign In", pinned at the top of the drawer. */
+.fpnav-drawer-profile-row {
+  display: flex; align-items: center; gap: 0.7rem; width: 100%;
+  background: none; border: none; cursor: pointer; text-align: left;
+  color: #f0f0f0; font-family: 'Fredoka', 'Lato', Arial, sans-serif; font-size: 1.1rem; font-weight: 700;
+  padding: 0.6rem; margin-bottom: 0.6rem; border-radius: 12px;
 }
-.fpnav-drawer-overlay.fpnav-drawer--open .fpnav-sheet-panel { transform: translateY(0); }
-.fpnav-sheet-handle { width: 40px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.2); margin: 0.6rem auto 0.8rem; }
+.fpnav-drawer-profile-row:hover { background: rgba(127,168,217,0.12); }
+.fpnav-drawer-profile-icon {
+  width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; color: #ccc; overflow: hidden;
+}
+.fpnav-drawer-profile-icon img, .fpnav-drawer-profile-icon .fpnav-avatar-fallback {
+  width: 44px; height: 44px; border-radius: 50%; object-fit: cover; display: block;
+}
+.fpnav-drawer-profile-icon .fpnav-avatar-fallback {
+  background: linear-gradient(135deg, #7fa8d9, #d97a72); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 700;
+}
+.fpnav-drawer-profile-icon svg { width: 26px; height: 26px; }
 
-/* ── Fixed bottom icon bar (Home / Search / Create / Notifications / Profile)
-   — mobile only, mirrors the Wattpad app's bottom nav. Lives outside
+/* Collapsible sections (Browse / Create / Community / Settings) — a toggle
+   button paired with a #fpnav-drawer-sub-<target> submenu, wired generically
+   in fanpages-nav.js via [data-drawer-target]. */
+.fpnav-drawer-toggle {
+  display: flex; align-items: center; justify-content: space-between; width: 100%;
+}
+.fpnav-drawer-toggle .fpnav-caret { transition: transform 0.18s ease; font-size: 0.8rem; opacity: 0.7; }
+.fpnav-drawer-toggle--open .fpnav-caret { transform: rotate(180deg); }
+.fpnav-drawer-submenu { padding-left: 0.9rem; }
+.fpnav-drawer-submenu a { font-size: 0.96rem; font-weight: 500; }
+
+/* ── Fixed bottom icon bar (Home / Search / Create / Updates / Clubs) —
+   mobile only, mirrors the Wattpad app's bottom nav. Lives outside
    #fanpages-topbar-root (appended straight to <body>) so it isn't affected
    by that root's own fixed-height sizing, and never renders above 720px. ── */
 .fpnav-bottombar { display: none; }
@@ -374,7 +406,11 @@
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 200;
     height: 58px; padding-bottom: env(safe-area-inset-bottom, 0px);
     background: #141414; border-top: 1px solid rgba(255,255,255,0.1);
+    transition: transform 0.25s ease;
   }
+  /* Slid down out of view on scroll-down, mirroring the top bar — see the
+     shared onScroll wiring in fanpages-nav.js. */
+  .fpnav-bottombar.fpnav-bottombar--hidden { transform: translateY(100%); }
   body.fpnav-has-bottombar { padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px)); }
 }
 .fpnav-bottombar-item {
@@ -385,13 +421,6 @@
 }
 .fpnav-bottombar-item svg { width: 23px; height: 23px; }
 .fpnav-bottombar-item:hover, .fpnav-bottombar-item.active { color: #7fa8d9; }
-.fpnav-bottombar-item--profile img, .fpnav-bottombar-item--profile .fpnav-avatar-fallback {
-  width: 24px; height: 24px; border-radius: 50%; object-fit: cover; display: block;
-}
-.fpnav-bottombar-item--profile .fpnav-avatar-fallback {
-  background: linear-gradient(135deg, #7fa8d9, #d97a72); color: #fff;
-  display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700;
-}
 .fpnav-bottombar-badge {
   position: absolute; top: 2px; right: calc(50% - 18px);
   min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px;
