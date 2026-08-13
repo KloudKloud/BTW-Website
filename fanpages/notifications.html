@@ -97,15 +97,15 @@
        user/nav box on the left, the actual chats/messages box on the right —
        not one box with an internal divider line. */
     .dm-app {
-      display: flex; width: 100%; height: 600px; gap: 1.25rem;
+      display: flex; width: 100%; height: calc(100vh - 15rem); min-height: 520px; gap: 1.25rem;
     }
     .dm-sidebar {
-      width: 220px; flex-shrink: 0;
+      width: 260px; flex-shrink: 0;
       background: rgba(10,8,14,0.82);
       font-family: 'Fredoka', 'Lato', cursive;
       border: 1px solid rgba(255,255,255,0.14); border-radius: 14px;
       padding: 1rem; display: flex; flex-direction: column; gap: 0.35rem;
-      overflow-y: auto;
+      overflow: hidden;
     }
     .dm-user-block {
       display: flex; align-items: center; gap: 0.6rem;
@@ -144,6 +144,46 @@
     .dm-req-badge {
       background: #d97a72; color: #fff; font-size: 0.68rem; font-weight: 700;
       border-radius: 9px; padding: 0.1rem 0.45rem;
+    }
+
+    /* Quick-switch chat list — a compact mirror of the Chats panel, sitting
+       right in the sidebar under the tabs so a conversation can be jumped to
+       without first clicking into the Chats panel and scanning it. */
+    .dm-sidebar-quicklist {
+      flex: 1; min-height: 0; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 0.15rem;
+      margin: 0 -0.35rem; padding: 0 0.35rem;
+    }
+    .dm-sidebar-quicklist-empty { font-size: 0.78rem; color: #888; padding: 0.6rem 0.4rem; text-align: center; font-family: 'Lato', Arial, sans-serif; }
+    .dm-quick-item {
+      display: flex; align-items: center; gap: 0.55rem;
+      padding: 0.5rem 0.4rem; border-radius: 10px; cursor: pointer;
+      position: relative; transition: background 0.15s;
+    }
+    .dm-quick-item:hover { background: rgba(255,255,255,0.06); }
+    .dm-quick-item--active { background: rgba(240,192,96,0.13); }
+    .dm-quick-item--active:hover { background: rgba(240,192,96,0.17); }
+    .dm-quick-item-avatar, .dm-quick-item-avatar-fallback {
+      width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    }
+    .dm-quick-item-avatar-fallback {
+      background: linear-gradient(135deg, #7fa8d9, #d97a72); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.72rem;
+    }
+    .dm-quick-item-body { min-width: 0; flex: 1; font-family: 'Lato', Arial, sans-serif; }
+    .dm-quick-item-name {
+      font-size: 0.8rem; font-weight: 700; color: #e8e8e8;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .dm-quick-item--unread .dm-quick-item-name { color: #fff; }
+    .dm-quick-item-preview {
+      font-size: 0.72rem; color: #888;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .dm-quick-item--unread .dm-quick-item-preview { color: #c8d8ea; }
+    .dm-quick-item-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: #f0c060;
+      box-shadow: 0 0 6px rgba(240,192,96,0.7); flex-shrink: 0;
     }
 
     .dm-content {
@@ -542,10 +582,11 @@
     .dm-following-item-name { font-size: 0.88rem; font-weight: 600; }
 
     @media (max-width: 720px) {
-      .dm-app { flex-direction: column; height: auto; }
+      .dm-app { flex-direction: column; height: auto; min-height: 0; }
       .dm-sidebar { width: 100%; height: auto; flex-direction: row; flex-wrap: wrap; }
       .dm-content { height: 500px; }
       .dm-sidebar-rule { display: none; }
+      .dm-sidebar-quicklist { display: none; }
     }
   </style>
 </head>
@@ -601,6 +642,10 @@
               <span>📮 Requests</span>
               <span class="dm-req-badge" id="dm-req-badge" hidden></span>
             </button>
+            <div class="dm-sidebar-rule"></div>
+            <div class="dm-sidebar-quicklist" id="dm-sidebar-quicklist">
+              <p class="dm-sidebar-quicklist-empty">Loading…</p>
+            </div>
           </aside>
 
           <div class="dm-content">
@@ -792,6 +837,7 @@
       e.currentTarget.disabled = true;
       await fetch(`/api/dm/${c.id}`, { method: 'DELETE', headers: authHeaders() });
       loadDmChats();
+      loadDmQuickList();
     });
     div.addEventListener('click', () => openDmThread(c.id, name, c.other_user, false));
     return div;
@@ -817,6 +863,47 @@
     `;
     div.addEventListener('click', () => openDmThread(p.id, name, p.other_user, true));
     return div;
+  }
+
+  // ── Sidebar quick-switch list — compact mirror of the Chats panel ────────
+  function dmQuickItem(c, isPriority) {
+    const div = document.createElement('div');
+    const name = c.other_user.display_name || c.other_user.username;
+    const previewText = c.last_message
+      ? ((!isPriority && c.last_message.is_mine) ? 'You: ' : '') + c.last_message.body
+      : (c.status === 'pending' ? 'Request sent — awaiting response' : 'No messages yet');
+    const unread = c.unread_count > 0;
+    const active = dmActiveThreadId === c.id;
+    div.className = 'dm-quick-item' + (unread ? ' dm-quick-item--unread' : '') + (active ? ' dm-quick-item--active' : '');
+    div.innerHTML = `
+      ${dmAvatarHtml(c.other_user, 'dm-quick-item-avatar', 'dm-quick-item-avatar-fallback')}
+      <div class="dm-quick-item-body">
+        <span class="dm-quick-item-name">${escapeHtml(name)}</span>
+        <div class="dm-quick-item-preview">${escapeHtml(previewText)}</div>
+      </div>
+      ${unread ? '<span class="dm-quick-item-dot"></span>' : ''}
+    `;
+    div.addEventListener('click', () => openDmThread(c.id, name, c.other_user, isPriority));
+    return div;
+  }
+
+  async function loadDmQuickList() {
+    const list = document.getElementById('dm-sidebar-quicklist');
+    try {
+      const res = await fetch('/api/dm/chats', { headers: authHeaders() });
+      const data = await res.json();
+      const priority = data.priority || [];
+      const chats = data.chats || [];
+      list.innerHTML = '';
+      if (!priority.length && !chats.length) {
+        list.innerHTML = '<p class="dm-sidebar-quicklist-empty">No chats yet.</p>';
+        return;
+      }
+      priority.forEach(p => list.appendChild(dmQuickItem(p, true)));
+      chats.forEach(c => list.appendChild(dmQuickItem(c, false)));
+    } catch {
+      list.innerHTML = '<p class="dm-sidebar-quicklist-empty">Couldn\'t load chats.</p>';
+    }
   }
 
   async function loadDmChats() {
@@ -889,6 +976,7 @@
         await fetch(`/api/dm/${r.id}/accept`, { method: 'POST', headers: authHeaders() });
         loadDmRequests();
         dmRefreshRequestBadge();
+        loadDmQuickList();
       });
       div.querySelector('.dm-deny-btn').addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -896,6 +984,7 @@
         await fetch(`/api/dm/${r.id}/deny`, { method: 'POST', headers: authHeaders() });
         loadDmRequests();
         dmRefreshRequestBadge();
+        loadDmQuickList();
       });
     }
     div.addEventListener('click', () => openDmThread(r.id, name, r.other_user));
@@ -1419,6 +1508,7 @@
     dmResetReplyBox();
     dmShowPanel('thread');
     location.hash = `inbox/${threadId}`;
+    loadDmQuickList();
     const msgWrap = document.getElementById('dm-thread-messages');
     if (!otherName) msgWrap.innerHTML = '<p class="notif-empty">Loading…</p>';
     try {
@@ -1449,6 +1539,7 @@
         dmScrollToBottom(msgWrap);
       }
       dmRefreshRequestBadge();
+      loadDmQuickList();
 
       dmLastMessageId = msgs.length ? msgs[msgs.length - 1].id : 0;
       dmLastDeletionId = 0;
@@ -1481,6 +1572,7 @@
     dmPendingTargetUser = null;
     dmShowPanel('chats');
     loadDmChats();
+    loadDmQuickList();
     location.hash = 'inbox';
   });
 
@@ -1493,6 +1585,7 @@
     dmActiveThreadId = null;
     dmShowPanel('chats');
     loadDmChats();
+    loadDmQuickList();
     location.hash = 'inbox';
   });
 
@@ -1520,6 +1613,7 @@
         dmActiveThreadId = null;
         dmShowPanel('chats');
         loadDmChats();
+        loadDmQuickList();
         location.hash = 'inbox';
       }
     } catch {}
@@ -1560,6 +1654,7 @@
         dmScrollToBottom(msgWrap);
         dmLastMessageId = data.message.id;
         document.getElementById('dm-typing-indicator').hidden = true;
+        loadDmQuickList();
       }
     } catch (err) {
       msgEl.textContent = err.message || 'Something went wrong.';
@@ -1643,6 +1738,7 @@
     if (!token) {
       dmChatsList.innerHTML = `<p class="notif-empty"><a href="${window.fpUrl(`/login?from=${encodeURIComponent(window.fpUrl('/notifications'))}`)}" style="color:#7fa8d9;">Log in</a> to chat with people you follow.</p>`;
       document.getElementById('dm-new-chat-btn').style.display = 'none';
+      document.getElementById('dm-sidebar-quicklist').style.display = 'none';
       return;
     }
     try {
@@ -1651,6 +1747,7 @@
       if (data && data.user) dmRenderUserBlock(data.user);
     } catch {}
     loadDmChats();
+    loadDmQuickList();
     dmRefreshRequestBadge();
   }
 
