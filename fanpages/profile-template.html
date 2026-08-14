@@ -1005,6 +1005,16 @@
        tabs scroll instead of overflowing, and every multi-column tab
        (Home/Characters/Gallery/My Stories) collapses to one column. */
     @media (max-width: 760px) {
+      /* Defensive: the story stat panel below (Reads/Likes/Words) has three
+         flex:0 0 auto pills that don't shrink -- on a narrow phone they can
+         add up wider than the card, which pushed real horizontal overflow
+         onto the whole page (that's what was reading as "flush right, gap
+         on the left", since the left padding stayed put and the excess
+         width just ran off the right edge of the viewport). Wrapping the
+         pills fixes the actual cause; overflow-x:hidden here is a backstop
+         so nothing else can do the same thing unnoticed. */
+      body { overflow-x: hidden; }
+      .fp-bcard-statpanel { flex-wrap: wrap; }
       .fp-banner-wrap { height: 220px; }
       body.fp-editing .fp-banner-wrap { margin-top: 68px; }
       .fp-avatar-wrap { width: 96px; height: 96px; top: -48px; }
@@ -1032,8 +1042,17 @@
          tabs' row is also what lets the tabs themselves run bigger below. */
       .fp-tabs-row { flex-direction: column-reverse; align-items: center; gap: 0.7rem; overflow-x: visible; }
       .fp-header-action { width: 100%; margin-bottom: 0; }
-      .fp-tabs { gap: 0.85rem; width: 100%; justify-content: center; }
-      .fp-tab { font-size: 0.92rem; padding: 0.75rem 0.1rem; }
+      /* Five equal-width flex columns spanning the full row instead of
+         gap-separated auto-width buttons -- lets each tab run as large as
+         possible while guaranteeing all five stay on one line (a long
+         label can only ever push its own column, via ellipsis, never the
+         layout). */
+      .fp-tabs { gap: 0; width: 100%; }
+      .fp-tab {
+        flex: 1 1 0; min-width: 0; text-align: center; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis;
+        font-size: 0.92rem; padding: 0.85rem 0.15rem;
+      }
 
       .fp-tab-view { padding: 1.25rem 1rem; }
       .fp-gallery-page-row { padding: 0 1rem; }
@@ -1075,8 +1094,7 @@
       .fp-name { font-size: 1.4rem; }
       .fp-action-btn { font-size: 0.85rem; padding: 0 1rem; height: 40px; }
       .fp-tab-view-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.85rem; }
-      .fp-tabs { gap: 0.55rem; }
-      .fp-tab { font-size: 0.78rem; padding: 0.7rem 0.05rem; }
+      .fp-tab { font-size: 0.78rem; padding: 0.75rem 0.1rem; }
       .fp-featured-row { gap: 0.4rem; }
       .fp-featured-card-title { font-size: 0.74rem; }
     }
