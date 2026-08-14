@@ -611,6 +611,16 @@
       color: #f0f0f0; font-family: inherit; font-size: 0.88rem; padding: 0.5rem 0.6rem; resize: vertical;
     }
     .fp-about-row input:focus, .fp-about-row textarea:focus { outline: none; border-color: #7fa8d9; }
+    /* Mobile-only "More" toggle for the About box -- collapses to just the
+       Pronouns row + a one-line preview of the Bio, expanding to reveal the
+       rest of the About fields plus Links/Recent Activity/Following. Hidden
+       entirely on desktop; the max-width query below is what turns it (and
+       the collapsing behavior) on. */
+    .fp-about-more-btn {
+      display: none; background: none; border: none; cursor: pointer; padding: 0.5rem 0 0.1rem;
+      font-family: inherit; font-size: 0.85rem; font-weight: 700; color: #7fa8d9;
+    }
+    .fp-about-more-btn:hover { color: #a8c6e8; text-decoration: underline; }
 
     /* Draft-only story badge -- the Stories tab's own bcards (see
        featuredStoryCardEl) are the only thing that still uses this, styled
@@ -1027,15 +1037,35 @@
       .fp-gallery-page-row { padding: 0 1rem; }
       .fp-gallery-page-row .mod-gallery-main { grid-template-columns: 1fr; gap: 1.5rem; }
       .fp-home-grid { padding: 1.25rem 1rem 2.5rem; grid-template-columns: 1fr !important; gap: 1.5rem; }
-      /* Force exactly 3 columns (never fewer) so all three Featured
-         Characters/Gallery/Stories cards stay on one row instead of
-         auto-fit dropping to 2 or 1 per row on narrow phones. */
-      .fp-featured-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
-      .fp-featured-card-title { font-size: 0.82rem; margin-top: 0.4rem; }
+      /* One featured card per row, laid out as a compact horizontal list
+         row (small square thumb + title) instead of a full-width square
+         image -- a single stretched-to-100%-width square thumbnail read as
+         way too tall/dominant on a phone screen. */
+      .fp-featured-row { grid-template-columns: 1fr; gap: 0.6rem; }
+      .fp-featured-card { display: flex; align-items: center; gap: 0.85rem; width: 100%; }
+      .fp-featured-card-img { width: 64px; height: 64px; flex-shrink: 0; }
+      .fp-featured-card-title { font-size: 0.9rem; margin-top: 0; }
       .fp-newspaper-home-header { flex-wrap: wrap; gap: 0.75rem; }
 
       .fp-theme-picker--floating { top: 0.6rem; right: 0.6rem; }
       .fp-banner-edit-pencil { bottom: 0.6rem; right: 0.6rem; width: 38px; height: 38px; }
+
+      /* ── About box: collapsed by default (Pronouns + one-line Bio preview
+         + More button), expands to the full box (remaining About fields,
+         Links, Recent Activity, Following) on tap. See #fp-about-more-btn's
+         click handler, which toggles .fp-home-side--expanded. ── */
+      .fp-about-more-btn { display: block; }
+      .fp-home-side:not(.fp-home-side--expanded) .fp-home-side-divider,
+      .fp-home-side:not(.fp-home-side--expanded) .fp-home-side-section:not(.fp-home-side-about) {
+        display: none;
+      }
+      .fp-home-side:not(.fp-home-side--expanded) #fp-about-rows [data-key="favorite_pokemon"],
+      .fp-home-side:not(.fp-home-side--expanded) #fp-about-rows [data-key="fun_fact"] {
+        display: none;
+      }
+      .fp-home-side:not(.fp-home-side--expanded) #fp-about-rows [data-key="account_bio"] .fp-about-row-value {
+        display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
+      }
     }
 
     @media (max-width: 480px) {
@@ -1047,8 +1077,9 @@
       .fp-tab-view-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.85rem; }
       .fp-tabs { gap: 0.35rem; }
       .fp-tab { font-size: 0.68rem; }
-      .fp-featured-row { gap: 0.4rem; }
-      .fp-featured-card-title { font-size: 0.74rem; }
+      .fp-featured-row { gap: 0.5rem; }
+      .fp-featured-card-img { width: 56px; height: 56px; }
+      .fp-featured-card-title { font-size: 0.82rem; }
     }
   </style>
 </head>
@@ -1148,9 +1179,10 @@
     <aside class="fp-home-side">
       <img class="fp-home-side-deco" src="/images/home/decoration-8.png" alt="" />
 
-      <div class="fp-home-side-section">
+      <div class="fp-home-side-section fp-home-side-about" id="fp-home-side-about">
         <p class="fp-home-side-label">About</p>
         <div id="fp-about-rows"></div>
+        <button type="button" class="fp-about-more-btn" id="fp-about-more-btn">More</button>
       </div>
 
       <div class="fp-home-side-divider"></div>
@@ -1570,6 +1602,14 @@
   document.addEventListener('click', (e) => {
     const picker = document.querySelector('.fp-theme-picker');
     if (picker && !picker.contains(e.target)) document.getElementById('fp-theme-popover').hidden = true;
+  });
+
+  // Mobile-only About "More"/"Less" toggle -- see .fp-about-more-btn and the
+  // collapsing rules under the 760px query. Harmless to wire up on desktop
+  // too since the button stays display:none there.
+  document.getElementById('fp-about-more-btn').addEventListener('click', function () {
+    const expanded = document.querySelector('.fp-home-side').classList.toggle('fp-home-side--expanded');
+    this.textContent = expanded ? 'Less' : 'More';
   });
 
   const ABOUT_FIELD_DEFS = [
@@ -4105,6 +4145,7 @@
         const value = a[key] || 'N/A';
         const row = document.createElement('div');
         row.className = 'fp-about-row';
+        row.dataset.key = key;
         row.innerHTML = `<p class="fp-about-row-label">${label}</p><p class="fp-about-row-value"></p>`;
         row.querySelector('.fp-about-row-value').textContent = value;
         aboutWrap.appendChild(row);
