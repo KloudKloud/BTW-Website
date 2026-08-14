@@ -1061,13 +1061,21 @@
       .fp-tab {
         flex: 1 1 0; min-width: 0; text-align: center; white-space: nowrap;
         overflow: hidden; text-overflow: ellipsis;
-        font-size: 0.92rem; padding: 0.85rem 0.15rem;
+        font-size: 0.82rem; padding: 0.85rem 0.1rem;
       }
 
       .fp-tab-view { padding: 1.25rem 1rem; }
       .fp-gallery-page-row { padding: 0 1rem; }
       .fp-gallery-page-row .mod-gallery-main { grid-template-columns: 1fr; gap: 1.5rem; }
       .fp-home-grid { padding: 1.25rem 1rem 2.5rem; grid-template-columns: 1fr !important; gap: 1.5rem; }
+      /* Characters/Gallery tabs -- fixed 3-column grid. Both .fp-char-grid
+         (fanpages.css sets 900px/640px breakpoints of its own, dropping to
+         2 columns well before phone width) and .gallery-grid--4up (same
+         pattern, 700px breakpoint) need overriding here; since this inline
+         block is loaded after fanpages.css, these rules win at equal
+         specificity regardless of which media query either sits in. */
+      .fp-char-grid { grid-template-columns: repeat(3, 1fr); gap: 0.7rem; }
+      .gallery-grid--4up { grid-template-columns: repeat(3, 1fr); }
       /* Featured Characters/Gallery (.fp-featured-row) stay a fixed
          3-column grid, matching desktop -- Featured Stories is a separate
          component (.fp-bcard-grid, already one-per-row by default on every
@@ -1103,8 +1111,10 @@
       .fp-avatar, .fp-avatar-fallback { width: 80px; height: 80px; }
       .fp-name { font-size: 1.4rem; }
       .fp-action-btn { font-size: 0.85rem; padding: 0 1rem; height: 40px; }
-      .fp-tab-view-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.85rem; }
-      .fp-tab { font-size: 0.78rem; padding: 0.75rem 0.1rem; }
+      .fp-char-grid { gap: 0.5rem; }
+      .fp-char-card-name { font-size: 0.92rem; }
+      .fp-char-card-species { font-size: 0.78rem; }
+      .fp-tab { font-size: 0.72rem; padding: 0.75rem 0.05rem; }
       .fp-featured-row { gap: 0.4rem; }
       .fp-featured-card-title { font-size: 0.74rem; }
     }
@@ -1631,12 +1641,14 @@
     if (picker && !picker.contains(e.target)) document.getElementById('fp-theme-popover').hidden = true;
   });
 
-  // Mobile-only About "More"/"Less" toggle -- see .fp-about-more-btn and the
-  // collapsing rules under the 760px query. Harmless to wire up on desktop
-  // too since the button stays display:none there.
+  // Mobile-only About "More" expand -- see .fp-about-more-btn and the
+  // collapsing rules under the 760px query. One-way (no "Less" collapse
+  // back down, by design) -- the button just hides itself once expanded.
+  // Harmless to wire up on desktop too since the button stays
+  // display:none there.
   document.getElementById('fp-about-more-btn').addEventListener('click', function () {
-    const expanded = document.querySelector('.fp-home-side').classList.toggle('fp-home-side--expanded');
-    this.textContent = expanded ? 'Less' : 'More';
+    document.querySelector('.fp-home-side').classList.add('fp-home-side--expanded');
+    this.hidden = true;
   });
 
   const ABOUT_FIELD_DEFS = [
