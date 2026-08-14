@@ -1891,8 +1891,15 @@ a.wiki-tag-bubble:hover { background: rgba(127,168,217,0.3); border-color: #7fa8
 @media (max-width: 1100px) {
   .gallery-grid--4up { grid-template-columns: repeat(3, 1fr); }
 }
+/* Used to drop to 2 columns here and just stay there all the way down to
+   phone width -- stays at a fixed 3 columns instead now, matching the
+   Characters grid's own mobile treatment (profile-template.html and
+   _story-template/characters.html's .fp-char-grid). */
 @media (max-width: 700px) {
-  .gallery-grid--4up { grid-template-columns: repeat(2, 1fr); }
+  .gallery-grid--4up { grid-template-columns: repeat(3, 1fr); gap: 0.6rem; }
+}
+@media (max-width: 480px) {
+  .gallery-grid--4up { gap: 0.4rem; }
 }
 /* Story gallery tab (.mod-page-row wrapper only, not profile-template's
    own .fp-gallery-page-row) — pull the grid up flush under the tabs, same
@@ -2415,8 +2422,15 @@ a.wiki-tag-bubble:hover { background: rgba(127,168,217,0.3); border-color: #7fa8
     gap: 2rem;
   }
   .wiki-side-col { order: 2; }
-  .chars-layout { grid-template-columns: 1fr !important; }
-  .mod-page-row { grid-template-columns: 1fr; gap: 1.5rem; }
+  /* Both are given their desktop side padding (3rem/48px+) as an inline
+     style attribute directly on the element (characters.html/chapters.html/
+     gallery.html), which beats any plain class rule regardless of media
+     query -- needs !important to actually win. That inline 3rem padding on
+     a ~360-412px phone was eating close to a quarter of the screen width on
+     each side, which is why these pages read as "not using the full
+     width" even though the tab row itself was already fixed. */
+  .chars-layout { grid-template-columns: 1fr !important; padding: 0 1rem 3rem !important; }
+  .mod-page-row { grid-template-columns: 1fr; gap: 1.5rem; padding: 0 1rem !important; }
   .mod-page-row .wiki-side-col { margin-top: 0; order: 2; }
   .mod-gallery-main { grid-template-columns: 1fr; gap: 1.5rem; padding: 2.5rem 0; }
 
@@ -2447,10 +2461,26 @@ a.wiki-tag-bubble:hover { background: rgba(127,168,217,0.3); border-color: #7fa8
   .mod-cover-wrap { margin: 0 auto; width: 160px; height: 240px; }
   .wiki-meta-display { width: 100%; max-width: 260px; }
 
-  /* Story tabs — scroll horizontally instead of wrapping onto a cramped
-     second line. */
-  .wiki-story-tabs { overflow-x: auto; flex-wrap: nowrap; }
-  .wiki-story-tab { flex-shrink: 0; }
+  /* Story tabs — used to scroll horizontally (Gallery/the last tab sat
+     off-screen, needing a swipe to even see it). Matches the profile
+     page's own tab-row fix instead: every tab becomes an equal-width flex
+     column spanning the full row, sized up as large as it'll go while
+     guaranteed to keep every tab on one line (ellipsis in its own column
+     if a label is ever too long, rather than threatening the layout).
+     The owner-only Edit Story pill (.wiki-story-tabs-edit-btn, normally
+     pinned right via margin-left:auto) drops to its own full-width line
+     above the tabs instead of sharing their row and stealing width from
+     them. */
+  .wiki-story-tabs { flex-wrap: wrap; gap: 0; width: 100%; }
+  .wiki-story-tab {
+    flex: 1 1 0; min-width: 0; text-align: center; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+    font-size: 0.8rem; padding: 0.85rem 0.05rem;
+  }
+  .wiki-story-tabs-edit-btn { flex: 1 1 100%; order: -1; margin: 0 0 0.7rem; justify-content: center; }
+  /* --top's desktop 3rem side padding was never reduced for mobile, eating
+     nearly a quarter of a phone's width before the tabs even start. */
+  .wiki-story-tabs--top { padding: 0 1rem; }
 
   /* Description's floated cover+avatar box — full-width above the text
      instead of a narrow float, same as the old cover+meta column used to
