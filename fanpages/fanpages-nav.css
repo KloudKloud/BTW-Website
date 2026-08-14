@@ -417,12 +417,18 @@
     height: 58px; padding-bottom: env(safe-area-inset-bottom, 0px);
     background: #141414; border-top: 1px solid rgba(255,255,255,0.1);
     transition: transform 0.25s ease;
-    /* Forces its own GPU compositor layer. Some in-app browsers (X/Twitter,
-       Reddit, etc — their embedded WebViews, not real Chrome/Safari) don't
-       reliably keep a plain position:fixed element pinned to the viewport
-       during scroll and instead let it drift/repaint toward the top of the
-       page. Promoting it to its own layer is the standard workaround for
-       that class of bug. */
+    /* Root cause of the "shows at the top" bug, confirmed with Playwright:
+       style.css has a bare `nav { position: sticky; top: 0; ... }` rule for
+       the legacy top navbar. This bar is itself a literal <nav> element
+       (see fanpages-nav.js), so that unscoped element selector also
+       matches it and sets top:0. This rule never declared its own `top` at
+       all, so there's no cascade fight to win -- style.css's top:0 just
+       applies uncontested. With both top:0 and bottom:0 present on a
+       fixed-height box, the box is over-constrained and the browser drops
+       bottom, pinning the bar to the TOP instead. Declaring top:auto here
+       makes this rule's own (higher-specificity) declaration the one that
+       wins on that property, same as it already does for `position`. */
+    top: auto;
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
     will-change: transform;
