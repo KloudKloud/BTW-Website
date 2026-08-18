@@ -1718,6 +1718,33 @@
   const NA = 'N/A';
   const DEFAULT_REF = '/images/defaultchar.jpg';
   function isBlank(v) { return !v || !v.trim() || v.trim() === NA; }
+
+  // Theme Song links: open.spotify.com is a plain https link, so clicking it
+  // just opens a browser tab -- it doesn't prompt to hand off to the Spotify
+  // app the way a real deep link does. Convert to the spotify: URI scheme and
+  // try that first; if the tab is still visible after a beat (no Spotify app
+  // installed, or a platform that doesn't support the handoff), fall back to
+  // the normal web link. Unregistered custom-protocol navigations are safely
+  // no-ops in every modern browser, so this can't break the click either way.
+  function wireSpotifyAppLink(a) {
+    const webUrl = a.href;
+    const m = webUrl.match(/open\.spotify\.com\/(track|album|playlist|artist|episode|show)\/([A-Za-z0-9]+)/);
+    if (!m) return;
+    const spotifyUri = `spotify:${m[1]}:${m[2]}`;
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      let fallbackTimer;
+      const cancelFallback = () => {
+        clearTimeout(fallbackTimer);
+        document.removeEventListener('visibilitychange', cancelFallback);
+        window.removeEventListener('blur', cancelFallback);
+      };
+      fallbackTimer = setTimeout(() => { cancelFallback(); window.open(webUrl, '_blank', 'noopener'); }, 1500);
+      document.addEventListener('visibilitychange', cancelFallback, { once: true });
+      window.addEventListener('blur', cancelFallback, { once: true });
+      window.location.href = spotifyUri;
+    });
+  }
   // A view only counts once a character has actually been open for 10s
   // (not just refreshed, or clicked past mid-slideshow), and at most once
   // per 5 minutes per character -- both tracked client-side.
@@ -2140,6 +2167,7 @@
       a.rel = 'noopener';
       a.style.color = '#f0c060';
       a.textContent = 'Theme Song';
+      wireSpotifyAppLink(a);
       themeContent.appendChild(a);
       themeContent.appendChild(document.createTextNode(' 🎵'));
     } else {
