@@ -169,7 +169,7 @@
        other view (Hub, Social feed, custom pages, gallery/promo detail)
        stays exactly as before. body.cl-post-open is only ever toggled by
        loadAndShowPost()/renderFromUrl(), never anywhere else. */
-    body.cl-post-open #cl-page-bg-img { filter: brightness(0.9) blur(2px); }
+    body.cl-post-open #cl-page-bg-img { filter: brightness(0.9) blur(4px); }
     @media (max-width: 860px) { #cl-page-bg-wrap { top: 180px; } }
 
     /* ── Banner + pfp (the only header content left for now) ── */
@@ -297,10 +297,15 @@
       position: relative; display: flex; justify-content: center; gap: 2rem;
       border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 2rem;
     }
-    /* Owner/admin-only — far left of the Hub/Social tab row. Same round
-       icon-button recipe as .soc-sidebar-toggle. */
+    /* Owner/admin-only — both actions grouped together on the right of the
+       Hub/Social tab row (Edit Club first, Theme right beside it), instead
+       of Theme sitting alone at the far left. */
+    .cl-tabs-admin-actions {
+      position: absolute; right: 0; top: calc(50% - 4px); transform: translateY(-50%);
+      display: flex; align-items: center; gap: 0.6rem;
+    }
+    /* Same round icon-button recipe as .soc-sidebar-toggle. */
     .cl-theme-btn {
-      position: absolute; left: 0; top: calc(50% - 4px); transform: translateY(-50%);
       width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
       border: 1px solid rgba(255,255,255,0.2);
       background: linear-gradient(160deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02));
@@ -309,18 +314,18 @@
     }
     .cl-theme-btn:hover { border-color: rgba(127,168,217,0.6); color: #7fa8d9; }
     /* Same popover + circular swatch grid as the profile page's background
-       picker (fp-theme-*) — a plain dark swatch plus a "+" upload tile. */
+       picker (fp-theme-*) — a plain dark swatch plus a "+" upload tile.
+       Anchored to the tab row's own right edge (matching the button group's
+       new position) rather than the button itself. */
     .cl-theme-menu {
-      position: absolute; left: 0; top: calc(50% + 32px); z-index: 20;
+      position: absolute; right: 0; top: calc(50% + 32px); z-index: 20;
       background: #161616; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
       box-shadow: 0 12px 32px rgba(0,0,0,0.5); padding: 1rem; width: 220px;
     }
-    /* Owner/admin-only — far right of the Hub/Social tab row, mirroring the
-       theme button now on the left. Opens the same Edit Club modal as the
-       sidebar's ✎ Edit Club button. Same 44px height as the round theme
-       button, just widened into a pill so the label fits. */
+    /* Opens the same Edit Club modal as the sidebar's ✎ Edit Club button.
+       Same 44px height as the round theme button, just widened into a pill
+       so the label fits. */
     .cl-tabs-edit-btn {
-      position: absolute; right: 0; top: calc(50% - 4px); transform: translateY(-50%);
       height: 44px; padding: 0 1.4rem; border-radius: 22px; flex-shrink: 0;
       border: 1px solid #7fa8d9; background: #7fa8d9;
       color: #0a0a0a; cursor: pointer; font-size: 0.95rem; font-weight: 700; font-family: inherit;
@@ -554,20 +559,24 @@
       overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
     }
 
-    /* ── Social tab posts only -- a light, mostly-transparent box per post
-       so each one reads as its own card against the theme background,
-       without the heavy glass-panel look used elsewhere. Scoped to
+    /* ── Social tab posts only -- same light glass-card recipe as the Home
+       feed's own post cards (.soc-feed-card in social.html: gradient
+       rgba(255,255,255,0.06)->0.015, border rgba(255,255,255,0.1)) so a
+       post reads consistently whether it's seen there or here. Scoped to
        .cl-social-posts-list so Club News (a different container,
        .cl-admin-posts-list, reuses the same .cl-admin-post row markup)
        keeps its plain divider-row look untouched. ── */
     .cl-social-posts-list .cl-admin-post:not(.cl-admin-post--card) {
-      background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.07);
+      background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+      border: 1px solid rgba(255,255,255,0.1);
       border-radius: 12px; margin: 0 0 0.6rem; padding: 0.95rem 1rem;
     }
     .cl-social-posts-list .cl-admin-post:not(.cl-admin-post--card):last-child { margin-bottom: 0; }
-    .cl-social-posts-list .cl-admin-post:not(.cl-admin-post--card):hover { background: rgba(255,255,255,0.06); }
-    .cl-social-posts-list .cl-admin-post--card { background: rgba(255,255,255,0.035); }
-    .cl-social-posts-list .cl-admin-post--card:hover { background: rgba(255,255,255,0.05); }
+    .cl-social-posts-list .cl-admin-post:not(.cl-admin-post--card):hover { background: rgba(255,255,255,0.08); }
+    .cl-social-posts-list .cl-admin-post--card {
+      background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+    }
+    .cl-social-posts-list .cl-admin-post--card:hover { background: rgba(255,255,255,0.08); }
 
     /* ── Card/Compact view toggle -- small square icon button, dropdown
        with the two options, Compact selected by default. Same component
@@ -1421,13 +1430,15 @@
         <div class="cl-home-tabs">
           <button class="cl-home-tab active" id="cl-home-tab-hub" type="button" data-tab="hub">Hub</button>
           <button class="cl-home-tab" id="cl-home-tab-social" type="button" data-tab="social">Social</button>
-          <button class="cl-theme-btn" id="cl-theme-btn" type="button" title="Club theme" style="display:none;">🎨</button>
+          <div class="cl-tabs-admin-actions" id="cl-tabs-admin-actions">
+            <button class="cl-tabs-edit-btn" id="cl-tabs-edit-btn" type="button" title="Edit Club" style="display:none;">✎ Edit Club</button>
+            <button class="cl-theme-btn" id="cl-theme-btn" type="button" title="Club theme" style="display:none;">🎨</button>
+          </div>
           <div class="cl-theme-menu" id="cl-theme-menu" hidden>
             <p class="cl-theme-popover-label">Club Background</p>
             <div class="cl-theme-grid" id="cl-theme-grid"></div>
           </div>
           <input type="file" id="cl-theme-bg-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-          <button class="cl-tabs-edit-btn" id="cl-tabs-edit-btn" type="button" title="Edit Club" style="display:none;">✎ Edit Club</button>
         </div>
 
         <div id="cl-hub-tab-content">
