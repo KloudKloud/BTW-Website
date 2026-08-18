@@ -5600,7 +5600,7 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
        ) gsl ON true
        LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
        JOIN users u ON u.id = mg.owner_user_id
-       WHERE mg.category = 'sfw' AND mg.title ILIKE $1 AND mg.owner_user_id ${ownerFilter} $2 ORDER BY mg.title LIMIT 30`,
+       WHERE mg.title ILIKE $1 AND mg.owner_user_id ${ownerFilter} $2 ORDER BY mg.title LIMIT 30`,
       [q, req.user.id]
     ));
   } else {
