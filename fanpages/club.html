@@ -162,8 +162,14 @@
     #cl-page-bg-wrap { position: absolute; top: 310px; left: 0; right: 0; bottom: auto; z-index: -1; overflow: hidden; }
     #cl-page-bg-img {
       width: 100%; height: 100vh; object-fit: cover; display: block;
-      filter: brightness(0.9); transform: none;
+      filter: brightness(0.9); transform: none; transition: filter 0.25s;
     }
+    /* Reading a single post gets a very slight extra blur behind it so the
+       post text pops a bit more against a busy theme background -- every
+       other view (Hub, Social feed, custom pages, gallery/promo detail)
+       stays exactly as before. body.cl-post-open is only ever toggled by
+       loadAndShowPost()/renderFromUrl(), never anywhere else. */
+    body.cl-post-open #cl-page-bg-img { filter: brightness(0.9) blur(2px); }
     @media (max-width: 860px) { #cl-page-bg-wrap { top: 180px; } }
 
     /* ── Banner + pfp (the only header content left for now) ── */
@@ -548,6 +554,21 @@
       overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
     }
 
+    /* ── Social tab posts only -- a light, mostly-transparent box per post
+       so each one reads as its own card against the theme background,
+       without the heavy glass-panel look used elsewhere. Scoped to
+       .cl-social-posts-list so Club News (a different container,
+       .cl-admin-posts-list, reuses the same .cl-admin-post row markup)
+       keeps its plain divider-row look untouched. ── */
+    .cl-social-posts-list .cl-admin-post:not(.cl-admin-post--card) {
+      background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px; margin: 0 0 0.6rem; padding: 0.95rem 1rem;
+    }
+    .cl-social-posts-list .cl-admin-post:not(.cl-admin-post--card):last-child { margin-bottom: 0; }
+    .cl-social-posts-list .cl-admin-post:not(.cl-admin-post--card):hover { background: rgba(255,255,255,0.06); }
+    .cl-social-posts-list .cl-admin-post--card { background: rgba(255,255,255,0.035); }
+    .cl-social-posts-list .cl-admin-post--card:hover { background: rgba(255,255,255,0.05); }
+
     /* ── Card/Compact view toggle -- small square icon button, dropdown
        with the two options, Compact selected by default. Same component
        as the Home/Recent pages, same shared localStorage key. ── */
@@ -885,6 +906,39 @@
     .cl-side-stat { display: flex; flex-direction: column; }
     .cl-side-stat-num { font-weight: 700; color: #f0f0f0; font-size: 1.05rem; }
     .cl-side-stat-label { font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+    /* Members stat doubles as a button opening the full members list --
+       Posts stays a plain div, only Members gets this reset + hover cue. */
+    .cl-side-stat--clickable { background: none; border: none; padding: 0; margin: 0; cursor: pointer; font-family: inherit; text-align: left; }
+    .cl-side-stat--clickable:hover .cl-side-stat-num { color: #7fa8d9; text-shadow: 0 0 8px rgba(127,168,217,0.5); }
+
+    /* ── All-Members modal -- opened from the "Members" stat above. Same
+       owner/moderators-first order as the sidebar's Moderators section
+       (server-side ORDER BY on GET /api/clubs/:slug), just showing
+       everyone instead of a capped preview. Owner/admin viewers get a "+"
+       button next to any plain member to fast-promote them right there. ── */
+    .cl-members-modal-list { display: flex; flex-direction: column; gap: 0.3rem; max-height: 55vh; overflow-y: auto; margin-top: 0.5rem; }
+    .cl-members-modal-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.4rem; border-radius: 8px; transition: background 0.15s; }
+    .cl-members-modal-row:hover { background: rgba(255,255,255,0.04); }
+    .cl-members-modal-link { display: flex; align-items: center; gap: 0.6rem; text-decoration: none; color: inherit; flex: 1; min-width: 0; }
+    .cl-members-modal-avatar, .cl-members-modal-avatar-fallback { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .cl-members-modal-avatar-fallback {
+      display: flex; align-items: center; justify-content: center; background: #2a2a2a; color: #999; font-weight: 700; font-size: 0.95rem;
+    }
+    .cl-members-modal-name { font-size: 0.92rem; color: #ddd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cl-members-modal-role {
+      font-size: 0.62rem; font-weight: 700; text-transform: uppercase; flex-shrink: 0; padding: 0.25em 0.65em; border-radius: 10px;
+    }
+    .cl-members-modal-role--owner { color: #f0c060; background: rgba(240,192,96,0.12); }
+    .cl-members-modal-role--admin { color: #7fa8d9; background: rgba(127,168,217,0.12); }
+    .cl-members-modal-role--member { color: #999; background: rgba(255,255,255,0.06); }
+    .cl-members-modal-promote-btn {
+      width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; margin-left: 0.5rem;
+      background: rgba(127,168,217,0.14); border: 1px solid rgba(127,168,217,0.35); color: #7fa8d9;
+      font-size: 1rem; font-weight: 700; line-height: 1; cursor: pointer; padding: 0;
+      display: flex; align-items: center; justify-content: center; transition: background 0.15s, box-shadow 0.15s;
+    }
+    .cl-members-modal-promote-btn:hover { background: rgba(127,168,217,0.28); box-shadow: 0 0 10px rgba(127,168,217,0.5); }
+    .cl-members-modal-promote-btn:disabled { opacity: 0.5; cursor: default; }
 
     .cl-side-rule2 { border: none; border-top: 1px solid rgba(255,255,255,0.12); margin: 1.35rem 0; }
     .cl-side-section-title {
@@ -1606,7 +1660,7 @@
       </div>
 
       <div class="cl-side-stats">
-        <div class="cl-side-stat"><span class="cl-side-stat-num" id="cl-side-member-count"></span><span class="cl-side-stat-label">Members</span></div>
+        <button type="button" class="cl-side-stat cl-side-stat--clickable" id="cl-side-members-btn"><span class="cl-side-stat-num" id="cl-side-member-count"></span><span class="cl-side-stat-label">Members</span></button>
         <div class="cl-side-stat"><span class="cl-side-stat-num" id="cl-side-post-count"></span><span class="cl-side-stat-label">Posts</span></div>
       </div>
 
@@ -2076,6 +2130,22 @@
           <button class="mod-btn" id="cl-rule-save-btn" type="button">Save Rule</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- All-members list -- opened by clicking the "Members" stat in the
+     sidebar. Owner/admins always sort first (server-side ORDER BY on
+     GET /api/clubs/:slug), matching the sidebar Moderators section, just
+     showing everyone instead of a capped preview. Owner/admin viewers get
+     a "+" button next to any plain member to fast-promote them to
+     moderator without leaving this list. -->
+<div class="char-editor-overlay" id="cl-members-modal-overlay" hidden>
+  <div class="char-editor-modal" style="max-width: 420px;">
+    <h2 class="char-editor-title">Members (<span id="cl-members-modal-count">0</span>)</h2>
+    <div class="cl-members-modal-list" id="cl-members-modal-list"><p class="cl-side-empty">Loading…</p></div>
+    <div class="char-editor-actions" style="margin-top:1.25rem;">
+      <button class="mod-btn mod-btn--cancel" id="cl-members-modal-close-btn" type="button">Close</button>
     </div>
   </div>
 </div>
@@ -2640,6 +2710,67 @@ function renderClubMods(members) {
     list.appendChild(showAllBtn);
   }
 }
+
+// ── All-Members modal — reuses currentMembers (already fetched by
+// loadClub(), already owner/admins-first per the API's own ORDER BY), so
+// opening it never needs its own network round-trip. ─────────────────────
+function memberModalRow(m) {
+  const isOwnerOrAdmin = currentClub && (currentClub.viewer_role === 'owner' || currentClub.viewer_role === 'admin');
+  const canPromote = isOwnerOrAdmin && m.role === 'member';
+  const row = document.createElement('div');
+  row.className = 'cl-members-modal-row';
+  const avatarHtml = m.avatar
+    ? `<img class="cl-members-modal-avatar" src="${m.avatar}" alt="" />`
+    : `<span class="cl-members-modal-avatar-fallback">${escapeHtml(m.display_name.charAt(0).toUpperCase())}</span>`;
+  const roleLabel = m.role === 'owner' ? 'Owner' : m.role === 'admin' ? 'Admin' : 'Member';
+  row.innerHTML = `
+    <a class="cl-members-modal-link" href="${window.fpUrl(`/${encodeURIComponent(m.username)}`)}">
+      ${avatarHtml}
+      <span class="cl-members-modal-name">${escapeHtml(m.display_name)}</span>
+    </a>
+    <span class="cl-members-modal-role cl-members-modal-role--${m.role}">${roleLabel}</span>
+    ${canPromote ? `<button type="button" class="cl-members-modal-promote-btn" title="Make moderator">+</button>` : ''}
+  `;
+  if (canPromote) {
+    row.querySelector('.cl-members-modal-promote-btn').addEventListener('click', () => promoteMember(m.id, row));
+  }
+  return row;
+}
+
+function renderMembersModalList() {
+  const list = document.getElementById('cl-members-modal-list');
+  document.getElementById('cl-members-modal-count').textContent = currentMembers.length;
+  if (!currentMembers.length) { list.innerHTML = '<p class="cl-side-empty">No members yet.</p>'; return; }
+  list.innerHTML = '';
+  currentMembers.forEach(m => list.appendChild(memberModalRow(m)));
+}
+
+async function promoteMember(userId, rowEl) {
+  const btn = rowEl.querySelector('.cl-members-modal-promote-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/members/${userId}`, {
+      method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'admin' }),
+    });
+    if (res.ok) {
+      const m = currentMembers.find(x => x.id === userId);
+      if (m) m.role = 'admin';
+      renderMembersModalList();
+      renderClubMods(currentMembers);
+      return;
+    }
+  } catch {}
+  if (btn) { btn.disabled = false; btn.textContent = '+'; }
+}
+
+document.getElementById('cl-side-members-btn').addEventListener('click', () => {
+  renderMembersModalList();
+  document.getElementById('cl-members-modal-overlay').hidden = false;
+});
+document.getElementById('cl-members-modal-close-btn').addEventListener('click', () => {
+  document.getElementById('cl-members-modal-overlay').hidden = true;
+});
 
 // ── Rules — preview title always visible, full description opens on
 // click. ────────────────────────────────────────────────────────────────
@@ -3250,6 +3381,7 @@ function renderFromUrl() {
   document.getElementById('cl-gallery-detail-view').hidden = true;
   document.getElementById('cl-promo-detail-view').hidden = true;
   document.getElementById('cl-body-row').classList.remove('cl-detail-mode');
+  document.body.classList.remove('cl-post-open');
 
   if (postId) {
     loadAndShowPost(postId);
@@ -3286,6 +3418,7 @@ async function loadAndShowPost(postId) {
     renderPostDetail(data.post);
     document.getElementById('cl-post-detail-view').hidden = false;
     document.getElementById('cl-body-row').classList.add('cl-detail-mode');
+    document.body.classList.add('cl-post-open');
     window.scrollTo(0, 0);
     ccMoveTo('cl-post-detail-comments-slot');
     ccInitSection('club_post', postId);

@@ -8957,14 +8957,22 @@ app.delete('/api/clubs/:slug/leave', requireAuth, async (req, res) => {
   res.json({ message: 'Left the club.' });
 });
 
-// PUT /api/clubs/:slug/members/:userId — owner only; promote/demote admin<->member.
+// PUT /api/clubs/:slug/members/:userId — owner can promote/demote anyone
+// (except themselves); admins get a narrower "fast-promote" power (member ->
+// admin only, never touching another admin or the owner) so the Members
+// list's "+" button works for either role, not just the owner.
 app.put('/api/clubs/:slug/members/:userId', requireAuth, async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id, owner_user_id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
-  if (club.owner_user_id !== req.user.id) return res.status(403).json({ error: 'Only the club owner can change member roles.' });
   const targetId = parseInt(req.params.userId, 10);
-  if (targetId === req.user.id) return res.status(400).json({ error: "The owner's own role can't be changed here." });
+  if (targetId === req.user.id) return res.status(400).json({ error: "Your own role can't be changed here." });
+  const viewerRole = await getClubRole(club.id, req.user.id);
   const role = req.body.role === 'admin' ? 'admin' : 'member';
+  if (viewerRole !== 'owner') {
+    const targetRole = await getClubRole(club.id, targetId);
+    const canFastPromote = viewerRole === 'admin' && role === 'admin' && targetRole === 'member';
+    if (!canFastPromote) return res.status(403).json({ error: 'Only the club owner can change member roles.' });
+  }
   const { rowCount } = await pool.query(
     `UPDATE club_members SET role = $1 WHERE club_id = $2 AND user_id = $3 AND role != 'owner'`,
     [role, club.id, targetId]
