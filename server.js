@@ -1479,6 +1479,23 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE clubs ADD COLUMN IF NOT EXISTS theme_bg_url TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('clubs theme migration:', e.message));
 
+  // Same theme concept, but per General-template club_pages row — every
+  // General page a club owner creates gets its own Hub/Social/theme, same
+  // as Home, instead of sharing the club-level theme above.
+  await pool.query(`
+    ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS theme_bg_url TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('club_pages theme migration:', e.message));
+
+  // Optional page scoping for club_posts — NULL means a Home Social post
+  // (all existing posts keep this behavior after the migration). A General
+  // page's own Social tab sets this to that page's id so its feed stays
+  // separate from Home's and from every other page's.
+  await pool.query(`
+    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS page_id INTEGER REFERENCES club_pages(id) ON DELETE CASCADE;
+    CREATE INDEX IF NOT EXISTS idx_club_posts_page ON club_posts(page_id, created_at DESC);
+  `).catch(e => console.error('club_posts page_id migration:', e.message));
+
   // BTWClub — the site-wide default club every account belongs to (an
   // r/all equivalent). Owned by the admin account; seeded once, then every
   // existing user is backfilled into it on each restart (new signups join
@@ -9021,7 +9038,7 @@ function clubPostPublicShape(p, voteRows, viewerId) {
     preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
     preview_image_url: p.preview_image_url || '',
     poll,
-    created_at: p.created_at, is_admin_post: p.is_admin_post,
+    created_at: p.created_at, is_admin_post: p.is_admin_post, page_id: p.page_id || null,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
     like_count: Number(p.like_count) || 0,
     comment_count: Number(p.comment_count) || 0,
@@ -9048,6 +9065,18 @@ app.get('/api/clubs/:slug/posts', async (req, res) => {
   const adminOnly = req.query.section === 'admin';
   const sort = ['best', 'top', 'new'].includes(req.query.sort) ? req.query.sort : 'best';
   const viewerId = optionalViewerId(req);
+
+  // ?page=<pageSlug> scopes to that General page's own Social feed; no
+  // ?page= means Home's Social feed (page_id IS NULL) — the behavior every
+  // existing club_posts row already has.
+  let pageId = null;
+  if (req.query.page) {
+    const { rows: [page] } = await pool.query(
+      'SELECT id FROM club_pages WHERE club_id = $1 AND slug = $2', [club.id, req.query.page]
+    );
+    if (!page) return res.status(404).json({ error: 'Page not found.' });
+    pageId = page.id;
+  }
   // Postgres won't resolve SELECT-list aliases inside a compound ORDER BY
   // expression (only bare "ORDER BY like_count" works, not "like_count +
   // comment_count") — repeat the underlying subqueries instead of the alias.
@@ -9070,9 +9099,9 @@ app.get('/api/clubs/:slug/posts', async (req, res) => {
        (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked,
        ${hotScoreExpr} AS hot_score
      FROM club_posts cp JOIN users u ON u.id = cp.author_user_id
-     WHERE cp.club_id = $1 ${adminOnly ? 'AND cp.is_admin_post = TRUE' : ''}
+     WHERE cp.club_id = $1 AND cp.page_id IS NOT DISTINCT FROM $3 ${adminOnly ? 'AND cp.is_admin_post = TRUE' : ''}
      ORDER BY ${orderBy} LIMIT 100`,
-    [club.id, viewerId || 0]
+    [club.id, viewerId || 0, pageId]
   );
   const pollPostIds = rows.filter(p => p.poll).map(p => p.id);
   let votesByPost = new Map();
@@ -9212,6 +9241,19 @@ app.post('/api/clubs/:slug/posts', requireAuth, uploadModImage.fields([{ name: '
   const role = await getClubRole(club.id, req.user.id);
   if (!role) return res.status(403).json({ error: 'Join this club to post in it.' });
 
+  // page_slug (optional) — posting into a General page's own Social tab
+  // instead of Home's. Resolved server-side, never trusted as a raw id, and
+  // only General pages can hold posts (Promotion/Gallery pages don't get a
+  // Social tab at all).
+  let pageId = null;
+  if (req.body.page_slug) {
+    const { rows: [page] } = await pool.query(
+      "SELECT id FROM club_pages WHERE club_id = $1 AND slug = $2 AND type = 'general'", [club.id, req.body.page_slug]
+    );
+    if (!page) return res.status(404).json({ error: 'Page not found.' });
+    pageId = page.id;
+  }
+
   const title = String(req.body.title || '').trim().slice(0, 120);
   const body = String(req.body.body || '').trim().slice(0, 5000);
   if (!title) return res.status(400).json({ error: 'A title is required.' });
@@ -9236,9 +9278,9 @@ app.post('/api/clubs/:slug/posts', requireAuth, uploadModImage.fields([{ name: '
     ? `/images/moderators/${req.files.preview_image[0].filename}` : '';
 
   const { rows: [post] } = await pool.query(
-    `INSERT INTO club_posts (club_id, author_user_id, title, body, image_url, image_urls, preview_position_x, preview_position_y, preview_image_url, poll, is_admin_post)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-    [club.id, req.user.id, title, body, imageUrls[0] || '', JSON.stringify(imageUrls), previewX, previewY, previewImageUrl, poll ? JSON.stringify(poll) : null, isAdminPost]
+    `INSERT INTO club_posts (club_id, author_user_id, title, body, image_url, image_urls, preview_position_x, preview_position_y, preview_image_url, poll, is_admin_post, page_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+    [club.id, req.user.id, title, body, imageUrls[0] || '', JSON.stringify(imageUrls), previewX, previewY, previewImageUrl, poll ? JSON.stringify(poll) : null, isAdminPost, pageId]
   );
   const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
   const { rows: members } = await pool.query('SELECT user_id FROM club_members WHERE club_id = $1', [club.id]);
@@ -9547,7 +9589,7 @@ app.get('/api/clubs/:slug/pages/:pageSlug', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const { rows: [page] } = await pool.query(
-    'SELECT slug, title, type, content, cover_mode, cover_image_url, text_fields FROM club_pages WHERE club_id = $1 AND slug = $2',
+    'SELECT slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url FROM club_pages WHERE club_id = $1 AND slug = $2',
     [club.id, req.params.pageSlug]
   );
   if (!page) return res.status(404).json({ error: 'Page not found.' });
@@ -9623,10 +9665,36 @@ app.put('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => {
   const title = req.body.title !== undefined ? String(req.body.title).trim().slice(0, 60) || existing.title : existing.title;
   const content = req.body.content !== undefined ? String(req.body.content).slice(0, 20000) : existing.content;
   const { rows: [page] } = await pool.query(
-    'UPDATE club_pages SET title = $1, content = $2 WHERE id = $3 RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields',
+    'UPDATE club_pages SET title = $1, content = $2 WHERE id = $3 RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url',
     [title, content, existing.id]
   );
   res.json({ page });
+});
+
+// PUT /api/clubs/:slug/pages/:pageSlug/theme — General page's own theme,
+// same default/custom pattern as the club-level PUT .../theme above.
+app.put('/api/clubs/:slug/pages/:pageSlug/theme', requireAuth, async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  const theme = req.body.theme === 'custom' ? 'custom' : 'default';
+  const { rows: [updated] } = await pool.query(
+    'UPDATE club_pages SET theme = $1 WHERE id = $2 RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url',
+    [theme, ctx.page.id]
+  );
+  res.json({ page: updated });
+});
+
+app.put('/api/clubs/:slug/pages/:pageSlug/theme-bg', requireAuth, uploadModImage.single('image'), async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const bgUrl = `/images/moderators/${req.file.filename}`;
+  const { rows: [updated] } = await pool.query(
+    `UPDATE club_pages SET theme_bg_url = $1, theme = 'custom' WHERE id = $2
+     RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url`,
+    [bgUrl, ctx.page.id]
+  );
+  res.json({ page: updated });
 });
 
 // PUT /api/clubs/:slug/pages/:pageSlug/text-fields — General Page template's
