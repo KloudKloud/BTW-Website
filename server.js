@@ -9235,7 +9235,7 @@ app.delete('/api/clubs/:slug/posts/:postId/like', async (req, res) => {
 // post's own page) — only the FEED THUMBNAIL gets a focal-point
 // reposition (preview_position_x/y), same idea as the gallery preview crop:
 // the source image itself is untouched.
-app.post('/api/clubs/:slug/posts', requireAuth, uploadModImage.fields([{ name: 'images', maxCount: 10 }, { name: 'preview_image', maxCount: 1 }]), async (req, res) => {
+app.post('/api/clubs/:slug/posts', requireAuth, uploadModImage.fields([{ name: 'images', maxCount: 100 }, { name: 'preview_image', maxCount: 1 }]), async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id, name, slug FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const role = await getClubRole(club.id, req.user.id);
