@@ -8277,6 +8277,7 @@ app.get('/api/activity-feed', async (req, res) => {
 // is the real listing. Deliberately excludes 'character' -- Submissions is
 // gallery posts + chapter postings only, not the character-ref feed.
 const SUBMISSIONS_RATING_OPTIONS = ['sfw', 'mature', 'explicit'];
+const SUBMISSIONS_TYPE_OPTIONS = ['chapter', 'art'];
 // Values here are fixed literal SQL fragments, never user input directly --
 // req.query.sort only ever indexes into this object (falling back to
 // 'best_match' on anything unrecognized), so interpolating the looked-up
@@ -8305,6 +8306,13 @@ app.get('/api/search/submissions', async (req, res) => {
   // would NOT do, so that case passes NULL to skip the clause entirely.
   const ratingsFilter = req.query.ratings === undefined ? null : ratings;
   const exclude = String(req.query.exclude || '').trim();
+  // "Type Filter" (Stories vs Gallery) on the Posts tab -- same null-means-
+  // no-filter / empty-array-means-match-nothing shape as ratingsFilter
+  // above. The client guards against ever submitting an empty selection
+  // (unchecking both re-checks both and re-searches instead), so this
+  // never actually needs to return zero rows in practice.
+  const types = String(req.query.types || '').split(',').map(s => s.trim()).filter(s => SUBMISSIONS_TYPE_OPTIONS.includes(s));
+  const typesFilter = req.query.types === undefined ? null : types;
 
   const { rows } = await pool.query(
     `SELECT * FROM (
@@ -8340,6 +8348,7 @@ app.get('/api/search/submissions', async (req, res) => {
      ) feed
      WHERE (category = 'sfw' OR $1)
        AND ($5::text[] IS NULL OR category IS NULL OR category = ANY($5::text[]))
+       AND ($7::text[] IS NULL OR type = ANY($7::text[]))
        AND ($2 = '' OR (
          title ILIKE '%' || $2 || '%' OR site_title ILIKE '%' || $2 || '%'
          OR username ILIKE '%' || $2 || '%' OR display_name ILIKE '%' || $2 || '%'
@@ -8351,7 +8360,7 @@ app.get('/api/search/submissions', async (req, res) => {
        ))
      ORDER BY ${orderBy}
      LIMIT $3 OFFSET $4`,
-    [nsfwAllowed, q, limit, offset, ratingsFilter, exclude]
+    [nsfwAllowed, q, limit, offset, ratingsFilter, exclude, typesFilter]
   );
   // total_count via COUNT(*) OVER() would double-count across the UNION
   // ALL branches' own window once category/q filtering is applied inline
@@ -8359,13 +8368,13 @@ app.get('/api/search/submissions', async (req, res) => {
   // fetched as a second lightweight query instead.
   const { rows: [{ count }] } = await pool.query(
     `SELECT count(*) FROM (
-       SELECT mc.id, mc.title, ms.site_title, u.username, u.display_name, ms.rating AS category, '[]'::jsonb AS tags
+       SELECT 'chapter' AS type, mc.id, mc.title, ms.site_title, u.username, u.display_name, ms.rating AS category, '[]'::jsonb AS tags
        FROM moderator_chapters mc
        JOIN moderator_sites ms ON ms.id = mc.site_id
        JOIN users u ON u.id = ms.owner_user_id
        WHERE mc.status = 'published' AND length(trim(mc.body)) > 0
        UNION ALL
-       SELECT mg.id, mg.title, ms.site_title, u.username, u.display_name, mg.category, mg.tags
+       SELECT 'art', mg.id, mg.title, ms.site_title, u.username, u.display_name, mg.category, mg.tags
        FROM moderator_gallery mg
        LEFT JOIN LATERAL (SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1) gsl ON true
        LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
@@ -8373,6 +8382,7 @@ app.get('/api/search/submissions', async (req, res) => {
      ) feed
      WHERE (category = 'sfw' OR $1)
        AND ($3::text[] IS NULL OR category IS NULL OR category = ANY($3::text[]))
+       AND ($5::text[] IS NULL OR type = ANY($5::text[]))
        AND ($2 = '' OR (
          title ILIKE '%' || $2 || '%' OR site_title ILIKE '%' || $2 || '%'
          OR username ILIKE '%' || $2 || '%' OR display_name ILIKE '%' || $2 || '%'
@@ -8382,7 +8392,7 @@ app.get('/api/search/submissions', async (req, res) => {
          title ILIKE '%' || $4 || '%' OR site_title ILIKE '%' || $4 || '%'
          OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) t WHERE t ILIKE '%' || $4 || '%')
        ))`,
-    [nsfwAllowed, q, ratingsFilter, exclude]
+    [nsfwAllowed, q, ratingsFilter, exclude, typesFilter]
   );
 
   res.json({

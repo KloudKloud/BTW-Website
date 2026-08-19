@@ -102,6 +102,26 @@
     .fp-layout--filters-collapsed { grid-template-columns: 250px 1fr 0px; }
     .fp-results-col { grid-column: 2; min-width: 0; contain: layout; }
 
+    /* ── Left tab box collapse -- mirrors --filters-collapsed above but for
+       column 1. Each combo needs its own rule since every view (story
+       search, submissions, profiles) already fully redefines
+       grid-template-columns rather than composing it from parts; the
+       two-class selectors below win over the single-class view rules
+       purely on specificity, so declaration order doesn't matter. Content
+       hides once its column hits 0, same as the filter panel's own
+       --filters-collapsed treatment. */
+    .fp-layout--sidebar-collapsed { grid-template-columns: 0px 1fr 250px; }
+    .fp-layout--sidebar-collapsed.fp-layout--filters-collapsed { grid-template-columns: 0px 1fr 0px; }
+    .fp-layout--sidebar-collapsed.fp-layout--submissions { grid-template-columns: 0px 1fr 250px; }
+    .fp-layout--sidebar-collapsed.fp-layout--profiles { grid-template-columns: 0px 1fr; }
+    .fp-layout--sidebar-collapsed .fp-side-panel { display: none; }
+    /* Results get "slightly bigger, fills the width neatly" for free here
+       -- the grids below already use `1fr` columns, so the same 2 (story
+       search) or 5 (posts) columns just stretch wider to use the freed
+       space instead of sitting in newly-empty space. Bumping the column
+       *count* instead was tried first and rejected: more, smaller columns
+       is the opposite of "bigger" cards. */
+
     /* ── Posts view — the Story tab's filter panel/collapse-fab don't apply
        here (no story filters for a gallery+chapter feed); its own
        .fp-posts-panel takes column 3 instead, a bit thinner than the
@@ -651,6 +671,27 @@
     .fp-filter-fab svg { transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1); transform: rotate(180deg); }
     .fp-filter-fab:hover { color: #fff; border-color: rgba(127,168,217,0.6); box-shadow: 0 4px 26px rgba(127,168,217,0.4); }
     .fp-filter-fab--collapsed svg { transform: rotate(0deg); }
+
+    /* ── Left "Stories/Posts/Profiles" tab box gets the exact same
+       collapse-to-0/floating-fab treatment as the right filter panel
+       above -- always starts open on a fresh page load (no persisted
+       state, same as the filter panel), and results get wider/denser
+       once it's out of the way (see .fp-layout--sidebar-collapsed
+       further down). Mirrored, not shared: separate class/id/state so
+       collapsing one side never touches the other. ── */
+    .fp-sidebar-fab {
+      position: fixed; top: 50%; left: 4px; transform: translateY(-50%);
+      width: 48px; height: 48px; border-radius: 50%; z-index: 60;
+      background: #14121a; border: 1px solid rgba(255,255,255,0.28);
+      color: #ccc; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 22px rgba(0,0,0,0.55);
+      transition: color 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .fp-sidebar-fab svg { transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1); transform: rotate(180deg); }
+    .fp-sidebar-fab:hover { color: #fff; border-color: rgba(127,168,217,0.6); box-shadow: 0 4px 26px rgba(127,168,217,0.4); }
+    .fp-sidebar-fab--collapsed svg { transform: rotate(0deg); }
+    .fp-layout--no-side .fp-sidebar-fab { display: none; }
     .fp-filter-query {
       font-size: 0.85rem; color: #bbb; background: rgba(127,168,217,0.1); border: 1px solid rgba(127,168,217,0.3);
       border-radius: 10px; padding: 0.6em 0.85em; margin-bottom: 1.25rem;
@@ -766,6 +807,7 @@
         margin-bottom: 0; margin-right: 0; border-radius: 18px;
       }
       .fp-filter-fab { display: none; }
+      .fp-sidebar-fab { display: none; }
       .fp-layout--submissions .fp-posts-panel {
         grid-column: 1;
         position: static; max-height: none; height: auto;
@@ -975,6 +1017,10 @@
     </nav>
   </aside>
 
+  <button class="fp-sidebar-fab" id="fp-sidebar-rail-toggle" type="button" title="Hide tabs" aria-label="Hide tabs">
+    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+  </button>
+
   <div class="fp-results-col">
     <div class="fp-browse-heading-row" id="fp-browse-heading-row" hidden>
       <h1 class="fp-browse-heading" id="fp-browse-heading"></h1>
@@ -1116,6 +1162,14 @@
         <option value="views">Most Views</option>
         <option value="popular">Popular</option>
       </select>
+    </div>
+
+    <div class="fp-filter-section">
+      <p class="fp-filter-section-title">Type Filter</p>
+      <div class="fp-filter-options" id="fp-posts-types">
+        <label><input type="checkbox" value="chapter" checked /> Stories</label>
+        <label><input type="checkbox" value="art" checked /> Gallery</label>
+      </div>
     </div>
 
     <div class="fp-filter-section">
@@ -1415,16 +1469,20 @@ function wirePagination(el) {
 }
 
 const POSTS_RATING_VALUES = ['sfw', 'mature', 'explicit'];
+const POSTS_TYPE_VALUES = ['chapter', 'art'];
 
 // Posts view's right panel -- results count, current-search reminder,
-// quick search (prefilled), sort, ratings checklist, and an exclude-keyword
-// field. Nothing here navigates the instant you touch it anymore -- every
-// control just updates its own state, and either hitting Enter in the
-// Quick Search/Exclude boxes or clicking "Sort and Filter" applies
-// everything that's currently set (search box + exclude + sort + ratings)
-// in one navigation, same as the Story filter panel's own "Sort and
-// Filter" button.
-function wirePostsPanel(q, sort, ratings, exclude) {
+// quick search (prefilled), sort, a Stories/Gallery type checklist, a
+// ratings checklist, and an exclude-keyword field. Nothing here navigates
+// the instant you touch it anymore -- every control just updates its own
+// state, and either hitting Enter in the Quick Search/Exclude boxes or
+// clicking "Sort and Filter" applies everything that's currently set
+// (search box + exclude + sort + types + ratings) in one navigation, same
+// as the Story filter panel's own "Sort and Filter" button. The one
+// exception is the type checkboxes: unchecking the last one re-checks
+// both and re-searches immediately, since "show nothing" isn't a real
+// filter state worth waiting for an explicit Apply click to correct.
+function wirePostsPanel(q, sort, ratings, exclude, types) {
   document.getElementById('fp-posts-query-text').textContent = q ? `"${q}"` : 'Everything';
 
   const searchInput = document.getElementById('fp-posts-search-input');
@@ -1434,6 +1492,7 @@ function wirePostsPanel(q, sort, ratings, exclude) {
   const sortSelect = document.getElementById('fp-posts-sort');
   sortSelect.value = sort;
   document.querySelectorAll('#fp-posts-ratings input').forEach(cb => { cb.checked = ratings.includes(cb.value); });
+  document.querySelectorAll('#fp-posts-types input').forEach(cb => { cb.checked = types.includes(cb.value); });
 
   const applyPostsFilters = () => {
     const usp = new URLSearchParams(window.location.search);
@@ -1445,6 +1504,9 @@ function wirePostsPanel(q, sort, ratings, exclude) {
     // param entirely instead of writing out the full list every time.
     if (checked.length === POSTS_RATING_VALUES.length) usp.delete('ratings');
     else usp.set('ratings', checked.join(','));
+    const checkedTypes = Array.from(document.querySelectorAll('#fp-posts-types input:checked')).map(c => c.value);
+    if (checkedTypes.length === POSTS_TYPE_VALUES.length) usp.delete('types');
+    else usp.set('types', checkedTypes.join(','));
     usp.delete('page');
     window.location.search = usp.toString();
   };
@@ -1452,6 +1514,17 @@ function wirePostsPanel(q, sort, ratings, exclude) {
   searchInput.onkeydown = (e) => { if (e.key === 'Enter') applyPostsFilters(); };
   excludeInput.onkeydown = (e) => { if (e.key === 'Enter') applyPostsFilters(); };
   document.getElementById('fp-posts-apply').onclick = applyPostsFilters;
+  document.querySelectorAll('#fp-posts-types input').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const anyChecked = document.querySelectorAll('#fp-posts-types input:checked').length > 0;
+      if (anyChecked) return;
+      // Unintended troll state (both off) -- silently re-check both and
+      // re-search right away instead of leaving a "matches nothing" state
+      // sitting there until someone happens to hit Apply.
+      document.querySelectorAll('#fp-posts-types input').forEach(c => { c.checked = true; });
+      applyPostsFilters();
+    });
+  });
 }
 
 async function runSubmissionsSearch() {
@@ -1474,14 +1547,17 @@ async function runSubmissionsSearch() {
   const sort = p.get('sort') || (isBrowseMode ? 'updated' : 'best_match');
   const ratingsParam = p.get('ratings');
   const ratings = ratingsParam ? ratingsParam.split(',').filter(r => POSTS_RATING_VALUES.includes(r)) : POSTS_RATING_VALUES.slice();
+  const typesParam = p.get('types');
+  const types = typesParam ? typesParam.split(',').filter(t => POSTS_TYPE_VALUES.includes(t)) : POSTS_TYPE_VALUES.slice();
   const exclude = p.get('exclude') || '';
   const limit = 30;
 
-  wirePostsPanel(q, sort, ratings, exclude);
+  wirePostsPanel(q, sort, ratings, exclude, types);
 
   try {
     const apiParams = new URLSearchParams({ q, page, limit, sort });
     if (ratingsParam) apiParams.set('ratings', ratings.join(','));
+    if (typesParam) apiParams.set('types', types.join(','));
     if (exclude) apiParams.set('exclude', exclude);
     const res = await fetch(`/api/search/submissions?${apiParams.toString()}`, { headers: authHeaders() });
     const data = await res.json();
@@ -1949,6 +2025,21 @@ filterRailToggle.addEventListener('click', () => setFiltersCollapsed(!fpLayoutEl
 // Every fresh page load starts with the filter panel expanded -- no
 // remembering last session's collapsed state.
 setFiltersCollapsed(false);
+
+// Left "Stories/Posts/Profiles" tab box collapse/expand -- exact mirror of
+// the filter panel toggle above, own class/button/state so the two sides
+// never interfere with each other. Also starts expanded on every fresh
+// page load, same reasoning.
+const sidebarRailToggle = document.getElementById('fp-sidebar-rail-toggle');
+function setSidebarPanelCollapsed(collapsed) {
+  fpLayoutEl.classList.toggle('fp-layout--sidebar-collapsed', collapsed);
+  sidebarRailToggle.classList.toggle('fp-sidebar-fab--collapsed', collapsed);
+  const label = collapsed ? 'Show tabs' : 'Hide tabs';
+  sidebarRailToggle.title = label;
+  sidebarRailToggle.setAttribute('aria-label', label);
+}
+sidebarRailToggle.addEventListener('click', () => setSidebarPanelCollapsed(!fpLayoutEl.classList.contains('fp-layout--sidebar-collapsed')));
+setSidebarPanelCollapsed(false);
 
 // Keeps the current query attached to all three left-panel tab links, so
 // clicking Story -> Submissions -> Profiles carries whatever you searched
