@@ -951,14 +951,14 @@
 
   <aside class="fp-side-panel" id="fp-side-panel">
     <nav class="fp-side-menu">
-      <a class="fp-side-menu-item fp-side-menu-item--active" href="/fanpages/search?view=submissions" id="fp-side-menu-submissions">
+      <a class="fp-side-menu-item" href="/fanpages/search?view=submissions" id="fp-side-menu-submissions">
         <span class="fp-side-menu-icon">🔥</span>
         <span class="fp-side-menu-text">
           <span class="fp-side-menu-label">Posts</span>
           <span class="fp-side-menu-count" id="fp-side-menu-count-submissions">Gallery posts &amp; chapters</span>
         </span>
       </a>
-      <a class="fp-side-menu-item" href="/fanpages/search" id="fp-side-menu-story">
+      <a class="fp-side-menu-item" href="/fanpages/search?view=story" id="fp-side-menu-story">
         <span class="fp-side-menu-icon">📖</span>
         <span class="fp-side-menu-text">
           <span class="fp-side-menu-label">Stories</span>
@@ -1966,7 +1966,7 @@ function syncSideMenuLinks() {
     if (qParam) parts.push(qParam);
     return window.fpUrl(parts.length ? `/search?${parts.join('&')}` : '/search');
   };
-  document.getElementById('fp-side-menu-story').href = join(null);
+  document.getElementById('fp-side-menu-story').href = join('story');
   document.getElementById('fp-side-menu-submissions').href = join('submissions');
   document.getElementById('fp-side-menu-profiles').href = join('profiles');
 }
@@ -2079,10 +2079,16 @@ if (isBrowseMode) {
     });
   }
 }
+// Active tab -- no longer hardcoded onto one link in the HTML (that broke
+// once "story" became a real, explicit ?view= value instead of "whatever
+// bare /search falls back to": the old code only ever touched the active
+// class inside the submissions/profiles branch, so a click on Stories
+// left Posts' hardcoded active class in place forever). Computed here for
+// all three tabs, unconditionally.
+document.querySelectorAll('.fp-side-menu-item').forEach(el => el.classList.remove('fp-side-menu-item--active'));
+document.getElementById(currentView === 'submissions' ? 'fp-side-menu-submissions' : currentView === 'profiles' ? 'fp-side-menu-profiles' : 'fp-side-menu-story').classList.add('fp-side-menu-item--active');
 if (currentView === 'submissions' || currentView === 'profiles') {
   fpLayoutEl.classList.add(currentView === 'submissions' ? 'fp-layout--submissions' : 'fp-layout--profiles');
-  document.getElementById('fp-side-menu-story').classList.remove('fp-side-menu-item--active');
-  document.getElementById(`fp-side-menu-${currentView}`).classList.add('fp-side-menu-item--active');
   if (currentView === 'submissions') runSubmissionsSearch();
   else runProfilesSearch();
 } else {
