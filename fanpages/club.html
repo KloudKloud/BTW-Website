@@ -3851,14 +3851,61 @@ document.getElementById('cl-page-view-slideshow-prev').addEventListener('click',
 document.getElementById('cl-page-view-slideshow-next').addEventListener('click', () => { cpvGoToSlide(cpvSlideshowIdx + 1); cpvStartAutoplay(); });
 
 let currentPageData = null;
-// Slideshow mode picks one random image to display statically (no cross-
-// fade/arrows on the live page); static mode is just the one image.
-function textFieldImageUrl(field, prefix) {
-  if (field[`${prefix}_mode`] === 'slideshow') {
-    const list = field[`${prefix}_slideshow`] || [];
-    return list.length ? list[Math.floor(Math.random() * list.length)].image_url : '';
+// Real cross-fading slideshow (arrows + 8s autoplay, same preload-before-
+// fade + reset-timer-on-click behavior as the page's own cover slideshow)
+// for a text field's Cover/Side image slot, built fresh per instance since
+// a page can have up to six of these live at once (Cover+Side x 3 fields)
+// -- each gets its own closure-scoped state/timer instead of sharing the
+// single cpv*/cl* globals the page-level slideshow uses. Timers are
+// tracked in cpvFieldSlideshowTimers so loadCustomPage can clear them all
+// on navigation (their DOM gets wiped via fieldsWrap.innerHTML = '', but
+// a running setInterval keeps firing against detached nodes otherwise).
+let cpvFieldSlideshowTimers = [];
+function fieldSlideshowEl(images, aspect, extraClass) {
+  const wrap = document.createElement('div');
+  wrap.className = `cl-slideshow-wrap ${extraClass}`;
+  wrap.style.aspectRatio = aspect;
+  wrap.innerHTML = `
+    <img class="cl-slideshow-img cl-active" alt="" />
+    <img class="cl-slideshow-img" alt="" />
+    <button type="button" class="cl-slideshow-nav cl-slideshow-prev" style="display:none;">‹</button>
+    <button type="button" class="cl-slideshow-nav cl-slideshow-next" style="display:none;">›</button>
+  `;
+  const [imgA, imgB, prevBtn, nextBtn] = wrap.children;
+  let activeLayer = 'a';
+  let idx = Math.floor(Math.random() * images.length);
+  let timer = null;
+  let loadToken = 0;
+  function show(url) {
+    const showingEl = activeLayer === 'a' ? imgB : imgA;
+    const hidingEl = activeLayer === 'a' ? imgA : imgB;
+    activeLayer = activeLayer === 'a' ? 'b' : 'a';
+    const token = ++loadToken;
+    const preload = new Image();
+    preload.onload = preload.onerror = () => {
+      if (token !== loadToken) return;
+      showingEl.src = url;
+      showingEl.classList.add('cl-active');
+      hidingEl.classList.remove('cl-active');
+    };
+    preload.src = url;
   }
-  return field[`${prefix}_image_url`] || '';
+  function goTo(i) {
+    idx = (i + images.length) % images.length;
+    show(images[idx]);
+  }
+  function startAutoplay() {
+    if (timer) clearInterval(timer);
+    if (images.length <= 1) return;
+    timer = setInterval(() => goTo(idx + 1), 8000);
+    cpvFieldSlideshowTimers.push(timer);
+  }
+  prevBtn.addEventListener('click', () => { goTo(idx - 1); startAutoplay(); });
+  nextBtn.addEventListener('click', () => { goTo(idx + 1); startAutoplay(); });
+  if (images.length > 1) { prevBtn.style.display = 'flex'; nextBtn.style.display = 'flex'; }
+  show(images[idx]);
+  startAutoplay();
+  return wrap;
 }
 async function loadCustomPage(pageSlug, tab) {
   const titleEl = document.getElementById('cl-custom-page-title');
@@ -3872,6 +3919,8 @@ async function loadCustomPage(pageSlug, tab) {
   const tabsRow = document.getElementById('cl-page-view-tabs');
   if (cpvSlideshowTimer) { clearInterval(cpvSlideshowTimer); cpvSlideshowTimer = null; }
   cpvSlideshowImages = [];
+  cpvFieldSlideshowTimers.forEach(t => clearInterval(t));
+  cpvFieldSlideshowTimers = [];
   slideshowWrap.hidden = true;
   fieldsWrap.innerHTML = '';
   galleryEmptyEl.hidden = true;
@@ -3988,21 +4037,34 @@ async function loadCustomPage(pageSlug, tab) {
       if (!title && !body) return;
       const section = document.createElement('div');
       section.className = 'cl-page-text-section';
-      // Slideshow mode shows one image on the live page (no cross-fade/
-      // arrows -- see the editor's own note on why) picked at random each
-      // load, same "random start slide" feel as a real slideshow's opener.
-      const coverUrl = textFieldImageUrl(field, 'cover');
-      const sideUrl = textFieldImageUrl(field, 'side');
+      const coverIsSlideshow = field.cover_mode === 'slideshow' && (field.cover_slideshow || []).length;
+      const sideIsSlideshow = field.side_mode === 'slideshow' && (field.side_slideshow || []).length;
+      const hasCover = coverIsSlideshow || !!field.cover_image_url;
+      const hasSide = sideIsSlideshow || !!field.side_image_url;
       // Title (+ a full divider, only when there's an image to separate
-      // from) always leads, then the Cover image, then body/Side -- keeps
+      // from) always leads, then the Cover slot, then body/Side -- keeps
       // the heading readable above the art instead of buried under it.
+      // Slot divs get filled in below (real cross-fading slideshow when
+      // in slideshow mode, a plain <img> for static).
       section.innerHTML = `
         ${title ? `<p class="cl-page-text-section-title">${escapeHtml(title)}</p>` : ''}
-        ${(coverUrl || sideUrl) ? `<hr class="cl-page-text-section-divider" />` : ''}
-        ${coverUrl ? `<img class="cl-page-text-section-cover" src="${coverUrl}" alt="" />` : ''}
-        ${sideUrl ? `<img class="cl-page-text-section-side" src="${sideUrl}" alt="" />` : ''}
+        ${(hasCover || hasSide) ? `<hr class="cl-page-text-section-divider" />` : ''}
+        <div class="cl-tf-cover-slot"></div>
+        <div class="cl-tf-side-slot"></div>
         <p class="cl-page-text-section-body">${escapeHtml(body || '')}</p>
       `;
+      const coverSlot = section.querySelector('.cl-tf-cover-slot');
+      const sideSlot = section.querySelector('.cl-tf-side-slot');
+      if (coverIsSlideshow) {
+        coverSlot.appendChild(fieldSlideshowEl(field.cover_slideshow.map(s => s.image_url), '16 / 9', 'cl-page-text-section-cover'));
+      } else if (field.cover_image_url) {
+        coverSlot.innerHTML = `<img class="cl-page-text-section-cover" src="${field.cover_image_url}" alt="" />`;
+      }
+      if (sideIsSlideshow) {
+        sideSlot.appendChild(fieldSlideshowEl(field.side_slideshow.map(s => s.image_url), '3 / 4', 'cl-page-text-section-side'));
+      } else if (field.side_image_url) {
+        sideSlot.innerHTML = `<img class="cl-page-text-section-side" src="${field.side_image_url}" alt="" />`;
+      }
       fieldsWrap.appendChild(section);
     });
   } catch {
