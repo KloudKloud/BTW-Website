@@ -2528,13 +2528,27 @@ function renderJoinBtn(club) {
 }
 document.getElementById('cl-banner-post-btn').addEventListener('click', () => {
   // Context-aware: posts into whichever Social feed you're currently
-  // looking at -- Home's, or the General page currently open.
-  if (currentPageSlug && currentPageData && currentPageData.type === 'general') {
+  // looking at -- Home's, or the General page currently open. Captured
+  // BEFORE navigateTo() -- which re-fetches the page and briefly nulls
+  // currentPageData while that fetch is in flight -- so the composer
+  // (opened synchronously right after, via the .click() below) doesn't
+  // read a momentarily-stale/null page and silently fall back to Home.
+  const targetPageSlug = (currentPageSlug && currentPageData && currentPageData.type === 'general') ? currentPageSlug : null;
+  const targetPageTitle = targetPageSlug ? currentPageData.title : null;
+  if (targetPageSlug) {
     navigateTo({ tab: 'social', post: null });
     document.getElementById('cl-page-view-create-social-post-btn').click();
   } else {
     navigateTo({ tab: 'social', page: null, post: null });
     document.getElementById('cl-create-social-post-btn').click();
+  }
+  // Reassert the captured page context now that the click above has run
+  // (it may have derived the wrong one internally, per the race noted
+  // above) -- only if the composer actually opened (membership gate may
+  // have shown a join prompt instead).
+  if (targetPageSlug && !document.getElementById('cl-post-create-overlay').hidden) {
+    postCreatePageSlug = targetPageSlug;
+    document.getElementById('cl-post-create-title').textContent = `Creating Post (${targetPageTitle})`;
   }
 });
 document.getElementById('cl-banner-join-btn').addEventListener('click', async () => {
@@ -3243,7 +3257,9 @@ function openCreatePostModal(mode) {
   postCreateImages = [];
   postPreviewPos = { x: 50, y: 50 };
   postPollActive = false;
-  document.getElementById('cl-post-create-title').textContent = mode === 'news' ? '🎗️ Creating News Post' : 'Creating Post';
+  document.getElementById('cl-post-create-title').textContent = mode === 'news'
+    ? '🎗️ Creating News Post'
+    : (postCreatePageSlug && currentPageData ? `Creating Post (${currentPageData.title})` : 'Creating Post');
   document.getElementById('cl-post-title-input').value = '';
   document.getElementById('cl-post-body-input').value = '';
   document.getElementById('cl-post-create-msg').textContent = '';
