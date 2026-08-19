@@ -2522,14 +2522,26 @@ let clSlideshowTimer = null;
 let clSlideshowImages = [];
 let clSlideshowIdx = 0;
 let clSlideshowActiveLayer = 'a';
+let clSlideshowLoadToken = 0;
+// Preload before swapping in + fading, otherwise the opacity transition
+// starts against a still-downloading image and the real pixels "pop" in
+// mid-fade -- the jerk/flicker some users saw, worse on slower connections.
+// The token guard drops a stale preload's result if a newer slide was
+// requested (rapid clicks) before the older one finished loading.
 function showSlideshowImage(url) {
   const showingLayer = clSlideshowActiveLayer === 'a' ? 'b' : 'a';
   const showingImg = document.getElementById(`cl-slideshow-img-${showingLayer}`);
   const hidingImg = document.getElementById(`cl-slideshow-img-${clSlideshowActiveLayer}`);
-  showingImg.src = url;
-  showingImg.classList.add('cl-active');
-  hidingImg.classList.remove('cl-active');
   clSlideshowActiveLayer = showingLayer;
+  const token = ++clSlideshowLoadToken;
+  const preload = new Image();
+  preload.onload = preload.onerror = () => {
+    if (token !== clSlideshowLoadToken) return;
+    showingImg.src = url;
+    showingImg.classList.add('cl-active');
+    hidingImg.classList.remove('cl-active');
+  };
+  preload.src = url;
 }
 function goToSlide(idx) {
   if (!clSlideshowImages.length) return;
@@ -3629,14 +3641,23 @@ let cpvSlideshowTimer = null;
 let cpvSlideshowImages = [];
 let cpvSlideshowIdx = 0;
 let cpvSlideshowActiveLayer = 'a';
+let cpvSlideshowLoadToken = 0;
+// Same preload-before-fade fix as the Home cover slideshow -- see
+// showSlideshowImage()'s comment for why.
 function cpvShowSlideshowImage(url) {
   const showingLayer = cpvSlideshowActiveLayer === 'a' ? 'b' : 'a';
   const showingImg = document.getElementById(`cl-page-view-slideshow-img-${showingLayer}`);
   const hidingImg = document.getElementById(`cl-page-view-slideshow-img-${cpvSlideshowActiveLayer}`);
-  showingImg.src = url;
-  showingImg.classList.add('cl-active');
-  hidingImg.classList.remove('cl-active');
   cpvSlideshowActiveLayer = showingLayer;
+  const token = ++cpvSlideshowLoadToken;
+  const preload = new Image();
+  preload.onload = preload.onerror = () => {
+    if (token !== cpvSlideshowLoadToken) return;
+    showingImg.src = url;
+    showingImg.classList.add('cl-active');
+    hidingImg.classList.remove('cl-active');
+  };
+  preload.src = url;
 }
 function cpvGoToSlide(idx) {
   if (!cpvSlideshowImages.length) return;
