@@ -1655,12 +1655,11 @@
           <span class="cl-side-admin-name" id="cl-side-admin-name"></span>
           <span class="cl-side-admin-ribbon" title="You're part of the admin team">🎗️</span>
         </div>
-        <button class="cl-side-edit-btn" id="cl-side-edit-btn" type="button">✎ Edit Club</button>
+        <button class="cl-side-edit-btn" id="cl-side-edit-btn" type="button">✎ Edit Info</button>
       </div>
 
       <div class="cl-side-title-row">
         <p class="cl-side-title" id="cl-side-title"></p>
-        <button class="cl-side-splash-edit-btn" id="cl-side-splash-edit-btn" type="button" style="display:none;" title="Edit splash title/message">✏️</button>
       </div>
       <p class="cl-side-message" id="cl-side-message"></p>
       <button class="cl-side-showmore-btn" id="cl-side-showmore-btn" type="button" style="display:none;">Show more</button>
@@ -2091,30 +2090,19 @@
 <div class="char-editor-overlay" id="cl-splash-edit-overlay" hidden>
   <div class="char-editor-modal" style="max-width: 460px;">
     <div id="cl-splash-main-view">
-      <div class="cl-splash-header-row">
-        <h2 class="char-editor-title" style="margin-bottom:0;">Edit Splash</h2>
-        <button type="button" class="cl-splash-rules-link" id="cl-splash-rules-link">🛡️ Make Rules</button>
-      </div>
+      <h2 class="char-editor-title">Edit Info</h2>
       <div class="mod-field">
         <label for="cl-splash-title-input">Splash Title</label>
         <input class="mod-input" id="cl-splash-title-input" maxlength="80" />
       </div>
-      <div class="mod-field" style="margin-bottom:0;">
+      <div class="mod-field">
         <label for="cl-splash-message-input">Description</label>
         <textarea class="mod-textarea" id="cl-splash-message-input" rows="7" maxlength="1000"></textarea>
       </div>
-      <p class="mod-panel-msg" id="cl-splash-msg"></p>
-      <div class="char-editor-actions">
-        <button class="mod-btn mod-btn--cancel" id="cl-splash-cancel-btn" type="button">Cancel</button>
-        <button class="mod-btn" id="cl-splash-save-btn" type="button">Save</button>
-      </div>
-    </div>
 
-    <div id="cl-splash-rules-view" hidden>
-      <div class="cl-splash-header-row">
-        <h2 class="char-editor-title" style="margin-bottom:0;">Club Rules</h2>
-        <button type="button" class="cl-splash-rules-link" id="cl-splash-rules-back-link">← Back</button>
-      </div>
+      <hr class="cl-side-rule2" />
+
+      <h2 class="char-editor-title" style="margin-bottom:0.35rem;">Club Rules</h2>
       <p class="cl-edit-hint-block">
         Rules are shown in the sidebar collapsed to just their preview text — members click to expand and read the full explanation.
       </p>
@@ -2136,6 +2124,12 @@
           <button class="mod-btn mod-btn--cancel" id="cl-rule-cancel-btn" type="button">Cancel</button>
           <button class="mod-btn" id="cl-rule-save-btn" type="button">Save Rule</button>
         </div>
+      </div>
+
+      <p class="mod-panel-msg" id="cl-splash-msg"></p>
+      <div class="char-editor-actions">
+        <button class="mod-btn mod-btn--cancel" id="cl-splash-cancel-btn" type="button">Cancel</button>
+        <button class="mod-btn" id="cl-splash-save-btn" type="button">Save</button>
       </div>
     </div>
   </div>
@@ -2513,7 +2507,6 @@ function renderClub(club, members) {
   document.getElementById('cl-side-admin-badge').style.display = isAdminOrOwner ? 'block' : 'none';
   document.getElementById('cl-side-add-page-btn').style.display = isAdminOrOwner ? 'block' : 'none';
   document.getElementById('cl-banner-recrop-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
-  document.getElementById('cl-side-splash-edit-btn').style.display = isAdminOrOwner ? 'inline-block' : 'none';
   document.getElementById('cl-create-news-post-btn').style.display = isAdminOrOwner ? 'block' : 'none';
   document.getElementById('cl-theme-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
   document.getElementById('cl-tabs-edit-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
@@ -4138,17 +4131,16 @@ document.getElementById('cl-theme-bg-file-input').addEventListener('change', asy
   }
 });
 
-// ── Sidebar splash title/message — small standalone editor, separate from
-// the Hub's Welcome Title/Description. ───────────────────────────────────
-document.getElementById('cl-side-splash-edit-btn').addEventListener('click', () => {
+// ── "Edit Info" — sidebar splash title/message + Rules, small standalone
+// editor, separate from the Hub's Welcome Title/Description. ─────────────
+document.getElementById('cl-side-edit-btn').addEventListener('click', () => {
   if (!currentClub) return;
   document.getElementById('cl-splash-title-input').value = currentClub.sidebar_title || '';
   document.getElementById('cl-splash-message-input').value = currentClub.sidebar_message || '';
   document.getElementById('cl-splash-msg').textContent = '';
   closeRuleForm();
-  document.getElementById('cl-splash-rules-view').hidden = true;
-  document.getElementById('cl-splash-main-view').hidden = false;
   document.getElementById('cl-splash-edit-overlay').hidden = false;
+  loadEditRules();
 });
 document.getElementById('cl-splash-cancel-btn').addEventListener('click', () => {
   document.getElementById('cl-splash-edit-overlay').hidden = true;
@@ -4179,19 +4171,6 @@ document.getElementById('cl-splash-save-btn').addEventListener('click', async ()
     btn.disabled = false;
     btn.textContent = 'Save';
   }
-});
-
-// ── "Make Rules" — a second view inside the splash-edit modal (not a
-// separate modal), matching the Featured Cards create/edit/delete flow. ──
-document.getElementById('cl-splash-rules-link').addEventListener('click', () => {
-  document.getElementById('cl-splash-main-view').hidden = true;
-  document.getElementById('cl-splash-rules-view').hidden = false;
-  loadEditRules();
-});
-document.getElementById('cl-splash-rules-back-link').addEventListener('click', () => {
-  closeRuleForm();
-  document.getElementById('cl-splash-rules-view').hidden = true;
-  document.getElementById('cl-splash-main-view').hidden = false;
 });
 
 let editRulesCache = [];
@@ -4340,7 +4319,6 @@ function closeEditClubModal() {
   document.body.style.overflow = '';
   closeCardForm();
 }
-document.getElementById('cl-side-edit-btn').addEventListener('click', () => openEditClubModal());
 document.getElementById('cl-tabs-edit-btn').addEventListener('click', () => openEditClubModal());
 document.getElementById('cl-side-add-page-btn').addEventListener('click', () => openEditClubModal({ createPage: true }));
 document.getElementById('cl-edit-cancel').addEventListener('click', () => {
