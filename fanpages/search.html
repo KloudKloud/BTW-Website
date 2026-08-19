@@ -783,7 +783,13 @@
       .fp-result { flex-direction: column; }
       .fp-result-cover { width: 100%; height: auto; aspect-ratio: 2 / 3; }
       .fp-bcard-grid, .fp-bcard-grid--narrow { grid-template-columns: 1fr; }
-      .fp-results-list--grid { grid-template-columns: repeat(2, 1fr); }
+      /* Gallery Posts (Browse and filtered search alike) — 3 per row
+         instead of 2, tile/caption sized down to match so at least ~2.5
+         rows are visible on one screen instead of ~1.5. */
+      .fp-results-list--grid { grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+      .rs-card-caption-title { font-size: 0.72rem; }
+      .rs-card-caption-author { font-size: 0.64rem; }
+      .rs-card-badge { font-size: 1.1rem; }
 
       /* Mobile-only: .fp-layout's desktop padding (2.5rem/40px each side,
          meant to clear the 250px side rail columns) was never cut down for
@@ -829,6 +835,84 @@
       .fp-bcard-char-chip:nth-child(n+4) { display: none; }
       .fp-bcard-char-chip img { width: 16px; height: 16px; }
       .fp-bcard-deco--tr { width: 22px; height: 22px; top: -6px; right: -5px; }
+
+      /* ── "Stories / Posts / Profiles" tab box becomes a Reddit-style
+         off-canvas drawer, same pattern as the club sidebar (see
+         social.html's ≤720px block for the full rationale — `left`
+         instead of `transform`, its own toggle class instead of touching
+         any desktop state, etc). Its own persistent hamburger sits top-
+         left of the page content, below the global nav bar so the two
+         hamburgers never visually collide at scroll position 0. ── */
+      .fp-tabdrawer-toggle {
+        display: flex; align-items: center; justify-content: center;
+        position: fixed; top: 86px; left: 0.9rem; z-index: 310;
+        width: 38px; height: 38px; border-radius: 10px;
+        background: rgba(20,16,26,0.55); border: 1px solid rgba(127,168,217,0.4);
+        color: #cfe0f5; cursor: pointer; box-shadow: 0 0 14px rgba(127,168,217,0.3);
+      }
+      .fp-tabdrawer-toggle:hover { color: #fff; border-color: rgba(127,168,217,0.7); }
+      .fp-side-panel {
+        position: fixed; top: 0; left: -80vw; bottom: 0; width: 78vw; max-width: 300px;
+        height: auto; max-height: none; z-index: 300; border-right: none;
+        margin: 0; padding: 5.25rem 1.1rem 1.5rem;
+        display: block; justify-content: normal; align-items: normal;
+        background: linear-gradient(175deg, rgba(14,12,20,0.96), rgba(14,12,20,0.92)), url('/images/home/box-background-3.png');
+        background-size: cover; background-position: center;
+        transition: left 0.28s ease;
+        box-shadow: 8px 0 40px rgba(0,0,0,0.55);
+      }
+      .fp-layout.fp-tabdrawer-open .fp-side-panel { left: 0; }
+      .fp-tabdrawer-backdrop {
+        display: none; position: fixed; inset: 0; z-index: 290;
+        background: rgba(0,0,0,0.5); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+      }
+      .fp-layout.fp-tabdrawer-open .fp-tabdrawer-backdrop { display: block; }
+      /* Browse mode has no side panel at all (.fp-layout--no-side hides
+         it outright) -- nothing for this hamburger to open there. */
+      .fp-layout--no-side .fp-tabdrawer-toggle { display: none; }
+      /* Bigger "switchable tab menu" feel inside the drawer, and — mobile
+         only, per request — reordered so Posts leads, then Story, then
+         Profile (desktop keeps Stories/Posts/Profiles; the underlying
+         active-tab/link logic is untouched, this is purely visual order). */
+      .fp-side-menu-item { padding: 1.1rem 1rem; }
+      .fp-side-menu-icon { font-size: 1.9rem; }
+      .fp-side-menu-label { font-size: 1.25rem; }
+      #fp-side-menu-submissions { order: -1; }
+      #fp-side-menu-story { order: 0; }
+      #fp-side-menu-profiles { order: 1; }
+
+      /* ── FurAffinity-style "Options" button — tucked onto the same line
+         as the top pagination row, right side. Collapsed by default; opens
+         the same filter fields the desktop right-hand panel has (moved
+         here via JS on mobile only, see the script below) in an in-flow
+         panel that pushes the results down, using the same grid-rows
+         expand trick as the global nav's own hamburger drawer. Half-
+         transparent background + a soft blue glow per request. ── */
+      .fp-pagination-top-row { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; min-height: 1px; }
+      .fp-mobile-options-btn:not([hidden]) {
+        display: flex; align-items: center; gap: 0.4rem;
+        background: rgba(20,16,26,0.5); border: 1px solid rgba(127,168,217,0.45); border-radius: 20px;
+        color: #cfe0f5; font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 0.82rem;
+        padding: 0.45em 0.9em; cursor: pointer; box-shadow: 0 0 12px rgba(127,168,217,0.3);
+        margin-left: auto;
+      }
+      .fp-mobile-options-btn:hover { border-color: rgba(127,168,217,0.75); color: #fff; }
+      .fp-mobile-options-btn-caret { transition: transform 0.2s ease; font-size: 0.75rem; }
+      .fp-mobile-options-btn--open .fp-mobile-options-btn-caret { transform: rotate(180deg); }
+      .fp-mobile-options-drawer { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.28s ease; }
+      .fp-mobile-options-drawer--open { grid-template-rows: 1fr; }
+      .fp-mobile-options-clip { overflow: hidden; min-height: 0; }
+      .fp-mobile-options-inner { padding-top: 0.8rem; }
+      /* The relocated .fp-filter-panel/.fp-posts-panel lose every sticky/
+         grid-column/negative-margin property that only made sense pinned
+         to the desktop's 3rd column -- here they're just a plain full-
+         width block inside the expanding drawer. */
+      .fp-mobile-options-inner .fp-filter-panel,
+      .fp-mobile-options-inner .fp-posts-panel {
+        position: static; grid-column: auto; width: 100%; box-sizing: border-box;
+        height: auto; max-height: none; margin: 0; border-radius: 16px;
+        padding: 1.1rem;
+      }
     }
   </style>
 </head>
@@ -845,6 +929,11 @@
 <div id="fanpages-topbar-root"></div>
 
 <main class="fp-layout">
+  <button class="fp-tabdrawer-toggle" id="fp-tabdrawer-toggle" type="button" aria-label="Stories / Posts / Profiles">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <div class="fp-tabdrawer-backdrop" id="fp-tabdrawer-backdrop"></div>
+
   <aside class="fp-side-panel" id="fp-side-panel">
     <nav class="fp-side-menu">
       <a class="fp-side-menu-item fp-side-menu-item--active" href="/fanpages/search" id="fp-side-menu-story">
@@ -885,7 +974,18 @@
       </div>
     </div>
     <p class="fp-search-sub" id="fp-search-sub"></p>
-    <div class="fp-pagination" id="fp-pagination-top" hidden></div>
+    <div class="fp-pagination-top-row">
+      <div class="fp-pagination" id="fp-pagination-top" hidden></div>
+      <button class="fp-mobile-options-btn" id="fp-mobile-options-btn" type="button" hidden>
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><circle cx="9" cy="7" r="2" fill="#0a0814"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="16" cy="17" r="2" fill="#0a0814"/></svg>
+        Options <span class="fp-mobile-options-btn-caret">▾</span>
+      </button>
+    </div>
+    <div class="fp-mobile-options-drawer" id="fp-mobile-options-drawer">
+      <div class="fp-mobile-options-clip">
+        <div class="fp-mobile-options-inner" id="fp-mobile-options-inner"></div>
+      </div>
+    </div>
     <div class="fp-results-list" id="fp-search-results"><p class="fp-search-empty">Loading…</p></div>
     <div class="fp-pagination" id="fp-pagination" hidden></div>
   </div>
@@ -1804,6 +1904,24 @@ document.getElementById('fp-story-search-input').addEventListener('keydown', (e)
 // position:fixed sibling, not a child of the panel, so it stays on screen
 // either way.
 const fpLayoutEl = document.querySelector('.fp-layout');
+
+// ── Mobile-only: "Stories / Posts / Profiles" tab box as a Reddit-style
+// off-canvas drawer (see the ≤720px block in <style>) -- own persistent
+// hamburger, own toggle class, doesn't touch the desktop collapse state
+// below. Same pattern as the club sidebar drawer. ──
+(function () {
+  const toggle = document.getElementById('fp-tabdrawer-toggle');
+  const backdrop = document.getElementById('fp-tabdrawer-backdrop');
+  if (!toggle || !backdrop) return;
+  function setOpen(open) {
+    fpLayoutEl.classList.toggle('fp-tabdrawer-open', open);
+    document.body.style.overflow = open ? 'hidden' : '';
+  }
+  toggle.addEventListener('click', () => setOpen(!fpLayoutEl.classList.contains('fp-tabdrawer-open')));
+  backdrop.addEventListener('click', () => setOpen(false));
+  window.addEventListener('resize', () => { if (window.innerWidth > 720) setOpen(false); });
+})();
+
 const filterRailToggle = document.getElementById('fp-filter-rail-toggle');
 function setFiltersCollapsed(collapsed) {
   fpLayoutEl.classList.toggle('fp-layout--filters-collapsed', collapsed);
@@ -1874,12 +1992,18 @@ async function refreshInactiveMenuCounts(activeView) {
 // the active left-panel link, drop the filter panel/fab (grid-column 3 ->
 // gone), and render into the same #fp-search-results element the Story
 // tab uses. ───────────────────────────────────────────────────────────
-const currentView = new URLSearchParams(window.location.search).get('view');
+let currentView = new URLSearchParams(window.location.search).get('view');
 // ?browse=1 — reached via the nav's Browse dropdown instead of the left
 // panel: no left panel at all, a plain "Recent Stories"/"Recent
 // Submissions" heading up top, everything else (right filter panel,
 // collapse arrow, the actual result-fetching) identical to the normal tab.
 const isBrowseMode = new URLSearchParams(window.location.search).get('browse') === '1';
+// Mobile-only default tab: a bare /search with no ?view= lands on Posts
+// instead of Stories on phones (desktop keeps Stories as the default) --
+// per request, matches the mobile tab drawer's own Posts-first ordering
+// below. Browse links always set an explicit ?view= already, so this
+// never touches Browse.
+if (!currentView && !isBrowseMode && window.innerWidth <= 720) currentView = 'submissions';
 // The unblurred box-background-5 wallpaper + fp-bcard grid belong to any
 // Story-tab result set -- Browse's own "Recent Stories" feed AND a normal
 // filtered Story search/tag click both count. Posts/Profiles keep the
@@ -1952,6 +2076,32 @@ if (currentView === 'submissions' || currentView === 'profiles') {
   runSearch();
 }
 if (!isBrowseMode) refreshInactiveMenuCounts(currentView === 'submissions' || currentView === 'profiles' ? currentView : 'story');
+
+// ── Mobile-only "Options" drawer (FurAffinity reference) — Browse has no
+// filter panel and Profiles has never had one, so this only applies to a
+// normal Story search (filter panel) or the Posts tab (posts panel). On
+// mobile it relocates that same panel node (not a copy -- every existing
+// id/listener on its fields keeps working untouched) out of its desktop
+// grid column into the collapsed drawer sitting on the pagination row, so
+// tapping "Options" expands it in place and pushes the results down; the
+// desktop layout above 720px never runs this and keeps the panel in its
+// normal 3rd column. ──
+(function () {
+  if (window.innerWidth > 720 || isBrowseMode || currentView === 'profiles') return;
+  const sourcePanel = isPostsView ? document.getElementById('fp-posts-panel') : document.getElementById('fp-filter-panel');
+  if (!sourcePanel) return;
+  const btn = document.getElementById('fp-mobile-options-btn');
+  const drawer = document.getElementById('fp-mobile-options-drawer');
+  const inner = document.getElementById('fp-mobile-options-inner');
+  inner.appendChild(sourcePanel);
+  sourcePanel.style.display = 'flex';
+  btn.hidden = false;
+  btn.addEventListener('click', () => {
+    const open = !drawer.classList.contains('fp-mobile-options-drawer--open');
+    drawer.classList.toggle('fp-mobile-options-drawer--open', open);
+    btn.classList.toggle('fp-mobile-options-btn--open', open);
+  });
+})();
 </script>
 
 </body>
