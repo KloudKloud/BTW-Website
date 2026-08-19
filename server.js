@@ -9697,8 +9697,24 @@ app.put('/api/clubs/:slug/pages/:pageSlug/theme-bg', requireAuth, uploadModImage
   res.json({ page: updated });
 });
 
+// Each text_fields[i].{cover,side}_image_url / _slideshow entry is set by
+// the dedicated per-field image endpoints below (they own file uploads);
+// this sanitizer just whitelists/round-trips whatever the client already
+// has cached for those keys alongside the title/body edit.
+function sanitizeTextFieldImageSlot(f, prefix) {
+  const slideshow = Array.isArray(f && f[`${prefix}_slideshow`]) ? f[`${prefix}_slideshow`] : [];
+  return {
+    [`${prefix}_mode`]: (f && f[`${prefix}_mode`] === 'slideshow') ? 'slideshow' : 'static',
+    [`${prefix}_image_url`]: String((f && f[`${prefix}_image_url`]) || ''),
+    [`${prefix}_slideshow`]: slideshow.slice(0, 10).map(s => ({ image_url: String((s && s.image_url) || '') })).filter(s => s.image_url),
+  };
+}
 // PUT /api/clubs/:slug/pages/:pageSlug/text-fields — General Page template's
-// up-to-three named text sections: { fields: [{title, body}, ...] }.
+// up-to-three named text sections: { fields: [{title, body, cover_mode,
+// cover_image_url, cover_slideshow, side_mode, side_image_url,
+// side_slideshow}, ...] }. Cover/Side are optional images per field --
+// Cover renders full-width above the section, Side floats narrow/tall to
+// its right.
 app.put('/api/clubs/:slug/pages/:pageSlug/text-fields', requireAuth, async (req, res) => {
   const ctx = await requireClubPageAdmin(req, res);
   if (!ctx) return;
@@ -9706,10 +9722,93 @@ app.put('/api/clubs/:slug/pages/:pageSlug/text-fields', requireAuth, async (req,
   const fields = fieldsIn.map(f => ({
     title: String((f && f.title) || '').trim().slice(0, 80),
     body: String((f && f.body) || '').trim().slice(0, 5000),
+    ...sanitizeTextFieldImageSlot(f, 'cover'),
+    ...sanitizeTextFieldImageSlot(f, 'side'),
   })).filter(f => f.title || f.body);
   await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(fields), ctx.page.id]);
   res.json({ text_fields: fields });
 });
+
+// Shared field-index resolver for the per-text-field Cover/Side image
+// endpoints below — fields are position-addressed (no stable id), so every
+// one of these needs the current text_fields array and a valid index.
+async function requireClubPageTextField(req, res) {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return null;
+  const idx = parseInt(req.params.fieldIdx, 10);
+  const fields = Array.isArray(ctx.page.text_fields) ? ctx.page.text_fields : [];
+  if (!(idx >= 0 && idx < fields.length)) { res.status(404).json({ error: 'Field not found.' }); return null; }
+  return { ...ctx, fields, idx };
+}
+function deleteIfModeratorUpload(url) {
+  if (url && url.startsWith('/images/moderators/')) {
+    const oldPath = path.join('/var/www/btw', url);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+}
+// Cover and Side share an identical mode/image/slideshow shape -- registered
+// together so both slots get the same five endpoints without duplicating
+// the logic twice.
+function registerTextFieldImageEndpoints(prefix) {
+  app.put(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-mode`, requireAuth, async (req, res) => {
+    const ctx = await requireClubPageTextField(req, res);
+    if (!ctx) return;
+    const mode = req.body[`${prefix}_mode`] === 'slideshow' ? 'slideshow' : 'static';
+    ctx.fields[ctx.idx][`${prefix}_mode`] = mode;
+    await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(ctx.fields), ctx.page.id]);
+    res.json({ text_fields: ctx.fields });
+  });
+
+  app.put(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-image`, requireAuth, uploadModImage.single('image'), async (req, res) => {
+    const ctx = await requireClubPageTextField(req, res);
+    if (!ctx) return;
+    if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+    const field = ctx.fields[ctx.idx];
+    deleteIfModeratorUpload(field[`${prefix}_image_url`]);
+    field[`${prefix}_image_url`] = `/images/moderators/${req.file.filename}`;
+    await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(ctx.fields), ctx.page.id]);
+    res.json({ text_fields: ctx.fields });
+  });
+
+  app.delete(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-image`, requireAuth, async (req, res) => {
+    const ctx = await requireClubPageTextField(req, res);
+    if (!ctx) return;
+    const field = ctx.fields[ctx.idx];
+    deleteIfModeratorUpload(field[`${prefix}_image_url`]);
+    field[`${prefix}_image_url`] = '';
+    await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(ctx.fields), ctx.page.id]);
+    res.json({ text_fields: ctx.fields });
+  });
+
+  app.post(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-slideshow`, requireAuth, uploadModImage.single('image'), async (req, res) => {
+    const ctx = await requireClubPageTextField(req, res);
+    if (!ctx) return;
+    if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+    const field = ctx.fields[ctx.idx];
+    const list = Array.isArray(field[`${prefix}_slideshow`]) ? field[`${prefix}_slideshow`] : [];
+    if (list.length >= 10) return res.status(400).json({ error: 'Maximum of 10 images.' });
+    list.push({ image_url: `/images/moderators/${req.file.filename}` });
+    field[`${prefix}_slideshow`] = list;
+    await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(ctx.fields), ctx.page.id]);
+    res.json({ text_fields: ctx.fields });
+  });
+
+  app.delete(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-slideshow/:slideIdx`, requireAuth, async (req, res) => {
+    const ctx = await requireClubPageTextField(req, res);
+    if (!ctx) return;
+    const field = ctx.fields[ctx.idx];
+    const list = Array.isArray(field[`${prefix}_slideshow`]) ? field[`${prefix}_slideshow`] : [];
+    const slideIdx = parseInt(req.params.slideIdx, 10);
+    if (!(slideIdx >= 0 && slideIdx < list.length)) return res.status(404).json({ error: 'Image not found.' });
+    const [removed] = list.splice(slideIdx, 1);
+    if (removed) deleteIfModeratorUpload(removed.image_url);
+    field[`${prefix}_slideshow`] = list;
+    await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(ctx.fields), ctx.page.id]);
+    res.json({ text_fields: ctx.fields });
+  });
+}
+registerTextFieldImageEndpoints('cover');
+registerTextFieldImageEndpoints('side');
 
 app.put('/api/clubs/:slug/pages/:pageSlug/cover-mode', requireAuth, async (req, res) => {
   const ctx = await requireClubPageAdmin(req, res);
