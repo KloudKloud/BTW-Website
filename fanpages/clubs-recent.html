@@ -258,6 +258,37 @@
       .soc-main { margin-left: 0; padding: 1.5rem 1.25rem 4rem; }
       .soc-layout.soc-collapsed .soc-main { margin-left: 0; }
     }
+
+    /* ── Mobile (≤720px): Reddit-style off-canvas drawer for the club
+       sidebar, same pattern as social.html — see that file's ≤720px block
+       for the full rationale. Collapsed by default, entirely separate from
+       the desktop icon-rail's .soc-collapsed/localStorage state. ── */
+    @media (max-width: 720px) {
+      .soc-sidebar {
+        position: fixed; top: 0; left: -80vw; bottom: 0; width: 78vw; max-width: 300px;
+        height: auto; border-right: none; z-index: 300;
+        padding: 3.5rem 1.25rem 1.1rem;
+        transition: left 0.28s ease;
+        box-shadow: 8px 0 40px rgba(0,0,0,0.55);
+      }
+      .soc-layout.soc-mobile-drawer-open .soc-sidebar { left: 0; }
+      .soc-sidebar-content { display: flex; }
+      .soc-sidebar-toggle {
+        position: fixed; top: 0.8rem; left: 0.9rem; z-index: 310;
+        width: auto; height: auto; align-self: auto; margin-bottom: 0;
+        background: none; border: none; box-shadow: none;
+        font-size: 1.5rem; line-height: 1; color: #f0f0f0;
+        text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+      }
+      .soc-sidebar-toggle:hover { background: none; color: #fff; }
+      .soc-mobile-drawer-backdrop {
+        display: none; position: fixed; inset: 0; z-index: 290;
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+      }
+      .soc-layout.soc-mobile-drawer-open .soc-mobile-drawer-backdrop { display: block; }
+      .soc-main, .soc-layout.soc-collapsed .soc-main { margin-left: 0; padding-top: 3.5rem; }
+    }
   </style>
 </head>
 <body>
@@ -271,6 +302,8 @@
 </div>
 
 <div class="soc-layout" id="soc-layout">
+
+  <div class="soc-mobile-drawer-backdrop" id="soc-mobile-drawer-backdrop"></div>
 
   <aside class="soc-sidebar">
     <button class="soc-sidebar-toggle" id="soc-sidebar-toggle" type="button" title="Collapse sidebar" aria-label="Collapse sidebar">☰</button>
@@ -745,8 +778,26 @@ function setSidebarCollapsed(collapsed) {
   sidebarToggleBtn.setAttribute('aria-label', label);
   localStorage.setItem('soc_sidebar_collapsed', collapsed ? '1' : '0');
 }
-sidebarToggleBtn.addEventListener('click', () => setSidebarCollapsed(!socLayout.classList.contains('soc-collapsed')));
-if (localStorage.getItem('soc_sidebar_collapsed') === '1') setSidebarCollapsed(true);
+function isMobileNav() { return window.innerWidth <= 720; }
+if (!isMobileNav() && localStorage.getItem('soc_sidebar_collapsed') === '1') setSidebarCollapsed(true);
+
+// ── Mobile-only: Reddit-style off-canvas drawer (see the ≤720px block in
+// <style>) — entirely separate from the desktop icon-rail collapse above,
+// doesn't persist across visits, always starts closed on load. ──
+const mobileDrawerBackdrop = document.getElementById('soc-mobile-drawer-backdrop');
+function setMobileDrawerOpen(open) {
+  socLayout.classList.toggle('soc-mobile-drawer-open', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+}
+mobileDrawerBackdrop.addEventListener('click', () => setMobileDrawerOpen(false));
+sidebarToggleBtn.addEventListener('click', () => {
+  if (isMobileNav()) { setMobileDrawerOpen(!socLayout.classList.contains('soc-mobile-drawer-open')); return; }
+  setSidebarCollapsed(!socLayout.classList.contains('soc-collapsed'));
+});
+window.addEventListener('resize', () => {
+  if (isMobileNav()) socLayout.classList.remove('soc-collapsed');
+  else setMobileDrawerOpen(false);
+});
 </script>
 
 </body>
