@@ -628,7 +628,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
             </div>
           </div>
 
-          <a href="${fpUrl('/search')}">Search</a>
+          <button class="fpnav-drawer-item" id="fpnav-drawer-search-btn" type="button">Search</button>
 
           <div class="fpnav-drawer-accordion">
             <button class="fpnav-drawer-toggle" data-drawer-target="create" type="button">Create <span class="fpnav-caret">&#9662;</span></button>
@@ -697,6 +697,16 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
       sub.hidden = !opening;
       btn.classList.toggle('fpnav-drawer-toggle--open', opening);
     });
+  });
+
+  // Drawer's flat "Search" entry doesn't navigate anywhere -- it just
+  // collapses the drawer back down so the top bar's own search input
+  // (already sitting right next to the hamburger on mobile) is visible
+  // again, and focuses it, instead of firing off an empty/unscoped search.
+  document.getElementById('fpnav-drawer-search-btn').addEventListener('click', () => {
+    closeHamburgerDrawer();
+    const input = document.getElementById('fpnav-search-input');
+    if (input) setTimeout(() => input.focus(), 300);
   });
 
   document.getElementById('fpnav-drawer-profile-row').addEventListener('click', () => {
