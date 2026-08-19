@@ -148,20 +148,17 @@
     /* Club background (default catalog picture, or an owner's custom
        upload) — matches the Story Home page's background formula instead
        of the generic site-wide .page-bg it was riding on before: that
-       shared class pins the image to the viewport (position:fixed) and
-       blurs it hard (blur(14px)), which is right for the plain content
-       pages it was built for but read as a smudge behind a club, whose
-       thumbnail/banner is the actual focal point up top. Overriding by ID
-       (beats the shared class's specificity regardless of load order):
-       barely any blur so the picture reads clearly, and it scrolls *with*
-       the page starting right below the banner instead of showing through
-       behind it. The wrap is left as a normal (non-fixed) box so the img
-       — a normal block child, not itself absolutely positioned — just
-       auto-sizes the wrap to whatever height JS gives it; no percentage/
-       inset sizing tricks needed since there's nothing else in this wrap. */
-    #cl-page-bg-wrap { position: absolute; top: 310px; left: 0; right: 0; bottom: auto; z-index: -1; overflow: hidden; }
+       shared class blurs the image hard (blur(14px)), which is right for
+       the plain content pages it was built for but read as a smudge behind
+       a club, whose thumbnail/banner is the actual focal point up top.
+       Overriding by ID (beats the shared class's specificity regardless of
+       load order): barely any blur so the picture reads clearly. Pinned to
+       the viewport (position:fixed; inset:0) so it never scrolls with page
+       content, full-bleed object-fit:cover so it always fills the screen
+       with no gaps. */
+    #cl-page-bg-wrap { position: fixed; inset: 0; z-index: -1; overflow: hidden; }
     #cl-page-bg-img {
-      width: 100%; height: 100vh; object-fit: cover; display: block;
+      width: 100%; height: 100%; object-fit: cover; display: block;
       filter: brightness(0.9); transform: none; transition: filter 0.25s;
     }
     /* Reading a single post gets a very slight extra blur behind it so the
@@ -170,7 +167,6 @@
        stays exactly as before. body.cl-post-open is only ever toggled by
        loadAndShowPost()/renderFromUrl(), never anywhere else. */
     body.cl-post-open #cl-page-bg-img { filter: brightness(0.9) blur(7px); }
-    @media (max-width: 860px) { #cl-page-bg-wrap { top: 180px; } }
 
     /* ── Banner + pfp (the only header content left for now) ── */
     .cl-banner-wrap { position: relative; width: 100%; height: 310px; background: #161616; overflow: hidden; }
@@ -4045,32 +4041,7 @@ function applyClubTheme(themeId, bgUrl) {
   bgImg.style.display = 'block';
   bgOverlay.style.display = 'block';
   document.querySelectorAll('.cl-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
-  syncClBgHeight();
 }
-// Background scrolls *with* the page instead of staying pinned -- needs its
-// height measured in JS since percentage/inset sizing can't resolve against
-// a wrap whose own height is just "however tall its content is." Reset to 0
-// before each measurement (the element being measured contributes to
-// scrollHeight itself once it has a height) so a previously-tall page can
-// still report shrinking back down. The wrap's own offset (310px under the
-// banner, 180px on the mobile breakpoint) is read from the DOM instead of
-// hardcoded here, so it stays correct if the media-query breakpoint above
-// ever changes without this needing a matching edit.
-function syncClBgHeight() {
-  const wrap = document.getElementById('cl-page-bg-wrap');
-  const bgEl = document.getElementById('cl-page-bg-img');
-  bgEl.style.height = '0';
-  const topOffset = wrap.getBoundingClientRect().top + window.scrollY;
-  const fullHeight = Math.max(document.documentElement.scrollHeight, window.innerHeight);
-  bgEl.style.height = Math.max(fullHeight - topOffset, 0) + 'px';
-}
-window.addEventListener('resize', syncClBgHeight);
-window.addEventListener('load', syncClBgHeight);
-// Catches every other way the page's height can change (feed pagination,
-// tab switches, pages/rules/mods lists loading in, images finishing their
-// own load) without needing a syncClBgHeight() call sprinkled into each of
-// those render functions individually.
-new ResizeObserver(() => syncClBgHeight()).observe(document.body);
 function buildClThemeGrid() {
   const grid = document.getElementById('cl-theme-grid');
   grid.innerHTML = '';
