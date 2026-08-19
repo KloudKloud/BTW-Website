@@ -1434,6 +1434,7 @@
   <div class="cl-banner-wrap" id="cl-banner-wrap">
     <div class="cl-banner-img-slot" id="cl-banner-img-slot"></div>
     <button class="cl-banner-recrop-btn" id="cl-banner-recrop-btn" type="button" style="display:none;" title="Change banner image">✏️</button>
+    <button class="cl-banner-recrop-btn" id="cl-banner-revert-btn" type="button" style="display:none; right: 4.2rem;" title="Use the club's own banner instead">↺</button>
     <input type="file" id="cl-banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
     <div class="cl-banner-actions" id="cl-banner-actions">
       <button class="cl-banner-post-btn" id="cl-banner-post-btn" type="button" style="display:none;">+ Post</button>
@@ -2512,6 +2513,17 @@ async function loadClub() {
   }
 }
 
+// ── Banner image — shared across every view (Home and every custom page
+// use the same #cl-banner-wrap element, unlike the Hub/Social tabs which
+// are duplicated per view) — a General page can override it with its own,
+// so this just paints whatever url/position it's given rather than always
+// reading from currentClub. ────────────────────────────────────────────
+function renderBanner(url, posX, posY) {
+  document.getElementById('cl-banner-img-slot').innerHTML = url
+    ? `<img src="${url}" alt="" style="object-position:${posX}% ${posY}%;" />`
+    : `<div class="cl-banner-fallback"></div>`;
+}
+
 // ── Join/Joined button — top-right of the banner ─────────────────────────
 function renderJoinBtn(club) {
   document.getElementById('cl-banner-post-btn').style.display = 'block';
@@ -2581,9 +2593,8 @@ function renderClub(club, members) {
   if (members) currentMembers = members;
   document.title = `${club.name} ✦ Social ✦ BTW`;
 
-  document.getElementById('cl-banner-img-slot').innerHTML = club.banner_url
-    ? `<img src="${club.banner_url}" alt="" style="object-position:${club.banner_position_x}% ${club.banner_position_y}%;" />`
-    : `<div class="cl-banner-fallback"></div>`;
+  renderBanner(club.banner_url, club.banner_position_x, club.banner_position_y);
+  document.getElementById('cl-banner-revert-btn').style.display = 'none';
 
   renderJoinBtn(club);
 
@@ -3576,9 +3587,13 @@ function renderFromUrl() {
   } else {
     document.getElementById('cl-home-view').hidden = false;
     setHomeTab(tab);
-    // A General page can carry its own theme -- switch the shared
-    // background back to Home's own theme when navigating away from one.
-    if (currentClub) applyClubTheme(currentClub.theme, currentClub.theme_bg_url);
+    // A General page can carry its own theme/banner -- switch the shared
+    // background/banner back to Home's own when navigating away from one.
+    if (currentClub) {
+      applyClubTheme(currentClub.theme, currentClub.theme_bg_url);
+      renderBanner(currentClub.banner_url, currentClub.banner_position_x, currentClub.banner_position_y);
+      document.getElementById('cl-banner-revert-btn').style.display = 'none';
+    }
   }
   highlightSidebarPages(pageSlug);
 }
@@ -3963,15 +3978,27 @@ async function loadCustomPage(pageSlug, tab) {
     // General/Gallery/Promotion pages stretch the full content column (like
     // Home); other templates keep the narrower, post-detail-style width.
     document.getElementById('cl-custom-page-view').classList.toggle('cl-post-detail', !['general', 'gallery', 'promotion'].includes(page.type));
+    // Default to the club's own banner -- only General pages (below) can
+    // override it with their own, so Gallery/Promotion/fallback pages
+    // always fall back here (the shared #cl-banner-wrap would otherwise
+    // keep showing whatever a previously-viewed General page last set).
+    if (currentClub) renderBanner(currentClub.banner_url, currentClub.banner_position_x, currentClub.banner_position_y);
+    document.getElementById('cl-banner-revert-btn').style.display = 'none';
 
     // General pages get their own Hub/Social tabs + own theme, same concept
     // as Home -- Promotion/Gallery pages below keep their single-view layout.
     if (page.type === 'general') {
       tabsRow.hidden = false;
       applyClubTheme(page.theme, page.theme_bg_url);
+      // Own banner if the page has set one, otherwise inherit the club's.
+      const bannerUrl = page.banner_url || (currentClub ? currentClub.banner_url : '');
+      const bannerX = page.banner_url ? page.banner_position_x : (currentClub ? currentClub.banner_position_x : 50);
+      const bannerY = page.banner_url ? page.banner_position_y : (currentClub ? currentClub.banner_position_y : 50);
+      renderBanner(bannerUrl, bannerX, bannerY);
       const isAdminOrOwner = !!currentClub && (currentClub.viewer_role === 'owner' || currentClub.viewer_role === 'admin');
       document.getElementById('cl-page-view-edit-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
       document.getElementById('cl-page-view-theme-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
+      document.getElementById('cl-banner-revert-btn').style.display = (isAdminOrOwner && page.banner_url) ? 'flex' : 'none';
       setPageViewTab(tab || 'hub');
     }
 
@@ -4592,7 +4619,9 @@ document.getElementById('cl-rule-save-btn').addEventListener('click', async () =
   finally { btn.disabled = false; }
 });
 
-// ── Banner — hover-pencil, immediate save on crop (no modal step). ───────
+// ── Banner — hover-pencil, immediate save on crop (no modal step).
+// Context-aware like +Post/Theme: uploading while viewing a General page
+// sets that page's own banner instead of the club's. ─────────────────────
 document.getElementById('cl-banner-recrop-btn').addEventListener('click', (e) => {
   e.stopPropagation();
   document.getElementById('cl-banner-file-input').click();
@@ -4600,16 +4629,37 @@ document.getElementById('cl-banner-recrop-btn').addEventListener('click', (e) =>
 document.getElementById('cl-banner-file-input').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
+  const targetPageSlug = (currentPageSlug && currentPageData && currentPageData.type === 'general') ? currentPageSlug : null;
   openCropModal({
     title: 'Crop Banner Image', imageSrc: URL.createObjectURL(file), aspectRatio: 1600 / 310, round: false,
     onSave: async (blob) => {
       const fd = new FormData();
       fd.append('banner', blob, 'banner.jpg');
-      const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}`, { method: 'PUT', headers: authHeaders(), body: fd });
-      if (res.ok) renderClub((await res.json()).club);
+      if (targetPageSlug) {
+        const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(targetPageSlug)}/banner`, { method: 'PUT', headers: authHeaders(), body: fd });
+        if (res.ok) {
+          const data = await res.json();
+          currentPageData = data.page;
+          renderBanner(data.page.banner_url, data.page.banner_position_x, data.page.banner_position_y);
+          document.getElementById('cl-banner-revert-btn').style.display = 'flex';
+        }
+      } else {
+        const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}`, { method: 'PUT', headers: authHeaders(), body: fd });
+        if (res.ok) renderClub((await res.json()).club);
+      }
     },
   });
   e.target.value = '';
+});
+document.getElementById('cl-banner-revert-btn').addEventListener('click', async (e) => {
+  e.stopPropagation();
+  if (!currentPageSlug) return;
+  const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(currentPageSlug)}/banner`, { method: 'DELETE', headers: authHeaders() });
+  if (res.ok) {
+    currentPageData = (await res.json()).page;
+    if (currentClub) renderBanner(currentClub.banner_url, currentClub.banner_position_x, currentClub.banner_position_y);
+    document.getElementById('cl-banner-revert-btn').style.display = 'none';
+  }
 });
 
 // ── Club editor modal state ───────────────────────────────────────────────

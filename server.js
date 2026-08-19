@@ -1487,6 +1487,15 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS theme_bg_url TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('club_pages theme migration:', e.message));
 
+  // Same idea, for the top banner -- a General page can override the
+  // club-wide banner_url with its own image; an empty banner_url means
+  // "inherit the club's own banner" (the default for every page).
+  await pool.query(`
+    ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS banner_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS banner_position_x INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS banner_position_y INTEGER NOT NULL DEFAULT 50;
+  `).catch(e => console.error('club_pages banner migration:', e.message));
+
   // Optional page scoping for club_posts — NULL means a Home Social post
   // (all existing posts keep this behavior after the migration). A General
   // page's own Social tab sets this to that page's id so its feed stays
@@ -9589,7 +9598,7 @@ app.get('/api/clubs/:slug/pages/:pageSlug', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const { rows: [page] } = await pool.query(
-    'SELECT slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url FROM club_pages WHERE club_id = $1 AND slug = $2',
+    'SELECT slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y FROM club_pages WHERE club_id = $1 AND slug = $2',
     [club.id, req.params.pageSlug]
   );
   if (!page) return res.status(404).json({ error: 'Page not found.' });
@@ -9665,7 +9674,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => {
   const title = req.body.title !== undefined ? String(req.body.title).trim().slice(0, 60) || existing.title : existing.title;
   const content = req.body.content !== undefined ? String(req.body.content).slice(0, 20000) : existing.content;
   const { rows: [page] } = await pool.query(
-    'UPDATE club_pages SET title = $1, content = $2 WHERE id = $3 RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url',
+    'UPDATE club_pages SET title = $1, content = $2 WHERE id = $3 RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y',
     [title, content, existing.id]
   );
   res.json({ page });
@@ -9678,7 +9687,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug/theme', requireAuth, async (req, res) 
   if (!ctx) return;
   const theme = req.body.theme === 'custom' ? 'custom' : 'default';
   const { rows: [updated] } = await pool.query(
-    'UPDATE club_pages SET theme = $1 WHERE id = $2 RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url',
+    'UPDATE club_pages SET theme = $1 WHERE id = $2 RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y',
     [theme, ctx.page.id]
   );
   res.json({ page: updated });
@@ -9691,8 +9700,44 @@ app.put('/api/clubs/:slug/pages/:pageSlug/theme-bg', requireAuth, uploadModImage
   const bgUrl = `/images/moderators/${req.file.filename}`;
   const { rows: [updated] } = await pool.query(
     `UPDATE club_pages SET theme_bg_url = $1, theme = 'custom' WHERE id = $2
-     RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url`,
+     RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
     [bgUrl, ctx.page.id]
+  );
+  res.json({ page: updated });
+});
+
+// PUT /api/clubs/:slug/pages/:pageSlug/banner — General page's own top
+// banner, overriding the club-wide one whenever it's set (empty banner_url
+// means "inherit the club's banner", the default for a new page). Same
+// crop-on-upload + draggable-reposition pattern as the club-level banner.
+app.put('/api/clubs/:slug/pages/:pageSlug/banner', requireAuth, uploadModImage.single('banner'), async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  const positionX = req.body.banner_position_x !== undefined ? clampPosition(req.body.banner_position_x) : ctx.page.banner_position_x;
+  const positionY = req.body.banner_position_y !== undefined ? clampPosition(req.body.banner_position_y) : ctx.page.banner_position_y;
+  let bannerUrl = ctx.page.banner_url;
+  if (req.file) {
+    bannerUrl = `/images/moderators/${req.file.filename}`;
+    deleteIfModeratorUpload(ctx.page.banner_url);
+  }
+  const { rows: [updated] } = await pool.query(
+    `UPDATE club_pages SET banner_url = $1, banner_position_x = $2, banner_position_y = $3 WHERE id = $4
+     RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
+    [bannerUrl, positionX, positionY, ctx.page.id]
+  );
+  res.json({ page: updated });
+});
+
+// DELETE /api/clubs/:slug/pages/:pageSlug/banner — clears the page's own
+// banner back to "inherit the club's banner".
+app.delete('/api/clubs/:slug/pages/:pageSlug/banner', requireAuth, async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  deleteIfModeratorUpload(ctx.page.banner_url);
+  const { rows: [updated] } = await pool.query(
+    `UPDATE club_pages SET banner_url = '', banner_position_x = 50, banner_position_y = 50 WHERE id = $1
+     RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
+    [ctx.page.id]
   );
   res.json({ page: updated });
 });
