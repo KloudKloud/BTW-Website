@@ -1434,7 +1434,7 @@
   <div class="cl-banner-wrap" id="cl-banner-wrap">
     <div class="cl-banner-img-slot" id="cl-banner-img-slot"></div>
     <button class="cl-banner-recrop-btn" id="cl-banner-recrop-btn" type="button" style="display:none;" title="Change banner image">✏️</button>
-    <button class="cl-banner-recrop-btn" id="cl-banner-revert-btn" type="button" style="display:none; right: 4.2rem;" title="Use the club's own banner instead">↺</button>
+    <button class="cl-banner-recrop-btn" id="cl-banner-revert-btn" type="button" style="display:none; right: 4.2rem;" title="Reset to the default banner">↺</button>
     <input type="file" id="cl-banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
     <div class="cl-banner-actions" id="cl-banner-actions">
       <button class="cl-banner-post-btn" id="cl-banner-post-btn" type="button" style="display:none;">+ Post</button>
@@ -3978,11 +3978,13 @@ async function loadCustomPage(pageSlug, tab) {
     // General/Gallery/Promotion pages stretch the full content column (like
     // Home); other templates keep the narrower, post-detail-style width.
     document.getElementById('cl-custom-page-view').classList.toggle('cl-post-detail', !['general', 'gallery', 'promotion'].includes(page.type));
-    // Default to the club's own banner -- only General pages (below) can
-    // override it with their own, so Gallery/Promotion/fallback pages
-    // always fall back here (the shared #cl-banner-wrap would otherwise
-    // keep showing whatever a previously-viewed General page last set).
-    if (currentClub) renderBanner(currentClub.banner_url, currentClub.banner_position_x, currentClub.banner_position_y);
+    // Default to the site's generic banner image -- not the club's own
+    // Home banner, a new/unchanged page shouldn't just copy whatever Home
+    // happens to have set. Only General pages (below) can override it with
+    // their own; Gallery/Promotion/fallback pages always fall back here
+    // (the shared #cl-banner-wrap would otherwise keep showing whatever a
+    // previously-viewed General page last set).
+    renderBanner(CL_DEFAULT_BANNER, 50, 50);
     document.getElementById('cl-banner-revert-btn').style.display = 'none';
 
     // General pages get their own Hub/Social tabs + own theme, same concept
@@ -3990,11 +3992,9 @@ async function loadCustomPage(pageSlug, tab) {
     if (page.type === 'general') {
       tabsRow.hidden = false;
       applyClubTheme(page.theme, page.theme_bg_url);
-      // Own banner if the page has set one, otherwise inherit the club's.
-      const bannerUrl = page.banner_url || (currentClub ? currentClub.banner_url : '');
-      const bannerX = page.banner_url ? page.banner_position_x : (currentClub ? currentClub.banner_position_x : 50);
-      const bannerY = page.banner_url ? page.banner_position_y : (currentClub ? currentClub.banner_position_y : 50);
-      renderBanner(bannerUrl, bannerX, bannerY);
+      // Own banner if the page has set one, otherwise the generic default
+      // (not Home's banner -- see comment above).
+      if (page.banner_url) renderBanner(page.banner_url, page.banner_position_x, page.banner_position_y);
       const isAdminOrOwner = !!currentClub && (currentClub.viewer_role === 'owner' || currentClub.viewer_role === 'admin');
       document.getElementById('cl-page-view-edit-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
       document.getElementById('cl-page-view-theme-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
@@ -4375,6 +4375,11 @@ document.getElementById('cc-compose-btn').addEventListener('click', async () => 
 // site — no crop needed since it's a cover-fit backdrop, not a framed
 // box). ────────────────────────────────────────────────────────────────
 const CL_DEFAULT_BG = '/images/gallery/solusgarnet_17.png';
+// Same image clubs.banner_url itself defaults to server-side -- a custom
+// page without its own banner shows this generic default, not whatever
+// the club happens to have set for Home (own banner only kicks in once
+// the page owner explicitly sets one, see loadCustomPage()).
+const CL_DEFAULT_BANNER = CL_DEFAULT_BG;
 function applyClubTheme(themeId, bgUrl) {
   const bgImg = document.getElementById('cl-page-bg-img');
   const bgOverlay = document.getElementById('cl-page-bg-overlay');
@@ -4657,7 +4662,7 @@ document.getElementById('cl-banner-revert-btn').addEventListener('click', async 
   const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(currentPageSlug)}/banner`, { method: 'DELETE', headers: authHeaders() });
   if (res.ok) {
     currentPageData = (await res.json()).page;
-    if (currentClub) renderBanner(currentClub.banner_url, currentClub.banner_position_x, currentClub.banner_position_y);
+    renderBanner(CL_DEFAULT_BANNER, 50, 50);
     document.getElementById('cl-banner-revert-btn').style.display = 'none';
   }
 });
