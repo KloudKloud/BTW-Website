@@ -424,6 +424,7 @@
       padding: 0.5rem 0.6rem; flex: none;
     }
     .fp-followers-panel-item-top { display: flex; align-items: center; gap: 0.55rem; }
+    .fp-followers-panel-link { display: flex; align-items: center; gap: 0.55rem; flex: 1; min-width: 0; text-decoration: none; color: inherit; }
     .fp-followers-panel-avatar, .fp-followers-panel-avatar-fallback { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
     .fp-followers-panel-avatar-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.85rem; }
     .fp-followers-panel-info { flex: 1; min-width: 0; }
@@ -664,6 +665,35 @@
         background-position: 50% 55%;
         background-size: cover;
       }
+
+      /* Mobile-only: swap the vertical stacked list for small square cards,
+         ~5 per row, avatar + name only -- stats and the Follow button don't
+         fit at this size, and the whole card already links to the profile
+         where following is one tap away. "Show More" appends the next 5
+         cards in place instead of opening the full suggestions modal (see
+         loadMoreFollowersMobile). Desktop's list/item styles above are
+         untouched. */
+      .fp-followers-panel-list {
+        flex-direction: row; flex-wrap: wrap; justify-content: center;
+        overflow: visible; gap: 0.55rem 0.4rem;
+      }
+      .fp-followers-panel-item {
+        flex: 0 0 calc(20% - 0.32rem); width: calc(20% - 0.32rem); box-sizing: border-box;
+        padding: 0.5rem 0.2rem; gap: 0.3rem;
+      }
+      .fp-followers-panel-link, .fp-followers-panel-item-top {
+        flex-direction: column; align-items: center; gap: 0.3rem; width: 100%;
+      }
+      .fp-followers-panel-avatar, .fp-followers-panel-avatar-fallback { width: 34px; height: 34px; }
+      .fp-followers-panel-info { width: 100%; }
+      .fp-followers-panel-name {
+        white-space: normal; text-align: center; font-size: 0.62rem; line-height: 1.15;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+      }
+      .fp-followers-panel-stats, .fp-followers-panel-follow-btn { display: none; }
+      .fp-followers-panel-more-btn { display: flex; align-items: center; justify-content: center; gap: 0.35rem; }
+      .fp-followers-panel-more-btn::before { content: '+'; font-weight: 700; }
+      .fp-followers-panel-more-btn::after { content: '\203A'; font-size: 1.05rem; font-weight: 700; line-height: 1; }
     }
   </style>
 </head>
@@ -1403,7 +1433,7 @@
 
     const link = document.createElement('a');
     link.href = window.fpUrl(`/${u.username}`);
-    link.style.cssText = 'display:flex;align-items:center;gap:0.55rem;flex:1;min-width:0;text-decoration:none;color:inherit;';
+    link.className = 'fp-followers-panel-link';
     link.innerHTML = `
       ${followerAvatarHtml(u, 'fp-followers-panel-avatar', 'fp-followers-panel-avatar-fallback')}
       <span class="fp-followers-panel-info"><span class="fp-followers-panel-name">${escapeHtml(u.display_name)}</span></span>
@@ -1460,16 +1490,44 @@
       // Bumped from 6 -- the panel now stretches to match a 3-row
       // .fp-below-main (Recommended/Bookmarked/Since You Love) instead of
       // 2, so there's real extra height to fill before the list needs its
-      // own scroll.
-      const res  = await fetch('/api/recommended-followers?limit=9', { headers: authHeaders() });
+      // own scroll. Mobile shows one row of 5 cards at a time instead
+      // (see loadMoreFollowersMobile), so it fetches just 5 up front.
+      const isMobileFollowers = window.innerWidth <= 720;
+      const limit = isMobileFollowers ? 5 : 9;
+      const res  = await fetch(`/api/recommended-followers?limit=${limit}`, { headers: authHeaders() });
       const data = await res.json();
       const users = data.users || [];
       if (!users.length) { list.innerHTML = '<p class="fp-row-empty">No one to recommend just yet!</p>'; return; }
       list.innerHTML = '';
       users.forEach(u => list.appendChild(followerPanelItem(u)));
+      followersPanelMobileOffset = users.length;
+      document.getElementById('fp-followers-panel-more').style.display = '';
     } catch { list.innerHTML = '<p class="fp-row-empty">Couldn\'t load recommendations right now.</p>'; }
   }
-  document.getElementById('fp-followers-panel-more').addEventListener('click', openFollowersModal);
+
+  // ── Mobile "Show More" — appends the next 5 cards to the row in place
+  // instead of opening the full suggestions modal (that stays a desktop-
+  // only affordance; mobile just keeps growing the same card row). ──
+  let followersPanelMobileOffset = 0;
+  async function loadMoreFollowersMobile() {
+    if (!token) { window.fpRequireSignIn('To see more recommended followers, you must create an account!'); return; }
+    const btn  = document.getElementById('fp-followers-panel-more');
+    const list = document.getElementById('fp-followers-panel-list');
+    btn.disabled = true;
+    try {
+      const res  = await fetch(`/api/recommended-followers?limit=5&offset=${followersPanelMobileOffset}`, { headers: authHeaders() });
+      const data = await res.json();
+      const users = data.users || [];
+      users.forEach(u => list.appendChild(followerPanelItem(u)));
+      followersPanelMobileOffset += users.length;
+      if (users.length < 5) btn.style.display = 'none';
+    } catch { /* leave the button as-is so the user can retry */ }
+    btn.disabled = false;
+  }
+  document.getElementById('fp-followers-panel-more').addEventListener('click', () => {
+    if (window.innerWidth <= 720) loadMoreFollowersMobile();
+    else openFollowersModal();
+  });
 
   // ── "Show More" expanded suggestions modal — loads 100 at a time; a
   // "Show More" button at the bottom of the list fetches the next 100 and
