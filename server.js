@@ -9724,7 +9724,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug/text-fields', requireAuth, async (req,
     body: String((f && f.body) || '').trim().slice(0, 5000),
     ...sanitizeTextFieldImageSlot(f, 'cover'),
     ...sanitizeTextFieldImageSlot(f, 'side'),
-  })).filter(f => f.title || f.body);
+  })).filter(f => f.title || f.body || f.cover_image_url || f.side_image_url || f.cover_slideshow.length || f.side_slideshow.length);
   await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(fields), ctx.page.id]);
   res.json({ text_fields: fields });
 });
