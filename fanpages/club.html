@@ -152,21 +152,24 @@
        the plain content pages it was built for but read as a smudge behind
        a club, whose thumbnail/banner is the actual focal point up top.
        Overriding by ID (beats the shared class's specificity regardless of
-       load order): barely any blur so the picture reads clearly. Pinned to
-       the viewport (position:fixed; inset:0) so it never scrolls with page
-       content, full-bleed object-fit:cover so it always fills the screen
-       with no gaps. */
+       load order): light blur so the picture still reads but isn't a sharp
+       backdrop competing with foreground content -- bumped up slightly
+       from zero once the background stopped scrolling with the page (a
+       pinned image sits still and gets looked at/scrutinized more than one
+       that was always sliding by). Pinned to the viewport (position:fixed;
+       inset:0) so it never scrolls with page content, full-bleed
+       object-fit:cover so it always fills the screen with no gaps. */
     #cl-page-bg-wrap { position: fixed; inset: 0; z-index: -1; overflow: hidden; }
     #cl-page-bg-img {
       width: 100%; height: 100%; object-fit: cover; display: block;
-      filter: brightness(0.9); transform: none; transition: filter 0.25s;
+      filter: brightness(0.9) blur(4px); transform: none; transition: filter 0.25s;
     }
-    /* Reading a single post gets a very slight extra blur behind it so the
-       post text pops a bit more against a busy theme background -- every
-       other view (Hub, Social feed, custom pages, gallery/promo detail)
-       stays exactly as before. body.cl-post-open is only ever toggled by
-       loadAndShowPost()/renderFromUrl(), never anywhere else. */
-    body.cl-post-open #cl-page-bg-img { filter: brightness(0.9) blur(7px); }
+    /* Reading a single post gets a bit more blur behind it so the post text
+       pops more against a busy theme background -- every other view (Hub,
+       Social feed, custom pages, gallery/promo detail) stays as above.
+       body.cl-post-open is only ever toggled by loadAndShowPost()/
+       renderFromUrl(), never anywhere else. */
+    body.cl-post-open #cl-page-bg-img { filter: brightness(0.9) blur(10px); }
 
     /* ── Banner + pfp (the only header content left for now) ── */
     .cl-banner-wrap { position: relative; width: 100%; height: 310px; background: #161616; overflow: hidden; }
@@ -5187,7 +5190,7 @@ let textFieldDragIdx = null;
 // the save endpoint drops a fully-blank field (see server.js), which would
 // silently shift every later field's index out from under a still-in-
 // flight upload, so uploading is blocked until there's something to save.
-function textFieldImageSlotHtml(field, prefix, aspect, label) {
+function textFieldImageSlotHtml(field, prefix, aspect, label, maxWidth) {
   const mode = field[`${prefix}_mode`] === 'slideshow' ? 'slideshow' : 'static';
   const imageUrl = field[`${prefix}_image_url`] || '';
   return `
@@ -5198,7 +5201,7 @@ function textFieldImageSlotHtml(field, prefix, aspect, label) {
         <button type="button" class="cl-edit-mode-btn${mode === 'slideshow' ? ' active' : ''}" data-mode="slideshow">Slideshow</button>
       </div>
       <div class="cl-tf-static" ${mode === 'slideshow' ? 'hidden' : ''}>
-        <div class="cl-edit-imgbox cl-tf-imgbox" style="aspect-ratio:${aspect};">
+        <div class="cl-edit-imgbox cl-tf-imgbox" style="aspect-ratio:${aspect}; max-width:${maxWidth}px;">
           <img class="cl-tf-preview" src="${imageUrl || '/images/nopicture2.png'}" alt="" />
           <div class="cl-edit-imgbox-overlay">📷 Change Image</div>
           <button type="button" class="fp-recrop-btn cl-tf-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;" ${imageUrl ? '' : 'hidden'}>✏️ Recrop</button>
@@ -5359,8 +5362,8 @@ function pageTextFieldRowEl(field, i) {
       <label>Section Body</label>
       <textarea class="mod-textarea" data-field="body" rows="4" maxlength="5000">${escapeHtml(field.body || '')}</textarea>
     </div>
-    ${textFieldImageSlotHtml(field, 'cover', '16 / 9', 'Cover Image (optional, renders above the section)')}
-    ${textFieldImageSlotHtml(field, 'side', '3 / 4', 'Side Image (optional, floats to the right of the text)')}
+    ${textFieldImageSlotHtml(field, 'cover', '16 / 9', 'Cover Image (optional, renders above the section)', 320)}
+    ${textFieldImageSlotHtml(field, 'side', '3 / 4', 'Side Image (optional, floats to the right of the text)', 180)}
     <button type="button" class="cl-page-text-field-remove">✕ Remove Section</button>
   `;
   row.querySelector('[data-field="title"]').addEventListener('input', (e) => { editPageTextFields[i].title = e.target.value; editDirty = true; });
