@@ -232,31 +232,43 @@
        sidebar, same pattern as social.html — see that file's ≤720px block
        for the full rationale. Collapsed by default, entirely separate from
        the desktop icon-rail's .soc-collapsed/localStorage state. ── */
+    .soc-mobile-toprow { display: none; }
     @media (max-width: 720px) {
       .soc-sidebar {
         position: fixed; top: 0; left: -80vw; bottom: 0; width: 78vw; max-width: 300px;
         height: auto; border-right: none; z-index: 300;
-        padding: 3.5rem 1.25rem 1.1rem;
+        padding: 1.5rem 1.25rem 1.1rem;
         transition: left 0.28s ease;
         box-shadow: 8px 0 40px rgba(0,0,0,0.55);
+        /* Same fix as social.html: solid-ish background of its own instead
+           of relying on backdrop-filter (which creates a containing block
+           for position:fixed descendants -- was silently pinning the old
+           nested toggle button to the drawer's own off-screen position). */
+        background: linear-gradient(175deg, rgba(16,14,22,0.97), rgba(16,14,22,0.94));
+        backdrop-filter: none; -webkit-backdrop-filter: none;
       }
       .soc-layout.soc-mobile-drawer-open .soc-sidebar { left: 0; }
       .soc-sidebar-content { display: flex; }
-      .soc-sidebar-toggle {
-        position: fixed; top: 0.8rem; left: 0.9rem; z-index: 310;
-        width: auto; height: auto; align-self: auto; margin-bottom: 0;
-        background: none; border: none; box-shadow: none;
-        font-size: 1.5rem; line-height: 1; color: #f0f0f0;
-        text-shadow: 0 1px 4px rgba(0,0,0,0.8);
-      }
-      .soc-sidebar-toggle:hover { background: none; color: #fff; }
+      .soc-sidebar-toggle { display: none; }
       .soc-mobile-drawer-backdrop {
         display: none; position: fixed; inset: 0; z-index: 290;
         background: rgba(0,0,0,0.5);
         backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
       }
       .soc-layout.soc-mobile-drawer-open .soc-mobile-drawer-backdrop { display: block; }
-      .soc-main, .soc-layout.soc-collapsed .soc-main { margin-left: 0; padding-top: 3.5rem; }
+      .soc-main, .soc-layout.soc-collapsed .soc-main { margin-left: 0; padding-top: 0.5rem; }
+
+      /* In-flow top row (hamburger only, no search on this page) sitting
+         directly under the shared topbar -- see social.html for the fuller
+         rationale/its own search-relocation variant. */
+      .soc-mobile-toprow { display: flex; align-items: center; padding: 0.7rem 0.9rem; box-sizing: border-box; }
+      .soc-mobile-drawer-toggle {
+        flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+        width: 38px; height: 38px; border-radius: 10px;
+        background: rgba(255,255,255,0.06); border: 1px solid rgba(127,168,217,0.4);
+        color: #cfe0f5; cursor: pointer; box-shadow: 0 0 12px rgba(127,168,217,0.28);
+      }
+      .soc-mobile-drawer-toggle:hover { color: #fff; border-color: rgba(127,168,217,0.7); }
     }
   </style>
 </head>
@@ -273,6 +285,12 @@
 <div class="soc-layout" id="soc-layout">
 
   <div class="soc-mobile-drawer-backdrop" id="soc-mobile-drawer-backdrop"></div>
+
+  <div class="soc-mobile-toprow" id="soc-mobile-toprow">
+    <button class="soc-mobile-drawer-toggle" id="soc-mobile-drawer-toggle" type="button" aria-label="Menu">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+  </div>
 
   <aside class="soc-sidebar">
     <button class="soc-sidebar-toggle" id="soc-sidebar-toggle" type="button" title="Collapse sidebar" aria-label="Collapse sidebar">☰</button>
@@ -747,20 +765,21 @@ function setSidebarCollapsed(collapsed) {
 }
 function isMobileNav() { return window.innerWidth <= 720; }
 if (!isMobileNav() && localStorage.getItem('soc_sidebar_collapsed') === '1') setSidebarCollapsed(true);
+sidebarToggleBtn.addEventListener('click', () => setSidebarCollapsed(!socLayout.classList.contains('soc-collapsed')));
 
 // ── Mobile-only: Reddit-style off-canvas drawer (see the ≤720px block in
 // <style>) — entirely separate from the desktop icon-rail collapse above,
-// doesn't persist across visits, always starts closed on load. ──
+// doesn't persist across visits, always starts closed on load. Its own
+// toggle button lives in the in-flow .soc-mobile-toprow, not nested inside
+// .soc-sidebar (backdrop-filter containing-block gotcha -- see social.html). ──
 const mobileDrawerBackdrop = document.getElementById('soc-mobile-drawer-backdrop');
+const mobileDrawerToggle = document.getElementById('soc-mobile-drawer-toggle');
 function setMobileDrawerOpen(open) {
   socLayout.classList.toggle('soc-mobile-drawer-open', open);
   document.body.style.overflow = open ? 'hidden' : '';
 }
 mobileDrawerBackdrop.addEventListener('click', () => setMobileDrawerOpen(false));
-sidebarToggleBtn.addEventListener('click', () => {
-  if (isMobileNav()) { setMobileDrawerOpen(!socLayout.classList.contains('soc-mobile-drawer-open')); return; }
-  setSidebarCollapsed(!socLayout.classList.contains('soc-collapsed'));
-});
+mobileDrawerToggle.addEventListener('click', () => setMobileDrawerOpen(!socLayout.classList.contains('soc-mobile-drawer-open')));
 window.addEventListener('resize', () => {
   if (isMobileNav()) socLayout.classList.remove('soc-collapsed');
   else setMobileDrawerOpen(false);
