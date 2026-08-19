@@ -419,40 +419,53 @@
     }
     .fp-followers-cardrow::-webkit-scrollbar { height: 6px; }
     .fp-followers-cardrow::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 4px; }
-    /* Fixed size, same as a story/book card -- never flex-grows to fill
-       the row, so a short result set (even just 1 card) sits in its own
-       space instead of stretching edge to edge. */
+    /* Fixed size (a calc'd fraction of the row, not flex-grow) -- same
+       "never stretches to fill the row" rule as a story/book card, so a
+       short result set (even just 1 card) sits in its own space instead
+       of stretching edge to edge. Desktop sizes for exactly 6 per row;
+       see the ≤720px block below for mobile's smaller fixed-px override. */
     .fp-follower-card {
-      flex: 0 0 176px; width: 176px; scroll-snap-align: start; box-sizing: border-box;
+      flex: 0 0 calc((100% - 5 * 0.9rem) / 6); width: calc((100% - 5 * 0.9rem) / 6);
+      scroll-snap-align: start; box-sizing: border-box;
       display: flex; flex-direction: column; align-items: center; text-align: center;
       /* Same box-background-2 art as the Recent Submissions box (.rs-box),
          not a plain flat tint, so the two card families read as part of
          the same visual system. */
       background-image: linear-gradient(160deg, rgba(6,6,16,0.55), rgba(6,6,16,0.72)), url('/images/home/box-background-2.png');
       background-size: cover; background-position: center;
-      border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 1.1rem 0.9rem 0.9rem;
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 1.6rem 1.1rem 1.3rem;
     }
     .fp-follower-card-avatar, .fp-follower-card-avatar-fallback {
-      width: 64px; height: 64px; border-radius: 50%; object-fit: cover; margin-bottom: 0.65rem; flex-shrink: 0;
+      width: 92px; height: 92px; border-radius: 50%; object-fit: cover; margin-bottom: 1rem; flex-shrink: 0;
     }
     .fp-follower-card-avatar-fallback {
       display: flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 1.4rem;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 1.9rem;
     }
     .fp-follower-card-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: inherit; width: 100%; }
     .fp-follower-card-name {
-      font-weight: 700; color: #fff; font-size: 0.92rem; white-space: nowrap; overflow: hidden;
-      text-overflow: ellipsis; max-width: 100%; margin-bottom: 0.2rem;
+      font-weight: 700; color: #fff; font-size: 1.05rem; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; max-width: 100%; margin-bottom: 0.3rem;
     }
-    .fp-follower-card-sub { font-size: 0.76rem; color: #999; margin-bottom: 0.8rem; }
+    .fp-follower-card-sub { font-size: 0.84rem; color: #999; margin-bottom: 1.1rem; }
     .fp-follower-card-follow-btn {
       width: 100%; background: linear-gradient(135deg, #6b5bf0, #5b52e6); border: none; border-radius: 10px;
-      color: #fff; font-weight: 700; font-size: 0.85rem; padding: 0.55em 0; cursor: pointer;
+      color: #fff; font-weight: 700; font-size: 0.9rem; padding: 0.65em 0; cursor: pointer;
       transition: background 0.15s;
     }
     .fp-follower-card-follow-btn:hover { background: linear-gradient(135deg, #7c71f5, #6c63f0); }
     .fp-follower-card-follow-btn.following { background: linear-gradient(135deg, #24c7b7, #1fb6a8); }
-    .fp-follow-check { font-size: 0.78rem; }
+    .fp-follow-check { font-size: 0.84rem; }
+    /* Desktop-only 6th tile -- same fixed card size, sits at the row's
+       far end, a plain right-arrow that opens the same suggestions modal
+       "See All" does. Mobile never renders one (see loadRecommendedFollowers). */
+    .fp-follower-card--more {
+      background-image: linear-gradient(160deg, rgba(127,168,217,0.1), rgba(6,6,16,0.6)), url('/images/home/box-background-2.png');
+      justify-content: center; cursor: pointer; border: 1px solid rgba(127,168,217,0.3);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .fp-follower-card--more:hover { border-color: rgba(127,168,217,0.65); box-shadow: 0 0 22px rgba(127,168,217,0.25); }
+    .fp-follower-card--more svg { width: 34px; height: 34px; color: #a8c6e8; }
 
     /* ── "See More" suggestions modal ── */
     /* :not([hidden]) — this page doesn't load the global [hidden]{display:
@@ -675,6 +688,8 @@
       .fp-follower-card-name { font-size: 0.85rem; }
       .fp-follower-card-sub { font-size: 0.7rem; margin-bottom: 0.65rem; }
       .fp-follower-card-follow-btn { font-size: 0.8rem; padding: 0.5em 0; }
+      /* JS never renders one on mobile, but hide defensively anyway. */
+      .fp-follower-card--more { display: none; }
     }
   </style>
 </head>
@@ -1429,18 +1444,30 @@
       return;
     }
     try {
-      // Desktop shows exactly 5, evenly stretched to fill the row.
-      // Mobile fetches more (10) so there's real content to reveal by
-      // scrolling past the ~2.5 visible up front, matching the
-      // Instagram-style reference.
-      const limit = window.innerWidth <= 720 ? 10 : 5;
+      // Desktop shows exactly 5 real cards + a 6th "more" arrow tile (see
+      // below), filling the 6-per-row layout. Mobile fetches more (10) so
+      // there's real content to reveal by scrolling past the ~2.5 visible
+      // up front, matching the Instagram-style reference -- no arrow tile
+      // there, the scroll itself is the affordance.
+      const isMobileFollowers = window.innerWidth <= 720;
+      const limit = isMobileFollowers ? 10 : 5;
       const res  = await fetch(`/api/recommended-followers?limit=${limit}`, { headers: authHeaders() });
       const data = await res.json();
       const users = data.users || [];
       if (!users.length) { row.innerHTML = '<p class="fp-row-empty">No one to recommend just yet!</p>'; return; }
       row.innerHTML = '';
       users.forEach(u => row.appendChild(followerCard(u)));
+      if (!isMobileFollowers) row.appendChild(followerMoreCard());
     } catch { row.innerHTML = '<p class="fp-row-empty">Couldn\'t load recommendations right now.</p>'; }
+  }
+  function followerMoreCard() {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'fp-follower-card fp-follower-card--more';
+    card.setAttribute('aria-label', 'See all recommended followers');
+    card.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+    card.addEventListener('click', () => openFollowersModal());
+    return card;
   }
   document.getElementById('fp-followers-see-all').addEventListener('click', () => {
     if (!token) { window.fpRequireSignIn('To see more recommended followers, you must create an account!'); return; }

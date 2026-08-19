@@ -779,6 +779,13 @@
       .fp-results-list--grid { grid-template-columns: repeat(3, 1fr); }
       .fp-layout--profiles .fp-results-col { position: static; height: auto; overflow: visible; padding-right: 0; }
     }
+    /* Mobile-only tab-drawer hamburger/backdrop -- both only ever got
+       styled inside the ≤720px block below, with no desktop default, so
+       above that breakpoint they fell back to the browser's plain button/
+       div rendering: a small default-styled button (with the hamburger
+       SVG inside) sitting at the very top of the page. Explicit hidden
+       default here fixes that. */
+    .fp-tabdrawer-toggle, .fp-tabdrawer-backdrop { display: none; }
     @media (max-width: 720px) {
       .fp-result { flex-direction: column; }
       .fp-result-cover { width: 100%; height: auto; aspect-ratio: 2 / 3; }
@@ -800,7 +807,10 @@
          --profiles, --submissions, --filters-collapsed) since none of them
          override padding themselves, only grid-template-columns. */
       .fp-layout, .fp-layout--no-side, .fp-layout--profiles, .fp-layout--submissions, .fp-layout--filters-collapsed {
-        padding: 1.25rem 0.6rem 3rem;
+        /* Top padding cleared to 4rem (not the original 1.25rem) so page
+           content starts below the fixed tab-drawer hamburger (top:86px,
+           38px tall) instead of overlapping it. */
+        padding: 4rem 0.6rem 3rem;
       }
 
       /* Shrink the Story browse/search card (Wattpad-style reference) so at
@@ -854,8 +864,12 @@
       .fp-side-panel {
         position: fixed; top: 0; left: -80vw; bottom: 0; width: 78vw; max-width: 300px;
         height: auto; max-height: none; z-index: 300; border-right: none;
-        margin: 0; padding: 5.25rem 1.1rem 1.5rem;
-        display: block; justify-content: normal; align-items: normal;
+        margin: 0; padding: 1.5rem 1.1rem;
+        /* Centered vertically instead of pinned under the hamburger --
+           with only 3 tabs, a tall drawer looked top-heavy pinned below
+           the icon, and centering keeps the tab list clear of the
+           hamburger's own area without needing exact padding math. */
+        display: flex; flex-direction: column; justify-content: center; align-items: stretch;
         background: linear-gradient(175deg, rgba(14,12,20,0.96), rgba(14,12,20,0.92)), url('/images/home/box-background-3.png');
         background-size: cover; background-position: center;
         transition: left 0.28s ease;
@@ -870,16 +884,13 @@
       /* Browse mode has no side panel at all (.fp-layout--no-side hides
          it outright) -- nothing for this hamburger to open there. */
       .fp-layout--no-side .fp-tabdrawer-toggle { display: none; }
-      /* Bigger "switchable tab menu" feel inside the drawer, and — mobile
-         only, per request — reordered so Posts leads, then Story, then
-         Profile (desktop keeps Stories/Posts/Profiles; the underlying
-         active-tab/link logic is untouched, this is purely visual order). */
+      /* Bigger "switchable tab menu" feel inside the drawer. Posts/Stories/
+         Profiles order is now the real DOM order (see the markup above),
+         not a mobile-only CSS override -- Posts-first is permanent on
+         desktop too, so no `order:` trick is needed here anymore. */
       .fp-side-menu-item { padding: 1.1rem 1rem; }
       .fp-side-menu-icon { font-size: 1.9rem; }
       .fp-side-menu-label { font-size: 1.25rem; }
-      #fp-side-menu-submissions { order: -1; }
-      #fp-side-menu-story { order: 0; }
-      #fp-side-menu-profiles { order: 1; }
 
       /* ── FurAffinity-style "Options" button — tucked onto the same line
          as the top pagination row, right side. Collapsed by default; opens
@@ -888,12 +899,16 @@
          panel that pushes the results down, using the same grid-rows
          expand trick as the global nav's own hamburger drawer. Half-
          transparent background + a soft blue glow per request. ── */
-      .fp-pagination-top-row { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; min-height: 1px; }
+      .fp-pagination-top-row { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; min-height: 2.2rem; }
       .fp-mobile-options-btn:not([hidden]) {
         display: flex; align-items: center; gap: 0.4rem;
+        /* Matches .fp-page-btn's fixed 2.2rem height exactly (that button
+           was sizing off font/padding alone, coming out visibly shorter
+           than the pagination pills next to it -- "squished" look). */
+        height: 2.2rem; box-sizing: border-box;
         background: rgba(20,16,26,0.5); border: 1px solid rgba(127,168,217,0.45); border-radius: 20px;
         color: #cfe0f5; font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 0.82rem;
-        padding: 0.45em 0.9em; cursor: pointer; box-shadow: 0 0 12px rgba(127,168,217,0.3);
+        padding: 0 0.9em; cursor: pointer; box-shadow: 0 0 12px rgba(127,168,217,0.3);
         margin-left: auto;
       }
       .fp-mobile-options-btn:hover { border-color: rgba(127,168,217,0.75); color: #fff; }
@@ -936,18 +951,18 @@
 
   <aside class="fp-side-panel" id="fp-side-panel">
     <nav class="fp-side-menu">
-      <a class="fp-side-menu-item fp-side-menu-item--active" href="/fanpages/search" id="fp-side-menu-story">
-        <span class="fp-side-menu-icon">📖</span>
-        <span class="fp-side-menu-text">
-          <span class="fp-side-menu-label">Stories</span>
-          <span class="fp-side-menu-count" id="fp-side-menu-count-story">Loading…</span>
-        </span>
-      </a>
-      <a class="fp-side-menu-item" href="/fanpages/search?view=submissions" id="fp-side-menu-submissions">
+      <a class="fp-side-menu-item fp-side-menu-item--active" href="/fanpages/search?view=submissions" id="fp-side-menu-submissions">
         <span class="fp-side-menu-icon">🔥</span>
         <span class="fp-side-menu-text">
           <span class="fp-side-menu-label">Posts</span>
           <span class="fp-side-menu-count" id="fp-side-menu-count-submissions">Gallery posts &amp; chapters</span>
+        </span>
+      </a>
+      <a class="fp-side-menu-item" href="/fanpages/search" id="fp-side-menu-story">
+        <span class="fp-side-menu-icon">📖</span>
+        <span class="fp-side-menu-text">
+          <span class="fp-side-menu-label">Stories</span>
+          <span class="fp-side-menu-count" id="fp-side-menu-count-story">Loading…</span>
         </span>
       </a>
       <a class="fp-side-menu-item" href="/fanpages/search?view=profiles" id="fp-side-menu-profiles">
@@ -1998,12 +2013,11 @@ let currentView = new URLSearchParams(window.location.search).get('view');
 // Submissions" heading up top, everything else (right filter panel,
 // collapse arrow, the actual result-fetching) identical to the normal tab.
 const isBrowseMode = new URLSearchParams(window.location.search).get('browse') === '1';
-// Mobile-only default tab: a bare /search with no ?view= lands on Posts
-// instead of Stories on phones (desktop keeps Stories as the default) --
-// per request, matches the mobile tab drawer's own Posts-first ordering
-// below. Browse links always set an explicit ?view= already, so this
+// Default tab: a bare /search with no ?view= lands on Posts, on desktop
+// and mobile alike -- permanent, matches the tab list's own Posts-first
+// order. Browse links always set an explicit ?view= already, so this
 // never touches Browse.
-if (!currentView && !isBrowseMode && window.innerWidth <= 720) currentView = 'submissions';
+if (!currentView && !isBrowseMode) currentView = 'submissions';
 // The unblurred box-background-5 wallpaper + fp-bcard grid belong to any
 // Story-tab result set -- Browse's own "Recent Stories" feed AND a normal
 // filtered Story search/tag click both count. Posts/Profiles keep the
