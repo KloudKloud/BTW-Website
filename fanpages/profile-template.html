@@ -1594,8 +1594,21 @@
     const h = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
     ids.forEach(id => { document.getElementById(id).style.height = h; });
   }
+  // Debounced -- mobile Safari/Chrome fire `resize` repeatedly as the
+  // address bar collapses/expands *during scrolling itself* (well-known
+  // mobile browser behavior, nothing to do with the viewport actually
+  // changing size). Running straight off every event meant
+  // syncScrollBgHeight's reset-to-0/remeasure/restore cycle -- a forced
+  // synchronous layout thrash across 4 elements -- was firing on nearly
+  // every scroll tick: the jank, and the momentary "grayed out" flash was
+  // the background layers actually collapsing to 0 height each time,
+  // revealing the plain dark page background underneath for a frame.
+  let bgResizeTimer = null;
   window.addEventListener('resize', () => {
-    if (activeTabName === 'home' || activeTabName === 'characters' || activeTabName === 'gallery' || activeTabName === 'stories' || activeTabName === 'newspaper') syncScrollBgHeight();
+    clearTimeout(bgResizeTimer);
+    bgResizeTimer = setTimeout(() => {
+      if (activeTabName === 'home' || activeTabName === 'characters' || activeTabName === 'gallery' || activeTabName === 'stories' || activeTabName === 'newspaper') syncScrollBgHeight();
+    }, 200);
   });
 
   function buildThemeGrid() {
