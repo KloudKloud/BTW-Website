@@ -2163,11 +2163,29 @@ document.getElementById('fp-bg-video-el').classList.toggle('fp-bg-video-el--acti
 // loading in can grow the page) and on resize.
 function syncPostsBgHeight() {
   if (!isPostsView) return;
+  const bg = document.querySelector('.fp-bg-video');
+  // Reset before measuring -- this element is itself position:absolute and
+  // taller than the viewport, so it contributes to
+  // document.documentElement.scrollHeight. Without resetting first, every
+  // remeasure just re-read (and locked back in) its own previous height
+  // instead of the page's actual content height, so the page could only
+  // ever grow taller, never shrink back down -- which is exactly why
+  // scrolling could go on well past the last real result.
+  bg.style.height = '0';
   const h = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
-  document.querySelector('.fp-bg-video').style.height = h;
+  bg.style.height = h;
 }
 if (isPostsView) {
-  window.addEventListener('resize', syncPostsBgHeight);
+  // Debounced -- mobile Safari/Chrome fire `resize` repeatedly as the
+  // address bar collapses/expands *during scrolling itself*, not just on
+  // an actual viewport size change (same mobile quirk fixed on the profile
+  // page's own scrolling-background sync). Left un-debounced, each of
+  // those events re-ran the reset/remeasure/restore cycle above.
+  let postsBgResizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(postsBgResizeTimer);
+    postsBgResizeTimer = setTimeout(syncPostsBgHeight, 200);
+  });
   window.addEventListener('load', syncPostsBgHeight);
 }
 if (isBrowseMode) {
