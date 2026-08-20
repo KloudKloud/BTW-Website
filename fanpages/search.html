@@ -815,14 +815,14 @@
       .fp-results-col { grid-column: 1; }
       .fp-filter-panel, .fp-layout--filters-collapsed .fp-filter-panel {
         grid-column: 1; display: flex;
-        position: static; max-height: none; height: auto;
+        position: static; max-height: none; height: auto; overflow-y: visible;
         margin-bottom: 0; margin-right: 0; border-radius: 18px;
       }
       .fp-filter-fab { display: none; }
       .fp-sidebar-fab { display: none; }
       .fp-layout--submissions .fp-posts-panel {
         grid-column: 1;
-        position: static; max-height: none; height: auto;
+        position: static; max-height: none; height: auto; overflow-y: visible;
         margin-bottom: 0; margin-right: 0; border-radius: 18px;
       }
       .fp-side-panel {
@@ -843,7 +843,7 @@
     @media (max-width: 720px) {
       .fp-result { flex-direction: column; }
       .fp-result-cover { width: 100%; height: auto; aspect-ratio: 2 / 3; }
-      .fp-bcard-grid, .fp-bcard-grid--narrow { grid-template-columns: 1fr; }
+      .fp-bcard-grid, .fp-bcard-grid--narrow { grid-template-columns: 1fr; gap: 0.5rem; }
       /* Gallery Posts (Browse and filtered search alike) — 3 per row
          instead of 2, tile/caption sized down to match so at least ~2.5
          rows are visible on one screen instead of ~1.5. */
@@ -862,43 +862,42 @@
          override padding themselves, only grid-template-columns. */
       .fp-layout, .fp-layout--no-side, .fp-layout--profiles, .fp-layout--submissions, .fp-layout--filters-collapsed {
         /* Top padding cleared to 4rem (not the original 1.25rem) so page
-           content starts below the fixed tab-drawer hamburger (top:86px,
-           38px tall) instead of overlapping it. */
+           content starts below the tab-drawer hamburger (positioned
+           absolute within this element, see .fp-tabdrawer-toggle below)
+           instead of overlapping it. position:relative makes this the
+           hamburger's containing block. */
         padding: 4rem 0.6rem 3rem;
+        position: relative;
       }
 
-      /* Shrink the Story browse/search card (Wattpad-style reference) so at
-         least ~2.5 fit in one screen instead of ~1.2 — a shorter fixed
-         height (the cover's aspect-ratio follows it down automatically, no
-         separate cover rule needed) and smaller type throughout. The extra
-         width freed up by the full-bleed layout above goes straight to the
-         synopsis column, so it's clamped to 3 lines (not 2) and still
-         clears 100+ characters comfortably. Desktop's .fp-bcard rules
-         above are untouched. */
-      .fp-bcard { height: 235px; border-radius: 12px; }
-      .fp-bcard-body { padding: 0.5rem 0.65rem 0.45rem; }
-      .fp-bcard-head { gap: 0.35rem; margin-bottom: 0.3rem; }
-      .fp-bcard-title { font-size: 0.95rem; }
-      .fp-bcard-title-deco { width: 11px; height: 11px; }
-      .fp-bcard-author-avatar, .fp-bcard-author-avatar-fallback { width: 17px; height: 17px; }
-      .fp-bcard-author-name { font-size: 0.72rem; }
-      .fp-bcard-badges { gap: 0.3rem; margin-bottom: 0.35rem; }
-      .fp-bcard-badges .fp-tag-pill { font-size: 0.66rem; padding: 0.24em 0.6em; }
-      .fp-bcard-statpanel { gap: 0.25rem; margin-bottom: 0.3rem; }
-      .fp-bcard-stat { padding: 0.12rem 0.15rem; }
-      .fp-bcard-stat-val { font-size: 0.72rem; }
-      .fp-bcard-stat-label { font-size: 0.56rem; }
-      .fp-bcard-synopsis { font-size: 0.72rem; line-height: 1.32; -webkit-line-clamp: 3; margin-bottom: 0.3rem; }
-      /* Capped to one row (nowrap + hide anything past the 3rd chip) --
-         at this card height a wrapped 2nd row of chips either got clipped
-         by the card's fixed height or forced the card taller than the
-         other compact rows around it, so a story with 4+ linked
-         characters no longer gets a taller/clipped card than one with 2. */
-      .fp-bcard-chars { gap: 0.25rem; flex-wrap: nowrap; overflow: hidden; }
-      .fp-bcard-char-chip { font-size: 0.62rem; padding: 0.15rem 0.5rem 0.15rem 0.15rem; gap: 0.25rem; flex-shrink: 0; }
-      .fp-bcard-char-chip:nth-child(n+4) { display: none; }
-      .fp-bcard-char-chip img { width: 16px; height: 16px; }
-      .fp-bcard-deco--tr { width: 22px; height: 22px; top: -6px; right: -5px; }
+      /* Shrunk further (was 235px) so at least ~4 rows are visible on one
+         screen instead of ~2.5 -- the previous pass had already trimmed
+         type/padding down once but kept the full 3-line synopsis + a
+         character-chip row, which is what actually made the card feel
+         "thick". The cover follows the shorter height down automatically
+         (aspect-ratio 2/3, no separate cover rule needed). Character chips
+         are dropped entirely at this height (they're a "nice to have"
+         teaser, not load-bearing at a glance in a compact list -- still
+         shown in full on the story's own page) and the synopsis clamps to
+         2 lines instead of 3, which is what actually buys back the height
+         rather than just shrinking fonts to the point of illegibility.
+         Desktop's .fp-bcard rules above are untouched. */
+      .fp-bcard { height: 125px; border-radius: 10px; }
+      .fp-bcard-body { padding: 0.4rem 0.55rem 0.4rem; }
+      .fp-bcard-head { gap: 0.3rem; margin-bottom: 0.2rem; }
+      .fp-bcard-title { font-size: 0.88rem; }
+      .fp-bcard-title-deco { width: 10px; height: 10px; }
+      .fp-bcard-author-avatar, .fp-bcard-author-avatar-fallback { width: 15px; height: 15px; }
+      .fp-bcard-author-name { font-size: 0.68rem; }
+      .fp-bcard-badges { gap: 0.25rem; margin-bottom: 0.25rem; }
+      .fp-bcard-badges .fp-tag-pill { font-size: 0.6rem; padding: 0.18em 0.5em; }
+      .fp-bcard-statpanel { gap: 0.2rem; margin-bottom: 0.22rem; }
+      .fp-bcard-stat { padding: 0.08rem 0.12rem; }
+      .fp-bcard-stat-val { font-size: 0.66rem; }
+      .fp-bcard-stat-label { font-size: 0.52rem; }
+      .fp-bcard-synopsis { font-size: 0.68rem; line-height: 1.28; -webkit-line-clamp: 2; margin-bottom: 0; }
+      .fp-bcard-chars { display: none; }
+      .fp-bcard-deco--tr { width: 20px; height: 20px; top: -5px; right: -4px; }
 
       /* ── "Stories / Posts / Profiles" tab box becomes a Reddit-style
          off-canvas drawer, same pattern as the club sidebar (see
@@ -909,7 +908,12 @@
          hamburgers never visually collide at scroll position 0. ── */
       .fp-tabdrawer-toggle {
         display: flex; align-items: center; justify-content: center;
-        position: fixed; top: 86px; left: 0.9rem; z-index: 310;
+        /* Was position:fixed (viewport-pinned, top:86px), which made it
+           follow the page down as you scrolled instead of staying put at
+           the top of the content -- absolute against .fp-layout's own
+           position:relative scrolls it away with the rest of the page
+           like any other in-content control. */
+        position: absolute; top: 0.9rem; left: 0.9rem; z-index: 310;
         width: 38px; height: 38px; border-radius: 10px;
         background: rgba(20,16,26,0.55); border: 1px solid rgba(127,168,217,0.4);
         color: #cfe0f5; cursor: pointer; box-shadow: 0 0 14px rgba(127,168,217,0.3);
@@ -954,6 +958,12 @@
          expand trick as the global nav's own hamburger drawer. Half-
          transparent background + a soft blue glow per request. ── */
       .fp-pagination-top-row { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; min-height: 2.2rem; }
+      /* .fp-pagination's own base rule carries a 2.5rem margin-top meant for
+         when it sits below a results list -- reused here inside a flex row,
+         that margin shifted its (margin-box-centered) buttons down relative
+         to the Options button beside it, landing visibly lower despite both
+         having the same 2.2rem button height. */
+      .fp-pagination-top-row .fp-pagination { margin-top: 0; }
       .fp-mobile-options-btn:not([hidden]) {
         display: flex; align-items: center; gap: 0.4rem;
         /* Matches .fp-page-btn's fixed 2.2rem height exactly (that button
@@ -975,11 +985,17 @@
       /* The relocated .fp-filter-panel/.fp-posts-panel lose every sticky/
          grid-column/negative-margin property that only made sense pinned
          to the desktop's 3rd column -- here they're just a plain full-
-         width block inside the expanding drawer. */
+         width block inside the expanding drawer. Also drops the desktop
+         rule's `overflow-y: auto` (never reset before) -- with height:auto
+         the panel has nothing to internally scroll, but Chrome/Safari on
+         mobile still treat a plain overflow-y:auto element as a scroll
+         container and hand it every touch-drag that starts over it, so a
+         swipe anywhere over the open Options panel silently went nowhere
+         instead of scrolling the actual page underneath it. */
       .fp-mobile-options-inner .fp-filter-panel,
       .fp-mobile-options-inner .fp-posts-panel {
         position: static; grid-column: auto; width: 100%; box-sizing: border-box;
-        height: auto; max-height: none; margin: 0; border-radius: 16px;
+        height: auto; max-height: none; overflow-y: visible; margin: 0; border-radius: 16px;
         padding: 1.1rem;
       }
     }
