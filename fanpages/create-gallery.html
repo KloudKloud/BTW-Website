@@ -27,9 +27,19 @@
        object-fit:cover, which is right for a character ref square but chops
        a gallery upload's actual artwork into a crop the user never chose —
        that choice belongs to the "Gallery Preview Crop" step below it. Let
-       this box grow to the image's own aspect ratio instead of cropping it. */
+       this box grow to the image's own aspect ratio instead of cropping it.
+       Width shrinks to the image's own rendered width too (not the full
+       520px placeholder width) — object-fit:contain inside a box wider or
+       taller than the image just pads it out with the wrap's own dark
+       background, showing as dead black bars around anything that isn't
+       exactly 520px wide / doesn't reach the 65vh cap. Only shrink-to-fit
+       once an image is actually loaded (`.has-image`, set by JS) -- the
+       empty upload prompt still needs its full clickable placeholder box. */
     .gallery-editor-img-wrap--full { height: auto; min-height: 160px; }
-    .gallery-editor-img-wrap--full img { height: auto; max-height: 65vh; object-fit: contain; }
+    .gallery-editor-img-wrap--full.has-image {
+      width: fit-content; max-width: 100%; min-height: 0; background: none; border: none;
+    }
+    .gallery-editor-img-wrap--full img { height: auto; max-height: 65vh; width: auto; max-width: 100%; object-fit: contain; display: block; }
 
     /* Sticky top bar — same pattern as +Character's .cc-topbar / +Story's
        .cs-topbar. Fixed, always visible, replaces the site nav. */
@@ -530,6 +540,7 @@
     const img = document.getElementById('gallery-editor-img');
     img.src = objectUrl;
     img.style.display = 'block';
+    document.getElementById('gallery-editor-img-wrap').classList.add('has-image');
     document.getElementById('gallery-editor-img-placeholder').style.display = 'none';
     galleryPos = { x: 50, y: 50 };
     showGalleryPreview(objectUrl);
@@ -923,6 +934,7 @@
       const img = document.getElementById('gallery-editor-img');
       img.src = item.image_url;
       img.style.display = 'block';
+      document.getElementById('gallery-editor-img-wrap').classList.add('has-image');
       document.getElementById('gallery-editor-img-placeholder').style.display = 'none';
       showGalleryPreview(item.image_url);
 
