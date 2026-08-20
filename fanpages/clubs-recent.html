@@ -279,6 +279,18 @@
         backdrop-filter: none; -webkit-backdrop-filter: none;
       }
       .soc-layout.soc-mobile-drawer-open .soc-sidebar { left: 0; }
+      /* While the drawer is open, force the shared top nav bar to stay
+         pinned/visible (it's normally position:relative on mobile, so it
+         scrolls away with the page) and start the drawer below it instead
+         of at the very top of the viewport -- without this, whatever sat
+         at the top of the drawer's own content (a pfp, in practice) was
+         rendering right underneath the topbar and reading as "cut off" by
+         it. Reverts to normal the instant the drawer closes. */
+      body.soc-drawer-open #fanpages-topbar-root {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 320;
+      }
+      body.soc-drawer-open .soc-sidebar { top: 76px; }
+      body.soc-drawer-open .soc-mobile-drawer-backdrop { top: 76px; }
       /* See social.html: overriding just `display:flex` here (to defeat
          the desktop collapse's display:none) defaults to flex-direction:
          row, which laid every section out side by side instead of
@@ -813,6 +825,7 @@ const mobileDrawerBackdrop = document.getElementById('soc-mobile-drawer-backdrop
 const mobileDrawerToggle = document.getElementById('soc-mobile-drawer-toggle');
 function setMobileDrawerOpen(open) {
   socLayout.classList.toggle('soc-mobile-drawer-open', open);
+  document.body.classList.toggle('soc-drawer-open', open);
   document.body.style.overflow = open ? 'hidden' : '';
 }
 mobileDrawerBackdrop.addEventListener('click', () => setMobileDrawerOpen(false));

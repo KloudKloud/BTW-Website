@@ -233,7 +233,15 @@
     }
     .cl-banner-post-btn:hover { background: rgba(240,192,96,0.3); transform: translateY(-1px); box-shadow: 0 0 10px rgba(240,192,96,0.35); }
     @media (max-width: 560px) {
-      .cl-banner-actions { right: auto; left: 1.1rem; }
+      /* Was `right: auto; left: 1.1rem;` -- moving these to the bottom-
+         LEFT of the banner put them directly where the club's pfp icon
+         also sits (it overlaps up from the banner's bottom edge via
+         .cl-header's negative top margin), so +Post/Join were rendering
+         on top of the pfp instead of in the bottom-right corner they're
+         actually meant to occupy. Smaller pills + a tighter right offset
+         is the real mobile fix, not relocating them to the other side. */
+      .cl-banner-actions { right: 0.75rem; gap: 0.4rem; }
+      .cl-banner-join-btn, .cl-banner-post-btn { padding: 0.4em 0.9em; font-size: 0.78rem; }
     }
     /* .cl-body-row lays out the main column and the right sidebar as actual
        flex siblings — the sidebar's horizontal position (far right) comes
@@ -332,6 +340,19 @@
       transition: background 0.15s, border-color 0.15s;
     }
     .cl-tabs-edit-btn:hover { background: #93b8e2; border-color: #93b8e2; }
+    @media (max-width: 560px) {
+      /* Both admin actions were full desktop size (44px Theme circle + a
+         "✎ Edit Club" pill wide enough to fit that whole label) floating
+         absolutely over the tab row's right edge -- with only two tabs
+         (Hub/Social) centered in a narrow row, there wasn't enough spare
+         width on either side for that combined size, so they landed
+         straight on top of "Social". Shrunk to something that actually
+         fits in the slack this narrow a tab row has. */
+      .cl-home-tabs { gap: 1.25rem; }
+      .cl-tabs-admin-actions { gap: 0.3rem; }
+      .cl-theme-btn { width: 30px; height: 30px; font-size: 0.95rem; }
+      .cl-tabs-edit-btn { height: 30px; padding: 0 0.65rem; font-size: 0.68rem; gap: 0.25rem; }
+    }
     .cl-theme-popover-label { font-size: 0.75rem; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; }
     .cl-theme-grid { display: flex; gap: 0.75rem; }
     .cl-theme-swatch {
@@ -867,6 +888,7 @@
        its own "floor" sits near the bottom of the screen and stays there
        (sticky) instead of just being as tall as its (currently sparse)
        content. */
+    .cl-side-fab { display: none; }
     .cl-side {
       flex-shrink: 0; width: 300px; margin: 12px 20px 0 16px;
       position: sticky; top: 64px; height: calc(100vh - 84px); z-index: 5;
@@ -1034,7 +1056,12 @@
 
     @media (max-width: 1100px) {
       .cl-body-row { flex-direction: column; }
-      .cl-side { position: static; width: auto; height: auto; margin: 2rem 1.25rem 0; }
+      /* overflow-y:visible -- height:auto leaves nothing to scroll inside
+         this box once it's no longer sticky/height-capped, but mobile
+         Chrome/Safari still claim (and eat) a touch-drag that starts over
+         a plain overflow-y:auto element regardless, so a swipe anywhere
+         over this box went nowhere instead of scrolling the page. */
+      .cl-side { position: static; width: auto; height: auto; margin: 2rem 1.25rem 0; overflow-y: visible; }
     }
     @media (max-width: 860px) {
       .cl-row { padding: 2rem 1.25rem 3rem; }
@@ -1046,7 +1073,6 @@
        toggle button doesn't move with the drawer, etc). Collapsed by
        default, entirely separate from the desktop icon-rail's
        .soc-collapsed/localStorage state so neither clobbers the other. ── */
-    .soc-mobile-toprow { display: none; }
     @media (max-width: 720px) {
       .soc-sidebar {
         position: fixed; top: 0; left: -80vw; bottom: 0; width: 78vw; max-width: 300px;
@@ -1067,6 +1093,18 @@
         backdrop-filter: none; -webkit-backdrop-filter: none;
       }
       .soc-layout.soc-mobile-drawer-open .soc-sidebar { left: 0; }
+      /* While the drawer is open, force the shared top nav bar to stay
+         pinned/visible (it's normally position:relative on mobile, so it
+         scrolls away with the page) and start the drawer below it instead
+         of at the very top of the viewport -- without this, whatever sat
+         at the top of the drawer's own content (a pfp, in practice) was
+         rendering right underneath the topbar and reading as "cut off" by
+         it. Reverts to normal the instant the drawer closes. */
+      body.soc-drawer-open #fanpages-topbar-root {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 320;
+      }
+      body.soc-drawer-open .soc-sidebar { top: 76px; }
+      body.soc-drawer-open .soc-mobile-drawer-backdrop { top: 76px; }
       /* See social.html: overriding just `display:flex` here (to defeat
          the desktop collapse's display:none) defaults to flex-direction:
          row, which laid every section out side by side instead of
@@ -1081,19 +1119,45 @@
       .soc-layout.soc-mobile-drawer-open .soc-mobile-drawer-backdrop { display: block; }
       #cl-page, #cl-notfound, .soc-layout.soc-collapsed #cl-page, .soc-layout.soc-collapsed #cl-notfound { margin-left: 0; }
 
-      /* In-flow top row (hamburger only, no search on this page) sitting
-         directly under the shared topbar -- see social.html for the fuller
-         rationale. #cl-page/#cl-notfound sit as siblings of .soc-layout,
-         not children, so this row is placed as their sibling too, right
-         between them. */
-      .soc-mobile-toprow { display: flex; align-items: center; padding: 0.7rem 0.9rem; box-sizing: border-box; }
+      /* Floats directly over the banner's top-left corner (now a real
+         child of .cl-banner-wrap, same overlay pattern as the recrop
+         pencil/±Post/Join buttons already living there) instead of
+         sitting in its own in-flow row above the banner, which just
+         pushed everything else down for no real benefit. */
       .soc-mobile-drawer-toggle {
+        position: absolute; top: 0.9rem; left: 0.9rem; z-index: 4;
         flex-shrink: 0; display: flex; align-items: center; justify-content: center;
         width: 38px; height: 38px; border-radius: 10px;
-        background: rgba(255,255,255,0.06); border: 1px solid rgba(127,168,217,0.4);
+        background: rgba(0,0,0,0.45); border: 1px solid rgba(127,168,217,0.4);
         color: #cfe0f5; cursor: pointer; box-shadow: 0 0 12px rgba(127,168,217,0.28);
       }
       .soc-mobile-drawer-toggle:hover { color: #fff; border-color: rgba(127,168,217,0.7); }
+
+      /* Full-bleed page width instead of the desktop-oriented 2rem
+         (.cl-header) / 1.25rem (.cl-row) gutters. */
+      .cl-header { padding: 0 0.7rem; }
+      .cl-row { padding: 1.5rem 0.7rem 3rem; }
+
+      /* Right info box (.cl-side) -- collapsed by default on mobile
+         behind a small round arrow toggle near the top-right of the
+         page, same expand/collapse behavior (and the same rotating-
+         chevron fab) as the Search page's own left "Stories/Posts/
+         Profiles" box uses on desktop -- just adapted to a stacked
+         mobile layout (height, not width, is what collapses to 0). */
+      .cl-side { max-height: 0; overflow: hidden; padding-top: 0; padding-bottom: 0; margin-top: 0; border-width: 0; }
+      .cl-side.cl-side--expanded { max-height: none; overflow: visible; padding: 1.25rem; margin-top: 2rem; border-width: 1px; }
+      .cl-side-fab {
+        display: flex;
+        position: fixed; top: 86px; right: 0.9rem; z-index: 250;
+        width: 40px; height: 40px; border-radius: 50%;
+        background: #14121a; border: 1px solid rgba(255,255,255,0.28);
+        color: #ccc; cursor: pointer; display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 22px rgba(0,0,0,0.55);
+        transition: color 0.15s, border-color 0.15s, box-shadow 0.15s;
+      }
+      .cl-side-fab svg { transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
+      .cl-side-fab.cl-side-fab--expanded svg { transform: rotate(180deg); }
+      .cl-side-fab:hover { color: #fff; border-color: rgba(127,168,217,0.6); box-shadow: 0 4px 26px rgba(127,168,217,0.4); }
     }
 
     .cl-gate { max-width: 500px; margin: 8rem auto; text-align: center; color: #999; padding: 0 1.5rem; }
@@ -1482,12 +1546,6 @@
     </div>
   </div>
 
-<div class="soc-mobile-toprow" id="soc-mobile-toprow">
-  <button class="soc-mobile-drawer-toggle" id="soc-mobile-drawer-toggle" type="button" aria-label="Menu">
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-  </button>
-</div>
-
 <div id="cl-notfound" class="cl-gate" style="display:none;">
   <p id="cl-notfound-msg">This club doesn't exist (or was deleted).</p>
   <a class="btn btn-green" id="cl-notfound-back" href="/fanpages/social" style="margin-top:1rem; display:inline-block;">&larr; Back to Social</a>
@@ -1496,6 +1554,9 @@
 <div id="cl-page" style="display:none;">
 
   <div class="cl-banner-wrap" id="cl-banner-wrap">
+    <button class="soc-mobile-drawer-toggle" id="soc-mobile-drawer-toggle" type="button" aria-label="Menu">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
     <div class="cl-banner-img-slot" id="cl-banner-img-slot"></div>
     <button class="cl-banner-recrop-btn" id="cl-banner-recrop-btn" type="button" style="display:none;" title="Change banner image">✏️</button>
     <button class="cl-banner-recrop-btn" id="cl-banner-revert-btn" type="button" style="display:none; right: 4.2rem;" title="Reset to the default banner">↺</button>
@@ -1785,7 +1846,10 @@
       </div>
     </div>
 
-    <aside class="cl-side">
+    <button class="cl-side-fab" id="cl-side-fab" type="button" aria-label="Club info">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <aside class="cl-side" id="cl-side">
       <p class="cl-side-name" id="cl-side-name"></p>
       <hr class="cl-side-rule2" />
 
@@ -2556,8 +2620,21 @@ const mobileDrawerBackdrop = document.getElementById('soc-mobile-drawer-backdrop
 const mobileDrawerToggle = document.getElementById('soc-mobile-drawer-toggle');
 function setMobileDrawerOpen(open) {
   socLayout.classList.toggle('soc-mobile-drawer-open', open);
+  document.body.classList.toggle('soc-drawer-open', open);
   document.body.style.overflow = open ? 'hidden' : '';
 }
+
+// ── Mobile-only: right info box (.cl-side) collapse/expand arrow --
+// same fab-toggle idea as the Search page's own collapsible side box. ──
+(function () {
+  const fab = document.getElementById('cl-side-fab');
+  const side = document.getElementById('cl-side');
+  if (!fab || !side) return;
+  fab.addEventListener('click', () => {
+    const expanded = side.classList.toggle('cl-side--expanded');
+    fab.classList.toggle('cl-side-fab--expanded', expanded);
+  });
+})();
 mobileDrawerBackdrop.addEventListener('click', () => setMobileDrawerOpen(false));
 mobileDrawerToggle.addEventListener('click', () => setMobileDrawerOpen(!socLayout.classList.contains('soc-mobile-drawer-open')));
 window.addEventListener('resize', () => {
