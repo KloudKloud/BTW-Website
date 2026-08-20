@@ -456,16 +456,25 @@
     .fp-follower-card-follow-btn:hover { background: linear-gradient(135deg, #7c71f5, #6c63f0); }
     .fp-follower-card-follow-btn.following { background: linear-gradient(135deg, #24c7b7, #1fb6a8); }
     .fp-follow-check { font-size: 0.84rem; }
-    /* Desktop-only 6th tile -- same fixed card size, sits at the row's
-       far end, a plain right-arrow that opens the same suggestions modal
-       "See All" does. Mobile never renders one (see loadRecommendedFollowers). */
+    /* Desktop-only 6th tile -- occupies the same fixed slot width as a
+       profile card (so the 5 real cards + this slot still fill the row
+       exactly), but the visible element is just a small transparent
+       circle with a right-arrow, not a full boxed card. Only rendered
+       when the row actually filled up with the max 5 profiles per row
+       (see loadRecommendedFollowers) -- a short result set just shows
+       the "See All" text link instead. Mobile never renders one. */
     .fp-follower-card--more {
-      background-image: linear-gradient(160deg, rgba(127,168,217,0.1), rgba(6,6,16,0.6)), url('/images/home/box-background-2.png');
-      justify-content: center; cursor: pointer; border: 1px solid rgba(127,168,217,0.3);
-      transition: border-color 0.15s, box-shadow 0.15s;
+      background: none; justify-content: center; cursor: pointer; border: none;
     }
-    .fp-follower-card--more:hover { border-color: rgba(127,168,217,0.65); box-shadow: 0 0 22px rgba(127,168,217,0.25); }
-    .fp-follower-card--more svg { width: 34px; height: 34px; color: #a8c6e8; }
+    .fp-follower-card--more-circle {
+      width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(127,168,217,0.3);
+      transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .fp-follower-card--more:hover .fp-follower-card--more-circle {
+      background: rgba(127,168,217,0.15); border-color: rgba(127,168,217,0.65); box-shadow: 0 0 16px rgba(127,168,217,0.25);
+    }
+    .fp-follower-card--more svg { width: 20px; height: 20px; color: #a8c6e8; }
 
     /* ── "See More" suggestions modal ── */
     /* :not([hidden]) — this page doesn't load the global [hidden]{display:
@@ -1457,7 +1466,10 @@
       if (!users.length) { row.innerHTML = '<p class="fp-row-empty">No one to recommend just yet!</p>'; return; }
       row.innerHTML = '';
       users.forEach(u => row.appendChild(followerCard(u)));
-      if (!isMobileFollowers) row.appendChild(followerMoreCard());
+      // Only show the "more" arrow tile once the row actually filled up
+      // with the max 5 profiles per row -- a short result set has nothing
+      // more to reveal, so the arrow would just be a dead-end click.
+      if (!isMobileFollowers && users.length === limit) row.appendChild(followerMoreCard());
     } catch { row.innerHTML = '<p class="fp-row-empty">Couldn\'t load recommendations right now.</p>'; }
   }
   function followerMoreCard() {
@@ -1465,7 +1477,7 @@
     card.type = 'button';
     card.className = 'fp-follower-card fp-follower-card--more';
     card.setAttribute('aria-label', 'See all recommended followers');
-    card.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+    card.innerHTML = '<span class="fp-follower-card--more-circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>';
     card.addEventListener('click', () => openFollowersModal());
     return card;
   }
