@@ -269,12 +269,65 @@
         position: static; max-height: none; height: auto;
         margin-bottom: 0; margin-left: 0; border-radius: 18px;
         border-right: none; border-bottom: 1px solid rgba(255,255,255,0.14);
+        /* Was never reset -- height:auto leaves nothing to actually
+           scroll inside this box, but Chrome/Safari on mobile still
+           claim (and eat) any touch-drag that starts over a plain
+           overflow-y:auto element even with nothing to scroll, so a
+           swipe starting over this box went nowhere instead of
+           scrolling the page underneath it. */
+        overflow-y: visible;
       }
       .fp-char-grid { grid-template-columns: repeat(3, 1fr); }
       .fp-bg-img { left: 0; width: 100%; }
     }
-    @media (max-width: 560px) {
-      .fp-char-grid { grid-template-columns: repeat(2, 1fr); }
+
+    /* ── True mobile (≤720px): sidebar becomes an off-canvas drawer
+       (same pattern as the Search page's own tab drawer) instead of a
+       big static block sitting inline above the grid -- pfp/search/sort/
+       filter menu are exactly the same content, just tucked behind a
+       hamburger until needed. Full-bleed page width, 3-per-row grid,
+       and character cards restyled to match the Profile → Characters
+       tab's cards (species stacked under the name instead of beside
+       it, which is what actually leaves room for a full name instead
+       of forcing an ellipsis). ── */
+    @media (max-width: 720px) {
+      .fp-layout { padding: 4rem 0.6rem 3rem; position: relative; }
+      .fp-char-drawer-toggle {
+        display: flex; align-items: center; justify-content: center;
+        position: absolute; top: 0.9rem; left: 0.9rem; z-index: 310;
+        width: 38px; height: 38px; border-radius: 10px;
+        background: rgba(20,16,26,0.55); border: 1px solid rgba(127,168,217,0.4);
+        color: #cfe0f5; cursor: pointer; box-shadow: 0 0 14px rgba(127,168,217,0.3);
+      }
+      .fp-char-drawer-toggle:hover { color: #fff; border-color: rgba(127,168,217,0.7); }
+      .fp-char-sidebar {
+        position: fixed; top: 0; left: -80vw; bottom: 0; width: 78vw; max-width: 300px;
+        height: auto; max-height: none; z-index: 300;
+        margin: 0; padding: 1.5rem 1.1rem; border-radius: 0; border: none;
+        border-right: 1px solid rgba(255,255,255,0.14);
+        overflow-y: auto; transition: left 0.28s ease;
+        box-shadow: 8px 0 40px rgba(0,0,0,0.55);
+      }
+      .fp-layout.fp-char-drawer-open .fp-char-sidebar { left: 0; }
+      .fp-char-drawer-backdrop {
+        display: none; position: fixed; inset: 0; z-index: 290;
+        background: rgba(0,0,0,0.5); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+      }
+      .fp-layout.fp-char-drawer-open .fp-char-drawer-backdrop { display: block; }
+
+      .fp-char-main-heading { font-size: 1.25rem; margin-top: 0; }
+      .fp-char-grid { grid-template-columns: repeat(3, 1fr) !important; gap: 0.5rem; }
+
+      /* Card restyle -- matches the Profile → Characters tab exactly:
+         species pill stacks under the name instead of sharing its row,
+         which is what actually leaves the name room to show in full
+         instead of being squeezed by a pill that never shrinks. */
+      .fp-char-card-body { height: 76px; padding: 0.4rem 0.5rem 0.45rem; }
+      .fp-char-card-name-row { flex-direction: column; align-items: flex-start; gap: 0.15rem; margin-bottom: 0.2rem; }
+      .fp-char-card-name { font-size: 0.82rem; max-width: 100%; }
+      .fp-char-card-species { font-size: 0.62rem; padding: 0.1em 0.5em; }
+      .fp-char-card-owner { font-size: 0.64rem; }
+      .fp-char-like-btn { padding: 0.22em 0.5em; font-size: 0.68rem; }
     }
   </style>
 </head>
@@ -287,7 +340,12 @@
 <div id="fanpages-topbar-root"></div>
 
 <main class="fp-layout">
-  <aside class="fp-char-sidebar">
+  <button class="fp-char-drawer-toggle" id="fp-char-drawer-toggle" type="button" aria-label="Search / Sort / Filter">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <div class="fp-char-drawer-backdrop" id="fp-char-drawer-backdrop"></div>
+
+  <aside class="fp-char-sidebar" id="fp-char-sidebar">
     <div id="fp-char-viewer-slot"></div>
 
     <div class="fp-char-search-wrap">
@@ -1108,6 +1166,26 @@ function closeCharacterDetail() {
 
 document.getElementById('fp-char-back-btn').addEventListener('click', closeCharacterDetail);
 
+// ── Mobile-only: sidebar-as-drawer toggle (search/sort/filter menu) --
+// same off-canvas pattern as the Search page's own tab drawer. ──
+(function () {
+  const layoutEl = document.querySelector('.fp-layout');
+  const toggle = document.getElementById('fp-char-drawer-toggle');
+  const backdrop = document.getElementById('fp-char-drawer-backdrop');
+  if (!toggle || !backdrop) return;
+  function setDrawerOpen(open) { layoutEl.classList.toggle('fp-char-drawer-open', open); }
+  toggle.addEventListener('click', () => setDrawerOpen(!layoutEl.classList.contains('fp-char-drawer-open')));
+  backdrop.addEventListener('click', () => setDrawerOpen(false));
+  // Picking a filter/sort closes the drawer back down instead of leaving
+  // it open over the now-updated grid.
+  document.getElementById('fp-char-sidebar').addEventListener('click', (e) => {
+    if (e.target.closest('.fp-char-filter-item, select, .fp-char-search-wrap input')) {
+      if (e.target.tagName !== 'INPUT') setDrawerOpen(false);
+    }
+  });
+  window.addEventListener('resize', () => { if (window.innerWidth > 720) setDrawerOpen(false); });
+})();
+
 window.addEventListener('popstate', () => {
   const id = new URLSearchParams(window.location.search).get('char');
   if (id) {
@@ -1234,7 +1312,12 @@ function syncBgHeight() {
   const h = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
   bgEl.style.height = h;
 }
-window.addEventListener('resize', syncBgHeight);
+// Debounced -- mobile Safari/Chrome fire `resize` repeatedly as the
+// address bar collapses/expands *during scrolling itself*, not just on
+// an actual viewport change; left un-debounced this reset/remeasure
+// cycle would re-run on nearly every scroll tick.
+let bgResizeTimer = null;
+window.addEventListener('resize', () => { clearTimeout(bgResizeTimer); bgResizeTimer = setTimeout(syncBgHeight, 200); });
 window.addEventListener('load', syncBgHeight);
 
 loadViewerBox();

@@ -747,10 +747,10 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
         <span>Home</span>
       </a>
-      <button class="fpnav-bottombar-item" id="fpnav-bb-search" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-        <span>Search</span>
-      </button>
+      <a class="fpnav-bottombar-item" href="${fpUrl('/characters')}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="16.2" rx="4.6" ry="3.6"/><circle cx="5.6" cy="9.8" r="1.9"/><circle cx="10.2" cy="6.2" r="1.9"/><circle cx="13.8" cy="6.2" r="1.9"/><circle cx="18.4" cy="9.8" r="1.9"/></svg>
+        <span>Chars</span>
+      </a>
       <button class="fpnav-bottombar-item" id="fpnav-bb-create" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
         <span>Create</span>
@@ -773,19 +773,6 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
     </nav>
   `;
   document.body.appendChild(bottombarWrap.firstElementChild);
-
-  // Bottom bar's "Search" doesn't navigate either -- same behavior as the
-  // hamburger drawer's own Search item, just hops straight to the top
-  // search bar instead of running a broad/unscoped search. The top bar is
-  // `position: static` on mobile (scrolls away with the page), so unlike
-  // the drawer's version (which only ever needs to wait out the drawer's
-  // close animation) this one has to scroll the bar back into view first.
-  document.getElementById('fpnav-bb-search').addEventListener('click', () => {
-    const input = document.getElementById('fpnav-search-input');
-    if (!input) { window.location.href = fpUrl('/search'); return; }
-    input.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setTimeout(() => input.focus(), 300);
-  });
 
   // "+Create" opens a small choice sheet (Creator Hub / +Story / +Character
   // / +Gallery) instead of jumping straight to the Creator Hub -- closes on
