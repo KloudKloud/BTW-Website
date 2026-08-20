@@ -644,6 +644,8 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
           <a href="${fpUrl('/characters')}">Characters</a>
           <a href="${fpUrl('/library')}">Bookmarks</a>
 
+          <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donate</a>
+
           <div class="fpnav-drawer-accordion">
             <button class="fpnav-drawer-toggle" data-drawer-target="community" type="button">Community <span class="fpnav-caret">&#9662;</span></button>
             <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-community" hidden>
@@ -745,14 +747,20 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
         <span>Home</span>
       </a>
-      <a class="fpnav-bottombar-item" href="${fpUrl('/search')}">
+      <button class="fpnav-bottombar-item" id="fpnav-bb-search" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
         <span>Search</span>
-      </a>
+      </button>
       <button class="fpnav-bottombar-item" id="fpnav-bb-create" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
         <span>Create</span>
       </button>
+      <div class="fpnav-dropdown fpnav-bb-create-sheet" id="fpnav-bb-create-sheet" hidden>
+        <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
+        <a href="${fpUrl('/create')}" data-gate="${fpUrl('/create')}"><span class="fpnav-plus-badge">+</span> Story</a>
+        <a href="${fpUrl('/create-character')}" data-gate="${fpUrl('/create-character')}"><span class="fpnav-plus-badge">+</span> Character</a>
+        <a href="${fpUrl('/create-gallery')}" data-gate="${fpUrl('/create-gallery')}"><span class="fpnav-plus-badge">+</span> Gallery</a>
+      </div>
       <button class="fpnav-bottombar-item" id="fpnav-bb-notif" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         <span id="fpnav-bb-notif-badge" class="fpnav-bottombar-badge" hidden></span>
@@ -766,10 +774,36 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   `;
   document.body.appendChild(bottombarWrap.firstElementChild);
 
-  document.getElementById('fpnav-bb-create').addEventListener('click', () => {
-    if (!token) { window.fpOpenLoginModal({ from: fpUrl('/editor'), redirectOnSuccess: fpUrl('/editor') }); return; }
-    window.location.href = fpUrl('/editor');
+  // Bottom bar's "Search" doesn't navigate either -- same behavior as the
+  // hamburger drawer's own Search item, just hops straight to the top
+  // search bar instead of running a broad/unscoped search. The top bar is
+  // `position: static` on mobile (scrolls away with the page), so unlike
+  // the drawer's version (which only ever needs to wait out the drawer's
+  // close animation) this one has to scroll the bar back into view first.
+  document.getElementById('fpnav-bb-search').addEventListener('click', () => {
+    const input = document.getElementById('fpnav-search-input');
+    if (!input) { window.location.href = fpUrl('/search'); return; }
+    input.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => input.focus(), 300);
   });
+
+  // "+Create" opens a small choice sheet (Creator Hub / +Story / +Character
+  // / +Gallery) instead of jumping straight to the Creator Hub -- closes on
+  // an outside click/tap, same as every other mobile menu on the site.
+  const createSheet = document.getElementById('fpnav-bb-create-sheet');
+  const createBtn = document.getElementById('fpnav-bb-create');
+  function closeCreateSheet() {
+    createSheet.hidden = true;
+    createBtn.classList.remove('fpnav-bb-create--open');
+  }
+  createBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const opening = createSheet.hidden;
+    closeCreateSheet();
+    if (opening) { createSheet.hidden = false; createBtn.classList.add('fpnav-bb-create--open'); }
+  });
+  createSheet.addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', closeCreateSheet);
   document.getElementById('fpnav-bb-notif').addEventListener('click', () => {
     if (!token) { window.fpOpenLoginModal(); return; }
     window.location.href = fpUrl('/notifications');
