@@ -85,6 +85,13 @@
       background: linear-gradient(135deg, #7fa8d9, #d97a72);
       color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.2rem;
     }
+    /* Wraps the avatar when the notification has a real actor -- clicking it
+       goes to their profile instead of triggering the card's own action
+       link, so it needs to be its own flex child (not just an inline img)
+       to keep the same size/position the bare avatar had. */
+    .notif-avatar-link { display: block; flex-shrink: 0; border-radius: 50%; }
+    .notif-avatar-link:hover .notif-avatar,
+    .notif-avatar-link:hover .notif-avatar--fallback { box-shadow: 0 0 0 2px rgba(240,192,96,0.6); }
 
     .notif-item-body { min-width: 0; }
     .notif-item-text { font-size: 1.02rem; line-height: 1.55; }
@@ -587,6 +594,27 @@
       .dm-content { height: 500px; }
       .dm-sidebar-rule { display: none; }
       .dm-sidebar-quicklist { display: none; }
+
+      /* Full-bleed width -- was inheriting the desktop 2rem side gutters,
+         plus a full 3rem top gap that left the tabs floating well below the
+         topbar instead of sitting right under it. */
+      .notif-main { padding: 1.1rem 0.6rem 3rem; }
+
+      /* Notifications/Inbox switch from a centered pill pair to a full-width
+         Wattpad-style tab row (same recipe as Bookmarks/Profile's own mobile
+         tabs) so it actually spans edge to edge instead of floating in the
+         middle third of the screen. */
+      .notif-tabs { justify-content: stretch; gap: 0; }
+      .notif-tabs-group { flex: 1; gap: 0; }
+      .notif-tab { flex: 1 1 0; text-align: center; font-size: 0.95rem; padding: 0.7rem 0.1rem 0.85rem; }
+
+      /* Notification cards shrunk so more fit on one screen without
+         scrolling. */
+      .notif-item { padding: 0.8rem 0.9rem; gap: 0.7rem; margin-bottom: 0.5rem; border-radius: 12px; }
+      .notif-avatar, .notif-avatar--fallback { width: 38px; height: 38px; }
+      .notif-avatar--fallback { font-size: 0.92rem; }
+      .notif-item-text { font-size: 0.85rem; line-height: 1.42; }
+      .notif-item-time { font-size: 0.68rem; margin-top: 0.2rem; }
     }
   </style>
 </head>
@@ -1756,9 +1784,15 @@
     const div = document.createElement('div');
     div.className = 'notif-item' + (n.is_read ? '' : ' notif-item--unread');
     const actorName = n.actor_display_name || n.actor_username || 'Between Two Worlds';
-    const avatarHtml = n.actor_avatar
+    const avatarInner = n.actor_avatar
       ? `<img src="${n.actor_avatar}" class="notif-avatar" alt="" />`
       : `<div class="notif-avatar--fallback">${escapeHtml(actorName.charAt(0).toUpperCase())}</div>`;
+    // Only real actors (not system notifications) get a profile link --
+    // clicking the pfp goes to their profile home; clicking anywhere else
+    // on the card still fires the notification's own action link.
+    const avatarHtml = n.actor_username
+      ? `<a class="notif-avatar-link" href="${window.fpUrl(`/${encodeURIComponent(n.actor_username)}`)}">${avatarInner}</a>`
+      : avatarInner;
     div.innerHTML = `
       ${avatarHtml}
       <div class="notif-item-body">
@@ -1768,7 +1802,10 @@
     `;
     if (n.link) {
       div.dataset.link = n.link;
-      div.addEventListener('click', () => { window.location.href = window.fpUrl(n.link); });
+      div.addEventListener('click', (e) => {
+        if (e.target.closest('a')) return;
+        window.location.href = window.fpUrl(n.link);
+      });
     }
     return div;
   }
