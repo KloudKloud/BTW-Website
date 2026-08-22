@@ -4575,19 +4575,28 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     // back to the live row and prefer its current name/art over the stale
     // snapshot. The snapshot only survives as a fallback for the rare case
     // the original character/gallery post was since deleted.
+    // "Other Characters"/"Other Gallery" (see fp-featured-tab-other in
+    // profile-template.html) lets a user feature something they don't own,
+    // so mc/mg's own owner can differ from this profile's author -- the
+    // frontend needs that real owner's username to link to the character's
+    // actual home instead of always assuming it lives on this profile.
     pool.query(
       `SELECT ufi.ref_id, COALESCE(mc.name, ufi.title) AS title,
-              COALESCE(mc.ref_image, ufi.image_url) AS image_url, ufi.link_url
+              COALESCE(mc.ref_image, ufi.image_url) AS image_url, ufi.link_url,
+              mcu.username AS owner_username
        FROM user_featured_items ufi
        LEFT JOIN moderator_characters mc ON ufi.ref_id ~ '^[0-9]+$' AND mc.id = ufi.ref_id::int
+       LEFT JOIN users mcu ON mcu.id = mc.owner_user_id
        WHERE ufi.user_id = $1 AND ufi.kind = 'character' ORDER BY ufi.sort_order LIMIT 3`,
       [author.id]
     ),
     pool.query(
       `SELECT ufi.ref_id, COALESCE(mg.title, ufi.title) AS title,
-              COALESCE(mg.image_url, ufi.image_url) AS image_url, ufi.link_url
+              COALESCE(mg.image_url, ufi.image_url) AS image_url, ufi.link_url,
+              mgu.username AS owner_username
        FROM user_featured_items ufi
        LEFT JOIN moderator_gallery mg ON ufi.ref_id ~ '^[0-9]+$' AND mg.id = ufi.ref_id::int
+       LEFT JOIN users mgu ON mgu.id = mg.owner_user_id
        WHERE ufi.user_id = $1 AND ufi.kind = 'gallery' ORDER BY ufi.sort_order LIMIT 3`,
       [author.id]
     ),
