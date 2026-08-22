@@ -8,6 +8,7 @@ const crypto   = require('crypto');
 const path     = require('path');
 const fs       = require('fs');
 const multer   = require('multer');
+const sharp    = require('sharp');
 const https    = require('https');
 
 // ── Avatar upload ─────────────────────────────────────────────────────────────
@@ -1019,6 +1020,19 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS preview_image_url TEXT NOT NULL DEFAULT '';
     ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS preview_image_url TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('preview_image_url migration:', e.message));
+
+  // thumb_image_url — a small re-encoded JPEG copy for card/spotlight
+  // contexts (Homepage Character/Gallery Spotlight, Recent Submissions),
+  // completely separate from the original ref_image/image_url. Unlike
+  // preview_image_url above (a user-chosen NSFW-blur crop, often blank),
+  // this is auto-generated server-side and never user-facing to set
+  // directly. Detail/full views (the character page, gallery-post.html)
+  // keep loading the untouched original -- only the card renderers that
+  // opt in read this column, falling back to the original when blank.
+  await pool.query(`
+    ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS thumb_image_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS thumb_image_url TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('thumb_image_url migration:', e.message));
 
   // Characters and gallery posts become independent of any single story:
   // ownership moves to the creating user (site_id becomes optional/legacy),
@@ -3519,6 +3533,33 @@ const uploadModImage = multer({
     cb(null, ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.mimetype));
   },
 });
+
+// Card/spotlight-sized JPEG copy of a character ref_image or gallery
+// image_url, generated next to the original -- used by the Homepage
+// Character/Gallery Spotlight and Recent Submissions (see thumb_image_url
+// migration above). The original is never touched or replaced, so the
+// character/gallery post's own detail page keeps loading full quality.
+// Only handles our own /images/moderators/ uploads (a character/gallery
+// entry can technically point at an external URL via manual entry, in
+// which case there's no local file to shrink and this is a no-op).
+async function generateThumbnail(imageUrlPath) {
+  if (!imageUrlPath || !imageUrlPath.startsWith('/images/moderators/')) return null;
+  try {
+    const srcPath = path.join('/var/www/btw', imageUrlPath);
+    if (!fs.existsSync(srcPath)) return null;
+    const ext = path.extname(imageUrlPath);
+    const thumbUrlPath = `${imageUrlPath.slice(0, -ext.length)}-thumb.jpg`;
+    const destPath = path.join('/var/www/btw', thumbUrlPath);
+    await sharp(srcPath)
+      .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 82 })
+      .toFile(destPath);
+    return thumbUrlPath;
+  } catch (e) {
+    console.error('generateThumbnail failed for', imageUrlPath, e.message);
+    return null;
+  }
+}
 
 // Chapter cover images share the moderator images dir; the readable PDF/Docx
 // attachment gets its own dir since it isn't an image and needs to keep its
@@ -6796,6 +6837,8 @@ app.post('/api/moderator/characters', requireAuth, requireModerator, async (req,
     'INSERT INTO character_story_links (character_id, site_id, sort_order) VALUES ($1, $2, $3)',
     [character.id, req.modSite.id, maxOrder + 1]
   );
+  const thumb = await generateThumbnail(character.ref_image);
+  if (thumb) { await pool.query('UPDATE moderator_characters SET thumb_image_url = $1 WHERE id = $2', [thumb, character.id]); character.thumb_image_url = thumb; }
   res.json({ character });
 });
 
@@ -6833,6 +6876,12 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
      official_art_source_url !== undefined ? official_art_source_url : null,
      existing.id]
   );
+  // Only regenerate when ref_image was actually part of this save -- an
+  // unrelated edit (description, stats, etc.) shouldn't re-touch the image.
+  if (ref_image) {
+    const thumb = await generateThumbnail(character.ref_image);
+    if (thumb) { await pool.query('UPDATE moderator_characters SET thumb_image_url = $1 WHERE id = $2', [thumb, character.id]); character.thumb_image_url = thumb; }
+  }
   res.json({ character });
 });
 
@@ -7133,6 +7182,8 @@ app.post('/api/characters', requireAuth, async (req, res) => {
   await notifyFollowers(req.user.id, 'new_character',
     `uploaded a new character: "${character.name}".`,
     `/${actor.username}?char=${character.id}#characters`);
+  const thumb = await generateThumbnail(character.ref_image);
+  if (thumb) { await pool.query('UPDATE moderator_characters SET thumb_image_url = $1 WHERE id = $2', [thumb, character.id]); character.thumb_image_url = thumb; }
   res.json({ character });
 });
 
@@ -7234,6 +7285,8 @@ app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage
   await notifyFollowers(req.user.id, 'new_gallery',
     `uploaded new gallery art${item.title ? `: "${item.title}"` : '.'}`,
     `/${actor1.username}?gallery=${item.id}#gallery`);
+  const thumb = await generateThumbnail(imageUrl);
+  if (thumb) { await pool.query('UPDATE moderator_gallery SET thumb_image_url = $1 WHERE id = $2', [thumb, item.id]); item.thumb_image_url = thumb; }
   res.json({ item });
 });
 
@@ -7302,6 +7355,10 @@ app.put('/api/moderator/gallery/:id', requireAuth, uploadModImage.fields([{ name
       const oldPath = path.join('/var/www/btw', existing.image_url);
       if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
     }
+    if (existing.thumb_image_url) {
+      const oldThumbPath = path.join('/var/www/btw', existing.thumb_image_url);
+      if (fs.existsSync(oldThumbPath)) fs.unlinkSync(oldThumbPath);
+    }
   }
   const previewFile = req.files && req.files.preview_image && req.files.preview_image[0];
   let previewImageUrl = existing.preview_image_url;
@@ -7329,6 +7386,12 @@ app.put('/api/moderator/gallery/:id', requireAuth, uploadModImage.fields([{ name
      WHERE id = $9 RETURNING *`,
     [category || null, title != null ? title.trim() : null, description != null ? description.trim() : null, imageUrl, previewImageUrl, positionX, positionY, tags !== undefined ? JSON.stringify(tags) : null, existing.id]
   );
+  // Only regenerate when the image itself changed on this save.
+  if (imageFile) {
+    const thumb = await generateThumbnail(imageUrl);
+    await pool.query('UPDATE moderator_gallery SET thumb_image_url = $1 WHERE id = $2', [thumb || '', item.id]);
+    item.thumb_image_url = thumb || '';
+  }
   res.json({ item });
 });
 
@@ -7507,6 +7570,8 @@ app.post('/api/gallery', requireAuth, uploadModImage.fields([{ name: 'image', ma
   await notifyFollowers(req.user.id, 'new_gallery',
     `uploaded new gallery art${item.title ? `: "${item.title}"` : '.'}`,
     `/${actor2.username}?gallery=${item.id}#gallery`);
+  const thumb = await generateThumbnail(imageUrl);
+  if (thumb) { await pool.query('UPDATE moderator_gallery SET thumb_image_url = $1 WHERE id = $2', [thumb, item.id]); item.thumb_image_url = thumb; }
   res.json({ item });
 });
 
@@ -8088,7 +8153,7 @@ app.get('/api/spotlight/characters', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 12, 100);
   const { nsfwAllowed } = await getViewerNsfwAccess(req);
   const { rows } = await pool.query(
-    `SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.ref_is_nsfw,
+    `SELECT mc.id, mc.name, mc.ref_image, mc.thumb_image_url, mc.ref_position_x, mc.ref_position_y, mc.ref_is_nsfw,
             ms.story_path, ms.slug, ms.site_title, u.username AS owner_username, u.display_name AS owner_display_name
      FROM moderator_characters mc
      LEFT JOIN LATERAL (
@@ -8104,10 +8169,13 @@ app.get('/api/spotlight/characters', async (req, res) => {
     // NSFW character refs stay IN the rotation for everyone — but a viewer
     // who can't see NSFW never gets the real image bytes, only a locked
     // flag; the frontend swaps in a blurred default silhouette instead.
+    // image is the small spotlight-only copy (falls back to the original
+    // for any row that hasn't been backfilled yet); clicking through to the
+    // character's own page always uses the untouched original, never this.
     characters: rows.map(r => {
       const locked = r.ref_is_nsfw && !nsfwAllowed;
       return {
-        id: r.id, name: r.name, image: locked ? null : r.ref_image, nsfw_locked: !!locked,
+        id: r.id, name: r.name, image: locked ? null : (r.thumb_image_url || r.ref_image), nsfw_locked: !!locked,
         position_x: r.ref_position_x, position_y: r.ref_position_y,
         story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
         owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
@@ -8124,7 +8192,7 @@ app.get('/api/spotlight/gallery', async (req, res) => {
   // everyone else.
   const categories = nsfwAllowed ? GALLERY_CATEGORIES : ['sfw'];
   const { rows } = await pool.query(
-    `SELECT mg.id, mg.image_url, mg.title, mg.position_x, mg.position_y,
+    `SELECT mg.id, mg.image_url, mg.thumb_image_url, mg.title, mg.position_x, mg.position_y,
             ms.story_path, ms.slug, ms.site_title, u.username AS owner_username, u.display_name AS owner_display_name
      FROM moderator_gallery mg
      LEFT JOIN LATERAL (
@@ -8137,8 +8205,10 @@ app.get('/api/spotlight/gallery', async (req, res) => {
     [limit, categories]
   );
   res.json({
+    // Same spotlight-only-thumb / original-on-click split as the character
+    // spotlight above.
     gallery: rows.map(r => ({
-      id: r.id, image: r.image_url, title: r.title,
+      id: r.id, image: r.thumb_image_url || r.image_url, title: r.title,
       position_x: r.position_x, position_y: r.position_y,
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
       owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
@@ -8210,7 +8280,7 @@ app.get('/api/activity-feed', async (req, res) => {
        -- not created_at, so an old draft that gets published today shows up
        -- as new today rather than back-dated to whenever the draft started.
        SELECT 'chapter' AS type, mc.id AS item_id, mc.updated_at AS created_at,
-              mc.title, ms.cover_url AS image,
+              mc.title, ms.cover_url AS image, NULL::text AS thumb_image_url,
               ms.cover_position_x AS position_x, ms.cover_position_y AS position_y,
               ms.story_path, ms.site_title AS site_title,
               u.username, u.display_name, u.avatar,
@@ -8223,7 +8293,7 @@ app.get('/api/activity-feed', async (req, res) => {
        UNION ALL
 
        SELECT 'art', mg.id, mg.created_at,
-              mg.title, mg.image_url,
+              mg.title, mg.image_url, NULLIF(mg.thumb_image_url, ''),
               mg.position_x, mg.position_y,
               ms.story_path, ms.site_title,
               u.username, u.display_name, u.avatar,
@@ -8238,7 +8308,7 @@ app.get('/api/activity-feed', async (req, res) => {
        UNION ALL
 
        SELECT 'character', mch.id, mch.created_at,
-              mch.name, mch.ref_image,
+              mch.name, mch.ref_image, NULLIF(mch.thumb_image_url, ''),
               mch.ref_position_x, mch.ref_position_y,
               ms.story_path, ms.site_title,
               u.username, u.display_name, u.avatar,
@@ -8267,7 +8337,12 @@ app.get('/api/activity-feed', async (req, res) => {
         id: r.item_id,
         created_at: r.created_at,
         title: r.title,
-        image: charLocked ? null : (r.image || null),
+        // Recent Submissions is a card-list context same as the spotlights
+        // -- thumb_image_url when this row has one, the original otherwise.
+        // Clicking through to the actual chapter/post/character page is
+        // unaffected, since those pages fetch their own data independently
+        // and never see this field.
+        image: charLocked ? null : (r.thumb_image_url || r.image || null),
         nsfw_locked: !!charLocked,
         position_x: r.position_x, position_y: r.position_y,
         story_path: r.story_path,

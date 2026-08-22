@@ -774,8 +774,8 @@
      neither has to zoom in hard. A soft gradient fade at the seam (see
      .fp-video-area--seam) blends the cut between the two. ══ -->
 <section class="fp-video-area fp-video-area--seam">
-  <video class="fp-video-area-bg" autoplay muted loop playsinline>
-    <source src="/images/home/main-background.mp4" type="video/mp4" />
+  <video class="fp-video-area-bg" muted loop playsinline preload="none">
+    <source data-lazy-src="/images/home/main-background.mp4" type="video/mp4" />
   </video>
   <div class="fp-video-area-scrim"></div>
 
@@ -832,8 +832,8 @@
 </section>
 
 <section class="fp-video-area">
-  <video class="fp-video-area-bg" autoplay muted loop playsinline>
-    <source src="/images/home/top-background.webm" type="video/webm" />
+  <video class="fp-video-area-bg" muted loop playsinline preload="none">
+    <source data-lazy-src="/images/home/top-background.webm" type="video/webm" />
   </video>
   <div class="fp-video-area-scrim"></div>
 
@@ -911,7 +911,7 @@
       const isMobile = window.innerWidth <= 720;
       videos.forEach((v) => {
         if (isMobile) v.pause();
-        else if (v.paused) v.play().catch(() => {});
+        else if (v.paused && v.readyState > 0) v.play().catch(() => {});
       });
     }
     syncVideoAreaBg();
@@ -920,6 +920,39 @@
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(syncVideoAreaBg, 150);
     });
+
+    // These two are below the fold (one of them, main-background.mp4, is a
+    // ~7MB file) and were previously `autoplay`, meaning the browser started
+    // fetching the full file the instant the page parsed the tag -- on
+    // mobile that download happened for nothing, since CSS hides
+    // .fp-video-area-bg entirely there and the sync above immediately
+    // pauses it. Deferred to real src-less <source data-lazy-src> tags;
+    // only assigned (and only on desktop) once the section is about to
+    // scroll into view, so first paint isn't competing with it for
+    // bandwidth. Mobile never downloads these at all now.
+    const lazyVideos = document.querySelectorAll('.fp-video-area-bg source[data-lazy-src]');
+    function loadLazyVideo(source) {
+      const video = source.parentElement;
+      source.src = source.dataset.lazySrc;
+      delete source.dataset.lazySrc;
+      video.load();
+      if (window.innerWidth > 720) video.play().catch(() => {});
+    }
+    if ('IntersectionObserver' in window && lazyVideos.length) {
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          io.unobserve(entry.target);
+          if (window.innerWidth <= 720) return; // mobile: skip the download entirely
+          loadLazyVideo(entry.target.querySelector('source[data-lazy-src]'));
+        });
+      }, { rootMargin: '150px 0px' });
+      document.querySelectorAll('.fp-video-area-bg').forEach((v) => {
+        if (v.querySelector('source[data-lazy-src]')) io.observe(v);
+      });
+    } else {
+      lazyVideos.forEach(loadLazyVideo);
+    }
   })();
 
   // ── Donations box re-parenting — on phones it physically moves out of the
