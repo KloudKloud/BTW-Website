@@ -740,14 +740,23 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   // 720px). Create goes straight to the Creator Hub (no more choice sheet);
   // the rest are plain navigation, matching Wattpad's own bottom nav.
   document.body.classList.add('fpnav-has-bottombar');
+  // Trailing-slash-insensitive match -- the Home link's own href
+  // (FP_BASE || '/') never carries a trailing slash, but here (a real
+  // location.pathname) does when you're actually sitting on the home page,
+  // so a naive === would never light Home up.
+  const norm = (p) => (p || '/').replace(/\/+$/, '') || '/';
+  const hereNorm = norm(here);
+  const isHomeActive = hereNorm === norm(FP_BASE || '/');
+  const isCharsActive = hereNorm === norm(fpUrl('/characters'));
+  const isUpdatesActive = hereNorm === norm(fpUrl('/notifications'));
   const bottombarWrap = document.createElement('div');
   bottombarWrap.innerHTML = `
     <nav class="fpnav-bottombar" id="fpnav-bottombar" aria-label="Primary">
-      <a class="fpnav-bottombar-item" href="${FP_BASE || '/'}">
+      <a class="fpnav-bottombar-item${isHomeActive ? ' active' : ''}" href="${FP_BASE || '/'}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
         <span>Home</span>
       </a>
-      <a class="fpnav-bottombar-item" href="${fpUrl('/characters')}">
+      <a class="fpnav-bottombar-item${isCharsActive ? ' active' : ''}" href="${fpUrl('/characters')}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="16.2" rx="4.6" ry="3.6"/><circle cx="5.6" cy="9.8" r="1.9"/><circle cx="10.2" cy="6.2" r="1.9"/><circle cx="13.8" cy="6.2" r="1.9"/><circle cx="18.4" cy="9.8" r="1.9"/></svg>
         <span>Chars</span>
       </a>
@@ -761,7 +770,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         <a href="${fpUrl('/create-character')}" data-gate="${fpUrl('/create-character')}"><span class="fpnav-plus-badge">+</span> Character</a>
         <a href="${fpUrl('/create-gallery')}" data-gate="${fpUrl('/create-gallery')}"><span class="fpnav-plus-badge">+</span> Gallery</a>
       </div>
-      <button class="fpnav-bottombar-item" id="fpnav-bb-notif" type="button">
+      <button class="fpnav-bottombar-item${isUpdatesActive ? ' active' : ''}" id="fpnav-bb-notif" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         <span id="fpnav-bb-notif-badge" class="fpnav-bottombar-badge" hidden></span>
         <span>Updates</span>
