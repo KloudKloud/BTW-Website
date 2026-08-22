@@ -36,6 +36,12 @@
 
     .notif-content { min-width: 0; }
 
+    /* Mobile-only Inbox chrome (see the ≤720px block below for real
+       styling) -- explicit hidden default so desktop doesn't fall back to
+       the browser's plain <button>/<div> rendering (a stray unstyled box)
+       above that breakpoint. */
+    .dm-mobile-fab, .dm-mobile-menu-backdrop { display: none; }
+
     .notif-tabs {
       display: flex; align-items: flex-end; justify-content: center; gap: 1rem;
       border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 1.75rem;
@@ -589,11 +595,68 @@
     .dm-following-item-name { font-size: 0.88rem; font-weight: 600; }
 
     @media (max-width: 720px) {
-      .dm-app { flex-direction: column; height: auto; min-height: 0; }
-      .dm-sidebar { width: 100%; height: auto; flex-direction: row; flex-wrap: wrap; }
-      .dm-content { height: 500px; }
+      /* The mobile topbar is position:fixed with z-index:200 (fanpages-nav.css)
+         and a sibling of this <main>, not an ancestor -- .notif-main's own
+         position:relative;z-index:1 (set unconditionally above, for the
+         desktop video-vs-content stacking) puts its entire subtree, thread
+         panel included, in a stacking context that loses to the topbar
+         outright regardless of any z-index set inside it. Bumped above 200
+         here so the full-screen thread view (and its Back button) actually
+         paints -- and receives clicks -- above the topbar instead of under it. */
+      .notif-main { z-index: 250; }
+
+      .dm-app { flex-direction: column; height: auto; min-height: 0; position: relative; }
       .dm-sidebar-rule { display: none; }
       .dm-sidebar-quicklist { display: none; }
+
+      /* Chats/Requests list is the only thing visible by default -- a real
+         full-screen inbox, not a squeezed 500px box under a visible sidebar.
+         Height clears the topbar (in-flow on mobile, already accounted for
+         by .notif-main's own top padding), the Notifications/Inbox tab row,
+         and the bottom nav bar. */
+      /* flex:0 0 auto, not the base rule's flex:1 -- flex:1 sets
+         flex-basis:0%, which in a column flex container silently overrides
+         an explicit height (flex-basis wins), collapsing this straight down
+         to min-height regardless of what height computes to. */
+      .dm-content { flex: 0 0 auto; width: 100%; height: calc(100vh - 242px - env(safe-area-inset-bottom, 0px)); min-height: 420px; }
+
+      /* .dm-sidebar (pfp/+New Chat/Chats-Requests toggle -- the desktop
+         "left box") becomes a hidden-by-default popover anchored above the
+         floating message button, opened via #dm-mobile-fab instead of
+         sitting permanently on screen. */
+      .dm-sidebar {
+        display: none; flex-direction: column; width: 78vw; max-width: 300px;
+        height: auto; max-height: 60vh;
+        position: fixed; right: 1rem; bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 4.2rem);
+        z-index: 420; box-shadow: 0 10px 40px rgba(0,0,0,0.55);
+      }
+      .dm-app.dm-mobile-menu-open .dm-sidebar { display: flex; }
+
+      .dm-mobile-fab {
+        display: flex; align-items: center; justify-content: center;
+        position: fixed; right: 1rem; bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 1.1rem);
+        z-index: 420; width: 52px; height: 52px; border-radius: 50%;
+        background: linear-gradient(135deg, #b8863a, #f0c060); color: #1a1408;
+        border: none; cursor: pointer; box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+      }
+      .dm-mobile-fab svg { width: 24px; height: 24px; }
+      .dm-mobile-fab:active { transform: scale(0.94); }
+
+      .dm-mobile-menu-backdrop {
+        position: fixed; inset: 0; z-index: 410; background: rgba(0,0,0,0.4);
+      }
+      .dm-app:not(.dm-mobile-menu-open) .dm-mobile-menu-backdrop { display: none; }
+
+      /* Single-thread view takes over the full viewport when open, like a
+         real Twitter DM screen -- covers the bottom nav too, its own Back
+         button is the only way out. */
+      .dm-panel--thread:not([hidden]) {
+        position: fixed; inset: 0; z-index: 400; height: 100vh;
+        border-radius: 0; border: none; background: #0d0d0d;
+      }
+      .dm-panel--thread:not([hidden]) .dm-thread-reply {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
 
       /* Full-bleed width -- was inheriting the desktop 2rem side gutters,
          plus a full 3rem top gap that left the tabs floating well below the
@@ -727,6 +790,18 @@
             </div>
           </div>
         </div>
+
+        <!-- ── Mobile-only Twitter-style Inbox chrome. Deliberately reuses
+             .dm-sidebar as-is (just repositioned via CSS into a popover) so
+             every existing dm-sidebar id/listener (pfp block, +New Chat,
+             Chats/Requests tabs, badges) keeps working untouched -- no
+             duplicate markup, no new JS wiring for that content. Desktop
+             never sees these; both are display:none outside the 720px
+             breakpoint. ── -->
+        <button class="dm-mobile-fab" id="dm-mobile-fab" type="button" aria-label="Messages menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <div class="dm-mobile-menu-backdrop" id="dm-mobile-menu-backdrop" hidden></div>
       </div>
     </section>
 
@@ -789,6 +864,10 @@
     dmPanelChats.hidden = which !== 'chats';
     dmPanelRequests.hidden = which !== 'requests';
     dmPanelThread.hidden = which !== 'thread';
+    // Mobile's floating message button would otherwise float on top of the
+    // full-screen thread's own reply box -- redundant and in the way once
+    // you're already inside a conversation.
+    document.getElementById('dm-mobile-fab').hidden = which === 'thread';
     if (which !== 'thread') {
       dmTabChats.classList.toggle('active', which === 'chats');
       dmTabRequests.classList.toggle('active', which === 'requests');
@@ -1748,6 +1827,21 @@
   });
 
   document.getElementById('dm-new-chat-cancel').addEventListener('click', () => { dmNewChatOverlay.hidden = true; });
+
+  // ── Mobile-only Twitter-style Inbox chrome — the floating message button
+  // opens .dm-sidebar (pfp/+New Chat/Chats-Requests) as a popover; any
+  // interaction inside it (profile row, +New Chat, switching tabs) closes it
+  // back down since that's always the end of that particular action.
+  // No-ops on desktop -- .dm-mobile-fab/.dm-mobile-menu-backdrop are
+  // display:none there, and dm-app never gets the --open class from a click
+  // on a hidden button.
+  const dmAppEl = document.getElementById('dm-app');
+  const dmMobileFab = document.getElementById('dm-mobile-fab');
+  const dmMobileMenuBackdrop = document.getElementById('dm-mobile-menu-backdrop');
+  function closeDmMobileMenu() { dmAppEl.classList.remove('dm-mobile-menu-open'); }
+  dmMobileFab.addEventListener('click', () => dmAppEl.classList.toggle('dm-mobile-menu-open'));
+  dmMobileMenuBackdrop.addEventListener('click', closeDmMobileMenu);
+  document.querySelector('.dm-sidebar').addEventListener('click', closeDmMobileMenu);
 
   // ── User block + lazy init on first Inbox-tab visit ──────────────────────
   function dmRenderUserBlock(u) {
