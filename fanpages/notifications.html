@@ -595,15 +595,19 @@
     .dm-following-item-name { font-size: 0.88rem; font-weight: 600; }
 
     @media (max-width: 720px) {
-      /* The mobile topbar is position:fixed with z-index:200 (fanpages-nav.css)
-         and a sibling of this <main>, not an ancestor -- .notif-main's own
-         position:relative;z-index:1 (set unconditionally above, for the
-         desktop video-vs-content stacking) puts its entire subtree, thread
-         panel included, in a stacking context that loses to the topbar
-         outright regardless of any z-index set inside it. Bumped above 200
-         here so the full-screen thread view (and its Back button) actually
-         paints -- and receives clicks -- above the topbar instead of under it. */
-      .notif-main { z-index: 250; }
+      /* The mobile topbar AND bottombar are position:fixed with z-index:200
+         (fanpages-nav.css) and siblings of this <main>, not ancestors --
+         .notif-main's own position:relative;z-index:1 (set unconditionally
+         above, for the desktop video-vs-content stacking) puts its entire
+         subtree in a stacking context that loses to both bars outright
+         regardless of any z-index set inside it. Bumping .notif-main itself
+         above 200 unconditionally was tried first and was wrong: it also
+         lifted the plain Chats-list view above the bottom bar every time,
+         covering it, when the only thing that actually needs to win that
+         fight is the full-screen thread view. Scoped to a class instead,
+         toggled by dmShowPanel() exactly when the thread panel is the
+         active one. */
+      .notif-main.dm-thread-fullscreen { z-index: 250; }
 
       .dm-app { flex-direction: column; height: auto; min-height: 0; position: relative; }
       .dm-sidebar-rule { display: none; }
@@ -885,6 +889,10 @@
     // full-screen thread's own reply box -- redundant and in the way once
     // you're already inside a conversation.
     document.getElementById('dm-mobile-fab').hidden = which === 'thread';
+    // Only the full-screen thread view needs to out-stack the topbar/bottom
+    // bar (see the .notif-main.dm-thread-fullscreen rule) -- everywhere
+    // else .notif-main must stay below the bottom bar or it covers it.
+    document.querySelector('.notif-main').classList.toggle('dm-thread-fullscreen', which === 'thread');
     if (which !== 'thread') {
       dmTabChats.classList.toggle('active', which === 'chats');
       dmTabRequests.classList.toggle('active', which === 'requests');
