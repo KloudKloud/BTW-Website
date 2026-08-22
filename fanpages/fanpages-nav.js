@@ -816,16 +816,27 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   (function () {
     const bottombar = document.getElementById('fpnav-bottombar');
     const mq = window.matchMedia('(max-width: 720px)');
-    let lastY = window.scrollY;
-    function onScroll() {
-      if (!mq.matches) { bottombar.classList.remove('fpnav-bottombar--hidden'); return; }
-      const y = window.scrollY;
-      if (Math.abs(y - lastY) < 6) return;
-      if (y > lastY && y > 76) bottombar.classList.add('fpnav-bottombar--hidden');
-      else bottombar.classList.remove('fpnav-bottombar--hidden');
-      lastY = y;
+    function makeScrollHider(getScrollTop) {
+      let lastY = getScrollTop();
+      return function onScroll() {
+        if (!mq.matches) { bottombar.classList.remove('fpnav-bottombar--hidden'); return; }
+        const y = getScrollTop();
+        if (Math.abs(y - lastY) < 6) return;
+        if (y > lastY && y > 76) bottombar.classList.add('fpnav-bottombar--hidden');
+        else bottombar.classList.remove('fpnav-bottombar--hidden');
+        lastY = y;
+      };
     }
-    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('scroll', makeScrollHider(() => window.scrollY), { passive: true });
+    // The Inbox tab's Chats/Requests lists (.dm-list, notifications.html
+    // only) are fixed-height app panels that scroll internally -- the
+    // window itself barely moves there, so the shared window-scroll hider
+    // above never engages. Same recipe, keyed to each list's own scrollTop
+    // instead. A no-op everywhere else (nothing matches .dm-list on any
+    // other page).
+    document.querySelectorAll('.dm-list').forEach((list) => {
+      list.addEventListener('scroll', makeScrollHider(() => list.scrollTop), { passive: true });
+    });
   })();
 
   // ── Search ───────────────────────────────────────────────────────────────

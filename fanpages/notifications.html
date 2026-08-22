@@ -663,6 +663,23 @@
          topbar instead of sitting right under it. */
       .notif-main { padding: 1.1rem 0.6rem 3rem; }
 
+      /* GIF picker -- dmPositionGifPicker() anchors it under the small GIF
+         button, which works fine in the old two-column desktop layout but
+         falls apart in the full-screen mobile thread view (button sits near
+         the very bottom of the screen, so "open below the button" has
+         nowhere to go and "flip upward" still has to guess a height before
+         it's ever rendered). !important beats the inline top/left/bottom/
+         max-height JS keeps setting on every open -- pinned to a fixed
+         bottom-sheet spot above the reply box instead, same as Twitter's
+         own mobile GIF picker, with a hard cap that always shows exactly
+         ~3 rows before scrolling. */
+      .dm-gif-picker {
+        position: fixed !important; left: 0.6rem !important; right: 0.6rem !important;
+        top: auto !important; bottom: calc(150px + env(safe-area-inset-bottom, 0px)) !important;
+        width: auto !important; max-height: 320px !important; z-index: 401 !important;
+      }
+      .dm-gif-results { max-height: 240px; }
+
       /* Notifications/Inbox switch from a centered pill pair to a full-width
          Wattpad-style tab row (same recipe as Bookmarks/Profile's own mobile
          tabs) so it actually spans edge to edge instead of floating in the
@@ -1842,6 +1859,27 @@
   dmMobileFab.addEventListener('click', () => dmAppEl.classList.toggle('dm-mobile-menu-open'));
   dmMobileMenuBackdrop.addEventListener('click', closeDmMobileMenu);
   document.querySelector('.dm-sidebar').addEventListener('click', closeDmMobileMenu);
+
+  // ── Mobile keyboard-aware reply box — .dm-thread-reply sits inside
+  // .dm-panel--thread's position:fixed;inset:0 full-screen overlay, which
+  // (like any fixed element) is pinned to the LAYOUT viewport, not the
+  // smaller VISUAL viewport the on-screen keyboard actually shrinks. Without
+  // this the reply box stays glued to the bottom of the full screen height
+  // and ends up hidden underneath the keyboard the instant it opens.
+  // visualViewport tracks the real usable area; nudging the box up by
+  // whatever the keyboard is currently covering keeps it visible right
+  // above it, same as any native chat app.
+  if (window.visualViewport) {
+    const dmReplyBox = document.querySelector('.dm-thread-reply');
+    function syncDmKeyboardOffset() {
+      if (window.innerWidth > 720) { dmReplyBox.style.transform = ''; return; }
+      const vv = window.visualViewport;
+      const overlap = window.innerHeight - vv.height - vv.offsetTop;
+      dmReplyBox.style.transform = overlap > 50 ? `translateY(-${overlap}px)` : '';
+    }
+    window.visualViewport.addEventListener('resize', syncDmKeyboardOffset);
+    window.visualViewport.addEventListener('scroll', syncDmKeyboardOffset);
+  }
 
   // ── User block + lazy init on first Inbox-tab visit ──────────────────────
   function dmRenderUserBlock(u) {
