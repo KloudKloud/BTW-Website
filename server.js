@@ -7197,10 +7197,23 @@ app.post('/api/characters/:id/link-many', requireAuth, async (req, res) => {
   );
   if (!item) return res.status(404).json({ error: 'Not found.' });
   const siteIds = Array.isArray(req.body.site_ids) ? req.body.site_ids.filter(Number.isFinite) : [];
-  await Promise.all(siteIds.map(siteId => pool.query(
-    'INSERT INTO character_story_links (character_id, site_id) VALUES ($1, $2) ON CONFLICT (character_id, site_id) DO NOTHING',
-    [item.id, siteId]
-  )));
+  // sort_order left unset used to silently fall back to the column's
+  // DEFAULT 0 -- tying with (or ahead of) whatever a story's own editor
+  // Reorder UI had already deliberately placed first, since Postgres gives
+  // no guarantee which row wins an ORDER BY tie. A character linked from
+  // "Link To: Stories" on the standalone creation flow now appends to the
+  // end of each target story's own cast order instead, same as
+  // /api/moderator/characters/:id/link (the story editor's own linker)
+  // already does.
+  await Promise.all(siteIds.map(async (siteId) => {
+    const { rows: [{ maxOrder }] } = await pool.query(
+      'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM character_story_links WHERE site_id = $1', [siteId]
+    );
+    await pool.query(
+      'INSERT INTO character_story_links (character_id, site_id, sort_order) VALUES ($1, $2, $3) ON CONFLICT (character_id, site_id) DO NOTHING',
+      [item.id, siteId, maxOrder + 1]
+    );
+  }));
   res.json({ message: 'Linked.' });
 });
 
