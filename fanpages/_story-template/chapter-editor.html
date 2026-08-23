@@ -955,10 +955,13 @@ function sanitizePastedHtml(html) {
   const container = document.createElement('div');
   container.innerHTML = html;
   const BLOCK_TAGS = new Set(['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'TR']);
+  const ALIGNS = new Set(['left', 'center', 'right', 'justify']);
   const paragraphs = [];
   let current = [];
+  let currentAlign = 'left';
   function flushParagraph() {
-    if (current.length) { paragraphs.push(current); current = []; }
+    if (current.length) { paragraphs.push({ runs: current, align: currentAlign }); current = []; }
+    currentAlign = 'left';
   }
   function isBold(el) {
     const fw = el.style && el.style.fontWeight;
@@ -971,9 +974,20 @@ function sanitizePastedHtml(html) {
     const td = el.style && (el.style.textDecorationLine || el.style.textDecoration || '');
     return td.includes('underline');
   }
-  function walk(node, marks) {
+  // Word/Google Docs export alignment as either a `text-align` style or the
+  // legacy `align` attribute — either way it lives on the block element, not
+  // a run, so it has to be threaded through walk() alongside marks and
+  // applied to whichever paragraph is open when the block's text lands.
+  function getAlign(el) {
+    const styleAlign = el.style && el.style.textAlign;
+    if (styleAlign && ALIGNS.has(styleAlign)) return styleAlign;
+    const attrAlign = el.getAttribute && el.getAttribute('align');
+    if (attrAlign && ALIGNS.has(attrAlign.toLowerCase())) return attrAlign.toLowerCase();
+    return null;
+  }
+  function walk(node, marks, align) {
     if (node.nodeType === Node.TEXT_NODE) {
-      if (node.textContent) current.push({ text: node.textContent, marks: { ...marks } });
+      if (node.textContent) { current.push({ text: node.textContent, marks: { ...marks } }); currentAlign = align; }
       return;
     }
     if (node.nodeType !== Node.ELEMENT_NODE) return;
@@ -989,16 +1003,18 @@ function sanitizePastedHtml(html) {
     if (node.style && node.style.fontWeight === 'normal') newMarks.bold = false;
 
     const isBlock = BLOCK_TAGS.has(tag);
+    const newAlign = getAlign(node) || align;
     if (isBlock) flushParagraph();
-    Array.from(node.childNodes).forEach(child => walk(child, newMarks));
+    Array.from(node.childNodes).forEach(child => walk(child, newMarks, newAlign));
     if (isBlock) flushParagraph();
   }
-  Array.from(container.childNodes).forEach(n => walk(n, {}));
+  Array.from(container.childNodes).forEach(n => walk(n, {}, 'left'));
   flushParagraph();
 
   if (!paragraphs.length) return '';
-  return paragraphs.map(runs => {
+  return paragraphs.map(({ runs, align }) => {
     const p = document.createElement('p');
+    if (align && align !== 'left') p.style.textAlign = align;
     runs.forEach(run => {
       if (!run.text) return;
       let node = document.createTextNode(run.text);
