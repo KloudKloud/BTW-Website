@@ -3428,6 +3428,22 @@
       onSave: uploadBanner,
     });
   });
+  // Banner/avatar filenames are reused per user (same path every upload), so
+  // the browser's own HTTP cache has to be defeated with a cache-busting
+  // query string or a fresh upload just redisplays the old cached bytes at
+  // that same URL. The upload handlers below already do this for their own
+  // immediate re-render -- but exitEditMode() (Save Changes AND Cancel)
+  // unconditionally calls loadProfile() afterward, which re-fetches the
+  // profile from the API and re-renders the avatar/banner from that
+  // response's plain, non-busted a.avatar/a.banner_url -- silently
+  // reverting the just-uploaded picture back to the stale cached image the
+  // instant you click Save. These two remember this session's own bust
+  // suffix so loadProfile()'s render can keep reusing it instead of
+  // dropping back to the plain URL; a normal page load/other viewer never
+  // sets them, so nothing changes for anyone who hasn't just uploaded.
+  let sessionBannerBust = '';
+  let sessionAvatarBust = '';
+
   async function uploadBanner(blob) {
     const fd = new FormData();
     fd.append('banner', blob, 'banner.jpg');
@@ -3441,7 +3457,8 @@
         currentAuthor.banner_position_x = 50;
         currentAuthor.banner_position_y = 50;
         currentAuthor.banner_zoom = 100;
-        await applyBgCrop(document.getElementById('fp-banner-img'), data.banner_url + '?t=' + Date.now(), 50, 50, 100);
+        sessionBannerBust = '?t=' + Date.now();
+        await applyBgCrop(document.getElementById('fp-banner-img'), data.banner_url + sessionBannerBust, 50, 50, 100);
         document.getElementById('fp-banner-recrop-btn').hidden = false;
       }
     } catch {}
@@ -3494,7 +3511,8 @@
         const img = document.getElementById('fp-avatar-img');
         img.style.display = 'block';
         document.getElementById('fp-avatar-fallback').style.display = 'none';
-        const bustedUrl = data.avatar + '?t=' + Date.now();
+        sessionAvatarBust = '?t=' + Date.now();
+        const bustedUrl = data.avatar + sessionAvatarBust;
         await applyBgCrop(img, bustedUrl, 50, 50, 100);
         document.getElementById('fp-avatar-recrop-btn').hidden = false;
 
@@ -4256,7 +4274,7 @@
 
       const bannerImg = document.getElementById('fp-banner-img');
       applyBgCrop(
-        bannerImg, a.banner_url || '/images/gallery/pixernbath_13.png',
+        bannerImg, (a.banner_url ? a.banner_url + sessionBannerBust : '/images/gallery/pixernbath_13.png'),
         a.banner_url && a.banner_position_x != null ? a.banner_position_x : 50,
         a.banner_url && a.banner_position_y != null ? a.banner_position_y : 50,
         a.banner_url ? (a.banner_zoom || 100) : 100
@@ -4270,7 +4288,7 @@
       if (a.avatar) {
         const img = document.getElementById('fp-avatar-img');
         applyBgCrop(
-          img, a.avatar,
+          img, a.avatar + sessionAvatarBust,
           a.avatar_position_x != null ? a.avatar_position_x : 50,
           a.avatar_position_y != null ? a.avatar_position_y : 50,
           a.avatar_zoom || 100
