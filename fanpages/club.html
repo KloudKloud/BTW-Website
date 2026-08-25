@@ -159,17 +159,20 @@
        that was always sliding by). Pinned to the viewport (position:fixed;
        inset:0) so it never scrolls with page content, full-bleed
        object-fit:cover so it always fills the screen with no gaps. */
-    /* height:100dvh (with a plain 100vh fallback for browsers that don't
-       support dvh) instead of inset:0's implicit 100%-of-viewport height --
-       on mobile, `position:fixed` + a height that tracks the *static* `vh`
-       unit fights with the browser's own address-bar show/hide-on-scroll
-       behavior (the viewport's usable height keeps changing as the bar
-       animates), which is what read as the background repeatedly zooming
-       in and out while scrolling. `dvh` tracks the actual visible viewport
-       instead of recomputing against a value that's itself oscillating. */
+    /* height:100lvh (large viewport height -- the size assuming the
+       browser's address bar is fully hidden), with a plain 100vh fallback
+       for browsers that don't support it, instead of inset:0's implicit
+       100%-of-viewport height. `dvh` (tried first) still visibly resized
+       the box on a fast scroll-to-bottom -- the box itself is what was
+       moving, which reads as a "jump" even without the earlier repeated
+       zoom. `lvh` is a *fixed* value that never changes while scrolling
+       (unlike `dvh`), sized to the largest the viewport can ever get, so
+       the box is always at least as tall as the screen regardless of
+       whether the address bar is currently showing or hidden -- nothing
+       about it moves or resizes at any point during a scroll. */
     #cl-page-bg-wrap {
       position: fixed; top: 0; left: 0; width: 100%; z-index: -1; overflow: hidden;
-      height: 100vh; height: 100dvh;
+      height: 100vh; height: 100lvh;
     }
     #cl-page-bg-img {
       width: 100%; height: 100%; object-fit: cover; display: block;
@@ -1130,45 +1133,77 @@
       .soc-layout.soc-mobile-drawer-open .soc-mobile-drawer-backdrop { display: block; }
       #cl-page, #cl-notfound, .soc-layout.soc-collapsed #cl-page, .soc-layout.soc-collapsed #cl-notfound { margin-left: 0; }
 
-      /* Floats directly over the banner's top-left corner (now a real
-         child of .cl-banner-wrap, same overlay pattern as the recrop
-         pencil/±Post/Join buttons already living there) instead of
-         sitting in its own in-flow row above the banner, which just
-         pushed everything else down for no real benefit. */
-      .soc-mobile-drawer-toggle {
-        position: absolute; top: 0.9rem; left: 0.9rem; z-index: 4;
+      /* Floats directly over the banner's top-left/top-right corners (real
+         children of .cl-banner-wrap, same overlay pattern as the recrop
+         pencil/±Post/Join buttons already living there) instead of sitting
+         in their own in-flow row above the banner or staying pinned to the
+         viewport -- both scroll away with the banner exactly like the
+         recrop/±Post/Join buttons already do, rather than following you
+         down the page. */
+      .soc-mobile-drawer-toggle, .cl-side-fab {
+        position: absolute; top: 0.9rem; z-index: 4;
         flex-shrink: 0; display: flex; align-items: center; justify-content: center;
         width: 38px; height: 38px; border-radius: 10px;
         background: rgba(0,0,0,0.45); border: 1px solid rgba(127,168,217,0.4);
         color: #cfe0f5; cursor: pointer; box-shadow: 0 0 12px rgba(127,168,217,0.28);
       }
-      .soc-mobile-drawer-toggle:hover { color: #fff; border-color: rgba(127,168,217,0.7); }
+      .soc-mobile-drawer-toggle { left: 0.9rem; }
+      .cl-side-fab { right: 0.9rem; }
+      .soc-mobile-drawer-toggle:hover, .cl-side-fab:hover { color: #fff; border-color: rgba(127,168,217,0.7); }
+      .cl-side-fab svg { transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
+      .cl-side-fab.cl-side-fab--expanded svg { transform: rotate(180deg); }
 
       /* Full-bleed page width instead of the desktop-oriented 2rem
          (.cl-header) / 1.25rem (.cl-row) gutters. */
       .cl-header { padding: 0 0.7rem; }
       .cl-row { padding: 1.5rem 0.7rem 3rem; }
 
-      /* Right info box (.cl-side) -- collapsed by default on mobile
-         behind a small round arrow toggle near the top-right of the
-         page, same expand/collapse behavior (and the same rotating-
-         chevron fab) as the Search page's own left "Stories/Posts/
-         Profiles" box uses on desktop -- just adapted to a stacked
-         mobile layout (height, not width, is what collapses to 0). */
-      .cl-side { max-height: 0; overflow: hidden; padding-top: 0; padding-bottom: 0; margin-top: 0; border-width: 0; }
-      .cl-side.cl-side--expanded { max-height: none; overflow: visible; padding: 1.25rem; margin-top: 2rem; border-width: 1px; }
-      .cl-side-fab {
-        display: flex;
-        position: fixed; top: 86px; right: 0.9rem; z-index: 250;
-        width: 40px; height: 40px; border-radius: 50%;
-        background: #14121a; border: 1px solid rgba(255,255,255,0.28);
-        color: #ccc; cursor: pointer; display: flex; align-items: center; justify-content: center;
-        box-shadow: 0 4px 22px rgba(0,0,0,0.55);
-        transition: color 0.15s, border-color 0.15s, box-shadow 0.15s;
+      /* Right info box (.cl-side) -- same Reddit-style off-canvas drawer as
+         .soc-sidebar above, just mirrored to slide in from the right edge
+         instead of the left (right:-80vw resting / right:0 open, same
+         "wider than max-width so it's always fully clear of the screen"
+         trick, same solid-ish own background since backdrop-filter would
+         re-break position:fixed descendants the same way it did there). */
+      .cl-side {
+        position: fixed; top: 0; right: -80vw; bottom: 0; width: 78vw; max-width: 300px;
+        height: auto; max-height: none; overflow-y: auto; z-index: 300;
+        padding: 1.5rem 1.25rem 1.1rem; margin: 0; border-width: 0 0 0 1px;
+        transition: right 0.28s ease;
+        background: linear-gradient(175deg, rgba(16,14,22,0.97), rgba(16,14,22,0.94));
+        backdrop-filter: none; -webkit-backdrop-filter: none;
+        box-shadow: -8px 0 40px rgba(0,0,0,0.55);
       }
-      .cl-side-fab svg { transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
-      .cl-side-fab.cl-side-fab--expanded svg { transform: rotate(180deg); }
-      .cl-side-fab:hover { color: #fff; border-color: rgba(127,168,217,0.6); box-shadow: 0 4px 26px rgba(127,168,217,0.4); }
+      .cl-side.cl-side--expanded { right: 0; }
+      body.cl-side-drawer-open #fanpages-topbar-root { position: fixed; top: 0; left: 0; right: 0; z-index: 320; }
+      body.cl-side-drawer-open .cl-side { top: 76px; }
+      body.cl-side-drawer-open .cl-side-backdrop { top: 76px; }
+      .cl-side-backdrop {
+        display: none; position: fixed; inset: 0; z-index: 290;
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+      }
+      body.cl-side-drawer-open .cl-side-backdrop { display: block; }
+
+      /* Edit Club topbar -- fanpages.css's own ≤820px rule wraps
+         .mod-edit-bar onto two rows once Delete Page/Delete Club/Cancel/
+         Save don't all fit on one line, but never shrinks the buttons
+         themselves, and .cl-edit-modal's top padding stays hardcoded to
+         the desktop 84px-tall single-row bar regardless -- so the now-
+         taller wrapped bar physically overlapped the top of the edit
+         form. Same fix as the Story Editor's own .mod-edit-bar (see
+         _story-template/edit.html's ≤720px block): hide the X-close
+         (Cancel already does the same thing) and shrink the remaining
+         buttons enough to fit back on one ~64px row, then shrink the
+         content's top offset to match instead of the desktop bar height. */
+      #cl-edit-topbar .mod-edit-bar-back { display: none; }
+      #cl-edit-topbar .mod-edit-bar-save, #cl-edit-topbar .mod-edit-bar-cancel,
+      #cl-edit-topbar .mod-edit-bar-delete {
+        font-size: 0.8rem; padding: 0.55em 1rem;
+      }
+      #cl-edit-topbar { padding: 0 0.85rem; gap: 0.5rem 0.6rem; }
+      #cl-edit-topbar .mod-edit-bar-actions { width: auto; }
+      .cl-edit-modal { padding: calc(64px + 1.25rem) 1rem 3rem; }
+      .cl-edit-pages-col { top: calc(64px + 1rem); max-height: calc(100vh - 64px - 2rem); }
     }
 
     .cl-gate { max-width: 500px; margin: 8rem auto; text-align: center; color: #999; padding: 0 1.5rem; }
@@ -1568,6 +1603,9 @@
     <button class="soc-mobile-drawer-toggle" id="soc-mobile-drawer-toggle" type="button" aria-label="Menu">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
+    <button class="cl-side-fab" id="cl-side-fab" type="button" aria-label="Club info">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
     <div class="cl-banner-img-slot" id="cl-banner-img-slot"></div>
     <button class="cl-banner-recrop-btn" id="cl-banner-recrop-btn" type="button" style="display:none;" title="Change banner image">✏️</button>
     <button class="cl-banner-recrop-btn" id="cl-banner-revert-btn" type="button" style="display:none; right: 4.2rem;" title="Reset to the default banner">↺</button>
@@ -1857,9 +1895,7 @@
       </div>
     </div>
 
-    <button class="cl-side-fab" id="cl-side-fab" type="button" aria-label="Club info">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-    </button>
+    <div class="cl-side-backdrop" id="cl-side-backdrop"></div>
     <aside class="cl-side" id="cl-side">
       <p class="cl-side-name" id="cl-side-name"></p>
       <hr class="cl-side-rule2" />
@@ -2635,16 +2671,23 @@ function setMobileDrawerOpen(open) {
   document.body.style.overflow = open ? 'hidden' : '';
 }
 
-// ── Mobile-only: right info box (.cl-side) collapse/expand arrow --
-// same fab-toggle idea as the Search page's own collapsible side box. ──
+// ── Mobile-only: right info box (.cl-side) as an off-canvas drawer --
+// same open/close/backdrop-blur pattern as the left .soc-sidebar drawer
+// above, mirrored to the right edge instead of sliding in its own info
+// in place. ──
 (function () {
   const fab = document.getElementById('cl-side-fab');
   const side = document.getElementById('cl-side');
-  if (!fab || !side) return;
-  fab.addEventListener('click', () => {
-    const expanded = side.classList.toggle('cl-side--expanded');
-    fab.classList.toggle('cl-side-fab--expanded', expanded);
-  });
+  const backdrop = document.getElementById('cl-side-backdrop');
+  if (!fab || !side || !backdrop) return;
+  function setSideDrawerOpen(open) {
+    side.classList.toggle('cl-side--expanded', open);
+    fab.classList.toggle('cl-side-fab--expanded', open);
+    document.body.classList.toggle('cl-side-drawer-open', open);
+    document.body.style.overflow = open ? 'hidden' : '';
+  }
+  fab.addEventListener('click', () => setSideDrawerOpen(!side.classList.contains('cl-side--expanded')));
+  backdrop.addEventListener('click', () => setSideDrawerOpen(false));
 })();
 mobileDrawerBackdrop.addEventListener('click', () => setMobileDrawerOpen(false));
 mobileDrawerToggle.addEventListener('click', () => setMobileDrawerOpen(!socLayout.classList.contains('soc-mobile-drawer-open')));
