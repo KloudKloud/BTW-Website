@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chapter Editor ✦ BTW</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Baloo+2:wght@600;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Baloo+2:wght@600;700&family=Fredoka:wght@500;600;700&display=swap" />
   <style>
     * { box-sizing: border-box; }
     body {
@@ -42,7 +42,7 @@
     }
     .ce-breadcrumb-chevron { font-size: 0.7rem; color: #777; }
     .ce-title-display {
-      margin: 0; color: #f5f5f5; font-family: 'Georgia', serif; font-size: 1.4rem; font-weight: 700;
+      margin: 0; color: #f5f5f5; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.4rem; font-weight: 700;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .ce-topbar-status {
@@ -347,9 +347,20 @@
       animation: ce-save-spin 0.7s linear infinite;
     }
     @keyframes ce-save-spin { to { transform: rotate(360deg); } }
-    .ce-btn--save { background: none; border: 1px solid rgba(127,168,217,0.5); color: #7fa8d9; }
-    .ce-btn--save:hover { border-color: #7fa8d9; background: rgba(127,168,217,0.1); }
-    .ce-btn--save:disabled { opacity: 0.45; cursor: default; }
+    /* ── Publish buffer — a brief, explicit "saving before you go live"
+       beat shown while Publish's save request is in flight, now that
+       there's no separate Save button to have already covered that. ── */
+    .ce-publish-buffer-overlay {
+      position: fixed; inset: 0; z-index: 220; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.72);
+    }
+    .ce-publish-buffer-modal {
+      display: flex; flex-direction: column; align-items: center; gap: 1rem;
+      background: #171717; border: 1px solid rgba(255,255,255,0.1); border-radius: 18px;
+      padding: 2rem 2.5rem; box-shadow: 0 24px 70px rgba(0,0,0,0.65);
+    }
+    .ce-publish-buffer-spinner { width: 1.8em; height: 1.8em; border-width: 3px; }
+    .ce-publish-buffer-text { margin: 0; font-family: 'Inter', sans-serif; font-size: 0.95rem; color: #ddd; text-align: center; }
 
     /* ── Unsaved-changes exit warning — offered whenever leaving the page
        through an in-app link (back arrow, cover, Cancel) while dirty,
@@ -478,10 +489,16 @@
   <div class="ce-topbar-actions">
     <button class="ce-btn ce-btn--cancel" id="ce-import-docx-btn" type="button">📄 Import</button>
     <button class="ce-btn ce-btn--publish" id="ce-publish-btn" type="button" disabled>Publish</button>
-    <button class="ce-btn ce-btn--save" id="ce-save-draft-btn" type="button" disabled>💾 Save</button>
     <button class="ce-btn ce-btn--cancel" id="ce-cancel-btn" type="button" hidden>Cancel</button>
     <button class="ce-btn ce-btn--cancel" id="ce-preview-btn" type="button" hidden>Preview</button>
     <input type="file" id="ce-docx-file-input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none;" />
+  </div>
+</div>
+
+<div class="ce-publish-buffer-overlay" id="ce-publish-buffer-overlay" hidden>
+  <div class="ce-publish-buffer-modal">
+    <span class="ce-save-spinner ce-publish-buffer-spinner"></span>
+    <p class="ce-publish-buffer-text">Making sure your latest changes are saved…</p>
   </div>
 </div>
 
@@ -627,13 +644,14 @@ let everPublished = false; // becomes true right after the first successful publ
 const editor = document.getElementById('ce-editor');
 
 // Draft vs published changes which buttons make sense: a draft has nothing
-// public yet to "cancel" back to, so it gets an explicit Save instead; a
-// published chapter already has a live version, so Cancel (discard edits)
-// makes sense there and a separate Save button doesn't.
+// public yet to "cancel" back to; a published chapter already has a live
+// version, so Cancel (discard edits) makes sense there. Autosave (below)
+// covers the "just save my progress" case for both states now, so Publish
+// is the only action button left -- it publishes a draft, or re-publishes
+// (saves + goes live with) edits to an already-published chapter.
 function updateButtonsForStatus() {
   const isDraft = !currentChapter || currentChapter.status === 'draft';
-  document.getElementById('ce-publish-btn').textContent = isDraft ? 'Publish' : 'Save';
-  document.getElementById('ce-save-draft-btn').hidden = !isDraft;
+  document.getElementById('ce-publish-btn').textContent = isDraft ? 'Publish' : 'Publish Changes';
   document.getElementById('ce-cancel-btn').hidden = isDraft;
   // Preview (view this chapter as a reader would, drafts included since
   // the reader shows an owner their own unpublished content) only makes
@@ -644,9 +662,10 @@ function updateButtonsForStatus() {
 function markDirty() {
   dirty = true;
   document.getElementById('ce-publish-btn').disabled = false;
-  document.getElementById('ce-save-draft-btn').disabled = false;
   updateStatusLine();
 }
+function showPublishBuffer() { document.getElementById('ce-publish-buffer-overlay').hidden = false; }
+function hidePublishBuffer() { document.getElementById('ce-publish-buffer-overlay').hidden = true; }
 let autosaving = false;
 function updateStatusLine() {
   const words = editor.textContent.trim() ? editor.textContent.trim().split(/\s+/).length : 0;
@@ -736,15 +755,6 @@ document.getElementById('ce-topbar-cover-link').addEventListener('click', async 
   const result = await confirmExitWithUnsavedChanges();
   if (result === 'stay') return;
   window.location.href = STORY_BASE;
-});
-document.getElementById('ce-save-draft-btn').addEventListener('click', async () => {
-  const btn = document.getElementById('ce-save-draft-btn');
-  btn.disabled = true;
-  btn.textContent = 'Saving…';
-  const ok = await saveChapterBody();
-  btn.textContent = ok ? 'Saved ✓' : '💾 Save';
-  if (!ok) alert('Something went wrong saving. Please try again.');
-  setTimeout(() => { btn.textContent = '💾 Save'; btn.disabled = !dirty; }, ok ? 1200 : 0);
 });
 // Autosave — Wattpad-style, every 20s while there's something unsaved.
 // Covers drafts and published chapters alike (saveChapterBody only ever
@@ -1424,6 +1434,14 @@ document.getElementById('ce-publish-btn').addEventListener('click', async () => 
   const btn = document.getElementById('ce-publish-btn');
   btn.disabled = true;
   btn.textContent = 'Saving…';
+  // Without the old separate Save button, Publish is now the only thing
+  // that guarantees the latest text actually made it to the server -- the
+  // 20s autosave timer might just not have fired yet. This overlay covers
+  // that gap: saveChapterBody() below always runs (and is awaited) before
+  // the status flips to published, so a mid-typing author never goes live
+  // with stale content, and the buffer gives that save a visible beat
+  // instead of it happening invisibly behind a button label change.
+  showPublishBuffer();
   try {
     const ok = await saveChapterBody();
     if (!ok) throw new Error('save failed');
@@ -1451,11 +1469,13 @@ document.getElementById('ce-publish-btn').addEventListener('click', async () => 
       window.location.href = `${STORY_BASE}/edit#chapters`;
       return;
     }
-    setTimeout(() => { btn.textContent = wasDraft ? 'Save' : (currentChapter.status === 'draft' ? 'Publish' : 'Save'); btn.disabled = true; }, 1200);
+    setTimeout(() => { btn.textContent = wasDraft ? 'Publish Changes' : (currentChapter.status === 'draft' ? 'Publish' : 'Publish Changes'); btn.disabled = true; }, 1200);
   } catch {
     alert('Something went wrong saving. Please try again.');
     btn.disabled = false;
-    btn.textContent = wasDraft ? 'Publish' : 'Save';
+    btn.textContent = wasDraft ? 'Publish' : 'Publish Changes';
+  } finally {
+    hidePublishBuffer();
   }
 });
 
@@ -1482,10 +1502,9 @@ window.addEventListener('beforeunload', (e) => {
   updateButtonsForStatus();
   // A chapter that already has real saved content (title or body text) has
   // something to publish/save right away — no reason to make the author
-  // type a throwaway edit first just to unlock the buttons.
+  // type a throwaway edit first just to unlock the button.
   if ((chapter.title && chapter.title.trim()) || (chapter.body && chapter.body.replace(/<[^>]*>/g, '').trim())) {
     document.getElementById('ce-publish-btn').disabled = false;
-    document.getElementById('ce-save-draft-btn').disabled = false;
   }
 
   if (siteRes && siteRes.ok) {

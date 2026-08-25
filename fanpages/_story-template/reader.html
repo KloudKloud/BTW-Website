@@ -115,12 +115,10 @@
        would otherwise run past the bottom of the screen, rather than
        overlapping the topbar or getting clipped invisibly. */
     .rd-side-panel {
-      position: fixed; left: 3rem; top: 178px; bottom: 1.5rem; z-index: 30;
-      /* Outer box width matches the right rail's 300px grid column
-         (box-sizing:border-box so padding doesn't push it past 300px) --
-         and left:3rem mirrors .rd-layout's 3rem right padding, so the
-         article text sits an equal gap in from an equal-size box on both
-         sides instead of the right rail visibly outweighing this panel. */
+      /* Flush against the screen's left edge (not inset) so the box fills
+         the full column width available to it instead of floating with a
+         gap on either side. */
+      position: fixed; left: 0; top: 178px; bottom: 1.5rem; z-index: 30;
       width: 300px; box-sizing: border-box;
       background: rgba(10,10,10,0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
       border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 1.5rem 1.1rem;
@@ -172,25 +170,40 @@
        viewport edge) and scrolls in normal flow with the rest of the
        page — not a sticky/independently-scrolling sidebar. ── */
     .rd-layout {
-      /* Left padding clears the fixed left panel (300px box sitting at
-         left:3rem) plus a 2.5rem gap -- same box width, same inset, and
-         same gap-to-text as the right side (3rem page padding + 300px
-         .rd-recs column + 2.5rem grid gap) -- so the article column reads
-         evenly pinched between two equal-size boxes instead of the right
-         rail pushing it off-center. 3rem + 300px(18.75rem) + 2.5rem = 24.25rem. */
-      padding: 3rem 3rem 6rem 24.25rem;
+      /* Left padding clears the fixed left panel (300px box, flush against
+         the screen's left edge) plus a 2.5rem gap to the article text --
+         300px(18.75rem) + 2.5rem = 21.25rem. Right padding stays a plain
+         3rem; .rd-recs cancels it with its own negative margin to reach the
+         right edge instead, so the grid math here doesn't need to know
+         about it. */
+      padding: 3rem 3rem 6rem 21.25rem;
       display: grid; grid-template-columns: 1fr 300px; gap: 2.5rem; align-items: start;
       transition: padding-left 0.4s cubic-bezier(0.22, 1, 0.36, 1), grid-template-columns 0.4s cubic-bezier(0.22, 1, 0.36, 1);
     }
     /* Left/right rail collapse toggles — same fab-arrow pattern as Browse/
-       Search's "Sort and Filter" and tab-box collapse arrows. Left panel is
-       position:fixed so collapsing it is just a display:none + folding the
-       layout's padding-left back down to the plain page margin; the right
-       rail is a real grid column so its track collapses to 0 instead. */
-    .rd-layout--left-collapsed { padding-left: 3rem; }
-    .rd-layout--left-collapsed .rd-side-panel { display: none; }
-    .rd-layout--right-collapsed { grid-template-columns: 1fr 0px; }
-    .rd-layout--right-collapsed .rd-recs { display: none; }
+       Search's "Sort and Filter" and tab-box collapse arrows. State toggles
+       live on <body> rather than .rd-layout itself: .rd-side-panel is a
+       *sibling* of .rd-layout in the markup (a fixed-position <aside>
+       outside the <main>, not inside its grid), so a `.rd-layout--collapsed
+       .rd-side-panel` descendant selector never actually matched it -- the
+       padding-left changed but the panel itself silently stayed put. Body
+       is an ancestor of both, so one class there can reach both regardless
+       of which one is/isn't nested inside the grid. */
+    body.rd-left-collapsed .rd-layout { padding-left: 3rem; }
+    body.rd-left-collapsed .rd-side-panel { display: none; }
+    body.rd-right-collapsed .rd-layout { grid-template-columns: 1fr 0px; }
+    body.rd-right-collapsed .rd-recs { display: none; }
+    /* Collapsing the left panel frees up real width, but .rd-article stays
+       flush against the left edge of its own grid column (deliberate in
+       the normal, left-panel-open layout, so the text sits close to that
+       panel) -- with the panel gone that read as jammed against the screen
+       edge with a big empty gap on the right instead. Centering it here
+       fixes that for both "left only" and "both" collapsed. Collapsing
+       the RIGHT panel alone deliberately keeps the flush-left behavior --
+       the remaining left panel still anchors the text near it the same way
+       it always did, and re-centering there would fight that instead of
+       just giving the text more room to breathe. */
+    body.rd-left-collapsed .rd-article { margin-left: auto; margin-right: auto; }
     .rd-rail-fab {
       position: fixed; top: 50%; transform: translateY(-50%);
       width: 44px; height: 44px; border-radius: 50%; z-index: 40;
@@ -203,9 +216,20 @@
     .rd-rail-fab:hover { color: #fff; border-color: rgba(127,168,217,0.6); box-shadow: 0 4px 26px rgba(127,168,217,0.4); }
     .rd-rail-fab--left, .rd-rail-fab--right { transform: translateY(-50%) rotate(180deg); }
     .rd-rail-fab--left.rd-rail-fab--collapsed, .rd-rail-fab--right.rd-rail-fab--collapsed { transform: translateY(-50%) rotate(0deg); }
-    .rd-rail-fab--left { left: 348px; }
+    /* Centered ON each panel's own visual left/right border (half the fab's
+       44px width either side of it) instead of floating just past it, so it
+       reads as tucked into the seam rather than a separate floating dot.
+       The left panel's box is a plain 300px, flush at left:0, so its
+       border sits at 300px -- 300/2 - 22 = 278px. The right rail's box is
+       *visually* 348px wide, not 300 -- .rd-recs cancels .rd-layout's own
+       3rem right padding with a matching negative margin so it can reach
+       the true screen edge, which stretches its rendered width by that
+       same 3rem (48px). Its border is therefore at 348px in from the
+       right, not 300 -- centering on the wrong (300px) figure put the fab
+       48px too far right, landing inside the panel instead of on its seam. */
+    .rd-rail-fab--left { left: 278px; }
     .rd-rail-fab--left.rd-rail-fab--collapsed { left: 4px; }
-    .rd-rail-fab--right { right: 348px; }
+    .rd-rail-fab--right { right: 326px; }
     .rd-rail-fab--right.rd-rail-fab--collapsed { right: 4px; }
     @media (max-width: 1100px) { .rd-rail-fab { display: none; } }
     /* Left-aligned within its column (not self-centered) so it stays near
@@ -268,6 +292,10 @@
     .rd-recs {
       display: flex; flex-direction: column;
       position: sticky; top: 178px;
+      /* Cancels .rd-layout's own 3rem right padding so this rail reaches
+         the true screen edge instead of floating with a gap, same trick as
+         Search's own filter panel. */
+      margin-right: -3rem;
       background: rgba(10,10,10,0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
       border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 1.4rem 1.1rem;
       max-height: calc(100vh - 200px); overflow-y: auto;
@@ -440,17 +468,16 @@
        (see fanpages-nav.css) -- it's a normal in-flow box that scrolls away
        with the page. .rd-topbar was still hard-pinned at top:76px assuming
        that bar was permanently there, which left it floating at the wrong
-       offset (or overlapping content) once the real nav scrolled off. On
-       mobile the book topbar becomes its own fixed top:0 bar and gets the
-       same Twitter-style hide-on-scroll-down/show-on-scroll-up treatment as
-       the bottom icon bar (see .rd-topbar--hidden, wired in the script
-       below) -- plus a tap-anywhere-in-the-chapter toggle, since a reader
-       actively reading wants the chrome gone without needing to scroll to
-       get it back. */
+       offset (or overlapping content) once the real nav scrolled off. Rather
+       than give the book topbar its own fixed/hide-on-scroll behavior, it
+       just drops out of fixed positioning entirely on mobile -- a plain
+       in-flow block sitting once, right under the persistent main nav, that
+       scrolls away naturally with the rest of the page like any other
+       element (no spacer needed either, since nothing needs to be held out
+       of flow for it anymore). */
     @media (max-width: 720px) {
-      .rd-topbar { top: 0; transition: transform 0.25s ease; }
-      .rd-topbar.rd-topbar--hidden { transform: translateY(-100%); }
-      .rd-topbar-spacer { height: 64px; }
+      .rd-topbar { position: static; }
+      .rd-topbar-spacer { display: none; }
       .rd-topbar-inner { padding: 0.55rem 0.85rem; gap: 0.6rem; }
       .rd-topbar-left { gap: 0.7rem; }
       .rd-topbar-divider { display: none; }
@@ -469,18 +496,44 @@
 
       .rd-layout { display: block; padding: 1.25rem 1.1rem 3.5rem; }
       .rd-article { max-width: 100%; }
-      .rd-meta-card { padding: 1.1rem 1.2rem; margin-bottom: 1.75rem; font-size: 0.82rem; }
-      .rd-meta-row-label { width: 88px; }
+      /* Flat AO3-style stacked list instead of the desktop boxed card --
+         no border/background/rounded corners eating into the width, each
+         row's label sits on its own line above the value instead of a
+         fixed-width side-by-side column, and everything runs edge to edge
+         at a smaller size. */
+      .rd-meta-card {
+        background: none; border: none; border-radius: 0;
+        border-bottom: 1px solid rgba(255,255,255,0.12);
+        padding: 0 0 1rem; margin-bottom: 1.5rem; font-size: 0.78rem;
+      }
+      .rd-meta-row { flex-direction: column; gap: 0.1rem; padding: 0.3rem 0; }
+      .rd-meta-row-label { width: auto; }
+      .rd-meta-tag {
+        background: none; border-radius: 0; color: #a8c6e8; text-decoration: underline;
+        padding: 0; margin: 0 0.5rem 0.15rem 0; font-size: 0.78rem;
+      }
+      .rd-meta-stats { gap: 0.25rem 0.9rem; }
       .rd-chapter-title { font-size: 1.55rem; margin-bottom: 1rem; }
       .rd-title-rule { margin-bottom: 1.75rem; }
       .rd-chapter-body { font-size: calc(1.02rem * var(--rd-font-scale, 1)); }
       .rd-nav-continue { padding: 0.8em 1.7em; font-size: 0.95rem; }
 
-      /* Hover never fires on touch, so the comment button has to just stay
-         visible; pulled inside a reserved right-side gutter on the
-         paragraph instead of floating off past the edge of the screen. */
-      .rd-para-comment-btn { opacity: 1; position: absolute; right: 0.1rem; bottom: 0.1rem; transform: none; background: rgba(0,0,0,0.4); }
-      .rd-para { padding-right: 2.3rem; }
+      /* Hover never fires on touch, so showing the button on every single
+         paragraph by default (the old always-opacity:1 mobile fallback)
+         just cluttered the whole chapter. Instead it only appears once the
+         reader actually highlights text inside that paragraph (wired in the
+         script below, Wattpad-style) or the paragraph already has real
+         comments on it (.has-comments, unchanged). It also drops out of
+         absolute positioning entirely here -- flows as a normal block right
+         under the paragraph ("in that newline space") instead of floating
+         in a reserved side gutter, so paragraph text can run the full width
+         of the screen edge to edge. */
+      .rd-para { padding-right: 0; }
+      .rd-para-comment-btn {
+        display: none; position: static; opacity: 1;
+        margin: 0.35rem 0 0; transform: none;
+      }
+      .rd-para-comment-btn.has-comments, .rd-para-comment-btn.rd-selected { display: inline-flex; }
 
       .rd-cp-drawer { top: 0; right: 0; left: 0; width: 100%; max-width: 100%; padding: 1.2rem 1.1rem; }
     }
@@ -633,10 +686,6 @@
   <div class="cc-list" id="rd-cp-list"></div>
 </div>
 
-<footer class="rd-content-z">
-  <p>This story is a fan-made page hosted on Between Two Worlds.</p>
-</footer>
-
 <script src="/fanpages/fanpages-site.js"></script>
 <script>
 const PATH_PARTS = window.location.pathname.split('/').filter(Boolean);
@@ -727,49 +776,24 @@ document.getElementById('rd-font-plus').addEventListener('click', () => {
 // Browse/Search's tab-box and filter-panel collapse arrows. Desktop only
 // (the fabs hide themselves under 1100px, where both rails are already
 // gone); state isn't persisted, same as Search's own rails. ────────────────
-const rdLayoutEl = document.querySelector('.rd-layout');
 const rdLeftRailToggle = document.getElementById('rd-left-rail-toggle');
 const rdRightRailToggle = document.getElementById('rd-right-rail-toggle');
 function setLeftRailCollapsed(collapsed) {
-  rdLayoutEl.classList.toggle('rd-layout--left-collapsed', collapsed);
+  document.body.classList.toggle('rd-left-collapsed', collapsed);
   rdLeftRailToggle.classList.toggle('rd-rail-fab--collapsed', collapsed);
   const label = collapsed ? 'Show panel' : 'Hide panel';
   rdLeftRailToggle.title = label;
   rdLeftRailToggle.setAttribute('aria-label', label);
 }
 function setRightRailCollapsed(collapsed) {
-  rdLayoutEl.classList.toggle('rd-layout--right-collapsed', collapsed);
+  document.body.classList.toggle('rd-right-collapsed', collapsed);
   rdRightRailToggle.classList.toggle('rd-rail-fab--collapsed', collapsed);
   const label = collapsed ? 'Show recommendations' : 'Hide recommendations';
   rdRightRailToggle.title = label;
   rdRightRailToggle.setAttribute('aria-label', label);
 }
-rdLeftRailToggle.addEventListener('click', () => setLeftRailCollapsed(!rdLayoutEl.classList.contains('rd-layout--left-collapsed')));
-rdRightRailToggle.addEventListener('click', () => setRightRailCollapsed(!rdLayoutEl.classList.contains('rd-layout--right-collapsed')));
-
-// ── Mobile book topbar: hides on scroll-down, reappears on scroll-up (same
-// recipe as the shared bottom icon bar in fanpages-nav.js), plus a tap
-// anywhere in the chapter body toggles it directly -- an actively-reading
-// mobile visitor wants the chrome gone without having to scroll first. ────
-(function () {
-  const topbar = document.querySelector('.rd-topbar');
-  const mq = window.matchMedia('(max-width: 720px)');
-  let lastY = window.scrollY;
-  window.addEventListener('scroll', () => {
-    if (!mq.matches) { topbar.classList.remove('rd-topbar--hidden'); lastY = window.scrollY; return; }
-    const y = window.scrollY;
-    if (Math.abs(y - lastY) < 6) return;
-    if (y > lastY && y > 60) topbar.classList.add('rd-topbar--hidden');
-    else topbar.classList.remove('rd-topbar--hidden');
-    lastY = y;
-  }, { passive: true });
-
-  document.getElementById('rd-chapter-body').addEventListener('click', (e) => {
-    if (!mq.matches) return;
-    if (e.target.closest('a, button, .rd-para-comment-btn')) return;
-    topbar.classList.toggle('rd-topbar--hidden');
-  });
-})();
+rdLeftRailToggle.addEventListener('click', () => setLeftRailCollapsed(!document.body.classList.contains('rd-left-collapsed')));
+rdRightRailToggle.addEventListener('click', () => setRightRailCollapsed(!document.body.classList.contains('rd-right-collapsed')));
 
 // ── Table of contents dropdown ──────────────────────────────────────────
 document.getElementById('rd-toc-toggle').addEventListener('click', (e) => {
@@ -974,7 +998,7 @@ async function renderRecs() {
         <img class="rd-rec-cover" src="${s.cover_url || '/images/gallery/pixernbath_13.png'}" alt="" />
         <span class="rd-rec-info">
           <p class="rd-rec-title">${escapeHtml(s.site_title || 'Untitled Story')}</p>
-          <p class="rd-rec-author">by <span>${escapeHtml(s.display_name || s.username || 'Unknown')}</span></p>
+          <p class="rd-rec-author">by <span>${escapeHtml(s.author || s.author_username || 'Unknown')}</span></p>
           <p class="rd-rec-teaser">${escapeHtml(s.synopsis || 'No description yet.')}</p>
           ${s.reason ? `<p class="rd-rec-reason">✦ ${escapeHtml(s.reason)}</p>` : ''}
         </span>
@@ -1056,6 +1080,22 @@ function setupParagraphComments() {
     })
     .catch(() => {});
 }
+
+// ── Mobile only: the comment button on a paragraph with no comments yet
+// stays hidden (see the ≤720px CSS) until the reader actually highlights
+// text inside it, Wattpad-style, instead of showing on every paragraph by
+// default. One shared listener re-evaluates on every selection change
+// rather than per-paragraph, since selection is a single global browser
+// concept, not something scoped to whichever paragraph you last touched. ──
+const rdMobileMq = window.matchMedia('(max-width: 720px)');
+document.addEventListener('selectionchange', () => {
+  if (!rdMobileMq.matches) return;
+  document.querySelectorAll('.rd-para-comment-btn.rd-selected').forEach(b => b.classList.remove('rd-selected'));
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.anchorNode) return;
+  const wrap = (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement)?.closest('.rd-para');
+  if (wrap) wrap.querySelector('.rd-para-comment-btn')?.classList.add('rd-selected');
+});
 
 function openParagraphComments(index, wrapEl) {
   activeParagraphIndex = index;
