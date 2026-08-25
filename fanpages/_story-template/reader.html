@@ -289,6 +289,30 @@
       font-family: 'Lora', 'Georgia', serif; color: #e8e8e8; line-height: 1.9;
       font-size: calc(1.15rem * var(--rd-font-scale, 1));
     }
+    /* Pasted/imported text going forward is already stripped down to plain
+       <p>/<strong>/<em>/<u> with no inline styling at all (see
+       sanitizePastedHtml() in the chapter editor) -- but chapters written
+       before that existed can still have raw Word/Docs clipboard HTML baked
+       into their saved body, carrying its own inline font-size/font-family/
+       color on top of ours. Those inline styles win over any plain class
+       selector (and don't respond to --rd-font-scale at all, since they're
+       absolute values, not inherited), which is exactly what read as "some
+       paragraphs randomly small/wrong font". Force plain text-content tags
+       back onto the chapter's own font-size/family/color/line-height --
+       bold/italic/underline/alignment survive since those come from real
+       tags or the text-align style, not this rule. Deliberately an explicit
+       tag list rather than a blanket `.rd-chapter-body *`: the paragraph
+       comment button lives as a sibling *inside* .rd-chapter-body too (see
+       setupParagraphComments()), and a wildcard would have `!important`'d
+       its own font-size/color right along with the real text. */
+    .rd-chapter-body p, .rd-chapter-body div, .rd-chapter-body li,
+    .rd-chapter-body span, .rd-chapter-body a, .rd-chapter-body strong,
+    .rd-chapter-body b, .rd-chapter-body em, .rd-chapter-body i, .rd-chapter-body u,
+    .rd-chapter-body blockquote, .rd-chapter-body h1, .rd-chapter-body h2,
+    .rd-chapter-body h3, .rd-chapter-body h4, .rd-chapter-body h5, .rd-chapter-body h6 {
+      font-family: inherit !important; font-size: inherit !important;
+      line-height: inherit !important; color: inherit !important;
+    }
     .rd-chapter-body p { margin: 0 0 1.2em; }
     .rd-chapter-body img { max-width: 100%; border-radius: 10px; display: block; margin: 0 auto 1.2em; }
     .rd-chapter-empty { color: #888; font-style: italic; }
