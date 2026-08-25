@@ -9,16 +9,6 @@
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <style>
-    /* ── Custom reader background — same recipe as the Profile/Notifications
-       pages' own custom backgrounds: z-index:0 fixed layers, with every
-       other direct child of body explicitly promoted to z-index:1 so real
-       content always paints above them (negative z-index alone isn't this
-       codebase's convention and has bitten us before — see .rd-content-z). ── */
-    .rd-bg-img {
-      position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover;
-      filter: blur(14px) brightness(0.9); z-index: 0; display: none;
-    }
-    .rd-bg-overlay { position: fixed; inset: 0; background: rgba(10,10,10,0.72); z-index: 0; display: none; }
     .rd-content-z { position: relative; z-index: 1; }
 
     /* ── Reader top bar — bleeds into the site's own dark top nav (same
@@ -159,16 +149,6 @@
     .rd-side-hr { width: 100%; height: 1px; background: rgba(255,255,255,0.1); }
     .rd-side-section { width: 100%; display: flex; flex-direction: column; align-items: center; }
     .rd-side-label { font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 0.6rem; }
-    .rd-theme-row { display: flex; gap: 0.6rem; }
-    .rd-theme-swatch {
-      width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
-      display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 700; color: #fff;
-      box-sizing: border-box; border: 2px solid transparent; overflow: hidden; padding: 0;
-    }
-    .rd-theme-swatch--dark { background: #0a0a0a; border-color: #333; }
-    .rd-theme-swatch--custom { background: #1a1a1a; border-style: dashed; border-color: #555; }
-    .rd-theme-swatch--custom img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .rd-theme-swatch.active { border-color: #7fa8d9; box-shadow: 0 0 8px rgba(127,168,217,0.6); }
     .rd-font-row { display: flex; gap: 0.6rem; }
     .rd-font-btn {
       width: 42px; height: 38px; border-radius: 10px; cursor: pointer;
@@ -200,7 +180,34 @@
          rail pushing it off-center. 3rem + 300px(18.75rem) + 2.5rem = 24.25rem. */
       padding: 3rem 3rem 6rem 24.25rem;
       display: grid; grid-template-columns: 1fr 300px; gap: 2.5rem; align-items: start;
+      transition: padding-left 0.4s cubic-bezier(0.22, 1, 0.36, 1), grid-template-columns 0.4s cubic-bezier(0.22, 1, 0.36, 1);
     }
+    /* Left/right rail collapse toggles — same fab-arrow pattern as Browse/
+       Search's "Sort and Filter" and tab-box collapse arrows. Left panel is
+       position:fixed so collapsing it is just a display:none + folding the
+       layout's padding-left back down to the plain page margin; the right
+       rail is a real grid column so its track collapses to 0 instead. */
+    .rd-layout--left-collapsed { padding-left: 3rem; }
+    .rd-layout--left-collapsed .rd-side-panel { display: none; }
+    .rd-layout--right-collapsed { grid-template-columns: 1fr 0px; }
+    .rd-layout--right-collapsed .rd-recs { display: none; }
+    .rd-rail-fab {
+      position: fixed; top: 50%; transform: translateY(-50%);
+      width: 44px; height: 44px; border-radius: 50%; z-index: 40;
+      background: #14121a; border: 1px solid rgba(255,255,255,0.28);
+      color: #ccc; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 22px rgba(0,0,0,0.55);
+      transition: left 0.4s cubic-bezier(0.22, 1, 0.36, 1), right 0.4s cubic-bezier(0.22, 1, 0.36, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), color 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .rd-rail-fab:hover { color: #fff; border-color: rgba(127,168,217,0.6); box-shadow: 0 4px 26px rgba(127,168,217,0.4); }
+    .rd-rail-fab--left, .rd-rail-fab--right { transform: translateY(-50%) rotate(180deg); }
+    .rd-rail-fab--left.rd-rail-fab--collapsed, .rd-rail-fab--right.rd-rail-fab--collapsed { transform: translateY(-50%) rotate(0deg); }
+    .rd-rail-fab--left { left: 348px; }
+    .rd-rail-fab--left.rd-rail-fab--collapsed { left: 4px; }
+    .rd-rail-fab--right { right: 348px; }
+    .rd-rail-fab--right.rd-rail-fab--collapsed { right: 4px; }
+    @media (max-width: 1100px) { .rd-rail-fab { display: none; } }
     /* Left-aligned within its column (not self-centered) so it stays near
        the floating left panel instead of drifting toward the middle of a
        now much wider column. */
@@ -258,16 +265,35 @@
     .rd-nav-continue:hover { box-shadow: 0 0 28px rgba(127,168,217,0.7); transform: translateY(-1px); }
     .rd-nav-last-updated { color: #888; font-family: 'Inter', sans-serif; font-size: 0.9rem; }
 
-    .rd-recs { display: flex; flex-direction: column; }
-    .rd-recs-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; color: #ccc; margin: 0 0 1rem; text-transform: uppercase; letter-spacing: 0.03em; }
-    .rd-recs-list { display: flex; flex-direction: column; gap: 1rem; }
-    .rd-rec-card { display: flex; gap: 0.75rem; text-decoration: none; color: inherit; }
-    .rd-rec-cover { width: 68px; height: 96px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1); }
-    .rd-rec-info { min-width: 0; }
-    .rd-rec-title { font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 700; color: #e8e8e8; margin: 0 0 0.2rem; line-height: 1.3; }
-    .rd-rec-card:hover .rd-rec-title { color: #7fa8d9; }
-    .rd-rec-teaser { font-size: 0.78rem; color: #999; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-    .rd-rec-reason { font-size: 0.7rem; color: #7fa8d9; font-style: italic; margin-top: 0.25rem; }
+    .rd-recs {
+      display: flex; flex-direction: column;
+      position: sticky; top: 178px;
+      background: rgba(10,10,10,0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 1.4rem 1.1rem;
+      max-height: calc(100vh - 200px); overflow-y: auto;
+    }
+    .rd-recs-title {
+      display: flex; align-items: center; gap: 0.4rem;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.1rem; color: #cfe0f5; margin: 0 0 1.1rem;
+      text-shadow: 0 0 14px rgba(127,168,217,0.4);
+    }
+    .rd-recs-title-deco { width: 18px; height: 18px; object-fit: contain; }
+    .rd-recs-list { display: flex; flex-direction: column; gap: 1.1rem; }
+    .rd-rec-card {
+      display: flex; gap: 0.85rem; text-decoration: none; color: inherit;
+      padding: 0.6rem; border-radius: 12px; border: 1px solid transparent; transition: border-color 0.15s, background 0.15s;
+    }
+    .rd-rec-card:hover { border-color: rgba(240,192,96,0.4); background: rgba(255,255,255,0.03); }
+    .rd-rec-cover { width: 76px; height: 108px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1); }
+    .rd-rec-info { min-width: 0; display: flex; flex-direction: column; }
+    .rd-rec-title {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.98rem; font-weight: 600; color: #cfe0f5; margin: 0 0 0.25rem; line-height: 1.25;
+    }
+    .rd-rec-card:hover .rd-rec-title { text-shadow: 0 0 12px rgba(127,168,217,0.6); }
+    .rd-rec-author { font-family: 'Inter', sans-serif; font-size: 0.72rem; color: #999; margin: 0 0 0.35rem; }
+    .rd-rec-author span { color: #bbb; font-weight: 600; }
+    .rd-rec-teaser { font-size: 0.76rem; color: #999; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .rd-rec-reason { font-size: 0.68rem; color: #f0c060; font-weight: 600; margin-top: auto; padding-top: 0.35rem; }
 
     /* ── Inline paragraph comments ── */
     .rd-para { position: relative; }
@@ -408,12 +434,59 @@
       .rd-layout { grid-template-columns: 1fr; padding-left: 3rem; }
       .rd-recs { display: none; }
     }
+
+    /* ── Mobile reader (≤720px) ──────────────────────────────────────────
+       The shared top nav (.fpnav-bar) is no longer fixed/sticky on mobile
+       (see fanpages-nav.css) -- it's a normal in-flow box that scrolls away
+       with the page. .rd-topbar was still hard-pinned at top:76px assuming
+       that bar was permanently there, which left it floating at the wrong
+       offset (or overlapping content) once the real nav scrolled off. On
+       mobile the book topbar becomes its own fixed top:0 bar and gets the
+       same Twitter-style hide-on-scroll-down/show-on-scroll-up treatment as
+       the bottom icon bar (see .rd-topbar--hidden, wired in the script
+       below) -- plus a tap-anywhere-in-the-chapter toggle, since a reader
+       actively reading wants the chrome gone without needing to scroll to
+       get it back. */
+    @media (max-width: 720px) {
+      .rd-topbar { top: 0; transition: transform 0.25s ease; }
+      .rd-topbar.rd-topbar--hidden { transform: translateY(-100%); }
+      .rd-topbar-spacer { height: 64px; }
+      .rd-topbar-inner { padding: 0.55rem 0.85rem; gap: 0.6rem; }
+      .rd-topbar-left { gap: 0.7rem; }
+      .rd-topbar-divider { display: none; }
+      .rd-topbar-book { gap: 0.6rem; padding-right: 1.2rem; }
+      .rd-topbar-cover { width: 34px; height: 50px; }
+      .rd-topbar-title { font-size: 0.92rem; max-width: 34vw; }
+      .rd-topbar-by { font-size: 0.72rem; }
+      .rd-topbar-book-arrow svg { width: 18px; height: 18px; }
+      .rd-topbar-actions { gap: 0.4rem; }
+      .rd-edit-btn { font-size: 0.78rem; padding: 0.45em 0.8em; }
+      .rd-icon-btn { width: 34px; height: 34px; }
+      .rd-icon-btn svg { width: 16px; height: 16px; }
+      .rd-like-btn { padding: 0 0.65rem 0 0.55rem; }
+      .rd-like-btn span#rd-like-count { font-size: 0.78rem; }
+      .rd-toc-dropdown { left: 0.85rem; right: 0.85rem; min-width: 0; max-height: 70vh; }
+
+      .rd-layout { display: block; padding: 1.25rem 1.1rem 3.5rem; }
+      .rd-article { max-width: 100%; }
+      .rd-meta-card { padding: 1.1rem 1.2rem; margin-bottom: 1.75rem; font-size: 0.82rem; }
+      .rd-meta-row-label { width: 88px; }
+      .rd-chapter-title { font-size: 1.55rem; margin-bottom: 1rem; }
+      .rd-title-rule { margin-bottom: 1.75rem; }
+      .rd-chapter-body { font-size: calc(1.02rem * var(--rd-font-scale, 1)); }
+      .rd-nav-continue { padding: 0.8em 1.7em; font-size: 0.95rem; }
+
+      /* Hover never fires on touch, so the comment button has to just stay
+         visible; pulled inside a reserved right-side gutter on the
+         paragraph instead of floating off past the edge of the screen. */
+      .rd-para-comment-btn { opacity: 1; position: absolute; right: 0.1rem; bottom: 0.1rem; transform: none; background: rgba(0,0,0,0.4); }
+      .rd-para { padding-right: 2.3rem; }
+
+      .rd-cp-drawer { top: 0; right: 0; left: 0; width: 100%; max-width: 100%; padding: 1.2rem 1.1rem; }
+    }
   </style>
 </head>
 <body class="mod-theme" id="reader-body">
-
-<img class="rd-bg-img" id="rd-bg-img" alt="" />
-<div class="rd-bg-overlay" id="rd-bg-overlay"></div>
 
 <div id="fanpages-topbar-root"></div>
 <script src="/fanpages/fanpages-nav.js"></script>
@@ -461,16 +534,6 @@
 
   <div class="rd-side-hr"></div>
 
-  <div class="rd-side-section">
-    <p class="rd-side-label">Theme</p>
-    <div class="rd-theme-row">
-      <button class="rd-theme-swatch rd-theme-swatch--dark active" id="rd-theme-dark" type="button" title="Dark"></button>
-      <button class="rd-theme-swatch rd-theme-swatch--custom" id="rd-theme-custom" type="button" title="Upload a custom background">
-        <img id="rd-theme-custom-preview" alt="" style="display:none;" />
-        <span id="rd-theme-custom-plus">+</span>
-      </button>
-    </div>
-  </div>
   <div class="rd-side-section">
     <p class="rd-side-label">Text Size</p>
     <div class="rd-font-row">
@@ -526,12 +589,19 @@
   </article>
 
   <aside class="rd-recs" id="rd-recs">
-    <p class="rd-recs-title">You Might Also Like</p>
+    <p class="rd-recs-title"><img class="rd-recs-title-deco" src="/images/home/decoration-1.png" alt="" />You Might Also Like</p>
     <div class="rd-recs-list" id="rd-recs-list">
       <p style="color:#888; font-size:0.85rem;">Loading…</p>
     </div>
   </aside>
 </main>
+
+<button class="rd-rail-fab rd-rail-fab--left" id="rd-left-rail-toggle" type="button" title="Hide panel" aria-label="Hide panel">
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+</button>
+<button class="rd-rail-fab rd-rail-fab--right" id="rd-right-rail-toggle" type="button" title="Hide recommendations" aria-label="Hide recommendations">
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+</button>
 
 <!-- Full-height drawer over the right side of the screen — covers the
      recommended-stories rail while open, same idea used for both viewing
@@ -633,86 +703,14 @@ function extractYouTubeId(url) {
   return m ? m[1] : null;
 }
 
-// ── Reader theme (dark, or a custom uploaded+blurred background) — an
-// account-level setting (like Notifications' own page-background picker),
-// so it follows this reader into every story instead of living on any one
-// story's record. Text size stays a lighter localStorage-only preference. ──
+// ── Reader is dark-mode only now — no custom background picker. Text size
+// stays a lighter localStorage-only preference. ──
 const FONT_SCALE_KEY = 'btw_reader_font_scale';
 let readerFontScale = parseFloat(localStorage.getItem(FONT_SCALE_KEY)) || 1;
-let readerTheme = 'dark';
-let readerThemeBgUrl = '';
 
-function applyReaderTheme() {
-  const bgImg = document.getElementById('rd-bg-img');
-  const bgOverlay = document.getElementById('rd-bg-overlay');
-  if (readerTheme === 'custom' && readerThemeBgUrl) {
-    bgImg.src = readerThemeBgUrl;
-    bgImg.style.display = 'block';
-    bgOverlay.style.display = 'block';
-  } else {
-    bgImg.style.display = 'none';
-    bgOverlay.style.display = 'none';
-  }
-  document.getElementById('rd-theme-dark').classList.toggle('active', readerTheme !== 'custom');
-  document.getElementById('rd-theme-custom').classList.toggle('active', readerTheme === 'custom');
-  const preview = document.getElementById('rd-theme-custom-preview');
-  const plus = document.getElementById('rd-theme-custom-plus');
-  if (readerThemeBgUrl) {
-    preview.src = readerThemeBgUrl;
-    preview.style.display = 'block';
-    plus.style.display = 'none';
-  } else {
-    preview.style.display = 'none';
-    plus.style.display = '';
-  }
-}
 function applyFontScale() {
   document.documentElement.style.setProperty('--rd-font-scale', readerFontScale);
 }
-
-async function setReaderTheme(theme) {
-  readerTheme = theme;
-  applyReaderTheme();
-  if (!authToken) return;
-  await fetch('/api/account/reader-theme', {
-    method: 'PUT',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ theme }),
-  }).catch(() => {});
-}
-
-document.getElementById('rd-theme-dark').addEventListener('click', () => setReaderTheme('dark'));
-// Guests can preview a custom background too — it just can't persist
-// anywhere without an account, so the upload step below is skipped for them
-// and it resets back to Dark on their next visit.
-document.getElementById('rd-theme-custom').addEventListener('click', () => {
-  document.getElementById('rd-theme-bg-file-input').click();
-});
-
-const readerThemeBgFileInput = document.createElement('input');
-readerThemeBgFileInput.type = 'file';
-readerThemeBgFileInput.accept = 'image/png,image/jpeg,image/webp,image/gif';
-readerThemeBgFileInput.id = 'rd-theme-bg-file-input';
-readerThemeBgFileInput.hidden = true;
-document.body.appendChild(readerThemeBgFileInput);
-readerThemeBgFileInput.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  readerTheme = 'custom';
-  readerThemeBgUrl = URL.createObjectURL(file); // instant preview
-  applyReaderTheme();
-  if (authToken) {
-    const fd = new FormData();
-    fd.append('image', file);
-    const res = await fetch('/api/account/reader-theme-bg', { method: 'PUT', headers: authHeaders(), body: fd });
-    if (res.ok) {
-      const data = await res.json();
-      readerThemeBgUrl = data.theme_bg_url;
-      applyReaderTheme();
-    }
-  }
-  readerThemeBgFileInput.value = '';
-});
 
 document.getElementById('rd-font-minus').addEventListener('click', () => {
   readerFontScale = Math.max(0.75, +(readerFontScale - 0.1).toFixed(2));
@@ -724,6 +722,54 @@ document.getElementById('rd-font-plus').addEventListener('click', () => {
   localStorage.setItem(FONT_SCALE_KEY, readerFontScale);
   applyFontScale();
 });
+
+// ── Left/right rail collapse toggles — same fab-arrow interaction as
+// Browse/Search's tab-box and filter-panel collapse arrows. Desktop only
+// (the fabs hide themselves under 1100px, where both rails are already
+// gone); state isn't persisted, same as Search's own rails. ────────────────
+const rdLayoutEl = document.querySelector('.rd-layout');
+const rdLeftRailToggle = document.getElementById('rd-left-rail-toggle');
+const rdRightRailToggle = document.getElementById('rd-right-rail-toggle');
+function setLeftRailCollapsed(collapsed) {
+  rdLayoutEl.classList.toggle('rd-layout--left-collapsed', collapsed);
+  rdLeftRailToggle.classList.toggle('rd-rail-fab--collapsed', collapsed);
+  const label = collapsed ? 'Show panel' : 'Hide panel';
+  rdLeftRailToggle.title = label;
+  rdLeftRailToggle.setAttribute('aria-label', label);
+}
+function setRightRailCollapsed(collapsed) {
+  rdLayoutEl.classList.toggle('rd-layout--right-collapsed', collapsed);
+  rdRightRailToggle.classList.toggle('rd-rail-fab--collapsed', collapsed);
+  const label = collapsed ? 'Show recommendations' : 'Hide recommendations';
+  rdRightRailToggle.title = label;
+  rdRightRailToggle.setAttribute('aria-label', label);
+}
+rdLeftRailToggle.addEventListener('click', () => setLeftRailCollapsed(!rdLayoutEl.classList.contains('rd-layout--left-collapsed')));
+rdRightRailToggle.addEventListener('click', () => setRightRailCollapsed(!rdLayoutEl.classList.contains('rd-layout--right-collapsed')));
+
+// ── Mobile book topbar: hides on scroll-down, reappears on scroll-up (same
+// recipe as the shared bottom icon bar in fanpages-nav.js), plus a tap
+// anywhere in the chapter body toggles it directly -- an actively-reading
+// mobile visitor wants the chrome gone without having to scroll first. ────
+(function () {
+  const topbar = document.querySelector('.rd-topbar');
+  const mq = window.matchMedia('(max-width: 720px)');
+  let lastY = window.scrollY;
+  window.addEventListener('scroll', () => {
+    if (!mq.matches) { topbar.classList.remove('rd-topbar--hidden'); lastY = window.scrollY; return; }
+    const y = window.scrollY;
+    if (Math.abs(y - lastY) < 6) return;
+    if (y > lastY && y > 60) topbar.classList.add('rd-topbar--hidden');
+    else topbar.classList.remove('rd-topbar--hidden');
+    lastY = y;
+  }, { passive: true });
+
+  document.getElementById('rd-chapter-body').addEventListener('click', (e) => {
+    if (!mq.matches) return;
+    if (e.target.closest('a, button, .rd-para-comment-btn')) return;
+    topbar.classList.toggle('rd-topbar--hidden');
+  });
+})();
 
 // ── Table of contents dropdown ──────────────────────────────────────────
 document.getElementById('rd-toc-toggle').addEventListener('click', (e) => {
@@ -928,8 +974,9 @@ async function renderRecs() {
         <img class="rd-rec-cover" src="${s.cover_url || '/images/gallery/pixernbath_13.png'}" alt="" />
         <span class="rd-rec-info">
           <p class="rd-rec-title">${escapeHtml(s.site_title || 'Untitled Story')}</p>
+          <p class="rd-rec-author">by <span>${escapeHtml(s.display_name || s.username || 'Unknown')}</span></p>
           <p class="rd-rec-teaser">${escapeHtml(s.synopsis || 'No description yet.')}</p>
-          ${s.reason ? `<p class="rd-rec-reason">${escapeHtml(s.reason)}</p>` : ''}
+          ${s.reason ? `<p class="rd-rec-reason">✦ ${escapeHtml(s.reason)}</p>` : ''}
         </span>
       </a>
     `).join('');
@@ -1393,18 +1440,6 @@ window.addEventListener('resize', () => { if (!gifPickerWrap.hidden && gifActive
 
 (async () => {
   applyFontScale();
-  applyReaderTheme();
-  if (authToken) {
-    fetch('/api/auth/me', { headers: authHeaders() })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (!data || !data.user) return;
-        readerTheme = data.user.reader_theme || 'dark';
-        readerThemeBgUrl = data.user.reader_theme_bg_url || '';
-        applyReaderTheme();
-      })
-      .catch(() => {});
-  }
 
   const data = await ModeratorSite.load(SLUG);
   SITE = (data && data.site) || null;
