@@ -1186,24 +1186,27 @@
 
       /* Edit Club topbar -- fanpages.css's own ≤820px rule wraps
          .mod-edit-bar onto two rows once Delete Page/Delete Club/Cancel/
-         Save don't all fit on one line, but never shrinks the buttons
-         themselves, and .cl-edit-modal's top padding stays hardcoded to
-         the desktop 84px-tall single-row bar regardless -- so the now-
-         taller wrapped bar physically overlapped the top of the edit
-         form. Same fix as the Story Editor's own .mod-edit-bar (see
-         _story-template/edit.html's ≤720px block): hide the X-close
-         (Cancel already does the same thing) and shrink the remaining
-         buttons enough to fit back on one ~64px row, then shrink the
-         content's top offset to match instead of the desktop bar height. */
-      #cl-edit-topbar .mod-edit-bar-back { display: none; }
+         Save don't all fit on one line, but never resizes anything to
+         actually fit that -- the buttons stayed full desktop size (barely
+         legible/tappable once wrapped) and .cl-edit-modal's top padding
+         stayed hardcoded to the desktop single-row 84px bar height, so the
+         taller wrapped bar physically overlapped the top of the edit form.
+         Rather than shrinking the bar down to a cramped single row, giving
+         it real height on purpose (~1/5 of the screen, via min-height:20vh)
+         lets Close/Delete/Cancel/Save wrap onto two comfortably-sized,
+         easy-to-tap rows, vertically centered in that space -- then the
+         content's own top offset is set to the exact same 20vh so nothing
+         underneath it is ever covered, however tall the wrapped content
+         actually ends up. */
+      #cl-edit-topbar {
+        min-height: 20vh; height: auto; padding: 1rem 1rem; gap: 0.7rem 0.8rem;
+        align-content: center;
+      }
       #cl-edit-topbar .mod-edit-bar-save, #cl-edit-topbar .mod-edit-bar-cancel,
       #cl-edit-topbar .mod-edit-bar-delete {
-        font-size: 0.8rem; padding: 0.55em 1rem;
+        font-size: 0.92rem; padding: 0.65em 1.3em;
       }
-      #cl-edit-topbar { padding: 0 0.85rem; gap: 0.5rem 0.6rem; }
       #cl-edit-topbar .mod-edit-bar-actions { width: auto; }
-      .cl-edit-modal { padding: calc(64px + 1.25rem) 1rem 3rem; }
-      .cl-edit-pages-col { top: calc(64px + 1rem); max-height: calc(100vh - 64px - 2rem); }
     }
 
     .cl-gate { max-width: 500px; margin: 8rem auto; text-align: center; color: #999; padding: 0 1.5rem; }
@@ -1394,6 +1397,17 @@
       .cl-edit-layout { flex-direction: column; }
       .cl-edit-divider { display: none; }
       .cl-edit-pages-col { width: auto; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); position: static; max-height: none; overflow-y: visible; }
+    }
+    /* Placed after the base .cl-edit-modal/.cl-edit-pages-col rules above
+       (equal specificity, plain class selectors -- a copy of this sitting
+       any earlier in the cascade loses to those base rules regardless of
+       the media condition, which is what silently broke this the first
+       time around) so the content's top offset actually matches
+       #cl-edit-topbar's own ~20vh mobile height instead of the desktop
+       84px bar height. */
+    @media (max-width: 720px) {
+      .cl-edit-modal { padding: calc(20vh + 1.25rem) 1rem 3rem; }
+      .cl-edit-pages-col { top: calc(20vh + 1rem); max-height: calc(100vh - 20vh - 2rem); }
     }
 
     /* Generic reusable image-upload box — same recipe as
