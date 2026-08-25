@@ -178,7 +178,14 @@
          about it. */
       padding: 3rem 3rem 6rem 21.25rem;
       display: grid; grid-template-columns: 1fr 300px; gap: 2.5rem; align-items: start;
-      transition: padding-left 0.4s cubic-bezier(0.22, 1, 0.36, 1), grid-template-columns 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+      /* A slower, evenly-paced "standard" ease (accelerate then decelerate,
+         no aggressive front-loaded snap) reads far less jerky than a sharp
+         ease-out for a change this size -- text reflow is expensive work
+         for the browser to redo every frame, and a curve that dumps most of
+         the motion into the first ~100ms was asking it to do most of that
+         work all at once. */
+      transition: padding-left 0.55s cubic-bezier(0.4, 0, 0.2, 1), grid-template-columns 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+      will-change: padding-left, grid-template-columns;
     }
     /* Left/right rail collapse toggles — same fab-arrow pattern as Browse/
        Search's "Sort and Filter" and tab-box collapse arrows. State toggles
@@ -190,9 +197,28 @@
        is an ancestor of both, so one class there can reach both regardless
        of which one is/isn't nested inside the grid. */
     body.rd-left-collapsed .rd-layout { padding-left: 3rem; }
-    body.rd-left-collapsed .rd-side-panel { display: none; }
     body.rd-right-collapsed .rd-layout { grid-template-columns: 1fr 0px; }
-    body.rd-right-collapsed .rd-recs { display: none; }
+    /* Panels used to hard-toggle display:none the instant a rail collapsed
+       -- an un-animatable property, so they popped in/out in a single
+       frame while the text around them was still smoothly sliding for
+       another half-second, which is what actually read as "jerky" (one
+       part of the motion instant, the rest gradual). Sliding + fading them
+       out in step with the same transition the layout itself uses turns it
+       into one continuous motion instead of a snap followed by a slide.
+       pointer-events is turned off immediately (not eased) so a collapsed,
+       invisible panel can't still eat clicks meant for the text under it. */
+    /* .rd-side-panel is position:fixed, entirely outside the grid -- its
+       own width never changes on its own, so it needs its own slide to
+       read as connected to the text moving into its place. .rd-recs, on
+       the other hand, IS the grid's own second track: its rendered width
+       already shrinks in step with grid-template-columns above, so it only
+       needs a fade here -- adding a slide on top of a box that's also
+       shrinking underneath it would compound into a faster, mismatched
+       motion instead of one clean one. */
+    .rd-side-panel { transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.55s cubic-bezier(0.4, 0, 0.2, 1); }
+    .rd-recs { transition: opacity 0.55s cubic-bezier(0.4, 0, 0.2, 1); }
+    body.rd-left-collapsed .rd-side-panel { transform: translateX(-110%); opacity: 0; pointer-events: none; }
+    body.rd-right-collapsed .rd-recs { opacity: 0; pointer-events: none; }
     /* Collapsing the left panel frees up real width, but .rd-article stays
        flush against the left edge of its own grid column (deliberate in
        the normal, left-panel-open layout, so the text sits close to that
@@ -211,7 +237,7 @@
       color: #ccc; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
       box-shadow: 0 4px 22px rgba(0,0,0,0.55);
-      transition: left 0.4s cubic-bezier(0.22, 1, 0.36, 1), right 0.4s cubic-bezier(0.22, 1, 0.36, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), color 0.15s, border-color 0.15s, box-shadow 0.15s;
+      transition: left 0.55s cubic-bezier(0.4, 0, 0.2, 1), right 0.55s cubic-bezier(0.4, 0, 0.2, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), color 0.15s, border-color 0.15s, box-shadow 0.15s;
     }
     .rd-rail-fab:hover { color: #fff; border-color: rgba(127,168,217,0.6); box-shadow: 0 4px 26px rgba(127,168,217,0.4); }
     .rd-rail-fab--left, .rd-rail-fab--right { transform: translateY(-50%) rotate(180deg); }
