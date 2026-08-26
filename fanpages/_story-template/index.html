@@ -41,6 +41,20 @@
   </div>
 </div>
 
+<!-- "Continue where you left off?" — Wattpad-style resume prompt, shown when
+     Start Reading is clicked and the server reports meaningful saved
+     progress on some chapter (see site.resume in the API response). -->
+<div class="mod-confirm-overlay" id="resume-confirm-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title">Continue where you left off?</p>
+    <p class="mod-confirm-text" id="resume-confirm-text"></p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="resume-confirm-restart" type="button">Start From The Top</button>
+      <button class="mod-btn" id="resume-confirm-yes" type="button" style="background:#1fb6a8;color:#04211d;">Resume Reading</button>
+    </div>
+  </div>
+</div>
+
 <!-- Delete-story confirmation — centered on-page modal -->
 <div class="mod-confirm-overlay" id="delete-story-confirm-overlay" hidden>
   <div class="mod-confirm-modal">
@@ -1209,6 +1223,32 @@ function renderStartReadingBtn(chapters) {
   btn.href = first ? `${STORY_BASE}/reader?ch=${first.id}` : `${STORY_BASE}/chapters`;
 }
 
+// "Continue where you left off?" — Wattpad-style. site.resume (see
+// sendSiteLookup on the server) names whichever chapter this logged-in
+// reader most recently reported scroll progress on, as long as it isn't
+// basically unstarted or basically finished. Clicking Start Reading with a
+// resume candidate on file intercepts the plain navigation and asks first;
+// with no candidate the button just falls through to its normal href.
+function wireStartReadingResume(s) {
+  const btn = document.getElementById('start-reading-btn');
+  const resume = s.resume;
+  if (!resume) return;
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('resume-confirm-text').textContent =
+      `You're ${resume.percent}% through "${resume.chapter_title || 'Untitled Chapter'}".`;
+    document.getElementById('resume-confirm-overlay').hidden = false;
+  });
+  document.getElementById('resume-confirm-restart').addEventListener('click', () => {
+    document.getElementById('resume-confirm-overlay').hidden = true;
+    window.location.href = btn.href;
+  });
+  document.getElementById('resume-confirm-yes').addEventListener('click', () => {
+    document.getElementById('resume-confirm-overlay').hidden = true;
+    window.location.href = `${STORY_BASE}/reader?ch=${resume.chapter_id}&resume=1`;
+  });
+}
+
 // Wattpad-style abbreviated counts (570000 -> "570K", 22800 -> "22.8K").
 function formatCount(n) {
   n = Number(n) || 0;
@@ -1284,6 +1324,7 @@ function renderPartsStatus(s, chapters) {
   renderAuthorTeaserCard(s);
   renderBookmarkBtn(s);
   renderStartReadingBtn(siteData.chapters);
+  wireStartReadingResume(s);
   renderHeroStats(s);
   renderReadingProgress(s);
   renderPartsStatus(s, siteData.chapters);

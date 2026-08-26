@@ -20,6 +20,12 @@
       position: fixed; top: 76px; left: 0; right: 0; z-index: 150;
     }
     .rd-topbar-spacer { height: 86px; }
+    /* Wattpad-style "how far into this chapter" rail, pinned to the
+       topbar's own bottom edge (an absolutely-positioned child of
+       .rd-topbar, not a separately fixed element) so it tracks whichever
+       positioning .rd-topbar itself is using at the current viewport width. */
+    .rd-progress-rail { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,0.06); z-index: 1; }
+    .rd-progress-rail-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #7fa8d9, #3dd6b8); transition: width 0.2s linear; }
     .rd-topbar-inner {
       padding: 0.75rem 2rem;
       display: flex; align-items: center; justify-content: space-between; gap: 1.5rem;
@@ -526,7 +532,12 @@
        element (no spacer needed either, since nothing needs to be held out
        of flow for it anymore). */
     @media (max-width: 720px) {
-      .rd-topbar { position: static; }
+      /* Stays a positioned element (relative instead of fixed) so
+         .rd-progress-rail -- an absolutely-positioned child anchored to
+         .rd-topbar's own bottom edge -- doesn't fall back to some further-up
+         ancestor as its containing block once .rd-topbar leaves fixed
+         positioning here. */
+      .rd-topbar { position: relative; }
       .rd-topbar-spacer { display: none; }
       .rd-topbar-inner { padding: 0.55rem 0.85rem; gap: 0.6rem; }
       .rd-topbar-left { gap: 0.7rem; }
@@ -623,6 +634,15 @@
         <span id="rd-like-count">0</span>
       </button>
     </div>
+  </div>
+
+  <!-- Wattpad-style thin progress rail along the topbar's own bottom edge --
+       an absolutely-positioned child tracks whatever position .rd-topbar
+       itself is in (fixed on desktop, static once the mobile media query
+       below takes over), so it never needs its own separate fixed-offset
+       math for the two layouts. -->
+  <div class="rd-progress-rail">
+    <div class="rd-progress-rail-fill" id="rd-progress-rail-fill"></div>
   </div>
 </div>
 <div class="rd-topbar-spacer"></div>
@@ -784,6 +804,7 @@ let SITE = null;
 let CHAPTERS = [];
 let CURRENT = null;
 let IS_SELF = false;
+let pendingResumeScroll = false;
 
 function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -959,8 +980,18 @@ function renderChapter() {
     editDivider.style.display = 'none';
   }
 
-  window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
   history.replaceState({}, '', `${STORY_BASE}/reader?ch=${CURRENT.id}`);
+
+  // "Resume Reading" from the story Home's prompt lands here with
+  // ?resume=1 -- jump straight to the saved scroll position instead of the
+  // usual top-of-chapter reset. Deferred a frame so the jump target is
+  // measured against the body's real laid-out height, not a possibly-still-
+  // reflowing one from mid-render.
+  const doResume = pendingResumeScroll;
+  pendingResumeScroll = false;
+  requestAnimationFrame(() => {
+    if (doResume) scrollToSavedProgress(); else window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+  });
 
   resetReadProgressTracking();
 }
@@ -979,6 +1010,17 @@ function computeReadPercent() {
   const scrolledPast = (window.scrollY + window.innerHeight) - bodyTop;
   return Math.max(0, Math.min(100, Math.round((scrolledPast / bodyHeight) * 100)));
 }
+// Inverse of computeReadPercent() -- jumps to whatever scroll position
+// corresponds to CURRENT's saved percent, for the "Resume Reading" flow.
+function scrollToSavedProgress() {
+  const bodyEl = document.getElementById('rd-chapter-body');
+  if (!bodyEl || !CURRENT) return;
+  const bodyTop = bodyEl.getBoundingClientRect().top + window.scrollY;
+  const bodyHeight = bodyEl.offsetHeight;
+  const pct = Math.max(0, Math.min(100, CURRENT.progress_percent || 0));
+  const targetY = bodyTop + (pct / 100) * bodyHeight - window.innerHeight;
+  window.scrollTo({ top: Math.max(0, targetY), behavior: 'instant' in window ? 'instant' : 'auto' });
+}
 function saveReadProgress() {
   if (!authToken || !CURRENT) return;
   const pct = computeReadPercent();
@@ -995,7 +1037,20 @@ function resetReadProgressTracking() {
   // the reader supplied it) so re-scrolling past ground already covered
   // doesn't just re-send the same number over and over.
   lastSavedReadPercent = (CURRENT && CURRENT.progress_percent) || 0;
+  updateProgressRail();
 }
+// Wattpad-style rail under the topbar -- updates live on every scroll frame
+// (rAF-throttled, not the 800ms network-save throttle below) since it's a
+// pure visual readout with no server round-trip of its own.
+let progressRailFrame = null;
+function updateProgressRail() {
+  const fill = document.getElementById('rd-progress-rail-fill');
+  if (fill) fill.style.width = computeReadPercent() + '%';
+}
+window.addEventListener('scroll', () => {
+  if (progressRailFrame) return;
+  progressRailFrame = requestAnimationFrame(() => { progressRailFrame = null; updateProgressRail(); });
+});
 let readProgressScrollTimer = null;
 window.addEventListener('scroll', () => {
   if (readProgressScrollTimer) return;
@@ -1603,7 +1658,9 @@ window.addEventListener('resize', () => { if (!gifPickerWrap.hidden && gifActive
   renderFollowState();
   renderSideLinks();
 
-  const requestedId = new URLSearchParams(window.location.search).get('ch');
+  const requestedParams = new URLSearchParams(window.location.search);
+  const requestedId = requestedParams.get('ch');
+  pendingResumeScroll = requestedParams.get('resume') === '1';
   CURRENT = (requestedId && CHAPTERS.find(c => String(c.id) === String(requestedId))) || CHAPTERS[0] || null;
 
   if (!CURRENT) {

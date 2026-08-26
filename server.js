@@ -5891,6 +5891,23 @@ async function sendSiteLookup(query, params, req, res) {
     ? Math.round(chapters.reduce((sum, ch) => sum + ch.progress_percent, 0) / chapters.length)
     : 0;
 
+  // "Continue where you left off?" target for the Start Reading button --
+  // whichever chapter this viewer most recently reported progress on, as
+  // long as it isn't basically unstarted or basically finished (both ends
+  // aren't worth a resume prompt over just reading normally).
+  let resume = null;
+  if (viewerId) {
+    const { rows: [resumeRow] } = await pool.query(
+      `SELECT crp.chapter_id, crp.percent, mc.title
+       FROM chapter_reading_progress crp
+       JOIN moderator_chapters mc ON mc.id = crp.chapter_id
+       WHERE mc.site_id = $1 AND crp.user_id = $2 AND crp.percent > 2 AND crp.percent < 97
+       ORDER BY crp.updated_at DESC LIMIT 1`,
+      [site.id, viewerId]
+    );
+    if (resumeRow) resume = { chapter_id: resumeRow.chapter_id, percent: resumeRow.percent, chapter_title: resumeRow.title };
+  }
+
   const likedSet = new Set(likedGalleryIds.rows.map(r => r.gallery_id));
   const bookmarkedSet = new Set(bookmarkedGalleryIds.rows.map(r => r.gallery_id));
   gallery.forEach(g => {
@@ -5931,6 +5948,7 @@ async function sendSiteLookup(query, params, req, res) {
       comment_count: Number(siteCommentCount.rows[0].count),
       bookmark_count: Number(siteBookmarkCount.rows[0].count),
       reading_progress_percent: readingProgressPercent,
+      resume,
     },
     chapters,
     characters,
