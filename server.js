@@ -493,6 +493,30 @@ async function initDb() {
     ON CONFLICT (name) DO NOTHING
   `).catch(e => console.error('character_species_catalog seed:', e.message));
 
+  // Gallery tag dictionary — split off from tag_catalog (which stays the
+  // story-only Additional Tags vocabulary). Gallery tags describe what's
+  // literally depicted in a piece of art (pose, species, setting, anatomy),
+  // a much more e621-shaped vocabulary than a story's narrative/thematic
+  // tags, so the two dictionaries no longer share suggestions or wrangling.
+  // Seeded from two sources: every tag already in use across existing BTW
+  // gallery posts (so nothing already typed becomes "unrecognized" the
+  // moment this ships), plus every non-artist tag (general/species/
+  // character/copyright/meta, artist/contributor excluded) scouted from 8
+  // real e621/e926 posts, underscores turned into spaces to match this
+  // site's tag formatting. Overlap with tag_catalog is fine and expected —
+  // the two vocabularies are independent now, not deduplicated against
+  // each other.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS gallery_tag_catalog (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL
+    );
+  `).catch(e => console.error('gallery_tag_catalog migration:', e.message));
+  const GALLERY_TAG_CATALOG_SEED = ["<3","3 toes","abs","affectionate","after sex","age difference","alcohol","ambiguous anthro","ambiguous gender","ambiguous penetrated","anal","anal penetration","anal wink","animal genitalia","animal penis","anthro","anthro on anthro","anthro penetrated","anthro penetrating","anthro penetrating anthro","anthro penetrating male","anthrofied","anus","arm around waist","Art","assisted exposure","aura","backsack","ball size difference","balls","balls touching","bar","bareback","battle scarred","becoming erect","Bed","bedroom","being watched","bestiality","big balls","big penis","big pupils","biped","black body","black eyes","black fur","black nose","black penis","bleeding","Blood","bloodshot eyes","blue body","blue eyes","blush","blush lines","blushing","bodily fluids","book","bookshelf","booth","bottomless","bottomwear","bouncing balls","boxer briefs","breathing","bronze eyes","bros being bros","burn marks","butt","canid","canine","canine genitalia","canine penis","canis","casual sex","caught","chair","chest tuft","chibi","Cinderace","cloak","close-up","clothed","clothed sex","clothing","clothing pull","cocaine","cocaine line","cocaine on nose","cockslap","Coffee","collar","computer","cosmic background","counter","countershading","Covers","crowd","cuddling","cum","cum drip","cum from mouth","cum from vagina","cum in ass","cum in clothing","cum in mouth","cum in sheath","cum in underwear","cum in vagina","cum inside","cum on balls","cum on butt","cum on face","cum string","cum through clothing","cum through underwear","cumshot","cumshot in mouth","cumshot on face","cup","cutaway","Cute","cute fangs","dark fur","daww","detailed background","dick veins","Digital Art","dilated pupils","dirty talk","discarded clothing","disembodied penis","docking","domestic cat","domestic dog","dominant","dominant male","door","dripping","drooling","drug usage","drugs","duo","duo focus","eevee","eeveelution","ejaculation","electronics","endless cum","erection","Espeon","exhibitionism","explicitly stated nonconsent","eye bags","eye contact","eyebrows","eyelashes","eyes closed","face fucking","faceless character","faceless male","facing each other","fan character","Fanart","fangs","feet","felid","feline","felis","fellatio","female","female focus","female penetrated","femboy","feral","feral on feral","feral penetrated","feral penetrating","feral penetrating feral","fingers","fire","first person view","fluffy","forced","forced oral","free use","Friends","from front position","frottage","frotting","fully erect inside sheath","fully sheathed","fur","furniture","generation 1 pokemon","generation 2 pokemon","generation 4 pokemon","generation 8 pokemon","genital fluids","genital shot","genitals","glans","graffiti","greninja","grey body","grey fur","grinding","group","group sex","half-erect","hand around waist","hand on belly","hand on cheek","handjob","handjob frottage","happy","happy sex","head grab","head tuft","heart","heterochromia","hip grab","holding","holding another's sheath","holding card","holding head","holding own sheath","holding sheath","hug","huge balls","huge penis","humanoid","humanoid genitalia","humanoid genitalia on feral","humanoid on feral","humanoid penis","humanoid vulva","humanoid vulva on feral","humor","hunched over","hybrid","infinite cum","infinite genital fluids","inside","internal","internal oral","internal sheath","interspecies","intimate","irrumatio","jockstrap","kneeling","knot","knot in sheath","Lap Sitting","laptop","Leafeon","leaking","leaking cum","leaking precum","legendary pokemon","legs up","level difference","licking","licking tip","lipsticking","long playtime","looking at another","looking at partner","looking at viewer","looking away","looking back","looking down","looking pleasured","Love","Lucario","lying","lynx","M/M","magic effects","male","male anthro","male dominating male","male feral","male humanoid","male on feral","male penetrated","male penetrating","male penetrating ambiguous","male penetrating anthro","male penetrating female","male penetrating male","male/ambiguous","male/female","male/male","mammal","masturbation","masturbation through clothing","mermaid position","messy","moon","Morning","multicolored body","multicolored fur","multiple positions","navel","nintendo","nude","offscreen character","on back","on bed","open mouth","open smile","opening door","oral","oral only","oral penetration","orange body","orange fur","orgasm","outdoor nudity","outside","outside sex","partially clothed","partially clothed anthro","partially clothed male","party hat","pawpads","paws","penetration","penile","penile masturbation","penile penetration","penis","penis in ass","penis in face","penis in mouth","penis in sheath","penis in vagina","penis lick","penis on belly","penis on face","penis shot","penis size difference","penis tip","penises touching","pikachu","pillow","pink pawpads","pixel animation","plushie","Pokemon","pokemorph","precum","precum in mouth","precum on face","precum on tongue","precum stain","precum through clothing","presenting","presenting hindquarters","public","public exposure","public nudity","public sex","public use","pull out","pupils","quilava","raining","reclining","red blush","Red Eyes","red sclera","Riolu","romantic","romantic couple","rubbing","saliva","same evolution group","scars","scrotum flap","semi-anthro","service bottom","sex","sexual harassment","shaking","sheath","sheath frottage","sheath grab","sheath lick","sheath nursing","sheath penetration","sheath play","sheath pressing","sheath pull","sheath sex","sheath suck","sheathjob","shirt","shocked","short playtime","side by side","simple background","sit and blow position","sitting","Sitting Up","size difference","skate park","skateboard","sketch","sky","slap","small but hung","small penis","smile","smiling","snorting drugs","soles","solo","solo focus","spread legs","spreading","star","starry background","starry sky","Stool","striped body","striped fur","stripes","submissive","submissive male","submissive pov","substance intoxication","sucking","sweat","t-shirt","table","tail","tail tuft","taking turns","talking feral","talking to another","talking to partner","Teasing","teeth","text","thick calves","thick leg","thick thighs","throbbing","throbbing penis","thrusting","toes","tongue","tongue out","tongue out fellatio","toony","topwear","traditional","Tsareena","tuft","turquoise eyes","two tone body","two tone fur","two-handed face fucking","Umbreon","underwear","underwear pull","underwear sex","undressing","undressing another","undressing partner","unsheathing","vaginal","vaginal fluids","vaginal penetration","vaporeon","vehicle","vein","veiny penis","voyeur","vulva","waist grab","warm colors","wet","wet clothing","wet underwear","white background","white body","white fur","wide hips","wood","wood furniture","wood table","y sheath opening","yellow body","yellow fur","Zeraora","Zoroark"];
+  await pool.query(
+    `INSERT INTO gallery_tag_catalog (name) SELECT unnest($1::text[]) ON CONFLICT (name) DO NOTHING`, [GALLERY_TAG_CATALOG_SEED]
+  ).catch(e => console.error('gallery_tag_catalog seed:', e.message));
+
   // Dictionary synonyms — real AO3-style tag wrangling: an admin reviewing a
   // pending tag/species can "merge" it into an existing catalog entry
   // instead of adding it as its own new entry (e.g. someone typed "Male/Male"
@@ -6331,6 +6355,14 @@ app.get('/api/relationship-catalog', async (req, res) => {
   res.json({ relationships: rows.map(r => r.name) });
 });
 
+// GET /api/gallery-tag-catalog — Gallery's own tag dictionary, independent
+// of tag_catalog (stories' Additional Tags). Powers the gallery editor's
+// typeahead.
+app.get('/api/gallery-tag-catalog', async (req, res) => {
+  const { rows } = await pool.query('SELECT name FROM gallery_tag_catalog ORDER BY name ASC');
+  res.json({ tags: rows.map(r => r.name) });
+});
+
 // How many posts (stories + gallery submissions, combined) carry each of
 // the given tags -- powers the e621-style "tag: count" rows on a gallery
 // post's stats box.
@@ -6352,7 +6384,7 @@ app.get('/api/tag-usage', async (req, res) => {
       ON lower(all_tags.t) = lower(req.tag)
       OR EXISTS (
         SELECT 1 FROM dictionary_synonyms ds
-        WHERE ds.kind = 'tag'
+        WHERE ds.kind IN ('tag', 'gallery_tag')
           AND ((lower(ds.alias) = lower(all_tags.t) AND lower(ds.canonical) = lower(req.tag))
             OR (lower(ds.canonical) = lower(all_tags.t) AND lower(ds.alias) = lower(req.tag)))
       )
@@ -6382,6 +6414,10 @@ app.delete('/api/admin/relationship-catalog/:name', requireAuth, requireAdmin, a
 });
 app.delete('/api/admin/character-species-catalog/:name', requireAuth, requireAdmin, async (req, res) => {
   await pool.query('DELETE FROM character_species_catalog WHERE name = $1', [req.params.name]);
+  res.json({ message: 'Deleted.' });
+});
+app.delete('/api/admin/gallery-tag-catalog/:name', requireAuth, requireAdmin, async (req, res) => {
+  await pool.query('DELETE FROM gallery_tag_catalog WHERE name = $1', [req.params.name]);
   res.json({ message: 'Deleted.' });
 });
 
@@ -6418,20 +6454,43 @@ app.post('/api/admin/relationship-catalog', requireAuth, requireAdmin, async (re
   );
   res.json({ name: rows[0]?.name || name });
 });
+app.post('/api/admin/gallery-tag-catalog', requireAuth, requireAdmin, async (req, res) => {
+  const name = String(req.body.name || '').trim().replace(/\s+/g, ' ').slice(0, 40);
+  if (!name) return res.status(400).json({ error: 'Name is required.' });
+  const { rows } = await pool.query(
+    'INSERT INTO gallery_tag_catalog (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING name',
+    [name]
+  );
+  res.json({ name: rows[0]?.name || name });
+});
 
 // GET /api/admin/pending-tags — every distinct Additional Tag actually in use
-// on a story or gallery post whose casing has no match in tag_catalog yet,
-// with a usage count, so new-user freeform tags can be reviewed and promoted
-// into the dictionary instead of just sitting unrecognized forever.
+// on a story whose casing has no match in tag_catalog yet, with a usage
+// count, so new-user freeform tags can be reviewed and promoted into the
+// dictionary instead of just sitting unrecognized forever. Story-only now
+// that Gallery has its own separate tag_catalog/pending flow below — see
+// pending-gallery-tags.
 app.get('/api/admin/pending-tags', requireAuth, requireAdmin, async (req, res) => {
   const { rows } = await pool.query(`
     SELECT t AS name, count(*)::int AS count FROM (
       SELECT jsonb_array_elements_text(tags) AS t FROM moderator_sites
-      UNION ALL
-      SELECT jsonb_array_elements_text(tags) AS t FROM moderator_gallery
     ) all_tags
     WHERE NOT EXISTS (SELECT 1 FROM tag_catalog tc WHERE lower(tc.name) = lower(all_tags.t))
       AND NOT EXISTS (SELECT 1 FROM dictionary_synonyms ds WHERE ds.kind = 'tag' AND lower(ds.alias) = lower(all_tags.t))
+    GROUP BY t ORDER BY count DESC, t ASC
+  `);
+  res.json({ pending: rows });
+});
+
+// GET /api/admin/pending-gallery-tags — same idea, sourced from gallery
+// posts' own tags against gallery_tag_catalog instead of the story dictionary.
+app.get('/api/admin/pending-gallery-tags', requireAuth, requireAdmin, async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT t AS name, count(*)::int AS count FROM (
+      SELECT jsonb_array_elements_text(tags) AS t FROM moderator_gallery
+    ) all_tags
+    WHERE NOT EXISTS (SELECT 1 FROM gallery_tag_catalog tc WHERE lower(tc.name) = lower(all_tags.t))
+      AND NOT EXISTS (SELECT 1 FROM dictionary_synonyms ds WHERE ds.kind = 'gallery_tag' AND lower(ds.alias) = lower(all_tags.t))
     GROUP BY t ORDER BY count DESC, t ASC
   `);
   res.json({ pending: rows });
@@ -6484,10 +6543,10 @@ app.post('/api/admin/dictionary-synonyms', requireAuth, requireAdmin, async (req
   const kind = req.body.kind;
   const alias = String(req.body.alias || '').trim();
   const canonicalInput = String(req.body.canonical || '').trim();
-  if (!['tag', 'species', 'relationship'].includes(kind) || !alias || !canonicalInput) {
+  if (!['tag', 'species', 'relationship', 'gallery_tag'].includes(kind) || !alias || !canonicalInput) {
     return res.status(400).json({ error: 'kind, alias, and canonical are required.' });
   }
-  const catalogTable = kind === 'tag' ? 'tag_catalog' : kind === 'species' ? 'character_species_catalog' : 'relationship_catalog';
+  const catalogTable = kind === 'tag' ? 'tag_catalog' : kind === 'species' ? 'character_species_catalog' : kind === 'gallery_tag' ? 'gallery_tag_catalog' : 'relationship_catalog';
   const { rows: [catalogRow] } = await pool.query(
     `SELECT name FROM ${catalogTable} WHERE lower(name) = lower($1)`, [canonicalInput]
   );
@@ -6510,7 +6569,7 @@ app.post('/api/admin/dictionary-synonyms', requireAuth, requireAdmin, async (req
 // typeahead's "did you mean the canonical tag?" nudge for whatever an admin
 // has already wrangled (e.g. typing "Male/Male" surfaces "M/M").
 app.get('/api/dictionary-synonyms', async (req, res) => {
-  const kind = ['tag', 'species', 'relationship'].includes(req.query.kind) ? req.query.kind : 'tag';
+  const kind = ['tag', 'species', 'relationship', 'gallery_tag'].includes(req.query.kind) ? req.query.kind : 'tag';
   const { rows } = await pool.query('SELECT alias, canonical FROM dictionary_synonyms WHERE kind = $1', [kind]);
   res.json({ synonyms: rows });
 });
@@ -7301,13 +7360,16 @@ function clampPosition(v) {
 // a JSON-encoded string field rather than a real array — same cleanup rules
 // as the story editor's client-side addWorkingTag (lowercase, collapsed
 // whitespace, 40 chars, 100 tags, de-duped) applied again here since this
-// is the actual trust boundary.
+// is the actual trust boundary. Snaps against gallery_tag_catalog, NOT
+// tag_catalog — Gallery has its own independent tag dictionary now (more
+// e621-shaped: pose/species/setting/anatomy rather than a story's narrative
+// tags), so a gallery tag's casing never gets pulled toward a story tag's.
 async function parseGalleryTags(raw) {
   if (raw === undefined) return undefined;
   let arr;
   try { arr = JSON.parse(raw); } catch { return []; }
   if (!Array.isArray(arr)) return [];
-  return snapToCatalogCasing('tag_catalog', arr, 40, 100);
+  return snapToCatalogCasing('gallery_tag_catalog', arr, 40, 100);
 }
 
 // Instant "create + attach to this story" — mirrors the character flow.

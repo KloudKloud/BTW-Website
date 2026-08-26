@@ -207,6 +207,10 @@
             <span class="adm-catalog-card-label">Additional Tags</span>
           </div>
           <div class="adm-catalog-card">
+            <span class="adm-catalog-card-num" id="cat-gallery-tag-count">—</span>
+            <span class="adm-catalog-card-label">Gallery Tags</span>
+          </div>
+          <div class="adm-catalog-card">
             <span class="adm-catalog-card-num" id="stat-characters">—</span>
             <span class="adm-catalog-card-label">Total Characters</span>
           </div>
@@ -256,7 +260,7 @@
 
   <!-- ══ Tag Dictionary ══════════════════════════════════════════════ -->
   <div class="adm-panel" id="adm-panel-dictionary">
-    <p class="hb-sub">Every entry currently in the Fandom, Additional Tags, Relationships, and Character Species typeahead catalogs — the shared vocabulary suggested to writers as they tag a story or character. Click ✕ to mark an entry for removal, then Save to commit.</p>
+    <p class="hb-sub">Every entry currently in the Fandom, Additional Tags, Gallery Tags, Relationships, and Character Species typeahead catalogs — the shared vocabulary suggested to writers as they tag a story, gallery post, or character. Gallery Tags is its own independent dictionary from Additional Tags (stories) — the two no longer share suggestions. Click ✕ to mark an entry for removal, then Save to commit.</p>
 
     <div class="adm-dict-search">
       <input type="text" id="adm-dict-search-input" placeholder="🔍 Filter the dictionary…" />
@@ -283,6 +287,26 @@
       <div class="adm-dict-list-wrap" id="dict-tag-list-wrap">
         <div class="adm-dict-list" id="dict-tag-list"></div>
         <div class="adm-dict-list-showall" id="dict-tag-showall" hidden>
+          <button class="mod-btn" type="button">Show All</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="adm-dict-section">
+      <div class="adm-dict-section-head">
+        <div>
+          <h2 class="adm-dict-heading">Gallery Tags</h2>
+          <p class="adm-dict-sub" id="dict-galleryTag-sub"></p>
+        </div>
+        <button class="mod-btn mod-btn--small" id="dict-galleryTag-pending-btn" type="button">Find Pending Gallery Tags</button>
+      </div>
+      <div class="adm-dict-pending" id="dict-galleryTag-pending" hidden>
+        <p class="adm-dict-pending-hint">Used on gallery posts but not yet in the dictionary. Click one to review and add it.</p>
+        <div class="adm-dict-list" id="dict-galleryTag-pending-list"></div>
+      </div>
+      <div class="adm-dict-list-wrap" id="dict-galleryTag-list-wrap">
+        <div class="adm-dict-list" id="dict-galleryTag-list"></div>
+        <div class="adm-dict-list-showall" id="dict-galleryTag-showall" hidden>
           <button class="mod-btn" type="button">Show All</button>
         </div>
       </div>
@@ -848,19 +872,22 @@ document.getElementById('hb-editor-delete').addEventListener('click', async () =
    Stats
    ═══════════════════════════════════════════════════════════════════════ */
 async function loadCatalogSummary() {
-  const [fRes, tRes, rRes, sRes] = await Promise.all([
+  const [fRes, tRes, gRes, rRes, sRes] = await Promise.all([
     fetch('/api/fandom-catalog').catch(() => null),
     fetch('/api/tag-catalog').catch(() => null),
+    fetch('/api/gallery-tag-catalog').catch(() => null),
     fetch('/api/relationship-catalog').catch(() => null),
     fetch('/api/character-species-catalog').catch(() => null),
   ]);
   const fandoms = fRes && fRes.ok ? (await fRes.json()).fandoms || [] : [];
   const tags = tRes && tRes.ok ? (await tRes.json()).tags || [] : [];
+  const galleryTags = gRes && gRes.ok ? (await gRes.json()).tags || [] : [];
   const relationships = rRes && rRes.ok ? (await rRes.json()).relationships || [] : [];
   const species = sRes && sRes.ok ? (await sRes.json()).species || [] : [];
   document.getElementById('cat-fandom-count').textContent = fandoms.length;
   document.getElementById('cat-tag-count').textContent = tags.length;
-  return { fandoms, tags, relationships, species };
+  document.getElementById('cat-gallery-tag-count').textContent = galleryTags.length;
+  return { fandoms, tags, galleryTags, relationships, species };
 }
 
 function renderDayChart(elId, rows) {
@@ -952,22 +979,23 @@ async function loadSiteStats() {
 /* ═══════════════════════════════════════════════════════════════════════
    Tag Dictionary
    ═══════════════════════════════════════════════════════════════════════ */
-let dictData = { fandoms: [], tags: [], relationships: [], species: [] };
+let dictData = { fandoms: [], tags: [], galleryTags: [], relationships: [], species: [] };
 // Maps each dictionary section to its GET-response key (dictData[key]) and
 // the DELETE endpoint segment used to prune an entry.
 const DICT_SECTIONS = {
   fandom: { key: 'fandoms', endpoint: 'fandom-catalog', noun: 'fandom' },
   tag: { key: 'tags', endpoint: 'tag-catalog', noun: 'tag' },
+  galleryTag: { key: 'galleryTags', endpoint: 'gallery-tag-catalog', noun: 'gallery tag' },
   relationship: { key: 'relationships', endpoint: 'relationship-catalog', noun: 'relationship' },
   species: { key: 'species', endpoint: 'character-species-catalog', noun: 'species' },
 };
-const DICT_SECTION_NAMES = ['fandom', 'tag', 'relationship', 'species'];
+const DICT_SECTION_NAMES = ['fandom', 'tag', 'galleryTag', 'relationship', 'species'];
 
 // Clicking ✕ only *stages* a removal (toggle-able) — nothing hits the
 // server until Save Changes is clicked, so a run of misclicks costs
 // nothing and there's an explicit "commit" moment, same as the rest of
 // the site's editors.
-const pendingDeletes = { fandom: new Set(), tag: new Set(), relationship: new Set(), species: new Set() };
+const pendingDeletes = { fandom: new Set(), tag: new Set(), galleryTag: new Set(), relationship: new Set(), species: new Set() };
 
 function updateSavebar() {
   const total = DICT_SECTION_NAMES.reduce((sum, s) => sum + pendingDeletes[s].size, 0);
@@ -1033,7 +1061,7 @@ function renderDictList(section, items) {
     btn.addEventListener('click', () => toggleDictEntry(section, btn.dataset.name));
   });
 }
-['tag', 'relationship', 'species'].forEach(section => {
+['tag', 'galleryTag', 'relationship', 'species'].forEach(section => {
   const btn = document.querySelector(`#dict-${section}-showall button`);
   btn.addEventListener('click', () => {
     dictExpanded.add(section);
@@ -1068,6 +1096,7 @@ document.getElementById('adm-dict-save-btn').addEventListener('click', async () 
     updateSavebar();
     document.getElementById('cat-fandom-count').textContent = dictData.fandoms.length;
     document.getElementById('cat-tag-count').textContent = dictData.tags.length;
+    document.getElementById('cat-gallery-tag-count').textContent = dictData.galleryTags.length;
   } finally {
     btn.disabled = false;
     btn.textContent = 'Save Changes';
@@ -1082,10 +1111,11 @@ document.getElementById('adm-dict-save-btn').addEventListener('click', async () 
    to tweak the casing/spelling before it's actually added. */
 const PENDING_KINDS = {
   tag: { endpoint: 'tag-catalog', fetchUrl: '/api/admin/pending-tags', listId: 'dict-tag-pending-list', wrapId: 'dict-tag-pending', btnId: 'dict-tag-pending-btn', dictKey: 'tags', noun: 'tag' },
+  galleryTag: { endpoint: 'gallery-tag-catalog', fetchUrl: '/api/admin/pending-gallery-tags', listId: 'dict-galleryTag-pending-list', wrapId: 'dict-galleryTag-pending', btnId: 'dict-galleryTag-pending-btn', dictKey: 'galleryTags', noun: 'gallery tag' },
   relationship: { endpoint: 'relationship-catalog', fetchUrl: '/api/admin/pending-relationships', listId: 'dict-relationship-pending-list', wrapId: 'dict-relationship-pending', btnId: 'dict-relationship-pending-btn', dictKey: 'relationships', noun: 'relationship' },
   species: { endpoint: 'character-species-catalog', fetchUrl: '/api/admin/pending-species', listId: 'dict-species-pending-list', wrapId: 'dict-species-pending', btnId: 'dict-species-pending-btn', dictKey: 'species', noun: 'species' },
 };
-const pendingCache = { tag: null, relationship: null, species: null };
+const pendingCache = { tag: null, galleryTag: null, relationship: null, species: null };
 let activePendingKind = null;
 
 function renderPendingList(kind) {
@@ -1124,11 +1154,12 @@ async function togglePendingSection(kind) {
   renderPendingList(kind);
 }
 document.getElementById('dict-tag-pending-btn').addEventListener('click', () => togglePendingSection('tag'));
+document.getElementById('dict-galleryTag-pending-btn').addEventListener('click', () => togglePendingSection('galleryTag'));
 document.getElementById('dict-relationship-pending-btn').addEventListener('click', () => togglePendingSection('relationship'));
 document.getElementById('dict-species-pending-btn').addEventListener('click', () => togglePendingSection('species'));
 
-const PENDING_TITLES = { tag: 'Add Additional Tag', relationship: 'Add Relationship', species: 'Add Character Species' };
-const PENDING_USAGE_NOUNS = { tag: 'stories/gallery posts', relationship: 'stories', species: 'characters' };
+const PENDING_TITLES = { tag: 'Add Additional Tag', galleryTag: 'Add Gallery Tag', relationship: 'Add Relationship', species: 'Add Character Species' };
+const PENDING_USAGE_NOUNS = { tag: 'stories', galleryTag: 'gallery posts', relationship: 'stories', species: 'characters' };
 // Tags and Relationships both wrangle "for real," AO3-style: a story/post
 // keeps displaying whatever its writer originally typed, but the alias and
 // its canonical become interchangeable everywhere that actually filters by
@@ -1139,10 +1170,11 @@ const PENDING_USAGE_NOUNS = { tag: 'stories/gallery posts', relationship: 'stori
 // nudge for now -- update this copy if/when a species browse filter ships.
 const PENDING_MERGE_HINTS = {
   tag: alias => `Links "${escapeHtml(alias)}" to an existing tag as a wrangle, AO3-style — posts already tagged "${escapeHtml(alias)}" keep showing that exact text, but clicking either tag from now on will surface posts tagged with both, and their usage counts get combined.`,
+  galleryTag: alias => `Links "${escapeHtml(alias)}" to an existing gallery tag as a wrangle, e621-style — posts already tagged "${escapeHtml(alias)}" keep showing that exact text, but clicking either tag from now on will surface posts tagged with both, and their usage counts get combined.`,
   species: alias => `Denies this as its own dictionary entry and links it to an existing one instead — anyone who types "${escapeHtml(alias)}" from now on gets nudged toward the species you pick here, but it's just a suggestion. Nothing already tagged this way gets touched, and it still saves as-is for anyone who ignores the nudge.`,
   relationship: alias => `Links "${escapeHtml(alias)}" to an existing relationship as a wrangle, AO3-style — stories already tagged "${escapeHtml(alias)}" keep showing that exact text, but clicking either relationship's tag from now on will surface stories tagged with both.`,
 };
-const PENDING_MERGE_LABELS = { tag: 'Recommend an existing tag instead', relationship: 'Wrangle into an existing relationship instead', species: 'Recommend an existing species instead' };
+const PENDING_MERGE_LABELS = { tag: 'Recommend an existing tag instead', galleryTag: 'Recommend an existing gallery tag instead', relationship: 'Wrangle into an existing relationship instead', species: 'Recommend an existing species instead' };
 
 let activePendingAlias = null;
 function openPendingModal(kind, name, count) {
@@ -1203,6 +1235,7 @@ document.getElementById('adm-pending-save').addEventListener('click', async () =
     renderPendingList(kind);
     renderDictionary();
     if (kind === 'tag') document.getElementById('cat-tag-count').textContent = dictData.tags.length;
+    if (kind === 'galleryTag') document.getElementById('cat-gallery-tag-count').textContent = dictData.galleryTags.length;
     closePendingModal();
   } catch {
     msgEl.className = 'mod-panel-msg mod-panel-msg--error';

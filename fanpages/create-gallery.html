@@ -396,8 +396,10 @@
 
   // ── Tags — same e621/Wattpad-style bubble input as the story editor's
   // Additional Tags field (fanpages/_story-template/edit.html), reusing the
-  // same shared /api/tag-catalog and the same .wiki-tag-bubble/.wiki-tags-*
-  // CSS from fanpages.css. ──────────────────────────────────────────────────
+  // same .wiki-tag-bubble/.wiki-tags-* CSS from fanpages.css, but its own
+  // independent /api/gallery-tag-catalog dictionary -- Gallery's tags are a
+  // more e621-shaped vocabulary (pose/species/setting/anatomy) than a
+  // story's narrative tags, so the two no longer share suggestions. ────────
   let workingGalleryTags = [];
   let galleryTagsCatalog = [];
   // alias (lowercase) -> canonical, from admin-wrangled tag merges.
@@ -501,8 +503,8 @@
   document.addEventListener('click', (e) => {
     if (!document.getElementById('gallery-tags-input-box').contains(e.target)) renderSuggestDropdown('gallery-tags-suggest', [], () => {});
   });
-  fetch('/api/tag-catalog').then(r => r.ok ? r.json() : { tags: [] }).then(d => { galleryTagsCatalog = d.tags || []; }).catch(() => {});
-  fetch('/api/dictionary-synonyms?kind=tag').then(r => r.ok ? r.json() : { synonyms: [] })
+  fetch('/api/gallery-tag-catalog').then(r => r.ok ? r.json() : { tags: [] }).then(d => { galleryTagsCatalog = d.tags || []; }).catch(() => {});
+  fetch('/api/dictionary-synonyms?kind=gallery_tag').then(r => r.ok ? r.json() : { synonyms: [] })
     .then(d => { galleryTagSynonyms = new Map(d.synonyms.map(s => [s.alias.toLowerCase(), s.canonical])); }).catch(() => {});
 
   // Live drag-to-pan-and-zoom crop box (6:7, matching the gallery tile
