@@ -150,6 +150,19 @@
 
             <button class="fp-recrop-btn" id="cover-recrop-btn" type="button" style="display:none; position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
           </div>
+
+          <!-- Start Reading + Share/Report now live under the cover instead
+               of alongside the tag cloud -- see wiki-hero-info below for
+               what took their old spot. -->
+          <div class="wiki-hero-actions">
+            <a class="wiki-hero-btn wiki-hero-btn--start" id="start-reading-btn" href="#">Start Reading</a>
+            <div class="wiki-hero-actions-row">
+              <button class="fp-share-icon-btn" id="story-share-btn" type="button" title="Share this story">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
+              </button>
+              <button class="fp-share-icon-btn" id="story-report-btn" type="button" title="Report" style="display:none;">&#127987;&#65039;</button>
+            </div>
+          </div>
         </div>
 
         <div class="wiki-hero-divider"></div>
@@ -174,12 +187,13 @@
             <button class="wiki-hero-tagcloud-expand" id="wiki-hero-tagcloud-expand" type="button" style="display:none;" title="Show all tags">+</button>
           </div>
 
-          <div class="wiki-hero-actions">
-            <a class="wiki-hero-btn wiki-hero-btn--start" id="start-reading-btn" href="#">Start Reading</a>
-            <button class="fp-share-icon-btn" id="story-share-btn" type="button" title="Share this story">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
-            </button>
-            <button class="fp-share-icon-btn" id="story-report-btn" type="button" title="Report" style="display:none;">&#127987;&#65039;</button>
+          <!-- Takes the old wiki-hero-actions spot -- only ever shown to a
+               logged-in reader (there's nothing to track for a guest), see
+               renderReadingProgress(). -->
+          <div class="wiki-hero-progress" id="wiki-hero-progress" style="display:none;">
+            <span class="wiki-hero-progress-label" id="wiki-hero-progress-label">Reading Progress</span>
+            <div class="wiki-hero-progress-bar"><div class="wiki-hero-progress-bar-fill" id="wiki-hero-progress-bar-fill"></div></div>
+            <span class="wiki-hero-progress-pct" id="wiki-hero-progress-pct">0%</span>
           </div>
 
           <div class="wiki-hero-stats-bar" id="wiki-hero-stats-bar">
@@ -1209,6 +1223,22 @@ function renderHeroStats(s) {
   document.getElementById('hero-stat-comments').textContent = formatCount(s.comment_count);
 }
 
+// Reading-progress tracker — only means anything for a logged-in reader
+// (guests aren't tracked, see the reader's own progress-reporting code), so
+// it stays hidden entirely rather than showing a meaningless "0%".
+function renderReadingProgress(s) {
+  const wrap = document.getElementById('wiki-hero-progress');
+  const loggedIn = !!(localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token'));
+  if (!loggedIn || !siteData.chapters || !siteData.chapters.length) {
+    wrap.style.display = 'none';
+    return;
+  }
+  const pct = Math.max(0, Math.min(100, Number(s.reading_progress_percent) || 0));
+  wrap.style.display = 'flex';
+  document.getElementById('wiki-hero-progress-bar-fill').style.width = pct + '%';
+  document.getElementById('wiki-hero-progress-pct').textContent = pct + '%';
+}
+
 // "X Published Parts" is visible to every visitor the moment the story has
 // one — "X Drafts" and the nudge to publish are owner-only, same privacy
 // rule as the draft banner above: a purely-drafted story stays completely
@@ -1255,6 +1285,7 @@ function renderPartsStatus(s, chapters) {
   renderBookmarkBtn(s);
   renderStartReadingBtn(siteData.chapters);
   renderHeroStats(s);
+  renderReadingProgress(s);
   renderPartsStatus(s, siteData.chapters);
 
   if (s.is_self) {

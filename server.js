@@ -1177,6 +1177,22 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
       ON chapter_likes(chapter_id, guest_device_id) WHERE guest_device_id IS NOT NULL;
   `).catch(e => console.error('guest identity migration:', e.message));
 
+  // Per-reader chapter progress -- how far a logged-in reader has scrolled
+  // into a chapter (0-100), reported from the in-browser reader. Only ever
+  // ratchets upward (see the upsert in the endpoint below), so scrolling
+  // back up to re-read something already read never looks like "un-reading"
+  // it. Guests aren't tracked -- there's no durable identity to attach it to.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS chapter_reading_progress (
+      id         SERIAL      PRIMARY KEY,
+      user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      chapter_id INTEGER     NOT NULL REFERENCES moderator_chapters(id) ON DELETE CASCADE,
+      percent    INTEGER     NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(user_id, chapter_id)
+    );
+  `).catch(e => console.error('chapter_reading_progress migration:', e.message));
+
   // Seed Blue's site row if it doesn't exist yet, once his account is registered.
   // slug is no longer unique (authors can have multiple stories), so this is
   // guarded with an explicit existence check instead of ON CONFLICT.
@@ -5817,7 +5833,8 @@ async function sendSiteLookup(query, params, req, res) {
               mc.status, mc.body, mc.view_count, mc.created_at, mc.updated_at,
               (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'chapter_paragraph' AND target_id = mc.id) AS comment_count,
               (SELECT COUNT(*)::int FROM chapter_likes WHERE chapter_id = mc.id) AS like_count,
-              EXISTS(SELECT 1 FROM chapter_likes WHERE chapter_id = mc.id AND user_id = $2) AS liked
+              EXISTS(SELECT 1 FROM chapter_likes WHERE chapter_id = mc.id AND user_id = $2) AS liked,
+              COALESCE((SELECT crp.percent FROM chapter_reading_progress crp WHERE crp.chapter_id = mc.id AND crp.user_id = $2), 0) AS progress_percent
        FROM moderator_chapters mc
        WHERE mc.site_id = $1 ${viewerId === site.owner_user_id ? '' : "AND mc.status = 'published'"}
        ORDER BY mc.sort_order, mc.id`,
@@ -5865,6 +5882,15 @@ async function sendSiteLookup(query, params, req, res) {
     pool.query('SELECT COUNT(*)::int AS count FROM moderator_bookmarks WHERE site_id = $1', [site.id]),
   ]);
 
+  // Story-wide "you're X% through this" tracker -- average of every
+  // published chapter's own read percent (0 with no chapters, or when
+  // logged out/never opened one). Deliberately not "last chapter read /
+  // total chapters" -- a partially-scrolled chapter should count as partial
+  // credit, not either 0 or a whole chapter.
+  const readingProgressPercent = (viewerId && chapters.length)
+    ? Math.round(chapters.reduce((sum, ch) => sum + ch.progress_percent, 0) / chapters.length)
+    : 0;
+
   const likedSet = new Set(likedGalleryIds.rows.map(r => r.gallery_id));
   const bookmarkedSet = new Set(bookmarkedGalleryIds.rows.map(r => r.gallery_id));
   gallery.forEach(g => {
@@ -5904,6 +5930,7 @@ async function sendSiteLookup(query, params, req, res) {
       like_count: Number(siteLikeCount.rows[0].count),
       comment_count: Number(siteCommentCount.rows[0].count),
       bookmark_count: Number(siteBookmarkCount.rows[0].count),
+      reading_progress_percent: readingProgressPercent,
     },
     chapters,
     characters,
@@ -7771,6 +7798,25 @@ app.delete('/api/chapters/:id/like', async (req, res) => {
   );
   const { rows: [{ count }] } = await pool.query('SELECT count(*) FROM chapter_likes WHERE chapter_id = $1', [req.params.id]);
   res.json({ liked: false, like_count: Number(count) });
+});
+
+// ── Chapter reading progress — the in-browser reader reports how far a
+// logged-in reader has scrolled into the current chapter (0-100). Only
+// ratchets upward via GREATEST so scrolling back up to re-read a passage
+// never looks like the reader lost progress. ──────────────────────────────
+app.post('/api/chapters/:id/progress', requireAuth, async (req, res) => {
+  const percent = Math.max(0, Math.min(100, Number(req.body.percent) || 0));
+  const { rows: [ch] } = await pool.query('SELECT id FROM moderator_chapters WHERE id = $1', [req.params.id]);
+  if (!ch) return res.status(404).json({ error: 'Not found.' });
+  const { rows: [row] } = await pool.query(
+    `INSERT INTO chapter_reading_progress (user_id, chapter_id, percent)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (user_id, chapter_id) DO UPDATE
+       SET percent = GREATEST(chapter_reading_progress.percent, EXCLUDED.percent), updated_at = NOW()
+     RETURNING percent`,
+    [req.user.id, ch.id, percent]
+  );
+  res.json({ ok: true, percent: row.percent });
 });
 
 // ── Notifications — generic fan-out helpers used by every real event below

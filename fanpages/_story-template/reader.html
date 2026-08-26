@@ -961,7 +961,48 @@ function renderChapter() {
 
   window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
   history.replaceState({}, '', `${STORY_BASE}/reader?ch=${CURRENT.id}`);
+
+  resetReadProgressTracking();
 }
+
+// ── Reading-progress tracking (feeds the Chapters tab's per-chapter bar and
+// the story Home tab's overall tracker) ─────────────────────────────────────
+// Only ever ratchets upward on the server, so this only bothers sending a
+// higher number than what's already saved for this chapter.
+let lastSavedReadPercent = 0;
+function computeReadPercent() {
+  const bodyEl = document.getElementById('rd-chapter-body');
+  if (!bodyEl) return 0;
+  const bodyTop = bodyEl.getBoundingClientRect().top + window.scrollY;
+  const bodyHeight = bodyEl.offsetHeight;
+  if (bodyHeight <= 0) return 0;
+  const scrolledPast = (window.scrollY + window.innerHeight) - bodyTop;
+  return Math.max(0, Math.min(100, Math.round((scrolledPast / bodyHeight) * 100)));
+}
+function saveReadProgress() {
+  if (!authToken || !CURRENT) return;
+  const pct = computeReadPercent();
+  if (pct <= lastSavedReadPercent) return;
+  lastSavedReadPercent = pct;
+  fetch(`/api/chapters/${CURRENT.id}/progress`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ percent: pct }),
+  }).catch(() => {});
+}
+function resetReadProgressTracking() {
+  // Start from whatever's already saved for this chapter (server value, if
+  // the reader supplied it) so re-scrolling past ground already covered
+  // doesn't just re-send the same number over and over.
+  lastSavedReadPercent = (CURRENT && CURRENT.progress_percent) || 0;
+}
+let readProgressScrollTimer = null;
+window.addEventListener('scroll', () => {
+  if (readProgressScrollTimer) return;
+  readProgressScrollTimer = setTimeout(() => { readProgressScrollTimer = null; saveReadProgress(); }, 800);
+});
+window.addEventListener('beforeunload', saveReadProgress);
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveReadProgress(); });
 
 // ── Like (chapter-level) ─────────────────────────────────────────────────
 function renderLikeState() {
