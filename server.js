@@ -1058,6 +1058,16 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE moderator_gallery ADD COLUMN IF NOT EXISTS thumb_image_url TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('thumb_image_url migration:', e.message));
 
+  // Tracks when a character's ref art was last actually swapped out (NULL
+  // until the first real re-upload) -- separate from updated_at, which
+  // bumps on every field edit (name/description/stats/etc). Lets the
+  // Recent Submissions feed and a profile's Recent Activity treat "changed
+  // the card art" as its own fresh, feed-worthy event instead of it being
+  // silently absorbed into whichever timestamp last touched the row.
+  await pool.query(`
+    ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS ref_image_updated_at TIMESTAMPTZ;
+  `).catch(e => console.error('ref_image_updated_at migration:', e.message));
+
   // Characters and gallery posts become independent of any single story:
   // ownership moves to the creating user (site_id becomes optional/legacy),
   // and a junction table tracks which stories a character/gallery post is
@@ -4709,6 +4719,15 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
          (SELECT 'character', created_at, name, NULL, id::text, NULL
           FROM moderator_characters WHERE owner_user_id = $1 ORDER BY created_at DESC LIMIT 5)
          UNION ALL
+         -- A real re-upload of a character's ref art, distinct from the
+         -- 'character' row above (which only ever fires once, at creation).
+         -- ref_image_updated_at starts NULL and only gets set by an actual
+         -- art swap (see PUT /api/moderator/characters/:id), so this never
+         -- double-reports the initial creation.
+         (SELECT 'character_art', ref_image_updated_at, name, NULL, id::text, NULL
+          FROM moderator_characters WHERE owner_user_id = $1 AND ref_image_updated_at IS NOT NULL
+          ORDER BY ref_image_updated_at DESC LIMIT 5)
+         UNION ALL
          (SELECT 'gallery', created_at, title, NULL, id::text, NULL
           FROM moderator_gallery WHERE owner_user_id = $1 ORDER BY created_at DESC LIMIT 5)
          UNION ALL
@@ -4807,6 +4826,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     switch (r.type) {
       case 'chapter': return { type: r.type, title: `Updated a chapter in "${r.context}"`, timestamp: r.ts, link: `/${r.ref_a}` };
       case 'character': return { type: r.type, title: `Posted a new character: "${r.label}"`, timestamp: r.ts, link: `/${author.username}?char=${r.ref_a}#characters` };
+      case 'character_art': return { type: r.type, title: `Updated the art for "${r.label}"`, timestamp: r.ts, link: `/${author.username}?char=${r.ref_a}#characters` };
       case 'gallery': return { type: r.type, title: `Posted new gallery art: "${r.label}"`, timestamp: r.ts, link: `/gallery-post?id=${r.ref_a}` };
       case 'newspaper': return { type: r.type, title: `Made a newspaper post: "${r.label}"`, timestamp: r.ts, link: `/${author.username}#newspaper` };
       case 'like_character': return { type: r.type, title: `Liked a character: "${r.label}"`, timestamp: r.ts, link: `/${r.owner_username}?char=${r.ref_a}#characters` };
@@ -6955,6 +6975,10 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Not found.' });
   const { name, ref_image, description, stats, facts, lore, relationships, sort_order, ref_is_nsfw, is_official_art, official_art_source_url } = req.body;
   const cleanStats = stats !== undefined ? await sanitizeCharacterStats(stats) : undefined;
+  // A real art change, not just this save happening to repeat the same URL
+  // -- drives ref_image_updated_at below, which is what puts this in Recent
+  // Submissions / Recent Activity as its own event.
+  const artChanged = !!ref_image && ref_image !== existing.ref_image;
   const { rows: [character] } = await pool.query(
     `UPDATE moderator_characters SET
        name                    = COALESCE($1, name),
@@ -6968,6 +6992,7 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
        ref_is_nsfw             = COALESCE($9, ref_is_nsfw),
        is_official_art         = COALESCE($10, is_official_art),
        official_art_source_url = COALESCE($11, official_art_source_url),
+       ref_image_updated_at    = CASE WHEN $13 THEN NOW() ELSE ref_image_updated_at END,
        updated_at              = NOW()
      WHERE id = $12 RETURNING *`,
     [name, ref_image, description,
@@ -6978,7 +7003,7 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
      sort_order, ref_is_nsfw !== undefined ? !!ref_is_nsfw : null,
      is_official_art !== undefined ? !!is_official_art : null,
      official_art_source_url !== undefined ? official_art_source_url : null,
-     existing.id]
+     existing.id, artChanged]
   );
   // Only regenerate when ref_image was actually part of this save -- an
   // unrelated edit (description, stats, etc.) shouldn't re-touch the image.
@@ -8446,7 +8471,7 @@ app.get('/api/activity-feed', async (req, res) => {
 
        UNION ALL
 
-       SELECT 'character', mch.id, mch.created_at,
+       SELECT 'character', mch.id, COALESCE(mch.ref_image_updated_at, mch.created_at),
               mch.name, mch.ref_image, NULLIF(mch.thumb_image_url, ''),
               mch.ref_position_x, mch.ref_position_y,
               ms.story_path, ms.site_title,
