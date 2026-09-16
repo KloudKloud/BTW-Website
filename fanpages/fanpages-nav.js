@@ -507,23 +507,6 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
 
       <a class="fpnav-brand" href="${FP_BASE || '/'}"><img class="fpnav-brand-logo" src="/images/fanpagelogo.png" alt="Fanpages" width="52" height="44" /></a>
 
-      <div class="fpnav-dropdown-wrap">
-        <button class="fpnav-link fpnav-trigger-link" id="fpnav-community-btn" type="button">Community <span class="fpnav-caret">▾</span></button>
-        <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
-          <a href="${fpUrl('/discord')}">Discord</a>
-          <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donations</a>
-          <div class="fpnav-dropdown-divider"></div>
-          <a href="${homeHref}">BTW Homepage</a>
-          <a href="${fpUrl('/tos')}">Terms of Service</a>
-        </div>
-      </div>
-
-      <!-- Never gets an .active/glow state, even when the current page IS
-           /characters — Browse's own "Characters" entry points at the same
-           URL, and having both light up this top-level button felt wrong,
-           so per request it just never lights up at all. -->
-      <a class="fpnav-link fpnav-trigger-link" href="${fpUrl('/characters')}">Characters</a>
-
       <div class="fpnav-dropdown-wrap fpnav-left-dropdown-wrap">
         <button class="fpnav-link fpnav-trigger-link${[fpUrl('/search'), fpUrl('/fandoms')].includes(here) ? ' active' : ''}" id="fpnav-browse-btn" type="button">Browse <span class="fpnav-caret">▾</span></button>
         <div class="fpnav-dropdown" id="fpnav-browse-dropdown" hidden>
@@ -534,22 +517,39 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         </div>
       </div>
 
+      <!-- Never gets an .active/glow state, even when the current page IS
+           /characters — Browse's own "Characters" entry points at the same
+           URL, and having both light up this top-level button felt wrong,
+           so per request it just never lights up at all. -->
+      <a class="fpnav-link fpnav-trigger-link" href="${fpUrl('/characters')}">Characters</a>
+
+      <a class="fpnav-link fpnav-link--clubs${here === fpUrl('/social') ? ' active' : ''}" href="${fpUrl('/social')}">Clubs</a>
+
+      <div class="fpnav-dropdown-wrap fpnav-desktop-only-action">
+        <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
+        <div class="fpnav-dropdown" id="fpnav-upload-dropdown" hidden>
+          <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
+          <div class="fpnav-dropdown-divider"></div>
+          <a href="${fpUrl('/create')}" data-gate="${fpUrl('/create')}"><span class="fpnav-plus-badge">+</span> Story</a>
+          <a href="${fpUrl('/create-character')}" data-gate="${fpUrl('/create-character')}"><span class="fpnav-plus-badge">+</span> Character</a>
+          <a href="${fpUrl('/create-gallery')}" data-gate="${fpUrl('/create-gallery')}"><span class="fpnav-plus-badge">+</span> Gallery</a>
+        </div>
+      </div>
+
       <div class="fpnav-search">
         <svg class="fpnav-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
         <input type="search" id="fpnav-search-input" placeholder="Search" />
       </div>
       <div class="fpnav-right">
 
-        <a class="fpnav-link fpnav-link--clubs${here === fpUrl('/social') ? ' active' : ''}" href="${fpUrl('/social')}">Clubs</a>
-
-        <div class="fpnav-dropdown-wrap fpnav-desktop-only-action">
-          <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
-          <div class="fpnav-dropdown" id="fpnav-upload-dropdown" hidden>
-            <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
+        <div class="fpnav-dropdown-wrap">
+          <button class="fpnav-link fpnav-trigger-link" id="fpnav-community-btn" type="button">Community <span class="fpnav-caret">▾</span></button>
+          <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
+            <a href="${fpUrl('/discord')}">Discord</a>
+            <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donations</a>
             <div class="fpnav-dropdown-divider"></div>
-            <a href="${fpUrl('/create')}" data-gate="${fpUrl('/create')}"><span class="fpnav-plus-badge">+</span> Story</a>
-            <a href="${fpUrl('/create-character')}" data-gate="${fpUrl('/create-character')}"><span class="fpnav-plus-badge">+</span> Character</a>
-            <a href="${fpUrl('/create-gallery')}" data-gate="${fpUrl('/create-gallery')}"><span class="fpnav-plus-badge">+</span> Gallery</a>
+            <a href="${homeHref}">BTW Homepage</a>
+            <a href="${fpUrl('/tos')}">Terms of Service</a>
           </div>
         </div>
 
