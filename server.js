@@ -4025,7 +4025,11 @@ app.get('/api/search/works', async (req, res) => {
       FROM moderator_chapters mc
       WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
     ) pubchap ON true
-    LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_site_likes WHERE site_id = ms.id) lc ON true
+    LEFT JOIN LATERAL (
+       SELECT COALESCE((SELECT COUNT(*)::int FROM moderator_site_likes WHERE site_id = ms.id), 0)
+            + COALESCE((SELECT COUNT(*)::int FROM chapter_likes chl JOIN moderator_chapters chc ON chc.id = chl.chapter_id WHERE chc.site_id = ms.id), 0)
+       AS count
+     ) lc ON true
     LEFT JOIN LATERAL (
       SELECT COUNT(*)::int AS count FROM content_comments cc2
       JOIN moderator_chapters mc2 ON mc2.id = cc2.target_id AND cc2.target_type = 'chapter_paragraph'
@@ -4247,7 +4251,11 @@ app.get('/api/recommendations/stories', async (req, res) => {
       SELECT COUNT(*)::int AS published_count, MAX(mc.updated_at) AS last_chapter_update
       FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
     ) pubchap ON true
-    LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_site_likes WHERE site_id = ms.id) lc ON true
+    LEFT JOIN LATERAL (
+       SELECT COALESCE((SELECT COUNT(*)::int FROM moderator_site_likes WHERE site_id = ms.id), 0)
+            + COALESCE((SELECT COUNT(*)::int FROM chapter_likes chl JOIN moderator_chapters chc ON chc.id = chl.chapter_id WHERE chc.site_id = ms.id), 0)
+       AS count
+     ) lc ON true
     LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_bookmarks WHERE site_id = ms.id) bc ON true
     WHERE pubchap.published_count > 0
   `);
@@ -4540,7 +4548,11 @@ async function fetchStoryCardsById(ids) {
        ), 0) AS word_count
        FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
      ) pubchap ON true
-     LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_site_likes WHERE site_id = ms.id) lc ON true
+     LEFT JOIN LATERAL (
+       SELECT COALESCE((SELECT COUNT(*)::int FROM moderator_site_likes WHERE site_id = ms.id), 0)
+            + COALESCE((SELECT COUNT(*)::int FROM chapter_likes chl JOIN moderator_chapters chc ON chc.id = chl.chapter_id WHERE chc.site_id = ms.id), 0)
+       AS count
+     ) lc ON true
      LEFT JOIN LATERAL (
        SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb) AS chars FROM (
          SELECT mc3.id, mc3.name, mc3.ref_image, u3.username AS owner_username
@@ -4624,7 +4636,11 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
               COALESCE(wc.word_count, 0) AS word_count,
               wc.last_chapter_update
        FROM moderator_sites ms
-       LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_site_likes WHERE site_id = ms.id) lc ON true
+       LEFT JOIN LATERAL (
+       SELECT COALESCE((SELECT COUNT(*)::int FROM moderator_site_likes WHERE site_id = ms.id), 0)
+            + COALESCE((SELECT COUNT(*)::int FROM chapter_likes chl JOIN moderator_chapters chc ON chc.id = chl.chapter_id WHERE chc.site_id = ms.id), 0)
+       AS count
+     ) lc ON true
        LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_bookmarks WHERE site_id = ms.id) bc ON true
        LEFT JOIN LATERAL (
          SELECT COALESCE(SUM(
@@ -5916,7 +5932,11 @@ async function sendSiteLookup(query, params, req, res) {
     viewerId
       ? pool.query('SELECT gallery_id FROM moderator_gallery_bookmarks WHERE user_id = $1', [viewerId])
       : Promise.resolve({ rows: [] }),
-    pool.query('SELECT count(*) FROM moderator_site_likes WHERE site_id = $1', [site.id]),
+    pool.query(
+      `SELECT (SELECT COUNT(*) FROM moderator_site_likes WHERE site_id = $1)
+            + (SELECT COUNT(*) FROM chapter_likes chl JOIN moderator_chapters chc ON chc.id = chl.chapter_id WHERE chc.site_id = $1) AS count`,
+      [site.id]
+    ),
     pool.query(
       `SELECT COUNT(*)::int AS count FROM content_comments cc
        JOIN moderator_chapters mc ON mc.id = cc.target_id AND cc.target_type = 'chapter_paragraph'
@@ -6032,7 +6052,8 @@ app.get('/api/moderator/my-sites', requireAuth, async (req, res) => {
        ) AS is_draft_only,
        (SELECT COUNT(*)::int FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0) AS published_chapter_count,
        (SELECT COUNT(*)::int FROM moderator_chapters mc WHERE mc.site_id = ms.id AND (mc.status = 'draft' OR length(trim(mc.body)) = 0)) AS draft_chapter_count,
-       (SELECT COUNT(*)::int FROM moderator_site_likes WHERE site_id = ms.id) AS like_count,
+       (SELECT COUNT(*)::int FROM moderator_site_likes WHERE site_id = ms.id)
+       + (SELECT COUNT(*)::int FROM chapter_likes chl JOIN moderator_chapters chc ON chc.id = chl.chapter_id WHERE chc.site_id = ms.id) AS like_count,
        (SELECT COUNT(*)::int FROM content_comments cc JOIN moderator_chapters mc ON mc.id = cc.target_id AND cc.target_type = 'chapter_paragraph' WHERE mc.site_id = ms.id) AS comment_count,
        (SELECT MAX(mc.updated_at) FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0) AS last_chapter_update,
        COALESCE((
@@ -8193,7 +8214,11 @@ app.get('/api/library', requireAuth, async (req, res) => {
       FROM moderator_bookmarks mb
       JOIN moderator_sites ms ON ms.id = mb.site_id
       JOIN users u ON u.id = ms.owner_user_id
-      LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_site_likes WHERE site_id = ms.id) lc ON true
+      LEFT JOIN LATERAL (
+       SELECT COALESCE((SELECT COUNT(*)::int FROM moderator_site_likes WHERE site_id = ms.id), 0)
+            + COALESCE((SELECT COUNT(*)::int FROM chapter_likes chl JOIN moderator_chapters chc ON chc.id = chl.chapter_id WHERE chc.site_id = ms.id), 0)
+       AS count
+     ) lc ON true
       LEFT JOIN LATERAL (
         SELECT COALESCE(SUM(
           GREATEST(1, array_length(regexp_split_to_array(trim(regexp_replace(mc4.body, '<[^>]+>', ' ', 'g')), '\\s+'), 1))

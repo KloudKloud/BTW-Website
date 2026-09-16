@@ -1999,7 +1999,22 @@
           .catch(() => {});
       }
     } else {
-      switchNotifTab(location.hash === '#inbox' ? 'inbox' : 'notifications', false);
+      const tab = location.hash === '#inbox' ? 'inbox' : 'notifications';
+      switchNotifTab(tab, false);
+      // Navigating (including browser Back/Forward) to the bare #inbox hash
+      // from an open thread -- e.g. hitting Back after openDmThread pushed
+      // #inbox/<id> -- otherwise leaves the thread panel on screen with its
+      // stale messages, since switchNotifTab only toggles the Inbox/
+      // Notifications tabs, not which DM panel (chats/requests/thread) is
+      // showing. Close out the thread the same way the in-app "← Back"
+      // button does, so the chat list always actually reloads.
+      if (tab === 'inbox' && (dmActiveThreadId !== null || dmPendingTargetUser !== null)) {
+        dmActiveThreadId = null;
+        dmPendingTargetUser = null;
+        dmShowPanel('chats');
+        loadDmChats();
+        loadDmQuickList();
+      }
     }
   }
   applyHashTab();
