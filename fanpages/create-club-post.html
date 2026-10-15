@@ -55,14 +55,27 @@
     }
 
     .cp-page { max-width: 880px; margin: 0 auto; padding: calc(84px + 2.5rem) 1.25rem 4rem; }
-    .cp-eyebrow {
-      font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
-      color: #f0c060; margin-bottom: 0.5rem; text-align: center;
+    /* Which club this post is going into -- shown up top so it's never
+       ambiguous, especially once the admin news-post variant (own styling
+       below) is in play. Links back to the club's Home. */
+    .cp-club-context {
+      display: flex; align-items: center; justify-content: center; gap: 0.6rem;
+      margin: 0 auto 1.5rem; text-decoration: none; width: fit-content;
+      padding: 0.5rem 1rem 0.5rem 0.5rem; border-radius: 30px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+      transition: border-color 0.15s, background 0.15s;
     }
+    .cp-club-context:hover { border-color: rgba(240,192,96,0.4); background: rgba(255,255,255,0.07); }
+    .cp-club-context-icon {
+      width: 32px; height: 32px; border-radius: 50%; object-fit: cover; display: block;
+      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12);
+    }
+    .cp-club-context-text { color: #ccc; font-size: 0.92rem; }
+    .cp-club-context-text strong { color: #f0c060; font-weight: 700; }
+    .cp-club-context--news .cp-club-context-text strong::after { content: ' · News Post'; color: #d9a04a; }
     .cp-sub { color: #999; font-size: 0.88rem; line-height: 1.6; margin-bottom: 1.5rem; text-align: center; }
     .char-editor-modal { margin: 0 auto; max-height: none; overflow-y: visible; }
     .cp-page .char-editor-title,
-    .cp-page .cp-eyebrow,
     .cp-page .mod-field label,
     .cp-page .mod-field-label-standalone,
     .cp-page .mod-btn {
@@ -182,8 +195,11 @@
 </div>
 
 <main class="cp-page">
-  <p class="cp-eyebrow" id="cp-eyebrow">Create</p>
-  <p class="cp-sub" id="cp-sub">Posts are now their own mini-page — add a title, some media, and up to three sections of text.</p>
+  <a class="cp-club-context" id="cp-club-context" href="#" hidden>
+    <img class="cp-club-context-icon" id="cp-club-context-icon" alt="" />
+    <span class="cp-club-context-text">Posting to <strong id="cp-club-context-name">…</strong></span>
+  </a>
+  <p class="cp-sub" id="cp-sub" hidden></p>
 
   <div class="char-editor-modal">
     <h2 class="char-editor-title editor-title-glow" id="cp-title-heading">New Post</h2>
@@ -294,7 +310,9 @@
   const editingPostId = params.get('id') || null;
   let clubName = '';
   if (!clubSlug) {
-    document.getElementById('cp-sub').textContent = 'No club specified — go back and try again.';
+    const subEl = document.getElementById('cp-sub');
+    subEl.hidden = false;
+    subEl.textContent = 'No club specified — go back and try again.';
     document.getElementById('cp-save').disabled = true;
   }
 
@@ -304,6 +322,25 @@
     document.getElementById('cp-cancel').href = document.referrer;
   } else if (clubSlug) {
     document.getElementById('cp-cancel').href = window.fpUrl(`/club?slug=${encodeURIComponent(clubSlug)}`);
+  }
+
+  // Which club this post is going into -- shown up top so it's never
+  // ambiguous which Social feed it'll land in, especially for the
+  // admin-only news-post variant.
+  if (clubSlug) {
+    const ctx = document.getElementById('cp-club-context');
+    ctx.href = window.fpUrl(`/club?slug=${encodeURIComponent(clubSlug)}`);
+    ctx.classList.toggle('cp-club-context--news', isNewsPost);
+    fetch(`/api/clubs/${encodeURIComponent(clubSlug)}`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data || !data.club) return;
+        clubName = data.club.name || clubSlug;
+        document.getElementById('cp-club-context-name').textContent = clubName;
+        if (data.club.icon_url) document.getElementById('cp-club-context-icon').src = data.club.icon_url;
+        ctx.hidden = false;
+      })
+      .catch(() => {});
   }
 
   let cpDirty = false;
@@ -801,8 +838,6 @@
   // +Character/+Gallery. ───────────────────────────────────────────────
   (async function initEditMode() {
     if (!editingPostId || !clubSlug) return;
-    document.getElementById('cp-eyebrow').textContent = 'Edit';
-    document.getElementById('cp-sub').textContent = 'Editing your post.';
     document.getElementById('cp-title-heading').textContent = 'Edit Post';
     document.getElementById('cp-topbar-title').textContent = 'Edit Post';
     document.getElementById('cp-topbar-create').textContent = 'Save Changes';
