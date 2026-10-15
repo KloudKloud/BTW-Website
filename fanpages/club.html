@@ -164,41 +164,16 @@
     #cl-page-bg-wrap {
       position: absolute; top: 0; left: 0; width: 100%; z-index: -1; overflow: hidden;
     }
-    /* A single object-fit:cover <img> stretched across the *entire* page
-       height (see #cl-page-bg-wrap above) upscales hard on any club whose
-       feed runs long -- cover scales uniformly to satisfy whichever
-       dimension needs it more, and a page many times taller than the
-       source image forces that to be the height, blowing the width out far
-       past the image's native pixels (soft/pixelated) while also cropping
-       most of the image off the left and right (the "zoomed in" the user
-       described). background-size:100% auto fixes that by scaling purely
-       by *width* -- the image always renders at (or very near) its native
-       resolution regardless of page length, and nothing is ever cropped
-       out of it. This element is a plain div with a CSS background now,
-       not an img tag, so it can be sized this way.
-       repeat-y (tiling the image down the rest of the page) was tried
-       first and reverted -- repeating a representational piece of art
-       (character faces, not an abstract/seamless texture) reads as an
-       obvious "duplicated image" glitch the moment a second copy is
-       visible, which is worse than the zoom problem it was fixing. So:
-       no-repeat, shown once at the top, and #cl-page-bg-fade below (see
-       positionClubBgFade() in the script) blends its bottom edge into
-       solid black rather than cutting it off hard or tiling it. */
+    /* A single image stretched to cover the whole scrolling wrap (see
+       #cl-page-bg-wrap above) -- tried a width-only scale + tiling/fade-to-
+       black here at one point to avoid the zoom a very tall page causes,
+       but that read as either an obvious "duplicated image" (tiling) or an
+       odd cutoff (fade band), both worse than just accepting the zoom. Back
+       to the simple version: one image, cover-fit, scrolling with the page. */
     #cl-page-bg-img {
       width: 100%; height: 100%; display: block;
-      background-repeat: no-repeat; background-position: top center; background-size: 100% auto;
+      background-repeat: no-repeat; background-position: center top; background-size: cover;
       filter: brightness(0.9) blur(4px); transition: filter 0.25s;
-    }
-    /* Gradient band blending the bottom edge of the once-shown background
-       image into solid black, instead of the image just stopping with a
-       hard cut partway down a tall page. Height/position are set in JS
-       (positionClubBgFade()) since they depend on the image's actual
-       rendered height, which depends on its native aspect ratio and the
-       current viewport width. */
-    #cl-page-bg-fade {
-      position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none;
-      background: linear-gradient(to bottom, transparent, #000);
-      display: none;
     }
     /* Reading a single post gets a bit more blur behind it so the post text
        pops more against a busy theme background -- every other view (Hub,
@@ -1535,7 +1510,6 @@
 <div class="page-bg" id="cl-page-bg-wrap">
   <div id="cl-page-bg-img" style="display:none;"></div>
   <div class="page-bg-overlay" id="cl-page-bg-overlay" style="display:none;"></div>
-  <div id="cl-page-bg-fade"></div>
 </div>
 
 <div class="soc-layout" id="soc-layout">
@@ -3384,17 +3358,16 @@ function renderFromUrl() {
   document.getElementById('cl-body-row').classList.remove('cl-detail-mode');
   document.body.classList.remove('cl-post-open');
 
-  // The top banner (and its +Post button) is Home-only now -- posting only
-  // ever happens from Home's own Social feed, so every other page loses
-  // the button, and an open post hides the whole banner for a cleaner
-  // reading session (Back brings it back).
+  // The top banner is Home-only now -- every other page (a post, or any
+  // custom General/Gallery/Promotion page) hides it entirely so the page's
+  // own content starts right at the top, not just hides its +Post button.
   const bannerWrap = document.getElementById('cl-banner-wrap');
   const bannerPostBtn = document.getElementById('cl-banner-post-btn');
-  if (postId) {
+  if (postId || pageSlug) {
     bannerWrap.style.display = 'none';
   } else {
     bannerWrap.style.display = '';
-    bannerPostBtn.style.display = pageSlug ? 'none' : 'block';
+    bannerPostBtn.style.display = 'block';
   }
 
   if (postId) {
@@ -4167,17 +4140,14 @@ const CL_DEFAULT_BG = '/images/gallery/solusgarnet_17.png';
 // the club happens to have set for Home (own banner only kicks in once
 // the page owner explicitly sets one, see loadCustomPage()).
 const CL_DEFAULT_BANNER = CL_DEFAULT_BG;
-let clCurrentBgUrl = null;
 function applyClubTheme(themeId, bgUrl) {
   const bgImg = document.getElementById('cl-page-bg-img');
   const bgOverlay = document.getElementById('cl-page-bg-overlay');
   const url = (themeId === 'custom' && bgUrl) ? bgUrl : CL_DEFAULT_BG;
-  clCurrentBgUrl = url;
   bgImg.style.backgroundImage = `url("${url}")`;
   bgImg.style.display = 'block';
   bgOverlay.style.display = 'block';
   document.querySelectorAll('.cl-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
-  positionClubBgFade();
   syncClubBgHeight();
 }
 // Same trick as profile-template.html's syncScrollBgHeight(): reset to 0
@@ -4192,30 +4162,6 @@ function syncClubBgHeight() {
   const h = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
   wrap.style.height = h;
 }
-// #cl-page-bg-img is background-size:100% auto, no-repeat -- its rendered
-// height depends on the image's own native aspect ratio and the current
-// page width, neither of which CSS alone can resolve into "where does the
-// image actually end so the fade band can start." Loads the image off-DOM
-// just to read its natural dimensions, then sizes/positions the fade band
-// (#cl-page-bg-fade, see the CSS comment above it) to cover the image's
-// last ~220px and blend into solid black exactly where the art stops.
-const CL_BG_FADE_HEIGHT = 220;
-function positionClubBgFade() {
-  const fade = document.getElementById('cl-page-bg-fade');
-  const wrap = document.getElementById('cl-page-bg-wrap');
-  if (!fade || !wrap || !clCurrentBgUrl) return;
-  const probe = new Image();
-  const urlAtRequest = clCurrentBgUrl;
-  probe.onload = () => {
-    // Theme may have changed again before this particular probe resolved.
-    if (urlAtRequest !== clCurrentBgUrl || !probe.naturalWidth || !probe.naturalHeight) return;
-    const renderedImgHeight = wrap.clientWidth * (probe.naturalHeight / probe.naturalWidth);
-    fade.style.top = Math.max(0, renderedImgHeight - CL_BG_FADE_HEIGHT) + 'px';
-    fade.style.height = CL_BG_FADE_HEIGHT + 'px';
-    fade.style.display = 'block';
-  };
-  probe.src = clCurrentBgUrl;
-}
 // Covers every way the page's content height can change after the initial
 // render -- switching Hub/Social/custom pages, posts loading in, replies
 // expanding, etc. -- without having to hook every individual render call
@@ -4223,12 +4169,11 @@ function positionClubBgFade() {
 new ResizeObserver(() => syncClubBgHeight()).observe(document.body);
 // Debounced -- mobile Safari/Chrome fire `resize` repeatedly as the
 // address bar collapses/expands *during scrolling itself*, same gotcha
-// profile-template.html's bgResizeTimer works around. Also repositions the
-// fade band, since a width change reflows the image's rendered height too.
+// profile-template.html's bgResizeTimer works around.
 let clBgResizeTimer = null;
 window.addEventListener('resize', () => {
   clearTimeout(clBgResizeTimer);
-  clBgResizeTimer = setTimeout(() => { syncClubBgHeight(); positionClubBgFade(); }, 200);
+  clBgResizeTimer = setTimeout(syncClubBgHeight, 200);
 });
 function buildClThemeGrid() {
   const grid = document.getElementById('cl-theme-grid');
