@@ -676,6 +676,23 @@
     #cl-custom-page-title {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 2.6rem; text-align: center;
     }
+    /* Anchor for .cl-tabs-admin-actions' absolute right/top:50% positioning
+       (see the shared rule above) -- without a position:relative row here,
+       it falls back to whatever positioned ancestor is next up the tree
+       instead of landing next to this title. */
+    .cl-page-view-title-row { position: relative; }
+    /* The title is centered across the full row (matches Home's .cl-name
+       treatment), but the admin actions sit absolutely at the row's right
+       edge -- reserve that same width on both sides so a long title wraps
+       before it ever runs under the buttons instead of overlapping them.
+       Only applied once the buttons are actually shown (owner/admin
+       viewers, --has-actions added alongside their display:flex toggle) so
+       a regular visitor's centered title keeps its full width. */
+    .cl-page-view-title-row--has-actions .cl-post-detail-title { padding: 0 190px; }
+    @media (max-width: 720px) {
+      .cl-page-view-title-row--has-actions .cl-post-detail-title { padding: 0; }
+      .cl-page-view-title-row .cl-tabs-admin-actions { position: static; transform: none; justify-content: center; margin: 0 0 1rem; }
+    }
     .cl-post-detail-image-wrap {
       position: relative; width: 100%; border-radius: 14px; overflow: hidden; background: #161616;
       border: 1px solid rgba(255,255,255,0.1); margin-bottom: 1.75rem; perspective: 1400px;
@@ -1685,13 +1702,19 @@
            three named text sections. Promotion/Gallery fall back to plain
            title+content until their dedicated renderers exist. -->
       <div class="cl-row cl-post-detail" id="cl-custom-page-view" hidden>
-        <h1 class="cl-post-detail-title" id="cl-custom-page-title"></h1>
-
-        <!-- Admin/owner page actions — Edit Club + Theme. Social moved to
-             Home-only; every page here is a single view (no tabs). -->
-        <div class="cl-tabs-admin-actions" id="cl-page-view-tabs-admin-actions">
-          <button class="cl-tabs-edit-btn" id="cl-page-view-edit-btn" type="button" title="Edit Club" style="display:none;">✎ Edit Club</button>
-          <button class="cl-theme-btn" id="cl-page-view-theme-btn" type="button" title="Page theme" style="display:none;">🎨</button>
+        <!-- Title + admin/owner page actions (Edit Club + Theme) share one
+             row now -- .cl-tabs-admin-actions positions itself absolutely
+             against the nearest `position:relative` ancestor, which used to
+             be the Hub/Social tab row (removed, Social is Home-only now);
+             this wrapper is that anchor so the buttons land next to the
+             title instead of wherever the next positioned ancestor up the
+             tree happened to be. -->
+        <div class="cl-page-view-title-row">
+          <h1 class="cl-post-detail-title" id="cl-custom-page-title"></h1>
+          <div class="cl-tabs-admin-actions" id="cl-page-view-tabs-admin-actions">
+            <button class="cl-tabs-edit-btn" id="cl-page-view-edit-btn" type="button" title="Edit Club" style="display:none;">✎ Edit Club</button>
+            <button class="cl-theme-btn" id="cl-page-view-theme-btn" type="button" title="Page theme" style="display:none;">🎨</button>
+          </div>
         </div>
         <div class="cl-theme-menu" id="cl-page-view-theme-menu" hidden>
           <p class="cl-theme-popover-label">Page Background</p>
@@ -3720,6 +3743,7 @@ async function loadCustomPage(pageSlug, tab) {
       const isAdminOrOwner = !!currentClub && (currentClub.viewer_role === 'owner' || currentClub.viewer_role === 'admin');
       document.getElementById('cl-page-view-edit-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
       document.getElementById('cl-page-view-theme-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
+      document.querySelector('.cl-page-view-title-row').classList.toggle('cl-page-view-title-row--has-actions', isAdminOrOwner);
       document.getElementById('cl-banner-revert-btn').style.display = (isAdminOrOwner && page.banner_url) ? 'flex' : 'none';
     }
 
