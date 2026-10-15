@@ -153,26 +153,16 @@
        a club, whose thumbnail/banner is the actual focal point up top.
        Overriding by ID (beats the shared class's specificity regardless of
        load order): light blur so the picture still reads but isn't a sharp
-       backdrop competing with foreground content -- bumped up slightly
-       from zero once the background stopped scrolling with the page (a
-       pinned image sits still and gets looked at/scrutinized more than one
-       that was always sliding by). Pinned to the viewport (position:fixed;
-       inset:0) so it never scrolls with page content, full-bleed
-       object-fit:cover so it always fills the screen with no gaps. */
-    /* height:100lvh (large viewport height -- the size assuming the
-       browser's address bar is fully hidden), with a plain 100vh fallback
-       for browsers that don't support it, instead of inset:0's implicit
-       100%-of-viewport height. `dvh` (tried first) still visibly resized
-       the box on a fast scroll-to-bottom -- the box itself is what was
-       moving, which reads as a "jump" even without the earlier repeated
-       zoom. `lvh` is a *fixed* value that never changes while scrolling
-       (unlike `dvh`), sized to the largest the viewport can ever get, so
-       the box is always at least as tall as the screen regardless of
-       whether the address bar is currently showing or hidden -- nothing
-       about it moves or resizes at any point during a scroll. */
+       backdrop competing with foreground content. */
+    /* Scrolls *with* the page now, exactly like a profile's Home tab
+       background (see profile-template.html's .fp-bg-wrap/fp-bg-img):
+       position:absolute instead of fixed, height measured in JS to match
+       the full document height instead of the viewport -- percentage/vh
+       heights can't express "as tall as the page's actual content", only
+       "as tall as the screen". syncClubBgHeight() below keeps this in
+       sync as content loads in/changes. */
     #cl-page-bg-wrap {
-      position: fixed; top: 0; left: 0; width: 100%; z-index: -1; overflow: hidden;
-      height: 100vh; height: 100lvh;
+      position: absolute; top: 0; left: 0; width: 100%; z-index: -1; overflow: hidden;
     }
     #cl-page-bg-img {
       width: 100%; height: 100%; object-fit: cover; display: block;
@@ -4624,7 +4614,33 @@ function applyClubTheme(themeId, bgUrl) {
   bgImg.style.display = 'block';
   bgOverlay.style.display = 'block';
   document.querySelectorAll('.cl-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
+  syncClubBgHeight();
 }
+// Same trick as profile-template.html's syncScrollBgHeight(): reset to 0
+// before measuring, since #cl-page-bg-wrap is itself absolutely positioned
+// and (once tall) contributes to document.documentElement.scrollHeight --
+// without the reset, a previously-tall page would never let the
+// measurement shrink back down.
+function syncClubBgHeight() {
+  const wrap = document.getElementById('cl-page-bg-wrap');
+  if (!wrap) return;
+  wrap.style.height = '0';
+  const h = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
+  wrap.style.height = h;
+}
+// Covers every way the page's content height can change after the initial
+// render -- switching Hub/Social/custom pages, posts loading in, replies
+// expanding, etc. -- without having to hook every individual render call
+// site in this file.
+new ResizeObserver(() => syncClubBgHeight()).observe(document.body);
+// Debounced -- mobile Safari/Chrome fire `resize` repeatedly as the
+// address bar collapses/expands *during scrolling itself*, same gotcha
+// profile-template.html's bgResizeTimer works around.
+let clBgResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(clBgResizeTimer);
+  clBgResizeTimer = setTimeout(syncClubBgHeight, 200);
+});
 function buildClThemeGrid() {
   const grid = document.getElementById('cl-theme-grid');
   grid.innerHTML = '';
