@@ -958,6 +958,16 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
     .then(data => {
       if (!data || !data.user) return;
       const u = data.user;
+      // Persist the fresh /api/auth/me payload (includes is_admin) back into
+      // the cached btw_user — pages that read CURRENT_USER straight off
+      // localStorage at load time (characters.html, club.html, etc.) only
+      // see is_admin correctly once this has run at least once this session.
+      try {
+        const store = localStorage.getItem('btw_token') ? localStorage : sessionStorage;
+        const cachedRaw = store.getItem('btw_user');
+        const cached = cachedRaw ? JSON.parse(cachedRaw) : {};
+        store.setItem('btw_user', JSON.stringify(Object.assign({}, cached, u)));
+      } catch {}
       const name = u.display_name || u.username;
       const initial = name.charAt(0).toUpperCase();
 

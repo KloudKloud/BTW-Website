@@ -5038,8 +5038,12 @@ app.put('/api/newspaper/:id', requireAuth, async (req, res) => {
 });
 
 app.delete('/api/newspaper/:id', requireAuth, async (req, res) => {
+  const isAdmin = await checkAdmin(req);
   const { rowCount } = await pool.query(
-    'DELETE FROM newspaper_posts WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]
+    isAdmin
+      ? 'DELETE FROM newspaper_posts WHERE id = $1'
+      : 'DELETE FROM newspaper_posts WHERE id = $1 AND user_id = $2',
+    isAdmin ? [req.params.id] : [req.params.id, req.user.id]
   );
   if (!rowCount) return res.status(404).json({ error: 'Not found.' });
   res.json({ message: 'Deleted.' });
@@ -7370,8 +7374,12 @@ app.post('/api/characters/:id/link-many', requireAuth, async (req, res) => {
 // Permanent delete — the only way a character actually goes away. Cascades
 // character_story_links automatically via FK.
 app.delete('/api/characters/:id', requireAuth, async (req, res) => {
+  const isAdmin = await checkAdmin(req);
   const { rows: [existing] } = await pool.query(
-    'SELECT id FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
+    isAdmin
+      ? 'SELECT id FROM moderator_characters WHERE id = $1'
+      : 'SELECT id FROM moderator_characters WHERE id = $1 AND owner_user_id = $2',
+    isAdmin ? [req.params.id] : [req.params.id, req.user.id]
   );
   if (!existing) return res.status(404).json({ error: 'Not found.' });
   await pool.query('DELETE FROM moderator_characters WHERE id = $1', [existing.id]);
@@ -7769,8 +7777,12 @@ app.post('/api/gallery/:id/link-many', requireAuth, async (req, res) => {
 
 // Permanent delete — cascades gallery_story_links automatically via FK.
 app.delete('/api/gallery/:id', requireAuth, async (req, res) => {
+  const isAdmin = await checkAdmin(req);
   const { rows: [item] } = await pool.query(
-    'SELECT * FROM moderator_gallery WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
+    isAdmin
+      ? 'SELECT * FROM moderator_gallery WHERE id = $1'
+      : 'SELECT * FROM moderator_gallery WHERE id = $1 AND owner_user_id = $2',
+    isAdmin ? [req.params.id] : [req.params.id, req.user.id]
   );
   if (!item) return res.status(404).json({ error: 'Not found.' });
   if (item.image_url.startsWith('/images/moderators/')) {
@@ -9594,7 +9606,7 @@ app.delete('/api/clubs/:slug/posts/:postId', requireAuth, async (req, res) => {
   const { rows: [post] } = await pool.query('SELECT * FROM club_posts WHERE id = $1 AND club_id = $2', [req.params.postId, club.id]);
   if (!post) return res.status(404).json({ error: 'Post not found.' });
   const role = await getClubRole(club.id, req.user.id);
-  const allowed = post.author_user_id === req.user.id || role === 'owner' || role === 'admin';
+  const allowed = post.author_user_id === req.user.id || role === 'owner' || role === 'admin' || await checkAdmin(req);
   if (!allowed) return res.status(403).json({ error: "You don't have permission to delete this post." });
   await pool.query('DELETE FROM club_posts WHERE id = $1', [post.id]);
   res.json({ message: 'Post deleted.' });

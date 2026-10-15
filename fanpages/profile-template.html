@@ -2750,7 +2750,7 @@
     if (diff < 2592000) return `${Math.floor(diff / 86400)}d ago`;
     return new Date(iso).toLocaleDateString();
   }
-  function ccIsMine(c) { return CURRENT_USER && CURRENT_USER.id === c.user_id; }
+  function ccIsMine(c) { return CURRENT_USER && (CURRENT_USER.id === c.user_id || CURRENT_USER.is_admin); }
 
   function ccCommentEl(c, isReply) {
     const wrap = document.createElement('div');
@@ -3879,21 +3879,24 @@
 
   function renderNewspaperDetail(post) {
     const isOwner = currentAuthor && currentAuthor.is_self;
+    const canDelete = isOwner || (CURRENT_USER && CURRENT_USER.is_admin);
     const el = document.getElementById('fp-newspaper-post');
     el.innerHTML = `
       ${newspaperAuthorHeader(post)}
       ${post.title ? `<p class="fp-newspaper-post-title">${escapeHtml(post.title)}</p>` : ''}
       <div class="fp-newspaper-post-body">${renderGalleryText(post.body)}</div>
       <div class="fp-newspaper-post-media">${newspaperMediaHtml(post.attachments, '')}</div>
-      ${isOwner ? `
+      ${isOwner || canDelete ? `
         <div class="fp-newspaper-post-actions">
-          <button class="mod-btn mod-btn--small" id="fp-newspaper-edit-this-btn" type="button">Edit</button>
-          <button class="mod-btn mod-btn--small mod-btn--danger" id="fp-newspaper-delete-this-btn" type="button">Delete</button>
+          ${isOwner ? '<button class="mod-btn mod-btn--small" id="fp-newspaper-edit-this-btn" type="button">Edit</button>' : ''}
+          ${canDelete ? '<button class="mod-btn mod-btn--small mod-btn--danger" id="fp-newspaper-delete-this-btn" type="button">Delete</button>' : ''}
         </div>
       ` : ''}
     `;
     if (isOwner) {
       document.getElementById('fp-newspaper-edit-this-btn').addEventListener('click', () => openNewspaperComposer(post));
+    }
+    if (canDelete) {
       document.getElementById('fp-newspaper-delete-this-btn').addEventListener('click', () => deleteNewspaperPost(post.id));
     }
   }
