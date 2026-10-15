@@ -164,9 +164,25 @@
     #cl-page-bg-wrap {
       position: absolute; top: 0; left: 0; width: 100%; z-index: -1; overflow: hidden;
     }
+    /* A single object-fit:cover <img> stretched across the *entire* page
+       height (see #cl-page-bg-wrap above) upscales hard on any club whose
+       feed runs long -- cover scales uniformly to satisfy whichever
+       dimension needs it more, and a page many times taller than the
+       source image forces that to be the height, blowing the width out far
+       past the image's native pixels (soft/pixelated) while also cropping
+       most of the image off the left and right (the "zoomed in" the user
+       described). A tiled CSS background sidesteps both: background-size:
+       100% auto scales by *width only* -- the image always renders at (or
+       very near) its native resolution regardless of page length, and
+       nothing is ever cropped out of a single tile -- then background-
+       repeat:repeat-y stacks as many full, uncropped copies as the page
+       needs to stay filled all the way down. This element is a plain div
+       with a CSS background now, not an img tag, specifically so it can
+       tile. */
     #cl-page-bg-img {
-      width: 100%; height: 100%; object-fit: cover; display: block;
-      filter: brightness(0.9) blur(4px); transform: none; transition: filter 0.25s;
+      width: 100%; height: 100%; display: block;
+      background-repeat: repeat-y; background-position: top center; background-size: 100% auto;
+      filter: brightness(0.9) blur(4px); transition: filter 0.25s;
     }
     /* Reading a single post gets a bit more blur behind it so the post text
        pops more against a busy theme background -- every other view (Hub,
@@ -1546,7 +1562,7 @@
 <script src="/fanpages/crop-modal.js"></script>
 
 <div class="page-bg" id="cl-page-bg-wrap">
-  <img id="cl-page-bg-img" alt="" style="display:none;" />
+  <div id="cl-page-bg-img" style="display:none;"></div>
   <div class="page-bg-overlay" id="cl-page-bg-overlay" style="display:none;"></div>
 </div>
 
@@ -4610,7 +4626,8 @@ const CL_DEFAULT_BANNER = CL_DEFAULT_BG;
 function applyClubTheme(themeId, bgUrl) {
   const bgImg = document.getElementById('cl-page-bg-img');
   const bgOverlay = document.getElementById('cl-page-bg-overlay');
-  bgImg.src = (themeId === 'custom' && bgUrl) ? bgUrl : CL_DEFAULT_BG;
+  const url = (themeId === 'custom' && bgUrl) ? bgUrl : CL_DEFAULT_BG;
+  bgImg.style.backgroundImage = `url("${url}")`;
   bgImg.style.display = 'block';
   bgOverlay.style.display = 'block';
   document.querySelectorAll('.cl-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
