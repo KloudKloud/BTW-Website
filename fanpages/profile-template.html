@@ -3161,6 +3161,13 @@
         seeMore.addEventListener('click', () => openFollowModal('following'));
         wrap.appendChild(seeMore);
       }
+      // This resolves after the Home tab's initial syncScrollBgHeight() call
+      // (see loadProfile) and can add avatar rows that grow the page --
+      // same re-sync pattern used everywhere else async content lands here.
+      if (activeTabName === 'home') {
+        syncScrollBgHeight();
+        wrap.querySelectorAll('img').forEach(img => img.addEventListener('load', syncScrollBgHeight, { once: true }));
+      }
     } catch {
       wrap.innerHTML = '<p class="fp-featured-empty">Couldn\'t load right now.</p>';
     }
@@ -3823,6 +3830,13 @@
       }
       wrap.innerHTML = '';
       wrap.appendChild(newspaperCardEl(posts[0]));
+      // Same reasoning as loadFollowingPreview just above -- this resolves
+      // after the Home tab's initial syncScrollBgHeight() call and the
+      // post's own attachment thumbnail can grow the page once it loads.
+      if (activeTabName === 'home') {
+        syncScrollBgHeight();
+        wrap.querySelectorAll('img').forEach(img => img.addEventListener('load', syncScrollBgHeight, { once: true }));
+      }
     } catch {
       wrap.innerHTML = '<p class="fp-featured-empty">Couldn\'t load the newspaper right now.</p>';
     }
