@@ -852,6 +852,15 @@ function renderCharDetailProfile(char, locked) {
     window.fpShare(e.currentTarget, `${window.location.origin}${window.location.pathname}?char=${char.id}`);
   });
   nameRow.appendChild(shareBtn);
+  if (CURRENT_USER && CURRENT_USER.is_admin) {
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'fp-share-icon-btn fp-share-icon-btn--danger';
+    deleteBtn.type = 'button';
+    deleteBtn.title = 'Delete this character (admin)';
+    deleteBtn.textContent = '🗑️';
+    deleteBtn.addEventListener('click', () => deleteCharacterAsAdmin(char));
+    nameRow.appendChild(deleteBtn);
+  }
   bio.appendChild(nameRow);
   const descWrap = document.createElement('div');
   descWrap.className = 'char-desc';
@@ -1176,6 +1185,18 @@ function closeCharacterDetail() {
 }
 
 document.getElementById('fp-char-back-btn').addEventListener('click', closeCharacterDetail);
+
+async function deleteCharacterAsAdmin(char) {
+  if (!confirm(`Delete "${char.name}"? This can't be undone.`)) return;
+  try {
+    const res = await fetch(`/api/characters/${char.id}`, { method: 'DELETE', headers: authHeaders() });
+    if (!res.ok) { alert('Could not delete this character.'); return; }
+    closeCharacterDetail();
+    runCharacterSearch();
+  } catch {
+    alert('Could not delete this character.');
+  }
+}
 
 // ── Mobile-only: sidebar-as-drawer toggle (search/sort/filter menu) --
 // same off-canvas pattern as the Search page's own tab drawer. ──
