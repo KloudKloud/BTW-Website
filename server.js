@@ -1560,14 +1560,25 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS banner_position_y INTEGER NOT NULL DEFAULT 50;
   `).catch(e => console.error('club_pages banner migration:', e.message));
 
-  // Optional page scoping for club_posts — NULL means a Home Social post
-  // (all existing posts keep this behavior after the migration). A General
-  // page's own Social tab sets this to that page's id so its feed stays
-  // separate from Home's and from every other page's.
+  // Posts became full mini-pages (title + Cover Media + up to three Text
+  // Sections, same shape as a club_pages General page, plus an optional
+  // poll) instead of a single free-text body with a flat image stack.
+  // page_id (per-page Social scoping) is dropped in the same pass — every
+  // post now always goes to the club's one Home feed, since every other
+  // page lost its own Social tab. All pre-existing club_posts rows were
+  // wiped as part of this migration (old shape had no sane mapping to the
+  // new one), so these drops are safe with no backfill needed.
   await pool.query(`
-    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS page_id INTEGER REFERENCES club_pages(id) ON DELETE CASCADE;
-    CREATE INDEX IF NOT EXISTS idx_club_posts_page ON club_posts(page_id, created_at DESC);
-  `).catch(e => console.error('club_posts page_id migration:', e.message));
+    ALTER TABLE club_posts DROP COLUMN IF EXISTS page_id;
+    DROP INDEX IF EXISTS idx_club_posts_page;
+    ALTER TABLE club_posts DROP COLUMN IF EXISTS body;
+    ALTER TABLE club_posts DROP COLUMN IF EXISTS image_url;
+    ALTER TABLE club_posts DROP COLUMN IF EXISTS image_urls;
+    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS cover_mode TEXT NOT NULL DEFAULT 'static';
+    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS cover_image_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS cover_slideshow JSONB NOT NULL DEFAULT '[]';
+    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS text_fields JSONB NOT NULL DEFAULT '[]';
+  `).catch(e => console.error('club_posts mini-page migration:', e.message));
 
   // BTWClub — the site-wide default club every account belongs to (an
   // r/all equivalent). Owned by the admin account; seeded once, then every
@@ -8038,6 +8049,16 @@ async function commentTargetInfo(targetType, targetId) {
     // not a routed URL) — link back to the gallery page itself instead.
     return { title: g.title || 'Untitled', link: `/club?slug=${encodeURIComponent(g.club_slug)}&page=${encodeURIComponent(g.page_slug)}`, ownerId: null };
   }
+  if (targetType === 'club_page') {
+    const { rows: [p] } = await pool.query(
+      `SELECT p.title, p.slug AS page_slug, c.slug AS club_slug
+       FROM club_pages p JOIN clubs c ON c.id = p.club_id
+       WHERE p.id = $1`,
+      [targetId]
+    );
+    if (!p) return null;
+    return { title: p.title || 'Untitled', link: `/club?slug=${encodeURIComponent(p.club_slug)}&page=${encodeURIComponent(p.page_slug)}`, ownerId: null };
+  }
   return null;
 }
 
@@ -8118,7 +8139,7 @@ app.post('/api/content-comments', async (req, res) => {
   let guestName = null;
   if (!viewerId) {
     // Clubs are explicitly held back from guest interaction for now.
-    if (targetType === 'club_post' || targetType === 'club_gallery_image') {
+    if (targetType === 'club_post' || targetType === 'club_gallery_image' || targetType === 'club_page') {
       return res.status(401).json({ error: 'You need an account to comment in clubs.' });
     }
     guestName = String(req.body.guest_name || '').trim().slice(0, 40);
@@ -9321,6 +9342,14 @@ app.delete('/api/clubs/:slug/members/:userId', requireAuth, async (req, res) => 
 // non-empty when the post actually has a poll). Results stay hidden from
 // the client's perspective until the viewer has voted — that's enforced
 // here, not just in the UI, so opening devtools doesn't reveal them early.
+// A post's card snippet (cross-club feeds, recommendations) comes from its
+// first Text Section's body now that there's no single free-text body —
+// same truncation the old flat body snippet used.
+function clubPostFeedSnippet(p) {
+  const fields = Array.isArray(p.text_fields) ? p.text_fields : [];
+  const first = fields.find(f => f && f.body);
+  return first ? String(first.body) : '';
+}
 function clubPostPublicShape(p, voteRows, viewerId) {
   let poll = p.poll || null;
   if (poll) {
@@ -9337,12 +9366,14 @@ function clubPostPublicShape(p, voteRows, viewerId) {
     };
   }
   return {
-    id: p.id, title: p.title, body: p.body,
-    image_url: p.image_url, image_urls: p.image_urls || [],
+    id: p.id, title: p.title,
+    cover_mode: p.cover_mode || 'static', cover_image_url: p.cover_image_url || '',
+    cover_slideshow: p.cover_slideshow || [],
+    text_fields: p.text_fields || [],
     preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
     preview_image_url: p.preview_image_url || '',
     poll,
-    created_at: p.created_at, is_admin_post: p.is_admin_post, page_id: p.page_id || null,
+    created_at: p.created_at, is_admin_post: p.is_admin_post,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
     like_count: Number(p.like_count) || 0,
     comment_count: Number(p.comment_count) || 0,
@@ -9370,17 +9401,6 @@ app.get('/api/clubs/:slug/posts', async (req, res) => {
   const sort = ['best', 'top', 'new'].includes(req.query.sort) ? req.query.sort : 'best';
   const viewerId = optionalViewerId(req);
 
-  // ?page=<pageSlug> scopes to that General page's own Social feed; no
-  // ?page= means Home's Social feed (page_id IS NULL) — the behavior every
-  // existing club_posts row already has.
-  let pageId = null;
-  if (req.query.page) {
-    const { rows: [page] } = await pool.query(
-      'SELECT id FROM club_pages WHERE club_id = $1 AND slug = $2', [club.id, req.query.page]
-    );
-    if (!page) return res.status(404).json({ error: 'Page not found.' });
-    pageId = page.id;
-  }
   // Postgres won't resolve SELECT-list aliases inside a compound ORDER BY
   // expression (only bare "ORDER BY like_count" works, not "like_count +
   // comment_count") — repeat the underlying subqueries instead of the alias.
@@ -9403,9 +9423,9 @@ app.get('/api/clubs/:slug/posts', async (req, res) => {
        (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked,
        ${hotScoreExpr} AS hot_score
      FROM club_posts cp JOIN users u ON u.id = cp.author_user_id
-     WHERE cp.club_id = $1 AND cp.page_id IS NOT DISTINCT FROM $3 ${adminOnly ? 'AND cp.is_admin_post = TRUE' : ''}
+     WHERE cp.club_id = $1 ${adminOnly ? 'AND cp.is_admin_post = TRUE' : ''}
      ORDER BY ${orderBy} LIMIT 100`,
-    [club.id, viewerId || 0, pageId]
+    [club.id, viewerId || 0]
   );
   const pollPostIds = rows.filter(p => p.poll).map(p => p.id);
   let votesByPost = new Map();
@@ -9531,60 +9551,79 @@ app.delete('/api/clubs/:slug/posts/:postId/like', async (req, res) => {
   res.json({ liked: false, like_count: count });
 });
 
+// Posts are now a one-shot "session" (create → submit, or edit → resubmit
+// the whole thing), just like creating a character/gallery post — every
+// image is uploaded immediately on selection via the plain generic
+// /api/moderator/character-image endpoint (it just saves whatever's handed
+// to it and hands back a URL, nothing character-specific about it) and the
+// resulting URL is carried in plain JSON here, same as those two pages'
+// own POST/PUT bodies. No multipart handling needed on these routes at all.
+function parsePollInput(raw) {
+  if (!raw) return null;
+  const question = String(raw.question || '').trim().slice(0, 200);
+  const options = (Array.isArray(raw.options) ? raw.options : [])
+    .map(o => String(o || '').trim().slice(0, 100)).filter(Boolean).slice(0, 4);
+  const type = raw.type === 'multiple' ? 'multiple' : 'single';
+  if (question && options.length >= 2) return { question, type, options };
+  return null;
+}
+
+// A Cover Media / Text Section image slot: { mode: 'static'|'slideshow',
+// image_url, slideshow: [{image_url}] } — client already resolved every URL
+// via the upload-on-select flow, this just whitelists/round-trips it.
+function sanitizeClubPostImageSlot(raw) {
+  const slideshow = Array.isArray(raw && raw.slideshow) ? raw.slideshow : [];
+  return {
+    mode: (raw && raw.mode === 'slideshow') ? 'slideshow' : 'static',
+    image_url: String((raw && raw.image_url) || ''),
+    slideshow: slideshow.slice(0, 10).map(s => ({ image_url: String((s && s.image_url) || '') })).filter(s => s.image_url),
+  };
+}
+
+function buildClubPostTextFields(raw) {
+  const fieldsIn = Array.isArray(raw) ? raw.slice(0, 3) : [];
+  return fieldsIn.map(f => {
+    const cover = sanitizeClubPostImageSlot(f && f.cover);
+    const side = sanitizeClubPostImageSlot(f && f.side);
+    return {
+      title: String((f && f.title) || '').trim().slice(0, 80),
+      body: String((f && f.body) || '').trim().slice(0, 5000),
+      cover_mode: cover.mode, cover_image_url: cover.image_url, cover_slideshow: cover.slideshow,
+      side_mode: side.mode, side_image_url: side.image_url, side_slideshow: side.slideshow,
+    };
+  }).filter(f => f.title || f.body || f.cover_image_url || f.side_image_url || f.cover_slideshow.length || f.side_slideshow.length);
+}
+
 // POST /api/clubs/:slug/posts — members only. is_admin_post is a deliberate
 // choice made at posting time (only owners/admins can set it — silently
 // ignored otherwise, never trusted from a regular member's request). Every
-// post needs a title; body/images/poll are all optional. Images are never
-// individually cropped (they're shown click-through, full-size, on the
-// post's own page) — only the FEED THUMBNAIL gets a focal-point
-// reposition (preview_position_x/y), same idea as the gallery preview crop:
-// the source image itself is untouched.
-app.post('/api/clubs/:slug/posts', requireAuth, uploadModImage.fields([{ name: 'images', maxCount: 100 }, { name: 'preview_image', maxCount: 1 }]), async (req, res) => {
+// post needs a title; Cover Media/Text Sections/poll are all optional —
+// a post is effectively a mini club_pages General page (same Title/Cover
+// Media/Text Sections shape) plus an optional poll bolted on. Cover Media
+// itself is never individually cropped (shown full-size on the post's own
+// page) — only the FEED THUMBNAIL gets a focal-point reposition
+// (preview_position_x/y), same idea as the gallery preview crop: the
+// source image itself is untouched.
+app.post('/api/clubs/:slug/posts', requireAuth, async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id, name, slug FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const role = await getClubRole(club.id, req.user.id);
   if (!role) return res.status(403).json({ error: 'Join this club to post in it.' });
 
-  // page_slug (optional) — posting into a General page's own Social tab
-  // instead of Home's. Resolved server-side, never trusted as a raw id, and
-  // only General pages can hold posts (Promotion/Gallery pages don't get a
-  // Social tab at all).
-  let pageId = null;
-  if (req.body.page_slug) {
-    const { rows: [page] } = await pool.query(
-      "SELECT id FROM club_pages WHERE club_id = $1 AND slug = $2 AND type = 'general'", [club.id, req.body.page_slug]
-    );
-    if (!page) return res.status(404).json({ error: 'Page not found.' });
-    pageId = page.id;
-  }
-
   const title = String(req.body.title || '').trim().slice(0, 120);
-  const body = String(req.body.body || '').trim().slice(0, 5000);
   if (!title) return res.status(400).json({ error: 'A title is required.' });
   const isAdminPost = !!req.body.is_admin_post && (role === 'owner' || role === 'admin');
   const previewX = req.body.preview_position_x !== undefined ? clampPosition(req.body.preview_position_x) : 50;
   const previewY = req.body.preview_position_y !== undefined ? clampPosition(req.body.preview_position_y) : 50;
-
-  let poll = null;
-  if (req.body.poll) {
-    try {
-      const parsed = JSON.parse(req.body.poll);
-      const question = String(parsed.question || '').trim().slice(0, 200);
-      const options = (Array.isArray(parsed.options) ? parsed.options : [])
-        .map(o => String(o || '').trim().slice(0, 100)).filter(Boolean).slice(0, 4);
-      const type = parsed.type === 'multiple' ? 'multiple' : 'single';
-      if (question && options.length >= 2) poll = { question, type, options };
-    } catch {}
-  }
-
-  const imageUrls = (req.files.images || []).map(f => `/images/moderators/${f.filename}`);
-  const previewImageUrl = req.files.preview_image && req.files.preview_image[0]
-    ? `/images/moderators/${req.files.preview_image[0].filename}` : '';
+  const poll = parsePollInput(req.body.poll);
+  const textFields = buildClubPostTextFields(req.body.text_fields);
+  const cover = sanitizeClubPostImageSlot(req.body.cover);
+  const previewImageUrl = String(req.body.preview_image_url || '');
 
   const { rows: [post] } = await pool.query(
-    `INSERT INTO club_posts (club_id, author_user_id, title, body, image_url, image_urls, preview_position_x, preview_position_y, preview_image_url, poll, is_admin_post, page_id)
+    `INSERT INTO club_posts (club_id, author_user_id, title, cover_mode, cover_image_url, cover_slideshow, text_fields, preview_position_x, preview_position_y, preview_image_url, poll, is_admin_post)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
-    [club.id, req.user.id, title, body, imageUrls[0] || '', JSON.stringify(imageUrls), previewX, previewY, previewImageUrl, poll ? JSON.stringify(poll) : null, isAdminPost, pageId]
+    [club.id, req.user.id, title, cover.mode, cover.image_url, JSON.stringify(cover.slideshow), JSON.stringify(textFields), previewX, previewY, previewImageUrl, poll ? JSON.stringify(poll) : null, isAdminPost]
   );
   const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
   const { rows: members } = await pool.query('SELECT user_id FROM club_members WHERE club_id = $1', [club.id]);
@@ -9596,6 +9635,41 @@ app.post('/api/clubs/:slug/posts', requireAuth, uploadModImage.fields([{ name: '
       .map(uid => notifyUser(uid, req.user.id, 'club_post',
         `posted "${title}" in ${club.name}.`, postLink))
   );
+  res.json({ post: clubPostPublicShape({ ...post, username: author.username, display_name: author.display_name, avatar: author.avatar }) });
+});
+
+// PUT /api/clubs/:slug/posts/:postId — editing a post resubmits the whole
+// thing (same shape as creating one), same permission model as deleting one
+// (the post's own author, a club owner/admin, or a global admin).
+app.put('/api/clubs/:slug/posts/:postId', requireAuth, async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const { rows: [existing] } = await pool.query('SELECT * FROM club_posts WHERE id = $1 AND club_id = $2', [req.params.postId, club.id]);
+  if (!existing) return res.status(404).json({ error: 'Post not found.' });
+  const role = await getClubRole(club.id, req.user.id);
+  const allowed = existing.author_user_id === req.user.id || role === 'owner' || role === 'admin' || await checkAdmin(req);
+  if (!allowed) return res.status(403).json({ error: "You don't have permission to edit this post." });
+
+  const title = String(req.body.title || '').trim().slice(0, 120);
+  if (!title) return res.status(400).json({ error: 'A title is required.' });
+  const isAdminPost = req.body.is_admin_post !== undefined
+    ? (!!req.body.is_admin_post && (role === 'owner' || role === 'admin'))
+    : existing.is_admin_post;
+  const previewX = req.body.preview_position_x !== undefined ? clampPosition(req.body.preview_position_x) : existing.preview_position_x;
+  const previewY = req.body.preview_position_y !== undefined ? clampPosition(req.body.preview_position_y) : existing.preview_position_y;
+  const poll = parsePollInput(req.body.poll);
+  const textFields = buildClubPostTextFields(req.body.text_fields);
+  const cover = sanitizeClubPostImageSlot(req.body.cover);
+  const previewImageUrl = req.body.preview_image_url !== undefined ? String(req.body.preview_image_url) : existing.preview_image_url;
+
+  const { rows: [post] } = await pool.query(
+    `UPDATE club_posts SET title = $1, cover_mode = $2, cover_image_url = $3, cover_slideshow = $4, text_fields = $5,
+       preview_position_x = $6, preview_position_y = $7, preview_image_url = $8, poll = $9, is_admin_post = $10
+     WHERE id = $11 RETURNING *`,
+    [title, cover.mode, cover.image_url, JSON.stringify(cover.slideshow), JSON.stringify(textFields),
+     previewX, previewY, previewImageUrl, poll ? JSON.stringify(poll) : null, isAdminPost, existing.id]
+  );
+  const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [post.author_user_id]);
   res.json({ post: clubPostPublicShape({ ...post, username: author.username, display_name: author.display_name, avatar: author.avatar }) });
 });
 
@@ -9893,7 +9967,7 @@ app.get('/api/clubs/:slug/pages/:pageSlug', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const { rows: [page] } = await pool.query(
-    'SELECT slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y FROM club_pages WHERE club_id = $1 AND slug = $2',
+    'SELECT id, slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y FROM club_pages WHERE club_id = $1 AND slug = $2',
     [club.id, req.params.pageSlug]
   );
   if (!page) return res.status(404).json({ error: 'Page not found.' });
@@ -9969,7 +10043,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => {
   const title = req.body.title !== undefined ? String(req.body.title).trim().slice(0, 60) || existing.title : existing.title;
   const content = req.body.content !== undefined ? String(req.body.content).slice(0, 20000) : existing.content;
   const { rows: [page] } = await pool.query(
-    'UPDATE club_pages SET title = $1, content = $2 WHERE id = $3 RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y',
+    'UPDATE club_pages SET title = $1, content = $2 WHERE id = $3 RETURNING id, slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y',
     [title, content, existing.id]
   );
   res.json({ page });
@@ -9982,7 +10056,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug/theme', requireAuth, async (req, res) 
   if (!ctx) return;
   const theme = req.body.theme === 'custom' ? 'custom' : 'default';
   const { rows: [updated] } = await pool.query(
-    'UPDATE club_pages SET theme = $1 WHERE id = $2 RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y',
+    'UPDATE club_pages SET theme = $1 WHERE id = $2 RETURNING id, slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y',
     [theme, ctx.page.id]
   );
   res.json({ page: updated });
@@ -9995,7 +10069,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug/theme-bg', requireAuth, uploadModImage
   const bgUrl = `/images/moderators/${req.file.filename}`;
   const { rows: [updated] } = await pool.query(
     `UPDATE club_pages SET theme_bg_url = $1, theme = 'custom' WHERE id = $2
-     RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
+     RETURNING id, slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
     [bgUrl, ctx.page.id]
   );
   res.json({ page: updated });
@@ -10017,7 +10091,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug/banner', requireAuth, uploadModImage.s
   }
   const { rows: [updated] } = await pool.query(
     `UPDATE club_pages SET banner_url = $1, banner_position_x = $2, banner_position_y = $3 WHERE id = $4
-     RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
+     RETURNING id, slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
     [bannerUrl, positionX, positionY, ctx.page.id]
   );
   res.json({ page: updated });
@@ -10031,7 +10105,7 @@ app.delete('/api/clubs/:slug/pages/:pageSlug/banner', requireAuth, async (req, r
   deleteIfModeratorUpload(ctx.page.banner_url);
   const { rows: [updated] } = await pool.query(
     `UPDATE club_pages SET banner_url = '', banner_position_x = 50, banner_position_y = 50 WHERE id = $1
-     RETURNING slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
+     RETURNING id, slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
     [ctx.page.id]
   );
   res.json({ page: updated });
@@ -10580,8 +10654,8 @@ app.get('/api/clubs-feed', async (req, res) => {
     [limit, viewerId || 0]
   );
   res.json({ posts: rows.map(p => ({
-    id: p.id, title: p.title, body: p.body, created_at: p.created_at, is_admin_post: p.is_admin_post,
-    image_url: p.image_url || '', preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
+    id: p.id, title: p.title, body: clubPostFeedSnippet(p), created_at: p.created_at, is_admin_post: p.is_admin_post,
+    image_url: p.cover_image_url || '', preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
     preview_image_url: p.preview_image_url || '',
     like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_liked: !!p.user_liked,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
@@ -10633,8 +10707,8 @@ app.get('/api/clubs-recommended', async (req, res) => {
     [limit, viewerId || 0]
   );
   res.json({ posts: rows.map(p => ({
-    id: p.id, title: p.title, body: p.body, created_at: p.created_at,
-    image_url: p.image_url || '', preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
+    id: p.id, title: p.title, body: clubPostFeedSnippet(p), created_at: p.created_at,
+    image_url: p.cover_image_url || '', preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
     preview_image_url: p.preview_image_url || '',
     like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_liked: !!p.user_liked,
     already_joined: !!p.already_joined, recently_visited: !!p.recently_visited,
