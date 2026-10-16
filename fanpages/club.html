@@ -404,7 +404,10 @@
       transition: box-shadow 0.2s, transform 0.2s;
     }
     .cl-create-post-btn:hover { box-shadow: 0 0 26px rgba(107,63,160,0.75); transform: translateY(-1px); }
-    .cl-create-post-btn--news { width: 100%; box-sizing: border-box; margin-bottom: 1rem; }
+    .cl-create-post-btn--news {
+      display: block; width: 100%; box-sizing: border-box; margin-bottom: 1rem;
+      text-align: center; white-space: nowrap;
+    }
     .cl-social-filter-btn {
       background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #ccc;
       border-radius: 20px; padding: 0.45em 1em; font-size: 0.85rem; font-weight: 700;
@@ -431,7 +434,7 @@
        with a short gradient underline flourish instead of a full-width
        rule. */
     .cl-about-label {
-      font-family: 'Cinzel', Georgia, serif; font-size: 1.85rem; font-weight: 700; letter-spacing: 0.03em;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.85rem; font-weight: 700; letter-spacing: 0.03em;
       color: #7fa8d9; text-shadow: 0 0 16px rgba(127,168,217,0.6);
       margin: 0 0 0.85rem; display: inline-block; position: relative; padding-bottom: 0.5rem;
     }
@@ -455,7 +458,7 @@
        reads as its own standalone thing instead of blending into a list. */
     .cl-admins-section { margin-top: 2.5rem; }
     .cl-admins-title {
-      font-family: 'Cinzel', Georgia, serif; font-size: 1.65rem; font-weight: 700; letter-spacing: 0.03em;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.65rem; font-weight: 700; letter-spacing: 0.03em;
       color: #7fa8d9; text-shadow: 0 0 16px rgba(127,168,217,0.6);
       margin: 0 0 1.1rem; display: inline-block; position: relative; padding-bottom: 0.5rem;
     }
@@ -2840,19 +2843,26 @@ document.getElementById('cl-side-showmore-btn').addEventListener('click', () => 
 // (it's the built-in Hub/Social view); clicking it just clears page/tab/
 // post entirely. Capped at 7 total (including Home) with a Show More. ────
 const CL_PAGES_CAP = 7;
-function pageLinkRow(label, pageSlug, isHome) {
+function pageLinkRow(label, pageSlug, isHome, isSocial) {
   const a = document.createElement('a');
   a.className = 'cl-side-page-row';
-  a.dataset.pageSlug = pageSlug || '';
-  a.href = pageSlug ? buildClubUrl({ page: pageSlug, tab: null, post: null }) : buildClubUrl({ page: null, tab: null, post: null });
-  if (isHome) {
-    a.innerHTML = `<span class="cl-side-page-home-star" title="The Home page can't be deleted">★</span>${escapeHtml(label)}`;
+  if (isSocial) {
+    a.dataset.pageSlug = '__social__';
+    a.href = buildClubUrl({ page: null, tab: 'social', post: null });
+    a.innerHTML = `<span class="cl-side-page-home-star">💬</span>${escapeHtml(label)}`;
   } else {
-    a.textContent = label;
+    a.dataset.pageSlug = pageSlug || '';
+    a.href = pageSlug ? buildClubUrl({ page: pageSlug, tab: null, post: null }) : buildClubUrl({ page: null, tab: null, post: null });
+    if (isHome) {
+      a.innerHTML = `<span class="cl-side-page-home-star" title="The Home page can't be deleted">★</span>${escapeHtml(label)}`;
+    } else {
+      a.textContent = label;
+    }
   }
   a.addEventListener('click', (e) => {
     e.preventDefault();
-    navigateTo(pageSlug ? { page: pageSlug, tab: null, post: null } : { page: null, tab: null, post: null });
+    if (isSocial) navigateTo({ page: null, tab: 'social', post: null });
+    else navigateTo(pageSlug ? { page: pageSlug, tab: null, post: null } : { page: null, tab: null, post: null });
   });
   return a;
 }
@@ -2872,9 +2882,10 @@ function renderClubPagesList(pages) {
   const list = document.getElementById('cl-side-pages-list');
   list.innerHTML = '';
   list.appendChild(pageLinkRow('Home', null, true));
+  list.appendChild(pageLinkRow('Social', null, false, true));
 
-  const shown = pages.slice(0, CL_PAGES_CAP - 1);
-  const rest = pages.slice(CL_PAGES_CAP - 1);
+  const shown = pages.slice(0, CL_PAGES_CAP - 2);
+  const rest = pages.slice(CL_PAGES_CAP - 2);
   shown.forEach(p => list.appendChild(pageLinkRow(p.title, p.slug)));
 
   if (rest.length) {
@@ -2885,16 +2896,23 @@ function renderClubPagesList(pages) {
     showAllBtn.addEventListener('click', () => {
       rest.forEach(p => list.insertBefore(pageLinkRow(p.title, p.slug), showAllBtn));
       showAllBtn.remove();
-      highlightSidebarPages(new URLSearchParams(location.search).get('page'));
+      const params = new URLSearchParams(location.search);
+      highlightSidebarPages(params.get('page'), params.get('tab') || 'hub');
     });
     list.appendChild(showAllBtn);
   }
-  highlightSidebarPages(new URLSearchParams(location.search).get('page'));
+  const params = new URLSearchParams(location.search);
+  highlightSidebarPages(params.get('page'), params.get('tab') || 'hub');
 }
 
-function highlightSidebarPages(activePageSlug) {
+function highlightSidebarPages(activePageSlug, activeTab) {
   document.querySelectorAll('.cl-side-page-row').forEach(row => {
-    row.classList.toggle('cl-active', row.dataset.pageSlug === (activePageSlug || ''));
+    const slug = row.dataset.pageSlug;
+    let active;
+    if (slug === '__social__') active = !activePageSlug && activeTab === 'social';
+    else if (slug === '') active = !activePageSlug && activeTab !== 'social';
+    else active = slug === activePageSlug;
+    row.classList.toggle('cl-active', active);
   });
 }
 
@@ -3417,7 +3435,7 @@ function renderFromUrl() {
       document.getElementById('cl-banner-revert-btn').style.display = 'none';
     }
   }
-  highlightSidebarPages(pageSlug);
+  highlightSidebarPages(pageSlug, tab);
 }
 window.addEventListener('popstate', renderFromUrl);
 
