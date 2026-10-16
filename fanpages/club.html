@@ -3870,6 +3870,16 @@ async function loadCustomPage(pageSlug, tab) {
   // Reclaim the shared cover-media+text-fields block in case a previously
   // opened post still has it (see pageContentMoveTo/renderCoverMediaBlock).
   pageContentMoveTo('cl-custom-page-view');
+  // Same idea for the shared comments block -- mountClubPageComments() only
+  // ever moves it INTO #cl-custom-page-comments-slot for a General page, it
+  // never moves it back out again. Flipping General -> Gallery/Promotion
+  // (which both return before reaching mountClubPageComments below) used to
+  // leave the real comments node sitting in that slot from the previous
+  // General page, so it kept rendering at the bottom of a page type that's
+  // not supposed to have one. Park it in the hidden post-detail view by
+  // default; the General branch below reclaims it with its own
+  // mountClubPageComments() call if this turns out to be a General page.
+  ccMoveTo('cl-post-detail-comments-slot');
   if (cpvSlideshowTimer) { clearInterval(cpvSlideshowTimer); cpvSlideshowTimer = null; }
   cpvSlideshowImages = [];
   document.getElementById('cl-page-view-slideshow-wrap').hidden = true;
@@ -4517,12 +4527,9 @@ document.getElementById('cl-page-view-theme-btn').addEventListener('click', (e) 
 });
 document.getElementById('cl-page-view-theme-menu').addEventListener('click', (e) => e.stopPropagation());
 document.addEventListener('click', () => { document.getElementById('cl-page-view-theme-menu').hidden = true; });
-document.getElementById('cl-page-view-theme-bg-file-input').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
+async function uploadPageThemeBg(blob) {
   const fd = new FormData();
-  fd.append('image', file);
+  fd.append('image', blob, 'theme-bg.jpg');
   const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(currentPageSlug)}/theme-bg`, {
     method: 'PUT', headers: authHeaders(), body: fd,
   });
@@ -4531,6 +4538,23 @@ document.getElementById('cl-page-view-theme-bg-file-input').addEventListener('ch
     currentPageData = data.page;
     applyPageTheme(currentPageData);
   }
+}
+// A page's background is a cover-fit full-bleed backdrop (not a framed box
+// like a banner/icon), so there's no one "correct" aspect ratio -- 16/9 is
+// just the same wide landscape ratio already used for this file's other
+// full-bleed cover crops (Cover Image, Slideshow). Letting the admin pick
+// their own framing here (instead of always auto-centering top) is what
+// actually fixes a background that crops awkwardly once `cover` picks a
+// slice of it on its own.
+document.getElementById('cl-page-view-theme-bg-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  openCropModal({
+    title: 'Crop Page Background', imageSrc: URL.createObjectURL(file), aspectRatio: 16 / 9, round: false,
+    hint: 'Drag to position, scroll or pinch to zoom — this is how the background will sit behind your page.',
+    onSave: uploadPageThemeBg,
+  });
 });
 document.getElementById('cl-page-view-edit-btn').addEventListener('click', () => openEditClubModal());
 
