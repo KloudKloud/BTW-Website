@@ -41,7 +41,32 @@
     .fp-layout {
       padding: 0 2.5rem 5rem;
       display: grid; grid-template-columns: 280px 1fr; column-gap: 2rem; align-items: stretch;
+      transition: grid-template-columns 0.4s cubic-bezier(0.22, 1, 0.36, 1);
     }
+    /* ── Desktop sidebar collapse -- exact port of the Browse search
+       page's own left-rail collapse (.fp-sidebar-fab/--sidebar-collapsed
+       there), just against this page's single 280px/1fr grid instead of
+       its three-column one. Always starts open on a fresh load, same as
+       Search (no persisted state). ── */
+    .fp-layout--sidebar-collapsed { grid-template-columns: 0px 1fr; }
+    .fp-layout--sidebar-collapsed .fp-char-sidebar { display: none; }
+    /* Background normally starts after the 280px sidebar (see .fp-bg-img
+       below) -- once collapsed there's no sidebar to start after, same
+       fix the ≤900px stacked-layout override already uses. */
+    body.fp-sidebar-collapsed .fp-bg-img { left: 0; width: 100%; }
+    .fp-sidebar-fab {
+      position: fixed; top: 84px; left: 40px; transform: translateX(-50%);
+      width: 48px; height: 48px; border-radius: 50%; z-index: 60;
+      background: #14121a; border: 1px solid rgba(255,255,255,0.28);
+      color: #ccc; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 22px rgba(0,0,0,0.55);
+      transition: left 0.4s cubic-bezier(0.22, 1, 0.36, 1), transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), color 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .fp-sidebar-fab svg { transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1); transform: rotate(180deg); }
+    .fp-sidebar-fab:hover { color: #fff; border-color: rgba(127,168,217,0.6); box-shadow: 0 4px 26px rgba(127,168,217,0.4); }
+    .fp-sidebar-fab--collapsed { left: 4px; transform: none; }
+    .fp-sidebar-fab--collapsed svg { transform: rotate(0deg); }
 
     .fp-char-drawer-toggle { display: none; }
     /* Base state was missing entirely -- only the ≤720px media query below
@@ -242,7 +267,12 @@
        Spotlights" side nav (this page already has its own sidebar), plus
        a Back button, and a prev/next slideshow that walks the current
        search results instead of the same owner's other characters. ── */
-    #fp-char-main-col { position: relative; }
+    /* Explicit grid-column -- without it, hiding the sidebar via
+       display:none (see .fp-layout--sidebar-collapsed) removes it from
+       the auto-placement algorithm entirely, so this ends up auto-placed
+       into the now-empty (and now 0px-wide) first track instead of
+       staying in the second. Same fix Search's own .fp-results-col uses. */
+    #fp-char-main-col { position: relative; grid-column: 2; min-width: 0; }
     /* padding-top -- a small buffer so the image doesn't sit flush against
        the very top of the viewport; matched by the Back button's own `top`
        below so the two stay aligned on the same line. */
@@ -275,7 +305,13 @@
       .fp-char-grid { grid-template-columns: repeat(3, 1fr); }
     }
     @media (max-width: 900px) {
-      .fp-layout { grid-template-columns: 1fr; }
+      .fp-layout, .fp-layout--sidebar-collapsed { grid-template-columns: 1fr; }
+      .fp-sidebar-fab { display: none; }
+      #fp-char-main-col { grid-column: 1; }
+      /* The collapse fab that would undo this is hidden at this width --
+         don't let a collapsed state carried over from a desktop-width
+         resize strand the sidebar hidden with no way back. */
+      .fp-layout--sidebar-collapsed .fp-char-sidebar { display: flex; }
       .fp-char-sidebar {
         position: static; max-height: none; height: auto;
         margin-bottom: 0; margin-left: 0; border-radius: 18px;
@@ -393,6 +429,10 @@
       </div>
     </div>
   </aside>
+
+  <button class="fp-sidebar-fab" id="fp-sidebar-rail-toggle" type="button" title="Hide sidebar" aria-label="Hide sidebar">
+    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+  </button>
 
   <div id="fp-char-main-col">
     <div id="fp-char-list-view">
@@ -1216,6 +1256,24 @@ async function deleteCharacterAsAdmin(char) {
     }
   });
   window.addEventListener('resize', () => { if (window.innerWidth > 720) setDrawerOpen(false); });
+})();
+
+// ── Desktop sidebar collapse -- exact port of the Browse search page's
+// own left-rail fab (setSidebarPanelCollapsed there). Always starts open
+// on a fresh load, same as Search (no persisted state). ──
+(function () {
+  const layoutEl = document.querySelector('.fp-layout');
+  const railToggle = document.getElementById('fp-sidebar-rail-toggle');
+  if (!railToggle) return;
+  function setSidebarCollapsed(collapsed) {
+    layoutEl.classList.toggle('fp-layout--sidebar-collapsed', collapsed);
+    document.body.classList.toggle('fp-sidebar-collapsed', collapsed);
+    railToggle.classList.toggle('fp-sidebar-fab--collapsed', collapsed);
+    const label = collapsed ? 'Show sidebar' : 'Hide sidebar';
+    railToggle.title = label;
+    railToggle.setAttribute('aria-label', label);
+  }
+  railToggle.addEventListener('click', () => setSidebarCollapsed(!layoutEl.classList.contains('fp-layout--sidebar-collapsed')));
 })();
 
 window.addEventListener('popstate', () => {
