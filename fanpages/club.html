@@ -182,6 +182,16 @@
        body.cl-post-open is only ever toggled by loadAndShowPost()/
        renderFromUrl(), never anywhere else. */
     body.cl-post-open #cl-page-bg-img { filter: brightness(0.9) blur(10px); }
+    /* Additional pages (General/Gallery/Promotion) have no top banner, so
+       there's no "continue the banner's art downward" reason to stretch
+       this across the whole scrolling document the way Home needs to --
+       pin it to the viewport instead. Sidesteps the "zoom gets worse the
+       taller the page is" tradeoff entirely (a fixed background's height
+       is just the viewport, not the document), and shows the picture at
+       a clean, constant size instead of an ever-growing crop. Toggled on
+       <body> by renderFromUrl() only while a pageSlug is active -- Home
+       and post-detail keep the original scrolling behavior. */
+    body.cl-page-bg-static #cl-page-bg-wrap { position: fixed; height: 100vh !important; }
 
     /* ── Banner + pfp (the only header content left for now) ── */
     .cl-banner-wrap { position: relative; width: 100%; height: 310px; background: #161616; overflow: hidden; }
@@ -3518,6 +3528,9 @@ function renderFromUrl() {
     bannerPostBtn.style.display = 'block';
     clHeader.style.display = '';
   }
+  // Stationary/full-size theme background -- custom pages only (see
+  // body.cl-page-bg-static above), not Home and not a post detail view.
+  document.body.classList.toggle('cl-page-bg-static', !!pageSlug);
 
   if (postId) {
     loadAndShowPost(postId);
