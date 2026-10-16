@@ -83,6 +83,13 @@
     }
     .cp-field-title-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; position: relative; }
     .cp-field-title-row label { margin-bottom: 0; }
+    /* Page heading stays blue (this page's own look, not the gold
+       .editor-title-glow +Character/+Gallery share) and centered. */
+    #cp-title-heading { color: #7fa8d9; text-shadow: 0 0 12px rgba(127,168,217,0.45); text-align: center; }
+    /* Post Title / Body Text read at the same size+color as a section
+       header (Media, Additional Fields) -- these two are just as
+       important as those, not lesser form-field labels. */
+    .mod-field label.cp-field-label-lg { font-size: 1.1rem; font-weight: 700; color: #f0f0f0; }
 
     /* Cover Media / Text Section image slots — ported verbatim from the
        General Page builder (club.html's imgbox/mode-toggle/slideshow-stack
@@ -159,14 +166,17 @@
       padding: 0.35rem 0.7rem; border-radius: 14px;
     }
     .cl-page-text-field-remove:hover { background: rgba(217,122,114,0.14); }
-    .cl-page-text-field-actions { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.5rem; }
+    /* space-between, not a hugging gap -- Save Section belongs at the far
+       right edge of the field's own box, not clustered next to Remove
+       Section. */
+    .cl-page-text-field-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 0.5rem; }
     .cl-page-text-field-save {
       background: none; border: 1px solid rgba(127,168,217,0.4); color: #7fa8d9;
       font-family: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
       padding: 0.35rem 0.7rem; border-radius: 14px;
     }
     .cl-page-text-field-save:hover { background: rgba(127,168,217,0.14); }
-    /* Collapsed "draft" state — Save Text Field tucks the row down to a
+    /* Collapsed "draft" state — Save Section tucks the row down to a
        compact summary line (title + badge + edit button), clicking
        anywhere on that line reopens it. The full form underneath stays in
        the DOM, just hidden, so nothing re-renders/loses state on expand. */
@@ -232,7 +242,7 @@
     <h2 class="char-editor-title editor-title-glow" id="cp-title-heading">New Post</h2>
 
     <div class="mod-field">
-      <label for="cp-title-input">Post Title <span class="mod-required-star">*</span></label>
+      <label for="cp-title-input" class="cp-field-label-lg">Post Title <span class="mod-required-star">*</span></label>
       <input class="mod-input" id="cp-title-input" maxlength="120" placeholder="Give your post a title" />
     </div>
 
@@ -277,17 +287,21 @@
     </div>
 
     <div class="mod-field" style="margin-top:2.25rem;">
-      <label for="cp-body-input">Body Text <span class="mod-required-star">*</span></label>
+      <div class="cp-field-title-row">
+        <label for="cp-body-input" class="cp-field-label-lg">Body Text <span class="mod-required-star">*</span></label>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Body Text help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Give your post some context! Sharing art, talking about lore, venting, offering an idea?<br><br>If you'd like to format: bold text with **text**, italicize with *text*, and embed a link into a phrase/word with [text]&lt;URL Link&gt;.</p></div>
+      </div>
       <textarea class="mod-textarea" id="cp-body-input" rows="6" maxlength="5000" placeholder="Write your post…"></textarea>
     </div>
 
     <div class="cp-field-title-row" style="margin-top:2.25rem;">
-      <h3 class="char-editor-title" style="font-size:1.1rem; margin:0;">Text Fields</h3>
-      <button class="wiki-tags-tip-icon" type="button" aria-label="Text Fields help">💡</button>
-      <div class="wiki-tags-tip-popover" hidden><p>Add up to three extra sections — great for going in-depth on a character, theme, or concept relevant to your post. Each gets its own title, body, and optional images.<br><br>Formatting: bold text with **text**, italicize with *text*, and embed a link into a phrase/word with [text]&lt;URL Link&gt;. Any poll you add below appears under your Text Fields.</p></div>
+      <h3 class="char-editor-title" style="font-size:1.1rem; margin:0;">Additional Fields</h3>
+      <button class="wiki-tags-tip-icon" type="button" aria-label="Additional Fields help">💡</button>
+      <div class="wiki-tags-tip-popover" hidden><p>Want to make your post pretty and add some additional sections? Look no further. You can add up to THREE additional text/image fields, formatted by default to add some sparkle!<br><br>You can format text with bold/italics (see Body Text hint), and feel free to go crazy and have fun!</p></div>
     </div>
     <div id="cp-text-fields-list"></div>
-    <button class="cl-edit-pages-create-btn" id="cp-text-field-add-btn" type="button" style="margin-bottom:1.25rem;">+ Text Field</button>
+    <button class="cl-edit-pages-create-btn" id="cp-text-field-add-btn" type="button" style="margin-bottom:1.25rem;">+ Additional Field</button>
 
     <div class="mod-field" id="cp-poll-field" hidden>
       <div class="cl-post-poll-box">
@@ -548,7 +562,7 @@
     previewImg.src = src;
   }
 
-  // ── Text Fields — up to three OPTIONAL extra sections on top of the
+  // ── Additional Fields — up to three OPTIONAL extra sections on top of the
   // mandatory Post Title/Media/Body Text above, each Title+Body+optional
   // Cover/Side images, ported from the General Page builder's own
   // text-field system (club.html's renderPageTextFields/
@@ -720,7 +734,7 @@
         ${textFieldImageSlotHtml(field, 'side', '3 / 4', 'Side Image', 180)}
         <div class="cl-page-text-field-actions">
           <button type="button" class="cl-page-text-field-remove">✕ Remove Section</button>
-          <button type="button" class="cl-page-text-field-save">💾 Save Text Field</button>
+          <button type="button" class="cl-page-text-field-save">💾 Save Section</button>
         </div>
       </div>
     `;
@@ -737,7 +751,7 @@
       cpDirty = true;
       renderPageTextFields();
     });
-    // Save Text Field collapses the row into a compact draft summary
+    // Save Section collapses the row into a compact draft summary
     // (reorder-by-drag still works on it via the handle); Edit/clicking the
     // collapsed summary reopens it. Nothing is sent to the server here --
     // the whole post, text fields included, only saves on the main "Post"
