@@ -359,6 +359,13 @@
       transition: background 0.15s, border-color 0.15s;
     }
     .cl-tabs-edit-btn:hover { background: #93b8e2; border-color: #93b8e2; }
+    /* Custom page title row only -- Edit Club + Theme sit on the LEFT here
+       (Home's own copy of these two buttons, #cl-tabs-admin-actions, stays
+       right-aligned -- these are two different elements sharing the same
+       .cl-tabs-admin-actions/.cl-theme-menu classes, so the override has to
+       target this row's ids specifically). */
+    #cl-page-view-tabs-admin-actions { right: auto; left: 0; }
+    #cl-page-view-theme-menu { right: auto; left: 0; }
     @media (max-width: 720px) {
       /* Previously: both admin actions stayed full desktop size, floating
          *absolutely* over a *centered* tab row's right edge -- with only
@@ -1797,6 +1804,10 @@
             <button class="cl-theme-btn" id="cl-page-view-theme-btn" type="button" title="Page theme" style="display:none;">🎨</button>
           </div>
         </div>
+        <!-- Unlike the Hub/Social tab row's own copy of these two buttons
+             (stays right-aligned), this pair sits on the LEFT for every
+             custom page type -- see #cl-page-view-tabs-admin-actions/
+             #cl-page-view-theme-menu overrides in <style>. -->
         <div class="cl-theme-menu" id="cl-page-view-theme-menu" hidden>
           <p class="cl-theme-popover-label">Page Background</p>
           <div class="cl-theme-grid" id="cl-page-view-theme-grid"></div>
@@ -3841,7 +3852,7 @@ async function loadCustomPage(pageSlug, tab) {
     // Promotion pages all just show their one single view, with a comments
     // section at the bottom (wired in below).
     if (page.type === 'general') {
-      applyClubTheme(page.theme, page.theme_bg_url);
+      applyPageTheme(page);
       // Own banner if the page has set one, otherwise the generic default
       // (not Home's banner -- see comment above).
       if (page.banner_url) renderBanner(page.banner_url, page.banner_position_x, page.banner_position_y);
@@ -3853,6 +3864,7 @@ async function loadCustomPage(pageSlug, tab) {
     }
 
     if (page.type === 'gallery') {
+      applyPageTheme(page);
       let images = [];
       try {
         const galRes = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(pageSlug)}/gallery`, { headers: authHeaders() });
@@ -3866,6 +3878,10 @@ async function loadCustomPage(pageSlug, tab) {
         galleryGridEl.hidden = false;
         images.forEach((img, idx) => galleryGridEl.appendChild(pageGalleryTileEl(img, idx)));
       }
+      const isGalleryAdmin = !!currentClub && (currentClub.viewer_role === 'owner' || currentClub.viewer_role === 'admin');
+      document.getElementById('cl-page-view-edit-btn').style.display = isGalleryAdmin ? 'flex' : 'none';
+      document.getElementById('cl-page-view-theme-btn').style.display = isGalleryAdmin ? 'flex' : 'none';
+      document.querySelector('.cl-page-view-title-row').classList.toggle('cl-page-view-title-row--has-actions', isGalleryAdmin);
       mountClubPageComments(page);
       return;
     }
@@ -3890,13 +3906,14 @@ async function loadCustomPage(pageSlug, tab) {
         promoListEl.hidden = false;
         posts.forEach(post => promoListEl.appendChild(adminPostRow(post)));
       }
-      // Same Edit Club entry point General pages get -- jumps straight into
-      // this page's own admin editor (openEditClubModal's existing
-      // currentPageSlug lookup). No Theme button here -- unlike General,
-      // Promotion pages don't carry their own theme/banner.
+      applyPageTheme(page);
+      // Same Edit Club + Theme entry points General pages get -- every
+      // additional page can set its own background now, Promotion
+      // included (jumps straight into this page's own admin editor via
+      // openEditClubModal's existing currentPageSlug lookup).
       const isPromoAdmin = !!currentClub && (currentClub.viewer_role === 'owner' || currentClub.viewer_role === 'admin');
       document.getElementById('cl-page-view-edit-btn').style.display = isPromoAdmin ? 'flex' : 'none';
-      document.getElementById('cl-page-view-theme-btn').style.display = 'none';
+      document.getElementById('cl-page-view-theme-btn').style.display = isPromoAdmin ? 'flex' : 'none';
       document.querySelector('.cl-page-view-title-row').classList.toggle('cl-page-view-title-row--has-actions', isPromoAdmin);
       return;
     }
@@ -4267,15 +4284,45 @@ const CL_DEFAULT_BG = '/images/gallery/solusgarnet_17.png';
 // the club happens to have set for Home (own banner only kicks in once
 // the page owner explicitly sets one, see loadCustomPage()).
 const CL_DEFAULT_BANNER = CL_DEFAULT_BG;
-function applyClubTheme(themeId, bgUrl) {
+// Paints the shared background layer only -- no swatch side effects (see
+// applyClubTheme just below for the version that also updates every open
+// theme swatch grid on the page, meant for when a swatch itself is the
+// thing being clicked).
+function paintThemeBackground(themeId, bgUrl) {
   const bgImg = document.getElementById('cl-page-bg-img');
   const bgOverlay = document.getElementById('cl-page-bg-overlay');
   const url = (themeId === 'custom' && bgUrl) ? bgUrl : CL_DEFAULT_BG;
   bgImg.style.backgroundImage = `url("${url}")`;
   bgImg.style.display = 'block';
   bgOverlay.style.display = 'block';
-  document.querySelectorAll('.cl-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
   syncClubBgHeight();
+}
+// A custom page (General/Gallery/Promotion) with no explicit theme of its
+// own (theme === 'default') now shows the CLUB's own theme instead of
+// jumping straight to the generic site background -- without this,
+// navigating Home -> any additional page looked like the whole club's
+// background had been reset, even though nothing about the club's actual
+// theme changed (bug report: "background switches from the home hub's
+// background to the default website's background"). Only an explicit
+// per-page 'custom' theme ever overrides the club's.
+function applyPageTheme(page) {
+  if (page && page.theme === 'custom' && page.theme_bg_url) {
+    paintThemeBackground('custom', page.theme_bg_url);
+  } else if (currentClub) {
+    paintThemeBackground(currentClub.theme, currentClub.theme_bg_url);
+  } else {
+    paintThemeBackground('default', '');
+  }
+  // This page's OWN picker reflects its own raw setting (default = "no
+  // override, inherit the club's"), not whatever background actually
+  // ended up painted above.
+  document.querySelectorAll('#cl-page-view-theme-grid .cl-theme-swatch').forEach(el => {
+    el.classList.toggle('active', el.dataset.theme === (page ? page.theme : 'default'));
+  });
+}
+function applyClubTheme(themeId, bgUrl) {
+  paintThemeBackground(themeId, bgUrl);
+  document.querySelectorAll('.cl-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
 }
 // Same trick as profile-template.html's syncScrollBgHeight(): reset to 0
 // before measuring, since #cl-page-bg-wrap is itself absolutely positioned
@@ -4387,7 +4434,7 @@ function buildPageThemeGrid() {
   uploadBtn.addEventListener('click', () => document.getElementById('cl-page-view-theme-bg-file-input').click());
   grid.appendChild(uploadBtn);
 
-  document.querySelectorAll('.cl-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === (currentPageData ? currentPageData.theme : 'default')));
+  document.querySelectorAll('#cl-page-view-theme-grid .cl-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === (currentPageData ? currentPageData.theme : 'default')));
 }
 async function selectPageTheme(themeId) {
   document.getElementById('cl-page-view-theme-menu').hidden = true;
@@ -4398,7 +4445,7 @@ async function selectPageTheme(themeId) {
   if (res.ok) {
     const data = await res.json();
     currentPageData = data.page;
-    applyClubTheme(currentPageData.theme, currentPageData.theme_bg_url);
+    applyPageTheme(currentPageData);
   }
 }
 document.getElementById('cl-page-view-theme-btn').addEventListener('click', (e) => {
@@ -4422,7 +4469,7 @@ document.getElementById('cl-page-view-theme-bg-file-input').addEventListener('ch
   if (res.ok) {
     const data = await res.json();
     currentPageData = data.page;
-    applyClubTheme(currentPageData.theme, currentPageData.theme_bg_url);
+    applyPageTheme(currentPageData);
   }
 });
 document.getElementById('cl-page-view-edit-btn').addEventListener('click', () => openEditClubModal());
