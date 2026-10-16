@@ -4183,6 +4183,23 @@ function renderTextFieldSections(fields) {
       sideSlot.appendChild(fadeInImg('cl-page-text-section-side', field.side_image_url));
     }
     fieldsWrap.appendChild(section);
+    // Side image floats right of the body paragraph -- if the body is too
+    // short (even one word), the paragraph's own box ends well above the
+    // bottom of the still-floating image, so the *next* section's title/
+    // divider renders into the gap and visually wraps around the tail end
+    // of this section's image instead of starting cleanly below it. Force
+    // the body paragraph's min-height to match the side image's rendered
+    // height (never shrinking long bodies that already clear it on their
+    // own) so the section's own box always tucks in flush under the image.
+    if (hasSide) {
+      const sideEl = sideSlot.firstElementChild;
+      const bodyEl = section.querySelector('.cl-page-text-section-body');
+      if (sideEl && bodyEl) {
+        const syncSideMinHeight = () => { bodyEl.style.minHeight = sideEl.offsetHeight + 'px'; };
+        syncSideMinHeight();
+        new ResizeObserver(syncSideMinHeight).observe(sideEl);
+      }
+    }
   });
 }
 // Relocates the one shared cover-media+text-fields block (see above) into
