@@ -101,11 +101,6 @@
       opacity: 0; transition: opacity 0.2s; text-align: center; padding: 0.5rem;
     }
     .cl-edit-imgbox:hover .cl-edit-imgbox-overlay { opacity: 1; }
-    .cl-edit-hint-block {
-      background: rgba(127,168,217,0.08); border: 1px solid rgba(127,168,217,0.25);
-      border-radius: 10px; padding: 0.85rem 1rem; margin: 0 0 1.25rem;
-      color: #aecbe8; font-size: 0.85rem; line-height: 1.65;
-    }
     .cl-splash-rules-link {
       background: none; border: 1px solid rgba(127,168,217,0.4); color: #7fa8d9;
       font-family: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer;
@@ -154,15 +149,47 @@
       padding: 1rem; margin-bottom: 0.85rem; transition: opacity 0.15s;
     }
     .cl-page-text-field-row.dragging { opacity: 0.35; }
-    .cl-page-text-field-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.85rem; }
-    .cl-page-text-field-handle { color: #777; font-size: 1rem; cursor: grab; }
-    .cl-page-text-field-num { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #888; }
+    .cl-page-text-field-head { display: flex; align-items: center; gap: 0.5rem; }
+    .cl-page-text-field-row:not(.cl-page-text-field-row--collapsed) .cl-page-text-field-head { margin-bottom: 0.85rem; }
+    .cl-page-text-field-handle { color: #777; font-size: 1rem; cursor: grab; flex-shrink: 0; }
+    .cl-page-text-field-num { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #888; flex-shrink: 0; }
     .cl-page-text-field-remove {
       background: none; border: 1px solid rgba(217,122,114,0.4); color: #f5b3ac;
       font-family: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
-      padding: 0.35rem 0.7rem; border-radius: 14px; margin-top: 0.5rem;
+      padding: 0.35rem 0.7rem; border-radius: 14px;
     }
     .cl-page-text-field-remove:hover { background: rgba(217,122,114,0.14); }
+    .cl-page-text-field-actions { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.5rem; }
+    .cl-page-text-field-save {
+      background: none; border: 1px solid rgba(127,168,217,0.4); color: #7fa8d9;
+      font-family: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+      padding: 0.35rem 0.7rem; border-radius: 14px;
+    }
+    .cl-page-text-field-save:hover { background: rgba(127,168,217,0.14); }
+    /* Collapsed "draft" state — Save Text Field tucks the row down to a
+       compact summary line (title + badge + edit button), clicking
+       anywhere on that line reopens it. The full form underneath stays in
+       the DOM, just hidden, so nothing re-renders/loses state on expand. */
+    .cl-page-text-field-summary,
+    .cl-page-text-field-draft-badge,
+    .cl-page-text-field-expand-btn { display: none; }
+    .cl-page-text-field-row--collapsed { cursor: pointer; }
+    .cl-page-text-field-row--collapsed .cl-page-text-field-body { display: none; }
+    .cl-page-text-field-row--collapsed .cl-page-text-field-summary {
+      display: block; flex: 1; min-width: 0; color: #ddd; font-weight: 600; font-size: 0.92rem;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .cl-page-text-field-row--collapsed .cl-page-text-field-draft-badge {
+      display: inline-block; background: rgba(240,192,96,0.14); border: 1px solid rgba(240,192,96,0.4);
+      color: #f0c060; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 0.2rem 0.55rem; border-radius: 10px; flex-shrink: 0;
+    }
+    .cl-page-text-field-row--collapsed .cl-page-text-field-expand-btn {
+      display: inline-block; background: none; border: 1px solid rgba(255,255,255,0.2); color: #ccc;
+      font-family: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+      padding: 0.3rem 0.65rem; border-radius: 14px; flex-shrink: 0;
+    }
+    .cl-page-text-field-row--collapsed .cl-page-text-field-expand-btn:hover { border-color: rgba(127,168,217,0.6); color: #7fa8d9; }
 
     /* Poll builder — ported verbatim from the old post modal. */
     .cl-post-poll-box { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 1.1rem; }
@@ -205,15 +232,15 @@
     <h2 class="char-editor-title editor-title-glow" id="cp-title-heading">New Post</h2>
 
     <div class="mod-field">
-      <label for="cp-title-input">Title</label>
+      <label for="cp-title-input">Post Title <span class="mod-required-star">*</span></label>
       <input class="mod-input" id="cp-title-input" maxlength="120" placeholder="Give your post a title" />
     </div>
 
-    <h3 class="char-editor-title" style="font-size:1.1rem; margin-top:1.75rem;">Cover Media</h3>
-    <p class="cl-edit-hint-block">
-      Wanna add media to your post? Pick a Static Image, or a Slideshow that cycles through several. It is good practice to credit sources you use, if the art/images aren't yours.<br><br>
-      (Note: Cover Media is optional! If your post is a discussion, you can skip adding one, and no cover will show on your post whatsoever~)
-    </p>
+    <div class="cp-field-title-row" style="margin-top:1.75rem;">
+      <h3 class="char-editor-title" style="font-size:1.1rem; margin:0;">Media</h3>
+      <button class="wiki-tags-tip-icon" type="button" aria-label="Media help">💡</button>
+      <div class="wiki-tags-tip-popover" hidden><p>Pick a Static Image, or a Slideshow that cycles through several. It's good practice to credit sources you use, if the art/images aren't yours.<br><br>Optional — if your post is a discussion, you can skip adding one, and no cover will show on your post whatsoever~</p></div>
+    </div>
     <div class="cl-edit-mode-toggle">
       <button class="cl-edit-mode-btn active" id="cp-cover-mode-static" type="button">Static Image</button>
       <button class="cl-edit-mode-btn" id="cp-cover-mode-slideshow" type="button">Slideshow</button>
@@ -249,13 +276,18 @@
       </div>
     </div>
 
-    <h3 class="char-editor-title" style="font-size:1.1rem; margin-top:2.25rem;">Text Sections</h3>
-    <p class="cl-edit-hint-block">
-      Add up to three sections of text — great for going in-depth on a character, theme, or concept relevant to your post. Each gets its own title, body, and optional images.<br><br>
-      (Note: Bold text with: **text**. Italicize text with: *text*. Embed a link into a phrase/word with: [text]&lt;URL Link&gt;.) — Any poll you add below appears under your Text Sections.
-    </p>
+    <div class="mod-field" style="margin-top:2.25rem;">
+      <label for="cp-body-input">Body Text <span class="mod-required-star">*</span></label>
+      <textarea class="mod-textarea" id="cp-body-input" rows="6" maxlength="5000" placeholder="Write your post…"></textarea>
+    </div>
+
+    <div class="cp-field-title-row" style="margin-top:2.25rem;">
+      <h3 class="char-editor-title" style="font-size:1.1rem; margin:0;">Text Fields</h3>
+      <button class="wiki-tags-tip-icon" type="button" aria-label="Text Fields help">💡</button>
+      <div class="wiki-tags-tip-popover" hidden><p>Add up to three extra sections — great for going in-depth on a character, theme, or concept relevant to your post. Each gets its own title, body, and optional images.<br><br>Formatting: bold text with **text**, italicize with *text*, and embed a link into a phrase/word with [text]&lt;URL Link&gt;. Any poll you add below appears under your Text Fields.</p></div>
+    </div>
     <div id="cp-text-fields-list"></div>
-    <button class="cl-edit-pages-create-btn" id="cp-text-field-add-btn" type="button" style="margin-bottom:1.25rem;">+ Add Text Field</button>
+    <button class="cl-edit-pages-create-btn" id="cp-text-field-add-btn" type="button" style="margin-bottom:1.25rem;">+ Text Field</button>
 
     <div class="mod-field" id="cp-poll-field" hidden>
       <div class="cl-post-poll-box">
@@ -356,13 +388,18 @@
   document.getElementById('cp-topbar-cancel').addEventListener('click', () => document.getElementById('cp-cancel').click());
   document.getElementById('cp-topbar-delete').addEventListener('click', () => document.getElementById('cp-delete-forever').click());
 
-  // Lightbulb hint popovers — generic wiring, same pattern as +Character/+Gallery.
-  document.querySelectorAll('.wiki-tags-tip-icon').forEach(icon => {
-    const pop = icon.nextElementSibling;
-    if (!pop || !pop.classList.contains('wiki-tags-tip-popover')) return;
-    icon.addEventListener('click', (e) => { e.stopPropagation(); pop.hidden = !pop.hidden; });
-    document.addEventListener('click', (e) => {
-      if (!pop.hidden && !pop.contains(e.target) && e.target !== icon) pop.hidden = true;
+  // Lightbulb hint popovers — delegated (not wired per-icon at load) since
+  // the Cover/Side Image slots' own lightbulbs get created later, dynamically,
+  // every time a Text Field row renders.
+  document.addEventListener('click', (e) => {
+    const icon = e.target.closest('.wiki-tags-tip-icon');
+    if (icon) {
+      const pop = icon.nextElementSibling;
+      if (pop && pop.classList.contains('wiki-tags-tip-popover')) { e.stopPropagation(); pop.hidden = !pop.hidden; }
+      return;
+    }
+    document.querySelectorAll('.wiki-tags-tip-popover').forEach(pop => {
+      if (!pop.hidden && !pop.contains(e.target)) pop.hidden = true;
     });
   });
 
@@ -511,13 +548,16 @@
     previewImg.src = src;
   }
 
-  // ── Text Sections — up to three, each Title+Body+optional Cover/Side
-  // images, ported from the General Page builder's own text-field system
-  // (club.html's renderPageTextFields/textFieldImageSlotHtml/
-  // wireTextFieldImageSlot/pageTextFieldRowEl) but working purely against
-  // local state + the generic upload endpoint instead of club_pages'
-  // incremental per-field save routes, since this post doesn't exist in
-  // the DB yet during editing. ─────────────────────────────────────────
+  // ── Text Fields — up to three OPTIONAL extra sections on top of the
+  // mandatory Post Title/Media/Body Text above, each Title+Body+optional
+  // Cover/Side images, ported from the General Page builder's own
+  // text-field system (club.html's renderPageTextFields/
+  // textFieldImageSlotHtml/wireTextFieldImageSlot/pageTextFieldRowEl) but
+  // working purely against local state + the generic upload endpoint
+  // instead of club_pages' incremental per-field save routes, since this
+  // post doesn't exist in the DB yet during editing. The mandatory Body
+  // Text box isn't tracked here at all -- it's its own #cp-body-input,
+  // only merged into text_fields[0] at submit time (see the Save handler).
   let postTextFields = [];
   function renderPageTextFields() {
     const list = document.getElementById('cp-text-fields-list');
@@ -526,12 +566,17 @@
     document.getElementById('cp-text-field-add-btn').style.display = postTextFields.length >= 3 ? 'none' : '';
   }
   let textFieldDragIdx = null;
+  const TF_IMG_HINT = 'Optional. Every text field can have a main body image and side image.';
   function textFieldImageSlotHtml(field, prefix, aspect, label, maxWidth) {
     const mode = field[`${prefix}_mode`] === 'slideshow' ? 'slideshow' : 'static';
     const imageUrl = field[`${prefix}_image_url`] || '';
     return `
       <div class="cl-tf-img-slot" data-slot="${prefix}">
-        <label class="mod-field-label-standalone">${label}</label>
+        <div class="cp-field-title-row">
+          <label class="mod-field-label-standalone">${label}</label>
+          <button class="wiki-tags-tip-icon" type="button" aria-label="${label} help">💡</button>
+          <div class="wiki-tags-tip-popover" hidden><p>${TF_IMG_HINT}</p></div>
+        </div>
         <div class="cl-edit-mode-toggle cl-tf-mode-toggle">
           <button type="button" class="cl-edit-mode-btn${mode !== 'slideshow' ? ' active' : ''}" data-mode="static">Static Image</button>
           <button type="button" class="cl-edit-mode-btn${mode === 'slideshow' ? ' active' : ''}" data-mode="slideshow">Slideshow</button>
@@ -651,33 +696,66 @@
   }
   function pageTextFieldRowEl(field, i) {
     const row = document.createElement('div');
-    row.className = 'cl-page-text-field-row';
+    row.className = 'cl-page-text-field-row' + (field._collapsed ? ' cl-page-text-field-row--collapsed' : '');
     row.draggable = false;
     row.dataset.idx = i;
     row.innerHTML = `
       <div class="cl-page-text-field-head">
         <span class="cl-page-text-field-handle">⠿</span>
         <span class="cl-page-text-field-num">Field ${i + 1}</span>
+        <span class="cl-page-text-field-summary">${escapeHtml(field.title || 'Untitled Text Field')}</span>
+        <span class="cl-page-text-field-draft-badge">Draft</span>
+        <button type="button" class="cl-page-text-field-expand-btn">✎ Edit</button>
       </div>
-      <div class="mod-field">
-        <label>Section Title</label>
-        <input class="mod-input" data-field="title" maxlength="80" value="${escapeHtml(field.title || '')}" />
+      <div class="cl-page-text-field-body">
+        <div class="mod-field">
+          <label>Title</label>
+          <input class="mod-input" data-field="title" maxlength="80" value="${escapeHtml(field.title || '')}" />
+        </div>
+        <div class="mod-field">
+          <label>Body</label>
+          <textarea class="mod-textarea" data-field="body" rows="4" maxlength="5000">${escapeHtml(field.body || '')}</textarea>
+        </div>
+        ${textFieldImageSlotHtml(field, 'cover', '16 / 9', 'Cover Image', 320)}
+        ${textFieldImageSlotHtml(field, 'side', '3 / 4', 'Side Image', 180)}
+        <div class="cl-page-text-field-actions">
+          <button type="button" class="cl-page-text-field-remove">✕ Remove Section</button>
+          <button type="button" class="cl-page-text-field-save">💾 Save Text Field</button>
+        </div>
       </div>
-      <div class="mod-field">
-        <label>Section Body</label>
-        <textarea class="mod-textarea" data-field="body" rows="4" maxlength="5000">${escapeHtml(field.body || '')}</textarea>
-      </div>
-      ${textFieldImageSlotHtml(field, 'cover', '16 / 9', 'Cover Image (optional, renders above the section)', 320)}
-      ${textFieldImageSlotHtml(field, 'side', '3 / 4', 'Side Image (optional, floats to the right of the text)', 180)}
-      <button type="button" class="cl-page-text-field-remove">✕ Remove Section</button>
     `;
-    row.querySelector('[data-field="title"]').addEventListener('input', (e) => { postTextFields[i].title = e.target.value; cpDirty = true; });
+    row.querySelector('[data-field="title"]').addEventListener('input', (e) => {
+      postTextFields[i].title = e.target.value;
+      row.querySelector('.cl-page-text-field-summary').textContent = e.target.value || 'Untitled Text Field';
+      cpDirty = true;
+    });
     row.querySelector('[data-field="body"]').addEventListener('input', (e) => { postTextFields[i].body = e.target.value; cpDirty = true; });
     wireTextFieldImageSlot(row, i, 'cover', 16 / 9);
     wireTextFieldImageSlot(row, i, 'side', 3 / 4);
     row.querySelector('.cl-page-text-field-remove').addEventListener('click', () => {
       postTextFields.splice(i, 1);
       cpDirty = true;
+      renderPageTextFields();
+    });
+    // Save Text Field collapses the row into a compact draft summary
+    // (reorder-by-drag still works on it via the handle); Edit/clicking the
+    // collapsed summary reopens it. Nothing is sent to the server here --
+    // the whole post, text fields included, only saves on the main "Post"
+    // button -- this is purely a local "I'm done with this one for now" fold.
+    row.querySelector('.cl-page-text-field-save').addEventListener('click', () => {
+      field._collapsed = true;
+      cpDirty = true;
+      renderPageTextFields();
+    });
+    row.querySelector('.cl-page-text-field-expand-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      field._collapsed = false;
+      renderPageTextFields();
+    });
+    row.addEventListener('click', (e) => {
+      if (!row.classList.contains('cl-page-text-field-row--collapsed')) return;
+      if (e.target.closest('.cl-page-text-field-handle')) return;
+      field._collapsed = false;
       renderPageTextFields();
     });
     row.querySelector('.cl-page-text-field-handle').addEventListener('mousedown', () => { row.draggable = true; });
@@ -750,10 +828,12 @@
   // ── Save / Create ──────────────────────────────────────────────────
   document.getElementById('cp-save').addEventListener('click', async () => {
     const title = document.getElementById('cp-title-input').value.trim();
+    const bodyText = document.getElementById('cp-body-input').value.trim();
     const msg = document.getElementById('cp-msg');
     msg.className = 'mod-panel-msg';
     msg.textContent = '';
     if (!title) { msg.className = 'mod-panel-msg mod-panel-msg--error'; msg.textContent = 'A title is required.'; return; }
+    if (!bodyText) { msg.className = 'mod-panel-msg mod-panel-msg--error'; msg.textContent = 'Body text is required.'; return; }
     if (!clubSlug) { msg.className = 'mod-panel-msg mod-panel-msg--error'; msg.textContent = 'No club specified.'; return; }
 
     const btn = document.getElementById('cp-save');
@@ -763,7 +843,12 @@
       const body = {
         title,
         cover,
-        text_fields: postTextFields,
+        // The mandatory Body Text box isn't its own field in the schema --
+        // it's carried as text_fields[0] with an empty title, same shape
+        // every other (optional) Text Field uses, just always present and
+        // always first. See the "Edit mode" block below for the matching
+        // unpack on the way back in.
+        text_fields: [{ title: '', body: bodyText }, ...postTextFields],
         preview_position_x: postPreviewPos.x,
         preview_position_y: postPreviewPos.y,
       };
@@ -849,6 +934,8 @@
       if (!res.ok) return;
       const { post } = await res.json();
       document.getElementById('cp-title-input').value = post.title || '';
+      const existingFields = post.text_fields || [];
+      document.getElementById('cp-body-input').value = (existingFields[0] && existingFields[0].body) || '';
       cover = {
         mode: post.cover_mode === 'slideshow' ? 'slideshow' : 'static',
         image_url: post.cover_image_url || '',
@@ -861,7 +948,7 @@
         document.getElementById('cp-cover-remove-btn').hidden = false;
       }
       renderCoverSlideshow();
-      postTextFields = (post.text_fields || []).slice(0, 3);
+      postTextFields = existingFields.slice(1, 4);
       renderPageTextFields();
       updatePostPreviewField();
       if (post.poll) {

@@ -9580,8 +9580,11 @@ function sanitizeClubPostImageSlot(raw) {
   };
 }
 
+// index 0 is always the mandatory Body Text box (empty title, see the
+// create-club-post.html Save handler) plus up to 3 further optional Text
+// Fields the poster added themselves -- 4 total.
 function buildClubPostTextFields(raw) {
-  const fieldsIn = Array.isArray(raw) ? raw.slice(0, 3) : [];
+  const fieldsIn = Array.isArray(raw) ? raw.slice(0, 4) : [];
   return fieldsIn.map(f => {
     const cover = sanitizeClubPostImageSlot(f && f.cover);
     const side = sanitizeClubPostImageSlot(f && f.side);
@@ -9612,6 +9615,13 @@ app.post('/api/clubs/:slug/posts', requireAuth, async (req, res) => {
 
   const title = String(req.body.title || '').trim().slice(0, 120);
   if (!title) return res.status(400).json({ error: 'A title is required.' });
+  // Body Text is mandatory client-side too (see create-club-post.html) --
+  // re-checked here against the real trust boundary, same as title. It
+  // always rides in as text_fields[0].body.
+  const rawFields = Array.isArray(req.body.text_fields) ? req.body.text_fields : [];
+  if (!String((rawFields[0] && rawFields[0].body) || '').trim()) {
+    return res.status(400).json({ error: 'Body text is required.' });
+  }
   const isAdminPost = !!req.body.is_admin_post && (role === 'owner' || role === 'admin');
   const previewX = req.body.preview_position_x !== undefined ? clampPosition(req.body.preview_position_x) : 50;
   const previewY = req.body.preview_position_y !== undefined ? clampPosition(req.body.preview_position_y) : 50;
@@ -9652,6 +9662,10 @@ app.put('/api/clubs/:slug/posts/:postId', requireAuth, async (req, res) => {
 
   const title = String(req.body.title || '').trim().slice(0, 120);
   if (!title) return res.status(400).json({ error: 'A title is required.' });
+  const rawFields = Array.isArray(req.body.text_fields) ? req.body.text_fields : [];
+  if (!String((rawFields[0] && rawFields[0].body) || '').trim()) {
+    return res.status(400).json({ error: 'Body text is required.' });
+  }
   const isAdminPost = req.body.is_admin_post !== undefined
     ? (!!req.body.is_admin_post && (role === 'owner' || role === 'admin'))
     : existing.is_admin_post;
