@@ -186,6 +186,13 @@
     .cl-banner-wrap { position: relative; width: 100%; height: 310px; background: #161616; overflow: hidden; }
     .cl-banner-img-slot { position: absolute; inset: 0; }
     .cl-banner-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    /* Freshly-inserted image fades in once it's actually decoded instead of
+       popping into place the instant its network request resolves --
+       applied anywhere an <img> gets its src set for the first time rather
+       than cross-fading between two already-loaded layers (see
+       .cl-slideshow-img for that pattern). */
+    .cl-fade-img { opacity: 0; transition: opacity 0.3s ease; }
+    .cl-fade-img.cl-loaded { opacity: 1; }
     /* Softens the banner's bottom edge into the page instead of cutting off
        sharply. */
     .cl-banner-wrap::after {
@@ -2654,10 +2661,41 @@ async function loadClub() {
 // are duplicated per view) — a General page can override it with its own,
 // so this just paints whatever url/position it's given rather than always
 // reading from currentClub. ────────────────────────────────────────────
+// Skips the rebuild entirely when the url/position haven't actually
+// changed -- renderFromUrl calls this on every Home/Social switch (even
+// when nothing about the banner changed), and recreating the <img> forces
+// a fresh decode/repaint every time, which read as a little flash/pop on
+// top of everything else happening during the switch.
+let clLastBannerKey = null;
 function renderBanner(url, posX, posY) {
-  document.getElementById('cl-banner-img-slot').innerHTML = url
-    ? `<img src="${url}" alt="" style="object-position:${posX}% ${posY}%;" />`
-    : `<div class="cl-banner-fallback"></div>`;
+  const key = `${url || ''}|${posX}|${posY}`;
+  if (key === clLastBannerKey) return;
+  clLastBannerKey = key;
+  const slot = document.getElementById('cl-banner-img-slot');
+  if (!url) { slot.innerHTML = `<div class="cl-banner-fallback"></div>`; return; }
+  const img = document.createElement('img');
+  img.alt = '';
+  img.className = 'cl-fade-img';
+  img.style.objectPosition = `${posX}% ${posY}%`;
+  img.addEventListener('load', () => img.classList.add('cl-loaded'), { once: true });
+  img.src = url;
+  slot.innerHTML = '';
+  slot.appendChild(img);
+  if (img.complete) img.classList.add('cl-loaded');
+}
+
+// Shared fade-in helper for any one-off <img> that's being set for the
+// first time (not cross-fading between two already-loaded layers, which
+// fieldSlideshowEl/cpvShowSlideshowImage already preload-then-swap) -- see
+// .cl-fade-img.
+function fadeInImg(className, url) {
+  const img = document.createElement('img');
+  img.className = `${className} cl-fade-img`;
+  img.alt = '';
+  img.addEventListener('load', () => img.classList.add('cl-loaded'), { once: true });
+  img.src = url;
+  if (img.complete) img.classList.add('cl-loaded');
+  return img;
 }
 
 // ── Join/Joined button — top-right of the banner ─────────────────────────
@@ -3926,12 +3964,12 @@ function renderTextFieldSections(fields) {
     if (coverIsSlideshow) {
       coverSlot.appendChild(fieldSlideshowEl(field.cover_slideshow.map(s => s.image_url), '16 / 9', 'cl-page-text-section-cover'));
     } else if (field.cover_image_url) {
-      coverSlot.innerHTML = `<img class="cl-page-text-section-cover" src="${field.cover_image_url}" alt="" />`;
+      coverSlot.appendChild(fadeInImg('cl-page-text-section-cover', field.cover_image_url));
     }
     if (sideIsSlideshow) {
       sideSlot.appendChild(fieldSlideshowEl(field.side_slideshow.map(s => s.image_url), '3 / 4', 'cl-page-text-section-side'));
     } else if (field.side_image_url) {
-      sideSlot.innerHTML = `<img class="cl-page-text-section-side" src="${field.side_image_url}" alt="" />`;
+      sideSlot.appendChild(fadeInImg('cl-page-text-section-side', field.side_image_url));
     }
     fieldsWrap.appendChild(section);
   });
