@@ -2802,6 +2802,13 @@ async function loadClub() {
       params.delete('openEdit');
       history.replaceState({}, '', `${location.pathname}?${params.toString()}`);
       openEditClubModal();
+    } else if (new URLSearchParams(location.search).get('edit') === '1') {
+      // The edit modal keeps ?edit=1 (+ &editPage=<slug>) in the URL for as
+      // long as it's open (see switchEditView/closeEditClubModal's
+      // syncEditUrlState()) -- a plain refresh while in the Promotion/
+      // Gallery/General page builder (or the Home editor) lands back here,
+      // not on the live page underneath.
+      openEditClubModal({ pageSlug: new URLSearchParams(location.search).get('editPage') });
     }
     // Fire-and-forget — stamps "last visited" for the Best feed's small
     // recently-browsed personalization boost. Not worth blocking on.
@@ -4829,8 +4836,10 @@ async function openEditClubModal(opts) {
   // scrolled from a previous session left you staring at the middle of
   // the form with no idea how you got there.
   document.getElementById('cl-edit-overlay').scrollTop = 0;
-  // Jump straight to whatever page/Home you're currently viewing, instead
-  // of always landing on Home — loadEditPages() must resolve first since
+  // Jump straight to whatever page/Home you're currently viewing (or an
+  // explicit opts.pageSlug -- used to restore a specific page's builder on
+  // refresh, see loadClub()'s ?edit=1&editPage=... handling), instead of
+  // always landing on Home — loadEditPages() must resolve first since
   // switchEditView('page', ...) looks the slug up in editPagesCache.
   await loadEditPages();
   if (opts && opts.createPage) {
@@ -4838,8 +4847,9 @@ async function openEditClubModal(opts) {
     openCreatePageTemplateView();
     return;
   }
-  if (currentPageSlug && editPagesCache.some(p => p.slug === currentPageSlug)) {
-    switchEditView('page', currentPageSlug, true);
+  const targetSlug = (opts && opts.pageSlug) || currentPageSlug;
+  if (targetSlug && editPagesCache.some(p => p.slug === targetSlug)) {
+    switchEditView('page', targetSlug, true);
   } else {
     switchEditView('home', null, true);
   }
@@ -4848,6 +4858,7 @@ function closeEditClubModal() {
   document.getElementById('cl-edit-overlay').hidden = true;
   document.body.classList.remove('cl-editing-active');
   document.body.style.overflow = '';
+  syncEditUrlState();
   closeCardForm();
 }
 document.getElementById('cl-tabs-edit-btn').addEventListener('click', () => openEditClubModal());
@@ -4879,7 +4890,28 @@ function switchEditView(view, pageSlug, skipGuard) {
   else if (view === 'page') populatePageEditor(pageSlug);
 
   highlightEditPagesList();
+  syncEditUrlState();
   return true;
+}
+
+// Keeps ?edit=1 (+ &editPage=<slug> for a specific page's builder, e.g.
+// Promotion/Gallery) in the URL for as long as the edit modal is open --
+// via replaceState, so it doesn't add a back-stack entry per page switch.
+// A plain refresh re-reads these on load (see loadClub()) and reopens the
+// modal on the same view instead of silently dropping back to the live
+// page underneath it.
+function syncEditUrlState() {
+  const params = new URLSearchParams(location.search);
+  const overlayOpen = !document.getElementById('cl-edit-overlay').hidden;
+  if (overlayOpen && (editActiveView === 'home' || editActiveView === 'page')) {
+    params.set('edit', '1');
+    if (editActiveView === 'page' && editActivePageSlug) params.set('editPage', editActivePageSlug);
+    else params.delete('editPage');
+  } else {
+    params.delete('edit');
+    params.delete('editPage');
+  }
+  history.replaceState(history.state, '', `${location.pathname}?${params.toString()}`);
 }
 
 // ── Pages list (right column) ─────────────────────────────────────────────
