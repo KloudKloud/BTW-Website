@@ -1508,6 +1508,14 @@
       display: flex; align-items: center; justify-content: center; cursor: pointer;
     }
     .cl-edit-imgbox img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
+    /* A text field's Cover/Side image slot (maxWidth-capped, unlike the
+       full-width single Cover Image above) has room to put its "No Image"
+       remove button beside the image instead of stacked right under it,
+       where it used to sit flush against whatever section follows. */
+    .cl-tf-img-row {
+      display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.9rem; margin-bottom: 1rem;
+    }
+    .cl-tf-img-row .cl-tf-imgbox { margin: 0; flex: 0 0 auto; }
     .cl-edit-imgbox-overlay {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       background: rgba(0,0,0,0.45); color: #fff; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600;
@@ -4087,18 +4095,21 @@ async function loadCustomPage(pageSlug, tab) {
       renderCoverMediaBlock('static', page.cover_image_url, null);
     }
 
-    // Text sections — a brand-new page (no fields saved yet) shows a single
-    // default "Text Field 1" section with an auto-generated splash line as
-    // its body, exactly like it appears in the editor before anyone's
-    // written anything. Once real fields exist, the very first one also
-    // falls back to that splash line specifically when its body is blank
-    // (title still shows as saved, e.g. renamed to something else). This
-    // page-specific fallback is resolved here, before handing off to the
-    // shared renderer (renderTextFieldSections) that posts reuse too.
-    const rawFields = (page.text_fields && page.text_fields.length) ? page.text_fields : [{ title: 'Text Field 1', body: '' }];
+    // Text sections — index 0 is the mandatory Body Text box, which has no
+    // title of its own in the editor (see cl-edit-page-body-input) and
+    // reads as part of the post itself, not a labeled section -- so unlike
+    // every optional Additional Section after it, it never gets a
+    // "Text Field 1"-style fallback title here. A brand-new page (no
+    // fields saved yet) shows that same untitled body with an
+    // auto-generated splash line standing in for it, and once real fields
+    // exist, the first one still falls back to that splash line
+    // specifically when its body is blank. This page-specific fallback is
+    // resolved here, before handing off to the shared renderer
+    // (renderTextFieldSections) that posts reuse too.
+    const rawFields = (page.text_fields && page.text_fields.length) ? page.text_fields : [{ title: '', body: '' }];
     const fields = rawFields.map((field, i) => (i === 0 ? {
       ...field,
-      title: field.title || 'Text Field 1',
+      title: '',
       body: field.body || `${page.title} is a page inside of ${currentClub ? currentClub.name : 'this club'}.`,
     } : field));
     renderTextFieldSections(fields);
@@ -5537,13 +5548,15 @@ function textFieldImageSlotHtml(field, prefix, aspect, label, maxWidth) {
         <button type="button" class="cl-edit-mode-btn${mode === 'slideshow' ? ' active' : ''}" data-mode="slideshow">Slideshow</button>
       </div>
       <div class="cl-tf-static" ${mode === 'slideshow' ? 'hidden' : ''}>
-        <div class="cl-edit-imgbox cl-tf-imgbox" style="aspect-ratio:${aspect}; max-width:${maxWidth}px;">
-          <img class="cl-tf-preview" src="${imageUrl || '/images/nopicture2.png'}" alt="" />
-          <div class="cl-edit-imgbox-overlay">📷 Change Image</div>
-          <button type="button" class="fp-recrop-btn cl-tf-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;" ${imageUrl ? '' : 'hidden'}>✏️ Recrop</button>
+        <div class="cl-tf-img-row">
+          <div class="cl-edit-imgbox cl-tf-imgbox" style="aspect-ratio:${aspect}; width:${maxWidth}px; max-width:${maxWidth}px;">
+            <img class="cl-tf-preview" src="${imageUrl || '/images/nopicture2.png'}" alt="" />
+            <div class="cl-edit-imgbox-overlay">📷 Change Image</div>
+            <button type="button" class="fp-recrop-btn cl-tf-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;" ${imageUrl ? '' : 'hidden'}>✏️ Recrop</button>
+          </div>
+          <button type="button" class="cl-splash-rules-link cl-tf-remove-img-btn" ${imageUrl ? '' : 'hidden'}>✕ No Image</button>
         </div>
         <input type="file" class="cl-tf-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-        <button type="button" class="cl-splash-rules-link cl-tf-remove-img-btn" style="margin-top:0.5rem;" ${imageUrl ? '' : 'hidden'}>✕ No Image</button>
       </div>
       <div class="cl-tf-slideshow" ${mode === 'static' ? 'hidden' : ''}>
         <div class="cl-edit-slideshow-stack cl-tf-slideshow-stack"></div>
