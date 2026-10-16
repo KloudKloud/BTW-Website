@@ -1446,36 +1446,36 @@
        real modal-in-modal layering. */
     .cl-edit-main-actions-locked { filter: blur(2px); opacity: 0.4; pointer-events: none; }
 
-    /* Gallery Page template — Upload/Reorder tab grids */
+    /* Gallery Page template — one grid, drag reorder always live (no
+       separate Upload/Reorder tab). Each tile is a grip-handle image box
+       with Edit/Delete buttons stacked underneath it, same width as the
+       image -- same "handle drags, buttons act" split as the Promotion
+       Page's row-based Edit Post/Delete Post, just laid out for a grid. */
     .cl-gallery-editor-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.75rem;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 1rem 0.75rem;
       margin-bottom: 1rem;
     }
+    .cl-gallery-editor-tile-wrap { display: flex; flex-direction: column; gap: 0.4rem; }
     .cl-gallery-editor-tile {
       position: relative; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden;
-      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;
+      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1);
     }
+    .cl-gallery-editor-tile-wrap.dragging .cl-gallery-editor-tile { opacity: 0.35; }
     .cl-gallery-editor-tile img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
     .cl-gallery-editor-tile-title {
       position: absolute; left: 0; right: 0; bottom: 0; padding: 0.4rem 0.5rem 0.3rem;
       background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
       font-size: 0.74rem; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .cl-gallery-editor-tile-remove {
-      position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;
-      background: rgba(0,0,0,0.7); border: none; color: #fff; font-size: 0.7rem; line-height: 1; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .cl-gallery-editor-tile-remove:hover { background: rgba(217,122,114,0.85); }
-    /* Reorder tab — same tiles, but draggable via a grip overlay instead of
-       click-to-edit; visually distinct with a dashed ring so it reads as a
-       different mode. */
-    .cl-gallery-editor-tile--reorder { cursor: grab; border-style: dashed; border-color: rgba(127,168,217,0.4); }
-    .cl-gallery-editor-tile--reorder.dragging { opacity: 0.35; }
-    .cl-gallery-editor-tile--reorder .cl-gallery-editor-tile-handle {
-      position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; border-radius: 50%;
+    /* The small draggable grip box -- only this grabs the tile, so clicking
+       the image or the Edit/Delete buttons below never starts a drag. */
+    .cl-gallery-editor-tile-handle {
+      position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; border-radius: 6px; z-index: 2;
       background: rgba(0,0,0,0.65); color: #fff; font-size: 0.85rem; display: flex; align-items: center; justify-content: center;
+      cursor: grab;
     }
+    .cl-gallery-editor-tile-wrap.dragging .cl-gallery-editor-tile-handle { cursor: grabbing; }
+    .cl-gallery-editor-tile-btn { width: 100%; text-align: center; }
     /* Promotion Page template — Link section sits visually apart from the
        image/title/description group above it. */
     .cl-promo-card-link-section {
@@ -2279,12 +2279,8 @@
           <!-- ── Gallery Page template ── -->
           <div id="cl-edit-page-gallery-fields" hidden>
             <p class="cl-edit-hint-block">
-              Add gallery images related to this page! 5 images per row. To reorder images, drag them in the "Reorder" tab. Please ensure that all images are properly sourced, if not yours.
+              Add gallery images related to this page! 5 images per row. Drag a tile's grip handle to reorder it. Please ensure that all images are properly sourced, if not yours.
             </p>
-            <div class="cl-edit-mode-toggle">
-              <button class="cl-edit-mode-btn active" id="cl-gallery-tab-upload" type="button">Upload</button>
-              <button class="cl-edit-mode-btn" id="cl-gallery-tab-reorder" type="button">Reorder</button>
-            </div>
 
             <div id="cl-gallery-upload-tab">
               <div class="cl-gallery-editor-grid" id="cl-gallery-editor-grid"></div>
@@ -2292,11 +2288,6 @@
                 <span class="gallery-linkto-add-tile-icon">➕</span> Gallery
               </button>
               <input type="file" id="cl-gallery-item-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-            </div>
-
-            <div id="cl-gallery-reorder-tab" hidden>
-              <p class="cl-edit-hint">Drag tiles around to choose the order they appear in the rows.</p>
-              <div class="cl-gallery-editor-grid" id="cl-gallery-reorder-grid"></div>
             </div>
 
             <div class="cl-edit-card-form" id="cl-gallery-item-form" hidden>
@@ -2397,6 +2388,17 @@
           <button class="cl-edit-pages-item active" id="cl-edit-pages-home-item" type="button"><span class="cl-side-page-home-star" title="The Home page can't be deleted">★</span>Home</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="mod-confirm-overlay" id="cl-gallery-item-delete-confirm-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title">Delete this image?</p>
+    <p class="mod-confirm-text">This can't be undone.</p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="cl-gallery-item-delete-confirm-cancel" type="button">Cancel</button>
+      <button class="mod-btn mod-btn--danger" id="cl-gallery-item-delete-confirm-yes" type="button">Delete Image</button>
     </div>
   </div>
 </div>
@@ -5366,7 +5368,6 @@ async function populatePageEditor(pageSlug) {
 
   if (isGallery) {
     closeGalleryItemForm();
-    switchGalleryEditorTab('upload');
     loadEditPageGallery(pageSlug);
     return;
   }
@@ -5816,26 +5817,18 @@ document.getElementById('cl-page-text-field-add-btn').addEventListener('click', 
   renderPageTextFields();
 });
 
-// ── Gallery Page template — Upload/Reorder tabs, "+ Gallery" create flow
-// using the same locked-preview-crop technique as the Fanpage gallery
-// system (position_x/position_y focal point; the source image is never
-// actually re-cropped). ───────────────────────────────────────────────────
+// ── Gallery Page template — "+ Gallery" create flow using the same
+// locked-preview-crop technique as the Fanpage gallery system
+// (position_x/position_y focal point; the source image is never actually
+// re-cropped). Drag reorder is always live via each tile's grip handle --
+// no separate Upload/Reorder tab to switch into. ──────────────────────────
 let editPageGalleryCache = [];
 let galleryPreviewCropper = null;
 let galleryItemPos = { x: 50, y: 50 };
 let editingGalleryItemId = null;
 let pendingGalleryItemFile = null;
-
-function switchGalleryEditorTab(tab) {
-  const isReorder = tab === 'reorder';
-  document.getElementById('cl-gallery-tab-upload').classList.toggle('active', !isReorder);
-  document.getElementById('cl-gallery-tab-reorder').classList.toggle('active', isReorder);
-  document.getElementById('cl-gallery-upload-tab').hidden = isReorder;
-  document.getElementById('cl-gallery-reorder-tab').hidden = !isReorder;
-  if (isReorder) renderGalleryReorderGrid(); else renderGalleryEditorGrid();
-}
-document.getElementById('cl-gallery-tab-upload').addEventListener('click', () => switchGalleryEditorTab('upload'));
-document.getElementById('cl-gallery-tab-reorder').addEventListener('click', () => switchGalleryEditorTab('reorder'));
+let galleryDragId = null;
+let galleryItemDeleteId = null;
 
 async function loadEditPageGallery(pageSlug) {
   try {
@@ -5850,59 +5843,70 @@ function renderGalleryEditorGrid() {
   const grid = document.getElementById('cl-gallery-editor-grid');
   grid.innerHTML = '';
   editPageGalleryCache.forEach(img => {
-    const tile = document.createElement('div');
-    tile.className = 'cl-gallery-editor-tile';
-    tile.innerHTML = `
-      <img src="${img.image_url}" alt="" style="object-position:${img.position_x}% ${img.position_y}%;" />
-      ${img.title ? `<span class="cl-gallery-editor-tile-title">${escapeHtml(img.title)}</span>` : ''}
-      <button type="button" class="cl-gallery-editor-tile-remove">✕</button>
+    const wrap = document.createElement('div');
+    wrap.className = 'cl-gallery-editor-tile-wrap';
+    wrap.dataset.id = img.id;
+    wrap.innerHTML = `
+      <div class="cl-gallery-editor-tile">
+        <span class="cl-gallery-editor-tile-handle">⠿</span>
+        <img src="${img.image_url}" alt="" draggable="false" style="object-position:${img.position_x}% ${img.position_y}%;" />
+        ${img.title ? `<span class="cl-gallery-editor-tile-title">${escapeHtml(img.title)}</span>` : ''}
+      </div>
+      <button type="button" class="cl-edit-card-row-btn cl-gallery-editor-tile-btn" data-action="edit">Edit</button>
+      <button type="button" class="cl-edit-card-row-btn cl-edit-card-row-btn--danger cl-gallery-editor-tile-btn" data-action="delete">Delete</button>
     `;
-    tile.addEventListener('click', (e) => {
-      if (e.target.closest('.cl-gallery-editor-tile-remove')) return;
-      openGalleryItemForm(img);
+    wrap.querySelector('[data-action="edit"]').addEventListener('click', () => openGalleryItemForm(img));
+    wrap.querySelector('[data-action="delete"]').addEventListener('click', () => {
+      galleryItemDeleteId = img.id;
+      document.getElementById('cl-gallery-item-delete-confirm-overlay').hidden = false;
     });
-    tile.querySelector('.cl-gallery-editor-tile-remove').addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (!confirm('Delete this gallery image?')) return;
-      await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/gallery/${img.id}`, { method: 'DELETE', headers: authHeaders() });
-      editPageGalleryCache = editPageGalleryCache.filter(i => i.id !== img.id);
-      renderGalleryEditorGrid();
-    });
-    grid.appendChild(tile);
-  });
-}
-
-let galleryDragId = null;
-function renderGalleryReorderGrid() {
-  const grid = document.getElementById('cl-gallery-reorder-grid');
-  grid.innerHTML = '';
-  editPageGalleryCache.forEach(img => {
-    const tile = document.createElement('div');
-    tile.className = 'cl-gallery-editor-tile cl-gallery-editor-tile--reorder';
-    tile.draggable = true;
-    tile.dataset.id = img.id;
-    tile.innerHTML = `
-      <img src="${img.image_url}" alt="" draggable="false" style="object-position:${img.position_x}% ${img.position_y}%;" />
-      <span class="cl-gallery-editor-tile-handle">⠿</span>
-    `;
-    tile.addEventListener('dragstart', () => { galleryDragId = img.id; tile.classList.add('dragging'); });
-    tile.addEventListener('dragend', () => tile.classList.remove('dragging'));
-    tile.addEventListener('dragover', (e) => e.preventDefault());
-    tile.addEventListener('drop', async (e) => {
+    // The tile only becomes draggable while the mouse is down on its grip
+    // handle -- otherwise dragging the image itself would fight with a
+    // future click-to-edit affordance and the Edit/Delete buttons below it.
+    const handle = wrap.querySelector('.cl-gallery-editor-tile-handle');
+    handle.addEventListener('mousedown', () => { wrap.draggable = true; });
+    wrap.addEventListener('mouseup', () => { wrap.draggable = false; });
+    wrap.addEventListener('dragstart', () => { galleryDragId = img.id; wrap.classList.add('dragging'); });
+    wrap.addEventListener('dragend', () => { wrap.classList.remove('dragging'); wrap.draggable = false; });
+    wrap.addEventListener('dragover', (e) => e.preventDefault());
+    wrap.addEventListener('drop', async (e) => {
       e.preventDefault();
       if (galleryDragId == null || galleryDragId === img.id) return;
-      const dragEl = grid.querySelector(`.cl-gallery-editor-tile[data-id="${CSS.escape(String(galleryDragId))}"]`);
+      const dragEl = grid.querySelector(`.cl-gallery-editor-tile-wrap[data-id="${CSS.escape(String(galleryDragId))}"]`);
       if (!dragEl) return;
-      grid.insertBefore(dragEl, tile);
-      const ids = [...grid.querySelectorAll('.cl-gallery-editor-tile')].map(el => el.dataset.id);
+      grid.insertBefore(dragEl, wrap);
+      const ids = [...grid.querySelectorAll('.cl-gallery-editor-tile-wrap')].map(el => el.dataset.id);
       await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/gallery/reorder`, {
         method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ order: ids }),
       });
       editPageGalleryCache = ids.map(id => editPageGalleryCache.find(i => String(i.id) === id)).filter(Boolean);
+      if (currentPageSlug === editActivePageSlug) loadCustomPage(editActivePageSlug);
     });
-    grid.appendChild(tile);
+    grid.appendChild(wrap);
   });
 }
+document.getElementById('cl-gallery-item-delete-confirm-cancel').addEventListener('click', () => {
+  galleryItemDeleteId = null;
+  document.getElementById('cl-gallery-item-delete-confirm-overlay').hidden = true;
+});
+document.getElementById('cl-gallery-item-delete-confirm-yes').addEventListener('click', async () => {
+  if (galleryItemDeleteId == null || !editActivePageSlug) return;
+  const imgId = galleryItemDeleteId;
+  const btn = document.getElementById('cl-gallery-item-delete-confirm-yes');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+  try {
+    await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/gallery/${imgId}`, { method: 'DELETE', headers: authHeaders() });
+    editPageGalleryCache = editPageGalleryCache.filter(i => i.id !== imgId);
+    if (editingGalleryItemId === imgId) closeGalleryItemForm();
+    renderGalleryEditorGrid();
+    if (currentPageSlug === editActivePageSlug) loadCustomPage(editActivePageSlug);
+  } catch {}
+  galleryItemDeleteId = null;
+  document.getElementById('cl-gallery-item-delete-confirm-overlay').hidden = true;
+  btn.disabled = false;
+  btn.textContent = 'Delete Image';
+});
 
 // Same locked-preview-crop recipe as the Fanpage gallery system
 // (gallery-preview-crop-wrap, see BtwCropper in btw-cropper.js): a fixed,
@@ -6002,13 +6006,10 @@ document.getElementById('cl-gallery-item-save-btn').addEventListener('click', as
   } catch { alert('Could not save this image — please try again.'); }
   finally { btn.disabled = false; }
 });
-document.getElementById('cl-gallery-item-delete-btn').addEventListener('click', async () => {
+document.getElementById('cl-gallery-item-delete-btn').addEventListener('click', () => {
   if (!editingGalleryItemId || !editActivePageSlug) return;
-  if (!confirm('Delete this gallery image?')) return;
-  await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/gallery/${editingGalleryItemId}`, { method: 'DELETE', headers: authHeaders() });
-  closeGalleryItemForm();
-  await loadEditPageGallery(editActivePageSlug);
-  if (currentPageSlug === editActivePageSlug) loadCustomPage(editActivePageSlug);
+  galleryItemDeleteId = editingGalleryItemId;
+  document.getElementById('cl-gallery-item-delete-confirm-overlay').hidden = false;
 });
 
 // ── Promotion Page template, v2 — cards ARE posts (promotion_page_id set),
