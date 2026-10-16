@@ -234,7 +234,7 @@
 <main class="cp-page">
   <a class="cp-club-context" id="cp-club-context" href="#" hidden>
     <img class="cp-club-context-icon" id="cp-club-context-icon" alt="" />
-    <span class="cp-club-context-text">Posting to <strong id="cp-club-context-name">…</strong></span>
+    <span class="cp-club-context-text">Posting to <strong id="cp-club-context-name">…</strong><span id="cp-club-context-promo" hidden> → <strong id="cp-club-context-promo-title">…</strong></span></span>
   </a>
   <p class="cp-sub" id="cp-sub" hidden></p>
 
@@ -354,7 +354,33 @@
   const clubSlug = params.get('club') || '';
   const isNewsPost = params.get('news') === '1';
   const editingPostId = params.get('id') || null;
+  // Set directly from ?page= for a new card ("+ Card" on a Promotion page
+  // links here with it); for an existing post it isn't in the URL at all
+  // (the "•••" edit link is the same for every post type) -- initEditMode
+  // below discovers it from the fetched post's own promotion_page_slug
+  // instead and calls applyPromoMode() itself once it knows.
+  let promoPageSlug = params.get('page') || '';
   let clubName = '';
+
+  // A Promotion page's cards are admin-authored archive entries (think
+  // one post per book chapter) -- no Poll option (doesn't fit that use
+  // case) and the "Posting to" context names the page too, not just the
+  // club, so it's never ambiguous which card list this lands in.
+  function applyPromoMode(pageSlug, pageTitle) {
+    promoPageSlug = pageSlug;
+    document.getElementById('cp-add-poll-btn').hidden = true;
+    document.getElementById('cp-club-context-promo-title').textContent = pageTitle || pageSlug;
+    document.getElementById('cp-club-context-promo').hidden = false;
+  }
+  if (promoPageSlug) {
+    applyPromoMode(promoPageSlug, '');
+    if (clubSlug) {
+      fetch(`/api/clubs/${encodeURIComponent(clubSlug)}/pages/${encodeURIComponent(promoPageSlug)}`, { headers: authHeaders() })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data && data.page) applyPromoMode(promoPageSlug, data.page.title); })
+        .catch(() => {});
+    }
+  }
   if (!clubSlug) {
     const subEl = document.getElementById('cp-sub');
     subEl.hidden = false;
@@ -867,6 +893,7 @@
         preview_position_y: postPreviewPos.y,
       };
       if (isNewsPost) body.is_admin_post = true;
+      if (promoPageSlug) body.page = promoPageSlug;
       if (postPollActive) {
         const question = document.getElementById('cp-poll-question').value.trim();
         const options = [...document.querySelectorAll('#cp-poll-options .cl-post-poll-option-row input')]
@@ -907,7 +934,13 @@
       }
       const { post } = await res.json();
       cpDirty = false;
-      window.location.href = window.fpUrl(`/club?slug=${encodeURIComponent(clubSlug)}&post=${post.id}`);
+      // A Promotion page card goes back into "the builder" -- that page's
+      // own admin card list (?openEdit=1, see loadClub() in club.html) --
+      // instead of the post's own detail page, so the admin immediately
+      // sees it show up as a draggable card.
+      window.location.href = promoPageSlug
+        ? window.fpUrl(`/club?slug=${encodeURIComponent(clubSlug)}&page=${encodeURIComponent(promoPageSlug)}&openEdit=1`)
+        : window.fpUrl(`/club?slug=${encodeURIComponent(clubSlug)}&post=${post.id}`);
     } catch {
       msg.className = 'mod-panel-msg mod-panel-msg--error';
       msg.textContent = 'Network error. Please try again.';
@@ -926,7 +959,9 @@
     try {
       await fetch(`/api/clubs/${encodeURIComponent(clubSlug)}/posts/${editingPostId}`, { method: 'DELETE', headers: authHeaders() });
       cpDirty = false;
-      window.location.href = window.fpUrl(`/club?slug=${encodeURIComponent(clubSlug)}`);
+      window.location.href = promoPageSlug
+        ? window.fpUrl(`/club?slug=${encodeURIComponent(clubSlug)}&page=${encodeURIComponent(promoPageSlug)}&openEdit=1`)
+        : window.fpUrl(`/club?slug=${encodeURIComponent(clubSlug)}`);
     } catch {
       delBtn.disabled = false;
       delBtn.textContent = 'Delete';
@@ -947,6 +982,7 @@
       const res = await fetch(`/api/clubs/${encodeURIComponent(clubSlug)}/posts/${editingPostId}`, { headers: authHeaders() });
       if (!res.ok) return;
       const { post } = await res.json();
+      if (post.promotion_page_slug) applyPromoMode(post.promotion_page_slug, post.promotion_page_title);
       document.getElementById('cp-title-input').value = post.title || '';
       const existingFields = post.text_fields || [];
       document.getElementById('cp-body-input').value = (existingFields[0] && existingFields[0].body) || '';

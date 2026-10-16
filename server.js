@@ -1580,6 +1580,21 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS text_fields JSONB NOT NULL DEFAULT '[]';
   `).catch(e => console.error('club_posts mini-page migration:', e.message));
 
+  // Promotion Page template, v2 — a Promotion page is now just a list of
+  // real posts (same shape as a Social post) scoped to that page, instead
+  // of the old standalone club_page_promotion_cards (image/title/desc/
+  // external link only). promotion_page_id NULL means "shows in the normal
+  // Social/Club News feeds" (the vast majority of posts); set, it means
+  // "lives only in that Promotion page's own card list" and is excluded
+  // from Social. sort_order is admin-draggable within a single Promotion
+  // page (see the /promotion-posts/reorder endpoint), meaningless/unused
+  // for ordinary posts.
+  await pool.query(`
+    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS promotion_page_id INTEGER REFERENCES club_pages(id) ON DELETE CASCADE;
+    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
+    CREATE INDEX IF NOT EXISTS idx_club_posts_promotion_page ON club_posts(promotion_page_id) WHERE promotion_page_id IS NOT NULL;
+  `).catch(e => console.error('club_posts promotion_page_id migration:', e.message));
+
   // BTWClub — the site-wide default club every account belongs to (an
   // r/all equivalent). Owned by the admin account; seeded once, then every
   // existing user is backfilled into it on each restart (new signups join
@@ -9378,6 +9393,13 @@ function clubPostPublicShape(p, voteRows, viewerId) {
     like_count: Number(p.like_count) || 0,
     comment_count: Number(p.comment_count) || 0,
     user_liked: !!p.user_liked,
+    // Only present on the single-post GET (joined there) -- lets
+    // create-club-post.html's edit mode self-detect "this post is a
+    // Promotion page card" without needing a ?page= URL param, and the
+    // post detail view's Back button already works for free since it just
+    // preserves whatever ?page= is already in the URL.
+    promotion_page_slug: p.promotion_page_slug || null,
+    promotion_page_title: p.promotion_page_title || null,
   };
 }
 function optionalViewerId(req) {
@@ -9394,12 +9416,27 @@ function optionalViewerId(req) {
 // ?sort=best|top|new — same Hot-score idea as /api/clubs-feed, just scoped
 // to this one club (no membership/visit personalization needed — every
 // post here already belongs to the club the viewer's looking at).
+// ?page=<promotion page slug> — a Promotion page's own card list instead of
+// the club's Social feed: only posts with promotion_page_id pointing at
+// that page, in its admin-draggable sort_order (ignores ?sort/?section).
+// Without ?page, promotion-page posts never appear here at all (they'd
+// otherwise flood Social with e.g. every chapter of a 20-chapter archive).
 app.get('/api/clubs/:slug/posts', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const adminOnly = req.query.section === 'admin';
   const sort = ['best', 'top', 'new'].includes(req.query.sort) ? req.query.sort : 'best';
   const viewerId = optionalViewerId(req);
+
+  let promoPageId = null;
+  if (req.query.page) {
+    const { rows: [page] } = await pool.query(
+      `SELECT id FROM club_pages WHERE club_id = $1 AND slug = $2 AND type = 'promotion'`,
+      [club.id, req.query.page]
+    );
+    if (!page) return res.status(404).json({ error: 'Page not found.' });
+    promoPageId = page.id;
+  }
 
   // Postgres won't resolve SELECT-list aliases inside a compound ORDER BY
   // expression (only bare "ORDER BY like_count" works, not "like_count +
@@ -9412,10 +9449,15 @@ app.get('/api/clubs/:slug/posts', async (req, res) => {
          (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
          + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) * 2,
        1)::numeric) + EXTRACT(EPOCH FROM cp.created_at) / 45000`;
-  const orderBy = sort === 'new' ? 'cp.created_at DESC'
+  const orderBy = promoPageId ? 'cp.sort_order ASC, cp.created_at ASC'
+    : sort === 'new' ? 'cp.created_at DESC'
     : sort === 'top' ? `(SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
         + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) DESC, cp.created_at DESC`
     : `${hotScoreExpr} + (random() - 0.5) * 0.3 DESC`;
+  const whereExtra = promoPageId
+    ? 'AND cp.promotion_page_id = $3'
+    : `AND cp.promotion_page_id IS NULL ${adminOnly ? 'AND cp.is_admin_post = TRUE' : ''}`;
+  const queryParams = promoPageId ? [club.id, viewerId || 0, promoPageId] : [club.id, viewerId || 0];
   const { rows } = await pool.query(
     `SELECT cp.*, u.username, u.display_name, u.avatar,
        (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
@@ -9423,9 +9465,9 @@ app.get('/api/clubs/:slug/posts', async (req, res) => {
        (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked,
        ${hotScoreExpr} AS hot_score
      FROM club_posts cp JOIN users u ON u.id = cp.author_user_id
-     WHERE cp.club_id = $1 ${adminOnly ? 'AND cp.is_admin_post = TRUE' : ''}
+     WHERE cp.club_id = $1 ${whereExtra}
      ORDER BY ${orderBy} LIMIT 100`,
-    [club.id, viewerId || 0]
+    queryParams
   );
   const pollPostIds = rows.filter(p => p.poll).map(p => p.id);
   let votesByPost = new Map();
@@ -9450,10 +9492,12 @@ app.get('/api/clubs/:slug/posts/:postId', async (req, res) => {
   const viewerId = optionalViewerId(req);
   const { rows: [p] } = await pool.query(
     `SELECT cp.*, u.username, u.display_name, u.avatar,
+       pg.slug AS promotion_page_slug, pg.title AS promotion_page_title,
        (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
        (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
        (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $3) AS user_liked
      FROM club_posts cp JOIN users u ON u.id = cp.author_user_id
+       LEFT JOIN club_pages pg ON pg.id = cp.promotion_page_id
      WHERE cp.id = $1 AND cp.club_id = $2`,
     [req.params.postId, club.id, viewerId || 0]
   );
@@ -9630,21 +9674,48 @@ app.post('/api/clubs/:slug/posts', requireAuth, async (req, res) => {
   const cover = sanitizeClubPostImageSlot(req.body.cover);
   const previewImageUrl = String(req.body.preview_image_url || '');
 
+  // Promotion page "cards" are just posts with promotion_page_id set --
+  // only an owner/admin can create one (this is the "+Card" builder, not
+  // the regular Social composer), and it's placed at the end of that
+  // page's own drag-orderable list.
+  let promotionPageId = null;
+  let sortOrder = 0;
+  if (req.body.page) {
+    if (role !== 'owner' && role !== 'admin') {
+      return res.status(403).json({ error: 'Only club owners/admins can add cards to a Promotion page.' });
+    }
+    const { rows: [page] } = await pool.query(
+      `SELECT id FROM club_pages WHERE club_id = $1 AND slug = $2 AND type = 'promotion'`,
+      [club.id, req.body.page]
+    );
+    if (!page) return res.status(404).json({ error: 'Page not found.' });
+    promotionPageId = page.id;
+    const { rows: [{ maxOrder }] } = await pool.query(
+      'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM club_posts WHERE promotion_page_id = $1', [promotionPageId]
+    );
+    sortOrder = maxOrder + 1;
+  }
+
   const { rows: [post] } = await pool.query(
-    `INSERT INTO club_posts (club_id, author_user_id, title, cover_mode, cover_image_url, cover_slideshow, text_fields, preview_position_x, preview_position_y, preview_image_url, poll, is_admin_post)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
-    [club.id, req.user.id, title, cover.mode, cover.image_url, JSON.stringify(cover.slideshow), JSON.stringify(textFields), previewX, previewY, previewImageUrl, poll ? JSON.stringify(poll) : null, isAdminPost]
+    `INSERT INTO club_posts (club_id, author_user_id, title, cover_mode, cover_image_url, cover_slideshow, text_fields, preview_position_x, preview_position_y, preview_image_url, poll, is_admin_post, promotion_page_id, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+    [club.id, req.user.id, title, cover.mode, cover.image_url, JSON.stringify(cover.slideshow), JSON.stringify(textFields), previewX, previewY, previewImageUrl, poll ? JSON.stringify(poll) : null, isAdminPost, promotionPageId, sortOrder]
   );
   const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
-  const { rows: members } = await pool.query('SELECT user_id FROM club_members WHERE club_id = $1', [club.id]);
-  const postLink = `/club?slug=${encodeURIComponent(club.slug)}&post=${post.id}`;
-  await Promise.all(
-    members
-      .map(m => m.user_id)
-      .filter(uid => uid !== req.user.id)
-      .map(uid => notifyUser(uid, req.user.id, 'club_post',
-        `posted "${title}" in ${club.name}.`, postLink))
-  );
+  // Promotion-page cards (e.g. one post per book chapter) don't notify the
+  // whole membership the way a real Social post does -- nobody wants 20
+  // notifications for a chapter archive being filled in.
+  if (!promotionPageId) {
+    const { rows: members } = await pool.query('SELECT user_id FROM club_members WHERE club_id = $1', [club.id]);
+    const postLink = `/club?slug=${encodeURIComponent(club.slug)}&post=${post.id}`;
+    await Promise.all(
+      members
+        .map(m => m.user_id)
+        .filter(uid => uid !== req.user.id)
+        .map(uid => notifyUser(uid, req.user.id, 'club_post',
+          `posted "${title}" in ${club.name}.`, postLink))
+    );
+  }
   res.json({ post: clubPostPublicShape({ ...post, username: author.username, display_name: author.display_name, avatar: author.avatar }) });
 });
 
@@ -10481,65 +10552,25 @@ app.delete('/api/clubs/:slug/pages/:pageSlug/gallery/:imageId', requireAuth, asy
   res.json({ message: 'Image removed.' });
 });
 
-// ── Promotion Page template — a vertical list of link-out cards. Image is
-// optional (falls back to /images/noimage.png client-side); everything
-// else is required. ─────────────────────────────────────────────────────
-app.get('/api/clubs/:slug/pages/:pageSlug/promotion-cards', async (req, res) => {
-  const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
-  if (!club) return res.status(404).json({ error: 'Club not found.' });
-  const { rows: [page] } = await pool.query(
-    'SELECT id FROM club_pages WHERE club_id = $1 AND slug = $2', [club.id, req.params.pageSlug]
-  );
-  if (!page) return res.status(404).json({ error: 'Page not found.' });
-  const { rows } = await pool.query(
-    `SELECT id, image_url, title, description, link_title, link_url
-     FROM club_page_promotion_cards WHERE page_id = $1 ORDER BY sort_order, created_at`,
-    [page.id]
-  );
-  res.json({ cards: rows });
-});
-
-function normalizeLinkUrl(url) {
-  const trimmed = String(url || '').trim();
-  if (!trimmed) return '';
-  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-}
-
-app.post('/api/clubs/:slug/pages/:pageSlug/promotion-cards', requireAuth, uploadModImage.single('image'), async (req, res) => {
+// ── Promotion Page template, v2 — a vertical list of real posts (same
+// shape as a Social post: Title/Media/Body/Additional Fields), scoped to
+// this page via club_posts.promotion_page_id. Creating/editing/deleting a
+// card IS creating/editing/deleting a post — see POST/PUT/DELETE
+// /api/clubs/:slug/posts(/:postId) above, which accept/return
+// promotion_page_id when a `page` slug is given. This section is just the
+// admin-only reorder endpoint, since dragging cards is specific to this
+// context (ordinary posts have no concept of a manual order). ───────────
+app.put('/api/clubs/:slug/pages/:pageSlug/promotion-posts/reorder', requireAuth, async (req, res) => {
   const ctx = await requireClubPageAdmin(req, res);
   if (!ctx) return;
-  const title = String(req.body.title || '').trim().slice(0, 80);
-  const description = String(req.body.description || '').trim().slice(0, 1000);
-  const linkTitle = String(req.body.link_title || '').trim().slice(0, 60);
-  const linkUrl = normalizeLinkUrl(req.body.link_url);
-  if (!title || !description || !linkTitle || !linkUrl) {
-    return res.status(400).json({ error: 'Title, description, link title, and link URL are all required.' });
-  }
-  const imageUrl = req.file ? `/images/moderators/${req.file.filename}` : '';
-  const { rows: [{ maxOrder }] } = await pool.query(
-    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM club_page_promotion_cards WHERE page_id = $1', [ctx.page.id]
-  );
-  const { rows: [card] } = await pool.query(
-    `INSERT INTO club_page_promotion_cards (page_id, image_url, title, description, link_title, link_url, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, image_url, title, description, link_title, link_url`,
-    [ctx.page.id, imageUrl, title, description, linkTitle, linkUrl, maxOrder + 1]
-  );
-  res.json({ card });
-});
-
-// Registered BEFORE /:cardId below — same route-ordering gotcha as the
-// gallery reorder route (Express would otherwise match "reorder" as
-// :cardId on this same PUT method).
-app.put('/api/clubs/:slug/pages/:pageSlug/promotion-cards/reorder', requireAuth, async (req, res) => {
-  const ctx = await requireClubPageAdmin(req, res);
-  if (!ctx) return;
+  if (ctx.page.type !== 'promotion') return res.status(400).json({ error: 'Not a Promotion page.' });
   const order = req.body.order;
-  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of card IDs.' });
+  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of post IDs.' });
   await pool.query('BEGIN');
   try {
     for (let i = 0; i < order.length; i++) {
       await pool.query(
-        'UPDATE club_page_promotion_cards SET sort_order = $1 WHERE id = $2 AND page_id = $3',
+        'UPDATE club_posts SET sort_order = $1 WHERE id = $2 AND promotion_page_id = $3',
         [i, order[i], ctx.page.id]
       );
     }
@@ -10549,52 +10580,6 @@ app.put('/api/clubs/:slug/pages/:pageSlug/promotion-cards/reorder', requireAuth,
     return res.status(500).json({ error: 'Failed to reorder cards.' });
   }
   res.json({ message: 'Reordered.' });
-});
-
-app.put('/api/clubs/:slug/pages/:pageSlug/promotion-cards/:cardId', requireAuth, uploadModImage.single('image'), async (req, res) => {
-  const ctx = await requireClubPageAdmin(req, res);
-  if (!ctx) return;
-  const { rows: [existing] } = await pool.query(
-    'SELECT * FROM club_page_promotion_cards WHERE id = $1 AND page_id = $2', [req.params.cardId, ctx.page.id]
-  );
-  if (!existing) return res.status(404).json({ error: 'Card not found.' });
-
-  const title = req.body.title !== undefined ? String(req.body.title).trim().slice(0, 80) : existing.title;
-  const description = req.body.description !== undefined ? String(req.body.description).trim().slice(0, 1000) : existing.description;
-  const linkTitle = req.body.link_title !== undefined ? String(req.body.link_title).trim().slice(0, 60) : existing.link_title;
-  const linkUrl = req.body.link_url !== undefined ? normalizeLinkUrl(req.body.link_url) : existing.link_url;
-  if (!title || !description || !linkTitle || !linkUrl) {
-    return res.status(400).json({ error: 'Title, description, link title, and link URL are all required.' });
-  }
-  let imageUrl = existing.image_url;
-  if (req.file) {
-    imageUrl = `/images/moderators/${req.file.filename}`;
-    if (existing.image_url.startsWith('/images/moderators/')) {
-      const oldPath = path.join('/var/www/btw', existing.image_url);
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-    }
-  }
-  const { rows: [card] } = await pool.query(
-    `UPDATE club_page_promotion_cards SET image_url = $1, title = $2, description = $3, link_title = $4, link_url = $5
-     WHERE id = $6 RETURNING id, image_url, title, description, link_title, link_url`,
-    [imageUrl, title, description, linkTitle, linkUrl, existing.id]
-  );
-  res.json({ card });
-});
-
-app.delete('/api/clubs/:slug/pages/:pageSlug/promotion-cards/:cardId', requireAuth, async (req, res) => {
-  const ctx = await requireClubPageAdmin(req, res);
-  if (!ctx) return;
-  const { rows: [existing] } = await pool.query(
-    'SELECT * FROM club_page_promotion_cards WHERE id = $1 AND page_id = $2', [req.params.cardId, ctx.page.id]
-  );
-  if (!existing) return res.status(404).json({ error: 'Card not found.' });
-  if (existing.image_url.startsWith('/images/moderators/')) {
-    const oldPath = path.join('/var/www/btw', existing.image_url);
-    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-  }
-  await pool.query('DELETE FROM club_page_promotion_cards WHERE id = $1', [existing.id]);
-  res.json({ message: 'Card removed.' });
 });
 
 app.delete('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => {
