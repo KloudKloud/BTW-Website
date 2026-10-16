@@ -10137,16 +10137,17 @@ function sanitizeTextFieldImageSlot(f, prefix) {
     [`${prefix}_slideshow`]: slideshow.slice(0, 10).map(s => ({ image_url: String((s && s.image_url) || '') })).filter(s => s.image_url),
   };
 }
-// PUT /api/clubs/:slug/pages/:pageSlug/text-fields — General Page template's
-// up-to-three named text sections: { fields: [{title, body, cover_mode,
-// cover_image_url, cover_slideshow, side_mode, side_image_url,
-// side_slideshow}, ...] }. Cover/Side are optional images per field --
-// Cover renders full-width above the section, Side floats narrow/tall to
-// its right.
+// PUT /api/clubs/:slug/pages/:pageSlug/text-fields — index 0 is always the
+// mandatory Body Text box (empty title, see club.html's populatePageEditor/
+// saveEditPageTitle), plus up to 3 further named "Additional Sections":
+// { fields: [{title, body, cover_mode, cover_image_url, cover_slideshow,
+// side_mode, side_image_url, side_slideshow}, ...] } -- 4 total. Cover/Side
+// are optional images per field -- Cover renders full-width above the
+// section, Side floats narrow/tall to its right.
 app.put('/api/clubs/:slug/pages/:pageSlug/text-fields', requireAuth, async (req, res) => {
   const ctx = await requireClubPageAdmin(req, res);
   if (!ctx) return;
-  const fieldsIn = Array.isArray(req.body.fields) ? req.body.fields.slice(0, 3) : [];
+  const fieldsIn = Array.isArray(req.body.fields) ? req.body.fields.slice(0, 4) : [];
   const fields = fieldsIn.map(f => ({
     title: String((f && f.title) || '').trim().slice(0, 80),
     body: String((f && f.body) || '').trim().slice(0, 5000),
