@@ -3395,6 +3395,17 @@ function navigateTo(overrides) {
 
 let currentPageSlug = null;
 function renderFromUrl() {
+  // Custom pages hide the banner/pfp that Home+Social show, so switching
+  // between the two changes the page's total height above the fold --
+  // without this, your scroll position stays put while everything on
+  // screen (including the sticky right-side pages box, once it un-sticks
+  // near the bottom of a short page) jumps by however much the banner's
+  // height added or removed. Snapshot the pages box's on-screen position
+  // before the swap and nudge the scroll position to match it afterward,
+  // so it reads as a tab switch instead of a jolt.
+  const sideEl = document.getElementById('cl-side');
+  const sideTopBefore = sideEl ? sideEl.getBoundingClientRect().top : null;
+
   const params = new URLSearchParams(location.search);
   const postId = params.get('post');
   const pageSlug = params.get('page');
@@ -3446,6 +3457,12 @@ function renderFromUrl() {
     }
   }
   highlightSidebarPages(pageSlug, tab);
+
+  if (sideEl && sideTopBefore !== null) {
+    const sideTopAfter = sideEl.getBoundingClientRect().top;
+    const delta = sideTopAfter - sideTopBefore;
+    if (delta !== 0) window.scrollTo(0, Math.max(0, window.scrollY + delta));
+  }
 }
 window.addEventListener('popstate', renderFromUrl);
 
