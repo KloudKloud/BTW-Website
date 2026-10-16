@@ -1601,6 +1601,12 @@
       .cl-promo-builder-layout { flex-direction: column; }
       .cl-promo-builder-side { position: static; }
     }
+    /* The whole row is clickable (opens the post builder), so the drag
+       "grab" cursor only belongs on the handle icon itself -- everywhere
+       else on the row reads as a normal pointer. */
+    #cl-promo-cards-list .cl-edit-card-row { cursor: pointer; }
+    #cl-promo-cards-list .cl-edit-card-row-handle { cursor: grab; }
+    #cl-promo-cards-list .cl-edit-card-row.dragging { cursor: grabbing; }
 
     /* Promo post row "•••" menu — same bubble/dropdown recipe as the
        Social/Club News post cards' own clPostMenu(), reused here for
@@ -5939,7 +5945,6 @@ function renderEditPromoPosts() {
 function editPromoPostRowEl(post) {
   const row = document.createElement('div');
   row.className = 'cl-edit-card-row';
-  row.draggable = true;
   row.dataset.id = post.id;
   const thumb = post.preview_image_url || post.cover_image_url || '/images/noimage.png';
   row.innerHTML = `
@@ -5955,8 +5960,14 @@ function editPromoPostRowEl(post) {
     if (e.target.closest('.cl-edit-card-row-handle, .cl-promo-row-menu-wrap')) return;
     openPromoPostEditor(post);
   });
+  // The row itself only becomes draggable while the mouse is down on the
+  // handle icon -- otherwise the whole row being draggable fought with
+  // the click-to-edit behavior above and showed a "grab" hand everywhere.
+  const handle = row.querySelector('.cl-edit-card-row-handle');
+  handle.addEventListener('mousedown', () => { row.draggable = true; });
+  row.addEventListener('mouseup', () => { row.draggable = false; });
   row.addEventListener('dragstart', () => { promoPostDragId = post.id; row.classList.add('dragging'); });
-  row.addEventListener('dragend', () => row.classList.remove('dragging'));
+  row.addEventListener('dragend', () => { row.classList.remove('dragging'); row.draggable = false; });
   row.addEventListener('dragover', (e) => e.preventDefault());
   row.addEventListener('drop', async (e) => {
     e.preventDefault();
