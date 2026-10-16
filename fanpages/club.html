@@ -1271,6 +1271,16 @@
       margin: 0 0 1.1rem; padding-bottom: 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.1);
     }
     .cl-edit-section-title-row .cl-edit-section-title { margin: 0; padding-bottom: 0; border-bottom: none; }
+    /* Lighter-weight version for a plain field label (not a bordered
+       section heading) -- Splash Title/Description in the Edit Info
+       modal. */
+    .cl-field-title-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; position: relative; }
+    .cl-field-title-row label { margin-bottom: 0; }
+    /* This modal is only 460px wide -- the shared popover's default
+       min(480px, 90vw) overflows its right edge from a left:0 icon.
+       Narrow it to fit the modal's own content width (460px - 2*2.5rem
+       padding). */
+    #cl-splash-edit-overlay .wiki-tags-tip-popover { width: min(360px, 90vw); }
     /* Bigger, brighter field labels (Welcome Title, Club Description, Page
        Title, card Title/Description, etc.) -- the base .mod-field label
        (fanpages.css) is a small dim 0.8rem/#bbb caption, easy to miss above
@@ -1534,6 +1544,17 @@
     #cl-edit-overlay .cl-splash-rules-link {
       font-family: 'Fredoka', 'Lato', cursive;
     }
+    /* Same bubbly Fredoka pass, extended to the "Edit Info" sidebar
+       splash/Club Rules editor -- it was scoped out of the pass above on
+       purpose at the time, revisited now. */
+    #cl-splash-edit-overlay .char-editor-title,
+    #cl-splash-edit-overlay .mod-field label,
+    #cl-splash-edit-overlay .mod-btn,
+    #cl-splash-edit-overlay .cl-edit-card-row-name,
+    #cl-splash-edit-overlay .cl-edit-card-row-btn,
+    #cl-splash-edit-overlay .gallery-linkto-add-tile {
+      font-family: 'Fredoka', 'Lato', cursive;
+    }
   </style>
 </head>
 <body>
@@ -1560,8 +1581,8 @@
 
       <nav class="soc-sidebar-nav">
         <a class="soc-nav-link" id="soc-nav-home" href="/fanpages/social"><span class="soc-nav-icon">🏠</span> Home</a>
-        <a class="soc-nav-link" id="soc-nav-recent" href="/fanpages/social#soc-feed-section"><span class="soc-nav-icon">🕓</span> Recent</a>
-        <a class="soc-nav-link" id="soc-nav-explore" href="/fanpages/social#soc-discover-section"><span class="soc-nav-icon">🧭</span> Explore</a>
+        <a class="soc-nav-link" id="soc-nav-recent" href="/fanpages/clubs-recent"><span class="soc-nav-icon">🕓</span> Recent</a>
+        <a class="soc-nav-link" id="soc-nav-explore" href="/fanpages/clubs-explore"><span class="soc-nav-icon">🧭</span> Explore</a>
         <a class="soc-nav-create-btn" id="soc-nav-create" href="/fanpages/social?create=1"><span>+</span> Start a Club</a>
       </nav>
 
@@ -2325,20 +2346,29 @@
     <div id="cl-splash-main-view">
       <h2 class="char-editor-title">Edit Info</h2>
       <div class="mod-field">
-        <label for="cl-splash-title-input">Splash Title</label>
+        <div class="cl-field-title-row">
+          <label for="cl-splash-title-input">Splash Title</label>
+          <button class="wiki-tags-tip-icon" type="button" aria-label="Splash Title help">💡</button>
+          <div class="wiki-tags-tip-popover" hidden><p>A short title/phrase that describes your club. Appears at the top of right box.</p></div>
+        </div>
         <input class="mod-input" id="cl-splash-title-input" maxlength="80" />
       </div>
       <div class="mod-field">
-        <label for="cl-splash-message-input">Description</label>
+        <div class="cl-field-title-row">
+          <label for="cl-splash-message-input">Description</label>
+          <button class="wiki-tags-tip-icon" type="button" aria-label="Description help">💡</button>
+          <div class="wiki-tags-tip-popover" hidden><p>Brief intro as to what members can expect from this club</p></div>
+        </div>
         <textarea class="mod-textarea" id="cl-splash-message-input" rows="7" maxlength="1000"></textarea>
       </div>
 
       <hr class="cl-side-rule2" />
 
-      <h2 class="char-editor-title" style="margin-bottom:0.35rem;">Club Rules</h2>
-      <p class="cl-edit-hint-block">
-        Rules are shown in the sidebar collapsed to just their preview text — members click to expand and read the full explanation.
-      </p>
+      <div class="cl-field-title-row" style="margin-bottom:0.35rem;">
+        <h2 class="char-editor-title" style="margin:0;">Club Rules</h2>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Club Rules help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Create rules that you and your fellow mod team expect members to follow when commenting, posting, and engaging within your club!</p></div>
+      </div>
       <div class="cl-edit-cards-list" id="cl-rules-list"></div>
       <button class="gallery-linkto-add-tile" id="cl-rule-create-btn" type="button" style="margin-top:0.75rem;">
         <span class="gallery-linkto-add-tile-icon">➕</span> Rule
@@ -2408,23 +2438,24 @@ window.fpFixLinks();
     if (!currentClub || !currentClub.viewer_role) { e.preventDefault(); openJoinPrompt(); }
   });
 }
-// Lightbulb hint popovers inside the Edit Club modal (Welcome Message,
-// Featured Cards, etc.) -- generic click-to-toggle wiring, same pattern
-// +Character/+Gallery use for theirs.
-document.querySelectorAll('#cl-edit-overlay .wiki-tags-tip-icon').forEach(icon => {
-  const pop = icon.nextElementSibling;
-  if (!pop || !pop.classList.contains('wiki-tags-tip-popover')) return;
-  icon.addEventListener('click', (e) => {
-    e.stopPropagation();
-    pop.hidden = !pop.hidden;
-  });
-  document.addEventListener('click', (e) => {
-    if (!pop.hidden && !pop.contains(e.target) && e.target !== icon) pop.hidden = true;
+// Lightbulb hint popovers -- every one on the page (Edit Club's Welcome
+// Message/Featured Cards, Edit Info's Splash Title/Description/Club
+// Rules, etc.), delegated instead of wired per-overlay so a new icon in
+// any modal just works without its own wiring block.
+document.addEventListener('click', (e) => {
+  const icon = e.target.closest('.wiki-tags-tip-icon');
+  if (icon) {
+    const pop = icon.nextElementSibling;
+    if (pop && pop.classList.contains('wiki-tags-tip-popover')) { e.stopPropagation(); pop.hidden = !pop.hidden; }
+    return;
+  }
+  document.querySelectorAll('.wiki-tags-tip-popover').forEach(pop => {
+    if (!pop.hidden && !pop.contains(e.target)) pop.hidden = true;
   });
 });
 document.getElementById('soc-nav-home').href = window.fpUrl('/social');
-document.getElementById('soc-nav-recent').href = window.fpUrl('/social#soc-feed-section');
-document.getElementById('soc-nav-explore').href = window.fpUrl('/social#soc-discover-section');
+document.getElementById('soc-nav-recent').href = window.fpUrl('/clubs-recent');
+document.getElementById('soc-nav-explore').href = window.fpUrl('/clubs-explore');
 document.getElementById('soc-nav-create').href = window.fpUrl('/social?create=1');
 document.getElementById('cl-notfound-back').href = window.fpUrl('/social');
 
