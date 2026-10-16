@@ -883,6 +883,18 @@
     .cl-gallery-detail-nav { display: flex; justify-content: center; gap: 1rem; margin: 0.5rem 0 1rem; }
     .cl-gallery-detail-prev, .cl-gallery-detail-next { position: static; transform: none; display: flex; }
     .cl-gallery-detail-prev:disabled, .cl-gallery-detail-next:disabled { opacity: 0.3; cursor: default; }
+    /* Toggled on #soc-layout while a gallery image's detail view is open
+       (openPageGalleryDetail/the back-button handlers) -- hides the left
+       site nav and the right club info panel entirely so the image gets
+       the freed-up width instead of floating in the regular sidebar-
+       flanked ~920px column. High-specificity selectors (ID + class, twice
+       over) so these reliably beat the base #cl-page/.cl-side/
+       .art-view-wrapper rules regardless of source order. */
+    #soc-layout.cl-gallery-focus .soc-sidebar { display: none; }
+    #soc-layout.cl-gallery-focus #cl-page,
+    #soc-layout.cl-gallery-focus #cl-notfound { margin-left: 0; }
+    #soc-layout.cl-gallery-focus .cl-side { display: none; }
+    #soc-layout.cl-gallery-focus #cl-gallery-detail-view.art-view-wrapper { max-width: 1400px; }
 
     /* Promotion Page template — vertical card list ("much like posts") and
        the chapter-reading-style detail view. */
@@ -1483,14 +1495,17 @@
     .cl-promo-row-menu-wrap.cl-gallery-editor-tile-menu { position: absolute; top: 4px; right: 4px; z-index: 2; }
     .cl-gallery-editor-tile-menu .cl-promo-row-menu-btn { background: rgba(0,0,0,0.65); color: #fff; }
     .cl-gallery-editor-tile-menu .cl-promo-row-menu-btn:hover { color: #7fa8d9; background: rgba(127,168,217,0.3); }
-    /* Dropdown centers under the "•••" button itself instead of the base
-       recipe's right-align (meant for a wide list row, not a small tile) --
-       and its one item, "View on Page", reads a touch smaller to match. */
+    /* Dropdown opens to the LEFT of the "•••" button at the same height,
+       not below it -- it then sits over the image itself (same top-right
+       corner the button occupies) instead of the base recipe's
+       below-and-right-aligned flyout (built for a wide list row, not a
+       small tile, where opening sideways would run off the grid). Its one
+       item, "View on Page", reads a touch smaller to match. */
     .cl-gallery-editor-tile-menu .cl-promo-row-menu-dropdown {
-      left: 50%; right: auto; transform: translateX(-50%); min-width: 0; width: max-content;
+      top: 0; left: auto; right: calc(100% + 6px); min-width: 0; width: max-content;
     }
     .cl-gallery-editor-tile-menu .cl-promo-row-menu-dropdown button {
-      text-align: center; font-size: 0.78rem; padding: 0.5rem 0.9rem;
+      text-align: center; font-size: 0.78rem; padding: 0.5rem 0.9rem; white-space: nowrap;
     }
     .cl-gallery-editor-tile-btn { width: 100%; text-align: center; }
     /* Edit = blue, Delete = red -- solid fill, constant, no hover color
@@ -3669,6 +3684,7 @@ function renderFromUrl() {
   document.getElementById('cl-post-detail-view').hidden = true;
   document.getElementById('cl-gallery-detail-view').hidden = true;
   document.getElementById('cl-body-row').classList.remove('cl-detail-mode');
+  document.getElementById('soc-layout').classList.remove('cl-gallery-focus');
   document.body.classList.remove('cl-post-open');
 
   // The top banner is Home-only now -- every other page (a post, or any
@@ -4344,6 +4360,12 @@ function showGalleryDetailImage(idx) {
 function openPageGalleryDetail(idx) {
   document.getElementById('cl-custom-page-view').hidden = true;
   document.getElementById('cl-gallery-detail-view').hidden = false;
+  // Hide the left site nav and right club info panel so the image itself
+  // can grow into the freed width instead of floating in the regular
+  // sidebar-flanked column -- see .cl-gallery-focus in <style>. Reset
+  // happens at the top of renderFromUrl(), alongside every other view's
+  // hidden toggle, whenever navigation moves away from this view.
+  document.getElementById('soc-layout').classList.add('cl-gallery-focus');
   window.scrollTo(0, 0);
   showGalleryDetailImage(idx);
 }
@@ -4422,6 +4444,7 @@ document.getElementById('cl-gallery-detail-back-btn').addEventListener('click', 
   }
   document.getElementById('cl-gallery-detail-view').hidden = true;
   document.getElementById('cl-custom-page-view').hidden = false;
+  document.getElementById('soc-layout').classList.remove('cl-gallery-focus');
   ccMoveTo('cl-post-detail-comments-slot');
 });
 
