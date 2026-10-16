@@ -169,18 +169,17 @@
     .cl-page-text-field-handle { color: #777; font-size: 1rem; cursor: grab; flex-shrink: 0; }
     .cl-page-text-field-num { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #888; flex-shrink: 0; }
     .cl-page-text-field-remove {
-      background: #d97a72; border: 1px solid #d97a72; color: #2a0a08;
-      font-family: inherit; font-size: 0.88rem; font-weight: 700; cursor: pointer;
+      background: #d97a72; border: 1px solid #d97a72; color: #fff;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.88rem; font-weight: 700; cursor: pointer;
       padding: 0.55rem 1.05rem; border-radius: 10px; transition: background 0.15s, border-color 0.15s;
     }
     .cl-page-text-field-remove:hover { background: #c96358; border-color: #c96358; }
-    /* space-between, not a hugging gap -- Save Section belongs at the far
-       right edge of the field's own box, not clustered next to Remove
-       Section. */
+    /* space-between, not a hugging gap -- Save belongs at the far right edge
+       of the field's own box, not clustered next to Remove Section. */
     .cl-page-text-field-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 0.5rem; }
     .cl-page-text-field-save {
-      background: #7fa8d9; border: 1px solid #7fa8d9; color: #0a0a0a;
-      font-family: inherit; font-size: 0.88rem; font-weight: 700; cursor: pointer;
+      background: #7fa8d9; border: 1px solid #7fa8d9; color: #fff;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.88rem; font-weight: 700; cursor: pointer;
       padding: 0.55rem 1.05rem; border-radius: 10px; transition: background 0.15s, border-color 0.15s;
     }
     .cl-page-text-field-save:hover { background: #93b8e2; border-color: #93b8e2; }
@@ -750,7 +749,7 @@
   }
   function pageTextFieldRowEl(field, i) {
     const row = document.createElement('div');
-    row.className = 'cl-page-text-field-row' + (field._collapsed ? ' cl-page-text-field-row--collapsed' : '');
+    row.className = 'cl-page-text-field-row' + (field.collapsed ? ' cl-page-text-field-row--collapsed' : '');
     row.draggable = false;
     row.dataset.idx = i;
     row.innerHTML = `
@@ -772,8 +771,8 @@
         ${textFieldImageSlotHtml(field, 'cover', '16 / 9', 'Cover Image', 320)}
         ${textFieldImageSlotHtml(field, 'side', '3 / 4', 'Side Image', 180)}
         <div class="cl-page-text-field-actions">
-          <button type="button" class="cl-page-text-field-remove">✕ Remove Section</button>
-          <button type="button" class="cl-page-text-field-save">💾 Save Section</button>
+          <button type="button" class="cl-page-text-field-remove">🗑️ Remove Section</button>
+          <button type="button" class="cl-page-text-field-save">💾 Save</button>
         </div>
       </div>
     `;
@@ -790,25 +789,28 @@
       cpDirty = true;
       renderPageTextFields();
     });
-    // Save Section collapses the row into a compact draft summary
-    // (reorder-by-drag still works on it via the handle); Edit/clicking the
-    // collapsed summary reopens it. Nothing is sent to the server here --
-    // the whole post, text fields included, only saves on the main "Post"
-    // button -- this is purely a local "I'm done with this one for now" fold.
+    // Save collapses the row into a compact summary (reorder-by-drag still
+    // works on it via the handle); Edit/clicking the collapsed summary
+    // reopens it. Nothing is sent to the server here -- the whole post,
+    // text fields included, only saves on the main "Post" button -- this is
+    // purely a local "I'm done with this one for now" fold, but `collapsed`
+    // is a real field on the data (not a throwaway local flag), so it rides
+    // along in that save and is still collapsed if this post is reopened
+    // to edit later.
     row.querySelector('.cl-page-text-field-save').addEventListener('click', () => {
-      field._collapsed = true;
+      field.collapsed = true;
       cpDirty = true;
       renderPageTextFields();
     });
     row.querySelector('.cl-page-text-field-expand-btn').addEventListener('click', (e) => {
       e.stopPropagation();
-      field._collapsed = false;
+      field.collapsed = false;
       renderPageTextFields();
     });
     row.addEventListener('click', (e) => {
       if (!row.classList.contains('cl-page-text-field-row--collapsed')) return;
       if (e.target.closest('.cl-page-text-field-handle')) return;
-      field._collapsed = false;
+      field.collapsed = false;
       renderPageTextFields();
     });
     row.querySelector('.cl-page-text-field-handle').addEventListener('mousedown', () => { row.draggable = true; });

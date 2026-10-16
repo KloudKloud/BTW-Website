@@ -9635,6 +9635,7 @@ function buildClubPostTextFields(raw) {
     return {
       title: String((f && f.title) || '').trim().slice(0, 80),
       body: String((f && f.body) || '').trim().slice(0, 5000),
+      collapsed: !!(f && f.collapsed),
       cover_mode: cover.mode, cover_image_url: cover.image_url, cover_slideshow: cover.slideshow,
       side_mode: side.mode, side_image_url: side.image_url, side_slideshow: side.slideshow,
     };
@@ -10222,6 +10223,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug/text-fields', requireAuth, async (req,
   const fields = fieldsIn.map(f => ({
     title: String((f && f.title) || '').trim().slice(0, 80),
     body: String((f && f.body) || '').trim().slice(0, 5000),
+    collapsed: !!(f && f.collapsed),
     ...sanitizeTextFieldImageSlot(f, 'cover'),
     ...sanitizeTextFieldImageSlot(f, 'side'),
   })).filter(f => f.title || f.body || f.cover_image_url || f.side_image_url || f.cover_slideshow.length || f.side_slideshow.length);

@@ -1395,18 +1395,18 @@
     .cl-page-text-field-handle { color: #777; font-size: 1rem; cursor: grab; flex-shrink: 0; }
     .cl-page-text-field-num { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #888; flex-shrink: 0; }
     .cl-page-text-field-remove {
-      background: #d97a72; border: 1px solid #d97a72; color: #2a0a08;
-      font-family: inherit; font-size: 0.88rem; font-weight: 700; cursor: pointer;
+      background: #d97a72; border: 1px solid #d97a72; color: #fff;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.88rem; font-weight: 700; cursor: pointer;
       padding: 0.55rem 1.05rem; border-radius: 10px; transition: background 0.15s, border-color 0.15s;
     }
     .cl-page-text-field-remove:hover { background: #c96358; border-color: #c96358; }
-    /* space-between, not a hugging gap -- Save Section belongs at the far
-       right edge of the field's own box, not clustered next to Remove
-       Section (same recipe as the +Post builder). */
+    /* space-between, not a hugging gap -- Save belongs at the far right edge
+       of the field's own box, not clustered next to Remove Section (same
+       recipe as the +Post builder). */
     .cl-page-text-field-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 0.5rem; }
     .cl-page-text-field-save {
-      background: #7fa8d9; border: 1px solid #7fa8d9; color: #0a0a0a;
-      font-family: inherit; font-size: 0.88rem; font-weight: 700; cursor: pointer;
+      background: #7fa8d9; border: 1px solid #7fa8d9; color: #fff;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.88rem; font-weight: 700; cursor: pointer;
       padding: 0.55rem 1.05rem; border-radius: 10px; transition: background 0.15s, border-color 0.15s;
     }
     .cl-page-text-field-save:hover { background: #93b8e2; border-color: #93b8e2; }
@@ -4883,6 +4883,29 @@ document.getElementById('cl-edit-cancel').addEventListener('click', () => {
   if (!confirmDiscardIfDirty()) return;
   closeEditClubModal();
 });
+// A refresh/tab-close/navigate-away while the page editor is open and an
+// Additional Section is still expanded shouldn't silently lose whatever
+// was typed into it, nor leave it expanded to clog the screen next time
+// this page opens -- best-effort save+collapse on the way out. keepalive
+// lets this fetch actually complete during unload (unlike a normal one,
+// which the browser would otherwise cancel).
+window.addEventListener('beforeunload', () => {
+  if (editActiveView !== 'page' || !editActivePageSlug) return;
+  if (!editPageTextFields[0] || !editPageTextFields[0].body) return;
+  let changed = false;
+  for (let i = 1; i < editPageTextFields.length; i++) {
+    const f = editPageTextFields[i];
+    if (f && !f.collapsed) { f.collapsed = true; changed = true; }
+  }
+  if (!changed) return;
+  try {
+    fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/text-fields`, {
+      method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: editPageTextFields }),
+      keepalive: true,
+    });
+  } catch {}
+});
 
 function switchEditView(view, pageSlug, skipGuard) {
   if (!skipGuard && !confirmDiscardIfDirty()) return false;
@@ -5560,21 +5583,28 @@ function textFieldImageSlotHtml(field, prefix, aspect, label, maxWidth) {
     </div>
   `;
 }
-async function ensureTextFieldSaved(i) {
+// Unconditionally PUTs the current editPageTextFields array -- the shared
+// low-level save behind per-field image uploads and the Save button's
+// "I'm done, fold it up" action (the beforeunload listener below does its
+// own near-identical fetch instead, since it needs the keepalive flag to
+// actually complete during unload).
+async function persistTextFields() {
   if (!editActivePageSlug) return false;
   // The server drops any fully-blank field when this PUTs -- including
   // index 0 (Body Text) if it's still empty, which would shift every
   // Additional Section's index down by one out from under this very
-  // upload. Body Text has to be filled in (and therefore already saved
-  // at index 0) before any Additional Section's own image actions can go.
+  // save. Body Text has to be filled in first.
   if (!editPageTextFields[0] || !editPageTextFields[0].body) return false;
-  const f = editPageTextFields[i];
-  if (!f || !(f.title || f.body)) return false;
   await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/text-fields`, {
     method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: editPageTextFields }),
   });
   return true;
+}
+async function ensureTextFieldSaved(i) {
+  const f = editPageTextFields[i];
+  if (!f || !(f.title || f.body)) return false;
+  return persistTextFields();
 }
 function wireTextFieldImageSlot(row, i, prefix, aspect) {
   const slot = row.querySelector(`.cl-tf-img-slot[data-slot="${prefix}"]`);
@@ -5695,7 +5725,7 @@ function wireTextFieldImageSlot(row, i, prefix, aspect) {
 }
 function pageTextFieldRowEl(field, i) {
   const row = document.createElement('div');
-  row.className = 'cl-page-text-field-row' + (field._collapsed ? ' cl-page-text-field-row--collapsed' : '');
+  row.className = 'cl-page-text-field-row' + (field.collapsed ? ' cl-page-text-field-row--collapsed' : '');
   row.draggable = false;
   row.dataset.idx = i;
   row.innerHTML = `
@@ -5717,8 +5747,8 @@ function pageTextFieldRowEl(field, i) {
       ${textFieldImageSlotHtml(field, 'cover', '16 / 9', 'Cover Image', 320)}
       ${textFieldImageSlotHtml(field, 'side', '3 / 4', 'Side Image', 180)}
       <div class="cl-page-text-field-actions">
-        <button type="button" class="cl-page-text-field-remove">✕ Remove Section</button>
-        <button type="button" class="cl-page-text-field-save">💾 Save Section</button>
+        <button type="button" class="cl-page-text-field-remove">🗑️ Remove Section</button>
+        <button type="button" class="cl-page-text-field-save">💾 Save</button>
       </div>
     </div>
   `;
@@ -5735,22 +5765,24 @@ function pageTextFieldRowEl(field, i) {
     editDirty = true;
     renderPageTextFields();
   });
-  // Save Section is a local "I'm done with this for now" fold, same as the
-  // +Post builder -- nothing server-side changes here beyond whatever
-  // already auto-saved via the image slots above.
-  row.querySelector('.cl-page-text-field-save').addEventListener('click', () => {
-    field._collapsed = true;
+  // Save is a local "I'm done with this for now" fold -- but unlike before,
+  // it now also persists immediately (not just whatever already auto-saved
+  // via the image slots above), so the collapsed state itself survives a
+  // refresh instead of popping back open.
+  row.querySelector('.cl-page-text-field-save').addEventListener('click', async () => {
+    field.collapsed = true;
     renderPageTextFields();
+    await persistTextFields();
   });
   row.querySelector('.cl-page-text-field-expand-btn').addEventListener('click', (e) => {
     e.stopPropagation();
-    field._collapsed = false;
+    field.collapsed = false;
     renderPageTextFields();
   });
   row.addEventListener('click', (e) => {
     if (!row.classList.contains('cl-page-text-field-row--collapsed')) return;
     if (e.target.closest('.cl-page-text-field-handle')) return;
-    field._collapsed = false;
+    field.collapsed = false;
     renderPageTextFields();
   });
   // Only the grip handle can start a drag — otherwise clicking/holding
