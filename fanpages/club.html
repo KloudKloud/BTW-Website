@@ -1440,12 +1440,6 @@
       display: block; width: 100%; max-height: 320px; object-fit: contain;
       background: #0a0a0a; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
     }
-    /* Dims + disables the overall editor's Cancel/Save row while an
-       inline sub-form (gallery item, etc.) sits on top of it — otherwise
-       those buttons stay clickable "through" the form since there's no
-       real modal-in-modal layering. */
-    .cl-edit-main-actions-locked { filter: blur(2px); opacity: 0.4; pointer-events: none; }
-
     /* Gallery Page template — one grid, drag reorder always live (no
        separate Upload/Reorder tab). Each tile is a grip-handle image box
        with Edit/Delete buttons stacked underneath it, same width as the
@@ -1476,6 +1470,15 @@
     }
     .cl-gallery-editor-tile-wrap.dragging .cl-gallery-editor-tile-handle { cursor: grabbing; }
     .cl-gallery-editor-tile-btn { width: 100%; text-align: center; }
+    /* Edit = blue, Delete = red, by default rather than just on hover --
+       distinct enough to tell apart at a glance across a whole grid. */
+    .cl-gallery-editor-tile-btn--edit { border-color: rgba(127,168,217,0.5); color: #7fa8d9; }
+    .cl-gallery-editor-tile-btn--edit:hover { border-color: rgba(127,168,217,0.9); color: #9dc0ea; background: rgba(127,168,217,0.1); }
+    .cl-gallery-editor-tile-btn--delete { border-color: rgba(217,122,114,0.5); color: #e8849e; }
+    .cl-gallery-editor-tile-btn--delete:hover { border-color: rgba(217,122,114,0.9); color: #f5b3ac; background: rgba(217,122,114,0.1); }
+    /* "+ Gallery" sits beside the grid in its own sticky column, same
+       layout the Promotion Page's "+ Post" uses. */
+    .cl-promo-builder-layout .cl-gallery-editor-grid { flex: 1; min-width: 0; margin-top: 0; }
     /* Promotion Page template — Link section sits visually apart from the
        image/title/description group above it. */
     .cl-promo-card-link-section {
@@ -2283,13 +2286,21 @@
             </p>
 
             <div id="cl-gallery-upload-tab">
-              <div class="cl-gallery-editor-grid" id="cl-gallery-editor-grid"></div>
-              <button class="gallery-linkto-add-tile" id="cl-gallery-item-add-btn" type="button">
-                <span class="gallery-linkto-add-tile-icon">➕</span> Gallery
-              </button>
-              <input type="file" id="cl-gallery-item-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+              <div class="cl-promo-builder-layout">
+                <div class="cl-promo-builder-side">
+                  <button class="gallery-linkto-add-tile" id="cl-gallery-item-add-btn" type="button">
+                    <span class="gallery-linkto-add-tile-icon">➕</span> Gallery
+                  </button>
+                  <input type="file" id="cl-gallery-item-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+                </div>
+                <div class="cl-gallery-editor-grid" id="cl-gallery-editor-grid"></div>
+              </div>
             </div>
 
+            <!-- No Delete/Cancel/Save row of its own -- while this form is
+                 open, the top bar's Cancel/Save (and Delete, relabeled
+                 "Delete Post") take over those actions instead, so there's
+                 only ever one set of action buttons on screen. -->
             <div class="cl-edit-card-form" id="cl-gallery-item-form" hidden>
               <div class="mod-field">
                 <label>Full Image</label>
@@ -2312,11 +2323,6 @@
                   To make bold text, wrap words around: **words**. To make italics text, wrap words around: *italics*. To embed links, use: [words to embed]&lt;URL link&gt;
                 </p>
                 <textarea class="mod-textarea" id="cl-gallery-item-desc" rows="3" maxlength="1000"></textarea>
-              </div>
-              <div class="char-editor-actions" style="margin-top:1rem;">
-                <button class="mod-btn mod-btn--danger" id="cl-gallery-item-delete-btn" type="button" style="margin-right:auto; display:none;">Delete</button>
-                <button class="mod-btn mod-btn--cancel" id="cl-gallery-item-cancel-btn" type="button">Cancel</button>
-                <button class="mod-btn" id="cl-gallery-item-save-btn" type="button">Save</button>
               </div>
             </div>
           </div>
@@ -4888,6 +4894,7 @@ function closeEditClubModal() {
 document.getElementById('cl-tabs-edit-btn').addEventListener('click', () => openEditClubModal());
 document.getElementById('cl-side-add-page-btn').addEventListener('click', () => openEditClubModal({ createPage: true }));
 document.getElementById('cl-edit-cancel').addEventListener('click', () => {
+  if (galleryItemFormOpen) { closeGalleryItemForm(); return; }
   if (!confirmDiscardIfDirty()) return;
   closeEditClubModal();
 });
@@ -4917,6 +4924,7 @@ window.addEventListener('beforeunload', () => {
 
 function switchEditView(view, pageSlug, skipGuard) {
   if (!skipGuard && !confirmDiscardIfDirty()) return false;
+  if (galleryItemFormOpen) closeGalleryItemForm();
   editDirty = false;
   editActiveView = view;
   editActivePageSlug = pageSlug || null;
@@ -5852,8 +5860,8 @@ function renderGalleryEditorGrid() {
         <img src="${img.image_url}" alt="" draggable="false" style="object-position:${img.position_x}% ${img.position_y}%;" />
         ${img.title ? `<span class="cl-gallery-editor-tile-title">${escapeHtml(img.title)}</span>` : ''}
       </div>
-      <button type="button" class="cl-edit-card-row-btn cl-gallery-editor-tile-btn" data-action="edit">Edit</button>
-      <button type="button" class="cl-edit-card-row-btn cl-edit-card-row-btn--danger cl-gallery-editor-tile-btn" data-action="delete">Delete</button>
+      <button type="button" class="cl-edit-card-row-btn cl-gallery-editor-tile-btn cl-gallery-editor-tile-btn--edit" data-action="edit">✏️ Edit</button>
+      <button type="button" class="cl-edit-card-row-btn cl-gallery-editor-tile-btn cl-gallery-editor-tile-btn--delete" data-action="delete">🗑️ Delete</button>
     `;
     wrap.querySelector('[data-action="edit"]').addEventListener('click', () => openGalleryItemForm(img));
     wrap.querySelector('[data-action="delete"]').addEventListener('click', () => {
@@ -5937,12 +5945,22 @@ function showPageGalleryPreview(src) {
 // Only used to edit an EXISTING tile (clicked from the grid) — a brand-new
 // upload is handled directly in the file-input change handler below, since
 // there's no saved image_url yet to preview from.
-// The overall editor's Cancel/Save row sits directly behind this form (no
-// modal-within-modal separation), so it stays clickable unless explicitly
-// locked out while a gallery item is being worked on.
-function setEditMainActionsLocked(locked) {
-  document.getElementById('cl-edit-main-actions').classList.toggle('cl-edit-main-actions-locked', locked);
-  document.getElementById('cl-edit-delete-actions').classList.toggle('cl-edit-main-actions-locked', locked);
+// This form has no Delete/Cancel/Save row of its own -- while it's open,
+// the top bar's own Cancel/Save (and Delete, relabeled "Delete Post")
+// drive it instead, gated by galleryItemFormOpen in those buttons' click
+// handlers further down. "Delete Post" only shows for an EXISTING item --
+// there's nothing to delete yet for a file that hasn't been saved.
+let galleryItemFormOpen = false;
+function setGalleryItemTopBarState(isOpen, isExisting) {
+  galleryItemFormOpen = isOpen;
+  const delBtn = document.getElementById('cl-edit-page-delete-btn');
+  if (isOpen) {
+    delBtn.textContent = 'Delete Post';
+    delBtn.hidden = !isExisting;
+  } else {
+    delBtn.textContent = 'Delete Page';
+    delBtn.hidden = editActiveView !== 'page';
+  }
 }
 function openGalleryItemForm(item) {
   editingGalleryItemId = item.id;
@@ -5950,10 +5968,9 @@ function openGalleryItemForm(item) {
   galleryItemPos = { x: item.position_x, y: item.position_y };
   document.getElementById('cl-gallery-item-title').value = item.title;
   document.getElementById('cl-gallery-item-desc').value = item.description;
-  document.getElementById('cl-gallery-item-delete-btn').style.display = '';
   document.getElementById('cl-gallery-item-form').hidden = false;
   document.getElementById('cl-gallery-upload-tab').hidden = true;
-  setEditMainActionsLocked(true);
+  setGalleryItemTopBarState(true, true);
   // Overlay must be visible before the cropper measures the container, and the
   // form was just unhidden this same tick — defer a frame so layout settles.
   requestAnimationFrame(() => showPageGalleryPreview(item.image_url));
@@ -5961,7 +5978,7 @@ function openGalleryItemForm(item) {
 function closeGalleryItemForm() {
   document.getElementById('cl-gallery-item-form').hidden = true;
   document.getElementById('cl-gallery-upload-tab').hidden = false;
-  setEditMainActionsLocked(false);
+  setGalleryItemTopBarState(false, false);
   if (galleryPreviewCropper) { galleryPreviewCropper.destroy(); galleryPreviewCropper = null; }
   editingGalleryItemId = null;
   pendingGalleryItemFile = null;
@@ -5976,18 +5993,18 @@ document.getElementById('cl-gallery-item-file-input').addEventListener('change',
   galleryItemPos = { x: 50, y: 50 };
   document.getElementById('cl-gallery-item-title').value = '';
   document.getElementById('cl-gallery-item-desc').value = '';
-  document.getElementById('cl-gallery-item-delete-btn').style.display = 'none';
   document.getElementById('cl-gallery-item-form').hidden = false;
   document.getElementById('cl-gallery-upload-tab').hidden = true;
-  setEditMainActionsLocked(true);
+  setGalleryItemTopBarState(true, false);
   requestAnimationFrame(() => showPageGalleryPreview(URL.createObjectURL(file)));
 });
-document.getElementById('cl-gallery-item-cancel-btn').addEventListener('click', closeGalleryItemForm);
-document.getElementById('cl-gallery-item-save-btn').addEventListener('click', async () => {
+async function saveGalleryItem() {
   if (!editActivePageSlug) return;
   if (!editingGalleryItemId && !pendingGalleryItemFile) { alert('Pick an image first.'); return; }
-  const btn = document.getElementById('cl-gallery-item-save-btn');
+  const btn = document.getElementById('cl-edit-save');
+  const prevText = btn.textContent;
   btn.disabled = true;
+  btn.textContent = 'Saving…';
   try {
     const fd = new FormData();
     fd.append('title', document.getElementById('cl-gallery-item-title').value.trim());
@@ -6004,13 +6021,13 @@ document.getElementById('cl-gallery-item-save-btn').addEventListener('click', as
     await loadEditPageGallery(editActivePageSlug);
     if (currentPageSlug === editActivePageSlug) loadCustomPage(editActivePageSlug);
   } catch { alert('Could not save this image — please try again.'); }
-  finally { btn.disabled = false; }
-});
-document.getElementById('cl-gallery-item-delete-btn').addEventListener('click', () => {
+  finally { btn.disabled = false; btn.textContent = prevText; }
+}
+function promptDeleteGalleryItem() {
   if (!editingGalleryItemId || !editActivePageSlug) return;
   galleryItemDeleteId = editingGalleryItemId;
   document.getElementById('cl-gallery-item-delete-confirm-overlay').hidden = false;
-});
+}
 
 // ── Promotion Page template, v2 — cards ARE posts (promotion_page_id set),
 // built in the exact same shared post builder +Post uses (create-club-
@@ -6186,6 +6203,7 @@ document.getElementById('cl-promo-post-delete-confirm-yes').addEventListener('cl
 });
 
 document.getElementById('cl-edit-page-delete-btn').addEventListener('click', () => {
+  if (galleryItemFormOpen) { promptDeleteGalleryItem(); return; }
   if (!editActivePageSlug) return;
   const page = editPagesCache.find(p => p.slug === editActivePageSlug);
   document.getElementById('cl-page-delete-confirm-title').textContent = `Delete "${page ? page.title : 'this page'}"?`;
@@ -6293,9 +6311,10 @@ document.getElementById('cl-edit-template-create-btn').addEventListener('click',
   finally { btn.disabled = false; }
 });
 
-// ── Save (context-aware: Home's welcome title/description, or a custom
-// page's title, depending on which view is active) ────────────────────────
+// ── Save (context-aware: a gallery item being edited takes priority over
+// Home's welcome title/description or a custom page's title) ─────────────
 document.getElementById('cl-edit-save').addEventListener('click', async () => {
+  if (galleryItemFormOpen) { await saveGalleryItem(); return; }
   if (editActiveView === 'page') { await saveEditPageTitle(); return; }
   await saveEditHome();
 });
