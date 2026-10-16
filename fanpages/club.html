@@ -1339,15 +1339,49 @@
       padding: 1rem; margin-bottom: 0.85rem; transition: opacity 0.15s;
     }
     .cl-page-text-field-row.dragging { opacity: 0.35; }
-    .cl-page-text-field-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.85rem; }
-    .cl-page-text-field-handle { color: #777; font-size: 1rem; cursor: grab; }
-    .cl-page-text-field-num { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #888; }
+    .cl-page-text-field-head { display: flex; align-items: center; gap: 0.5rem; }
+    .cl-page-text-field-row:not(.cl-page-text-field-row--collapsed) .cl-page-text-field-head { margin-bottom: 0.85rem; }
+    .cl-page-text-field-handle { color: #777; font-size: 1rem; cursor: grab; flex-shrink: 0; }
+    .cl-page-text-field-num { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #888; flex-shrink: 0; }
     .cl-page-text-field-remove {
       background: none; border: 1px solid rgba(217,122,114,0.4); color: #f5b3ac;
       font-family: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
-      padding: 0.35rem 0.7rem; border-radius: 14px; margin-top: 0.5rem;
+      padding: 0.35rem 0.7rem; border-radius: 14px;
     }
     .cl-page-text-field-remove:hover { background: rgba(217,122,114,0.14); }
+    /* space-between, not a hugging gap -- Save Section belongs at the far
+       right edge of the field's own box, not clustered next to Remove
+       Section (same recipe as the +Post builder). */
+    .cl-page-text-field-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 0.5rem; }
+    .cl-page-text-field-save {
+      background: none; border: 1px solid rgba(127,168,217,0.4); color: #7fa8d9;
+      font-family: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+      padding: 0.35rem 0.7rem; border-radius: 14px;
+    }
+    .cl-page-text-field-save:hover { background: rgba(127,168,217,0.14); }
+    /* Collapsed "draft" state -- Save Section tucks the row down to a
+       compact summary line (title + badge + edit button); clicking
+       anywhere on that line (or its Edit button) reopens it. */
+    .cl-page-text-field-summary,
+    .cl-page-text-field-draft-badge,
+    .cl-page-text-field-expand-btn { display: none; }
+    .cl-page-text-field-row--collapsed { cursor: pointer; }
+    .cl-page-text-field-row--collapsed .cl-page-text-field-body { display: none; }
+    .cl-page-text-field-row--collapsed .cl-page-text-field-summary {
+      display: block; flex: 1; min-width: 0; color: #ddd; font-weight: 600; font-size: 0.92rem;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .cl-page-text-field-row--collapsed .cl-page-text-field-draft-badge {
+      display: inline-block; background: rgba(240,192,96,0.14); border: 1px solid rgba(240,192,96,0.4);
+      color: #f0c060; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 0.2rem 0.55rem; border-radius: 10px; flex-shrink: 0;
+    }
+    .cl-page-text-field-row--collapsed .cl-page-text-field-expand-btn {
+      display: inline-block; background: none; border: 1px solid rgba(255,255,255,0.2); color: #ccc;
+      font-family: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+      padding: 0.3rem 0.65rem; border-radius: 14px; flex-shrink: 0;
+    }
+    .cl-page-text-field-row--collapsed .cl-page-text-field-expand-btn:hover { border-color: rgba(127,168,217,0.6); color: #7fa8d9; }
 
     /* Gallery Page template — the un-cropped source image, shown above the
        square focal-point preview so you can see exactly what you're
@@ -1554,6 +1588,12 @@
     #cl-splash-edit-overlay .cl-edit-card-row-name,
     #cl-splash-edit-overlay .cl-edit-card-row-btn,
     #cl-splash-edit-overlay .gallery-linkto-add-tile {
+      font-family: 'Fredoka', 'Lato', cursive;
+    }
+    /* Delete Page confirm -- a standalone overlay outside #cl-edit-overlay,
+       so the passes above never touched it. */
+    #cl-page-delete-confirm-overlay .mod-confirm-title,
+    #cl-page-delete-confirm-overlay .mod-btn {
       font-family: 'Fredoka', 'Lato', cursive;
     }
   </style>
@@ -2565,8 +2605,10 @@ function sidebarClubLink(c, showOwnerRose) {
   return a;
 }
 function sidebarModClubLink(c) {
+  // Not active-highlighted here -- that's reserved for the main "Your
+  // Clubs" list (sidebarClubLink) only, not this Moderation preview.
   const a = document.createElement('a');
-  a.className = 'soc-sidebar-club-link' + (c.slug === slug ? ' active' : '');
+  a.className = 'soc-sidebar-club-link';
   a.href = window.fpUrl(`/club?slug=${encodeURIComponent(c.slug)}`);
   a.innerHTML = `${clubIconHtml(c, 'soc-sidebar-club-icon')}<span class="soc-sidebar-club-name">${escapeHtml(c.name)}</span><span class="soc-sidebar-club-role-badge">${c.viewer_role}</span>`;
   return a;
@@ -5476,33 +5518,63 @@ function wireTextFieldImageSlot(row, i, prefix, aspect) {
 }
 function pageTextFieldRowEl(field, i) {
   const row = document.createElement('div');
-  row.className = 'cl-page-text-field-row';
+  row.className = 'cl-page-text-field-row' + (field._collapsed ? ' cl-page-text-field-row--collapsed' : '');
   row.draggable = false;
   row.dataset.idx = i;
   row.innerHTML = `
     <div class="cl-page-text-field-head">
       <span class="cl-page-text-field-handle">⠿</span>
       <span class="cl-page-text-field-num">Field ${i}</span>
+      <span class="cl-page-text-field-summary">${escapeHtml(field.title || 'Untitled Text Field')}</span>
+      <span class="cl-page-text-field-draft-badge">Draft</span>
+      <button type="button" class="cl-page-text-field-expand-btn">✎ Edit</button>
     </div>
-    <div class="mod-field">
-      <label>Title</label>
-      <input class="mod-input" data-field="title" maxlength="80" value="${escapeHtml(field.title || '')}" />
+    <div class="cl-page-text-field-body">
+      <div class="mod-field">
+        <label>Title</label>
+        <input class="mod-input" data-field="title" maxlength="80" value="${escapeHtml(field.title || '')}" />
+      </div>
+      <div class="mod-field">
+        <label>Body</label>
+        <textarea class="mod-textarea" data-field="body" rows="4" maxlength="5000">${escapeHtml(field.body || '')}</textarea>
+      </div>
+      ${textFieldImageSlotHtml(field, 'cover', '16 / 9', 'Cover Image', 320)}
+      ${textFieldImageSlotHtml(field, 'side', '3 / 4', 'Side Image', 180)}
+      <div class="cl-page-text-field-actions">
+        <button type="button" class="cl-page-text-field-remove">✕ Remove Section</button>
+        <button type="button" class="cl-page-text-field-save">💾 Save Section</button>
+      </div>
     </div>
-    <div class="mod-field">
-      <label>Body</label>
-      <textarea class="mod-textarea" data-field="body" rows="4" maxlength="5000">${escapeHtml(field.body || '')}</textarea>
-    </div>
-    ${textFieldImageSlotHtml(field, 'cover', '16 / 9', 'Cover Image', 320)}
-    ${textFieldImageSlotHtml(field, 'side', '3 / 4', 'Side Image', 180)}
-    <button type="button" class="cl-page-text-field-remove">✕ Remove Section</button>
   `;
-  row.querySelector('[data-field="title"]').addEventListener('input', (e) => { editPageTextFields[i].title = e.target.value; editDirty = true; });
+  row.querySelector('[data-field="title"]').addEventListener('input', (e) => {
+    editPageTextFields[i].title = e.target.value;
+    row.querySelector('.cl-page-text-field-summary').textContent = e.target.value || 'Untitled Text Field';
+    editDirty = true;
+  });
   row.querySelector('[data-field="body"]').addEventListener('input', (e) => { editPageTextFields[i].body = e.target.value; editDirty = true; });
   wireTextFieldImageSlot(row, i, 'cover', 16 / 9);
   wireTextFieldImageSlot(row, i, 'side', 3 / 4);
   row.querySelector('.cl-page-text-field-remove').addEventListener('click', () => {
     editPageTextFields.splice(i, 1);
     editDirty = true;
+    renderPageTextFields();
+  });
+  // Save Section is a local "I'm done with this for now" fold, same as the
+  // +Post builder -- nothing server-side changes here beyond whatever
+  // already auto-saved via the image slots above.
+  row.querySelector('.cl-page-text-field-save').addEventListener('click', () => {
+    field._collapsed = true;
+    renderPageTextFields();
+  });
+  row.querySelector('.cl-page-text-field-expand-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    field._collapsed = false;
+    renderPageTextFields();
+  });
+  row.addEventListener('click', (e) => {
+    if (!row.classList.contains('cl-page-text-field-row--collapsed')) return;
+    if (e.target.closest('.cl-page-text-field-handle')) return;
+    field._collapsed = false;
     renderPageTextFields();
   });
   // Only the grip handle can start a drag — otherwise clicking/holding
