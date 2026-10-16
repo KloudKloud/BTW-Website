@@ -43,30 +43,31 @@
       display: grid; grid-template-columns: 280px 1fr; column-gap: 2rem; align-items: stretch;
       transition: grid-template-columns 0.4s cubic-bezier(0.22, 1, 0.36, 1);
     }
-    /* ── Desktop sidebar collapse -- exact port of the Browse search
-       page's own left-rail collapse (.fp-sidebar-fab/--sidebar-collapsed
-       there), just against this page's single 280px/1fr grid instead of
-       its three-column one. Always starts open on a fresh load, same as
-       Search (no persisted state). ── */
-    .fp-layout--sidebar-collapsed { grid-template-columns: 0px 1fr; }
-    .fp-layout--sidebar-collapsed .fp-char-sidebar { display: none; }
+    /* ── Desktop sidebar collapse -- matches the Clubs page's own sidebar
+       collapse exactly (.soc-sidebar-toggle there): a ☰ button pinned to
+       the sidebar's own top-right corner shrinks it to a narrow 56px
+       strip (not fully gone -- the toggle itself stays put so there's
+       always a way back) instead of a floating fab elsewhere on the
+       screen. Only a 224px swing (280px -> 56px, not 280px -> 0), which
+       keeps the grid's own reflow modest instead of the jarring full-
+       width jump collapsing to 0 caused. Always starts open on a fresh
+       load (no persisted state). ── */
+    .fp-layout--sidebar-collapsed { grid-template-columns: 56px 1fr; }
+    .fp-layout--sidebar-collapsed .fp-char-sidebar { padding-left: 0.6rem; padding-right: 0.6rem; }
+    .fp-layout--sidebar-collapsed .fp-char-sidebar-content { display: none; }
     /* Background normally starts after the 280px sidebar (see .fp-bg-img
-       below) -- once collapsed there's no sidebar to start after, same
-       fix the ≤900px stacked-layout override already uses. */
-    body.fp-sidebar-collapsed .fp-bg-img { left: 0; width: 100%; }
-    .fp-sidebar-fab {
-      position: fixed; top: 84px; left: 40px; transform: translateX(-50%);
-      width: 48px; height: 48px; border-radius: 50%; z-index: 60;
-      background: #14121a; border: 1px solid rgba(255,255,255,0.28);
-      color: #ccc; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 22px rgba(0,0,0,0.55);
-      transition: left 0.4s cubic-bezier(0.22, 1, 0.36, 1), transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), color 0.15s, border-color 0.15s, box-shadow 0.15s;
+       below) -- the collapsed 56px strip still needs its own matching
+       offset, same fix the ≤900px stacked-layout override already uses
+       for "no sidebar to start after" at 0. */
+    body.fp-sidebar-collapsed .fp-bg-img { left: 56px; width: calc(100% - 56px); }
+    .fp-char-sidebar-toggle {
+      width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; align-self: flex-end; margin-bottom: 1rem;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: linear-gradient(160deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02));
+      color: #ccc; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s, color 0.15s;
     }
-    .fp-sidebar-fab svg { transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1); transform: rotate(180deg); }
-    .fp-sidebar-fab:hover { color: #fff; border-color: rgba(127,168,217,0.6); box-shadow: 0 4px 26px rgba(127,168,217,0.4); }
-    .fp-sidebar-fab--collapsed { left: 4px; transform: none; }
-    .fp-sidebar-fab--collapsed svg { transform: rotate(0deg); }
+    .fp-char-sidebar-toggle:hover { background: linear-gradient(160deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04)); color: #fff; }
 
     .fp-char-drawer-toggle { display: none; }
     /* Base state was missing entirely -- only the ≤720px media query below
@@ -92,7 +93,9 @@
       padding: 1.5rem; overflow-y: auto;
       scrollbar-color: #444 transparent;
       overscroll-behavior: contain;
+      transition: padding 0.3s ease;
     }
+    .fp-char-sidebar-content { display: flex; flex-direction: column; min-width: 232px; }
     .fp-char-sidebar::-webkit-scrollbar { width: 8px; }
     .fp-char-sidebar::-webkit-scrollbar-track { background: #1a1a1e; border-radius: 8px; }
     .fp-char-sidebar::-webkit-scrollbar-thumb { background: #444; border-radius: 8px; }
@@ -306,12 +309,12 @@
     }
     @media (max-width: 900px) {
       .fp-layout, .fp-layout--sidebar-collapsed { grid-template-columns: 1fr; }
-      .fp-sidebar-fab { display: none; }
+      .fp-char-sidebar-toggle { display: none; }
       #fp-char-main-col { grid-column: 1; }
-      /* The collapse fab that would undo this is hidden at this width --
-         don't let a collapsed state carried over from a desktop-width
-         resize strand the sidebar hidden with no way back. */
-      .fp-layout--sidebar-collapsed .fp-char-sidebar { display: flex; }
+      /* The collapse toggle that would undo this is hidden at this width
+         -- don't let a collapsed state carried over from a desktop-width
+         resize strand the sidebar's content hidden with no way back. */
+      .fp-layout--sidebar-collapsed .fp-char-sidebar-content { display: flex; }
       .fp-char-sidebar {
         position: static; max-height: none; height: auto;
         margin-bottom: 0; margin-left: 0; border-radius: 18px;
@@ -393,46 +396,46 @@
   <div class="fp-char-drawer-backdrop" id="fp-char-drawer-backdrop"></div>
 
   <aside class="fp-char-sidebar" id="fp-char-sidebar">
-    <div id="fp-char-viewer-slot"></div>
+    <button class="fp-char-sidebar-toggle" id="fp-char-sidebar-toggle" type="button" title="Collapse sidebar" aria-label="Collapse sidebar">☰</button>
 
-    <div class="fp-char-search-wrap">
-      <svg class="fp-char-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-      <input type="search" id="fp-char-search-input" placeholder="Search Keywords…" />
-    </div>
+    <div class="fp-char-sidebar-content" id="fp-char-sidebar-content">
+      <div id="fp-char-viewer-slot"></div>
 
-    <div class="fp-char-sort-wrap">
-      <label for="fp-char-sort-select">Sort</label>
-      <select id="fp-char-sort-select">
-        <option value="best_match">Best Match</option>
-        <option value="updated">Date Updated</option>
-        <option value="popular">Popular</option>
-      </select>
-    </div>
+      <div class="fp-char-search-wrap">
+        <svg class="fp-char-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="search" id="fp-char-search-input" placeholder="Search Keywords…" />
+      </div>
 
-    <div class="fp-char-filter-menu" id="fp-char-filter-menu">
-      <button type="button" class="fp-char-filter-item" data-filter="">
-        <span class="fp-char-filter-icon">🐾</span> All Characters
-      </button>
-      <div class="fp-guest-blur-wrap" id="fp-char-guest-filters-wrap">
-        <div class="fp-char-guest-filters">
-          <button type="button" class="fp-char-filter-item" data-filter="mine">
-            <span class="fp-char-filter-icon">✨</span> Your Characters
-          </button>
-          <button type="button" class="fp-char-filter-item" data-filter="followed">
-            <span class="fp-char-filter-icon">💫</span> Followed Characters
-          </button>
-          <button type="button" class="fp-char-filter-item" data-filter="liked">
-            <span class="fp-char-filter-icon">💖</span> Liked Characters
-          </button>
+      <div class="fp-char-sort-wrap">
+        <label for="fp-char-sort-select">Sort</label>
+        <select id="fp-char-sort-select">
+          <option value="best_match">Best Match</option>
+          <option value="updated">Date Updated</option>
+          <option value="popular">Popular</option>
+        </select>
+      </div>
+
+      <div class="fp-char-filter-menu" id="fp-char-filter-menu">
+        <button type="button" class="fp-char-filter-item" data-filter="">
+          <span class="fp-char-filter-icon">🐾</span> All Characters
+        </button>
+        <div class="fp-guest-blur-wrap" id="fp-char-guest-filters-wrap">
+          <div class="fp-char-guest-filters">
+            <button type="button" class="fp-char-filter-item" data-filter="mine">
+              <span class="fp-char-filter-icon">✨</span> Your Characters
+            </button>
+            <button type="button" class="fp-char-filter-item" data-filter="followed">
+              <span class="fp-char-filter-icon">💫</span> Followed Characters
+            </button>
+            <button type="button" class="fp-char-filter-item" data-filter="liked">
+              <span class="fp-char-filter-icon">💖</span> Liked Characters
+            </button>
+          </div>
+          <div class="fp-guest-blur-overlay" id="fp-char-guest-filters-overlay" hidden><p><a href="#" id="fp-char-guest-filters-signin">Sign in</a> to create and save characters!</p></div>
         </div>
-        <div class="fp-guest-blur-overlay" id="fp-char-guest-filters-overlay" hidden><p><a href="#" id="fp-char-guest-filters-signin">Sign in</a> to create and save characters!</p></div>
       </div>
     </div>
   </aside>
-
-  <button class="fp-sidebar-fab" id="fp-sidebar-rail-toggle" type="button" title="Hide sidebar" aria-label="Hide sidebar">
-    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-  </button>
 
   <div id="fp-char-main-col">
     <div id="fp-char-list-view">
@@ -1258,22 +1261,23 @@ async function deleteCharacterAsAdmin(char) {
   window.addEventListener('resize', () => { if (window.innerWidth > 720) setDrawerOpen(false); });
 })();
 
-// ── Desktop sidebar collapse -- exact port of the Browse search page's
-// own left-rail fab (setSidebarPanelCollapsed there). Always starts open
-// on a fresh load, same as Search (no persisted state). ──
+// ── Desktop sidebar collapse -- matches the Clubs page's own
+// .soc-sidebar-toggle exactly: shrinks the sidebar to a 56px strip
+// (toggle stays put) instead of hiding it outright, so #fp-char-main-col
+// only ever sees a modest 224px width swing, not the full 280px->0 jump.
+// Always starts open on a fresh load (no persisted state). ──
 (function () {
   const layoutEl = document.querySelector('.fp-layout');
-  const railToggle = document.getElementById('fp-sidebar-rail-toggle');
-  if (!railToggle) return;
+  const toggleBtn = document.getElementById('fp-char-sidebar-toggle');
+  if (!toggleBtn) return;
   function setSidebarCollapsed(collapsed) {
     layoutEl.classList.toggle('fp-layout--sidebar-collapsed', collapsed);
     document.body.classList.toggle('fp-sidebar-collapsed', collapsed);
-    railToggle.classList.toggle('fp-sidebar-fab--collapsed', collapsed);
-    const label = collapsed ? 'Show sidebar' : 'Hide sidebar';
-    railToggle.title = label;
-    railToggle.setAttribute('aria-label', label);
+    const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    toggleBtn.title = label;
+    toggleBtn.setAttribute('aria-label', label);
   }
-  railToggle.addEventListener('click', () => setSidebarCollapsed(!layoutEl.classList.contains('fp-layout--sidebar-collapsed')));
+  toggleBtn.addEventListener('click', () => setSidebarCollapsed(!layoutEl.classList.contains('fp-layout--sidebar-collapsed')));
 })();
 
 window.addEventListener('popstate', () => {
