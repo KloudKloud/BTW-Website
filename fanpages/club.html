@@ -3581,8 +3581,12 @@ function buildClubUrl(overrides) {
   });
   return window.fpUrl(`/club?${params.toString()}`);
 }
-function navigateTo(overrides) {
-  history.pushState({}, '', buildClubUrl(overrides));
+// `state` is extra metadata carried on this history entry (not reflected
+// in the URL) -- a Back button can read `history.state` for whatever the
+// previous navigateTo() call attached, so it can return to the actual
+// context the viewer came from instead of guessing from the URL alone.
+function navigateTo(overrides, state) {
+  history.pushState(state || {}, '', buildClubUrl(overrides));
   renderFromUrl();
 }
 
@@ -3831,7 +3835,18 @@ document.getElementById('cl-post-share-btn').addEventListener('click', (e) => {
   if (!currentPostDetail) return;
   window.fpShare(e.currentTarget, `${window.location.origin}${buildClubUrl({ post: currentPostDetail.id })}`);
 });
-document.getElementById('cl-post-back-btn').addEventListener('click', () => navigateTo({ post: null }));
+document.getElementById('cl-post-back-btn').addEventListener('click', () => {
+  // "View in Page" (Promotion Page builder's "•••" menu) tags this history
+  // entry with returnToEditor -- Back then reopens the builder on that page
+  // instead of just landing on the live page underneath it.
+  const returnToEditor = history.state && history.state.returnToEditor;
+  if (returnToEditor) {
+    navigateTo({ post: null, page: returnToEditor });
+    openEditClubModal();
+    return;
+  }
+  navigateTo({ post: null });
+});
 
 // ── Custom "More Pages" pages ──────────────────────────────────────────
 let cpvSlideshowTimer = null;
@@ -6022,7 +6037,9 @@ function promoPostRowMenu(post) {
     e.stopPropagation();
     dropdown.hidden = true;
     closeEditClubModal();
-    navigateTo({ page: editActivePageSlug, post: post.id });
+    // Tag this history entry so the post's own Back button knows to
+    // return to the builder instead of just the live page underneath.
+    navigateTo({ page: editActivePageSlug, post: post.id }, { returnToEditor: editActivePageSlug });
   });
   dropdown.appendChild(viewBtn);
 
