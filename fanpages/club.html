@@ -1454,7 +1454,10 @@
       display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 1rem 0.75rem;
       margin-bottom: 1rem;
     }
-    .cl-gallery-editor-tile-wrap { display: flex; flex-direction: column; gap: 0.4rem; }
+    /* position:relative so the "•••" menu below can sit outside the tile's
+       own overflow:hidden (which clips to the square image) -- otherwise
+       its dropdown gets cut off instead of floating over the art. */
+    .cl-gallery-editor-tile-wrap { display: flex; flex-direction: column; gap: 0.4rem; position: relative; }
     .cl-gallery-editor-tile {
       position: relative; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden;
       background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1);
@@ -1474,6 +1477,12 @@
       cursor: grab;
     }
     .cl-gallery-editor-tile-wrap.dragging .cl-gallery-editor-tile-handle { cursor: grabbing; }
+    /* "•••" menu, top-right -- the drag handle owns top-left, same dark
+       circle treatment so the two read as a matched pair of overlay
+       controls instead of the menu looking "bare" against the art. */
+    .cl-gallery-editor-tile-menu { position: absolute; top: 4px; right: 4px; z-index: 2; }
+    .cl-gallery-editor-tile-menu .cl-promo-row-menu-btn { background: rgba(0,0,0,0.65); color: #fff; }
+    .cl-gallery-editor-tile-menu .cl-promo-row-menu-btn:hover { color: #7fa8d9; background: rgba(127,168,217,0.3); }
     .cl-gallery-editor-tile-btn { width: 100%; text-align: center; }
     /* Edit = blue, Delete = red -- solid fill, constant, no hover color
        change at all (explicitly repeated on :hover since the shared
@@ -4058,6 +4067,14 @@ async function loadCustomPage(pageSlug, tab) {
       // per-image now, opened via showGalleryDetailImage() when you click
       // into one (already wired to its own club_gallery_image/img.id
       // section, see ccInitSection calls there).
+      // "View on Page" (Gallery Builder's "•••" menu) tags this history
+      // entry with openGalleryImageId -- land straight on that image's
+      // detail view instead of the bare grid.
+      const openImageId = history.state && history.state.openGalleryImageId;
+      if (openImageId != null) {
+        const idx = images.findIndex(i => String(i.id) === String(openImageId));
+        if (idx !== -1) openPageGalleryDetail(idx);
+      }
       return;
     }
 
@@ -4334,6 +4351,15 @@ document.getElementById('cl-gallery-detail-next').addEventListener('click', () =
   showGalleryDetailImage(pageGalleryDetailIdx + 1);
 });
 document.getElementById('cl-gallery-detail-back-btn').addEventListener('click', () => {
+  // "View on Page" (Gallery Builder's "•••" menu) tags this history entry
+  // with returnToEditor -- Back then reopens the builder on that page
+  // instead of just landing on the grid underneath it.
+  const returnToEditor = history.state && history.state.returnToEditor;
+  if (returnToEditor) {
+    navigateTo({ post: null, page: returnToEditor });
+    openEditClubModal();
+    return;
+  }
   document.getElementById('cl-gallery-detail-view').hidden = true;
   document.getElementById('cl-custom-page-view').hidden = false;
   ccMoveTo('cl-post-detail-comments-slot');
@@ -5854,6 +5880,47 @@ async function loadEditPageGallery(pageSlug) {
   renderGalleryEditorGrid();
 }
 
+// Tile's "•••" menu, top-right (the drag handle owns top-left) -- just
+// "View on Page" for now, same bubble/dropdown recipe as the Promotion
+// Page's post row menu. Tags the history entry it navigates to with
+// openGalleryImageId/returnToEditor so the live page lands straight on
+// this image's detail view, and its Back button returns to this builder
+// instead of the bare grid (see loadCustomPage's gallery branch and
+// cl-gallery-detail-back-btn's click handler).
+function galleryTileMenu(img) {
+  const wrap = document.createElement('div');
+  wrap.className = 'cl-promo-row-menu-wrap cl-gallery-editor-tile-menu';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'cl-promo-row-menu-btn';
+  btn.textContent = '•••';
+  btn.setAttribute('aria-label', 'Image actions');
+  const dropdown = document.createElement('div');
+  dropdown.className = 'cl-promo-row-menu-dropdown';
+  dropdown.hidden = true;
+
+  const viewBtn = document.createElement('button');
+  viewBtn.type = 'button';
+  viewBtn.textContent = 'View on Page';
+  viewBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.hidden = true;
+    closeEditClubModal();
+    navigateTo({ page: editActivePageSlug, post: null }, { returnToEditor: editActivePageSlug, openGalleryImageId: img.id });
+  });
+  dropdown.appendChild(viewBtn);
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const opening = dropdown.hidden;
+    document.querySelectorAll('.cl-promo-row-menu-dropdown').forEach(d => { d.hidden = true; });
+    dropdown.hidden = !opening;
+  });
+  wrap.appendChild(btn);
+  wrap.appendChild(dropdown);
+  return wrap;
+}
+
 function renderGalleryEditorGrid() {
   const grid = document.getElementById('cl-gallery-editor-grid');
   grid.innerHTML = '';
@@ -5870,6 +5937,7 @@ function renderGalleryEditorGrid() {
       <button type="button" class="cl-edit-card-row-btn cl-gallery-editor-tile-btn cl-gallery-editor-tile-btn--edit" data-action="edit">✏️ Edit</button>
       <button type="button" class="cl-edit-card-row-btn cl-gallery-editor-tile-btn cl-gallery-editor-tile-btn--delete" data-action="delete">🗑️ Delete</button>
     `;
+    wrap.appendChild(galleryTileMenu(img));
     wrap.querySelector('[data-action="edit"]').addEventListener('click', () => openGalleryItemForm(img));
     wrap.querySelector('[data-action="delete"]').addEventListener('click', () => {
       galleryItemDeleteId = img.id;
