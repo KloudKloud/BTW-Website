@@ -2215,14 +2215,14 @@
 
           <!-- ── Promotion Page template, v2 — a drag-orderable list of real
                posts (same shape as a Social post: Title/Media/Body/
-               Additional Fields). "+ Card" navigates to the shared post
+               Additional Fields). "+ Post" navigates to the shared post
                builder instead of an inline form; reordering is always on,
                no separate Upload/Reorder toggle needed since there's no
                second "editing" mode to switch away from. -->
           <div id="cl-edit-page-promotion-fields" hidden>
             <div class="cl-edit-cards-list" id="cl-promo-cards-list"></div>
             <a class="gallery-linkto-add-tile" id="cl-promo-card-create-btn" href="#">
-              <span class="gallery-linkto-add-tile-icon">➕</span> Card
+              <span class="gallery-linkto-add-tile-icon">➕</span> Post
             </a>
           </div>
         </div>
@@ -3890,6 +3890,14 @@ async function loadCustomPage(pageSlug, tab) {
         promoListEl.hidden = false;
         posts.forEach(post => promoListEl.appendChild(adminPostRow(post)));
       }
+      // Same Edit Club entry point General pages get -- jumps straight into
+      // this page's own admin editor (openEditClubModal's existing
+      // currentPageSlug lookup). No Theme button here -- unlike General,
+      // Promotion pages don't carry their own theme/banner.
+      const isPromoAdmin = !!currentClub && (currentClub.viewer_role === 'owner' || currentClub.viewer_role === 'admin');
+      document.getElementById('cl-page-view-edit-btn').style.display = isPromoAdmin ? 'flex' : 'none';
+      document.getElementById('cl-page-view-theme-btn').style.display = 'none';
+      document.querySelector('.cl-page-view-title-row').classList.toggle('cl-page-view-title-row--has-actions', isPromoAdmin);
       return;
     }
 
@@ -5730,7 +5738,7 @@ function renderEditPromoPosts() {
   const list = document.getElementById('cl-promo-cards-list');
   list.innerHTML = '';
   if (!editPromoPostsCache.length) {
-    list.innerHTML = '<p class="cl-edit-hint">No cards yet — click "+ Card" below to add your first one.</p>';
+    list.innerHTML = '<p class="cl-edit-hint">No posts yet — click "+ Post" below to add your first one.</p>';
     return;
   }
   editPromoPostsCache.forEach(p => list.appendChild(editPromoPostRowEl(p)));
