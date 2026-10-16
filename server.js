@@ -1501,6 +1501,16 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     );
   `).catch(e => console.error('club_page_gallery_images migration:', e.message));
 
+  // Detail-view stats box needs a real uploader + view count, same as the
+  // Fanpage gallery's own moderator_gallery.view_count -- naive per-load
+  // counter, bumped in the detail-view open endpoint below.
+  await pool.query(`
+    ALTER TABLE club_page_gallery_images ADD COLUMN IF NOT EXISTS uploaded_by INTEGER REFERENCES users(id);
+  `).catch(e => console.error('club_page_gallery_images uploaded_by migration:', e.message));
+  await pool.query(`
+    ALTER TABLE club_page_gallery_images ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0;
+  `).catch(e => console.error('club_page_gallery_images view_count migration:', e.message));
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS club_page_gallery_likes (
       id         SERIAL      PRIMARY KEY,
@@ -10428,13 +10438,39 @@ app.get('/api/clubs/:slug/pages/:pageSlug/gallery', async (req, res) => {
     if (h && h.startsWith('Bearer ')) userId = jwt.verify(h.slice(7), process.env.JWT_SECRET).id;
   } catch {}
   const { rows } = await pool.query(
-    `SELECT g.id, g.image_url, g.title, g.description, g.position_x, g.position_y,
+    `SELECT g.id, g.image_url, g.title, g.description, g.position_x, g.position_y, g.created_at, g.view_count,
+       u.username AS uploader_username, u.display_name AS uploader_display_name,
        (SELECT COUNT(*)::int FROM club_page_gallery_likes WHERE image_id = g.id) AS like_count,
-       (SELECT COUNT(*) > 0 FROM club_page_gallery_likes WHERE image_id = g.id AND user_id = $2) AS user_liked
-     FROM club_page_gallery_images g WHERE g.page_id = $1 ORDER BY g.sort_order, g.created_at`,
+       (SELECT COUNT(*) > 0 FROM club_page_gallery_likes WHERE image_id = g.id AND user_id = $2) AS user_liked,
+       (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_gallery_image' AND target_id = g.id) AS comment_count
+     FROM club_page_gallery_images g
+     LEFT JOIN users u ON u.id = g.uploaded_by
+     WHERE g.page_id = $1 ORDER BY g.sort_order, g.created_at`,
     [page.id, userId || 0]
   );
   res.json({ images: rows });
+});
+
+// Same naive per-load counter as the Fanpage gallery's /api/gallery/:id/view
+// -- fired once per detail-view open, uploader's own views excluded so an
+// admin reviewing their own upload doesn't inflate it.
+app.post('/api/clubs/:slug/pages/:pageSlug/gallery/:imageId/view', async (req, res) => {
+  let viewerId = null;
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+  const { rows: [image] } = await pool.query(
+    `SELECT g.id, g.uploaded_by FROM club_page_gallery_images g
+     JOIN club_pages p ON p.id = g.page_id JOIN clubs c ON c.id = p.club_id
+     WHERE c.slug = $1 AND p.slug = $2 AND g.id = $3`,
+    [req.params.slug, req.params.pageSlug, req.params.imageId]
+  );
+  if (!image) return res.status(404).json({ error: 'Not found.' });
+  if (viewerId == null || viewerId !== image.uploaded_by) {
+    await pool.query('UPDATE club_page_gallery_images SET view_count = view_count + 1 WHERE id = $1', [image.id]);
+  }
+  res.json({ ok: true });
 });
 
 app.post('/api/clubs/:slug/pages/:pageSlug/gallery/:imageId/like', requireAuth, async (req, res) => {
@@ -10479,9 +10515,9 @@ app.post('/api/clubs/:slug/pages/:pageSlug/gallery', requireAuth, uploadModImage
     'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM club_page_gallery_images WHERE page_id = $1', [ctx.page.id]
   );
   const { rows: [image] } = await pool.query(
-    `INSERT INTO club_page_gallery_images (page_id, image_url, title, description, position_x, position_y, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, image_url, title, description, position_x, position_y`,
-    [ctx.page.id, imageUrl, title, description, positionX, positionY, maxOrder + 1]
+    `INSERT INTO club_page_gallery_images (page_id, image_url, title, description, position_x, position_y, sort_order, uploaded_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, image_url, title, description, position_x, position_y`,
+    [ctx.page.id, imageUrl, title, description, positionX, positionY, maxOrder + 1, req.user.id]
   );
   res.json({ image });
 });

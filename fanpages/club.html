@@ -860,31 +860,27 @@
     }
     .cl-page-gallery-tile-like:hover { background: rgba(0,0,0,0.85); }
 
-    /* Gallery Page detail view — the heart sits next to the title; prev/
-       next arrows are a static row under the description (not overlaid on
-       the image), per explicit request for "arrows at the bottom". */
-    .cl-gallery-detail-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
-    .cl-gallery-like-btn {
-      display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0; margin-top: 0.3rem;
-      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 20px;
-      padding: 0.5rem 1rem; color: #f0f0f0; font-size: 0.95rem; font-weight: 700; cursor: pointer;
-      transition: background 0.15s, border-color 0.15s;
+    /* Gallery Page detail view — built on the shared art-view-* layout
+       (see fanpages.css's #cl-gallery-detail-view rules, duplicated
+       alongside #fp-gallery-detail-view's own). Only the back-button pill
+       needs a page-local override here, same as gallery-post.html's own
+       #fp-gallery-detail-view .art-view-back does -- nothing in
+       fanpages.css styles .art-view-back for this id otherwise, since
+       #gallery-detail-view/#chapter-detail-view's green-pill rule doesn't
+       include it. Prev/next arrows stay a static centered row under the
+       description (not overlaid on the image), matching how they read
+       before this redesign. */
+    #cl-gallery-detail-view .art-view-back {
+      color: #cfe2f7; border-color: rgba(127,168,217,0.5); background: rgba(127,168,217,0.1);
+      font-size: 0.92rem; font-weight: 700; padding: 0.5em 1.3em;
+      margin-top: 0; margin-bottom: 1.5rem;
+      box-shadow: 0 0 16px rgba(127,168,217,0.35);
     }
-    .cl-gallery-like-btn:hover { border-color: rgba(217,122,114,0.5); }
-    .cl-gallery-like-btn.liked { border-color: #d97a72; color: #f5b3ac; background: rgba(217,122,114,0.12); }
-    /* Full-size, uncropped image -- same "natural sizing, width-capped by
-       the column, height auto" convention every other gallery view on the
-       site uses (see gallery-post.html's own #fp-gallery-detail-view
-       treatment), instead of the shared .cl-post-detail-image-wrap's
-       640px-max-height cover-crop (that's meant for a post's cover image,
-       a different use case -- scoped to this id so posts are untouched). */
-    #cl-gallery-detail-image-wrap {
-      background: transparent; border: none; box-shadow: none; text-align: center;
+    #cl-gallery-detail-view .art-view-back:hover {
+      color: #fff; border-color: rgba(127,168,217,0.85); background: rgba(127,168,217,0.18);
+      box-shadow: 0 0 22px rgba(127,168,217,0.55);
     }
-    #cl-gallery-detail-image-wrap img {
-      width: auto; max-width: 100%; height: auto; max-height: none; object-fit: unset; display: block; margin: 0 auto;
-    }
-    .cl-gallery-detail-nav { display: flex; justify-content: center; gap: 1rem; margin: 0.5rem 0 2.5rem; }
+    .cl-gallery-detail-nav { display: flex; justify-content: center; gap: 1rem; margin: 0.5rem 0 1rem; }
     .cl-gallery-detail-prev, .cl-gallery-detail-next { position: static; transform: none; display: flex; }
     .cl-gallery-detail-prev:disabled, .cl-gallery-detail-next:disabled { opacity: 0.3; cursor: default; }
 
@@ -1487,6 +1483,15 @@
     .cl-promo-row-menu-wrap.cl-gallery-editor-tile-menu { position: absolute; top: 4px; right: 4px; z-index: 2; }
     .cl-gallery-editor-tile-menu .cl-promo-row-menu-btn { background: rgba(0,0,0,0.65); color: #fff; }
     .cl-gallery-editor-tile-menu .cl-promo-row-menu-btn:hover { color: #7fa8d9; background: rgba(127,168,217,0.3); }
+    /* Dropdown centers under the "•••" button itself instead of the base
+       recipe's right-align (meant for a wide list row, not a small tile) --
+       and its one item, "View on Page", reads a touch smaller to match. */
+    .cl-gallery-editor-tile-menu .cl-promo-row-menu-dropdown {
+      left: 50%; right: auto; transform: translateX(-50%); min-width: 0; width: max-content;
+    }
+    .cl-gallery-editor-tile-menu .cl-promo-row-menu-dropdown button {
+      text-align: center; font-size: 0.78rem; padding: 0.5rem 0.9rem;
+    }
     .cl-gallery-editor-tile-btn { width: 100%; text-align: center; }
     /* Edit = blue, Delete = red -- solid fill, constant, no hover color
        change at all (explicitly repeated on :hover since the shared
@@ -1971,30 +1976,44 @@
       </div>
 
       <!-- Gallery Page image detail — a full view swap (not a routed URL,
-           same idea as the Promotion card detail), matching the Fanpage
-           gallery's own image-detail page: full image, title, description,
-           a heart/like, prev/next arrows to the neighboring images, and a
-           comment section (the same shared comments block used by post
-           detail, relocated in here while open). -->
-      <div class="cl-row cl-post-detail" id="cl-gallery-detail-view" hidden>
-        <button class="cl-post-back-btn" id="cl-gallery-detail-back-btn" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-          Back
-        </button>
-        <div class="cl-post-detail-image-wrap" id="cl-gallery-detail-image-wrap">
-          <img id="cl-gallery-detail-img" alt="" />
-        </div>
-        <div class="cl-gallery-detail-header-row">
-          <h1 class="cl-post-detail-title" id="cl-gallery-detail-title"></h1>
-          <button type="button" class="cl-gallery-like-btn" id="cl-gallery-detail-like-btn">
-            <span id="cl-gallery-detail-like-icon">🤍</span> <span id="cl-gallery-detail-like-count">0</span>
-          </button>
-        </div>
-        <p class="cl-post-detail-body" id="cl-gallery-detail-desc"></p>
+           same idea as the Promotion card detail), now built on the same
+           shared art-view-* layout the Fanpage gallery's own standalone
+           gallery-post.html uses (full image, right-side Views/Likes/
+           Comments + Info stats box), just without a Tags section or
+           linked Characters/Stories -- neither concept applies to a club
+           gallery. See fanpages.css's #cl-gallery-detail-view rules
+           (duplicated alongside #fp-gallery-detail-view's) for the shared
+           layout, and this page's own <style> below for the back-button
+           pill, which only gallery-post.html overrides locally today. -->
+      <div class="art-view-wrapper" id="cl-gallery-detail-view" hidden>
+        <button class="art-view-back" id="cl-gallery-detail-back-btn" type="button">← Back</button>
+        <div class="art-view-detail-grid">
+          <div class="art-view-main-col">
+            <div class="art-view-image-wrap">
+              <img id="cl-gallery-detail-img" alt="" />
+            </div>
+            <div class="art-view-info">
+              <h1 class="art-view-title" id="cl-gallery-detail-title"></h1>
+              <div class="art-view-actions">
+                <button type="button" class="art-view-like art-view-like--big" id="cl-gallery-detail-like-btn" aria-label="Like">
+                  <span id="cl-gallery-detail-like-icon">♡</span> <span id="cl-gallery-detail-like-count">0</span>
+                </button>
+              </div>
+            </div>
+            <div class="art-view-desc" id="cl-gallery-detail-desc-box">
+              <p id="cl-gallery-detail-desc"></p>
+            </div>
+            <div class="cl-gallery-detail-nav">
+              <button type="button" class="cl-post-detail-image-nav cl-gallery-detail-prev" id="cl-gallery-detail-prev" title="Previous image">‹</button>
+              <button type="button" class="cl-post-detail-image-nav cl-gallery-detail-next" id="cl-gallery-detail-next" title="Next image">›</button>
+            </div>
+          </div>
 
-        <div class="cl-gallery-detail-nav">
-          <button type="button" class="cl-post-detail-image-nav cl-gallery-detail-prev" id="cl-gallery-detail-prev" title="Previous image">‹</button>
-          <button type="button" class="cl-post-detail-image-nav cl-gallery-detail-next" id="cl-gallery-detail-next" title="Next image">›</button>
+          <aside class="art-view-stats-box" id="cl-gallery-detail-stats">
+            <div class="art-view-quickstats" id="cl-gallery-detail-quickstats"></div>
+            <p class="art-view-stats-title">Info</p>
+            <div class="art-view-stats-rows" id="cl-gallery-detail-stats-rows"></div>
+          </aside>
         </div>
 
         <div id="cl-gallery-detail-comments-slot"></div>
@@ -4318,6 +4337,7 @@ async function toggleGalleryLike(img) {
 function showGalleryDetailImage(idx) {
   pageGalleryDetailIdx = idx;
   renderGalleryDetail();
+  bumpGalleryImageView(pageGalleryImages[idx]);
   ccMoveTo('cl-gallery-detail-comments-slot');
   ccInitSection('club_gallery_image', pageGalleryImages[idx].id);
 }
@@ -4333,13 +4353,49 @@ function renderGalleryDetail() {
   document.getElementById('cl-gallery-detail-title').textContent = img.title || '';
   document.getElementById('cl-gallery-detail-desc').innerHTML = img.description ? renderRichText(img.description) : '';
   updateGalleryDetailLikeUI(img);
+  renderGalleryDetailStats(img);
   document.getElementById('cl-gallery-detail-prev').disabled = pageGalleryDetailIdx === 0;
   document.getElementById('cl-gallery-detail-next').disabled = pageGalleryDetailIdx === pageGalleryImages.length - 1;
 }
 function updateGalleryDetailLikeUI(img) {
   document.getElementById('cl-gallery-detail-like-btn').classList.toggle('liked', !!img.user_liked);
-  document.getElementById('cl-gallery-detail-like-icon').textContent = img.user_liked ? '❤️' : '🤍';
+  document.getElementById('cl-gallery-detail-like-icon').textContent = img.user_liked ? '♥' : '♡';
   document.getElementById('cl-gallery-detail-like-count').textContent = img.like_count || 0;
+}
+// Right-side stats box -- same Views/Likes/Comments quickstats + Info rows
+// as the Fanpage gallery's own art-view-stats-box, just no Tags section and
+// no linked Characters/Stories cards below the description: neither concept
+// applies to a club gallery image, only "what club, who uploaded it, when".
+function renderGalleryDetailStats(img) {
+  document.getElementById('cl-gallery-detail-quickstats').innerHTML = `
+    <div class="art-view-quickstat"><span class="art-view-quickstat-val">👁 ${img.view_count || 0}</span><span class="art-view-quickstat-label">Views</span></div>
+    <div class="art-view-quickstat"><span class="art-view-quickstat-val">❤️ ${img.like_count || 0}</span><span class="art-view-quickstat-label">Likes</span></div>
+    <div class="art-view-quickstat"><span class="art-view-quickstat-val">💬 ${img.comment_count || 0}</span><span class="art-view-quickstat-label">Comments</span></div>
+  `;
+  const uploadedDate = img.created_at
+    ? new Date(img.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '';
+  // Legacy images uploaded before uploaded_by existed have no uploader on
+  // record -- plain em dash instead of a broken/empty profile link.
+  const uploaderHtml = img.uploader_username
+    ? `<a href="${window.fpUrl(`/${encodeURIComponent(img.uploader_username)}`)}">${escapeHtml(img.uploader_display_name || img.uploader_username)}</a>`
+    : '—';
+  document.getElementById('cl-gallery-detail-stats-rows').innerHTML = `
+    <div class="art-view-stat-row"><span>Club</span><span>${escapeHtml(currentClub ? currentClub.name : '')}</span></div>
+    <div class="art-view-stat-row"><span>Uploaded by</span><span>${uploaderHtml}</span></div>
+    ${uploadedDate ? `<div class="art-view-stat-row"><span>Date Uploaded</span><span>${uploadedDate}</span></div>` : ''}
+  `;
+}
+// Same naive per-load counter as the Fanpage gallery's own view bump --
+// fired once per detail-view open (including prev/next, same as that
+// convention), and bumped optimistically in the already-cached list so the
+// number on screen doesn't wait on a round trip.
+function bumpGalleryImageView(img) {
+  img.view_count = (img.view_count || 0) + 1;
+  document.querySelector('#cl-gallery-detail-quickstats .art-view-quickstat-val').textContent = `👁 ${img.view_count}`;
+  fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(currentPageSlug)}/gallery/${img.id}/view`, {
+    method: 'POST', headers: authHeaders(),
+  }).catch(() => {});
 }
 document.getElementById('cl-gallery-detail-like-btn').addEventListener('click', async () => {
   const img = pageGalleryImages[pageGalleryDetailIdx];
