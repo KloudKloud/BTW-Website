@@ -88,12 +88,18 @@ The Fanpage Hub homepage got a full visual overhaul this session (was a flat dar
 now a video-backed, decorated design). These conventions should carry forward to other
 pages as they get redesigned:
 
-- **Bubbly font rule**: `'Fredoka', 'Lato', cursive` is now the site's "friendly/fun"
-  display font for card/section titles, live billboard captions, admin bulletin caption
-  inputs, dropdown modal titles — anywhere text previously used Cinzel serif for a
-  *casual* heading (not everywhere Cinzel appears; Cinzel remains the base site serif for
-  more formal contexts). Loaded via the existing Google Fonts `@import` in
-  `fanpages-nav.css` (already had Fredoka for the nav brand), no new font load needed.
+- **Bubbly font rule (updated, supersedes the old "casual only" carve-out)**:
+  `'Fredoka', 'Lato', cursive` is now the site's default heading/display font, full stop —
+  not just for "casual" headings anymore. The earlier rule that Cinzel stayed as the base
+  serif for "more formal contexts" is retired; **any new heading/title work should use
+  Fredoka, never introduce a new Cinzel usage.** Cinzel still exists in ~19 files/115
+  spots as of this writing (style.css, fanpages.css, fanpages-nav.css, and most
+  individual fanpages) — those are swept to Fredoka opportunistically as each page gets
+  touched/redesigned (same incremental rollout the homepage/Browse/Characters redesigns
+  already used), not in one blind global pass, per explicit user decision when asked
+  whether to do a full site-wide sweep at once. Loaded via the existing Google Fonts
+  `@import` in `fanpages-nav.css` (already had Fredoka for the nav brand), no new font
+  load needed.
 - **Video backgrounds**: `<video autoplay muted loop playsinline>` full-bleed sections
   (`.fp-video-area` pattern) use `position:absolute; inset:0; object-fit:cover` **scoped
   per-section**, not one giant page-length video — `object-fit:cover` zooms in harder the
