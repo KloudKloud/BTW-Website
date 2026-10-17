@@ -864,6 +864,14 @@ function fpFormatVoiceTime(sec) {
   const s = Math.floor(sec % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
 }
+const FP_VOICE_PLAY_ICON = '<svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7L8 5Z" fill="currentColor"/></svg>';
+const FP_VOICE_PAUSE_ICON = '<svg viewBox="0 0 24 24" fill="none"><path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor"/></svg>';
+function fpSyncVoicePlayPauseIcon() {
+  const btn = document.getElementById('fp-voice-bar-playpause');
+  if (!btn) return;
+  const audio = fpGetVoiceAudio();
+  btn.innerHTML = audio.paused ? FP_VOICE_PLAY_ICON : FP_VOICE_PAUSE_ICON;
+}
 function fpGetVoiceAudio() {
   if (window.fpVoiceAudio) return window.fpVoiceAudio;
   const audio = new Audio();
@@ -878,6 +886,8 @@ function fpGetVoiceAudio() {
     if (seek && audio.duration) seek.value = (audio.currentTime / audio.duration) * 100;
     if (curEl) curEl.textContent = fpFormatVoiceTime(audio.currentTime);
   });
+  audio.addEventListener('play', fpSyncVoicePlayPauseIcon);
+  audio.addEventListener('pause', fpSyncVoicePlayPauseIcon);
   window.fpVoiceAudio = audio;
   return audio;
 }
@@ -890,6 +900,7 @@ function fpEnsureVoiceBar() {
   bar.hidden = true;
   bar.innerHTML = `
     <span class="fp-voice-bar-name" id="fp-voice-bar-name"></span>
+    <button type="button" class="fp-voice-bar-playpause" id="fp-voice-bar-playpause" title="Play/Pause">${FP_VOICE_PAUSE_ICON}</button>
     <span class="fp-voice-bar-time" id="fp-voice-bar-current">0:00</span>
     <input type="range" class="fp-voice-bar-seek" id="fp-voice-bar-seek" min="0" max="100" step="0.1" value="0">
     <span class="fp-voice-bar-time" id="fp-voice-bar-total">0:00</span>
@@ -898,6 +909,10 @@ function fpEnsureVoiceBar() {
     <button type="button" class="fp-voice-bar-close" id="fp-voice-bar-close">✕ Close</button>
   `;
   document.body.appendChild(bar);
+  bar.querySelector('#fp-voice-bar-playpause').addEventListener('click', () => {
+    const audio = fpGetVoiceAudio();
+    if (audio.paused) audio.play().catch(() => {}); else audio.pause();
+  });
   const seek = bar.querySelector('#fp-voice-bar-seek');
   seek.addEventListener('input', () => {
     fpVoiceSeeking = true;
@@ -936,6 +951,7 @@ function fpPlayVoiceClip(url, btn, charName) {
   bar.hidden = false;
   document.getElementById('fp-voice-bar-name').textContent = charName ? `${charName}'s Voice Claim` : 'Voice Claim';
   document.getElementById('fp-voice-bar-volume').value = audio.volume;
+  fpSyncVoicePlayPauseIcon();
 }
 function fpMakeVoiceBtn(url, charName) {
   const btn = document.createElement('button');
