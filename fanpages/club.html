@@ -6173,11 +6173,23 @@ document.getElementById('cl-gallery-editor-grid').addEventListener('dragover', (
     target = best;
   }
   if (!target || target === dragEl) return;
-  const rect = target.getBoundingClientRect();
-  const isPastHalfway = e.clientX > rect.left + rect.width / 2;
-  if (isPastHalfway) {
-    if (target.nextElementSibling !== dragEl) grid.insertBefore(dragEl, target.nextElementSibling);
-  } else if (target.previousElementSibling !== dragEl) {
+  // Threshold anchored to the DRAGGED tile's own current edge, not the
+  // target's far halfway point. The dragged tile is already live-moved in
+  // the DOM as you go (that's the point of this whole listener), so its
+  // rect reflects wherever it currently sits -- requiring the cursor to
+  // cross the TARGET's halfway point meant a quick or partial drag (just
+  // past your own tile's edge, short of plowing all the way through the
+  // neighboring tile) never registered, which read as sluggish/unresponsive,
+  // especially dragging right-to-left. Swapping as soon as the cursor
+  // clears the dragged tile's own edge in the direction of travel is a much
+  // shorter, snappier threshold and symmetric in both directions.
+  const dragRect = dragEl.getBoundingClientRect();
+  const targetComesAfter = !!(dragEl.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING);
+  if (targetComesAfter) {
+    if (e.clientX > dragRect.right && target.nextElementSibling !== dragEl) {
+      grid.insertBefore(dragEl, target.nextElementSibling);
+    }
+  } else if (e.clientX < dragRect.left && target.previousElementSibling !== dragEl) {
     grid.insertBefore(dragEl, target);
   }
 });
