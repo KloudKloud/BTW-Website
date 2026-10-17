@@ -10686,7 +10686,8 @@ app.get('/api/clubs-feed', async (req, res) => {
      JOIN clubs c ON c.id = cp.club_id
      LEFT JOIN club_members cm ON cm.club_id = cp.club_id AND cm.user_id = $2
      LEFT JOIN club_visits cv ON cv.club_id = cp.club_id AND cv.user_id = $2
-     ${mineOnly ? 'WHERE cp.author_user_id = $2' : (nsfwAllowed ? '' : 'WHERE c.is_nsfw = FALSE')}
+     WHERE cp.promotion_page_id IS NULL
+       ${mineOnly ? 'AND cp.author_user_id = $2' : (nsfwAllowed ? '' : 'AND c.is_nsfw = FALSE')}
      ORDER BY ${orderBy}
      LIMIT $1`,
     [limit, viewerId || 0]
@@ -10738,7 +10739,7 @@ app.get('/api/clubs-recommended', async (req, res) => {
        JOIN users u ON u.id = cp.author_user_id
        JOIN clubs c ON c.id = cp.club_id
        LEFT JOIN club_visits cv ON cv.club_id = cp.club_id AND cv.user_id = $2
-       WHERE 1=1 ${nsfwAllowed ? '' : 'AND c.is_nsfw = FALSE'}
+       WHERE cp.promotion_page_id IS NULL ${nsfwAllowed ? '' : 'AND c.is_nsfw = FALSE'}
        ORDER BY cp.club_id, hot_score DESC
      )
      SELECT * FROM per_club ORDER BY already_joined ASC, recently_visited DESC, hot_score + (random() - 0.5) * 0.3 DESC LIMIT $1`,

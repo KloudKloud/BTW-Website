@@ -6154,8 +6154,25 @@ document.getElementById('cl-gallery-editor-grid').addEventListener('dragover', (
   const grid = document.getElementById('cl-gallery-editor-grid');
   const dragEl = grid.querySelector(`.cl-gallery-editor-tile-wrap[data-id="${CSS.escape(String(galleryDragId))}"]`);
   if (!dragEl) return;
-  const target = document.elementFromPoint(e.clientX, e.clientY)?.closest('.cl-gallery-editor-tile-wrap');
-  if (!target || target === dragEl || target.parentElement !== grid) return;
+  let target = document.elementFromPoint(e.clientX, e.clientY)?.closest('.cl-gallery-editor-tile-wrap');
+  if (!target || target.parentElement !== grid) {
+    // The grid has a real row/column gap (see .cl-gallery-editor-grid's
+    // `gap`) -- hovering there (e.g. the "top" of the next row's tile,
+    // just above its box) makes elementFromPoint return the grid itself
+    // or nothing, so the swap never fires until the cursor fully enters
+    // a tile. Fall back to the nearest tile by center distance instead.
+    let best = null, bestDist = Infinity;
+    grid.querySelectorAll('.cl-gallery-editor-tile-wrap').forEach(el => {
+      if (el === dragEl) return;
+      const r = el.getBoundingClientRect();
+      const dx = e.clientX - (r.left + r.width / 2);
+      const dy = e.clientY - (r.top + r.height / 2);
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) { bestDist = dist; best = el; }
+    });
+    target = best;
+  }
+  if (!target || target === dragEl) return;
   const rect = target.getBoundingClientRect();
   const isPastHalfway = e.clientX > rect.left + rect.width / 2;
   if (isPastHalfway) {
