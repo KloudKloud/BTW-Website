@@ -685,6 +685,48 @@
     }
     .fp-link-add-btn:hover { border-color: #7fa8d9; color: #7fa8d9; }
 
+    /* Featured Club box (left info box, above Links) */
+    .fp-side-club-card {
+      display: flex; align-items: center; gap: 0.6rem; text-decoration: none;
+      padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
+      transition: border-color 0.15s;
+    }
+    .fp-side-club-card:hover { border-color: #7fa8d9; }
+    .fp-side-club-card img { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; border-radius: 4px; }
+    .fp-side-club-card span { color: #ddd; font-size: 0.85rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Feature Club editor (Edit Profile, under Featured Gallery) */
+    .fp-featured-club-selected {
+      display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.75rem;
+      background: #1e1e1e; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; max-width: 320px;
+    }
+    .fp-featured-club-selected img { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; flex-shrink: 0; }
+    .fp-featured-club-selected span { flex: 1; color: #f0f0f0; font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fp-featured-club-remove {
+      background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #d97a72;
+      cursor: pointer; flex-shrink: 0; width: 28px; height: 28px; font-size: 0.85rem;
+    }
+    .fp-featured-club-remove:hover { border-color: #d97a72; }
+    .fp-featured-club-search-wrap { position: relative; max-width: 320px; }
+    .fp-featured-club-search {
+      width: 100%; background: #1e1e1e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
+      color: #f0f0f0; font-family: inherit; font-size: 0.85rem; padding: 0.55rem 0.7rem; box-sizing: border-box;
+    }
+    .fp-featured-club-search:focus { outline: none; border-color: #7fa8d9; }
+    .fp-featured-club-dropdown {
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 5;
+      background: #1e1e1e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
+      max-height: 220px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .fp-featured-club-option {
+      width: 100%; display: flex; align-items: center; gap: 0.55rem; background: none; border: none;
+      padding: 0.5rem 0.7rem; cursor: pointer; text-align: left; color: #ddd; font-family: inherit; font-size: 0.85rem;
+    }
+    .fp-featured-club-option:hover { background: rgba(127,168,217,0.12); color: #7fa8d9; }
+    .fp-featured-club-option img { width: 24px; height: 24px; object-fit: contain; border-radius: 4px; flex-shrink: 0; }
+    .fp-featured-club-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fp-featured-club-empty { color: #999; font-size: 0.82rem; padding: 0.6rem 0.7rem; margin: 0; }
+
     /* Featured Stories / Featured Characters / Featured Gallery -- these now
        live stacked inside .fp-home-main (a flex column), so no more of
        their own max-width/centering, just natural block flow. */
@@ -1272,6 +1314,16 @@
 
       <div class="fp-home-side-divider"></div>
 
+      <div class="fp-home-side-section fp-home-side-featured-club" id="fp-home-side-featured-club" hidden>
+        <p class="fp-home-side-label">Featured Club</p>
+        <a class="fp-side-club-card" id="fp-side-club-card" href="#">
+          <img id="fp-side-club-badge" src="" alt="" />
+          <span id="fp-side-club-name"></span>
+        </a>
+      </div>
+
+      <div class="fp-home-side-divider" id="fp-home-side-featured-club-divider" hidden></div>
+
       <div class="fp-home-side-section">
         <p class="fp-home-side-label">
           Links
@@ -1314,6 +1366,12 @@
         <p class="fp-featured-title">Featured Gallery<img class="fp-featured-title-deco" src="/images/home/decoration-3.png" alt="" /></p>
         <div id="fp-featured-gallery"></div>
         <div id="fp-featured-gallery-editor" hidden></div>
+      </section>
+
+      <section class="fp-featured" id="fp-feature-club-section" hidden>
+        <p class="fp-featured-title">Feature Club<img class="fp-featured-title-deco" src="/images/home/decoration-8.png" alt="" /></p>
+        <p class="fp-featured-editor-note">Pick a club you're a member of to showcase on your profile! Its badge (or icon, if it hasn't set a custom badge) will appear next to its name in your left info box.</p>
+        <div id="fp-featured-club-editor"></div>
       </section>
 
       <section class="fp-featured fp-newspaper-home">
@@ -1566,6 +1624,8 @@
   let currentStories = [];
   let editMode = false;
   let editLinks = [];
+  let editFeaturedClub = null;
+  let myClubsCache = null;
   let editFeatured = { character: [], gallery: [], story: [] };
   // Single lookup driving the previously character/gallery-only binary
   // ternaries in renderFeaturedEditor/openFeaturedPicker/featuredPickerItemEl
@@ -3347,6 +3407,7 @@
     editLinks = (currentAuthor.account_links || []).map(l => ({ ...l }));
     editFeatured.character = (currentAuthor.featured_characters || []).map(it => ({ ...it }));
     editFeatured.gallery = (currentAuthor.featured_gallery || []).map(it => ({ ...it }));
+    editFeaturedClub = currentAuthor.featured_club ? { ...currentAuthor.featured_club } : null;
     // Seeded from the (possibly default-computed, unlocked) list the server
     // returned -- Saving without changing anything still writes real rows
     // and permanently locks the category from then on, which is intended.
@@ -3372,6 +3433,8 @@
     renderFeaturedEditor('story', 'Feature up to three of your favorite stories! Defaults to your own latest-updated stories until you pick your own set here.');
     renderFeaturedEditor('character', 'Feature your top three favorite characters! Can be your own characters, if you\'ve made them, or three characters from stories/art/people you love! Feel free to search for those that stand out to you~');
     renderFeaturedEditor('gallery', 'Feature your top three favorite gallery pieces! Can be your own artwork, if you\'ve posted your commissions/art here, or three art pieces from stories/artists you love on the site! Feel free to search for those that stand out to you~');
+    document.getElementById('fp-feature-club-section').hidden = false;
+    renderFeaturedClubEditor();
   }
 
   function exitEditMode() {
@@ -3392,6 +3455,7 @@
     document.getElementById('fp-featured-characters').hidden = false;
     document.getElementById('fp-featured-gallery-editor').hidden = true;
     document.getElementById('fp-featured-gallery').hidden = false;
+    document.getElementById('fp-feature-club-section').hidden = true;
     document.getElementById('fp-name').hidden = false;
     document.getElementById('fp-name-edit-box').hidden = true;
     loadProfile();
@@ -3548,6 +3612,7 @@
         if (el) fields[key] = el.value;
       });
       fields.account_links = editLinks.filter(l => l.url);
+      fields.featured_club_slug = editFeaturedClub ? editFeaturedClub.slug : '';
       const nameVal = document.getElementById('fp-name-edit-input').value.trim();
       if (nameVal) fields.display_name = nameVal;
 
@@ -3745,6 +3810,84 @@
     const q = e.target.value.trim();
     featuredPickerOtherDebounce = setTimeout(() => runFeaturedPickerSearch('other', q), 300);
   });
+
+  // ── Feature Club — single-pick, limited to clubs the viewer is actually
+  // a member of, so this just fetches that (usually short) list once and
+  // filters it client-side as they type instead of a server round trip
+  // per keystroke. ────────────────────────────────────────────────────────
+  async function loadMyClubs() {
+    if (myClubsCache) return myClubsCache;
+    try {
+      const res = await fetch(`/api/fanpage-profile/${encodeURIComponent(USERNAME)}/clubs`, { headers: authHeaders() });
+      const data = await res.json();
+      myClubsCache = data.clubs || [];
+    } catch { myClubsCache = []; }
+    return myClubsCache;
+  }
+
+  function renderFeaturedClubEditor() {
+    const wrap = document.getElementById('fp-featured-club-editor');
+    wrap.innerHTML = '';
+
+    if (editFeaturedClub) {
+      const card = document.createElement('div');
+      card.className = 'fp-featured-club-selected';
+      card.innerHTML = `
+        <img src="${editFeaturedClub.badge_url || '/images/nopicture2.png'}" alt="" />
+        <span>${escapeHtml(editFeaturedClub.name)}</span>
+        <button type="button" class="fp-featured-club-remove">✕</button>
+      `;
+      card.querySelector('.fp-featured-club-remove').addEventListener('click', () => {
+        editFeaturedClub = null;
+        renderFeaturedClubEditor();
+      });
+      wrap.appendChild(card);
+      return;
+    }
+
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'fp-featured-club-search-wrap';
+    searchWrap.innerHTML = `
+      <input type="text" class="fp-featured-club-search" placeholder="Search a club you're in…" autocomplete="off" />
+      <div class="fp-featured-club-dropdown" hidden></div>
+    `;
+    wrap.appendChild(searchWrap);
+    const input = searchWrap.querySelector('.fp-featured-club-search');
+    const dropdown = searchWrap.querySelector('.fp-featured-club-dropdown');
+
+    async function paintDropdown(q) {
+      const clubs = await loadMyClubs();
+      const query = q.trim().toLowerCase();
+      const matches = query ? clubs.filter(c => c.name.toLowerCase().includes(query)) : clubs;
+      dropdown.hidden = false;
+      if (!matches.length) {
+        dropdown.innerHTML = `<p class="fp-featured-club-empty">${clubs.length ? 'No matches.' : "You're not in any clubs yet."}</p>`;
+        return;
+      }
+      dropdown.innerHTML = '';
+      matches.forEach(c => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'fp-featured-club-option';
+        item.innerHTML = `
+          <img src="${c.badge_url || c.icon_url || '/images/nopicture2.png'}" alt="" />
+          <span>${escapeHtml(c.name)}</span>
+        `;
+        // mousedown (not click) fires before the input's blur hides the
+        // dropdown, otherwise blur wins the race and the click never lands.
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          editFeaturedClub = { slug: c.slug, name: c.name, badge_url: c.badge_url || c.icon_url || '' };
+          renderFeaturedClubEditor();
+        });
+        dropdown.appendChild(item);
+      });
+    }
+
+    input.addEventListener('focus', () => paintDropdown(input.value));
+    input.addEventListener('input', () => paintDropdown(input.value));
+    input.addEventListener('blur', () => { dropdown.hidden = true; });
+  }
 
   // ── Newspaper ─────────────────────────────────────────────────────────────
   let NEWSPAPER_POSTS = [];
@@ -4323,6 +4466,22 @@
         row.querySelector('.fp-about-row-value').textContent = value;
         aboutWrap.appendChild(row);
       });
+
+      // Featured Club box -- hidden entirely (section + its own divider)
+      // when the user hasn't picked one, so Links doesn't end up sitting
+      // behind a doubled-up gap.
+      const fcSection = document.getElementById('fp-home-side-featured-club');
+      const fcDivider = document.getElementById('fp-home-side-featured-club-divider');
+      if (a.featured_club) {
+        document.getElementById('fp-side-club-badge').src = a.featured_club.badge_url || '/images/nopicture2.png';
+        document.getElementById('fp-side-club-name').textContent = a.featured_club.name;
+        document.getElementById('fp-side-club-card').href = window.fpUrl(`/club?slug=${a.featured_club.slug}`);
+        fcSection.hidden = false;
+        fcDivider.hidden = false;
+      } else {
+        fcSection.hidden = true;
+        fcDivider.hidden = true;
+      }
 
       // Links box
       const linksList = document.getElementById('fp-links-list');

@@ -1666,6 +1666,13 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE clubs ADD COLUMN IF NOT EXISTS badge_original_url TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('clubs badge migration:', e.message));
 
+  // Featured Club — a user picks one club they're a member of to showcase
+  // (its badge, or icon when it has no custom badge) in their profile's
+  // left info box, above Links.
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS featured_club_slug TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('users featured_club_slug migration:', e.message));
+
 
   await pool.query(`
     INSERT INTO club_members (club_id, user_id, role)
@@ -4668,7 +4675,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
             pronouns, favorite_pokemon, account_bio, fun_fact, account_links,
             account_banner_url, account_banner_position_x, account_banner_position_y, account_banner_zoom,
             club_profile_banner_url, club_profile_banner_position_x, club_profile_banner_position_y, club_profile_banner_zoom,
-            profile_theme, profile_theme_bg_url
+            profile_theme, profile_theme_bg_url, featured_club_slug
      FROM users WHERE username = $1`,
     [req.params.username.toLowerCase()]
   );
@@ -4903,6 +4910,18 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     ? await fetchStoryCardsById(featuredStoryIds.rows.map(r => Number(r.ref_id)))
     : await fetchDefaultStoryCards(author.id, 3);
 
+  // Re-checked against live membership (not just the stored slug) so a
+  // club the user has since left quietly stops showing instead of leaking
+  // a stale badge for a club they're no longer in.
+  const featuredClub = author.featured_club_slug
+    ? (await pool.query(
+        `SELECT c.slug, c.name, c.icon_url, c.badge_url FROM clubs c
+         JOIN club_members cm ON cm.club_id = c.id AND cm.user_id = $1
+         WHERE c.slug = $2`,
+        [author.id, author.featured_club_slug]
+      )).rows[0] || null
+    : null;
+
   // Recent Activity — turn the normalized (type, ts, label, context, ref_a,
   // owner_username) rows into a human sentence + link. Every type is
   // clickable now: character-based links need an explicit owner (a "like"
@@ -4962,6 +4981,10 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       featured_characters: featuredCharacters,
       featured_gallery: featuredGalleryItems,
       featured_stories: featuredStories,
+      featured_club: featuredClub ? {
+        slug: featuredClub.slug, name: featuredClub.name,
+        badge_url: featuredClub.badge_url || featuredClub.icon_url || '',
+      } : null,
       recent_activity: recentActivity,
       is_self: viewerId === author.id,
     },
@@ -4992,13 +5015,13 @@ app.get('/api/fanpage-profile/:username/clubs', async (req, res) => {
 
   const { viewerId, nsfwAllowed } = await getViewerNsfwAccess(req);
   const { rows } = await pool.query(
-    `SELECT c.slug, c.name, c.icon_url, c.is_nsfw, cm.role
+    `SELECT c.slug, c.name, c.icon_url, c.badge_url, c.is_nsfw, cm.role
      FROM club_members cm JOIN clubs c ON c.id = cm.club_id
      WHERE cm.user_id = $1 ${nsfwAllowed || viewerId === author.id ? '' : 'AND c.is_nsfw = FALSE'}
      ORDER BY (cm.role = 'owner') DESC, (cm.role = 'admin') DESC, c.name ASC`,
     [author.id]
   );
-  res.json({ clubs: rows.map(r => ({ slug: r.slug, name: r.name, icon_url: r.icon_url || null, is_nsfw: r.is_nsfw, role: r.role })) });
+  res.json({ clubs: rows.map(r => ({ slug: r.slug, name: r.name, icon_url: r.icon_url || null, badge_url: r.badge_url || null, is_nsfw: r.is_nsfw, role: r.role })) });
 });
 
 // Shared by the followers/following list modal — each row carries enough to
@@ -5709,6 +5732,22 @@ app.put('/api/account/profile', requireAuth, async (req, res) => {
   const displayName = req.body.display_name !== undefined
     ? String(req.body.display_name).trim().slice(0, 20) || null
     : null;
+  // Re-validated against real membership here (the trust boundary) even
+  // though the picker only ever offers clubs the viewer already belongs
+  // to -- an empty string clears the feature, same COALESCE-skips-only-
+  // actual-NULL trick the other opt-in fields above use.
+  let featuredClubSlug = null;
+  if (req.body.featured_club_slug !== undefined) {
+    const raw = String(req.body.featured_club_slug || '').trim().toLowerCase();
+    if (!raw) featuredClubSlug = '';
+    else {
+      const { rows } = await pool.query(
+        `SELECT c.slug FROM clubs c JOIN club_members cm ON cm.club_id = c.id
+         WHERE c.slug = $1 AND cm.user_id = $2`, [raw, req.user.id]
+      );
+      featuredClubSlug = rows.length ? raw : '';
+    }
+  }
 
   await pool.query(
     `UPDATE users SET
@@ -5717,9 +5756,10 @@ app.put('/api/account/profile', requireAuth, async (req, res) => {
        account_bio = COALESCE($3, account_bio),
        fun_fact = COALESCE($4, fun_fact),
        account_links = COALESCE($5, account_links),
-       display_name = COALESCE($7, display_name)
+       display_name = COALESCE($7, display_name),
+       featured_club_slug = COALESCE($8, featured_club_slug)
      WHERE id = $6`,
-    [pronouns, favoritePokemon, accountBio, funFact, links, req.user.id, displayName]
+    [pronouns, favoritePokemon, accountBio, funFact, links, req.user.id, displayName, featuredClubSlug]
   );
   res.json({ message: 'Profile updated.' });
 });
