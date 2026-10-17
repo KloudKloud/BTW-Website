@@ -656,15 +656,16 @@
     /* Links box */
     .fp-share-btn {
       background: none; border: none; cursor: pointer; color: #999; font-size: 0.9rem;
-      padding: 0.15rem 0.3rem; border-radius: 6px; line-height: 1;
+      padding: 0.15rem 0.3rem; border-radius: 6px; line-height: 1; flex-shrink: 0;
     }
     .fp-share-btn:hover { color: #7fa8d9; background: rgba(127,168,217,0.1); }
     .fp-links-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+    .fp-links-list li { display: flex; align-items: center; gap: 0.35rem; }
     .fp-link-item {
       display: block; text-decoration: none; color: #ddd; font-size: 0.85rem;
       padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      transition: border-color 0.15s, color 0.15s;
+      transition: border-color 0.15s, color 0.15s; flex: 1; min-width: 0;
     }
     .fp-link-item:hover { border-color: #7fa8d9; color: #7fa8d9; }
 
@@ -1327,10 +1328,7 @@
       <div class="fp-home-side-divider"></div>
 
       <div class="fp-home-side-section">
-        <p class="fp-home-side-label">
-          Links
-          <button class="fp-share-btn" id="fp-share-btn" type="button" title="Copy link to this page">🔗</button>
-        </p>
+        <p class="fp-home-side-label">Links</p>
         <ul class="fp-links-list" id="fp-links-list"></ul>
         <div id="fp-links-editor" hidden></div>
       </div>
@@ -3385,18 +3383,18 @@
     return moreWrap;
   }
 
-  document.getElementById('fp-share-btn').addEventListener('click', async () => {
-    const url = window.location.origin + window.fpUrl(`/${USERNAME}`);
+  // Copies one specific link's own URL (not the profile page) -- used by
+  // the small 🔗 button rendered next to each entry in the Links list.
+  async function copyLinkUrl(url, btn) {
     try {
       await navigator.clipboard.writeText(url);
-      const btn = document.getElementById('fp-share-btn');
       const original = btn.textContent;
       btn.textContent = '✓';
       setTimeout(() => { btn.textContent = original; }, 1500);
     } catch {
       prompt('Copy this link:', url);
     }
-  });
+  }
 
   // ── In-line editor ──────────────────────────────────────────────────────
   function isDefaultBanner() {
@@ -3686,7 +3684,6 @@
       wrap.querySelectorAll('.fp-link-edit-remove').forEach(btn => {
         btn.addEventListener('click', () => { editLinks.splice(+btn.dataset.i, 1); paint(); });
       });
-      document.getElementById('fp-share-btn').hidden = !editLinks.length;
     }
     paint();
   }
@@ -4499,9 +4496,15 @@
         link.title = l.label;
         link.textContent = truncate(l.label, 15);
         li.appendChild(link);
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'fp-share-btn';
+        copyBtn.title = 'Copy this link';
+        copyBtn.textContent = '🔗';
+        copyBtn.addEventListener('click', () => copyLinkUrl(l.url, copyBtn));
+        li.appendChild(copyBtn);
         linksList.appendChild(li);
       });
-      document.getElementById('fp-share-btn').hidden = !(a.account_links || []).length;
 
       // Featured Stories / Featured Characters / Featured Gallery
       renderFeaturedStories('fp-featured-stories', a.featured_stories);
