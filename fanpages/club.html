@@ -801,6 +801,8 @@
     }
     .cl-post-meta-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.22); color: #fff; }
     .cl-post-meta-btn.liked { border-color: #d97a72; color: #f5b3ac; background: rgba(217,122,114,0.1); }
+    .cl-post-meta-btn.saved { border-color: #7fa8d9; color: #cfe0f5; background: rgba(127,168,217,0.14); }
+    .cl-post-meta-btn.saved svg { fill: currentColor; }
 
     /* Post list teaser row — like/comment counts, "almost like a teaser for
        clicking on the post" per feedback, shown under the title in both the
@@ -2122,6 +2124,9 @@
           <button type="button" class="cl-post-meta-btn" id="cl-post-comment-jump-btn">
             💬 <span id="cl-post-comment-count">0</span>
           </button>
+          <button type="button" class="cl-post-meta-btn" id="cl-post-save-btn" title="Save this post">
+            <svg viewBox="0 0 24 24" style="width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:2;"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
+          </button>
           <button type="button" class="cl-post-meta-btn" id="cl-post-share-btn" title="Share this post">
             <svg viewBox="0 0 24 24" fill="none" style="width:15px; height:15px;"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
           </button>
@@ -2720,10 +2725,7 @@ if (token && currentUser) {
         <span class="soc-sidebar-username">${escapeHtml(currentUser.display_name || currentUser.username)}</span>
       </button>
       <div class="soc-sidebar-user-menu" id="soc-sidebar-user-menu" hidden>
-        <a class="soc-sidebar-user-menu-item" href="${window.fpUrl('/your-posts')}">Your Posts</a>
-        <hr class="soc-sidebar-user-menu-divider" />
-        <a class="soc-sidebar-user-menu-item" href="${window.fpUrl(`/${encodeURIComponent(currentUser.username)}`)}">View Profile</a>
-        <a class="soc-sidebar-user-menu-item" href="${window.fpUrl('/account-settings')}">Account Settings</a>
+        <a class="soc-sidebar-user-menu-item" href="${window.fpUrl('/club-profile')}">Your Club Profile</a>
       </div>
     </div>
   `;
@@ -3584,14 +3586,16 @@ function adminPostRow(post, mode) {
   return row;
 }
 
-// "•••" post-actions menu -- the post's own author, or a club owner/admin
-// (matches the server-side check in DELETE /api/clubs/:slug/posts/:postId
-// exactly). Returns null (no menu rendered) if the viewer can't delete.
+// "•••" post-actions menu -- Save/Unsave shows for any logged-in viewer;
+// Edit/Delete are added on top of that only for the post's own author or a
+// club owner/admin (matches the server-side check in DELETE
+// /api/clubs/:slug/posts/:postId exactly). Returns null (no menu rendered)
+// at all for a logged-out viewer, since there's nothing for them to do here.
 function clPostMenu(post) {
+  if (!currentUser) return null;
   const isOwnerOrAdmin = currentClub && (currentClub.viewer_role === 'owner' || currentClub.viewer_role === 'admin');
-  const isSiteAdmin = currentUser && currentUser.is_admin;
-  const canDelete = currentUser && (post.author.id === currentUser.id || isOwnerOrAdmin || isSiteAdmin);
-  if (!canDelete) return null;
+  const isSiteAdmin = currentUser.is_admin;
+  const canDelete = post.author.id === currentUser.id || isOwnerOrAdmin || isSiteAdmin;
 
   const wrap = document.createElement('div');
   wrap.className = 'cl-post-menu-wrap';
@@ -3604,36 +3608,58 @@ function clPostMenu(post) {
   dropdown.className = 'cl-post-menu-dropdown';
   dropdown.hidden = true;
 
-  const editLink = document.createElement('a');
-  editLink.href = window.fpUrl(`/create-club-post?club=${encodeURIComponent(slug)}&id=${post.id}`);
-  editLink.textContent = 'Edit';
-  editLink.addEventListener('click', (e) => e.stopPropagation());
-  dropdown.appendChild(editLink);
-
-  const delBtn = document.createElement('button');
-  delBtn.type = 'button';
-  delBtn.className = 'cl-menu-danger';
-  delBtn.textContent = 'Delete';
-  delBtn.addEventListener('click', async (e) => {
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.textContent = post.user_saved ? 'Unsave' : 'Save';
+  saveBtn.addEventListener('click', async (e) => {
     e.preventDefault();
     e.stopPropagation();
     dropdown.hidden = true;
     wrap.classList.remove('cl-post-menu-open');
-    if (!confirm('Delete this post? This cannot be undone.')) return;
     try {
-      const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${post.id}`, { method: 'DELETE', headers: authHeaders() });
-      if (res.ok) {
-        if (post.is_admin_post) loadAdminPosts();
-        else { socialPostsCache = null; loadSocialPosts(); }
-        if (currentClub) {
-          currentClub.post_count = Math.max(0, (currentClub.post_count || 0) - 1);
-          const el = document.getElementById('cl-side-post-count');
-          if (el) el.textContent = currentClub.post_count;
-        }
-      }
+      const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${post.id}/save`, {
+        method: post.user_saved ? 'DELETE' : 'POST', headers: authHeaders(),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      post.user_saved = data.saved;
+      saveBtn.textContent = post.user_saved ? 'Unsave' : 'Save';
     } catch {}
   });
-  dropdown.appendChild(delBtn);
+  dropdown.appendChild(saveBtn);
+
+  if (canDelete) {
+    const editLink = document.createElement('a');
+    editLink.href = window.fpUrl(`/create-club-post?club=${encodeURIComponent(slug)}&id=${post.id}`);
+    editLink.textContent = 'Edit';
+    editLink.addEventListener('click', (e) => e.stopPropagation());
+    dropdown.appendChild(editLink);
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'cl-menu-danger';
+    delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropdown.hidden = true;
+      wrap.classList.remove('cl-post-menu-open');
+      if (!confirm('Delete this post? This cannot be undone.')) return;
+      try {
+        const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${post.id}`, { method: 'DELETE', headers: authHeaders() });
+        if (res.ok) {
+          if (post.is_admin_post) loadAdminPosts();
+          else { socialPostsCache = null; loadSocialPosts(); }
+          if (currentClub) {
+            currentClub.post_count = Math.max(0, (currentClub.post_count || 0) - 1);
+            const el = document.getElementById('cl-side-post-count');
+            if (el) el.textContent = currentClub.post_count;
+          }
+        }
+      } catch {}
+    });
+    dropdown.appendChild(delBtn);
+  }
 
   btn.addEventListener('click', (e) => {
     e.preventDefault();
@@ -3950,6 +3976,9 @@ function updatePostMetaUI(post) {
   document.getElementById('cl-post-like-icon').textContent = post.user_liked ? '❤️' : '🤍';
   document.getElementById('cl-post-like-count').textContent = post.like_count || 0;
   document.getElementById('cl-post-comment-count').textContent = post.comment_count || 0;
+  const saveBtn = document.getElementById('cl-post-save-btn');
+  saveBtn.classList.toggle('saved', !!post.user_saved);
+  saveBtn.title = post.user_saved ? 'Unsave this post' : 'Save this post';
 }
 document.getElementById('cl-post-like-btn').addEventListener('click', async () => {
   if (!currentPostDetail) return;
@@ -3966,6 +3995,19 @@ document.getElementById('cl-post-like-btn').addEventListener('click', async () =
 });
 document.getElementById('cl-post-comment-jump-btn').addEventListener('click', () => {
   document.getElementById('cl-post-detail-comments').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+document.getElementById('cl-post-save-btn').addEventListener('click', async () => {
+  if (!currentPostDetail) return;
+  if (!token) { window.fpRequireSignIn('To save a post, first', 'to keep it for later!'); return; }
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${currentPostDetail.id}/save`, {
+      method: currentPostDetail.user_saved ? 'DELETE' : 'POST', headers: authHeaders(),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    currentPostDetail.user_saved = data.saved;
+    updatePostMetaUI(currentPostDetail);
+  } catch {}
 });
 document.getElementById('cl-post-share-btn').addEventListener('click', (e) => {
   if (!currentPostDetail) return;

@@ -1303,6 +1303,19 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
       ON club_post_likes(post_id, guest_device_id) WHERE guest_device_id IS NOT NULL;
   `).catch(e => console.error('club_post_likes guest migration:', e.message));
 
+  // Saved club posts -- account-only (no guest_device_id, unlike likes),
+  // powers the "Saved" tab on the new Your Club Profile page.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS club_post_saves (
+      id         SERIAL      PRIMARY KEY,
+      post_id    INTEGER     NOT NULL REFERENCES club_posts(id) ON DELETE CASCADE,
+      user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(post_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_club_post_saves_user ON club_post_saves(user_id, created_at DESC);
+  `).catch(e => console.error('club_post_saves migration:', e.message));
+
   // Tracks the last time a viewer opened a given club — powers the "Best"
   // feed's small personalization boost for clubs you've recently browsed
   // (in addition to the bigger boost for clubs you're actually a member
@@ -9403,6 +9416,7 @@ function clubPostPublicShape(p, voteRows, viewerId) {
     like_count: Number(p.like_count) || 0,
     comment_count: Number(p.comment_count) || 0,
     user_liked: !!p.user_liked,
+    user_saved: !!p.user_saved,
     // Only present on the single-post GET (joined there) -- lets
     // create-club-post.html's edit mode self-detect "this post is a
     // Promotion page card" without needing a ?page= URL param, and the
@@ -9473,6 +9487,7 @@ app.get('/api/clubs/:slug/posts', async (req, res) => {
        (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
        (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
        (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked,
+       (SELECT COUNT(*) > 0 FROM club_post_saves WHERE post_id = cp.id AND user_id = $2) AS user_saved,
        ${hotScoreExpr} AS hot_score
      FROM club_posts cp JOIN users u ON u.id = cp.author_user_id
      WHERE cp.club_id = $1 ${whereExtra}
@@ -9505,7 +9520,8 @@ app.get('/api/clubs/:slug/posts/:postId', async (req, res) => {
        pg.slug AS promotion_page_slug, pg.title AS promotion_page_title,
        (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
        (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
-       (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $3) AS user_liked
+       (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $3) AS user_liked,
+       (SELECT COUNT(*) > 0 FROM club_post_saves WHERE post_id = cp.id AND user_id = $3) AS user_saved
      FROM club_posts cp JOIN users u ON u.id = cp.author_user_id
        LEFT JOIN club_pages pg ON pg.id = cp.promotion_page_id
      WHERE cp.id = $1 AND cp.club_id = $2`,
@@ -9603,6 +9619,31 @@ app.delete('/api/clubs/:slug/posts/:postId/like', async (req, res) => {
   );
   const { rows: [{ count }] } = await pool.query('SELECT COUNT(*)::int AS count FROM club_post_likes WHERE post_id = $1', [post.id]);
   res.json({ liked: false, like_count: count });
+});
+
+// Saving, unlike liking, is account-only -- powers the "Saved" tab on Your
+// Club Profile, so there's no meaningful "guest save" that would persist
+// anywhere for them to come back to.
+app.post('/api/clubs/:slug/posts/:postId/save', requireAuth, async (req, res) => {
+  const { rows: [post] } = await pool.query(
+    `SELECT cp.id FROM club_posts cp JOIN clubs c ON c.id = cp.club_id WHERE c.slug = $1 AND cp.id = $2`,
+    [req.params.slug, req.params.postId]
+  );
+  if (!post) return res.status(404).json({ error: 'Post not found.' });
+  await pool.query(
+    'INSERT INTO club_post_saves (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [post.id, req.user.id]
+  );
+  res.json({ saved: true });
+});
+app.delete('/api/clubs/:slug/posts/:postId/save', requireAuth, async (req, res) => {
+  const { rows: [post] } = await pool.query(
+    `SELECT cp.id FROM club_posts cp JOIN clubs c ON c.id = cp.club_id WHERE c.slug = $1 AND cp.id = $2`,
+    [req.params.slug, req.params.postId]
+  );
+  if (!post) return res.status(404).json({ error: 'Post not found.' });
+  await pool.query('DELETE FROM club_post_saves WHERE post_id = $1 AND user_id = $2', [post.id, req.user.id]);
+  res.json({ saved: false });
 });
 
 // Posts are now a one-shot "session" (create → submit, or edit → resubmit
@@ -10753,6 +10794,60 @@ app.get('/api/clubs-recommended', async (req, res) => {
     already_joined: !!p.already_joined, recently_visited: !!p.recently_visited,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
     club: { slug: p.club_slug, name: p.club_name, icon_url: p.club_icon || null },
+  })) });
+});
+
+// GET /api/your-saved-posts — the "Saved" tab on Your Club Profile. Same
+// card shape as /api/clubs-feed, just sourced from club_post_saves and
+// ordered by when it was saved (not when it was posted) by default.
+app.get('/api/your-saved-posts', requireAuth, async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit, 10) || 25, 50);
+  const { rows } = await pool.query(
+    `SELECT cp.*, u.username, u.display_name, u.avatar, c.slug AS club_slug, c.name AS club_name, c.icon_url AS club_icon,
+       cps.created_at AS saved_at,
+       (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
+       (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
+       (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked
+     FROM club_post_saves cps
+     JOIN club_posts cp ON cp.id = cps.post_id
+     JOIN users u ON u.id = cp.author_user_id
+     JOIN clubs c ON c.id = cp.club_id
+     WHERE cps.user_id = $2
+     ORDER BY cps.created_at DESC
+     LIMIT $1`,
+    [limit, req.user.id]
+  );
+  res.json({ posts: rows.map(p => ({
+    id: p.id, title: p.title, body: clubPostFeedSnippet(p), created_at: p.created_at, saved_at: p.saved_at,
+    image_url: p.cover_image_url || '', preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
+    preview_image_url: p.preview_image_url || '',
+    like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_liked: !!p.user_liked,
+    user_saved: true,
+    author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
+    club: { slug: p.club_slug, name: p.club_name, icon_url: p.club_icon || null },
+  })) });
+});
+
+// GET /api/your-club-comments — the "Comments" tab on Your Club Profile:
+// every comment the viewer has left on a club post, newest first, with
+// enough context (post title + club) to link back to where it was posted.
+app.get('/api/your-club-comments', requireAuth, async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit, 10) || 25, 50);
+  const { rows } = await pool.query(
+    `SELECT cc.id, cc.body, cc.created_at, cp.id AS post_id, cp.title AS post_title,
+       c.slug AS club_slug, c.name AS club_name, c.icon_url AS club_icon
+     FROM content_comments cc
+     JOIN club_posts cp ON cp.id = cc.target_id AND cc.target_type = 'club_post'
+     JOIN clubs c ON c.id = cp.club_id
+     WHERE cc.user_id = $2
+     ORDER BY cc.created_at DESC
+     LIMIT $1`,
+    [limit, req.user.id]
+  );
+  res.json({ comments: rows.map(c => ({
+    id: c.id, body: c.body, created_at: c.created_at,
+    post: { id: c.post_id, title: c.post_title || 'Untitled post' },
+    club: { slug: c.club_slug, name: c.club_name, icon_url: c.club_icon || null },
   })) });
 });
 
