@@ -845,6 +845,17 @@
     }
     @media (max-width: 900px) { .cl-page-gallery-grid { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 560px) { .cl-page-gallery-grid { grid-template-columns: repeat(2, 1fr); } }
+    /* Card = image tile + an always-visible caption underneath (title +
+       "by <uploader>"), same "Recent Submissions"/Browse-Posts recipe as
+       fanpages/index.html and search.html's own .rs-tile/.rs-card/
+       .rs-card-caption -- duplicated here under a cl-page-gallery-tile-*
+       namespace rather than reusing those classes directly, same as every
+       other page that's borrowed this look. Title gets the established
+       Fredoka/blue-glow "spotlight" treatment (Characters/Gallery/Stories
+       card titles elsewhere) instead of rs-card-caption-title's flatter
+       plain-blue version, to read as a card on ITS OWN page rather than a
+       photo-wall thumbnail. */
+    .cl-page-gallery-tile-wrap { display: flex; flex-direction: column; min-width: 0; }
     .cl-page-gallery-tile {
       display: block; position: relative; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden;
       background: #1a1a1a; border: 1px solid rgba(255,255,255,0.08); cursor: pointer;
@@ -859,6 +870,19 @@
       color: #fff; font-size: 0.78rem; font-weight: 700; cursor: pointer; transition: background 0.15s;
     }
     .cl-page-gallery-tile-like:hover { background: rgba(0,0,0,0.85); }
+    .cl-page-gallery-tile-badge {
+      position: absolute; bottom: 6px; right: 7px; z-index: 2;
+      font-size: 1.35rem; line-height: 1; text-shadow: 0 1px 5px rgba(0,0,0,0.85); pointer-events: none;
+    }
+    .cl-page-gallery-tile-caption { padding: 0.55rem 0.1rem 0; min-width: 0; text-align: center; }
+    .cl-page-gallery-tile-title {
+      display: block; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.92rem; font-weight: 700;
+      color: #7fa8d9; text-shadow: 0 0 14px rgba(127,168,217,0.5), 0 1px 3px rgba(0,0,0,0.5);
+      text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .cl-page-gallery-tile-author { display: block; font-size: 0.78rem; color: #999; margin-top: 0.2rem; }
+    .cl-page-gallery-tile-author a { color: #a8c6e8; text-decoration: none; }
+    .cl-page-gallery-tile-author a:hover { text-decoration: underline; }
 
     /* Gallery Page detail view — built on the shared art-view-* layout
        (see fanpages.css's #cl-gallery-detail-view rules, duplicated
@@ -902,6 +926,15 @@
     #soc-layout.cl-gallery-focus #cl-gallery-detail-view.art-view-wrapper {
       max-width: none; margin: 0; padding-left: 3rem; padding-right: 3rem;
     }
+    /* Solid black behind the image instead of the club's own theme/banner
+       art bleeding through blurred -- #cl-page-bg-wrap is a sibling of
+       #soc-layout (not a descendant), so this needs its own body-level
+       class rather than reusing the #soc-layout one above. !important on
+       the image layer only, to beat the inline background-image JS sets
+       per-page (applyPageTheme/renderBanner etc.) -- nothing else here
+       needs it since plain background-color already wins on its own. */
+    body.cl-gallery-focus #cl-page-bg-wrap { background: #000; }
+    body.cl-gallery-focus #cl-page-bg-img { background-image: none !important; }
 
     /* Promotion Page template — vertical card list ("much like posts") and
        the chapter-reading-style detail view. */
@@ -1498,18 +1531,24 @@
     /* Compound selector (two classes) so this reliably beats the later,
        equal-specificity .cl-promo-row-menu-wrap { position: relative }
        rule regardless of source order -- otherwise the menu stays in
-       normal flex flow below the image instead of floating on top of it. */
-    .cl-promo-row-menu-wrap.cl-gallery-editor-tile-menu { position: absolute; top: 4px; right: 4px; z-index: 2; }
-    .cl-gallery-editor-tile-menu .cl-promo-row-menu-btn { background: rgba(0,0,0,0.65); color: #fff; }
+       normal flex flow below the image instead of floating on top of it.
+       Stretched left:4px/right:4px (not just a right:4px box sized to the
+       button) so the dropdown below has the TILE's full width as its
+       centering reference, not just the small button -- its own height
+       collapses to 0 since every child inside is position:absolute, which
+       is fine, nothing else relies on this element having visible size. */
+    .cl-promo-row-menu-wrap.cl-gallery-editor-tile-menu { position: absolute; top: 4px; left: 4px; right: 4px; z-index: 2; }
+    .cl-gallery-editor-tile-menu .cl-promo-row-menu-btn {
+      position: absolute; top: 0; right: 0; background: rgba(0,0,0,0.65); color: #fff;
+    }
     .cl-gallery-editor-tile-menu .cl-promo-row-menu-btn:hover { color: #7fa8d9; background: rgba(127,168,217,0.3); }
-    /* Dropdown opens to the LEFT of the "•••" button at the same height,
-       not below it -- it then sits over the image itself (same top-right
-       corner the button occupies) instead of the base recipe's
-       below-and-right-aligned flyout (built for a wide list row, not a
-       small tile, where opening sideways would run off the grid). Its one
-       item, "View on Page", reads a touch smaller to match. */
+    /* Dropdown opens BELOW the "•••" button (its own 28px height + a small
+       gap) but centered on the whole tile -- left:50%/transform now
+       relative to the full-width wrap above, not just the button, so it
+       sits tucked under the button without hugging the image's right
+       edge. Its one item, "View on Page", reads a touch smaller to match. */
     .cl-gallery-editor-tile-menu .cl-promo-row-menu-dropdown {
-      top: 0; left: auto; right: calc(100% + 6px); min-width: 0; width: max-content;
+      top: 32px; left: 50%; right: auto; transform: translateX(-50%); min-width: 0; width: max-content;
     }
     .cl-gallery-editor-tile-menu .cl-promo-row-menu-dropdown button {
       text-align: center; font-size: 0.78rem; padding: 0.5rem 0.9rem; white-space: nowrap;
@@ -1525,9 +1564,9 @@
        verified with Playwright against the live page's actual computed
        style, not just by reading the source. */
     .cl-edit-card-row-btn.cl-gallery-editor-tile-btn--edit,
-    .cl-edit-card-row-btn.cl-gallery-editor-tile-btn--edit:hover { background: #7fa8d9; border-color: #7fa8d9; color: #0a0a0a; }
+    .cl-edit-card-row-btn.cl-gallery-editor-tile-btn--edit:hover { background: #93b8e3; border-color: #93b8e3; color: #fff; }
     .cl-edit-card-row-btn.cl-gallery-editor-tile-btn--delete,
-    .cl-edit-card-row-btn.cl-gallery-editor-tile-btn--delete:hover { background: #d97a72; border-color: #d97a72; color: #0a0a0a; }
+    .cl-edit-card-row-btn.cl-gallery-editor-tile-btn--delete:hover { background: #e38f88; border-color: #e38f88; color: #fff; }
     /* "+ Gallery" sits beside the grid in its own sticky column, same
        layout the Promotion Page's "+ Post" uses. */
     .cl-promo-builder-layout .cl-gallery-editor-grid { flex: 1; min-width: 0; margin-top: 0; }
@@ -3673,6 +3712,16 @@ function navigateTo(overrides, state) {
 }
 
 let currentPageSlug = null;
+// Hides the left site nav/right club panel and swaps the theme background
+// for solid black while a gallery image's detail view is open -- two
+// separate toggle points (#soc-layout for the sidebars/width, body for the
+// background, since #cl-page-bg-wrap sits outside #soc-layout in the DOM)
+// kept in sync here instead of duplicated at each of this function's three
+// call sites. See the .cl-gallery-focus rules in <style>.
+function setGalleryFocus(on) {
+  document.getElementById('soc-layout').classList.toggle('cl-gallery-focus', on);
+  document.body.classList.toggle('cl-gallery-focus', on);
+}
 function renderFromUrl() {
   // Custom pages hide the banner/pfp that Home+Social show, so switching
   // between the two changes the page's total height above the fold --
@@ -3696,7 +3745,7 @@ function renderFromUrl() {
   document.getElementById('cl-post-detail-view').hidden = true;
   document.getElementById('cl-gallery-detail-view').hidden = true;
   document.getElementById('cl-body-row').classList.remove('cl-detail-mode');
-  document.getElementById('soc-layout').classList.remove('cl-gallery-focus');
+  setGalleryFocus(false);
   document.body.classList.remove('cl-post-open');
 
   // The top banner is Home-only now -- every other page (a post, or any
@@ -4320,13 +4369,20 @@ let pageGalleryDetailIdx = 0;
 function galleryLikeBtnHtml(img) {
   return `${img.user_liked ? '❤️' : '🤍'} <span>${img.like_count || 0}</span>`;
 }
+// Card = image tile + an always-visible caption underneath (title + "by
+// <uploader>" + a 🎨 badge), same look as the Fanpage Hub's "Recent
+// Submissions"/Browse Posts cards -- see the .cl-page-gallery-tile-* rules
+// in <style>.
 function pageGalleryTileEl(img, idx) {
+  const wrap = document.createElement('div');
+  wrap.className = 'cl-page-gallery-tile-wrap';
   const a = document.createElement('a');
   a.className = 'cl-page-gallery-tile';
   a.href = '#';
   a.innerHTML = `
     <img src="${img.image_url}" alt="${escapeHtml(img.title || '')}" loading="lazy" style="object-position:${img.position_x}% ${img.position_y}%;" />
     <button type="button" class="cl-page-gallery-tile-like">${galleryLikeBtnHtml(img)}</button>
+    <span class="cl-page-gallery-tile-badge">🎨</span>
   `;
   a.addEventListener('click', (e) => {
     e.preventDefault();
@@ -4339,7 +4395,21 @@ function pageGalleryTileEl(img, idx) {
     await toggleGalleryLike(img);
     e.currentTarget.innerHTML = galleryLikeBtnHtml(img);
   });
-  return a;
+  wrap.appendChild(a);
+  const authorHtml = img.uploader_username
+    ? `<a href="${window.fpUrl(`/${encodeURIComponent(img.uploader_username)}`)}">${escapeHtml(img.uploader_display_name || img.uploader_username)}</a>`
+    : 'Unknown';
+  wrap.insertAdjacentHTML('beforeend', `
+    <div class="cl-page-gallery-tile-caption">
+      <a class="cl-page-gallery-tile-title" href="#">${escapeHtml(img.title || 'Untitled')}</a>
+      <span class="cl-page-gallery-tile-author">by ${authorHtml}</span>
+    </div>
+  `);
+  wrap.querySelector('.cl-page-gallery-tile-title').addEventListener('click', (e) => {
+    e.preventDefault();
+    openPageGalleryDetail(idx);
+  });
+  return wrap;
 }
 async function toggleGalleryLike(img) {
   if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(location.pathname + location.search)}`); return; }
@@ -4372,12 +4442,12 @@ function showGalleryDetailImage(idx) {
 function openPageGalleryDetail(idx) {
   document.getElementById('cl-custom-page-view').hidden = true;
   document.getElementById('cl-gallery-detail-view').hidden = false;
-  // Hide the left site nav and right club info panel so the image itself
-  // can grow into the freed width instead of floating in the regular
-  // sidebar-flanked column -- see .cl-gallery-focus in <style>. Reset
-  // happens at the top of renderFromUrl(), alongside every other view's
-  // hidden toggle, whenever navigation moves away from this view.
-  document.getElementById('soc-layout').classList.add('cl-gallery-focus');
+  // Hide the left site nav/right club panel and swap the theme background
+  // for solid black so the image itself is the focus -- see
+  // .cl-gallery-focus in <style>. Reset happens at the top of
+  // renderFromUrl(), alongside every other view's hidden toggle, whenever
+  // navigation moves away from this view.
+  setGalleryFocus(true);
   window.scrollTo(0, 0);
   showGalleryDetailImage(idx);
 }
@@ -4456,7 +4526,7 @@ document.getElementById('cl-gallery-detail-back-btn').addEventListener('click', 
   }
   document.getElementById('cl-gallery-detail-view').hidden = true;
   document.getElementById('cl-custom-page-view').hidden = false;
-  document.getElementById('soc-layout').classList.remove('cl-gallery-focus');
+  setGalleryFocus(false);
   ccMoveTo('cl-post-detail-comments-slot');
 });
 
