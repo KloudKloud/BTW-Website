@@ -585,6 +585,12 @@ async function initDb() {
     WHERE ref_image IS NOT NULL AND ref_image != '' AND ref_image != '/images/defaultchar.jpg';
   `).catch(e => console.error('moderator_characters is_official_art backfill:', e.message));
 
+  // Voice Claims -- a short MP3 clip, played from a mic icon beside the
+  // character's name wherever it's displayed.
+  await pool.query(`
+    ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS voice_claim_url TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('moderator_characters voice_claim_url migration:', e.message));
+
   // Same naive per-load view counter as stories/gallery -- and its own
   // Bookmarks table, deliberately separate from moderator_character_likes:
   // "Like" is the quick heart-toggle scattered across every card; "Bookmark"
@@ -3661,6 +3667,21 @@ const uploadModImage = multer({
   },
 });
 
+// Voice Claims — a short MP3 clip attached to a character, played from a
+// mic icon next to their name. Capped much smaller than image uploads
+// (5MB ~ a few minutes at 128kbps) since this is meant to be a short line/
+// reading, not a full audio drama upload.
+const uploadModAudio = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, MOD_IMAGES_DIR),
+    filename: (req, file, cb) => cb(null, `${req.user.id}_${Date.now()}_${file.fieldname}.mp3`),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    cb(null, ['audio/mpeg', 'audio/mp3'].includes(file.mimetype));
+  },
+});
+
 // Card/spotlight-sized JPEG copy of a character ref_image or gallery
 // image_url, generated next to the original -- used by the Homepage
 // Character/Gallery Spotlight and Recent Submissions (see thumb_image_url
@@ -5228,7 +5249,7 @@ app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
   const { rows } = await pool.query(
     `SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.view_count,
             mc.description, mc.stats, mc.facts, mc.lore, mc.relationships,
-            mc.is_official_art, mc.official_art_source_url,
+            mc.is_official_art, mc.official_art_source_url, mc.voice_claim_url,
             ms.story_path, ms.slug, ms.site_title,
             (SELECT COUNT(*)::int FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id) AS like_count,
             EXISTS(SELECT 1 FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id AND mcl.user_id = $2) AS liked,
@@ -5252,6 +5273,7 @@ app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
       description: r.description, stats: r.stats || {}, facts: r.facts || [],
       lore: r.lore || [], relationships: r.relationships || [],
       is_official_art: r.is_official_art !== false, official_art_source_url: r.official_art_source_url || '',
+      voice_claim_url: r.voice_claim_url || '',
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
       like_count: r.like_count, liked: r.liked, bookmarked: r.bookmarked, view_count: r.view_count || 0,
     })),
@@ -6039,7 +6061,7 @@ async function sendSiteLookup(query, params, req, res) {
     ),
     pool.query(`
       SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.description, mc.stats, mc.facts, mc.lore, mc.relationships, mc.owner_user_id, mc.ref_is_nsfw, mc.view_count,
-             mc.is_official_art, mc.official_art_source_url,
+             mc.is_official_art, mc.official_art_source_url, mc.voice_claim_url,
              ou.display_name AS owner_display_name, ou.username AS owner_username,
              (SELECT COUNT(*)::int FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id) AS like_count,
              EXISTS(SELECT 1 FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id AND mcl.user_id = $2) AS liked,
@@ -7016,6 +7038,13 @@ app.post('/api/moderator/character-image', requireAuth, uploadModImage.single('i
   res.json({ url: `/images/moderators/${req.file.filename}` });
 });
 
+// Voice Claim MP3 upload — same "upload it, get a URL back" shape as the
+// reference image, embedded into the create/update JSON payload afterward.
+app.post('/api/moderator/character-voice', requireAuth, uploadModAudio.single('audio'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'An MP3 file (5MB max) is required.' });
+  res.json({ url: `/images/moderators/${req.file.filename}` });
+});
+
 // Inline images dropped into a chapter's body text (the chapter editor) —
 // same plain "upload it, get a URL back" shape, the editor embeds the URL
 // itself in an image block within the saved body HTML.
@@ -7097,7 +7126,7 @@ app.put('/api/moderator/characters/profile-order', requireAuth, async (req, res)
 // link to this story is a separate row, so the same character can later be
 // linked into other stories too without being duplicated.
 app.post('/api/moderator/characters', requireAuth, requireModerator, async (req, res) => {
-  const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url } = req.body;
+  const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
   const cleanStats = await sanitizeCharacterStats(stats || {});
   // New characters jump to the top of the owner's profile Page Order.
@@ -7105,12 +7134,12 @@ app.post('/api/moderator/characters', requireAuth, requireModerator, async (req,
     'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_characters WHERE owner_user_id = $1', [req.user.id]
   );
   const { rows: [character] } = await pool.query(
-    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
      JSON.stringify(relationships || []), !!ref_is_nsfw,
-     is_official_art !== undefined ? !!is_official_art : true, official_art_source_url || '', profileMinOrder]
+     is_official_art !== undefined ? !!is_official_art : true, official_art_source_url || '', voice_claim_url || '', profileMinOrder]
   );
   const { rows: [{ maxOrder }] } = await pool.query(
     'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM character_story_links WHERE site_id = $1', [req.modSite.id]
@@ -7131,7 +7160,7 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
     'SELECT * FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
   );
   if (!existing) return res.status(404).json({ error: 'Not found.' });
-  const { name, ref_image, description, stats, facts, lore, relationships, sort_order, ref_is_nsfw, is_official_art, official_art_source_url } = req.body;
+  const { name, ref_image, description, stats, facts, lore, relationships, sort_order, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url } = req.body;
   const cleanStats = stats !== undefined ? await sanitizeCharacterStats(stats) : undefined;
   // A real art change, not just this save happening to repeat the same URL
   // -- drives ref_image_updated_at below, which is what puts this in Recent
@@ -7150,6 +7179,7 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
        ref_is_nsfw             = COALESCE($9, ref_is_nsfw),
        is_official_art         = COALESCE($10, is_official_art),
        official_art_source_url = COALESCE($11, official_art_source_url),
+       voice_claim_url         = COALESCE($14, voice_claim_url),
        ref_image_updated_at    = CASE WHEN $13 THEN NOW() ELSE ref_image_updated_at END,
        updated_at              = NOW()
      WHERE id = $12 RETURNING *`,
@@ -7161,7 +7191,7 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
      sort_order, ref_is_nsfw !== undefined ? !!ref_is_nsfw : null,
      is_official_art !== undefined ? !!is_official_art : null,
      official_art_source_url !== undefined ? official_art_source_url : null,
-     existing.id, artChanged]
+     existing.id, artChanged, voice_claim_url !== undefined ? voice_claim_url : null]
   );
   // Only regenerate when ref_image was actually part of this save -- an
   // unrelated edit (description, stats, etc.) shouldn't re-touch the image.
@@ -7451,19 +7481,19 @@ app.delete('/api/characters/:id/link-gallery/:galleryId', requireAuth, async (re
 // requireModerator — RPers/artists with zero stories should still be able
 // to make characters).
 app.post('/api/characters', requireAuth, async (req, res) => {
-  const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url } = req.body;
+  const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
   const cleanStats = await sanitizeCharacterStats(stats || {});
   const { rows: [{ minOrder: profileMinOrder }] } = await pool.query(
     'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_characters WHERE owner_user_id = $1', [req.user.id]
   );
   const { rows: [character] } = await pool.query(
-    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
      JSON.stringify(relationships || []), !!ref_is_nsfw,
-     is_official_art !== undefined ? !!is_official_art : true, official_art_source_url || '', profileMinOrder]
+     is_official_art !== undefined ? !!is_official_art : true, official_art_source_url || '', voice_claim_url || '', profileMinOrder]
   );
   const { rows: [actor] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
   await notifyFollowers(req.user.id, 'new_character',

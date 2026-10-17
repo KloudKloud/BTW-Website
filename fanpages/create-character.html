@@ -284,6 +284,23 @@
       <textarea class="mod-textarea" id="char-editor-lore" placeholder="One paragraph per line. Each becomes its own line on the character's page."></textarea>
     </div>
 
+    <div class="mod-field">
+      <div class="cc-field-title-row">
+        <label for="char-editor-voice-input">Voice Claims</label>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Voice Claims help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Upload a short MP3 clip of your character's voice! Shows up as a clickable mic icon next to their name. MP3 only, 5MB max.</p></div>
+      </div>
+      <input type="file" id="char-editor-voice-input" accept="audio/mpeg,.mp3" style="display:none;" />
+      <div id="char-editor-voice-empty">
+        <button class="mod-btn mod-btn--small" type="button" id="char-editor-voice-upload-btn">🎤 Upload Voice Claim</button>
+      </div>
+      <div id="char-editor-voice-filled" style="display:none; align-items:center; gap:0.75rem;">
+        <audio id="char-editor-voice-preview" controls style="height:32px; max-width:260px;"></audio>
+        <button class="mod-btn mod-btn--small" type="button" id="char-editor-voice-replace-btn">Replace</button>
+        <button class="mod-btn mod-btn--small mod-btn--danger" type="button" id="char-editor-voice-remove-btn">Remove</button>
+      </div>
+    </div>
+
     <div class="mod-field gallery-linkto-box">
       <label>Link To Story</label>
       <p class="mod-tip-box">💡 If you have one-shots, fics, or a story of some-kind that your character is part of, you can link them here! AO3, Furaffinity, Wattpad — wherever you post your writing, let readers and fans alike explore them! (Note: You first have to post a story onto your account, using the story builder, and then come back to link this character to the designated story! :3)</p>
@@ -593,6 +610,7 @@
   function isBlank(v) { return !v || !v.trim() || v.trim() === NA; }
 
   let uploadedRefUrl = '';
+  let uploadedVoiceUrl = '';
 
   function addFactRow(value, removable) {
     if (removable === undefined) removable = true;
@@ -1046,6 +1064,55 @@
     }
   }
 
+  // ── Voice Claims — a short MP3 upload, no cropping involved. Picking a
+  // file uploads it immediately (mirrors the ref image flow), and the
+  // resulting URL rides along in the regular Create/Save payload. ────────
+  function showVoiceFilled(url) {
+    document.getElementById('char-editor-voice-preview').src = url;
+    document.getElementById('char-editor-voice-empty').style.display = 'none';
+    document.getElementById('char-editor-voice-filled').style.display = 'flex';
+  }
+  function showVoiceEmpty() {
+    document.getElementById('char-editor-voice-preview').src = '';
+    document.getElementById('char-editor-voice-empty').style.display = 'block';
+    document.getElementById('char-editor-voice-filled').style.display = 'none';
+  }
+  async function uploadVoiceClaim(file) {
+    const fd = new FormData();
+    fd.append('audio', file, 'voice.mp3');
+    const res = await fetch('/api/moderator/character-voice', { method: 'POST', headers: authHeaders(), body: fd });
+    if (res.ok) {
+      const data = await res.json();
+      uploadedVoiceUrl = data.url;
+      showVoiceFilled(data.url);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      document.getElementById('char-editor-msg').className = 'mod-panel-msg mod-panel-msg--error';
+      document.getElementById('char-editor-msg').textContent = data.error || 'Voice claim upload failed. Please try again.';
+    }
+  }
+  document.getElementById('char-editor-voice-upload-btn').addEventListener('click', () => {
+    document.getElementById('char-editor-voice-input').click();
+  });
+  document.getElementById('char-editor-voice-replace-btn').addEventListener('click', () => {
+    document.getElementById('char-editor-voice-input').click();
+  });
+  document.getElementById('char-editor-voice-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      document.getElementById('char-editor-msg').className = 'mod-panel-msg mod-panel-msg--error';
+      document.getElementById('char-editor-msg').textContent = 'Voice claim must be 5MB or smaller.';
+      return;
+    }
+    uploadVoiceClaim(file);
+  });
+  document.getElementById('char-editor-voice-remove-btn').addEventListener('click', () => {
+    uploadedVoiceUrl = '';
+    showVoiceEmpty();
+  });
+
   // ── Save ──────────────────────────────────────────────────────────────────
   document.getElementById('char-editor-name').addEventListener('input', (e) => {
     e.target.classList.remove('mod-input--flash-error');
@@ -1106,6 +1173,7 @@
       facts,
       relationships,
       lore: document.getElementById('char-editor-lore').value.split('\n').map(s => s.trim()).filter(Boolean),
+      voice_claim_url: uploadedVoiceUrl,
     };
 
     const saveBtn = document.getElementById('char-editor-save');
@@ -1211,6 +1279,11 @@
       // Blank line between entries, not a single \n — matches how the
       // display renders each lore entry as its own spaced-out paragraph.
       document.getElementById('char-editor-lore').value = (character.lore || []).join('\n\n');
+
+      if (character.voice_claim_url) {
+        uploadedVoiceUrl = character.voice_claim_url;
+        showVoiceFilled(uploadedVoiceUrl);
+      }
 
       if (character.ref_image) {
         uploadedRefUrl = character.ref_image;

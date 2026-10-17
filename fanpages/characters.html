@@ -852,6 +852,30 @@ async function ccHandleCompose() {
 }
 document.getElementById('fp-char-cc-compose-btn').addEventListener('click', ccHandleCompose);
 
+// ── Voice Claim playback — a single shared <audio>, so spamming the mic
+// button restarts the clip from the top instead of stacking overlapping
+// plays. Re-picking a different character's clip just swaps the source. ──
+function fpPlayVoiceClip(url, btn) {
+  if (!window.fpVoiceAudio) window.fpVoiceAudio = new Audio();
+  const audio = window.fpVoiceAudio;
+  if (audio.dataset.src !== url) { audio.src = url; audio.dataset.src = url; }
+  audio.currentTime = 0;
+  audio.play().catch(() => {});
+  document.querySelectorAll('.fp-voice-icon-btn.is-playing').forEach(b => b.classList.remove('is-playing'));
+  btn.classList.add('is-playing');
+  audio.onended = () => btn.classList.remove('is-playing');
+  audio.onpause = () => btn.classList.remove('is-playing');
+}
+function fpMakeVoiceBtn(url, charName) {
+  const btn = document.createElement('button');
+  btn.className = 'fp-share-icon-btn fp-voice-icon-btn';
+  btn.type = 'button';
+  btn.title = `Play ${charName}'s voice claim`;
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z" fill="currentColor"/><path d="M19 11a7 7 0 0 1-14 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 18v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  btn.addEventListener('click', (e) => { e.stopPropagation(); fpPlayVoiceClip(url, btn); });
+  return btn;
+}
+
 // ── Character card — identical markup/classes to the profile Characters
 // tab's renderFpCharProfile, so the two views look the same. Relationship
 // links open the linked character in this same overlay (in-page) instead
@@ -886,6 +910,7 @@ function renderCharDetailProfile(char, locked) {
   nameEl.className = 'char-name';
   nameEl.textContent = char.name;
   nameRow.appendChild(nameEl);
+  if (char.voice_claim_url) nameRow.appendChild(fpMakeVoiceBtn(char.voice_claim_url, char.name));
   const shareBtn = document.createElement('button');
   shareBtn.className = 'fp-share-icon-btn';
   shareBtn.type = 'button';
