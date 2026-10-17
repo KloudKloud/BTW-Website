@@ -694,6 +694,7 @@
     .fp-side-club-card:hover { border-color: #7fa8d9; }
     .fp-side-club-card img { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; border-radius: 4px; }
     .fp-side-club-card span { color: #ddd; font-size: 0.85rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fp-side-club-empty { color: #999; font-size: 0.85rem; font-style: italic; margin: 0; }
 
     /* Feature Club editor (Edit Profile, under Featured Gallery) */
     .fp-featured-club-selected {
@@ -1314,15 +1315,16 @@
 
       <div class="fp-home-side-divider"></div>
 
-      <div class="fp-home-side-section fp-home-side-featured-club" id="fp-home-side-featured-club" hidden>
+      <div class="fp-home-side-section fp-home-side-featured-club">
         <p class="fp-home-side-label">Featured Club</p>
-        <a class="fp-side-club-card" id="fp-side-club-card" href="#">
+        <a class="fp-side-club-card" id="fp-side-club-card" href="#" hidden>
           <img id="fp-side-club-badge" src="" alt="" />
           <span id="fp-side-club-name"></span>
         </a>
+        <p class="fp-side-club-empty" id="fp-side-club-empty" hidden><em>No Featured Clubs.</em></p>
       </div>
 
-      <div class="fp-home-side-divider" id="fp-home-side-featured-club-divider" hidden></div>
+      <div class="fp-home-side-divider"></div>
 
       <div class="fp-home-side-section">
         <p class="fp-home-side-label">
@@ -4467,20 +4469,20 @@
         aboutWrap.appendChild(row);
       });
 
-      // Featured Club box -- hidden entirely (section + its own divider)
-      // when the user hasn't picked one, so Links doesn't end up sitting
-      // behind a doubled-up gap.
-      const fcSection = document.getElementById('fp-home-side-featured-club');
-      const fcDivider = document.getElementById('fp-home-side-featured-club-divider');
+      // Featured Club box -- always visible on every profile, same as
+      // Links/Recent Activity/Following, falling back to an italic
+      // "No Featured Clubs." placeholder when nothing's picked.
+      const fcCard = document.getElementById('fp-side-club-card');
+      const fcEmpty = document.getElementById('fp-side-club-empty');
       if (a.featured_club) {
         document.getElementById('fp-side-club-badge').src = a.featured_club.badge_url || '/images/nopicture2.png';
         document.getElementById('fp-side-club-name').textContent = a.featured_club.name;
-        document.getElementById('fp-side-club-card').href = window.fpUrl(`/club?slug=${a.featured_club.slug}`);
-        fcSection.hidden = false;
-        fcDivider.hidden = false;
+        fcCard.href = window.fpUrl(`/club?slug=${a.featured_club.slug}`);
+        fcCard.hidden = false;
+        fcEmpty.hidden = true;
       } else {
-        fcSection.hidden = true;
-        fcDivider.hidden = true;
+        fcCard.hidden = true;
+        fcEmpty.hidden = false;
       }
 
       // Links box
