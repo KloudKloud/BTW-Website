@@ -233,6 +233,19 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS account_banner_zoom INTEGER NOT NULL DEFAULT 100;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_zoom INTEGER NOT NULL DEFAULT 100;
   `).catch(e => console.error('banner/avatar zoom migration:', e.message));
+  // A separate banner just for the Your Club Profile page (fanpages/
+  // club-profile.html) -- blank until the user explicitly crops one there,
+  // same "blank means fall through to a default" convention as
+  // account_banner_url. Kept distinct from account_banner_url on purpose:
+  // the Club Profile page's banner is a different aspect ratio/vibe than the
+  // main fanpage profile's, so sharing one image would mean a crop that
+  // looks right on one page and wrong on the other.
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS club_profile_banner_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS club_profile_banner_position_x INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS club_profile_banner_position_y INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS club_profile_banner_zoom INTEGER NOT NULL DEFAULT 100;
+  `).catch(e => console.error('club_profile_banner migration:', e.message));
   // Inbox threading columns
   await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS thread_id INTEGER`).catch(e => console.error('migration thread_id:', e.message));
   await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS subject TEXT DEFAULT 'No Subject'`).catch(e => console.error('migration subject:', e.message));
@@ -4646,6 +4659,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     `SELECT id, username, display_name, avatar, avatar_original_url, avatar_position_x, avatar_position_y, avatar_zoom,
             pronouns, favorite_pokemon, account_bio, fun_fact, account_links,
             account_banner_url, account_banner_position_x, account_banner_position_y, account_banner_zoom,
+            club_profile_banner_url, club_profile_banner_position_x, club_profile_banner_position_y, club_profile_banner_zoom,
             profile_theme, profile_theme_bg_url
      FROM users WHERE username = $1`,
     [req.params.username.toLowerCase()]
@@ -4922,6 +4936,14 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       banner_position_x: author.account_banner_url ? author.account_banner_position_x : 50,
       banner_position_y: author.account_banner_url ? author.account_banner_position_y : 50,
       banner_zoom: author.account_banner_url ? (author.account_banner_zoom || 100) : 100,
+      // Club Profile banner -- falls back to the account's main banner until
+      // the user explicitly crops a dedicated one for that page, so the page
+      // never looks blank/unset on first visit.
+      club_profile_banner_url: author.club_profile_banner_url || author.account_banner_url || '',
+      club_profile_banner_position_x: author.club_profile_banner_url ? author.club_profile_banner_position_x : (author.account_banner_url ? author.account_banner_position_x : 50),
+      club_profile_banner_position_y: author.club_profile_banner_url ? author.club_profile_banner_position_y : (author.account_banner_url ? author.account_banner_position_y : 50),
+      club_profile_banner_zoom: author.club_profile_banner_url ? (author.club_profile_banner_zoom || 100) : 100,
+      has_own_club_profile_banner: !!author.club_profile_banner_url,
       pronouns: author.pronouns || '',
       favorite_pokemon: author.favorite_pokemon || '',
       account_bio: author.account_bio || '',
@@ -5753,6 +5775,20 @@ app.put('/api/account/banner', requireAuth, uploadModImage.single('banner'), asy
   // New upload resets zoom to 1x, same as avatar/cover/character-ref uploads.
   await pool.query(
     `UPDATE users SET account_banner_url = $1, account_banner_position_x = $2, account_banner_position_y = $3, account_banner_zoom = 100 WHERE id = $4`,
+    [bannerUrl, posX, posY, req.user.id]
+  );
+  res.json({ banner_url: bannerUrl, position_x: posX, position_y: posY, zoom: 100 });
+});
+
+app.put('/api/account/club-profile-banner', requireAuth, uploadModImage.single('banner'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const bannerUrl = `/images/moderators/${req.file.filename}`;
+  const x = parseInt(req.body.position_x, 10);
+  const y = parseInt(req.body.position_y, 10);
+  const posX = Number.isFinite(x) ? x : 50;
+  const posY = Number.isFinite(y) ? y : 50;
+  await pool.query(
+    `UPDATE users SET club_profile_banner_url = $1, club_profile_banner_position_x = $2, club_profile_banner_position_y = $3, club_profile_banner_zoom = 100 WHERE id = $4`,
     [bannerUrl, posX, posY, req.user.id]
   );
   res.json({ banner_url: bannerUrl, position_x: posX, position_y: posY, zoom: 100 });
