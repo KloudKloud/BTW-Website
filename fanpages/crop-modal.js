@@ -74,6 +74,7 @@
 
   let btwCropper = null;
   let onSaveCb = null;
+  let exportFormat = 'image/jpeg';
 
   function close() {
     overlay.hidden = true;
@@ -117,7 +118,7 @@
         canvas.toBlob(async (blob) => {
           if (!blob) { reject(new Error('Could not export the cropped image.')); return; }
           try { await onSaveCb(blob); resolve(); } catch (err) { reject(err); }
-        }, 'image/jpeg', 0.92);
+        }, exportFormat, exportFormat === 'image/jpeg' ? 0.92 : undefined);
       });
       close();
     } catch (err) {
@@ -128,7 +129,10 @@
     }
   });
 
-  // opts: { title, imageSrc, aspectRatio, round, hint, onSave(blob) }
+  // opts: { title, imageSrc, aspectRatio, round, hint, onSave(blob), format }
+  // format: 'png' keeps transparency (e.g. logos/badges meant to sit over
+  // other art) instead of the default JPEG export, which flattens any
+  // alpha channel to solid black.
   window.openCropModal = function (opts) {
     overlay.querySelector('#crop-modal-title').textContent = opts.title || 'Crop Image';
     overlay.querySelector('#crop-modal-hint').textContent = opts.hint || 'Drag to move, scroll or pinch to zoom.';
@@ -136,6 +140,7 @@
     wrap.classList.toggle('crop-modal-img-wrap--round', !!opts.round);
     const img = overlay.querySelector('#crop-modal-img');
     onSaveCb = opts.onSave;
+    exportFormat = opts.format === 'png' ? 'image/png' : 'image/jpeg';
     overlay.hidden = false;
     if (btwCropper) { btwCropper.destroy(); btwCropper = null; }
 

@@ -337,12 +337,8 @@
     .cl-name {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 2.6rem; font-weight: 700; color: #7fa8d9;
       text-shadow: 0 0 18px rgba(127,168,217,0.55), 0 1px 3px rgba(0,0,0,0.5);
-      margin: 0 0 1.25rem; display: flex; align-items: center; justify-content: center; gap: 0.6rem;
+      margin: 0 0 1.25rem; text-align: center;
     }
-    /* Optional per-club badge/logo, set in the editor's Home tab -- sits
-       right of the title text, sized off the title's own font-size so it
-       scales with the responsive clamp() instead of a fixed px value. */
-    .cl-name-badge { height: 1.15em; width: auto; object-fit: contain; flex-shrink: 0; }
 
     /* ── Hub / Social tabs — replaces the old underline flourish under the
        title. ── */
@@ -1027,10 +1023,15 @@
     .cl-side::-webkit-scrollbar-thumb:hover, .cl-admin-posts::-webkit-scrollbar-thumb:hover {
       background: rgba(127,168,217,0.65);
     }
+    .cl-side-name-row { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
     .cl-side-name {
       font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 1.2rem; color: #fff;
-      margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
     }
+    /* Optional per-club badge/logo, set in the editor's Home tab. PNG export
+       (see crop-modal.js's `format: 'png'` opt) keeps transparency instead
+       of the usual JPEG flatten-to-black. */
+    .cl-side-badge { height: 1.5rem; width: auto; object-fit: contain; flex-shrink: 0; }
 
     /* ── Admin badge — ribbon + username + a universal Edit Club button,
        replacing the one that used to sit on the banner. ── */
@@ -1900,7 +1901,7 @@
       </div>
 
       <div class="cl-row" id="cl-home-view">
-        <h1 class="cl-name" id="cl-name"><span id="cl-name-text"></span><img class="cl-name-badge" id="cl-name-badge" src="" alt="" hidden></h1>
+        <h1 class="cl-name" id="cl-name"></h1>
 
         <div class="cl-home-tabs">
           <button class="cl-home-tab active" id="cl-home-tab-hub" type="button" data-tab="hub">Hub</button>
@@ -2158,7 +2159,10 @@
 
     <div class="cl-side-backdrop" id="cl-side-backdrop"></div>
     <aside class="cl-side" id="cl-side">
-      <p class="cl-side-name" id="cl-side-name"></p>
+      <div class="cl-side-name-row">
+        <p class="cl-side-name" id="cl-side-name"></p>
+        <img class="cl-side-badge" id="cl-side-badge" src="" alt="" hidden>
+      </div>
       <hr class="cl-side-rule2" />
 
       <!-- Admin/owner only. -->
@@ -3062,11 +3066,11 @@ function renderClub(club, members) {
     ? `<img src="${club.icon_url}" alt="" />`
     : `<span class="cl-icon-fallback">${escapeHtml(club.name.charAt(0).toUpperCase())}</span>`;
 
-  document.getElementById('cl-name-text').textContent = club.name;
-  const nameBadge = document.getElementById('cl-name-badge');
-  if (club.badge_url) { nameBadge.src = club.badge_url; nameBadge.hidden = false; }
-  else { nameBadge.hidden = true; nameBadge.removeAttribute('src'); }
+  document.getElementById('cl-name').textContent = club.name;
   document.getElementById('cl-side-name').textContent = club.name;
+  const sideBadge = document.getElementById('cl-side-badge');
+  if (club.badge_url) { sideBadge.src = club.badge_url; sideBadge.hidden = false; }
+  else { sideBadge.hidden = true; sideBadge.removeAttribute('src'); }
   document.getElementById('cl-about-label').textContent = club.welcome_title || `Welcome To: ${club.name}`;
   document.getElementById('cl-about-body').textContent = club.description || 'This club hasn\'t written anything here yet.';
   document.getElementById('cl-admin-posts-title').textContent = `${club.name} News`;
@@ -5386,6 +5390,7 @@ document.getElementById('cl-edit-badge-recrop-btn').addEventListener('click', (e
   pendingNewBadgeFile = null;
   openCropModal({
     title: 'Crop Club Logo', imageSrc: currentClub.badge_original_url || currentClub.badge_url, aspectRatio: 1, round: false,
+    format: 'png', hint: 'Drag to move, scroll or pinch to zoom. Transparent areas stay transparent.',
     onSave: saveClubBadge,
   });
 });
@@ -5395,14 +5400,15 @@ document.getElementById('cl-edit-badge-file-input').addEventListener('change', (
   pendingNewBadgeFile = file;
   openCropModal({
     title: 'Crop Club Logo', imageSrc: URL.createObjectURL(file), aspectRatio: 1, round: false,
+    format: 'png', hint: 'Drag to move, scroll or pinch to zoom. Transparent areas stay transparent.',
     onSave: saveClubBadge,
   });
   e.target.value = '';
 });
 async function saveClubBadge(blob) {
   const fd = new FormData();
-  fd.append('image', blob, 'badge.jpg');
-  if (pendingNewBadgeFile) fd.append('image_original', pendingNewBadgeFile, pendingNewBadgeFile.name || 'original.jpg');
+  fd.append('image', blob, 'badge.png');
+  if (pendingNewBadgeFile) fd.append('image_original', pendingNewBadgeFile, pendingNewBadgeFile.name || 'original.png');
   const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/badge`, { method: 'PUT', headers: authHeaders(), body: fd });
   if (res.ok) {
     const data = await res.json();
