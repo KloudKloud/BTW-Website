@@ -179,6 +179,21 @@
     }
     .fp-char-filter-icon { font-size: 1rem; }
 
+    /* "+ New Character" -- same dashed/gold "add" tile language as the
+       ➕ Post/Gallery/Cards tiles the club builders use
+       (.gallery-linkto-add-tile in fanpages.css), just stretched full-width
+       to sit naturally at the bottom of this sidebar's vertical list
+       instead of a small square tile in a horizontal row. */
+    .fp-char-new-btn {
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+      width: 100%; margin-top: 0.75rem; padding: 0.7em 0.85em; box-sizing: border-box;
+      border-radius: 10px; background: rgba(255,255,255,0.03); border: 2px dashed rgba(255,255,255,0.25);
+      color: #aaa; font-size: 0.9rem; font-weight: 700; text-decoration: none; text-align: center;
+      font-family: 'Inter', sans-serif; cursor: pointer; transition: border-color 0.2s, color 0.2s, background 0.2s;
+    }
+    .fp-char-new-btn:hover { border-color: #f0c060; color: #f0c060; background: rgba(240,192,96,0.07); }
+    .fp-char-new-btn-icon { font-size: 1.15rem; line-height: 1; color: #f0c060; }
+
     /* ── Main content — heading + card grid, 4-per-row and noticeably
        smaller than the old 3-per-row layout. ── */
     .fp-char-main-heading {
@@ -434,6 +449,10 @@
           <div class="fp-guest-blur-overlay" id="fp-char-guest-filters-overlay" hidden><p><a href="#" id="fp-char-guest-filters-signin">Sign in</a> to create and save characters!</p></div>
         </div>
       </div>
+
+      <a class="fp-char-new-btn" id="fp-char-new-btn">
+        <span class="fp-char-new-btn-icon">➕</span> New Character
+      </a>
     </div>
   </aside>
 
@@ -486,6 +505,24 @@ if (!token) {
     window.fpOpenLoginModal();
   });
 }
+
+// "+ New Character" -- returnTo=characters tells create-character.html to
+// send you back here (instead of your own profile) once the character's
+// saved. Logged-out clicks are gated to the sign-in modal like the nav's
+// own +Character link -- wired directly (not via [data-gate]) since that
+// shared wiring in fanpages-nav.js already ran its querySelectorAll by the
+// time this script executes, so an attribute added only now would be missed.
+(() => {
+  const newCharUrl = window.fpUrl('/create-character?returnTo=characters');
+  const btn = document.getElementById('fp-char-new-btn');
+  btn.href = newCharUrl;
+  btn.addEventListener('click', (e) => {
+    if (!token) {
+      e.preventDefault();
+      window.fpOpenLoginModal({ from: newCharUrl, redirectOnSuccess: newCharUrl });
+    }
+  });
+})();
 
 const FILTER_LABELS = {
   '': 'All Characters', mine: 'Your Characters', followed: 'Followed Characters', liked: 'Liked Characters',
