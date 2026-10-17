@@ -2285,7 +2285,7 @@
               <h3 class="cl-edit-section-title">Welcome Message</h3>
               <button class="wiki-tags-tip-icon" type="button" aria-label="Welcome Message help">💡</button>
               <div class="wiki-tags-tip-popover" hidden>
-                <p>Write a welcome message for your club! Describe what your club is about, what to expect, the inspiration behind it, or whatever you want! This can be brief, or longer if you'd prefer!<br><br>To make bold text, wrap words around: **words**. To make italics text, wrap words around: *italics*. To embed links, such as to other websites, profiles on the page, etc., use: [words to embed]&lt;URL link&gt;</p>
+                <p>Write a welcome message for your club! Describe what your club is about, what to expect, the inspiration behind it, or whatever you want! This can be brief, or longer if you'd prefer!<br><br>To make bold text, wrap words around: **words**. To make italics text, wrap words around: *italics*. Normal links: just paste a plain link (like https://example.com) and it'll go clickable on its own. To embed a link into a specific word or phrase instead, such as to other websites, profiles on the page, etc., use: [words to embed]&lt;URL link&gt;</p>
               </div>
             </div>
             <div class="mod-field">
@@ -2402,7 +2402,7 @@
               <div class="cl-field-title-row">
                 <label for="cl-edit-page-body-input">Body Text <span class="mod-required-star">*</span></label>
                 <button class="wiki-tags-tip-icon" type="button" aria-label="Body Text help">💡</button>
-                <div class="wiki-tags-tip-popover" hidden><p>Every page must have at least some text! If you're mainly focused on art, just say 'hi' ^w^<br><br>(Note: Pretty pages attract more members! Try using our additional fields below to really add some sparkle to this page. Organize certain themes and provide descriptive body texts for every page! A guide on formatting: to make bold text, wrap words around **words**, to make italics text, wrap words around *italics*, and to embed links, use [words to embed]&lt;URL link&gt;. And remember to credit sources, if the art/images used aren't yours!)</p></div>
+                <div class="wiki-tags-tip-popover" hidden><p>Every page must have at least some text! If you're mainly focused on art, just say 'hi' ^w^<br><br>(Note: Pretty pages attract more members! Try using our additional fields below to really add some sparkle to this page. Organize certain themes and provide descriptive body texts for every page! A guide on formatting: to make bold text, wrap words around **words**, to make italics text, wrap words around *italics*, normal links: just paste a plain link (like https://example.com) to make it clickable automatically, and to embed a link into a specific word or phrase, use [words to embed]&lt;URL link&gt;. And remember to credit sources, if the art/images used aren't yours!)</p></div>
               </div>
               <textarea class="mod-textarea" id="cl-edit-page-body-input" rows="6" maxlength="5000" placeholder="Write your page…"></textarea>
             </div>
@@ -2410,7 +2410,7 @@
             <div class="cl-edit-section-title-row" style="margin-top: 2.25rem;">
               <h3 class="cl-edit-section-title">Additional Sections</h3>
               <button class="wiki-tags-tip-icon" type="button" aria-label="Additional Sections help">💡</button>
-              <div class="wiki-tags-tip-popover" hidden><p>Add up to three additional sections! This is great for going in-depth and making your page pop out for readers!</p></div>
+              <div class="wiki-tags-tip-popover" hidden><p>Add up to three additional sections! This is great for going in-depth and making your page pop out for readers! Same formatting as Body Text works here too — bold/italics, normal links (just paste one and it goes clickable), and [words to embed]&lt;URL link&gt; to embed a link into a specific phrase.</p></div>
             </div>
             <div id="cl-page-text-fields-list"></div>
             <button class="cl-edit-pages-create-btn" id="cl-page-text-field-add-btn" type="button" style="margin-bottom:1.25rem;">+ Add Text Field</button>
@@ -2457,7 +2457,7 @@
               <div class="mod-field" style="margin-bottom:0;">
                 <label for="cl-gallery-item-desc">Description <span style="font-weight:400;color:#888;">(optional)</span></label>
                 <p class="char-editor-facts-hint" style="margin-top:0;">
-                  To make bold text, wrap words around: **words**. To make italics text, wrap words around: *italics*. To embed links, use: [words to embed]&lt;URL link&gt;
+                  To make bold text, wrap words around: **words**. To make italics text, wrap words around: *italics*. Normal links: just paste a plain link (like https://example.com) and it'll go clickable automatically. To embed a link into a specific word or phrase instead, use: [words to embed]&lt;URL link&gt;
                 </p>
                 <textarea class="mod-textarea" id="cl-gallery-item-desc" rows="3" maxlength="1000"></textarea>
               </div>
@@ -2725,15 +2725,38 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// **bold**, *italic*, [label]<url> — same lightweight syntax hinted at
-// throughout the club editor (Welcome Message, Featured Cards, gallery
-// descriptions). Escapes first so raw HTML in the source text can't leak
-// through.
+// **bold**, *italic*, [label]<url> (named links), and bare https://... URLs
+// typed with no wrapper at all (plain links, auto-detected) — same
+// lightweight syntax hinted at throughout the club editor (Welcome Message,
+// Body Text, Featured Cards, gallery descriptions). Named/bare links are
+// tokenized out of the raw string first, before escaping, so their URL text
+// can't get re-matched by the other pass or have markdown characters inside
+// it misread as formatting; the tokens get swapped back in as real <a> tags
+// at the end.
 function renderRichText(s) {
-  return escapeHtml(s)
+  if (!s) return '';
+  const tokens = [];
+  let working = String(s);
+  working = working.replace(/\[([^\]]+)\]<(https?:\/\/[^\s<>]+)>/g, (m, label, url) => {
+    tokens.push({ label, url });
+    return ` TOKEN${tokens.length - 1} `;
+  });
+  working = working.replace(/(https?:\/\/[^\s<>]+)/g, (m, url) => {
+    // Trailing sentence punctuation ("...my channel: https://example.com.")
+    // shouldn't get swallowed into the link itself.
+    let trail = '';
+    while (url.length && /[.,;:!?)\]}'"]/.test(url[url.length - 1])) { trail = url[url.length - 1] + trail; url = url.slice(0, -1); }
+    if (!url) return m;
+    tokens.push({ label: url, url });
+    return ` TOKEN${tokens.length - 1} ${trail}`;
+  });
+  let out = escapeHtml(working)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    .replace(/\[([^\]]+)\]&lt;(https?:\/\/[^&]+)&gt;/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  tokens.forEach((t, i) => {
+    out = out.replace(` TOKEN${i} `, `<a href="${escapeHtml(t.url)}" target="_blank" rel="noopener noreferrer" style="color:#7fa8d9;">${escapeHtml(t.label)}</a>`);
+  });
+  return out;
 }
 
 // ── Sidebar (identical to fanpages/social.html) ──────────────────────────

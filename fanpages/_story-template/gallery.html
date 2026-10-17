@@ -214,14 +214,22 @@ function richText(s) {
 function renderGalleryText(s) {
   if (!s) return '<span style="color:#888;">No description provided</span>';
   const tokens = [];
-  const working = String(s).replace(/\[([^\]]+)\]<([^>]+)>/g, (m, label, url) => {
+  let working = String(s).replace(/\[([^\]]+)\]<([^>]+)>/g, (m, label, url) => {
     const safeUrl = /^https?:\/\//i.test(url.trim()) ? url.trim() : '#';
     tokens.push({ label, url: safeUrl });
     return ` TOKEN${tokens.length - 1} `;
   });
+  // Bare https://... URLs, typed with no [label] wrapper, go clickable too.
+  working = working.replace(/(https?:\/\/[^\s<>]+)/g, (m, url) => {
+    let trail = '';
+    while (url.length && /[.,;:!?)\]}'"]/.test(url[url.length - 1])) { trail = url[url.length - 1] + trail; url = url.slice(0, -1); }
+    if (!url) return m;
+    tokens.push({ label: url, url });
+    return ` TOKEN${tokens.length - 1} ${trail}`;
+  });
   let out = richText(working);
   tokens.forEach((t, i) => {
-    out = out.replace(` TOKEN${i} `, `<a href="${t.url}" target="_blank" rel="noopener" style="color:#7fa8d9;">${escapeHtml(t.label)}</a>`);
+    out = out.replace(` TOKEN${i} `, `<a href="${escapeHtml(t.url)}" target="_blank" rel="noopener" style="color:#7fa8d9;">${escapeHtml(t.label)}</a>`);
   });
   return out;
 }
