@@ -530,9 +530,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         <div class="fpnav-dropdown" id="fpnav-upload-dropdown" hidden>
           <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
           <div class="fpnav-dropdown-divider"></div>
-          <a href="${fpUrl('/create')}" data-gate="${fpUrl('/create')}"><span class="fpnav-plus-badge">+</span> Story</a>
-          <a href="${fpUrl('/create-character')}" data-gate="${fpUrl('/create-character')}"><span class="fpnav-plus-badge">+</span> Character</a>
-          <a href="${fpUrl('/create-gallery')}" data-gate="${fpUrl('/create-gallery')}"><span class="fpnav-plus-badge">+</span> Gallery</a>
+          <a href="${fpUrl('/upload')}" data-gate="${fpUrl('/upload')}"><span class="fpnav-plus-badge">+</span> Upload</a>
         </div>
       </div>
 
@@ -634,9 +632,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
             <button class="fpnav-drawer-toggle" data-drawer-target="create" type="button">Create <span class="fpnav-caret">&#9662;</span></button>
             <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-create" hidden>
               <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
-              <a href="${fpUrl('/create')}" data-gate="${fpUrl('/create')}"><span class="fpnav-plus-badge">+</span> Story</a>
-              <a href="${fpUrl('/create-character')}" data-gate="${fpUrl('/create-character')}"><span class="fpnav-plus-badge">+</span> Character</a>
-              <a href="${fpUrl('/create-gallery')}" data-gate="${fpUrl('/create-gallery')}"><span class="fpnav-plus-badge">+</span> Gallery</a>
+              <a href="${fpUrl('/upload')}" data-gate="${fpUrl('/upload')}"><span class="fpnav-plus-badge">+</span> Upload</a>
             </div>
           </div>
 
@@ -766,9 +762,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
       </button>
       <div class="fpnav-dropdown fpnav-bb-create-sheet" id="fpnav-bb-create-sheet" hidden>
         <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
-        <a href="${fpUrl('/create')}" data-gate="${fpUrl('/create')}"><span class="fpnav-plus-badge">+</span> Story</a>
-        <a href="${fpUrl('/create-character')}" data-gate="${fpUrl('/create-character')}"><span class="fpnav-plus-badge">+</span> Character</a>
-        <a href="${fpUrl('/create-gallery')}" data-gate="${fpUrl('/create-gallery')}"><span class="fpnav-plus-badge">+</span> Gallery</a>
+        <a href="${fpUrl('/upload')}" data-gate="${fpUrl('/upload')}"><span class="fpnav-plus-badge">+</span> Upload</a>
       </div>
       <button class="fpnav-bottombar-item${isUpdatesActive ? ' active' : ''}" id="fpnav-bb-notif" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
