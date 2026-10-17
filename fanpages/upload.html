@@ -28,6 +28,11 @@
     .up-bg-overlay { position: fixed; inset: 0; background: rgba(10,8,14,0.68); z-index: -1; }
 
     .up-page { max-width: 1150px; margin: 0 auto; padding: 7rem 2rem 5rem; position: relative; }
+    /* Title row is its own positioning context so the Back button can sit
+       at the title's vertical center without adding height above it --
+       keeps the title/subtitle/page at the exact same level in both
+       phases instead of shifting down when Back appears. */
+    .up-title-row { position: relative; }
     .up-title {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 3rem; font-weight: 700; color: #fff;
       text-shadow: 0 2px 10px rgba(0,0,0,0.6);
@@ -59,15 +64,18 @@
     .up-box-desc { font-size: 0.95rem; color: #ccc; text-align: center; margin: 0; line-height: 1.5; }
 
     .up-back-btn {
-      display: inline-flex; align-items: center; gap: 0.4rem;
+      position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+      display: inline-flex; align-items: center; gap: 0.5rem;
       background: none; border: none; cursor: pointer;
-      color: #ccc; font-family: 'Fredoka', 'Lato', cursive; font-size: 1rem; font-weight: 600;
-      margin: 0 0 1.5rem; padding: 0;
+      color: #ccc; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.2rem; font-weight: 600;
+      padding: 0;
     }
     .up-back-btn:hover { color: #7fa8d9; }
-    .up-back-btn svg { width: 18px; height: 18px; }
+    .up-back-btn svg { width: 24px; height: 24px; }
 
     @media (max-width: 720px) {
+      .up-back-btn { position: static; transform: none; margin: 0 0 1rem; font-size: 1.05rem; }
+      .up-back-btn svg { width: 20px; height: 20px; }
       .up-page { padding: 6rem 1.25rem 4rem; }
       .up-title { font-size: 2.1rem; }
       .up-row { gap: 1.1rem; }
@@ -84,10 +92,16 @@
 <div class="up-bg-overlay"></div>
 
 <main class="up-page">
-  <div id="up-grid-view">
+  <div class="up-title-row">
+    <button class="up-back-btn" id="up-story-back-btn" type="button" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      Back
+    </button>
     <h1 class="up-title">Post Type</h1>
-    <p class="up-subtitle">Pick your type of post to get started.</p>
+  </div>
+  <p class="up-subtitle">Pick your type of post to get started.</p>
 
+  <div id="up-grid-view">
     <div class="up-row">
       <a class="up-box" id="up-box-story" href="#" data-gate="#">
         <span class="up-box-icon">
@@ -116,13 +130,6 @@
   </div>
 
   <div id="up-story-view" hidden>
-    <button class="up-back-btn" id="up-story-back-btn" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-      Back
-    </button>
-    <h1 class="up-title">Story</h1>
-    <p class="up-subtitle">Upload a new story, or update one you've already posted.</p>
-
     <div class="up-row">
       <a class="up-box" id="up-box-story-new" href="#" data-gate="#">
         <span class="up-box-icon">
@@ -169,14 +176,17 @@
   // Existing" choice first.
   const gridView = document.getElementById('up-grid-view');
   const storyView = document.getElementById('up-story-view');
+  const backBtn = document.getElementById('up-story-back-btn');
   document.getElementById('up-box-story').addEventListener('click', (e) => {
     e.preventDefault();
     gridView.hidden = true;
     storyView.hidden = false;
+    backBtn.hidden = false;
   });
-  document.getElementById('up-story-back-btn').addEventListener('click', () => {
+  backBtn.addEventListener('click', () => {
     storyView.hidden = true;
     gridView.hidden = false;
+    backBtn.hidden = true;
   });
 </script>
 </body>
