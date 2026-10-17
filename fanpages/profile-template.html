@@ -715,10 +715,19 @@
       color: #f0f0f0; font-family: inherit; font-size: 0.85rem; padding: 0.55rem 0.7rem; box-sizing: border-box;
     }
     .fp-featured-club-search:focus { outline: none; border-color: #7fa8d9; }
+    /* Body-appended, fixed-position dropdown (same pattern as the tag/fandom
+       suggest dropdowns elsewhere) -- it used to be position:absolute scoped
+       to the search box, which lived inside the left sidebar's own
+       position:relative/z-index:1 stacking context, so the Links section
+       underneath it (a later sibling with the same z-index) always painted
+       on top and made the suggestions look washed out/clipped. Fixed
+       positioning off the real DOM root sidesteps that entirely. Capped to
+       ~4 rows tall with scroll so being in dozens of clubs doesn't produce
+       a huge list. */
     .fp-featured-club-dropdown {
-      position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 5;
+      position: fixed; z-index: 3000;
       background: #1e1e1e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
-      max-height: 220px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      max-height: 168px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
     }
     .fp-featured-club-option {
       width: 100%; display: flex; align-items: center; gap: 0.55rem; background: none; border: none;
@@ -3612,6 +3621,7 @@
     document.getElementById('fp-featured-gallery-editor').hidden = true;
     document.getElementById('fp-featured-gallery').hidden = false;
     document.getElementById('fp-feature-club-section').hidden = true;
+    document.getElementById('fp-featured-club-dropdown')?.remove();
     document.getElementById('fp-name').hidden = false;
     document.getElementById('fp-name-edit-box').hidden = true;
     loadProfile();
@@ -4005,16 +4015,33 @@
     searchWrap.className = 'fp-featured-club-search-wrap';
     searchWrap.innerHTML = `
       <input type="text" class="fp-featured-club-search" placeholder="Search a club you're in…" autocomplete="off" />
-      <div class="fp-featured-club-dropdown" hidden></div>
     `;
     wrap.appendChild(searchWrap);
     const input = searchWrap.querySelector('.fp-featured-club-search');
-    const dropdown = searchWrap.querySelector('.fp-featured-club-dropdown');
+
+    // Body-appended, fixed-position dropdown (never position:absolute
+    // scoped to the search box -- the sidebar it lives in clips/loses
+    // stacking-order fights with the Links section below it otherwise).
+    // Re-created fresh each editor render, so drop any stale one first.
+    document.getElementById('fp-featured-club-dropdown')?.remove();
+    const dropdown = document.createElement('div');
+    dropdown.className = 'fp-featured-club-dropdown';
+    dropdown.id = 'fp-featured-club-dropdown';
+    dropdown.hidden = true;
+    document.body.appendChild(dropdown);
+
+    function positionClubDropdown() {
+      const rect = input.getBoundingClientRect();
+      dropdown.style.top = `${rect.bottom + 4}px`;
+      dropdown.style.left = `${rect.left}px`;
+      dropdown.style.width = `${rect.width}px`;
+    }
 
     async function paintDropdown(q) {
       const clubs = await loadMyClubs();
       const query = q.trim().toLowerCase();
       const matches = query ? clubs.filter(c => c.name.toLowerCase().includes(query)) : clubs;
+      positionClubDropdown();
       dropdown.hidden = false;
       if (!matches.length) {
         dropdown.innerHTML = `<p class="fp-featured-club-empty">${clubs.length ? 'No matches.' : "You're not in any clubs yet."}</p>`;
@@ -4043,6 +4070,8 @@
     input.addEventListener('focus', () => paintDropdown(input.value));
     input.addEventListener('input', () => paintDropdown(input.value));
     input.addEventListener('blur', () => { dropdown.hidden = true; });
+    window.addEventListener('scroll', () => { if (!dropdown.hidden) positionClubDropdown(); }, true);
+    window.addEventListener('resize', () => { if (!dropdown.hidden) positionClubDropdown(); });
   }
 
   // ── Newspaper ─────────────────────────────────────────────────────────────
