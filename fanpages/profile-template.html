@@ -2131,6 +2131,36 @@
     const audio = fpGetVoiceAudio();
     btn.innerHTML = audio.paused ? FP_VOICE_PLAY_ICON : FP_VOICE_PAUSE_ICON;
   }
+  // Volume slider sits at 75% by default, which is just the file's normal
+  // (unboosted) volume -- anything past that pushes gain above 1.0 via a Web
+  // Audio GainNode, since a plain <audio>.volume can never exceed 100%. Below
+  // 75% behaves like a normal volume knob down to silence.
+  function fpVoiceSliderToGain(pct) {
+    pct = Math.max(0, Math.min(100, Number(pct)));
+    return pct <= 75 ? (pct / 75) : (1 + (pct - 75) / 25);
+  }
+  let fpVoiceAudioCtx = null;
+  let fpVoiceGainNode = null;
+  function fpEnsureVoiceGainNode(audio) {
+    if (fpVoiceAudioCtx) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      fpVoiceAudioCtx = new Ctx();
+      const source = fpVoiceAudioCtx.createMediaElementSource(audio);
+      fpVoiceGainNode = fpVoiceAudioCtx.createGain();
+      source.connect(fpVoiceGainNode).connect(fpVoiceAudioCtx.destination);
+      audio.volume = 1;
+    } catch {
+      fpVoiceAudioCtx = null;
+      fpVoiceGainNode = null;
+    }
+  }
+  function fpApplyVoiceVolume(pct) {
+    const audio = fpGetVoiceAudio();
+    const gain = fpVoiceSliderToGain(pct);
+    if (fpVoiceGainNode) fpVoiceGainNode.gain.value = gain;
+    else audio.volume = Math.min(1, gain);
+  }
   function fpGetVoiceAudio() {
     if (window.fpVoiceAudio) return window.fpVoiceAudio;
     const audio = new Audio();
@@ -2148,6 +2178,7 @@
     audio.addEventListener('play', fpSyncVoicePlayPauseIcon);
     audio.addEventListener('pause', fpSyncVoicePlayPauseIcon);
     window.fpVoiceAudio = audio;
+    fpEnsureVoiceGainNode(audio);
     return audio;
   }
   function fpEnsureVoiceBar() {
@@ -2164,13 +2195,13 @@
       <input type="range" class="fp-voice-bar-seek" id="fp-voice-bar-seek" min="0" max="100" step="0.1" value="0">
       <span class="fp-voice-bar-time" id="fp-voice-bar-total">0:00</span>
       <svg class="fp-voice-bar-vol-icon" viewBox="0 0 24 24" fill="none"><path d="M4 9v6h4l5 5V4L8 9H4Z" fill="currentColor"/><path d="M16.3 8.3a5.2 5.2 0 0 1 0 7.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <input type="range" class="fp-voice-bar-volume" id="fp-voice-bar-volume" min="0" max="1" step="0.01" value="1">
+      <input type="range" class="fp-voice-bar-volume" id="fp-voice-bar-volume" min="0" max="100" step="1" value="75">
       <button type="button" class="fp-voice-bar-close" id="fp-voice-bar-close">✕ Close</button>
     `;
     document.body.appendChild(bar);
     bar.querySelector('#fp-voice-bar-playpause').addEventListener('click', () => {
       const audio = fpGetVoiceAudio();
-      if (audio.paused) audio.play().catch(() => {}); else audio.pause();
+      if (audio.paused) fpResumeAndPlay(audio); else audio.pause();
     });
     const seek = bar.querySelector('#fp-voice-bar-seek');
     seek.addEventListener('input', () => {
@@ -2185,10 +2216,15 @@
       fpVoiceSeeking = false;
     });
     bar.querySelector('#fp-voice-bar-volume').addEventListener('input', (e) => {
-      fpGetVoiceAudio().volume = Number(e.target.value);
+      fpApplyVoiceVolume(e.target.value);
     });
     bar.querySelector('#fp-voice-bar-close').addEventListener('click', fpCloseVoiceBar);
+    fpApplyVoiceVolume(75);
     return bar;
+  }
+  function fpResumeAndPlay(audio) {
+    if (fpVoiceAudioCtx && fpVoiceAudioCtx.state === 'suspended') fpVoiceAudioCtx.resume().catch(() => {});
+    audio.play().catch(() => {});
   }
   function fpCloseVoiceBar() {
     const audio = fpGetVoiceAudio();
@@ -2201,7 +2237,7 @@
     const audio = fpGetVoiceAudio();
     if (audio.dataset.src !== url) { audio.src = url; audio.dataset.src = url; }
     audio.currentTime = 0;
-    audio.play().catch(() => {});
+    fpResumeAndPlay(audio);
     document.querySelectorAll('.fp-voice-icon-btn.is-playing').forEach(b => b.classList.remove('is-playing'));
     btn.classList.add('is-playing');
     audio.onended = () => btn.classList.remove('is-playing');
@@ -2209,7 +2245,6 @@
     const bar = fpEnsureVoiceBar();
     bar.hidden = false;
     document.getElementById('fp-voice-bar-name').textContent = charName ? `${charName}'s Voice Claim` : 'Voice Claim';
-    document.getElementById('fp-voice-bar-volume').value = audio.volume;
     fpSyncVoicePlayPauseIcon();
   }
   function fpMakeVoiceBtn(url, charName) {
