@@ -6118,14 +6118,14 @@ function renderGalleryEditorGrid() {
     handle.addEventListener('mousedown', () => { wrap.draggable = true; });
     wrap.addEventListener('mouseup', () => { wrap.draggable = false; });
     wrap.addEventListener('dragstart', () => { galleryDragId = img.id; wrap.classList.add('dragging'); });
-    wrap.addEventListener('dragend', () => { wrap.classList.remove('dragging'); wrap.draggable = false; });
-    wrap.addEventListener('dragover', (e) => e.preventDefault());
-    wrap.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      if (galleryDragId == null || galleryDragId === img.id) return;
-      const dragEl = grid.querySelector(`.cl-gallery-editor-tile-wrap[data-id="${CSS.escape(String(galleryDragId))}"]`);
-      if (!dragEl) return;
-      grid.insertBefore(dragEl, wrap);
+    // One PUT once the gesture actually ends (success or not), reflecting
+    // wherever the live swaps (see the grid's own dragover listener, set up
+    // once below) left it -- not per-swap, which would fire a request on
+    // every single tile crossed during the drag.
+    wrap.addEventListener('dragend', async () => {
+      wrap.classList.remove('dragging');
+      wrap.draggable = false;
+      galleryDragId = null;
       const ids = [...grid.querySelectorAll('.cl-gallery-editor-tile-wrap')].map(el => el.dataset.id);
       await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/gallery/reorder`, {
         method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ order: ids }),
@@ -6133,9 +6133,37 @@ function renderGalleryEditorGrid() {
       editPageGalleryCache = ids.map(id => editPageGalleryCache.find(i => String(i.id) === id)).filter(Boolean);
       if (currentPageSlug === editActivePageSlug) loadCustomPage(editActivePageSlug);
     });
+    wrap.addEventListener('drop', (e) => e.preventDefault());
     grid.appendChild(wrap);
   });
 }
+// Live swap, SortableJS-style, as soon as the dragged tile crosses the
+// HALFWAY point of another one -- not just on a final drop. One listener
+// on the GRID itself (set up once here, not per-tile inside
+// renderGalleryEditorGrid, which reruns on every reorder/add/delete and
+// would otherwise pile up duplicate listeners), using elementFromPoint to
+// find the tile under the cursor instead of each tile's own dragover.
+// Per-tile dragover looked right going one direction but not the other --
+// moving the dragged element via insertBefore mid-drag (same tick a
+// dragover fires) desyncs which element the BROWSER's own drag session
+// still thinks is "under" the cursor, and that desync isn't symmetric.
+// Querying the real DOM position directly on every event sidesteps it.
+document.getElementById('cl-gallery-editor-grid').addEventListener('dragover', (e) => {
+  e.preventDefault();
+  if (galleryDragId == null) return;
+  const grid = document.getElementById('cl-gallery-editor-grid');
+  const dragEl = grid.querySelector(`.cl-gallery-editor-tile-wrap[data-id="${CSS.escape(String(galleryDragId))}"]`);
+  if (!dragEl) return;
+  const target = document.elementFromPoint(e.clientX, e.clientY)?.closest('.cl-gallery-editor-tile-wrap');
+  if (!target || target === dragEl || target.parentElement !== grid) return;
+  const rect = target.getBoundingClientRect();
+  const isPastHalfway = e.clientX > rect.left + rect.width / 2;
+  if (isPastHalfway) {
+    if (target.nextElementSibling !== dragEl) grid.insertBefore(dragEl, target.nextElementSibling);
+  } else if (target.previousElementSibling !== dragEl) {
+    grid.insertBefore(dragEl, target);
+  }
+});
 document.getElementById('cl-gallery-item-delete-confirm-cancel').addEventListener('click', () => {
   galleryItemDeleteId = null;
   document.getElementById('cl-gallery-item-delete-confirm-overlay').hidden = true;
