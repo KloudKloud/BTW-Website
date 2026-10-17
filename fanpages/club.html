@@ -337,8 +337,12 @@
     .cl-name {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 2.6rem; font-weight: 700; color: #7fa8d9;
       text-shadow: 0 0 18px rgba(127,168,217,0.55), 0 1px 3px rgba(0,0,0,0.5);
-      margin: 0 0 1.25rem; text-align: center;
+      margin: 0 0 1.25rem; display: flex; align-items: center; justify-content: center; gap: 0.6rem;
     }
+    /* Optional per-club badge/logo, set in the editor's Home tab -- sits
+       right of the title text, sized off the title's own font-size so it
+       scales with the responsive clamp() instead of a fixed px value. */
+    .cl-name-badge { height: 1.15em; width: auto; object-fit: contain; flex-shrink: 0; }
 
     /* ── Hub / Social tabs — replaces the old underline flourish under the
        title. ── */
@@ -1896,7 +1900,7 @@
       </div>
 
       <div class="cl-row" id="cl-home-view">
-        <h1 class="cl-name" id="cl-name"></h1>
+        <h1 class="cl-name" id="cl-name"><span id="cl-name-text"></span><img class="cl-name-badge" id="cl-name-badge" src="" alt="" hidden></h1>
 
         <div class="cl-home-tabs">
           <button class="cl-home-tab active" id="cl-home-tab-hub" type="button" data-tab="hub">Hub</button>
@@ -2288,6 +2292,22 @@
               <label for="cl-edit-description">Club Description</label>
               <textarea class="mod-textarea" id="cl-edit-description" rows="6" maxlength="1000"></textarea>
             </div>
+          </div>
+
+          <div class="cl-edit-panel">
+            <div class="cl-edit-section-title-row">
+              <h3 class="cl-edit-section-title">Club Logo Image</h3>
+              <button class="wiki-tags-tip-icon" type="button" aria-label="Club Logo Image help">💡</button>
+              <div class="wiki-tags-tip-popover" hidden>
+                <p>A small badge/logo that appears right next to your club's name on the Hub and Social pages. Members will also be able to sponsor this badge on their own profile!</p>
+              </div>
+            </div>
+            <div class="cl-edit-imgbox" id="cl-edit-badge-wrap" style="aspect-ratio: 1 / 1; width: 80px; position: relative;">
+              <img id="cl-edit-badge-preview" alt="" />
+              <div class="cl-edit-imgbox-overlay">📷 Change Logo</div>
+              <button type="button" class="fp-recrop-btn" id="cl-edit-badge-recrop-btn" style="display:none; position:absolute; bottom:4px; right:4px; z-index:3; font-size:0.68rem; padding:0.3rem 0.5rem;">✏️ Recrop</button>
+            </div>
+            <input type="file" id="cl-edit-badge-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
           </div>
 
           <div class="cl-edit-panel">
@@ -3042,7 +3062,10 @@ function renderClub(club, members) {
     ? `<img src="${club.icon_url}" alt="" />`
     : `<span class="cl-icon-fallback">${escapeHtml(club.name.charAt(0).toUpperCase())}</span>`;
 
-  document.getElementById('cl-name').textContent = club.name;
+  document.getElementById('cl-name-text').textContent = club.name;
+  const nameBadge = document.getElementById('cl-name-badge');
+  if (club.badge_url) { nameBadge.src = club.badge_url; nameBadge.hidden = false; }
+  else { nameBadge.hidden = true; nameBadge.removeAttribute('src'); }
   document.getElementById('cl-side-name').textContent = club.name;
   document.getElementById('cl-about-label').textContent = club.welcome_title || `Welcome To: ${club.name}`;
   document.getElementById('cl-about-body').textContent = club.description || 'This club hasn\'t written anything here yet.';
@@ -5296,6 +5319,8 @@ function populateHomeEditor(club) {
   document.getElementById('cl-edit-description').value = club.description || '';
   document.getElementById('cl-edit-icon-preview').src = club.icon_url || '/images/nopicture2.png';
   document.getElementById('cl-edit-icon-recrop-btn').style.display = club.icon_url ? 'block' : 'none';
+  document.getElementById('cl-edit-badge-preview').src = club.badge_url || '/images/nopicture2.png';
+  document.getElementById('cl-edit-badge-recrop-btn').style.display = club.badge_url ? 'block' : 'none';
   setEditNsfwLabel(!!club.is_nsfw);
   document.getElementById('cl-edit-nsfw-toggle').checked = !!club.is_nsfw;
   setEditCoverMode(club.cover_mode || 'static', true);
@@ -5345,6 +5370,48 @@ async function saveClubIcon(blob) {
     if (currentClub) {
       currentClub.icon_url = data.icon_url;
       currentClub.icon_original_url = data.icon_original_url || currentClub.icon_original_url;
+      renderClub(currentClub);
+    }
+  }
+}
+
+// ── Club Logo/Badge — same crop-on-upload-and-save-immediately pattern as
+// the Club Icon above, just a separate image/slot (shown next to the club
+// name instead of as the PFP). ──────────────────────────────────────────
+let pendingNewBadgeFile = null;
+document.getElementById('cl-edit-badge-wrap').addEventListener('click', () => document.getElementById('cl-edit-badge-file-input').click());
+document.getElementById('cl-edit-badge-recrop-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!currentClub || !currentClub.badge_url) return;
+  pendingNewBadgeFile = null;
+  openCropModal({
+    title: 'Crop Club Logo', imageSrc: currentClub.badge_original_url || currentClub.badge_url, aspectRatio: 1, round: false,
+    onSave: saveClubBadge,
+  });
+});
+document.getElementById('cl-edit-badge-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  pendingNewBadgeFile = file;
+  openCropModal({
+    title: 'Crop Club Logo', imageSrc: URL.createObjectURL(file), aspectRatio: 1, round: false,
+    onSave: saveClubBadge,
+  });
+  e.target.value = '';
+});
+async function saveClubBadge(blob) {
+  const fd = new FormData();
+  fd.append('image', blob, 'badge.jpg');
+  if (pendingNewBadgeFile) fd.append('image_original', pendingNewBadgeFile, pendingNewBadgeFile.name || 'original.jpg');
+  const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/badge`, { method: 'PUT', headers: authHeaders(), body: fd });
+  if (res.ok) {
+    const data = await res.json();
+    pendingNewBadgeFile = null;
+    document.getElementById('cl-edit-badge-preview').src = data.badge_url;
+    document.getElementById('cl-edit-badge-recrop-btn').style.display = 'block';
+    if (currentClub) {
+      currentClub.badge_url = data.badge_url;
+      currentClub.badge_original_url = data.badge_original_url || currentClub.badge_original_url;
       renderClub(currentClub);
     }
   }

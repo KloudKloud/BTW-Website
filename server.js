@@ -1658,6 +1658,14 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     WHERE slug = 'btwclub' AND club_types = '[]'::jsonb;
   `).catch(e => console.error('BTWClub types seed:', e.message));
 
+  // Club badge/logo — small image shown beside the club name on the Hub/
+  // Social pages; members will later be able to sponsor one on their own
+  // profile. Same original/baked pair as icon_url/icon_original_url.
+  await pool.query(`
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS badge_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS badge_original_url TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('clubs badge migration:', e.message));
+
 
   await pool.query(`
     INSERT INTO club_members (club_id, user_id, role)
@@ -9063,6 +9071,7 @@ function clubPublicShape(c, viewerRole) {
     id: c.id, slug: c.slug, name: c.name, description: c.description,
     banner_url: c.banner_url, banner_position_x: c.banner_position_x, banner_position_y: c.banner_position_y,
     icon_url: c.icon_url, icon_original_url: c.icon_original_url || '', owner_user_id: c.owner_user_id,
+    badge_url: c.badge_url || '', badge_original_url: c.badge_original_url || '',
     theme: c.theme || 'default', theme_bg_url: c.theme_bg_url || '',
     sidebar_title: c.sidebar_title || '', sidebar_message: c.sidebar_message || '', is_nsfw: !!c.is_nsfw,
     welcome_title: c.welcome_title || '', cover_mode: c.cover_mode || 'static', cover_image_url: c.cover_image_url || '',
@@ -9284,6 +9293,29 @@ app.put('/api/clubs/:slug/icon', requireAuth, uploadModImage.fields([{ name: 'im
   }
   const { rows: [club] } = await pool.query('SELECT icon_original_url FROM clubs WHERE id = $1', [ctx.club.id]);
   res.json({ icon_url: iconUrl, icon_original_url: club.icon_original_url });
+});
+
+// PUT /api/clubs/:slug/badge — the small badge/logo shown next to the club
+// name on the Hub/Social pages. Same original/baked-crop pattern as icon.
+app.put('/api/clubs/:slug/badge', requireAuth, uploadModImage.fields([{ name: 'image', maxCount: 1 }, { name: 'image_original', maxCount: 1 }]), async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const badgeFile = req.files && req.files.image && req.files.image[0];
+  if (!badgeFile) return res.status(400).json({ error: 'Image is required.' });
+  const badgeUrl = `/images/moderators/${badgeFile.filename}`;
+  if (ctx.club.badge_url.startsWith('/images/moderators/')) {
+    const oldPath = path.join('/var/www/btw', ctx.club.badge_url);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+  const originalFile = req.files.image_original && req.files.image_original[0];
+  if (originalFile) {
+    const originalUrl = `/images/moderators/${originalFile.filename}`;
+    await pool.query('UPDATE clubs SET badge_url = $1, badge_original_url = $2 WHERE id = $3', [badgeUrl, originalUrl, ctx.club.id]);
+  } else {
+    await pool.query('UPDATE clubs SET badge_url = $1 WHERE id = $2', [badgeUrl, ctx.club.id]);
+  }
+  const { rows: [club] } = await pool.query('SELECT badge_original_url FROM clubs WHERE id = $1', [ctx.club.id]);
+  res.json({ badge_url: badgeUrl, badge_original_url: club.badge_original_url });
 });
 
 // PUT /api/clubs/:slug/nsfw — { is_nsfw: true|false }, settable either way
