@@ -122,6 +122,16 @@
     body.fp-editing #fp-banner-img { filter: blur(5px) brightness(0.55); }
     body.fp-editing .fp-avatar { filter: blur(1.5px) brightness(0.55); }
 
+    /* Editing drops whatever custom theme/wallpaper the tab was showing in
+       favor of a flat black background -- the theme picker is already
+       hidden while editing (see the ::floating rule above this block), so
+       a custom theme shouldn't keep showing behind the edit form either. */
+    body.fp-editing .fp-bg-img,
+    body.fp-editing .fp-bg-img-scroll { display: none !important; }
+    body.fp-editing .fp-bg-overlay,
+    body.fp-editing .fp-bg-overlay-scroll { display: block !important; background: #000 !important; opacity: 1 !important; }
+    body.fp-editing .fp-bg-wrap { background: #000 !important; }
+
     /* Matches the story editor's banner controls exactly: centered
        button+hint stack, and a small "Reposition" pill tucked in the
        top-right corner — both overlaid on the banner, not in flow, so they
@@ -685,6 +695,10 @@
       color: #999; font-family: inherit; font-size: 0.8rem; padding: 0.5rem; cursor: pointer; margin-top: 0.25rem;
     }
     .fp-link-add-btn:hover { border-color: #7fa8d9; color: #7fa8d9; }
+    .fp-link-edit-row input[data-field="url"].fp-link-input--invalid {
+      border-color: #d97a72; box-shadow: 0 0 0 1px rgba(217,122,114,0.4);
+    }
+    .fp-links-error { color: #d97a72; font-size: 0.78rem; margin: 0.35rem 0 0; }
 
     /* Featured Club box (left info box, above Links) */
     .fp-side-club-card {
@@ -1344,6 +1358,7 @@
         <p class="fp-home-side-label">Links</p>
         <ul class="fp-links-list" id="fp-links-list"></ul>
         <div id="fp-links-editor" hidden></div>
+        <p id="fp-links-error" class="fp-links-error" hidden>Please put a valid link.</p>
       </div>
 
       <div class="fp-home-side-divider"></div>
@@ -3774,6 +3789,23 @@
   document.getElementById('fp-edit-cancel').addEventListener('click', exitEditMode);
 
   document.getElementById('fp-edit-save').addEventListener('click', async () => {
+    const linksError = document.getElementById('fp-links-error');
+    document.querySelectorAll('#fp-links-editor input[data-field="url"]').forEach(inp => inp.classList.remove('fp-link-input--invalid'));
+    linksError.hidden = true;
+    let firstInvalidInput = null;
+    editLinks.forEach((l, i) => {
+      if (l.url && l.url.trim() && !isSafeLinkUrl(l.url)) {
+        const inp = document.querySelector(`#fp-links-editor input[data-field="url"][data-i="${i}"]`);
+        if (inp) { inp.classList.add('fp-link-input--invalid'); firstInvalidInput = firstInvalidInput || inp; }
+      }
+    });
+    if (firstInvalidInput) {
+      linksError.hidden = false;
+      firstInvalidInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      firstInvalidInput.focus();
+      return;
+    }
+
     const saveBtn = document.getElementById('fp-edit-save');
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving…';
