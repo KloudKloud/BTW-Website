@@ -3437,6 +3437,14 @@ async function reportTargetInfo(targetType, targetId) {
     if (!p) return null;
     return { title: `Club post in "${p.club_name}": "${p.title || 'Untitled'}"`, link: `/club?slug=${encodeURIComponent(p.slug)}&post=${targetId}` };
   }
+  if (targetType === 'gallery') {
+    const { rows: [g] } = await pool.query(
+      `SELECT mg.title, u.username FROM moderator_gallery mg JOIN users u ON u.id = mg.owner_user_id WHERE mg.id = $1`,
+      [targetId]
+    );
+    if (!g) return null;
+    return { title: `Gallery post by ${g.username}: "${g.title || 'Untitled'}"`, link: `/${encodeURIComponent(g.username)}?gallery=${targetId}#gallery` };
+  }
   if (targetType === 'club_gallery_image') {
     const { rows: [g] } = await pool.query(
       `SELECT g.title, c.name AS club_name, c.slug AS club_slug, p.slug AS page_slug
@@ -3478,7 +3486,7 @@ async function reportTargetInfo(targetType, targetId) {
 // this is meant to be seen right away rather than discovered later.
 app.post('/api/reports', requireAuth, async (req, res) => {
   const { target_type, target_id, reason } = req.body;
-  if (!['story', 'comment', 'dm_message', 'user', 'club_post', 'club_gallery_image', 'newspaper_post', 'newspaper_comment'].includes(target_type)) return res.status(400).json({ error: 'Invalid report type.' });
+  if (!['story', 'comment', 'dm_message', 'user', 'club_post', 'club_gallery_image', 'newspaper_post', 'newspaper_comment', 'gallery'].includes(target_type)) return res.status(400).json({ error: 'Invalid report type.' });
   const targetId = parseInt(target_id, 10);
   if (!targetId) return res.status(400).json({ error: 'Invalid target.' });
   const cleanReason = (reason || '').trim().slice(0, 1000);
@@ -3495,6 +3503,7 @@ app.post('/api/reports', requireAuth, async (req, res) => {
     story: 'Story', comment: 'Comment', dm_message: 'DM Message', user: 'User',
     club_post: 'Club Post', club_gallery_image: 'Club Gallery Image',
     newspaper_post: 'Newspaper Post', newspaper_comment: 'Newspaper Comment',
+    gallery: 'Gallery Post',
   }[target_type];
   const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 

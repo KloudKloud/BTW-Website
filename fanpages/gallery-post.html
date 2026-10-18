@@ -111,6 +111,21 @@
       #fp-gallery-detail-view .art-view-title { font-size: 1.3rem; }
       #fp-gallery-detail-view .art-view-quickstats { gap: 0.5rem; }
     }
+
+    /* "…" more-options menu, next to Share — same circular icon-button
+       shell (.fp-share-icon-btn) as Like/Bookmark/Share, just with a small
+       dropdown instead of its own click action. Only holds Report for now. */
+    .fp-more-menu-wrap { position: relative; }
+    .fp-more-menu-dropdown {
+      position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 20;
+      background: #1c1c1e; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.5); min-width: 140px; overflow: hidden;
+    }
+    .fp-more-menu-dropdown button {
+      display: block; width: 100%; text-align: left; background: none; border: none;
+      color: #e8849e; font-family: inherit; font-size: 0.85rem; padding: 0.65rem 0.9rem; cursor: pointer;
+    }
+    .fp-more-menu-dropdown button:hover { background: rgba(224,90,90,0.12); }
   </style>
 </head>
 <body class="mod-theme">
@@ -138,6 +153,12 @@
             <button class="fp-share-icon-btn" id="fp-gallery-detail-share" type="button" title="Share this post">
               <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
             </button>
+            <div class="fp-more-menu-wrap">
+              <button class="fp-share-icon-btn" id="fp-gallery-detail-more" type="button" title="More options" aria-label="More options">⋯</button>
+              <div class="fp-more-menu-dropdown" id="fp-gallery-detail-more-menu" hidden>
+                <button type="button" id="fp-gallery-detail-report-btn">&#127987;&#65039; Report</button>
+              </div>
+            </div>
           </div>
         </div>
         <div class="art-view-desc" id="fp-gallery-detail-desc-box">
@@ -555,6 +576,15 @@ document.getElementById('fp-gallery-detail-bookmark').addEventListener('click', 
 document.getElementById('fp-gallery-detail-share').addEventListener('click', (e) => {
   fpShare(e.currentTarget, window.location.href);
 });
+document.getElementById('fp-gallery-detail-more').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('fp-gallery-detail-more-menu').hidden = !document.getElementById('fp-gallery-detail-more-menu').hidden;
+});
+document.getElementById('fp-gallery-detail-report-btn').addEventListener('click', () => {
+  document.getElementById('fp-gallery-detail-more-menu').hidden = true;
+  reportContent('gallery', GALLERY_ID);
+});
+document.addEventListener('click', () => { document.getElementById('fp-gallery-detail-more-menu').hidden = true; });
 
 (async () => {
   if (!GALLERY_ID) {
