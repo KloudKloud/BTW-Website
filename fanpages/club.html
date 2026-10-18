@@ -827,18 +827,37 @@
     .cl-post-vote-score.cl-downvoted { color: #7193ff; }
 
     /* Compact Reddit-style vote arrows used inline in card teaser rows
-       (post list, Social feed cards) -- same arrow glyph as the detail
-       view's vote pill, just small and non-interactive (read-only tally). */
+       (post list, Social tab, Promotion page cards -- adminPostRow() is
+       shared by all three) -- same arrow glyph as the detail view's vote
+       pill, just small. Real buttons, not a read-only tally, so voting
+       works straight from the list without opening the post. */
     .cl-teaser-vote {
       display: inline-flex; align-items: center; gap: 0.3rem;
     }
     .cl-teaser-vote-arrow { width: 11px; height: 11px; fill: currentColor; vertical-align: -1px; }
     .cl-teaser-vote-arrow--down { transform: rotate(180deg); }
+    .cl-teaser-vote-btn {
+      display: inline-flex; align-items: center; justify-content: center; background: none; border: none; padding: 0.1rem;
+      color: #888; cursor: pointer; border-radius: 4px; transition: color 0.15s, background 0.15s;
+    }
+    .cl-teaser-vote-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .cl-teaser-vote-btn.cl-upvoted { color: #ff4500; }
+    .cl-teaser-vote-btn.cl-downvoted { color: #7193ff; }
+    .cl-teaser-vote-score.cl-upvoted { color: #ff4500; }
+    .cl-teaser-vote-score.cl-downvoted { color: #7193ff; }
+    .cl-teaser-save-btn {
+      display: inline-flex; align-items: center; background: none; border: none; padding: 0.1rem;
+      color: #888; cursor: pointer; border-radius: 4px; transition: color 0.15s, background 0.15s;
+    }
+    .cl-teaser-save-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .cl-teaser-save-btn svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; vertical-align: -1px; }
+    .cl-teaser-save-btn.saved { color: #7fa8d9; }
+    .cl-teaser-save-btn.saved svg { fill: currentColor; }
 
     /* Post list teaser row — like/comment counts, "almost like a teaser for
        clicking on the post" per feedback, shown under the title in both the
        Club News box and the Social feed rows. */
-    .cl-admin-post-teaser { display: flex; gap: 0.9rem; margin-top: 0.4rem; font-size: 0.76rem; color: #888; }
+    .cl-admin-post-teaser { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.4rem; font-size: 0.76rem; color: #888; }
 
     /* General Page template's up-to-three text sections — underlined
        heading, same bubbly Fredoka font as the homepage Spotlight cards
@@ -3642,10 +3661,19 @@ function adminPostRow(post, mode) {
       <span>·</span>
       <span>${timeAgo(post.created_at)}</span>
     </div>`;
+  const teaserVoteArrowSvg = (down) => `<svg viewBox="0 0 24 24" class="cl-teaser-vote-arrow${down ? ' cl-teaser-vote-arrow--down' : ''}"><path d="M12 4l8 9h-5v7H9v-7H4z"/></svg>`;
+  const teaserVote = post.user_vote || 0;
   const teaserHtml = `
     <div class="cl-admin-post-teaser">
-      <span class="cl-teaser-vote"><svg viewBox="0 0 24 24" class="cl-teaser-vote-arrow"><path d="M12 4l8 9h-5v7H9v-7H4z"/></svg> ${post.like_count || 0}</span>
+      <span class="cl-teaser-vote">
+        <button type="button" class="cl-teaser-vote-btn cl-teaser-upvote-btn${teaserVote === 1 ? ' cl-upvoted' : ''}" title="Upvote" aria-label="Upvote">${teaserVoteArrowSvg(false)}</button>
+        <span class="cl-teaser-vote-score${teaserVote === 1 ? ' cl-upvoted' : teaserVote === -1 ? ' cl-downvoted' : ''}">${post.like_count || 0}</span>
+        <button type="button" class="cl-teaser-vote-btn cl-teaser-downvote-btn${teaserVote === -1 ? ' cl-downvoted' : ''}" title="Downvote" aria-label="Downvote">${teaserVoteArrowSvg(true)}</button>
+      </span>
       <span>💬 ${post.comment_count || 0}</span>
+      <button type="button" class="cl-teaser-save-btn${post.user_saved ? ' saved' : ''}" title="${post.user_saved ? 'Unsave this post' : 'Save this post'}" aria-label="Save">
+        <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
+      </button>
     </div>`;
   // Card mode reads top-to-bottom like Reddit's own card view -- author/
   // title sit above the image, not below it, with the image opening up
@@ -3668,9 +3696,54 @@ function adminPostRow(post, mode) {
       ${teaserHtml}
     </div>
   `;
+  wireAdminPostRowActions(row, post);
   const menu = clPostMenu(post);
   if (menu) row.appendChild(menu);
   return row;
+}
+// Wires the teaser row's vote arrows + quick Save button -- both need to
+// stop the click from bubbling up to the row's own click handler (which
+// navigates into the post), same as the Home/Recent feed cards.
+function wireAdminPostRowActions(row, post) {
+  const upBtn = row.querySelector('.cl-teaser-upvote-btn');
+  const downBtn = row.querySelector('.cl-teaser-downvote-btn');
+  const scoreEl = row.querySelector('.cl-teaser-vote-score');
+  const castVote = async (e, value) => {
+    e.preventDefault(); e.stopPropagation();
+    const newValue = (post.user_vote || 0) === value ? 0 : value;
+    try {
+      const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${post.id}/vote`, {
+        method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: newValue }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      post.user_vote = data.user_vote;
+      post.like_count = data.like_count;
+      upBtn.classList.toggle('cl-upvoted', post.user_vote === 1);
+      downBtn.classList.toggle('cl-downvoted', post.user_vote === -1);
+      scoreEl.textContent = post.like_count;
+      scoreEl.classList.toggle('cl-upvoted', post.user_vote === 1);
+      scoreEl.classList.toggle('cl-downvoted', post.user_vote === -1);
+    } catch {}
+  };
+  upBtn.addEventListener('click', (e) => castVote(e, 1));
+  downBtn.addEventListener('click', (e) => castVote(e, -1));
+  const saveBtn = row.querySelector('.cl-teaser-save-btn');
+  saveBtn.addEventListener('click', async (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (!token) { window.fpRequireSignIn('To save a post, first', 'to keep it for later!'); return; }
+    try {
+      const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${post.id}/save`, {
+        method: post.user_saved ? 'DELETE' : 'POST', headers: authHeaders(),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      post.user_saved = data.saved;
+      saveBtn.classList.toggle('saved', !!post.user_saved);
+      saveBtn.title = post.user_saved ? 'Unsave this post' : 'Save this post';
+    } catch {}
+  });
 }
 
 // "•••" post-actions menu -- Save/Unsave shows for any logged-in viewer;
