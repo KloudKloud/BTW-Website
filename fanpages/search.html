@@ -1403,6 +1403,23 @@ document.addEventListener('click', (e) => {
   if (!card || e.target.closest('a, button')) return;
   window.location.href = card.dataset.href;
 });
+// Clicking a tag/fandom/relationship/category/rating pill anywhere on this
+// page (tagSearchUrl's own links) is a brand-new, specific search -- same
+// as hitting Enter in the panel or Browse -> Stories -- so it should land
+// with both side panels open too, not carry over whatever collapsed state
+// a previous search on this tab left behind. Delegated + a tagSearchUrl
+// sniff on the href rather than a class, since these links live in several
+// different card-rendering functions.
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a[href]');
+  if (!a) return;
+  const href = a.getAttribute('href') || '';
+  if (!/[?&](tags_include|fandoms|relationships|categories|rating)=/.test(href)) return;
+  try {
+    sessionStorage.removeItem(FILTERS_COLLAPSED_KEY);
+    sessionStorage.removeItem(SIDEBAR_COLLAPSED_KEY);
+  } catch {}
+});
 // Live result count under the "Story" left-panel link, for the current
 // query. Profiles doesn't have a backing search yet, so it just shows a
 // static description instead.
@@ -1438,6 +1455,18 @@ function ratingLabel(rating) {
 function formatDate(d) {
   if (!d) return '';
   return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+// Surfaces whatever fandom/tag/relationship/category filter(s) are active
+// right next to the "X found" count, not just buried in the side panel's
+// own "Current search" line -- so clicking a tag like "Jolteon" from a
+// story card makes it obvious at a glance what you're now looking at.
+function activeTagFilterHtml(f) {
+  const names = [];
+  ['fandoms', 'tags_include', 'relationships', 'categories'].forEach(key => {
+    if (f[key]) f[key].split(',').filter(Boolean).forEach(v => names.push(v));
+  });
+  if (!names.length) return '';
+  return ` — searching tag${names.length === 1 ? '' : 's'}: <strong>${names.map(escapeHtml).join('</strong>, <strong>')}</strong>`;
 }
 function tagSearchUrl(params) {
   const usp = new URLSearchParams(params);
@@ -2252,7 +2281,7 @@ async function runSearch() {
       const phrase = BROWSE_SORT_PHRASE[data.sort] || 'latest updated';
       subEl.innerHTML = `These are some of the ${phrase} stories in our community. To find more stories, <a href="${window.fpUrl('/fandoms')}">choose a fandom</a> or enter a specific tag into the search bar above and perform a filtered search.`;
     } else {
-      subEl.innerHTML = `<strong>${data.total || 0}</strong> work${data.total === 1 ? '' : 's'} found — sorted by ${escapeHtml(SORT_LABELS[data.sort] || 'Best Match')}. ${pageLabelHtml('Stories')}`;
+      subEl.innerHTML = `<strong>${data.total || 0}</strong> work${data.total === 1 ? '' : 's'} found — sorted by ${escapeHtml(SORT_LABELS[data.sort] || 'Best Match')}.${activeTagFilterHtml(f)} ${pageLabelHtml('Stories')}`;
     }
     setStoryMenuCount(`${data.total || 0} stor${(data.total || 0) === 1 ? 'y' : 'ies'}${f.q ? ` for "${f.q}"` : ''}`);
 

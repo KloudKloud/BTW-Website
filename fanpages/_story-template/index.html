@@ -397,6 +397,21 @@ document.getElementById('qn-gallery').href = STORY_BASE + '/gallery';
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
 const authHeaders = () => ({ Authorization: `Bearer ${token}`, 'X-Story-Path': SLUG });
 
+// Clicking a tag in the hero tag cloud (renderHeroTagCloud's tagItem links)
+// runs a brand-new, specific Stories search -- it should land there with
+// both of search.html's side panels open, not carry over whatever
+// collapsed state a previous visit there left in this tab's sessionStorage.
+// Mirrors search.html's own resetCollapseStateForNewSearch, duplicated here
+// since this page's script runs independently of search.html's.
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a.wiki-tag-bubble[href]');
+  if (!a) return;
+  try {
+    sessionStorage.removeItem('btw_search_filters_collapsed');
+    sessionStorage.removeItem('btw_search_sidebar_collapsed');
+  } catch {}
+});
+
 let siteData = { site: {} };
 let editing = false;
 let isSelf = false;

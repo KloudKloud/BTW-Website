@@ -42,6 +42,20 @@
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  // Clicking a tag here runs a brand-new, specific Stories search -- it
+  // should land on search.html with both side panels open, not carry over
+  // whatever collapsed state a previous visit there left in this tab's
+  // sessionStorage. Mirrors search.html's own resetCollapseStateForNewSearch,
+  // duplicated here since this page's script runs independently of it.
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a.fp-cloud-tag[href]');
+    if (!a) return;
+    try {
+      sessionStorage.removeItem('btw_search_filters_collapsed');
+      sessionStorage.removeItem('btw_search_sidebar_collapsed');
+    } catch {}
+  });
+
   // Log-scaled font size so one runaway-popular tag doesn't make everything
   // else unreadably tiny by comparison — same idea as AO3's own tag cloud.
   function sizeForCount(count, minCount, maxCount) {
