@@ -558,15 +558,27 @@
        drag the thumb for fine control. Hidden entirely on cards whose
        tags all fit (initBcardTagScrollers only adds --has-overflow when
        there's something to scroll). */
+    /* The hit area (.fp-bcard-tags-scrollbar itself) is taller than the
+       visible line -- a thin 4px bar is hard to land a click/hover on, so
+       the whole 12px-tall box is clickable/draggable and the visible line
+       (the ::before) plus the thumb just grow a little on hover to confirm
+       you're over it, rather than the thin line itself being the only
+       interactive target. */
     .fp-bcard-tags-scrollbar {
-      display: none; position: relative; height: 4px; border-radius: 3px;
-      background: rgba(255,255,255,0.1); cursor: pointer;
+      display: none; position: relative; height: 12px; cursor: pointer;
     }
+    .fp-bcard-tags-scrollbar::before {
+      content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 4px; transform: translateY(-50%);
+      border-radius: 3px; background: rgba(255,255,255,0.1); transition: height 0.15s, background-color 0.15s;
+    }
+    .fp-bcard-tags-scrollbar:hover::before { height: 6px; background: rgba(255,255,255,0.18); }
     .fp-bcard-tags-scroll-wrap.fp-bcard-tags-has-overflow .fp-bcard-tags-scrollbar { display: block; }
     .fp-bcard-tags-scrollbar-thumb {
-      position: absolute; top: 0; left: 0; height: 100%; min-width: 14%; border-radius: 3px;
+      position: absolute; top: 50%; left: 0; height: 4px; min-width: 14%; border-radius: 3px; transform: translateY(-50%);
       background: linear-gradient(90deg, #f0c060, #e0504a); cursor: grab; touch-action: none;
+      transition: height 0.15s;
     }
+    .fp-bcard-tags-scrollbar:hover .fp-bcard-tags-scrollbar-thumb { height: 7px; }
     .fp-bcard-tags-scrollbar-thumb:hover { filter: brightness(1.15); }
     .fp-bcard-tags-scrollbar-thumb:active { cursor: grabbing; }
     /* Description sits between the tags row and the character/stat row,
@@ -2550,7 +2562,15 @@ if (isPostsView) {
   window.addEventListener('load', syncPostsBgHeight);
 }
 if (isBrowseMode) {
-  fpLayoutEl.classList.add('fp-layout--no-side');
+  // Browse → Posts still gets the panel-less full-width feed it always
+  // has. Browse → Stories now keeps both side panels (left tab rail +
+  // right "Sort and Filter") instead of hiding them -- per request, a
+  // fresh Browse → Stories visit should land with both boxes already
+  // open, same as a real filtered Stories search already does (the
+  // !isBrowseMode guards on setFiltersCollapsed/setSidebarPanelCollapsed
+  // further down force them open whenever isBrowseMode is true, so once
+  // the panels aren't hidden outright they start open for free).
+  if (!isBrowseStories) fpLayoutEl.classList.add('fp-layout--no-side');
   const headingEl = document.getElementById('fp-browse-heading');
   const headingText = currentView === 'submissions' ? 'Recent Submissions' : 'Recent Stories';
   headingEl.innerHTML = `${headingText} <img class="fp-title-deco" src="/images/home/decoration-2.png" alt="" />`;
@@ -2593,19 +2613,20 @@ if (currentView === 'submissions' || currentView === 'profiles') {
   loadCatalogsForAutocomplete();
   runSearch();
 }
-if (!isBrowseMode) refreshInactiveMenuCounts(currentView === 'submissions' || currentView === 'profiles' ? currentView : 'story');
+if (!isBrowseMode || isBrowseStories) refreshInactiveMenuCounts(currentView === 'submissions' || currentView === 'profiles' ? currentView : 'story');
 
-// ── Mobile-only "Options" drawer (FurAffinity reference) — Browse has no
-// filter panel and Profiles has never had one, so this only applies to a
-// normal Story search (filter panel) or the Posts tab (posts panel). On
-// mobile it relocates that same panel node (not a copy -- every existing
-// id/listener on its fields keeps working untouched) out of its desktop
-// grid column into the collapsed drawer sitting on the pagination row, so
-// tapping "Options" expands it in place and pushes the results down; the
-// desktop layout above 720px never runs this and keeps the panel in its
-// normal 3rd column. ──
+// ── Mobile-only "Options" drawer (FurAffinity reference) — Browse → Posts
+// has no filter panel and Profiles has never had one, so this only applies
+// to a normal Story search (filter panel), Browse → Stories (same filter
+// panel, now that it's no longer hidden there), or the Posts tab (posts
+// panel). On mobile it relocates that same panel node (not a copy -- every
+// existing id/listener on its fields keeps working untouched) out of its
+// desktop grid column into the collapsed drawer sitting on the pagination
+// row, so tapping "Options" expands it in place and pushes the results
+// down; the desktop layout above 720px never runs this and keeps the panel
+// in its normal 3rd column. ──
 (function () {
-  if (window.innerWidth > 720 || isBrowseMode || currentView === 'profiles') return;
+  if (window.innerWidth > 720 || (isBrowseMode && !isBrowseStories) || currentView === 'profiles') return;
   const sourcePanel = isPostsView ? document.getElementById('fp-posts-panel') : document.getElementById('fp-filter-panel');
   if (!sourcePanel) return;
   const btn = document.getElementById('fp-mobile-options-btn');

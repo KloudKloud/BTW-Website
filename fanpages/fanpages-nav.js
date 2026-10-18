@@ -838,6 +838,17 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   const currentQ = new URLSearchParams(window.location.search).get('q');
   if (here === fpUrl('/search') && currentQ) searchInput.value = currentQ;
   const runSearch = () => {
+    // A search launched from this global bar is always a brand-new search,
+    // same as hitting Enter/"Sort and Filter" inside search.html itself
+    // (which calls its own resetCollapseStateForNewSearch for this exact
+    // reason) -- mirrors those same two sessionStorage keys here since this
+    // bar lives outside search.html's own script and can't call that
+    // function directly. Without this, a panel collapsed while paging
+    // through an earlier search stayed collapsed on this fresh one too.
+    try {
+      sessionStorage.removeItem('btw_search_filters_collapsed');
+      sessionStorage.removeItem('btw_search_sidebar_collapsed');
+    } catch {}
     const q = searchInput.value.trim();
     window.location.href = q ? fpUrl(`/search?q=${encodeURIComponent(q)}`) : fpUrl('/search');
   };
