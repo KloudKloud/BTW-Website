@@ -1472,6 +1472,18 @@ function tagSearchUrl(params) {
   const usp = new URLSearchParams(params);
   usp.set('sort', 'updated');
   usp.set('view', 'story');
+  // A tags_include click (a free-form "Additional Tag" pill, e.g. clicking
+  // "Jolteon") also sets q to that same tag -- Posts/Profiles only
+  // understand free-text q, not tags_include, so without this, switching
+  // to those tabs via the left-nav links (syncSideMenuLinks carries q
+  // across tab switches) would silently drop back to "Everything" instead
+  // of staying on "Jolteon". Safe for Stories' own results too: the API's
+  // q filter already ORs in a tag-name match, so a story that satisfies
+  // tags_include=Jolteon always also satisfies q=Jolteon -- it's a no-op
+  // there, not an extra narrowing filter. Fandom/relationship/category/
+  // rating pills don't get this -- those aren't meaningful free-text
+  // keywords for a Posts/Profiles search.
+  if (params.tags_include && !usp.has('q')) usp.set('q', params.tags_include);
   return window.fpUrl(`/search?${usp.toString()}`);
 }
 
@@ -2082,10 +2094,13 @@ function applyParamsToPanel(f) {
   // "<tag> @X" marker so it's obvious this is a narrowed exact-match search,
   // not the fuzzy keyword search a plain "X" would imply.
   const queryBits = [];
-  if (f.q) queryBits.push(`"${f.q}"`);
-  ['fandoms', 'tags_include', 'relationships', 'categories'].forEach(key => {
-    if (f[key]) f[key].split(',').filter(Boolean).forEach(v => queryBits.push(`<tag> @${v}`));
-  });
+  const tagValues = ['fandoms', 'tags_include', 'relationships', 'categories']
+    .flatMap(key => (f[key] ? f[key].split(',').filter(Boolean) : []));
+  // A tag-click URL sets q to the same value as its tags_include (so Posts/
+  // Profiles inherit it via the left-nav links) -- skip the redundant plain
+  // "X" bit here when q is just mirroring a tag already shown as <tag> @X.
+  if (f.q && !tagValues.some(v => v.toLowerCase() === f.q.toLowerCase())) queryBits.push(`"${f.q}"`);
+  tagValues.forEach(v => queryBits.push(`<tag> @${v}`));
   if (f.ratings.length < STORY_RATING_VALUES.length) f.ratings.forEach(v => queryBits.push(`<tag> @${v}`));
   const queryText = queryBits.length ? queryBits.join(', ') : 'Everything';
   document.getElementById('fp-filter-query-text').textContent = queryText;
