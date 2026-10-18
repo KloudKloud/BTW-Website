@@ -800,9 +800,40 @@
       transition: background 0.15s, border-color 0.15s, color 0.15s;
     }
     .cl-post-meta-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.22); color: #fff; }
-    .cl-post-meta-btn.liked { border-color: #d97a72; color: #f5b3ac; background: rgba(217,122,114,0.1); }
     .cl-post-meta-btn.saved { border-color: #7fa8d9; color: #cfe0f5; background: rgba(127,168,217,0.14); }
     .cl-post-meta-btn.saved svg { fill: currentColor; }
+
+    /* Reddit-style up/down vote pill -- same transparent-pill shell as the
+       other meta buttons, but the two arrows + score live inside one pill
+       instead of being a single toggle button. */
+    .cl-post-vote-group {
+      display: flex; align-items: center; gap: 0.6rem;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); border-radius: 20px;
+      padding: 0.4rem 0.9rem;
+    }
+    .cl-post-vote-btn {
+      display: flex; align-items: center; justify-content: center; background: none; border: none;
+      padding: 0.15rem; color: #999; cursor: pointer; border-radius: 6px; transition: color 0.15s, background 0.15s;
+    }
+    .cl-post-vote-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .cl-vote-arrow { width: 18px; height: 18px; fill: currentColor; }
+    .cl-vote-arrow--down { transform: rotate(180deg); }
+    .cl-post-vote-btn.cl-upvoted { color: #ff4500; }
+    .cl-post-vote-btn.cl-downvoted { color: #7193ff; }
+    .cl-post-vote-score {
+      font-family: inherit; font-size: 0.88rem; font-weight: 700; color: #ccc; min-width: 1.5em; text-align: center;
+    }
+    .cl-post-vote-score.cl-upvoted { color: #ff4500; }
+    .cl-post-vote-score.cl-downvoted { color: #7193ff; }
+
+    /* Compact Reddit-style vote arrows used inline in card teaser rows
+       (post list, Social feed cards) -- same arrow glyph as the detail
+       view's vote pill, just small and non-interactive (read-only tally). */
+    .cl-teaser-vote {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+    }
+    .cl-teaser-vote-arrow { width: 11px; height: 11px; fill: currentColor; vertical-align: -1px; }
+    .cl-teaser-vote-arrow--down { transform: rotate(180deg); }
 
     /* Post list teaser row — like/comment counts, "almost like a teaser for
        clicking on the post" per feedback, shown under the title in both the
@@ -2123,9 +2154,15 @@
         <div class="cl-post-poll-display" id="cl-post-detail-poll" hidden></div>
 
         <div class="cl-post-meta-row" id="cl-post-meta-row">
-          <button type="button" class="cl-post-meta-btn" id="cl-post-like-btn">
-            <span id="cl-post-like-icon">🤍</span> <span id="cl-post-like-count">0</span>
-          </button>
+          <div class="cl-post-vote-group" id="cl-post-vote-group">
+            <button type="button" class="cl-post-vote-btn" id="cl-post-upvote-btn" title="Upvote" aria-label="Upvote">
+              <svg viewBox="0 0 24 24" class="cl-vote-arrow"><path d="M12 4l8 9h-5v7H9v-7H4z"/></svg>
+            </button>
+            <span id="cl-post-vote-score" class="cl-post-vote-score">0</span>
+            <button type="button" class="cl-post-vote-btn" id="cl-post-downvote-btn" title="Downvote" aria-label="Downvote">
+              <svg viewBox="0 0 24 24" class="cl-vote-arrow cl-vote-arrow--down"><path d="M12 4l8 9h-5v7H9v-7H4z"/></svg>
+            </button>
+          </div>
           <button type="button" class="cl-post-meta-btn" id="cl-post-comment-jump-btn">
             💬 <span id="cl-post-comment-count">0</span>
           </button>
@@ -3607,7 +3644,7 @@ function adminPostRow(post, mode) {
     </div>`;
   const teaserHtml = `
     <div class="cl-admin-post-teaser">
-      <span>🤍 ${post.like_count || 0}</span>
+      <span class="cl-teaser-vote"><svg viewBox="0 0 24 24" class="cl-teaser-vote-arrow"><path d="M12 4l8 9h-5v7H9v-7H4z"/></svg> ${post.like_count || 0}</span>
       <span>💬 ${post.comment_count || 0}</span>
     </div>`;
   // Card mode reads top-to-bottom like Reddit's own card view -- author/
@@ -4022,27 +4059,39 @@ async function submitPollVote(postId) {
   } catch { btn.disabled = false; }
 }
 function updatePostMetaUI(post) {
-  document.getElementById('cl-post-like-btn').classList.toggle('liked', !!post.user_liked);
-  document.getElementById('cl-post-like-icon').textContent = post.user_liked ? '❤️' : '🤍';
-  document.getElementById('cl-post-like-count').textContent = post.like_count || 0;
+  const upBtn = document.getElementById('cl-post-upvote-btn');
+  const downBtn = document.getElementById('cl-post-downvote-btn');
+  const scoreEl = document.getElementById('cl-post-vote-score');
+  const vote = post.user_vote || 0;
+  upBtn.classList.toggle('cl-upvoted', vote === 1);
+  downBtn.classList.toggle('cl-downvoted', vote === -1);
+  scoreEl.textContent = post.like_count || 0;
+  scoreEl.classList.toggle('cl-upvoted', vote === 1);
+  scoreEl.classList.toggle('cl-downvoted', vote === -1);
   document.getElementById('cl-post-comment-count').textContent = post.comment_count || 0;
   const saveBtn = document.getElementById('cl-post-save-btn');
   saveBtn.classList.toggle('saved', !!post.user_saved);
   saveBtn.title = post.user_saved ? 'Unsave this post' : 'Save this post';
 }
-document.getElementById('cl-post-like-btn').addEventListener('click', async () => {
+async function castPostVote(value) {
   if (!currentPostDetail) return;
+  // Clicking the already-active arrow retracts the vote (0); clicking the
+  // other arrow switches it -- same as Reddit.
+  const newValue = (currentPostDetail.user_vote || 0) === value ? 0 : value;
   try {
-    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${currentPostDetail.id}/like`, {
-      method: currentPostDetail.user_liked ? 'DELETE' : 'POST', headers: authHeaders(),
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${currentPostDetail.id}/vote`, {
+      method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: newValue }),
     });
     if (!res.ok) return;
     const data = await res.json();
-    currentPostDetail.user_liked = data.liked;
+    currentPostDetail.user_vote = data.user_vote;
     currentPostDetail.like_count = data.like_count;
     updatePostMetaUI(currentPostDetail);
   } catch {}
-});
+}
+document.getElementById('cl-post-upvote-btn').addEventListener('click', () => castPostVote(1));
+document.getElementById('cl-post-downvote-btn').addEventListener('click', () => castPostVote(-1));
 document.getElementById('cl-post-comment-jump-btn').addEventListener('click', () => {
   document.getElementById('cl-post-detail-comments').scrollIntoView({ behavior: 'smooth', block: 'start' });
 });

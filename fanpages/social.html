@@ -277,14 +277,41 @@
     .soc-feed-card-club-icon, .soc-feed-card-club-icon-fallback { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
     .soc-feed-card-club-icon-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.6rem; }
     .soc-feed-card-club-dot { color: #666; }
-    .soc-feed-card-meta { font-size: 0.78rem; color: #888; font-weight: 400; }
+    .soc-feed-card-meta { font-size: 0.85rem; color: #888; font-weight: 400; }
     .soc-feed-card-title {
       font-size: 1rem; font-weight: 600; color: #e8e8e8; margin: 0; line-height: 1.4;
       overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
       -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     }
-    .soc-feed-card-stats { display: flex; gap: 1rem; font-size: 0.76rem; color: #888; margin-top: 0.4rem; }
-    .soc-feed-card-stat--liked { color: #d97a72; }
+    .soc-feed-card-stats { display: flex; align-items: center; gap: 1.1rem; font-size: 0.85rem; color: #888; margin-top: 0.5rem; }
+
+    /* Reddit-style up/down vote -- compact pill of arrow/score/arrow, sits
+       inline in the stats row. Buttons (not just a readout span) since
+       voting happens right from the feed card, not only the post detail. */
+    .soc-feed-card-vote { display: flex; align-items: center; gap: 0.35rem; }
+    .soc-feed-card-vote-btn {
+      display: flex; align-items: center; justify-content: center; background: none; border: none; padding: 0.1rem;
+      color: #888; cursor: pointer; border-radius: 5px; transition: color 0.15s, background 0.15s;
+    }
+    .soc-feed-card-vote-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .soc-feed-card-vote-arrow { width: 14px; height: 14px; fill: currentColor; vertical-align: -2px; }
+    .soc-feed-card-vote-arrow--down { transform: rotate(180deg); }
+    .soc-feed-card-vote-btn.cl-upvoted { color: #ff4500; }
+    .soc-feed-card-vote-btn.cl-downvoted { color: #7193ff; }
+    .soc-feed-card-vote-score { font-weight: 700; color: #ccc; min-width: 1.4em; text-align: center; }
+    .soc-feed-card-vote-score.cl-upvoted { color: #ff4500; }
+    .soc-feed-card-vote-score.cl-downvoted { color: #7193ff; }
+
+    /* Quick Save button -- same bookmark-ribbon glyph used on the club post
+       detail view's own Save button, just smaller, inline in the stats row. */
+    .soc-feed-card-save-btn {
+      display: flex; align-items: center; background: none; border: none; padding: 0.1rem;
+      color: #888; cursor: pointer; border-radius: 5px; transition: color 0.15s, background 0.15s; margin-left: auto;
+    }
+    .soc-feed-card-save-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .soc-feed-card-save-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; }
+    .soc-feed-card-save-btn.saved { color: #7fa8d9; }
+    .soc-feed-card-save-btn.saved svg { fill: currentColor; }
 
     /* ── Card view -- image (when there is one) opens up full-width instead
        of a small square thumbnail; text-only posts drop the thumbnail
@@ -1038,10 +1065,19 @@ function feedCard(p, mode) {
       <span class="soc-feed-card-club-dot">·</span>
       <span class="soc-feed-card-meta">${escapeHtml(p.author.display_name)} · ${timeAgo(p.created_at)}</span>
     </div>`;
+  const voteArrowSvg = (down) => `<svg viewBox="0 0 24 24" class="soc-feed-card-vote-arrow${down ? ' soc-feed-card-vote-arrow--down' : ''}"><path d="M12 4l8 9h-5v7H9v-7H4z"/></svg>`;
+  const vote = p.user_vote || 0;
   const statsHtml = `
     <div class="soc-feed-card-stats">
-      <span class="${p.user_liked ? 'soc-feed-card-stat--liked' : ''}">🤍 ${p.like_count}</span>
+      <div class="soc-feed-card-vote">
+        <button type="button" class="soc-feed-card-vote-btn soc-feed-card-upvote-btn${vote === 1 ? ' cl-upvoted' : ''}" title="Upvote" aria-label="Upvote">${voteArrowSvg(false)}</button>
+        <span class="soc-feed-card-vote-score${vote === 1 ? ' cl-upvoted' : vote === -1 ? ' cl-downvoted' : ''}">${p.like_count}</span>
+        <button type="button" class="soc-feed-card-vote-btn soc-feed-card-downvote-btn${vote === -1 ? ' cl-downvoted' : ''}" title="Downvote" aria-label="Downvote">${voteArrowSvg(true)}</button>
+      </div>
       <span>💬 ${p.comment_count}</span>
+      <button type="button" class="soc-feed-card-save-btn${p.user_saved ? ' saved' : ''}" title="${p.user_saved ? 'Unsave this post' : 'Save this post'}" aria-label="Save">
+        <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
+      </button>
     </div>`;
   // Card mode reads top-to-bottom like Reddit's own card view -- club/
   // author/title sit above the image, not below it, with the image
@@ -1064,7 +1100,52 @@ function feedCard(p, mode) {
       ${statsHtml}
     </div>
   `;
+  wireFeedCardActions(a, p);
   return a;
+}
+// Wires the vote arrows + Save button on a feed card -- both need to stop
+// the click from bubbling up to the card's own <a href> (which would
+// navigate into the post instead of just casting a vote/save).
+function wireFeedCardActions(card, p) {
+  const upBtn = card.querySelector('.soc-feed-card-upvote-btn');
+  const downBtn = card.querySelector('.soc-feed-card-downvote-btn');
+  const scoreEl = card.querySelector('.soc-feed-card-vote-score');
+  const castVote = async (e, value) => {
+    e.preventDefault(); e.stopPropagation();
+    const newValue = (p.user_vote || 0) === value ? 0 : value;
+    try {
+      const res = await fetch(`${API}/clubs/${encodeURIComponent(p.club.slug)}/posts/${p.id}/vote`, {
+        method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: newValue }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      p.user_vote = data.user_vote;
+      p.like_count = data.like_count;
+      upBtn.classList.toggle('cl-upvoted', p.user_vote === 1);
+      downBtn.classList.toggle('cl-downvoted', p.user_vote === -1);
+      scoreEl.textContent = p.like_count;
+      scoreEl.classList.toggle('cl-upvoted', p.user_vote === 1);
+      scoreEl.classList.toggle('cl-downvoted', p.user_vote === -1);
+    } catch {}
+  };
+  upBtn.addEventListener('click', (e) => castVote(e, 1));
+  downBtn.addEventListener('click', (e) => castVote(e, -1));
+  const saveBtn = card.querySelector('.soc-feed-card-save-btn');
+  saveBtn.addEventListener('click', async (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (!token) { window.fpRequireSignIn('To save a post, first', 'to keep it for later!'); return; }
+    try {
+      const res = await fetch(`${API}/clubs/${encodeURIComponent(p.club.slug)}/posts/${p.id}/save`, {
+        method: p.user_saved ? 'DELETE' : 'POST', headers: authHeaders(),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      p.user_saved = data.saved;
+      saveBtn.classList.toggle('saved', !!p.user_saved);
+      saveBtn.title = p.user_saved ? 'Unsave this post' : 'Save this post';
+    } catch {}
+  });
 }
 
 // ── Card/Compact view toggle -- shared preference across Home, Recent, and

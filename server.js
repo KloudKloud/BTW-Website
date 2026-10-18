@@ -1322,6 +1322,12 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
       ON club_post_likes(post_id, guest_device_id) WHERE guest_device_id IS NOT NULL;
   `).catch(e => console.error('club_post_likes guest migration:', e.message));
 
+  // Reddit-style up/down voting: existing rows (plain "likes") default to
+  // an upvote (+1) so nothing's lost converting the old boolean-like table.
+  await pool.query(`
+    ALTER TABLE club_post_likes ADD COLUMN IF NOT EXISTS value SMALLINT NOT NULL DEFAULT 1;
+  `).catch(e => console.error('club_post_likes value migration:', e.message));
+
   // Saved club posts -- account-only (no guest_device_id, unlike likes),
   // powers the "Saved" tab on the new Your Club Profile page.
   await pool.query(`
@@ -9553,7 +9559,7 @@ function clubPostPublicShape(p, voteRows, viewerId) {
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
     like_count: Number(p.like_count) || 0,
     comment_count: Number(p.comment_count) || 0,
-    user_liked: !!p.user_liked,
+    user_vote: p.user_vote ? Number(p.user_vote) : 0,
     user_saved: !!p.user_saved,
     // Only present on the single-post GET (joined there) -- lets
     // create-club-post.html's edit mode self-detect "this post is a
@@ -9608,12 +9614,12 @@ app.get('/api/clubs/:slug/posts', async (req, res) => {
   // that) — enough for near-tied posts to swap on refresh, not enough to
   // bump a clearly-better post down.
   const hotScoreExpr = `LOG(10, GREATEST(
-         (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
+         (SELECT COALESCE(SUM(value),0)::int FROM club_post_likes WHERE post_id = cp.id)
          + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) * 2,
        1)::numeric) + EXTRACT(EPOCH FROM cp.created_at) / 45000`;
   const orderBy = promoPageId ? 'cp.sort_order ASC, cp.created_at ASC'
     : sort === 'new' ? 'cp.created_at DESC'
-    : sort === 'top' ? `(SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
+    : sort === 'top' ? `(SELECT COALESCE(SUM(value),0)::int FROM club_post_likes WHERE post_id = cp.id)
         + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) DESC, cp.created_at DESC`
     : `${hotScoreExpr} + (random() - 0.5) * 0.3 DESC`;
   const whereExtra = promoPageId
@@ -9622,9 +9628,9 @@ app.get('/api/clubs/:slug/posts', async (req, res) => {
   const queryParams = promoPageId ? [club.id, viewerId || 0, promoPageId] : [club.id, viewerId || 0];
   const { rows } = await pool.query(
     `SELECT cp.*, u.username, u.display_name, u.avatar,
-       (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
+       (SELECT COALESCE(SUM(value),0)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
        (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
-       (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked,
+       (SELECT value FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_vote,
        (SELECT COUNT(*) > 0 FROM club_post_saves WHERE post_id = cp.id AND user_id = $2) AS user_saved,
        ${hotScoreExpr} AS hot_score
      FROM club_posts cp JOIN users u ON u.id = cp.author_user_id
@@ -9656,9 +9662,9 @@ app.get('/api/clubs/:slug/posts/:postId', async (req, res) => {
   const { rows: [p] } = await pool.query(
     `SELECT cp.*, u.username, u.display_name, u.avatar,
        pg.slug AS promotion_page_slug, pg.title AS promotion_page_title,
-       (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
+       (SELECT COALESCE(SUM(value),0)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
        (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
-       (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $3) AS user_liked,
+       (SELECT value FROM club_post_likes WHERE post_id = cp.id AND user_id = $3) AS user_vote,
        (SELECT COUNT(*) > 0 FROM club_post_saves WHERE post_id = cp.id AND user_id = $3) AS user_saved
      FROM club_posts cp JOIN users u ON u.id = cp.author_user_id
        LEFT JOIN club_pages pg ON pg.id = cp.promotion_page_id
@@ -9725,38 +9731,44 @@ app.post('/api/clubs/:slug/posts/:postId/poll/vote', requireAuth, async (req, re
   });
 });
 
-// Guests can like club posts (unlike joining/commenting/voting, still
+// Guests can vote on club posts (unlike joining/commenting/polling, still
 // account-only) — no requireAuth here, optionalViewerId + the guest cookie
-// stand in for it.
-app.post('/api/clubs/:slug/posts/:postId/like', async (req, res) => {
+// stand in for it. Reddit-style: value is 1 (upvote), -1 (downvote), or 0
+// (remove vote). Posting the same value you already have is a no-op through
+// the UI, which always sends 0 to retract instead of resubmitting value.
+app.post('/api/clubs/:slug/posts/:postId/vote', async (req, res) => {
   const { rows: [post] } = await pool.query(
     `SELECT cp.id FROM club_posts cp JOIN clubs c ON c.id = cp.club_id WHERE c.slug = $1 AND cp.id = $2`,
     [req.params.slug, req.params.postId]
   );
   if (!post) return res.status(404).json({ error: 'Post not found.' });
+  const value = Number(req.body.value);
+  if (![1, -1, 0].includes(value)) return res.status(400).json({ error: 'Invalid vote value.' });
   const viewerId = optionalViewerId(req);
-  await pool.query(
-    'INSERT INTO club_post_likes (post_id, user_id, guest_device_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
-    [post.id, viewerId, viewerId ? null : req.guestId]
+  if (value === 0) {
+    await pool.query(
+      viewerId
+        ? 'DELETE FROM club_post_likes WHERE post_id = $1 AND user_id = $2'
+        : 'DELETE FROM club_post_likes WHERE post_id = $1 AND guest_device_id = $2',
+      [post.id, viewerId || req.guestId]
+    );
+  } else if (viewerId) {
+    await pool.query(
+      `INSERT INTO club_post_likes (post_id, user_id, value) VALUES ($1, $2, $3)
+       ON CONFLICT (post_id, user_id) DO UPDATE SET value = EXCLUDED.value`,
+      [post.id, viewerId, value]
+    );
+  } else {
+    await pool.query(
+      `INSERT INTO club_post_likes (post_id, guest_device_id, value) VALUES ($1, $2, $3)
+       ON CONFLICT (post_id, guest_device_id) DO UPDATE SET value = EXCLUDED.value`,
+      [post.id, req.guestId, value]
+    );
+  }
+  const { rows: [{ score }] } = await pool.query(
+    'SELECT COALESCE(SUM(value),0)::int AS score FROM club_post_likes WHERE post_id = $1', [post.id]
   );
-  const { rows: [{ count }] } = await pool.query('SELECT COUNT(*)::int AS count FROM club_post_likes WHERE post_id = $1', [post.id]);
-  res.json({ liked: true, like_count: count });
-});
-app.delete('/api/clubs/:slug/posts/:postId/like', async (req, res) => {
-  const { rows: [post] } = await pool.query(
-    `SELECT cp.id FROM club_posts cp JOIN clubs c ON c.id = cp.club_id WHERE c.slug = $1 AND cp.id = $2`,
-    [req.params.slug, req.params.postId]
-  );
-  if (!post) return res.status(404).json({ error: 'Post not found.' });
-  const viewerId = optionalViewerId(req);
-  await pool.query(
-    viewerId
-      ? 'DELETE FROM club_post_likes WHERE post_id = $1 AND user_id = $2'
-      : 'DELETE FROM club_post_likes WHERE post_id = $1 AND guest_device_id = $2',
-    [post.id, viewerId || req.guestId]
-  );
-  const { rows: [{ count }] } = await pool.query('SELECT COUNT(*)::int AS count FROM club_post_likes WHERE post_id = $1', [post.id]);
-  res.json({ liked: false, like_count: count });
+  res.json({ user_vote: value, like_count: score });
 });
 
 // Saving, unlike liking, is account-only -- powers the "Saved" tab on Your
@@ -10843,22 +10855,23 @@ app.get('/api/clubs-feed', async (req, res) => {
 
   // Same alias-in-ORDER-BY limitation as the per-club posts endpoint above.
   const hotScoreExpr = `LOG(10, GREATEST(
-         (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
+         (SELECT COALESCE(SUM(value),0)::int FROM club_post_likes WHERE post_id = cp.id)
          + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) * 2,
        1)::numeric)
          + EXTRACT(EPOCH FROM cp.created_at) / 45000
          + CASE WHEN cm.user_id IS NOT NULL THEN 2 ELSE 0 END
          + CASE WHEN cv.user_id IS NOT NULL AND cv.last_visited_at > NOW() - INTERVAL '30 days' THEN 0.5 ELSE 0 END`;
   const orderBy = sort === 'new' ? 'cp.created_at DESC'
-    : sort === 'top' ? `(SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
+    : sort === 'top' ? `(SELECT COALESCE(SUM(value),0)::int FROM club_post_likes WHERE post_id = cp.id)
         + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) DESC, cp.created_at DESC`
     : `${hotScoreExpr} + (random() - 0.5) * 0.3 DESC`;
 
   const { rows } = await pool.query(
     `SELECT cp.*, u.username, u.display_name, u.avatar, c.slug AS club_slug, c.name AS club_name, c.icon_url AS club_icon,
-       (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
+       (SELECT COALESCE(SUM(value),0)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
        (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
-       (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked,
+       (SELECT value FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_vote,
+       (SELECT COUNT(*) > 0 FROM club_post_saves WHERE post_id = cp.id AND user_id = $2) AS user_saved,
        ${hotScoreExpr} AS hot_score
      FROM club_posts cp
      JOIN users u ON u.id = cp.author_user_id
@@ -10875,7 +10888,8 @@ app.get('/api/clubs-feed', async (req, res) => {
     id: p.id, title: p.title, body: clubPostFeedSnippet(p), created_at: p.created_at, is_admin_post: p.is_admin_post,
     image_url: p.cover_image_url || '', preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
     preview_image_url: p.preview_image_url || '',
-    like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_liked: !!p.user_liked,
+    like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_vote: p.user_vote ? Number(p.user_vote) : 0,
+    user_saved: !!p.user_saved,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
     club: { slug: p.club_slug, name: p.club_name, icon_url: p.club_icon || null },
   })), sort });
@@ -10905,13 +10919,14 @@ app.get('/api/clubs-recommended', async (req, res) => {
     `WITH per_club AS (
        SELECT DISTINCT ON (cp.club_id) cp.*, u.username, u.display_name, u.avatar,
          c.slug AS club_slug, c.name AS club_name, c.icon_url AS club_icon,
-         (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
+         (SELECT COALESCE(SUM(value),0)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
          (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
-         (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked,
+         (SELECT value FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_vote,
+         (SELECT COUNT(*) > 0 FROM club_post_saves WHERE post_id = cp.id AND user_id = $2) AS user_saved,
          EXISTS(SELECT 1 FROM club_members cm WHERE cm.club_id = cp.club_id AND cm.user_id = $2) AS already_joined,
          (cv.user_id IS NOT NULL AND cv.last_visited_at > NOW() - INTERVAL '30 days') AS recently_visited,
          LOG(10, GREATEST(
-           (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id)
+           (SELECT COALESCE(SUM(value),0)::int FROM club_post_likes WHERE post_id = cp.id)
            + (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) * 2,
          1)::numeric) + EXTRACT(EPOCH FROM cp.created_at) / 45000 AS hot_score
        FROM club_posts cp
@@ -10928,7 +10943,8 @@ app.get('/api/clubs-recommended', async (req, res) => {
     id: p.id, title: p.title, body: clubPostFeedSnippet(p), created_at: p.created_at,
     image_url: p.cover_image_url || '', preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
     preview_image_url: p.preview_image_url || '',
-    like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_liked: !!p.user_liked,
+    like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_vote: p.user_vote ? Number(p.user_vote) : 0,
+    user_saved: !!p.user_saved,
     already_joined: !!p.already_joined, recently_visited: !!p.recently_visited,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
     club: { slug: p.club_slug, name: p.club_name, icon_url: p.club_icon || null },
@@ -10943,9 +10959,9 @@ app.get('/api/your-saved-posts', requireAuth, async (req, res) => {
   const { rows } = await pool.query(
     `SELECT cp.*, u.username, u.display_name, u.avatar, c.slug AS club_slug, c.name AS club_name, c.icon_url AS club_icon,
        cps.created_at AS saved_at,
-       (SELECT COUNT(*)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
+       (SELECT COALESCE(SUM(value),0)::int FROM club_post_likes WHERE post_id = cp.id) AS like_count,
        (SELECT COUNT(*)::int FROM content_comments WHERE target_type = 'club_post' AND target_id = cp.id) AS comment_count,
-       (SELECT COUNT(*) > 0 FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_liked
+       (SELECT value FROM club_post_likes WHERE post_id = cp.id AND user_id = $2) AS user_vote
      FROM club_post_saves cps
      JOIN club_posts cp ON cp.id = cps.post_id
      JOIN users u ON u.id = cp.author_user_id
@@ -10959,7 +10975,7 @@ app.get('/api/your-saved-posts', requireAuth, async (req, res) => {
     id: p.id, title: p.title, body: clubPostFeedSnippet(p), created_at: p.created_at, saved_at: p.saved_at,
     image_url: p.cover_image_url || '', preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
     preview_image_url: p.preview_image_url || '',
-    like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_liked: !!p.user_liked,
+    like_count: Number(p.like_count) || 0, comment_count: Number(p.comment_count) || 0, user_vote: p.user_vote ? Number(p.user_vote) : 0,
     user_saved: true,
     author: { id: p.author_user_id, username: p.username, display_name: p.display_name || p.username, avatar: p.avatar || null },
     club: { slug: p.club_slug, name: p.club_name, icon_url: p.club_icon || null },
