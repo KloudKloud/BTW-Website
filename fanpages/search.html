@@ -506,22 +506,19 @@
     .fp-bcard-author-avatar, .fp-bcard-author-avatar-fallback { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
     .fp-bcard-author-avatar-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.68rem; }
     .fp-bcard-author-name { font-size: 0.86rem; font-weight: 600; color: #ccc; }
-    /* Top row: Rating + Ongoing/Complete pinned on the left (never scroll
-       away), then every other tag (fandoms/relationships/categories/tags)
-       packed into a horizontally-scrolling strip that fills the rest of
-       the row. The strip clips at the card edge -- a fade + arrow button
-       (only shown when there's actually overflow, via initBcardTagScrollers)
+    /* Top row: every tag -- Rating and Ongoing/Complete included -- packed
+       into one horizontally-scrolling strip flush with the row's left
+       edge. The strip clips at the card edge -- a fade + arrow pair (only
+       shown when there's actually overflow, via initBcardTagScrollers)
        lets you click through the rest instead of dragging. */
-    .fp-bcard-tags-row { display: flex; align-items: flex-start; gap: 0.4rem; margin-bottom: 0.5rem; min-width: 0; }
-    .fp-bcard-tags-fixed { display: flex; gap: 0.4rem; flex-shrink: 0; margin-top: 0.08rem; }
+    .fp-bcard-tags-row { display: flex; margin-bottom: 0.5rem; min-width: 0; }
     /* Rating colors are hard-pinned to a plain green/yellow/red
        traffic-light scheme here specifically (General/Mature/Explicit),
        separate from the site's usual green/gold/orange rating palette
        used elsewhere. */
-    .fp-bcard-tags-fixed .fp-tag-pill { font-size: 0.85rem; padding: 0.36em 0.9em; font-weight: 800; }
-    .fp-bcard-tags-fixed .fp-tag-pill--rating-general { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
-    .fp-bcard-tags-fixed .fp-tag-pill--rating-teen { background: rgba(240,192,96,0.18); color: #f5cf7c; border-color: rgba(240,192,96,0.5); }
-    .fp-bcard-tags-fixed .fp-tag-pill--rating-mature { background: rgba(224,80,74,0.2); color: #ff8079; border-color: rgba(224,80,74,0.55); }
+    .fp-bcard-tags-scroll .fp-tag-pill--rating-general { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
+    .fp-bcard-tags-scroll .fp-tag-pill--rating-teen { background: rgba(240,192,96,0.18); color: #f5cf7c; border-color: rgba(240,192,96,0.5); }
+    .fp-bcard-tags-scroll .fp-tag-pill--rating-mature { background: rgba(224,80,74,0.2); color: #ff8079; border-color: rgba(224,80,74,0.55); }
     .fp-tag-pill--status-ongoing { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
     .fp-tag-pill--status-complete { background: rgba(127,168,217,0.2); color: #a8c6e8; border-color: rgba(127,168,217,0.5); }
     /* The strip itself sits in a flex column: the scrollable pills on top,
@@ -559,26 +556,26 @@
        tags all fit (initBcardTagScrollers only adds --has-overflow when
        there's something to scroll). */
     /* The hit area (.fp-bcard-tags-scrollbar itself) is taller than the
-       visible line -- a thin 4px bar is hard to land a click/hover on, so
-       the whole 12px-tall box is clickable/draggable and the visible line
-       (the ::before) plus the thumb just grow a little on hover to confirm
-       you're over it, rather than the thin line itself being the only
-       interactive target. */
+       visible bar -- a thin line is hard to land a click/hover on, so the
+       whole 18px-tall box is clickable/draggable and the bar itself (the
+       ::before) plus the thumb are sized generously (6px resting, 9px on
+       hover) so it reads as a real, easy-to-grab scrollbar rather than a
+       hairline accent. */
     .fp-bcard-tags-scrollbar {
-      display: none; position: relative; height: 12px; cursor: pointer;
+      display: none; position: relative; height: 18px; cursor: pointer;
     }
     .fp-bcard-tags-scrollbar::before {
-      content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 4px; transform: translateY(-50%);
-      border-radius: 3px; background: rgba(255,255,255,0.1); transition: height 0.15s, background-color 0.15s;
+      content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 6px; transform: translateY(-50%);
+      border-radius: 4px; background: rgba(255,255,255,0.12); transition: height 0.15s, background-color 0.15s;
     }
-    .fp-bcard-tags-scrollbar:hover::before { height: 6px; background: rgba(255,255,255,0.18); }
+    .fp-bcard-tags-scrollbar:hover::before { height: 9px; background: rgba(255,255,255,0.2); }
     .fp-bcard-tags-scroll-wrap.fp-bcard-tags-has-overflow .fp-bcard-tags-scrollbar { display: block; }
     .fp-bcard-tags-scrollbar-thumb {
-      position: absolute; top: 50%; left: 0; height: 4px; min-width: 14%; border-radius: 3px; transform: translateY(-50%);
+      position: absolute; top: 50%; left: 0; height: 6px; min-width: 16%; border-radius: 4px; transform: translateY(-50%);
       background: linear-gradient(90deg, #f0c060, #e0504a); cursor: grab; touch-action: none;
       transition: height 0.15s;
     }
-    .fp-bcard-tags-scrollbar:hover .fp-bcard-tags-scrollbar-thumb { height: 7px; }
+    .fp-bcard-tags-scrollbar:hover .fp-bcard-tags-scrollbar-thumb { height: 9px; }
     .fp-bcard-tags-scrollbar-thumb:hover { filter: brightness(1.15); }
     .fp-bcard-tags-scrollbar-thumb:active { cursor: grabbing; }
     /* Description sits between the tags row and the character/stat row,
@@ -1033,9 +1030,17 @@
       .fp-bcard-title-deco { width: 10px; height: 10px; }
       .fp-bcard-author-avatar, .fp-bcard-author-avatar-fallback { width: 15px; height: 15px; }
       .fp-bcard-author-name { font-size: 0.68rem; }
+      /* Rating/Ongoing now live inside the same scroll strip as everything
+         else (desktop), so mobile can no longer just hide the whole strip
+         -- that would lose Rating/Ongoing entirely. Instead the strip stays
+         visible but non-interactive here: overflow clips silently (no
+         arrows/scrollbar, no touch-scroll) rather than trying to cram a
+         drag-to-scroll gesture into a 125px-tall card. */
       .fp-bcard-tags-row { gap: 0.25rem; margin-bottom: 0.25rem; }
-      .fp-bcard-tags-fixed .fp-tag-pill { font-size: 0.6rem; padding: 0.18em 0.5em; }
-      .fp-bcard-tags-scroll-wrap { display: none; }
+      .fp-bcard-tags-scroll-wrap { gap: 0; }
+      .fp-bcard-tags-scroll { overflow-x: hidden; }
+      .fp-bcard-tags-scroll .fp-tag-pill { font-size: 0.6rem; padding: 0.18em 0.5em; }
+      .fp-bcard-tags-arrow, .fp-bcard-tags-scrollbar { display: none !important; }
       .fp-bcard-bottom-row { margin-top: 0.2rem; }
       .fp-bcard-statpanel { gap: 0.2rem; }
       .fp-bcard-stat { padding: 0.08rem 0.12rem; font-size: 0.56rem; }
@@ -1510,29 +1515,22 @@ function bcardCharsHtml(w) {
     </div>
   `;
 }
-// Fixed Rating + Ongoing/Complete pills, pinned to the left of the tags
-// row so they're always visible -- everything else (fandoms/relationships/
-// categories/tags) goes in the scrollable strip next to them.
-function bcardTagsFixedHtml(w) {
-  const isComplete = !!w.is_complete;
-  return `
-    <div class="fp-bcard-tags-fixed">
-      ${w.rating ? `<a class="fp-tag-pill ${ratingClass(w.rating)}" href="${tagSearchUrl({ rating: w.rating })}">${escapeHtml(ratingLabel(w.rating))}</a>` : ''}
-      <a class="fp-tag-pill ${isComplete ? 'fp-tag-pill--status-complete' : 'fp-tag-pill--status-ongoing'}" href="${tagSearchUrl({ completion: isComplete ? 'complete' : 'wip' })}">${isComplete ? 'Complete' : 'Ongoing'}</a>
-    </div>
-  `;
-}
-// Every other tag (fandoms, relationships, categories, free tags) packed
-// into one horizontally-scrolling strip, with a left/right arrow pair and
-// a thin draggable scrollbar underneath -- all three only become visible
-// once initBcardTagScrollers() detects actual overflow.
+// Every tag -- Rating and Ongoing/Complete first, then fandoms/
+// relationships/categories/free tags -- packed into one horizontally-
+// scrolling strip starting flush at the row's left edge, with a left/right
+// arrow pair and a draggable scrollbar underneath -- all three only become
+// visible once initBcardTagScrollers() detects actual overflow. Rating/
+// Ongoing used to be pinned outside the scroller; now they scroll with
+// everything else, per request.
 function bcardTagsScrollHtml(w) {
+  const isComplete = !!w.is_complete;
   const tags = [];
+  if (w.rating) tags.push(`<a class="fp-tag-pill ${ratingClass(w.rating)}" href="${tagSearchUrl({ rating: w.rating })}">${escapeHtml(ratingLabel(w.rating))}</a>`);
+  tags.push(`<a class="fp-tag-pill ${isComplete ? 'fp-tag-pill--status-complete' : 'fp-tag-pill--status-ongoing'}" href="${tagSearchUrl({ completion: isComplete ? 'complete' : 'wip' })}">${isComplete ? 'Complete' : 'Ongoing'}</a>`);
   (w.fandoms || []).forEach(f => tags.push(`<a class="fp-tag-pill fp-tag-pill--fandom" href="${tagSearchUrl({ fandoms: f })}">${escapeHtml(f)}</a>`));
   (w.relationships || []).forEach(r => tags.push(`<a class="fp-tag-pill fp-tag-pill--relationship" href="${tagSearchUrl({ relationships: r })}">${escapeHtml(r)}</a>`));
   (w.categories || []).forEach(c => tags.push(`<a class="fp-tag-pill fp-tag-pill--category" href="${tagSearchUrl({ categories: c })}">${escapeHtml(c)}</a>`));
   (w.tags || []).forEach(t => tags.push(`<a class="fp-tag-pill fp-tag-pill--tag" href="${tagSearchUrl({ tags_include: t })}">${escapeHtml(t)}</a>`));
-  if (!tags.length) return '<div class="fp-bcard-tags-scroll-wrap"></div>';
   return `
     <div class="fp-bcard-tags-scroll-wrap">
       <div class="fp-bcard-tags-scroll-inner">
@@ -1649,7 +1647,6 @@ function browseResultCard(w) {
           ${bcardAuthorHtml(w)}
         </div>
         <div class="fp-bcard-tags-row">
-          ${bcardTagsFixedHtml(w)}
           ${bcardTagsScrollHtml(w)}
         </div>
         <p class="fp-bcard-synopsis">${escapeHtml(truncateSynopsis(w.synopsis))}</p>
