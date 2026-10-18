@@ -122,13 +122,19 @@
        *count* instead was tried first and rejected: more, smaller columns
        is the opposite of "bigger" cards. */
 
-    /* ── Posts view — the Story tab's filter panel/collapse-fab don't apply
-       here (no story filters for a gallery+chapter feed); its own
-       .fp-posts-panel takes column 3 instead, a bit thinner than the
-       Story filter panel since it needs far fewer fields. ── */
+    /* ── Posts view — the Story tab's filter panel doesn't apply here (no
+       story filters for a gallery+chapter feed); its own .fp-posts-panel
+       takes column 3 instead, a bit thinner than the Story filter panel
+       since it needs far fewer fields. It reuses the same .fp-filter-fab/
+       --filters-collapsed collapse mechanism as the Story panel (shared
+       button, shared toggle state) rather than a separate posts-only fab. ── */
     .fp-layout--submissions { grid-template-columns: 250px 1fr 250px; }
-    .fp-layout--submissions .fp-filter-panel,
-    .fp-layout--submissions .fp-filter-fab { display: none; }
+    .fp-layout--submissions .fp-filter-panel { display: none; }
+    /* Combo selector needed to win on specificity over the single-class
+       .fp-layout--submissions rule above it (same (0,1,0) weight, so
+       declaration order alone would decide it) -- mirrors the plain
+       .fp-layout--filters-collapsed rule further down. */
+    .fp-layout--submissions.fp-layout--filters-collapsed { grid-template-columns: 250px 1fr 0px; }
     /* Hidden everywhere except the Posts view -- default .fp-layout has no
        3rd-column content of its own to give this room, so it only ever
        renders where .fp-layout--submissions has already made column 3
@@ -649,7 +655,8 @@
     .fp-filter-panel::-webkit-scrollbar-track { background: #1a1a1e; border-radius: 8px; }
     .fp-filter-panel::-webkit-scrollbar-thumb { background: #444; border-radius: 8px; }
     .fp-filter-panel::-webkit-scrollbar-thumb:hover { background: #555; }
-    .fp-layout--filters-collapsed .fp-filter-panel { display: none; }
+    .fp-layout--filters-collapsed .fp-filter-panel,
+    .fp-layout--filters-collapsed .fp-posts-panel { display: none; }
     /* Floating round toggle, fixed to the viewport (not the panel) so it
        stays put and visible in both states. Vertically centered on
        screen; overlaps into the panel's left edge a bit while open, and
@@ -820,8 +827,8 @@
       }
       .fp-filter-fab { display: none; }
       .fp-sidebar-fab { display: none; }
-      .fp-layout--submissions .fp-posts-panel {
-        grid-column: 1;
+      .fp-layout--submissions .fp-posts-panel, .fp-layout--filters-collapsed .fp-posts-panel {
+        grid-column: 1; display: flex;
         position: static; max-height: none; height: auto; overflow-y: visible;
         margin-bottom: 0; margin-right: 0; border-radius: 18px;
       }
@@ -1191,9 +1198,9 @@
 
   <!-- Posts view only -- results count, quick search, sort, and a ratings
        checklist, replacing the plain "no filter panel at all" the
-       Submissions view used to have. Permanent (no collapse fab) since
-       there's nowhere near the amount of fields the Story filter panel
-       has to justify one. -->
+       Submissions view used to have. Shares the Story filter panel's
+       #fp-filter-rail-toggle fab/collapse mechanism -- see the
+       --filters-collapsed rules in the <style> block. -->
   <aside class="fp-posts-panel" id="fp-posts-panel">
     <p class="fp-posts-count" id="fp-posts-count"></p>
 
