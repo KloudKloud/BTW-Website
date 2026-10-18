@@ -2097,6 +2097,15 @@ document.getElementById('fp-story-search-input').addEventListener('keydown', (e)
 // position:fixed sibling, not a child of the panel, so it stays on screen
 // either way.
 const fpLayoutEl = document.querySelector('.fp-layout');
+// Declared early (not down with the rest of the Browse-mode setup below)
+// because the sidebar/filter collapse restoration just below needs it --
+// Browse mode has no side panels to collapse at all, so a collapsed flag
+// left over in sessionStorage from a normal Search tab must never be
+// reapplied here, or the --sidebar-collapsed/--filters-collapsed combo
+// selectors elsewhere in this stylesheet win over .fp-layout--no-side's
+// single `1fr` column and wreck the whole grid (squashed into 0px-wide
+// side tracks).
+const isBrowseMode = new URLSearchParams(window.location.search).get('browse') === '1';
 
 // ── Mobile-only: "Stories / Posts / Profiles" tab box as a Reddit-style
 // off-canvas drawer (see the ≤720px block in <style>) -- own persistent
@@ -2131,10 +2140,14 @@ function setFiltersCollapsed(collapsed) {
   const label = collapsed ? 'Show filters' : 'Hide filters';
   filterRailToggle.title = label;
   filterRailToggle.setAttribute('aria-label', label);
-  sessionStorage.setItem(FILTERS_COLLAPSED_KEY, collapsed ? '1' : '0');
+  // Skipped in Browse mode -- there's no fab to click there, so the only
+  // way this ever runs is the forced-false restore call below, and that
+  // forced false must not stomp a real collapsed='1' saved from a normal
+  // Search tab visit just because the user also looked at Browse once.
+  if (!isBrowseMode) sessionStorage.setItem(FILTERS_COLLAPSED_KEY, collapsed ? '1' : '0');
 }
 filterRailToggle.addEventListener('click', () => setFiltersCollapsed(!fpLayoutEl.classList.contains('fp-layout--filters-collapsed')));
-setFiltersCollapsed(sessionStorage.getItem(FILTERS_COLLAPSED_KEY) === '1');
+setFiltersCollapsed(!isBrowseMode && sessionStorage.getItem(FILTERS_COLLAPSED_KEY) === '1');
 
 // Left "Stories/Posts/Profiles" tab box collapse/expand -- exact mirror of
 // the filter panel toggle above, own class/button/state/storage key so the
@@ -2146,7 +2159,8 @@ function setSidebarPanelCollapsed(collapsed) {
   const label = collapsed ? 'Show tabs' : 'Hide tabs';
   sidebarRailToggle.title = label;
   sidebarRailToggle.setAttribute('aria-label', label);
-  sessionStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
+  // Same reasoning as setFiltersCollapsed's guard above.
+  if (!isBrowseMode) sessionStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
   // #fp-bg-video-el lives outside <main class="fp-layout"> (a sibling, not
   // a descendant), so a CSS rule scoped under .fp-layout--sidebar-collapsed
   // can never reach it -- toggle its own class directly instead so the
@@ -2155,7 +2169,7 @@ function setSidebarPanelCollapsed(collapsed) {
   document.getElementById('fp-bg-video-el').classList.toggle('fp-bg-video-el--sidebar-collapsed', collapsed);
 }
 sidebarRailToggle.addEventListener('click', () => setSidebarPanelCollapsed(!fpLayoutEl.classList.contains('fp-layout--sidebar-collapsed')));
-setSidebarPanelCollapsed(sessionStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1');
+setSidebarPanelCollapsed(!isBrowseMode && sessionStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1');
 
 // Keeps the current query attached to all three left-panel tab links, so
 // clicking Story -> Submissions -> Profiles carries whatever you searched
@@ -2215,11 +2229,12 @@ async function refreshInactiveMenuCounts(activeView) {
 // gone), and render into the same #fp-search-results element the Story
 // tab uses. ───────────────────────────────────────────────────────────
 let currentView = new URLSearchParams(window.location.search).get('view');
-// ?browse=1 — reached via the nav's Browse dropdown instead of the left
-// panel: no left panel at all, a plain "Recent Stories"/"Recent
-// Submissions" heading up top, everything else (right filter panel,
-// collapse arrow, the actual result-fetching) identical to the normal tab.
-const isBrowseMode = new URLSearchParams(window.location.search).get('browse') === '1';
+// isBrowseMode itself is declared earlier, right after fpLayoutEl, since
+// the collapse-state restoration up there needs it too -- ?browse=1 is
+// reached via the nav's Browse dropdown instead of the left panel: no
+// left panel at all, a plain "Recent Stories"/"Recent Submissions"
+// heading up top, everything else (right filter panel, collapse arrow,
+// the actual result-fetching) identical to the normal tab.
 // Default tab: a bare /search with no ?view= lands on Posts, on desktop
 // and mobile alike -- permanent, matches the tab list's own Posts-first
 // order. Browse links always set an explicit ?view= already, so this
