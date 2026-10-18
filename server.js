@@ -10,6 +10,7 @@ const fs       = require('fs');
 const multer   = require('multer');
 const sharp    = require('sharp');
 const https    = require('https');
+const sanitizeHtml = require('sanitize-html');
 
 // ── Avatar upload ─────────────────────────────────────────────────────────────
 const AVATARS_DIR = '/var/www/btw/images/avatars';
@@ -6447,6 +6448,48 @@ function isValidHttpUrl(str) {
   } catch { return false; }
 }
 
+// Chapter body sanitizer — the real trust boundary for rich-text chapter
+// content. The chapter-editor's own sanitizePastedHtml() only runs
+// client-side on paste, so a hand-crafted PUT to
+// /api/moderator/chapters/:id/body would bypass it entirely; this allowlist
+// mirrors exactly what the editor's toolbar/image/hr/video-block features
+// can actually produce (see chapter-editor.html's buildImageBlock/
+// buildHrBlock/buildVideoBlock + the bold/italic/underline/align toolbar),
+// nothing more -- no <script>, no event-handler attributes, no non-http(s)
+// URLs anywhere.
+function sanitizeChapterBody(html) {
+  return sanitizeHtml(String(html || ''), {
+    allowedTags: [
+      'p', 'div', 'span', 'br', 'hr', 'img', 'a', 'button',
+      'strong', 'b', 'em', 'i', 'u', 'blockquote',
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li',
+    ],
+    allowedAttributes: {
+      '*': ['class', 'style', 'data-video-id', 'data-dir', 'contenteditable', 'title'],
+      a: ['href', 'target', 'rel'],
+      img: ['src', 'alt'],
+      button: ['type'],
+    },
+    allowedSchemesByTag: { a: ['http', 'https'], img: ['http', 'https'] },
+    allowedStyles: {
+      '*': {
+        'text-align': [/^left$|^center$|^right$|^justify$/],
+        'font-weight': [/^\d+$|^bold$|^normal$/],
+        'font-style': [/^italic$|^normal$/],
+        'text-decoration': [/./],
+        'text-decoration-line': [/./],
+      },
+    },
+    // iframe/script/etc. aren't in allowedTags at all, so they're discarded
+    // outright rather than unwrapped into the surrounding text -- an inline
+    // video block only ever saves its thumbnail markup (img/button/div), the
+    // live <iframe> is swapped in client-side on click and isn't expected to
+    // survive a save; worst case a save-while-playing loses that one embed,
+    // which is a cosmetic edge case, not a security concern.
+    disallowedTagsMode: 'discard',
+  });
+}
+
 // Wattpad/e621-style tags: lowercased, whitespace collapsed to underscores,
 // deduped, capped at 100. Bad input silently gets cleaned up rather than
 // rejected — this is discovery metadata, not user-facing prose.
@@ -6993,7 +7036,7 @@ app.put('/api/moderator/chapters/:id/status', requireAuth, requireModerator, asy
 // cover is either an image or a YouTube link, not both).
 app.put('/api/moderator/chapters/:id/body', requireAuth, requireModerator, async (req, res) => {
   const title = String(req.body.title || '').trim();
-  const body = String(req.body.body || '');
+  const body = sanitizeChapterBody(req.body.body);
   if (!title) return res.status(400).json({ error: 'Title is required.' });
   const hasImageUrl = req.body.image_url !== undefined;
   const hasVideoUrl = req.body.video_url !== undefined;
