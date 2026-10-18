@@ -479,13 +479,13 @@
        row. Own "fp-bcard-*" namespace (not .fp-result) so the filtered
        Story-tab search results (still the single-column AO3-style list)
        stay completely untouched. ── */
-    .fp-bcard-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.1rem; }
-    /* Filtered Story search (tag click, "Sort and Filter", quick search)
-       still has the side filter panel eating width -- 2 per row instead
-       of 3 so cards don't get squeezed. */
-    .fp-bcard-grid--narrow { grid-template-columns: repeat(2, 1fr); }
+    /* One story per row, full width -- stretches to fill whatever space is
+       available (narrower when the side filter panel is present, same as
+       before, just no longer forcing a 2nd column). Card height stays
+       pinned to the cover's own height regardless of row width. */
+    .fp-bcard-grid, .fp-bcard-grid--narrow { display: grid; grid-template-columns: 1fr; gap: 0.9rem; }
     .fp-bcard {
-      display: flex; flex-direction: row; cursor: pointer; overflow: hidden; position: relative; height: 250px;
+      display: flex; flex-direction: row; cursor: pointer; overflow: hidden; position: relative; height: 270px;
       background: linear-gradient(160deg, rgba(10,8,14,0.86), rgba(10,8,14,0.76)), url('/images/home/potential-box-background.png');
       background-size: cover; background-position: center;
       border: 1px solid rgba(255,255,255,0.22); border-radius: 14px;
@@ -506,17 +506,39 @@
     .fp-bcard-author-avatar, .fp-bcard-author-avatar-fallback { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
     .fp-bcard-author-avatar-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.68rem; }
     .fp-bcard-author-name { font-size: 0.86rem; font-weight: 600; color: #ccc; }
-    .fp-bcard-badges { display: flex; gap: 0.4rem; margin-bottom: 0.6rem; }
+    /* Top row: Rating + Ongoing/Complete pinned on the left (never scroll
+       away), then every other tag (fandoms/relationships/categories/tags)
+       packed into a horizontally-scrolling strip that fills the rest of
+       the row. The strip clips at the card edge -- a fade + arrow button
+       (only shown when there's actually overflow, via initBcardTagScrollers)
+       lets you click through the rest instead of dragging. */
+    .fp-bcard-tags-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.6rem; min-width: 0; }
+    .fp-bcard-tags-fixed { display: flex; gap: 0.4rem; flex-shrink: 0; }
     /* Rating colors are hard-pinned to a plain green/yellow/red
        traffic-light scheme here specifically (General/Mature/Explicit),
        separate from the site's usual green/gold/orange rating palette
        used elsewhere. */
-    .fp-bcard-badges .fp-tag-pill { font-size: 0.85rem; padding: 0.36em 0.9em; font-weight: 800; }
-    .fp-bcard-badges .fp-tag-pill--rating-general { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
-    .fp-bcard-badges .fp-tag-pill--rating-teen { background: rgba(240,192,96,0.18); color: #f5cf7c; border-color: rgba(240,192,96,0.5); }
-    .fp-bcard-badges .fp-tag-pill--rating-mature { background: rgba(224,80,74,0.2); color: #ff8079; border-color: rgba(224,80,74,0.55); }
+    .fp-bcard-tags-fixed .fp-tag-pill { font-size: 0.85rem; padding: 0.36em 0.9em; font-weight: 800; }
+    .fp-bcard-tags-fixed .fp-tag-pill--rating-general { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
+    .fp-bcard-tags-fixed .fp-tag-pill--rating-teen { background: rgba(240,192,96,0.18); color: #f5cf7c; border-color: rgba(240,192,96,0.5); }
+    .fp-bcard-tags-fixed .fp-tag-pill--rating-mature { background: rgba(224,80,74,0.2); color: #ff8079; border-color: rgba(224,80,74,0.55); }
     .fp-tag-pill--status-ongoing { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
     .fp-tag-pill--status-complete { background: rgba(127,168,217,0.2); color: #a8c6e8; border-color: rgba(127,168,217,0.5); }
+    .fp-bcard-tags-scroll-wrap { position: relative; flex: 1; min-width: 0; overflow: hidden; }
+    .fp-bcard-tags-scroll {
+      display: flex; gap: 0.4rem; overflow-x: auto; scroll-behavior: smooth;
+      scrollbar-width: none; padding-right: 0.2rem;
+    }
+    .fp-bcard-tags-scroll::-webkit-scrollbar { display: none; }
+    .fp-bcard-tags-scroll .fp-tag-pill { font-size: 0.78rem; padding: 0.28em 0.8em; white-space: nowrap; }
+    .fp-bcard-tags-arrow {
+      display: none; position: absolute; right: 0; top: 0; bottom: 0; width: 2rem;
+      align-items: center; justify-content: center; border: none; cursor: pointer; padding: 0;
+      background: linear-gradient(to right, transparent, rgba(10,8,14,0.92) 45%);
+      color: #f0c060; font-size: 1.15rem; font-weight: 800;
+    }
+    .fp-bcard-tags-scroll-wrap.fp-bcard-tags-has-overflow .fp-bcard-tags-arrow { display: flex; }
+    .fp-bcard-tags-arrow:hover { color: #fff; }
     /* Stats -- three small individual boxes instead of one shared strip.
        Padding kept tight (not "thick") so the label text can run bigger
        without the box itself growing tall. */
@@ -530,7 +552,7 @@
     .fp-bcard-stat-label { display: block; font-size: 0.68rem; font-weight: 600; color: #ccc; margin-top: 0.02rem; }
     .fp-bcard-synopsis {
       font-size: 0.85rem; line-height: 1.42; color: #ddd; margin-bottom: 0.4rem;
-      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden;
     }
     /* Character teaser row -- always renders something (real chips or the
        "No Linked Characters" placeholder) so this slot's height is
@@ -964,8 +986,9 @@
       .fp-bcard-title-deco { width: 10px; height: 10px; }
       .fp-bcard-author-avatar, .fp-bcard-author-avatar-fallback { width: 15px; height: 15px; }
       .fp-bcard-author-name { font-size: 0.68rem; }
-      .fp-bcard-badges { gap: 0.25rem; margin-bottom: 0.25rem; }
-      .fp-bcard-badges .fp-tag-pill { font-size: 0.6rem; padding: 0.18em 0.5em; }
+      .fp-bcard-tags-row { gap: 0.25rem; margin-bottom: 0.25rem; }
+      .fp-bcard-tags-fixed .fp-tag-pill { font-size: 0.6rem; padding: 0.18em 0.5em; }
+      .fp-bcard-tags-scroll-wrap { display: none; }
       .fp-bcard-statpanel { gap: 0.2rem; margin-bottom: 0.22rem; }
       .fp-bcard-stat { padding: 0.08rem 0.12rem; }
       .fp-bcard-stat-val { font-size: 0.66rem; }
@@ -1348,7 +1371,7 @@ function setProfilesMenuCount(text) {
 function truncateSynopsis(s) {
   const text = (s || '').trim();
   if (!text) return 'No description yet.';
-  return text.length > 500 ? text.slice(0, 500).trim() + '…' : text;
+  return text.length > 650 ? text.slice(0, 650).trim() + '…' : text;
 }
 function ratingClass(rating) {
   if (rating === 'mature') return 'fp-tag-pill--rating-teen';
@@ -1439,8 +1462,56 @@ function bcardCharsHtml(w) {
     </div>
   `;
 }
-function browseResultCard(w) {
+// Fixed Rating + Ongoing/Complete pills, pinned to the left of the tags
+// row so they're always visible -- everything else (fandoms/relationships/
+// categories/tags) goes in the scrollable strip next to them.
+function bcardTagsFixedHtml(w) {
   const isComplete = !!w.is_complete;
+  return `
+    <div class="fp-bcard-tags-fixed">
+      ${w.rating ? `<a class="fp-tag-pill ${ratingClass(w.rating)}" href="${tagSearchUrl({ rating: w.rating })}">${escapeHtml(ratingLabel(w.rating))}</a>` : ''}
+      <a class="fp-tag-pill ${isComplete ? 'fp-tag-pill--status-complete' : 'fp-tag-pill--status-ongoing'}" href="${tagSearchUrl({ completion: isComplete ? 'complete' : 'wip' })}">${isComplete ? 'Complete' : 'Ongoing'}</a>
+    </div>
+  `;
+}
+// Every other tag (fandoms, relationships, categories, free tags) packed
+// into one horizontally-scrolling strip -- the arrow button only becomes
+// visible once initBcardTagScrollers() detects actual overflow.
+function bcardTagsScrollHtml(w) {
+  const tags = [];
+  (w.fandoms || []).forEach(f => tags.push(`<a class="fp-tag-pill fp-tag-pill--fandom" href="${tagSearchUrl({ fandoms: f })}">${escapeHtml(f)}</a>`));
+  (w.relationships || []).forEach(r => tags.push(`<a class="fp-tag-pill fp-tag-pill--relationship" href="${tagSearchUrl({ relationships: r })}">${escapeHtml(r)}</a>`));
+  (w.categories || []).forEach(c => tags.push(`<a class="fp-tag-pill fp-tag-pill--category" href="${tagSearchUrl({ categories: c })}">${escapeHtml(c)}</a>`));
+  (w.tags || []).forEach(t => tags.push(`<a class="fp-tag-pill fp-tag-pill--tag" href="${tagSearchUrl({ tags_include: t })}">${escapeHtml(t)}</a>`));
+  if (!tags.length) return '<div class="fp-bcard-tags-scroll-wrap"></div>';
+  return `
+    <div class="fp-bcard-tags-scroll-wrap">
+      <div class="fp-bcard-tags-scroll">${tags.join('')}</div>
+      <button type="button" class="fp-bcard-tags-arrow" aria-label="Show more tags" onclick="scrollBcardTags(this)">›</button>
+    </div>
+  `;
+}
+// After the arrow is clicked enough times to hit the end of the strip,
+// loop back to the start rather than leaving it stuck with a dead button.
+function scrollBcardTags(btn) {
+  const wrap = btn.closest('.fp-bcard-tags-scroll-wrap');
+  const scrollEl = wrap.querySelector('.fp-bcard-tags-scroll');
+  if (scrollEl.scrollLeft + scrollEl.clientWidth >= scrollEl.scrollWidth - 4) {
+    scrollEl.scrollTo({ left: 0, behavior: 'smooth' });
+  } else {
+    scrollEl.scrollBy({ left: 160, behavior: 'smooth' });
+  }
+}
+// Only show the arrow on cards that actually have more tags than fit --
+// call once after the grid's innerHTML is set.
+function initBcardTagScrollers() {
+  document.querySelectorAll('.fp-bcard-tags-scroll-wrap').forEach(wrap => {
+    const scrollEl = wrap.querySelector('.fp-bcard-tags-scroll');
+    if (!scrollEl) return;
+    wrap.classList.toggle('fp-bcard-tags-has-overflow', scrollEl.scrollWidth > scrollEl.clientWidth + 2);
+  });
+}
+function browseResultCard(w) {
   return `
     <div class="fp-bcard" data-href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">
       <a class="fp-bcard-cover-link" href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">${coverHtml(w)}</a>
@@ -1450,9 +1521,9 @@ function browseResultCard(w) {
           <a class="fp-bcard-title" href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">${escapeHtml(w.site_title || 'Untitled Story')}<img class="fp-bcard-title-deco" src="/images/home/decoration-1.png" alt="" /></a>
           ${bcardAuthorHtml(w)}
         </div>
-        <div class="fp-bcard-badges">
-          ${w.rating ? `<a class="fp-tag-pill ${ratingClass(w.rating)}" href="${tagSearchUrl({ rating: w.rating })}">${escapeHtml(ratingLabel(w.rating))}</a>` : ''}
-          <a class="fp-tag-pill ${isComplete ? 'fp-tag-pill--status-complete' : 'fp-tag-pill--status-ongoing'}" href="${tagSearchUrl({ completion: isComplete ? 'complete' : 'wip' })}">${isComplete ? 'Complete' : 'Ongoing'}</a>
+        <div class="fp-bcard-tags-row">
+          ${bcardTagsFixedHtml(w)}
+          ${bcardTagsScrollHtml(w)}
         </div>
         <div class="fp-bcard-statpanel">
           <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${(w.hits || 0).toLocaleString()}</span><span class="fp-bcard-stat-label">👁 Reads</span></div>
@@ -2066,6 +2137,7 @@ async function runSearch() {
       return;
     }
     resultsEl.innerHTML = works.map(isStoriesView ? browseResultCard : resultCard).join('');
+    if (isStoriesView) initBcardTagScrollers();
 
     const totalPages = Math.max(1, Math.ceil((data.total || 0) / (data.limit || 20)));
     if (totalPages > 1) {
