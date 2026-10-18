@@ -2086,9 +2086,9 @@
       line.innerHTML = '<span style="color:#2fbf5f; font-weight:600;">Official ✅</span>';
     } else if (char.official_art_source_url) {
       const a = document.createElement('a');
-      a.href = char.official_art_source_url;
+      a.href = isSafeLinkUrl(char.official_art_source_url) ? char.official_art_source_url : '#';
       a.target = '_blank';
-      a.rel = 'noopener';
+      a.rel = 'noopener noreferrer nofollow ugc';
       a.style.cssText = 'color:#d9a13a; font-weight:600; text-decoration:underline;';
       a.textContent = 'Unofficial 🎨';
       line.appendChild(a);
@@ -2117,7 +2117,7 @@
     });
     let out = richText(working);
     tokens.forEach((t, i) => {
-      out = out.replace(` TOKEN${i} `, `<a href="${escapeHtml(t.url)}" target="_blank" rel="noopener" style="color:#7fa8d9;">${escapeHtml(t.label)}</a>`);
+      out = out.replace(` TOKEN${i} `, `<a href="${escapeHtml(t.url)}" target="_blank" rel="noopener noreferrer nofollow ugc" style="color:#7fa8d9;">${escapeHtml(t.label)}</a>`);
     });
     return out;
   }
@@ -2449,7 +2449,7 @@
       const a = document.createElement('a');
       a.href = themeSong.trim();
       a.target = '_blank';
-      a.rel = 'noopener';
+      a.rel = 'noopener noreferrer nofollow ugc';
       a.style.color = '#f0c060';
       a.textContent = 'Theme Song';
       wireSpotifyAppLink(a);
@@ -4261,18 +4261,20 @@
       ${post.title ? `<p class="fp-newspaper-post-title">${escapeHtml(post.title)}</p>` : ''}
       <div class="fp-newspaper-post-body">${renderGalleryText(post.body)}</div>
       <div class="fp-newspaper-post-media">${newspaperMediaHtml(post.attachments, '')}</div>
-      ${isOwner || canDelete ? `
-        <div class="fp-newspaper-post-actions">
-          ${isOwner ? '<button class="mod-btn mod-btn--small" id="fp-newspaper-edit-this-btn" type="button">Edit</button>' : ''}
-          ${canDelete ? '<button class="mod-btn mod-btn--small mod-btn--danger" id="fp-newspaper-delete-this-btn" type="button">Delete</button>' : ''}
-        </div>
-      ` : ''}
+      <div class="fp-newspaper-post-actions">
+        ${isOwner ? '<button class="mod-btn mod-btn--small" id="fp-newspaper-edit-this-btn" type="button">Edit</button>' : ''}
+        ${canDelete ? '<button class="mod-btn mod-btn--small mod-btn--danger" id="fp-newspaper-delete-this-btn" type="button">Delete</button>' : ''}
+        ${!isOwner && token ? '<button class="mod-btn mod-btn--small" id="fp-newspaper-report-this-btn" type="button">Report</button>' : ''}
+      </div>
     `;
     if (isOwner) {
       document.getElementById('fp-newspaper-edit-this-btn').addEventListener('click', () => openNewspaperComposer(post));
     }
     if (canDelete) {
       document.getElementById('fp-newspaper-delete-this-btn').addEventListener('click', () => deleteNewspaperPost(post.id));
+    }
+    if (!isOwner && token) {
+      document.getElementById('fp-newspaper-report-this-btn').addEventListener('click', () => reportContent('newspaper_post', post.id));
     }
   }
 
@@ -4289,8 +4291,11 @@
         <span class="fp-newspaper-comment-name">${escapeHtml(a.display_name || a.username)}</span>
         <span class="fp-newspaper-comment-time">${timeAgo(c.created_at)}</span>
         <p class="fp-newspaper-comment-text">${richText(c.body)}</p>
+        ${token && CURRENT_USER && a.id !== CURRENT_USER.id ? '<button class="cc-action-btn cc-action-btn--flag" data-action="report" title="Report">&#127987;&#65039;</button>' : ''}
       </div>
     `;
+    const reportBtn = row.querySelector('[data-action="report"]');
+    if (reportBtn) reportBtn.addEventListener('click', () => reportContent('newspaper_comment', c.id));
     return row;
   }
 
@@ -4715,7 +4720,7 @@
         link.className = 'fp-link-item';
         link.href = isSafeLinkUrl(l.url) ? l.url : '#';
         link.target = '_blank';
-        link.rel = 'noopener';
+        link.rel = 'noopener noreferrer nofollow ugc';
         link.title = l.label;
         link.textContent = truncate(l.label, 15);
         li.appendChild(link);

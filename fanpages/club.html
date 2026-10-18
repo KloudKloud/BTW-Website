@@ -2127,6 +2127,7 @@
                 <button type="button" class="art-view-like art-view-like--big" id="cl-gallery-detail-like-btn" aria-label="Like">
                   <span id="cl-gallery-detail-like-icon">♡</span> <span id="cl-gallery-detail-like-count">0</span>
                 </button>
+                <button type="button" class="cl-post-meta-btn" id="cl-gallery-detail-report-btn" title="Report this image">&#127987;&#65039;</button>
               </div>
             </div>
             <div class="art-view-desc" id="cl-gallery-detail-desc-box">
@@ -2195,6 +2196,7 @@
           <button type="button" class="cl-post-meta-btn" id="cl-post-share-btn" title="Share this post">
             <svg viewBox="0 0 24 24" fill="none" style="width:15px; height:15px;"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
           </button>
+          <button type="button" class="cl-post-meta-btn" id="cl-post-report-btn" title="Report this post">&#127987;&#65039;</button>
         </div>
 
         <div id="cl-post-detail-comments-slot">
@@ -2814,7 +2816,7 @@ function renderRichText(s) {
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>');
   tokens.forEach((t, i) => {
-    out = out.replace(` TOKEN${i} `, `<a href="${escapeHtml(t.url)}" target="_blank" rel="noopener noreferrer" style="color:#7fa8d9;">${escapeHtml(t.label)}</a>`);
+    out = out.replace(` TOKEN${i} `, `<a href="${escapeHtml(t.url)}" target="_blank" rel="noopener noreferrer nofollow ugc" style="color:#7fa8d9;">${escapeHtml(t.label)}</a>`);
   });
   return out;
 }
@@ -4192,6 +4194,10 @@ document.getElementById('cl-post-share-btn').addEventListener('click', (e) => {
   if (!currentPostDetail) return;
   window.fpShare(e.currentTarget, `${window.location.origin}${buildClubUrl({ post: currentPostDetail.id })}`);
 });
+document.getElementById('cl-post-report-btn').addEventListener('click', () => {
+  if (!currentPostDetail) return;
+  reportContent('club_post', currentPostDetail.id);
+});
 document.getElementById('cl-post-back-btn').addEventListener('click', () => {
   // "View in Page" (Promotion Page builder's "•••" menu) tags this history
   // entry with returnToEditor -- Back then reopens the builder on that page
@@ -4695,6 +4701,10 @@ function renderGalleryDetail() {
   document.getElementById('cl-gallery-detail-prev').disabled = pageGalleryDetailIdx === 0;
   document.getElementById('cl-gallery-detail-next').disabled = pageGalleryDetailIdx === pageGalleryImages.length - 1;
 }
+document.getElementById('cl-gallery-detail-report-btn').addEventListener('click', () => {
+  const img = pageGalleryImages[pageGalleryDetailIdx];
+  if (img) reportContent('club_gallery_image', img.id);
+});
 function updateGalleryDetailLikeUI(img) {
   document.getElementById('cl-gallery-detail-like-btn').classList.toggle('liked', !!img.user_liked);
   document.getElementById('cl-gallery-detail-like-icon').textContent = img.user_liked ? '♥' : '♡';

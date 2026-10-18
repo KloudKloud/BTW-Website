@@ -3427,6 +3427,48 @@ async function reportTargetInfo(targetType, targetId) {
     if (!m) return null;
     return { title: `DM from ${m.username}: "${(m.body || '').slice(0, 80)}"`, link: null };
   }
+  if (targetType === 'club_post') {
+    const { rows: [p] } = await pool.query(
+      `SELECT cp.title, c.name AS club_name, c.slug
+       FROM club_posts cp JOIN clubs c ON c.id = cp.club_id
+       WHERE cp.id = $1`,
+      [targetId]
+    );
+    if (!p) return null;
+    return { title: `Club post in "${p.club_name}": "${p.title || 'Untitled'}"`, link: `/club?slug=${encodeURIComponent(p.slug)}&post=${targetId}` };
+  }
+  if (targetType === 'club_gallery_image') {
+    const { rows: [g] } = await pool.query(
+      `SELECT g.title, c.name AS club_name, c.slug AS club_slug, p.slug AS page_slug
+       FROM club_page_gallery_images g JOIN club_pages p ON p.id = g.page_id JOIN clubs c ON c.id = p.club_id
+       WHERE g.id = $1`,
+      [targetId]
+    );
+    if (!g) return null;
+    return { title: `Club gallery image in "${g.club_name}": "${g.title || 'Untitled'}"`, link: `/club?slug=${encodeURIComponent(g.club_slug)}&page=${encodeURIComponent(g.page_slug)}` };
+  }
+  if (targetType === 'newspaper_post') {
+    const { rows: [p] } = await pool.query(
+      `SELECT np.title, u.username FROM newspaper_posts np JOIN users u ON u.id = np.user_id WHERE np.id = $1`,
+      [targetId]
+    );
+    if (!p) return null;
+    return { title: `Newspaper post by ${p.username}: "${p.title || 'Untitled'}"`, link: `/${encodeURIComponent(p.username)}?newspaper=${targetId}#newspaper` };
+  }
+  if (targetType === 'newspaper_comment') {
+    const { rows: [c] } = await pool.query(
+      `SELECT nc.body, nc.post_id, u.username FROM newspaper_comments nc JOIN users u ON u.id = nc.user_id WHERE nc.id = $1`,
+      [targetId]
+    );
+    if (!c) return null;
+    const { rows: [owner] } = await pool.query(
+      `SELECT u.username FROM newspaper_posts np JOIN users u ON u.id = np.user_id WHERE np.id = $1`, [c.post_id]
+    );
+    return {
+      title: `Newspaper comment by ${c.username}: "${(c.body || '').slice(0, 80)}"`,
+      link: owner ? `/${encodeURIComponent(owner.username)}?newspaper=${c.post_id}#newspaper` : null,
+    };
+  }
   return null;
 }
 
@@ -3436,7 +3478,7 @@ async function reportTargetInfo(targetType, targetId) {
 // this is meant to be seen right away rather than discovered later.
 app.post('/api/reports', requireAuth, async (req, res) => {
   const { target_type, target_id, reason } = req.body;
-  if (!['story', 'comment', 'dm_message', 'user'].includes(target_type)) return res.status(400).json({ error: 'Invalid report type.' });
+  if (!['story', 'comment', 'dm_message', 'user', 'club_post', 'club_gallery_image', 'newspaper_post', 'newspaper_comment'].includes(target_type)) return res.status(400).json({ error: 'Invalid report type.' });
   const targetId = parseInt(target_id, 10);
   if (!targetId) return res.status(400).json({ error: 'Invalid target.' });
   const cleanReason = (reason || '').trim().slice(0, 1000);
@@ -3449,7 +3491,11 @@ app.post('/api/reports', requireAuth, async (req, res) => {
   const { rows: [reporter] } = await pool.query('SELECT username, display_name FROM users WHERE id = $1', [req.user.id]);
   const reporterName = (reporter && (reporter.display_name || reporter.username)) || 'Unknown';
   const info = await reportTargetInfo(target_type, targetId).catch(() => null);
-  const typeLabel = { story: 'Story', comment: 'Comment', dm_message: 'DM Message', user: 'User' }[target_type];
+  const typeLabel = {
+    story: 'Story', comment: 'Comment', dm_message: 'DM Message', user: 'User',
+    club_post: 'Club Post', club_gallery_image: 'Club Gallery Image',
+    newspaper_post: 'Newspaper Post', newspaper_comment: 'Newspaper Comment',
+  }[target_type];
   const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   resend.emails.send({

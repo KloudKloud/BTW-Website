@@ -1161,3 +1161,93 @@ window.wikiSetCoverSlot = function (el, site, opts) {
   el.replaceWith(replacement);
   return replacement;
 };
+
+// ── "You are leaving BTWFics" interstitial — Discord-style warning before
+// following any user-submitted/external link, since URL-format validation
+// (isValidHttpUrl etc. elsewhere) can only catch bad schemes, never a
+// legitimate-looking link (a Google Drive share, a shortener) that leads to
+// something malicious. One delegated, capture-phase document listener
+// covers every page that loads this script and every link already using
+// the site's own established external-link convention (target="_blank"),
+// past and future, without having to tag each individual render site.
+// Capture phase so this runs before any per-element click listener already
+// on the anchor (e.g. character.html's Spotify-app-deep-link try/fallback)
+// -- this intentionally supersedes that kind of per-domain special-casing
+// in favor of one consistent warning everywhere.
+(function () {
+  const TRUSTED_KEY = 'btw_trusted_link_domains';
+  function getTrustedDomains() {
+    try { return JSON.parse(localStorage.getItem(TRUSTED_KEY) || '[]'); } catch { return []; }
+  }
+  function trustDomain(host) {
+    const list = getTrustedDomains();
+    if (!list.includes(host)) { list.push(host); try { localStorage.setItem(TRUSTED_KEY, JSON.stringify(list)); } catch {} }
+  }
+  function isSameSite(hostname) {
+    const norm = (h) => (h || '').replace(/^www\./, '').toLowerCase();
+    const here = norm(location.hostname);
+    const there = norm(hostname);
+    return there === here || there === 'btwfics.net' || there === 'btwfanfic.net';
+  }
+
+  let leavingOverlay = null;
+  function showLeavingModal(url) {
+    if (!leavingOverlay) {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `
+        <div class="fpnav-modal-overlay" id="fp-leaving-overlay" hidden>
+          <div class="fpnav-modal-card">
+            <p class="fpnav-modal-title">You are leaving BTWFics</p>
+            <p class="fpnav-modal-text">
+              This link was posted by another user and goes to
+              <strong id="fp-leaving-host"></strong>, a site we don't control.
+              Make sure you trust it before continuing.
+            </p>
+            <p class="fp-leaving-url" id="fp-leaving-url"></p>
+            <label class="fp-leaving-trust-row">
+              <input type="checkbox" id="fp-leaving-trust-check" />
+              Don't ask again for this site
+            </label>
+            <div class="fp-leaving-btn-row">
+              <button type="button" class="fpnav-modal-cta fpnav-modal-cta--secondary" id="fp-leaving-cancel">Go Back</button>
+              <button type="button" class="fpnav-modal-cta" id="fp-leaving-continue">Continue</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(wrap.firstElementChild);
+      leavingOverlay = document.getElementById('fp-leaving-overlay');
+      leavingOverlay.addEventListener('click', (e) => { if (e.target === leavingOverlay) closeLeavingModal(); });
+      document.getElementById('fp-leaving-cancel').addEventListener('click', closeLeavingModal);
+      document.getElementById('fp-leaving-continue').addEventListener('click', () => {
+        const checked = document.getElementById('fp-leaving-trust-check').checked;
+        const target = leavingOverlay.dataset.targetUrl;
+        const host = leavingOverlay.dataset.targetHost;
+        closeLeavingModal();
+        if (checked && host) trustDomain(host);
+        window.open(target, '_blank', 'noopener');
+      });
+    }
+    const u = new URL(url);
+    leavingOverlay.dataset.targetUrl = url;
+    leavingOverlay.dataset.targetHost = u.hostname;
+    document.getElementById('fp-leaving-host').textContent = u.hostname;
+    document.getElementById('fp-leaving-url').textContent = url.length > 80 ? url.slice(0, 77) + '…' : url;
+    document.getElementById('fp-leaving-trust-check').checked = false;
+    leavingOverlay.hidden = false;
+  }
+  function closeLeavingModal() { if (leavingOverlay) leavingOverlay.hidden = true; }
+
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[target="_blank"]');
+    if (!a || !a.href) return;
+    let url;
+    try { url = new URL(a.href, location.href); } catch { return; }
+    if (!['http:', 'https:'].includes(url.protocol)) return;
+    if (isSameSite(url.hostname)) return;
+    if (getTrustedDomains().includes(url.hostname)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    showLeavingModal(url.href);
+  }, true);
+})();

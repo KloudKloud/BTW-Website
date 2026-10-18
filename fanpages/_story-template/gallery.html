@@ -229,7 +229,7 @@ function renderGalleryText(s) {
   });
   let out = richText(working);
   tokens.forEach((t, i) => {
-    out = out.replace(` TOKEN${i} `, `<a href="${escapeHtml(t.url)}" target="_blank" rel="noopener" style="color:#7fa8d9;">${escapeHtml(t.label)}</a>`);
+    out = out.replace(` TOKEN${i} `, `<a href="${escapeHtml(t.url)}" target="_blank" rel="noopener noreferrer nofollow ugc" style="color:#7fa8d9;">${escapeHtml(t.label)}</a>`);
   });
   return out;
 }
@@ -641,7 +641,7 @@ function ccCommentEl(c, isReply) {
     </div>
     <div class="cc-actions">
       ${token && !isReply ? '<button class="cc-action-btn" data-action="reply">Reply</button>' : ''}
-      ${ccIsMine(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : ''}
+      ${ccIsMine(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : (token ? '<button class="cc-action-btn cc-action-btn--flag" data-action="report" title="Report">&#127987;&#65039;</button>' : '')}
     </div>
   `;
   wrap.appendChild(body);
@@ -650,6 +650,8 @@ function ccCommentEl(c, isReply) {
   if (replyBtn) replyBtn.addEventListener('click', () => ccOpenReplyBox(body, c));
   const deleteBtn = body.querySelector('[data-action="delete"]');
   if (deleteBtn) deleteBtn.addEventListener('click', () => ccDeleteComment(c.id));
+  const reportBtn = body.querySelector('[data-action="report"]');
+  if (reportBtn) reportBtn.addEventListener('click', () => reportContent('comment', c.id));
 
   if (!isReply && (c.replies || []).length) {
     const repliesWrap = document.createElement('div');
