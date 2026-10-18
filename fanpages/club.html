@@ -826,38 +826,41 @@
     .cl-post-vote-score.cl-upvoted { color: #ff4500; }
     .cl-post-vote-score.cl-downvoted { color: #7193ff; }
 
-    /* Compact Reddit-style vote arrows used inline in card teaser rows
-       (post list, Social tab, Promotion page cards -- adminPostRow() is
-       shared by all three) -- same arrow glyph as the detail view's vote
-       pill, just small. Real buttons, not a read-only tally, so voting
-       works straight from the list without opening the post. */
+    /* Reddit-style vote arrows used inline in card teaser rows (post list,
+       Social tab, Promotion page cards -- adminPostRow() is shared by all
+       three) -- sized/spaced to match the Home/Recent feed cards'
+       .soc-feed-card-vote exactly, so a post reads the same wherever it's
+       seen. Real buttons, not a read-only tally -- voting works straight
+       from the list without opening the post. */
     .cl-teaser-vote {
-      display: inline-flex; align-items: center; gap: 0.3rem;
+      display: inline-flex; align-items: center; gap: 0.35rem;
     }
-    .cl-teaser-vote-arrow { width: 11px; height: 11px; fill: currentColor; vertical-align: -1px; }
+    .cl-teaser-vote-arrow { width: 14px; height: 14px; fill: currentColor; vertical-align: -2px; }
     .cl-teaser-vote-arrow--down { transform: rotate(180deg); }
     .cl-teaser-vote-btn {
       display: inline-flex; align-items: center; justify-content: center; background: none; border: none; padding: 0.1rem;
-      color: #888; cursor: pointer; border-radius: 4px; transition: color 0.15s, background 0.15s;
+      color: #888; cursor: pointer; border-radius: 5px; transition: color 0.15s, background 0.15s;
     }
     .cl-teaser-vote-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
     .cl-teaser-vote-btn.cl-upvoted { color: #ff4500; }
     .cl-teaser-vote-btn.cl-downvoted { color: #7193ff; }
+    .cl-teaser-vote-score { font-weight: 700; color: #ccc; min-width: 1.4em; text-align: center; }
     .cl-teaser-vote-score.cl-upvoted { color: #ff4500; }
     .cl-teaser-vote-score.cl-downvoted { color: #7193ff; }
     .cl-teaser-save-btn {
-      display: inline-flex; align-items: center; background: none; border: none; padding: 0.1rem;
-      color: #888; cursor: pointer; border-radius: 4px; transition: color 0.15s, background 0.15s;
+      display: inline-flex; align-items: center; gap: 0.35rem; background: none; border: none; padding: 0.1rem 0.4rem;
+      color: #888; cursor: pointer; border-radius: 5px; transition: color 0.15s, background 0.15s; font-family: inherit; font-size: inherit;
     }
     .cl-teaser-save-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
-    .cl-teaser-save-btn svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; vertical-align: -1px; }
+    .cl-teaser-save-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; flex-shrink: 0; }
     .cl-teaser-save-btn.saved { color: #7fa8d9; }
     .cl-teaser-save-btn.saved svg { fill: currentColor; }
 
     /* Post list teaser row — like/comment counts, "almost like a teaser for
        clicking on the post" per feedback, shown under the title in both the
-       Club News box and the Social feed rows. */
-    .cl-admin-post-teaser { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.4rem; font-size: 0.76rem; color: #888; }
+       Club News box and the Social feed rows. Sized to match the Home/
+       Recent feed cards' .soc-feed-card-stats exactly. */
+    .cl-admin-post-teaser { display: flex; align-items: center; gap: 1.1rem; margin-top: 0.5rem; font-size: 0.85rem; color: #888; }
 
     /* General Page template's up-to-three text sections — underlined
        heading, same bubbly Fredoka font as the homepage Spotlight cards
@@ -2187,6 +2190,7 @@
           </button>
           <button type="button" class="cl-post-meta-btn" id="cl-post-save-btn" title="Save this post">
             <svg viewBox="0 0 24 24" style="width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:2;"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
+            <span id="cl-post-save-label">Save</span>
           </button>
           <button type="button" class="cl-post-meta-btn" id="cl-post-share-btn" title="Share this post">
             <svg viewBox="0 0 24 24" fill="none" style="width:15px; height:15px;"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
@@ -3538,7 +3542,7 @@ function timeAgo(dateStr) {
 async function loadAdminPosts() {
   const list = document.getElementById('cl-admin-posts-list');
   try {
-    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts?section=admin`);
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts?section=admin`, { headers: authHeaders() });
     const data = await res.json();
     const posts = data.posts || [];
     if (!posts.length) {
@@ -3557,7 +3561,7 @@ let socialSort = 'new';
 async function loadSocialPosts() {
   const list = document.getElementById('cl-social-posts-list');
   try {
-    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts?sort=${socialSort}`);
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts?sort=${socialSort}`, { headers: authHeaders() });
     const data = await res.json();
     socialPostsCache = data.posts || [];
     renderSocialPosts();
@@ -3673,6 +3677,7 @@ function adminPostRow(post, mode) {
       <span>💬 ${post.comment_count || 0}</span>
       <button type="button" class="cl-teaser-save-btn${post.user_saved ? ' saved' : ''}" title="${post.user_saved ? 'Unsave this post' : 'Save this post'}" aria-label="Save">
         <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
+        <span class="cl-teaser-save-label">${post.user_saved ? 'Saved' : 'Save'}</span>
       </button>
     </div>`;
   // Card mode reads top-to-bottom like Reddit's own card view -- author/
@@ -3742,6 +3747,7 @@ function wireAdminPostRowActions(row, post) {
       post.user_saved = data.saved;
       saveBtn.classList.toggle('saved', !!post.user_saved);
       saveBtn.title = post.user_saved ? 'Unsave this post' : 'Save this post';
+      saveBtn.querySelector('.cl-teaser-save-label').textContent = post.user_saved ? 'Saved' : 'Save';
     } catch {}
   });
 }
@@ -4145,6 +4151,7 @@ function updatePostMetaUI(post) {
   const saveBtn = document.getElementById('cl-post-save-btn');
   saveBtn.classList.toggle('saved', !!post.user_saved);
   saveBtn.title = post.user_saved ? 'Unsave this post' : 'Save this post';
+  document.getElementById('cl-post-save-label').textContent = post.user_saved ? 'Saved' : 'Save';
 }
 async function castPostVote(value) {
   if (!currentPostDetail) return;
@@ -4415,7 +4422,7 @@ async function loadCustomPage(pageSlug, tab) {
       // its own.
       let posts = [];
       try {
-        const promoRes = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts?page=${encodeURIComponent(pageSlug)}`);
+        const promoRes = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts?page=${encodeURIComponent(pageSlug)}`, { headers: authHeaders() });
         const promoData = await promoRes.json();
         posts = promoData.posts || [];
       } catch {}
@@ -4779,6 +4786,8 @@ function ccCommentEl(c, isReply) {
 
   const body = document.createElement('div');
   body.className = 'cc-body-wrap';
+  const ccVoteArrowSvg = (down) => `<svg viewBox="0 0 24 24" class="cc-vote-arrow${down ? ' cc-vote-arrow--down' : ''}"><path d="M12 4l8 9h-5v7H9v-7H4z"/></svg>`;
+  const ccVote = c.user_vote || 0;
   body.innerHTML = `
     <div class="cc-bubble">
       <span class="cc-name"><a href="${window.fpUrl(`/${encodeURIComponent(c.username)}`)}">${escapeHtml(c.display_name || c.username)}</a></span>
@@ -4786,11 +4795,59 @@ function ccCommentEl(c, isReply) {
       <p class="cc-text">${c.reply_to_username ? `<span class="cc-mention">@${escapeHtml(c.reply_to_username)}</span> ` : ''}${escapeHtml(c.body)}</p>
     </div>
     <div class="cc-actions">
+      <span class="cc-vote">
+        <button type="button" class="cc-vote-btn cc-upvote-btn${ccVote === 1 ? ' cl-upvoted' : ''}" title="Upvote" aria-label="Upvote">${ccVoteArrowSvg(false)}</button>
+        <span class="cc-vote-score${ccVote === 1 ? ' cl-upvoted' : ccVote === -1 ? ' cl-downvoted' : ''}">${c.like_count || 0}</span>
+        <button type="button" class="cc-vote-btn cc-downvote-btn${ccVote === -1 ? ' cl-downvoted' : ''}" title="Downvote" aria-label="Downvote">${ccVoteArrowSvg(true)}</button>
+      </span>
+      <button type="button" class="cc-save-btn${c.user_saved ? ' saved' : ''}" title="${c.user_saved ? 'Unsave this comment' : 'Save this comment'}">
+        <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
+        <span class="cc-save-label">${c.user_saved ? 'Saved' : 'Save'}</span>
+      </button>
       ${token && !isReply ? '<button class="cc-action-btn" data-action="reply">Reply</button>' : ''}
       ${ccIsMine(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : (token ? '<button class="cc-action-btn cc-action-btn--flag" data-action="report" title="Report">&#127987;&#65039;</button>' : '')}
     </div>
   `;
   wrap.appendChild(body);
+
+  const ccUpBtn = body.querySelector('.cc-upvote-btn');
+  const ccDownBtn = body.querySelector('.cc-downvote-btn');
+  const ccScoreEl = body.querySelector('.cc-vote-score');
+  const ccCastVote = async (value) => {
+    const newValue = (c.user_vote || 0) === value ? 0 : value;
+    try {
+      const res = await fetch(`/api/content-comments/${c.id}/vote`, {
+        method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: newValue }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      c.user_vote = data.user_vote;
+      c.like_count = data.like_count;
+      ccUpBtn.classList.toggle('cl-upvoted', c.user_vote === 1);
+      ccDownBtn.classList.toggle('cl-downvoted', c.user_vote === -1);
+      ccScoreEl.textContent = c.like_count;
+      ccScoreEl.classList.toggle('cl-upvoted', c.user_vote === 1);
+      ccScoreEl.classList.toggle('cl-downvoted', c.user_vote === -1);
+    } catch {}
+  };
+  ccUpBtn.addEventListener('click', () => ccCastVote(1));
+  ccDownBtn.addEventListener('click', () => ccCastVote(-1));
+  const ccSaveBtn = body.querySelector('.cc-save-btn');
+  ccSaveBtn.addEventListener('click', async () => {
+    if (!token) { window.fpRequireSignIn('To save a comment, first', 'to keep it for later!'); return; }
+    try {
+      const res = await fetch(`/api/content-comments/${c.id}/save`, {
+        method: c.user_saved ? 'DELETE' : 'POST', headers: authHeaders(),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      c.user_saved = data.saved;
+      ccSaveBtn.classList.toggle('saved', !!c.user_saved);
+      ccSaveBtn.title = c.user_saved ? 'Unsave this comment' : 'Save this comment';
+      ccSaveBtn.querySelector('.cc-save-label').textContent = c.user_saved ? 'Saved' : 'Save';
+    } catch {}
+  });
 
   const replyBtn = body.querySelector('[data-action="reply"]');
   if (replyBtn) replyBtn.addEventListener('click', () => ccOpenReplyBox(body, c));
@@ -4850,7 +4907,7 @@ async function ccLoadComments() {
   const list = document.getElementById('cc-list');
   if (!list) return;
   try {
-    const res = await fetch(`/api/content-comments?target_type=${ccTargetType}&target_id=${ccTargetId}`);
+    const res = await fetch(`/api/content-comments?target_type=${ccTargetType}&target_id=${ccTargetId}`, { headers: authHeaders() });
     const data = await res.json();
     const comments = data.comments || [];
     list.innerHTML = '';

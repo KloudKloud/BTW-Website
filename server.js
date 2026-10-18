@@ -710,6 +710,34 @@ async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_content_comments_paragraph ON content_comments(target_type, target_id, paragraph_index);
   `).catch(e => console.error('content_comments paragraph/gif migration:', e.message));
 
+  // Comment voting + saving -- same Reddit-style signed value + guest
+  // support as club_post_likes/club_post_saves, just keyed by comment_id
+  // instead of post_id. Since content_comments is already the universal
+  // target_type/target_id system, this is available to every comment
+  // everywhere (club posts, club pages, club gallery images, story/gallery/
+  // character comments, reader paragraph comments) without a new table per
+  // content type.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS content_comment_likes (
+      id               SERIAL      PRIMARY KEY,
+      comment_id       INTEGER     NOT NULL REFERENCES content_comments(id) ON DELETE CASCADE,
+      user_id          INTEGER     REFERENCES users(id) ON DELETE CASCADE,
+      guest_device_id  TEXT,
+      value            SMALLINT    NOT NULL DEFAULT 1,
+      created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(comment_id, user_id)
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS content_comment_likes_guest_unique
+      ON content_comment_likes(comment_id, guest_device_id) WHERE guest_device_id IS NOT NULL;
+    CREATE TABLE IF NOT EXISTS content_comment_saves (
+      id         SERIAL      PRIMARY KEY,
+      comment_id INTEGER     NOT NULL REFERENCES content_comments(id) ON DELETE CASCADE,
+      user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(comment_id, user_id)
+    );
+  `).catch(e => console.error('content_comment_likes/saves migration:', e.message));
+
   // TOS Blobs — free-text reference storage for policy/rules copy (Terms of
   // Service, community guidelines, etc.), admin-only for now. Just a place
   // to write and keep drafts before real dedicated pages exist for them —
@@ -8229,13 +8257,18 @@ app.get('/api/content-comments', async (req, res) => {
   // the target (paragraph_index is NULL for those rows anyway).
   const hasParagraph = req.query.paragraph_index !== undefined && req.query.paragraph_index !== '';
   const paragraphIndex = hasParagraph ? parseInt(req.query.paragraph_index, 10) : null;
+  const viewerId = optionalViewerId(req);
+  const baseParams = [targetType, targetId, viewerId || 0, req.guestId];
   const { rows } = await pool.query(
     `SELECT cc.id, cc.parent_id, cc.reply_to_username, cc.body, cc.gif_url, cc.paragraph_index, cc.created_at,
-            cc.user_id, cc.guest_name, u.username, u.display_name, u.avatar
+            cc.user_id, cc.guest_name, u.username, u.display_name, u.avatar,
+            (SELECT COALESCE(SUM(value),0)::int FROM content_comment_likes WHERE comment_id = cc.id) AS like_count,
+            (SELECT value FROM content_comment_likes WHERE comment_id = cc.id AND (user_id = $3 OR guest_device_id = $4)) AS user_vote,
+            (SELECT COUNT(*) > 0 FROM content_comment_saves WHERE comment_id = cc.id AND user_id = $3) AS user_saved
      FROM content_comments cc LEFT JOIN users u ON u.id = cc.user_id
-     WHERE cc.target_type = $1 AND cc.target_id = $2 ${hasParagraph ? 'AND cc.paragraph_index = $3' : ''}
+     WHERE cc.target_type = $1 AND cc.target_id = $2 ${hasParagraph ? 'AND cc.paragraph_index = $5' : ''}
      ORDER BY cc.created_at ASC`,
-    hasParagraph ? [targetType, targetId, paragraphIndex] : [targetType, targetId]
+    hasParagraph ? [...baseParams, paragraphIndex] : baseParams
   );
   const byId = {};
   const roots = [];
@@ -8251,6 +8284,9 @@ app.get('/api/content-comments', async (req, res) => {
       display_name: r.user_id ? r.display_name : r.guest_name,
       avatar: r.user_id ? r.avatar : null,
       is_guest: !r.user_id,
+      like_count: Number(r.like_count) || 0,
+      user_vote: r.user_vote ? Number(r.user_vote) : 0,
+      user_saved: !!r.user_saved,
       replies: [],
     };
     byId[c.id] = c;
@@ -8377,6 +8413,7 @@ app.post('/api/content-comments', async (req, res) => {
       display_name: viewerId ? author.display_name : guestName,
       avatar: viewerId ? author.avatar : null,
       is_guest: !viewerId,
+      like_count: 0, user_vote: 0, user_saved: false,
       parent_id: rootParentId, replies: [],
     },
   });
@@ -8388,6 +8425,58 @@ app.delete('/api/content-comments/:id', requireAuth, async (req, res) => {
   if (comment.user_id !== req.user.id && !await checkAdmin(req)) return res.status(403).json({ error: 'Not your comment.' });
   await pool.query('DELETE FROM content_comments WHERE id = $1', [req.params.id]);
   res.json({ message: 'Deleted.' });
+});
+
+// Reddit-style up/down voting on any comment, everywhere content_comments is
+// used — guest-friendly (no requireAuth), same signed value (1/-1/0) convention
+// as club_post_likes/the post vote endpoint above.
+app.post('/api/content-comments/:id/vote', async (req, res) => {
+  const { rows: [comment] } = await pool.query('SELECT id FROM content_comments WHERE id = $1', [req.params.id]);
+  if (!comment) return res.status(404).json({ error: 'Comment not found.' });
+  const value = Number(req.body.value);
+  if (![1, -1, 0].includes(value)) return res.status(400).json({ error: 'Invalid vote value.' });
+  const viewerId = optionalViewerId(req);
+  if (value === 0) {
+    await pool.query(
+      viewerId
+        ? 'DELETE FROM content_comment_likes WHERE comment_id = $1 AND user_id = $2'
+        : 'DELETE FROM content_comment_likes WHERE comment_id = $1 AND guest_device_id = $2',
+      [comment.id, viewerId || req.guestId]
+    );
+  } else if (viewerId) {
+    await pool.query(
+      `INSERT INTO content_comment_likes (comment_id, user_id, value) VALUES ($1, $2, $3)
+       ON CONFLICT (comment_id, user_id) DO UPDATE SET value = EXCLUDED.value`,
+      [comment.id, viewerId, value]
+    );
+  } else {
+    await pool.query(
+      `INSERT INTO content_comment_likes (comment_id, guest_device_id, value) VALUES ($1, $2, $3)
+       ON CONFLICT (comment_id, guest_device_id) WHERE guest_device_id IS NOT NULL DO UPDATE SET value = EXCLUDED.value`,
+      [comment.id, req.guestId, value]
+    );
+  }
+  const { rows: [{ score }] } = await pool.query(
+    'SELECT COALESCE(SUM(value),0)::int AS score FROM content_comment_likes WHERE comment_id = $1', [comment.id]
+  );
+  res.json({ user_vote: value, like_count: score });
+});
+
+// Saving a comment, like saving a club post, is account-only.
+app.post('/api/content-comments/:id/save', requireAuth, async (req, res) => {
+  const { rows: [comment] } = await pool.query('SELECT id FROM content_comments WHERE id = $1', [req.params.id]);
+  if (!comment) return res.status(404).json({ error: 'Comment not found.' });
+  await pool.query(
+    'INSERT INTO content_comment_saves (comment_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [comment.id, req.user.id]
+  );
+  res.json({ saved: true });
+});
+app.delete('/api/content-comments/:id/save', requireAuth, async (req, res) => {
+  const { rows: [comment] } = await pool.query('SELECT id FROM content_comments WHERE id = $1', [req.params.id]);
+  if (!comment) return res.status(404).json({ error: 'Comment not found.' });
+  await pool.query('DELETE FROM content_comment_saves WHERE comment_id = $1 AND user_id = $2', [comment.id, req.user.id]);
+  res.json({ saved: false });
 });
 
 // GET /api/library — bookmarked stories + liked gallery art, across every
