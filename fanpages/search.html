@@ -2072,6 +2072,15 @@ const fpLayoutEl = document.querySelector('.fp-layout');
   window.addEventListener('resize', () => { if (window.innerWidth > 720) setOpen(false); });
 })();
 
+// Pagination (wirePagination) navigates via a real window.location.search
+// reload rather than an in-place fetch, so a collapsed panel would
+// otherwise snap back open on every "next page" click. sessionStorage
+// carries the collapsed/expanded state across that reload -- scoped to
+// the tab's session rather than forever, so it doesn't become a permanent
+// site-wide preference, just survives paging through one browsing visit.
+const FILTERS_COLLAPSED_KEY = 'btw_search_filters_collapsed';
+const SIDEBAR_COLLAPSED_KEY = 'btw_search_sidebar_collapsed';
+
 const filterRailToggle = document.getElementById('fp-filter-rail-toggle');
 function setFiltersCollapsed(collapsed) {
   fpLayoutEl.classList.toggle('fp-layout--filters-collapsed', collapsed);
@@ -2079,16 +2088,14 @@ function setFiltersCollapsed(collapsed) {
   const label = collapsed ? 'Show filters' : 'Hide filters';
   filterRailToggle.title = label;
   filterRailToggle.setAttribute('aria-label', label);
+  sessionStorage.setItem(FILTERS_COLLAPSED_KEY, collapsed ? '1' : '0');
 }
 filterRailToggle.addEventListener('click', () => setFiltersCollapsed(!fpLayoutEl.classList.contains('fp-layout--filters-collapsed')));
-// Every fresh page load starts with the filter panel expanded -- no
-// remembering last session's collapsed state.
-setFiltersCollapsed(false);
+setFiltersCollapsed(sessionStorage.getItem(FILTERS_COLLAPSED_KEY) === '1');
 
 // Left "Stories/Posts/Profiles" tab box collapse/expand -- exact mirror of
-// the filter panel toggle above, own class/button/state so the two sides
-// never interfere with each other. Also starts expanded on every fresh
-// page load, same reasoning.
+// the filter panel toggle above, own class/button/state/storage key so the
+// two sides never interfere with each other.
 const sidebarRailToggle = document.getElementById('fp-sidebar-rail-toggle');
 function setSidebarPanelCollapsed(collapsed) {
   fpLayoutEl.classList.toggle('fp-layout--sidebar-collapsed', collapsed);
@@ -2096,9 +2103,10 @@ function setSidebarPanelCollapsed(collapsed) {
   const label = collapsed ? 'Show tabs' : 'Hide tabs';
   sidebarRailToggle.title = label;
   sidebarRailToggle.setAttribute('aria-label', label);
+  sessionStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
 }
 sidebarRailToggle.addEventListener('click', () => setSidebarPanelCollapsed(!fpLayoutEl.classList.contains('fp-layout--sidebar-collapsed')));
-setSidebarPanelCollapsed(false);
+setSidebarPanelCollapsed(sessionStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1');
 
 // Keeps the current query attached to all three left-panel tab links, so
 // clicking Story -> Submissions -> Profiles carries whatever you searched
