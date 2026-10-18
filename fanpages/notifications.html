@@ -106,17 +106,21 @@
 
     .notif-empty { color: #999; font-size: 0.92rem; padding: 2rem 0; }
 
-    /* ── DM app (the "Inbox" tab) ── two separate boxes side by side: the
-       user/nav box on the left, the actual chats/messages box on the right —
-       not one box with an internal divider line. */
+    /* ── DM app (the "Inbox" tab) ── a single unified panel: one shared
+       background/border/radius wraps both the sidebar and the chats/
+       messages area, divided only by a vertical rule (border-right on the
+       sidebar) rather than two stacked boxes sitting side by side. */
     .dm-app {
-      display: flex; width: 100%; height: calc(100vh - 15rem); min-height: 520px; gap: 1.25rem;
+      display: flex; width: 100%; height: calc(100vh - 15rem); min-height: 520px; gap: 0;
+      background: rgba(10,8,14,0.82);
+      border: 1px solid rgba(255,255,255,0.14); border-radius: 14px;
+      overflow: hidden;
     }
     .dm-sidebar {
       width: 260px; flex-shrink: 0;
-      background: rgba(10,8,14,0.82);
+      background: transparent;
       font-family: 'Fredoka', 'Lato', cursive;
-      border: 1px solid rgba(255,255,255,0.14); border-radius: 14px;
+      border: none; border-right: 1px solid rgba(255,255,255,0.14);
       padding: 1rem; display: flex; flex-direction: column; gap: 0.35rem;
       overflow: hidden;
     }
@@ -201,8 +205,6 @@
 
     .dm-content {
       flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden;
-      background: rgba(10,8,14,0.82);
-      border: 1px solid rgba(255,255,255,0.1); border-radius: 14px;
     }
     .dm-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
     .dm-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
@@ -434,6 +436,13 @@
     .dm-bubble p { margin: 0; white-space: pre-wrap; }
     .dm-bubble--mine { background: #f0c060; color: #0d0d0d; border-bottom-right-radius: 4px; }
     .dm-bubble--theirs { background: rgba(255,255,255,0.07); border-bottom-left-radius: 4px; }
+    /* An image/GIF sent with no text shouldn't sit inside the colored
+       bubble fill — that reads as a box/frame around the picture. Drop the
+       fill and padding so the image is the whole bubble, Twitter-DM style. */
+    .dm-bubble.dm-bubble--media-only {
+      background: transparent; padding: 0; border-radius: 16px;
+    }
+    .dm-bubble--media-only .dm-bubble-time { color: rgba(255,255,255,0.55); text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
 
     /* "•••" hover menu — only visible while hovering the row it belongs to. */
     .dm-bubble-menu-wrap { position: relative; flex-shrink: 0; opacity: 0; transition: opacity 0.15s; }
@@ -461,6 +470,7 @@
     .dm-bubble-menu-dropdown button.dm-menu-danger { color: #e8849e; }
     .dm-bubble-menu-dropdown button.dm-menu-danger:hover { background: rgba(194,84,122,0.12); }
     .dm-bubble-attach-grid { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+    .dm-bubble--media-only .dm-bubble-attach-grid { margin-top: 0; }
     .dm-bubble-attach-img {
       max-height: 260px; max-width: 280px; width: auto; height: auto;
       border-radius: 10px; object-fit: contain; display: block;
@@ -633,6 +643,11 @@
         height: auto; max-height: 60vh;
         position: fixed; right: 1rem; bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 4.2rem);
         z-index: 420; box-shadow: 0 10px 40px rgba(0,0,0,0.55);
+        /* Detached from .dm-app's own box once popped out as a floating
+           menu, so it needs its own background/border back here — the
+           desktop base rule leaves it transparent now that it just sits
+           inside the shared .dm-app panel. */
+        background: rgba(10,8,14,0.96); border: 1px solid rgba(255,255,255,0.14); border-radius: 14px;
       }
       .dm-app.dm-mobile-menu-open .dm-sidebar { display: flex; }
 
@@ -1306,14 +1321,16 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !dmLightboxOverlay.hidden) dmCloseLightbox(); });
 
   function dmBubble(m) {
+    const atts = m.attachments || [];
+    const mediaOnly = !m.body && atts.length > 0;
     const div = document.createElement('div');
-    div.className = 'dm-bubble ' + (m.is_mine ? 'dm-bubble--mine' : 'dm-bubble--theirs');
+    div.className = 'dm-bubble ' + (m.is_mine ? 'dm-bubble--mine' : 'dm-bubble--theirs') +
+      (mediaOnly ? ' dm-bubble--media-only' : '');
     if (m.body) {
       const p = document.createElement('p');
       p.textContent = m.body;
       div.appendChild(p);
     }
-    const atts = m.attachments || [];
     if (atts.length) {
       const grid = document.createElement('div');
       grid.className = 'dm-bubble-attach-grid';
