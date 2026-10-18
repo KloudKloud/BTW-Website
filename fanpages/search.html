@@ -530,8 +530,16 @@
        go backward, not just nudge forward one arrow-click at a time. */
     .fp-bcard-tags-scroll-wrap { display: flex; flex-direction: column; gap: 0.22rem; flex: 1; min-width: 0; }
     .fp-bcard-tags-scroll-inner { position: relative; min-width: 0; overflow: hidden; }
+    /* scroll-behavior is deliberately left off the element -- arrow/track
+       clicks are animated by hand (animateBcardTagsScroll) so rapid clicks
+       cancel and re-ease from wherever the strip currently sits instead of
+       queuing up native smooth-scrolls that fight each other and jump.
+       scroll-snap was tried here too but actively fought the hand-rolled
+       animation -- the browser's own snap correction kept overriding our
+       per-frame scrollLeft, turning a smooth ease into a jump between snap
+       points. Dropped it; the eased JS animation alone is the smooth one. */
     .fp-bcard-tags-scroll {
-      display: flex; gap: 0.4rem; overflow-x: auto; scroll-behavior: smooth;
+      display: flex; gap: 0.4rem; overflow-x: auto;
       scrollbar-width: none;
     }
     .fp-bcard-tags-scroll::-webkit-scrollbar { display: none; }
@@ -1417,6 +1425,7 @@ function formatDate(d) {
 function tagSearchUrl(params) {
   const usp = new URLSearchParams(params);
   usp.set('sort', 'updated');
+  usp.set('view', 'story');
   return window.fpUrl(`/search?${usp.toString()}`);
 }
 
@@ -1523,9 +1532,38 @@ function bcardTagsScrollHtml(w) {
     </div>
   `;
 }
+// Hand-rolled smooth scroll (ease-out, ~280ms) instead of the native
+// scroll-behavior:smooth -- browsers queue/interrupt native smooth scrolls
+// awkwardly when a new one starts mid-animation (clicking the arrow twice
+// fast felt like a stutter/jump). Keying the running animation by element
+// means a new call always cancels the old one and eases from wherever the
+// strip actually is right now, so repeated clicks stay smooth.
+const bcardScrollAnims = new WeakMap();
+function animateBcardTagsScroll(el, target) {
+  cancelAnimationFrame(bcardScrollAnims.get(el));
+  const start = el.scrollLeft;
+  const delta = target - start;
+  if (Math.abs(delta) < 1) return;
+  const duration = 280;
+  const startTime = performance.now();
+  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+  function step(now) {
+    const t = Math.min((now - startTime) / duration, 1);
+    el.scrollLeft = start + delta * easeOutCubic(t);
+    if (t < 1) {
+      bcardScrollAnims.set(el, requestAnimationFrame(step));
+    } else {
+      bcardScrollAnims.delete(el);
+    }
+  }
+  bcardScrollAnims.set(el, requestAnimationFrame(step));
+}
 function scrollBcardTags(btn, dir) {
   const wrap = btn.closest('.fp-bcard-tags-scroll-wrap');
-  wrap.querySelector('.fp-bcard-tags-scroll').scrollBy({ left: dir * 160, behavior: 'smooth' });
+  const scrollEl = wrap.querySelector('.fp-bcard-tags-scroll');
+  const maxScroll = scrollEl.scrollWidth - scrollEl.clientWidth;
+  const target = Math.max(0, Math.min(scrollEl.scrollLeft + dir * 160, maxScroll));
+  animateBcardTagsScroll(scrollEl, target);
 }
 // Keeps a tag strip's scrollbar thumb sized/positioned to match its real
 // scroll state, and toggles the at-start/at-end classes the arrows' CSS
@@ -1560,28 +1598,31 @@ function initBcardTagScrollers() {
     updateBcardTagsScrollbar(wrap);
     scrollEl.addEventListener('scroll', () => updateBcardTagsScrollbar(wrap));
 
-    const scrollToClientX = (clientX) => {
+    const scrollTargetForClientX = (clientX) => {
       const trackRect = track.getBoundingClientRect();
       const thumbWidth = thumb.offsetWidth;
       const x = Math.max(0, Math.min(clientX - trackRect.left - thumbWidth / 2, trackRect.width - thumbWidth));
       const maxScroll = scrollEl.scrollWidth - scrollEl.clientWidth;
       const travel = trackRect.width - thumbWidth;
-      scrollEl.scrollLeft = travel > 0 ? (x / travel) * maxScroll : 0;
+      return travel > 0 ? (x / travel) * maxScroll : 0;
     };
 
     thumb.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
+      cancelAnimationFrame(bcardScrollAnims.get(scrollEl));
       thumb.setPointerCapture(e.pointerId);
     });
+    // Live drag tracks the pointer 1:1, no easing -- only arrow/track clicks
+    // (a jump to a spot, not a continuous gesture) get the animated ease.
     thumb.addEventListener('pointermove', (e) => {
       if (!thumb.hasPointerCapture(e.pointerId)) return;
-      scrollToClientX(e.clientX);
+      scrollEl.scrollLeft = scrollTargetForClientX(e.clientX);
     });
     thumb.addEventListener('click', (e) => e.stopPropagation());
     track.addEventListener('click', (e) => {
       e.stopPropagation();
       if (e.target === thumb) return;
-      scrollToClientX(e.clientX);
+      animateBcardTagsScroll(scrollEl, scrollTargetForClientX(e.clientX));
     });
   });
 }
