@@ -5780,7 +5780,7 @@ app.put('/api/account/profile', requireAuth, async (req, res) => {
   const funFact = req.body.fun_fact !== undefined ? String(req.body.fun_fact).slice(0, 300) : null;
   const links = Array.isArray(req.body.account_links)
     ? JSON.stringify(req.body.account_links
-        .filter(l => l && l.url)
+        .filter(l => l && l.url && isValidHttpUrl(String(l.url)))
         .slice(0, 10)
         .map(l => ({ label: String(l.label || l.url).slice(0, 40), url: String(l.url).slice(0, 300) })))
     : null;
@@ -6435,6 +6435,18 @@ app.put('/api/moderator/site/nav-card/:kind/position', requireAuth, requireModer
   res.json({ site });
 });
 
+// Protocol allowlist for every user-submitted "link" field (profile social
+// links, story links, etc). Rejects javascript:/data:/vbscript: URIs and
+// anything else that isn't a plain http(s) address — this is the real trust
+// boundary; any client-side check on the same field is just UX on top of it.
+function isValidHttpUrl(str) {
+  if (typeof str !== 'string' || !str.trim()) return false;
+  try {
+    const u = new URL(str.trim());
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch { return false; }
+}
+
 // Wattpad/e621-style tags: lowercased, whitespace collapsed to underscores,
 // deduped, capped at 100. Bad input silently gets cleaned up rather than
 // rejected — this is discovery metadata, not user-facing prose.
@@ -6533,8 +6545,21 @@ async function sanitizeCharacterStats(stats) {
   return { ...stats, Species: clean || stats.Species.trim() };
 }
 
+// Same shape/limits as account_links (server.js's `isValidHttpUrl`-gated
+// profile social links) -- a story's own link list gets rendered on its
+// public landing page to every visitor, so it needs the same cap+allowlist
+// treatment, which it was previously missing entirely.
+function sanitizeSiteLinks(raw) {
+  if (!Array.isArray(raw)) return undefined;
+  return raw
+    .filter(l => l && l.url && isValidHttpUrl(String(l.url)))
+    .slice(0, 10)
+    .map(l => ({ label: String(l.label || l.url).slice(0, 40), url: String(l.url).slice(0, 300) }));
+}
+
 app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) => {
-  const { site_title, synopsis, bio, links, theme } = req.body;
+  const { site_title, synopsis, bio, theme } = req.body;
+  const links = req.body.links !== undefined ? sanitizeSiteLinks(req.body.links) : undefined;
   const tags = req.body.tags !== undefined ? await sanitizeTags(req.body.tags) : undefined;
   const rating = req.body.rating !== undefined && RATING_OPTIONS.includes(req.body.rating) ? req.body.rating : undefined;
   const categories = req.body.categories !== undefined ? sanitizeCategories(req.body.categories) : undefined;

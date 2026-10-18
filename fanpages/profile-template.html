@@ -1870,6 +1870,12 @@
   function escapeHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+  // Defensive client-side mirror of the server's protocol allowlist — rejects
+  // javascript:/data:/vbscript: URIs before they're ever assigned to an href.
+  function isSafeLinkUrl(url) {
+    try { return ['http:', 'https:'].includes(new URL(String(url), location.origin).protocol); }
+    catch { return false; }
+  }
 
   // ── Featured Stories card — ported from search.html's .fp-bcard /
   // browseResultCard so a story reads the same on Search as it does when
@@ -4675,7 +4681,7 @@
         const li = document.createElement('li');
         const link = document.createElement('a');
         link.className = 'fp-link-item';
-        link.href = l.url;
+        link.href = isSafeLinkUrl(l.url) ? l.url : '#';
         link.target = '_blank';
         link.rel = 'noopener';
         link.title = l.label;

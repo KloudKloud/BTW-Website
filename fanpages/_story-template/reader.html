@@ -809,6 +809,12 @@ let pendingResumeScroll = false;
 function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+// Defensive client-side mirror of the server's protocol allowlist — rejects
+// javascript:/data:/vbscript: URIs before they're ever assigned to an href.
+function isSafeLinkUrl(url) {
+  try { return ['http:', 'https:'].includes(new URL(String(url), location.origin).protocol); }
+  catch { return false; }
+}
 function ratingLabelFor(rating) {
   if (rating === 'mature') return 'Mature';
   if (rating === 'explicit') return 'Explicit';
@@ -1114,7 +1120,7 @@ function renderSideLinks() {
   hr.hidden = false;
   section.hidden = false;
   document.getElementById('rd-side-links-list').innerHTML = links.map(l => `
-    <a class="rd-side-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener">🔗 ${escapeHtml(l.label || l.url)}</a>
+    <a class="rd-side-link" href="${escapeHtml(isSafeLinkUrl(l.url) ? l.url : '#')}" target="_blank" rel="noopener">🔗 ${escapeHtml(l.label || l.url)}</a>
   `).join('');
 }
 document.getElementById('rd-follow-btn').addEventListener('click', async () => {

@@ -762,8 +762,8 @@ function populateDisplay() {
       const li = document.createElement('li');
       const a  = document.createElement('a');
       a.className = 'wiki-link-item';
-      a.href = l.url; a.target = '_blank'; a.rel = 'noopener';
-      a.innerHTML = `<span class="link-icon">${linkIcon(l.label, l.url)}</span><span class="link-name">${l.label}</span><span class="link-arrow">↗</span>`;
+      a.href = isSafeLinkUrl(l.url) ? l.url : '#'; a.target = '_blank'; a.rel = 'noopener';
+      a.innerHTML = `<span class="link-icon">${linkIcon(l.label, l.url)}</span><span class="link-name">${escapeHtml(l.label)}</span><span class="link-arrow">↗</span>`;
       li.appendChild(a);
       linksList.appendChild(li);
     });
@@ -788,6 +788,15 @@ document.getElementById('add-link-edit-row').addEventListener('click', () => add
 
 function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Defensive client-side mirror of the server's protocol allowlist — rejects
+// javascript:/data:/vbscript: URIs before they're ever assigned to an href.
+// The server is the real trust boundary; this just stops a bad value that's
+// already in the DB (e.g. saved before this check existed) from firing.
+function isSafeLinkUrl(url) {
+  try { return ['http:', 'https:'].includes(new URL(String(url), location.origin).protocol); }
+  catch { return false; }
 }
 
 // Tiny markdown subset for the Description/Bio fields — **bold** and
