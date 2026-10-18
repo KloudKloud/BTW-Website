@@ -11,6 +11,20 @@ const multer   = require('multer');
 const sharp    = require('sharp');
 const https    = require('https');
 const sanitizeHtml = require('sanitize-html');
+const rateLimit = require('express-rate-limit');
+
+// Brute-force/credential-stuffing and password-reset-flood protection —
+// login/register/forgot-password had no rate limiting at all. Keyed by IP
+// (express-rate-limit's default), 10 attempts per 15 minutes; a real user
+// mistyping their password a few times in a row won't hit this, but a
+// scripted attempt sweep will.
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Please try again in a few minutes.' },
+});
 
 // ── Avatar upload ─────────────────────────────────────────────────────────────
 const AVATARS_DIR = '/var/www/btw/images/avatars';
@@ -35,6 +49,12 @@ const uploadAvatar = multer({
 });
 
 const app = express();
+// Server only ever receives traffic via nginx on 127.0.0.1 (see server
+// layout notes) -- trust exactly one hop so req.ip/express-rate-limit read
+// the real client IP from X-Forwarded-For instead of treating every
+// request as coming from localhost (which would rate-limit all visitors
+// together as a single "IP").
+app.set('trust proxy', 'loopback');
 app.use(express.json());
 
 app.use((req, res, next) => {
@@ -1886,7 +1906,7 @@ const emailConfirmEmailChange = (name, confirmUrl) => emailShell(`
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 // POST /api/auth/register
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authRateLimiter, async (req, res) => {
   try {
     const { username, display_name, email, password, from } = req.body;
 
@@ -2099,7 +2119,7 @@ app.post('/api/auth/verify', async (req, res) => {
 });
 
 // POST /api/auth/login
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authRateLimiter, async (req, res) => {
   try {
     const { identifier, password } = req.body;
     if (!identifier || !password)
@@ -2328,7 +2348,7 @@ app.put('/api/auth/password', requireAuth, async (req, res) => {
 });
 
 // ── Forgot password ───────────────────────────────────────────────────────────
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', authRateLimiter, async (req, res) => {
   const identifier = (req.body.identifier || '').trim().toLowerCase();
   if (!identifier) return res.status(400).json({ error: 'Please provide your username or email.' });
 
@@ -3878,7 +3898,7 @@ app.post('/api/admin/hub-billboard', requireAuth, requireAdmin, uploadModImage.s
        (image_url, position_x, position_y, zoom, caption, credit, link, sort_order,
         animation_type, end_position_x, end_position_y, end_zoom, is_nsfw, is_vip)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-    [imageUrl, positionX, positionY, zoom, (caption || '').trim(), (credit || '').trim(), (link || '').trim(), maxOrder + 1,
+    [imageUrl, positionX, positionY, zoom, (caption || '').trim(), (credit || '').trim(), cleanLinkUrl(link), maxOrder + 1,
      animationType, endPositionX, endPositionY, endZoom, isNsfw, isVip]
   );
   res.json({ slide });
@@ -3917,7 +3937,7 @@ app.put('/api/admin/hub-billboard/:id', requireAuth, requireAdmin, uploadModImag
        animation_type = $8, end_position_x = $9, end_position_y = $10, end_zoom = $11, is_nsfw = $12, is_vip = $13
      WHERE id = $14 RETURNING *`,
     [imageUrl, positionX, positionY, zoom, caption != null ? caption.trim() : null,
-     credit != null ? credit.trim() : null, link != null ? link.trim() : null,
+     credit != null ? credit.trim() : null, link != null ? cleanLinkUrl(link) : null,
      animationType, endPositionX, endPositionY, endZoom, isNsfw, isVip, existing.id]
   );
   res.json({ slide });
@@ -6448,6 +6468,28 @@ function isValidHttpUrl(str) {
   } catch { return false; }
 }
 
+// Blanks out anything that isn't a plain http(s) URL instead of rejecting
+// the whole request -- used for single optional link fields (character's
+// official-art-source/voice-claim links) where the rest of the save should
+// still go through even if this one field was bad.
+function cleanLinkUrl(str) {
+  return isValidHttpUrl(str) ? String(str).trim() : '';
+}
+
+// Club post/text-field image slots are only ever supposed to hold a path
+// this server itself generated via uploadModImage (see
+// /api/moderator/character-image) -- the editor UI has no "paste an
+// external image URL" field at all, it only ever writes back whatever path
+// the upload endpoint returned. So unlike isValidHttpUrl (which allows any
+// http(s) URL for a real link field), this restricts to the exact shape of
+// a same-origin /images/... path and rejects everything else outright,
+// including quote/angle-bracket characters that could break out of a
+// src="..." attribute on render.
+function cleanUploadedImagePath(str) {
+  const s = String(str || '').trim();
+  return /^\/images\/[A-Za-z0-9_\-./]+$/.test(s) ? s : '';
+}
+
 // Chapter body sanitizer — the real trust boundary for rich-text chapter
 // content. The chapter-editor's own sanitizePastedHtml() only runs
 // client-side on paste, so a hand-crafted PUT to
@@ -6966,7 +7008,7 @@ function parseChapterLinks(raw) {
   try { links = JSON.parse(raw || '[]'); } catch { links = []; }
   if (!Array.isArray(links)) return [];
   return links
-    .filter(l => l && l.label && l.url)
+    .filter(l => l && l.label && l.url && isValidHttpUrl(String(l.url)))
     .map(l => ({ label: String(l.label).trim(), url: String(l.url).trim() }));
 }
 
@@ -7241,7 +7283,7 @@ app.post('/api/moderator/characters', requireAuth, requireModerator, async (req,
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
      JSON.stringify(relationships || []), !!ref_is_nsfw,
-     is_official_art !== undefined ? !!is_official_art : true, official_art_source_url || '', voice_claim_url || '', profileMinOrder]
+     is_official_art !== undefined ? !!is_official_art : true, cleanLinkUrl(official_art_source_url), cleanLinkUrl(voice_claim_url), profileMinOrder]
   );
   const { rows: [{ maxOrder }] } = await pool.query(
     'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM character_story_links WHERE site_id = $1', [req.modSite.id]
@@ -7292,8 +7334,8 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
      relationships !== undefined ? JSON.stringify(relationships) : null,
      sort_order, ref_is_nsfw !== undefined ? !!ref_is_nsfw : null,
      is_official_art !== undefined ? !!is_official_art : null,
-     official_art_source_url !== undefined ? official_art_source_url : null,
-     existing.id, artChanged, voice_claim_url !== undefined ? voice_claim_url : null]
+     official_art_source_url !== undefined ? cleanLinkUrl(official_art_source_url) : null,
+     existing.id, artChanged, voice_claim_url !== undefined ? cleanLinkUrl(voice_claim_url) : null]
   );
   // Only regenerate when ref_image was actually part of this save -- an
   // unrelated edit (description, stats, etc.) shouldn't re-touch the image.
@@ -7595,7 +7637,7 @@ app.post('/api/characters', requireAuth, async (req, res) => {
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
      JSON.stringify(relationships || []), !!ref_is_nsfw,
-     is_official_art !== undefined ? !!is_official_art : true, official_art_source_url || '', voice_claim_url || '', profileMinOrder]
+     is_official_art !== undefined ? !!is_official_art : true, cleanLinkUrl(official_art_source_url), cleanLinkUrl(voice_claim_url), profileMinOrder]
   );
   const { rows: [actor] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
   await notifyFollowers(req.user.id, 'new_character',
@@ -9977,8 +10019,8 @@ function sanitizeClubPostImageSlot(raw) {
   const slideshow = Array.isArray(raw && raw.slideshow) ? raw.slideshow : [];
   return {
     mode: (raw && raw.mode === 'slideshow') ? 'slideshow' : 'static',
-    image_url: String((raw && raw.image_url) || ''),
-    slideshow: slideshow.slice(0, 10).map(s => ({ image_url: String((s && s.image_url) || '') })).filter(s => s.image_url),
+    image_url: cleanUploadedImagePath(raw && raw.image_url),
+    slideshow: slideshow.slice(0, 10).map(s => ({ image_url: cleanUploadedImagePath(s && s.image_url) })).filter(s => s.image_url),
   };
 }
 
@@ -10031,7 +10073,7 @@ app.post('/api/clubs/:slug/posts', requireAuth, async (req, res) => {
   const poll = parsePollInput(req.body.poll);
   const textFields = buildClubPostTextFields(req.body.text_fields);
   const cover = sanitizeClubPostImageSlot(req.body.cover);
-  const previewImageUrl = String(req.body.preview_image_url || '');
+  const previewImageUrl = cleanUploadedImagePath(req.body.preview_image_url);
 
   // Promotion page "cards" are just posts with promotion_page_id set --
   // only an owner/admin can create one (this is the "+Card" builder, not
@@ -10104,7 +10146,7 @@ app.put('/api/clubs/:slug/posts/:postId', requireAuth, async (req, res) => {
   const poll = parsePollInput(req.body.poll);
   const textFields = buildClubPostTextFields(req.body.text_fields);
   const cover = sanitizeClubPostImageSlot(req.body.cover);
-  const previewImageUrl = req.body.preview_image_url !== undefined ? String(req.body.preview_image_url) : existing.preview_image_url;
+  const previewImageUrl = req.body.preview_image_url !== undefined ? cleanUploadedImagePath(req.body.preview_image_url) : existing.preview_image_url;
 
   const { rows: [post] } = await pool.query(
     `UPDATE club_posts SET title = $1, cover_mode = $2, cover_image_url = $3, cover_slideshow = $4, text_fields = $5,
@@ -10563,8 +10605,8 @@ function sanitizeTextFieldImageSlot(f, prefix) {
   const slideshow = Array.isArray(f && f[`${prefix}_slideshow`]) ? f[`${prefix}_slideshow`] : [];
   return {
     [`${prefix}_mode`]: (f && f[`${prefix}_mode`] === 'slideshow') ? 'slideshow' : 'static',
-    [`${prefix}_image_url`]: String((f && f[`${prefix}_image_url`]) || ''),
-    [`${prefix}_slideshow`]: slideshow.slice(0, 10).map(s => ({ image_url: String((s && s.image_url) || '') })).filter(s => s.image_url),
+    [`${prefix}_image_url`]: cleanUploadedImagePath(f && f[`${prefix}_image_url`]),
+    [`${prefix}_slideshow`]: slideshow.slice(0, 10).map(s => ({ image_url: cleanUploadedImagePath(s && s.image_url) })).filter(s => s.image_url),
   };
 }
 // PUT /api/clubs/:slug/pages/:pageSlug/text-fields — index 0 is always the

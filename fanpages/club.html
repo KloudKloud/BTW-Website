@@ -3515,7 +3515,7 @@ function adminCard(c) {
   const card = document.createElement('div');
   card.className = 'cl-admin-card';
   card.innerHTML = `
-    <div class="cl-admin-card-pic"><img src="${c.image_url || '/images/defaultchar.jpg'}" alt="" /></div>
+    <div class="cl-admin-card-pic"><img src="${escapeHtml(c.image_url || '/images/defaultchar.jpg')}" alt="" /></div>
     <div class="cl-admin-card-body">
       <p class="cl-admin-card-name">${escapeHtml(c.name)}</p>
       <p class="cl-admin-card-desc">${escapeHtml(c.description || 'No description yet.')}</p>
@@ -3653,8 +3653,8 @@ function adminPostRow(post, mode) {
   // one -- already the right shape, no position math needed. Falls back to
   // the old pan-position-on-the-full-image approach for older posts.
   const thumbImg = post.preview_image_url
-    ? `<img class="cl-admin-post-thumb" src="${post.preview_image_url}" alt="" />`
-    : `<img class="cl-admin-post-thumb" src="${post.cover_image_url || '/images/noimage.png'}" alt="" style="object-position:${previewX}% ${previewY}%;" />`;
+    ? `<img class="cl-admin-post-thumb" src="${escapeHtml(post.preview_image_url)}" alt="" />`
+    : `<img class="cl-admin-post-thumb" src="${escapeHtml(post.cover_image_url || '/images/noimage.png')}" alt="" style="object-position:${previewX}% ${previewY}%;" />`;
   const thumbWrapClass = post.preview_image_url ? 'cl-admin-post-thumb-wrap cl-admin-post-thumb-wrap--square' : 'cl-admin-post-thumb-wrap';
   const thumbHtml = (isCard && !hasImage) ? '' : (isCard ? `<div class="${thumbWrapClass}">${thumbImg}</div>` : thumbImg);
   const showPreview = isCard && !hasImage && post.title && snippetText;
@@ -4614,7 +4614,7 @@ function pageGalleryTileEl(img, idx) {
   a.className = 'cl-page-gallery-tile';
   a.href = '#';
   a.innerHTML = `
-    <img src="${img.image_url}" alt="${escapeHtml(img.title || '')}" loading="lazy" style="object-position:${img.position_x}% ${img.position_y}%;" />
+    <img src="${escapeHtml(img.image_url)}" alt="${escapeHtml(img.title || '')}" loading="lazy" style="object-position:${img.position_x}% ${img.position_y}%;" />
     <button type="button" class="cl-page-gallery-tile-like">${galleryLikeBtnHtml(img)}</button>
     <span class="cl-page-gallery-tile-badge">🎨</span>
   `;
@@ -5728,7 +5728,7 @@ function slideshowItemEl(img) {
   item.className = 'cl-edit-slideshow-item';
   item.draggable = true;
   item.dataset.id = img.id;
-  item.innerHTML = `<img src="${img.image_url}" alt="" draggable="false" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
+  item.innerHTML = `<img src="${escapeHtml(img.image_url)}" alt="" draggable="false" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
   item.querySelector('.cl-edit-slideshow-remove').addEventListener('click', async (e) => {
     e.stopPropagation();
     await fetch(`${API}/clubs/${encodeURIComponent(slug)}/slideshow/${img.id}`, { method: 'DELETE', headers: authHeaders() });
@@ -5800,7 +5800,7 @@ function editCardRowEl(card) {
   row.dataset.id = card.id;
   row.innerHTML = `
     <span class="cl-edit-card-row-handle">⠿</span>
-    <img class="cl-edit-card-row-pic" src="${card.image_url}" alt="" draggable="false" />
+    <img class="cl-edit-card-row-pic" src="${escapeHtml(card.image_url)}" alt="" draggable="false" />
     <span class="cl-edit-card-row-name">${escapeHtml(card.name)}</span>
     <button type="button" class="cl-edit-card-row-btn" data-action="edit">Edit</button>
     <button type="button" class="cl-edit-card-row-btn cl-edit-card-row-btn--danger" data-action="delete">Delete</button>
@@ -6025,7 +6025,7 @@ function pageSlideshowItemEl(img) {
   item.className = 'cl-edit-slideshow-item';
   item.draggable = true;
   item.dataset.id = img.id;
-  item.innerHTML = `<img src="${img.image_url}" alt="" draggable="false" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
+  item.innerHTML = `<img src="${escapeHtml(img.image_url)}" alt="" draggable="false" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
   item.querySelector('.cl-edit-slideshow-remove').addEventListener('click', async (e) => {
     e.stopPropagation();
     await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/slideshow/${img.id}`, { method: 'DELETE', headers: authHeaders() });
@@ -6227,7 +6227,7 @@ function wireTextFieldImageSlot(row, i, prefix, aspect) {
     (editPageTextFields[i][`${prefix}_slideshow`] || []).forEach((img, slideIdx) => {
       const item = document.createElement('div');
       item.className = 'cl-edit-slideshow-item';
-      item.innerHTML = `<img src="${img.image_url}" alt="" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
+      item.innerHTML = `<img src="${escapeHtml(img.image_url)}" alt="" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
       item.querySelector('.cl-edit-slideshow-remove').addEventListener('click', async (e) => {
         e.stopPropagation();
         if (!(await ensureTextFieldSaved(i))) return;
@@ -6430,7 +6430,7 @@ function renderGalleryEditorGrid() {
     wrap.innerHTML = `
       <div class="cl-gallery-editor-tile">
         <span class="cl-gallery-editor-tile-handle">⠿</span>
-        <img src="${img.image_url}" alt="" draggable="false" style="object-position:${img.position_x}% ${img.position_y}%;" />
+        <img src="${escapeHtml(img.image_url)}" alt="" draggable="false" style="object-position:${img.position_x}% ${img.position_y}%;" />
         ${img.title ? `<span class="cl-gallery-editor-tile-title">${escapeHtml(img.title)}</span>` : ''}
       </div>
       <button type="button" class="cl-edit-card-row-btn cl-gallery-editor-tile-btn cl-gallery-editor-tile-btn--edit" data-action="edit">✏️ Edit</button>
@@ -6704,7 +6704,7 @@ function editPromoPostRowEl(post) {
   const thumb = post.preview_image_url || post.cover_image_url || '/images/noimage.png';
   row.innerHTML = `
     <span class="cl-edit-card-row-handle">⠿</span>
-    <img class="cl-edit-card-row-pic" src="${thumb}" alt="" draggable="false" />
+    <img class="cl-edit-card-row-pic" src="${escapeHtml(thumb)}" alt="" draggable="false" />
     <span class="cl-edit-card-row-name">${escapeHtml(post.title)}</span>
   `;
   row.appendChild(promoPostRowMenu(post));

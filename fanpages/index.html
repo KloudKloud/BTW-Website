@@ -1083,15 +1083,16 @@
 
     track.innerHTML = '';
     slides.forEach((slide, i) => {
-      const el = document.createElement(slide.link ? 'a' : 'div');
+      const linkOk = slide.link && isSafeLinkUrl(slide.link);
+      const el = document.createElement(linkOk ? 'a' : 'div');
       el.className = 'fp-billboard-slide' + (i === 0 ? ' active' : '');
-      if (slide.link) el.href = slide.link;
+      if (linkOk) el.href = slide.link;
       el.innerHTML = `
         <div class="fp-billboard-slide-bg"></div>
         ${(slide.caption || slide.credit) ? `
           <div class="fp-billboard-slide-scrim">
-            ${slide.caption ? `<p class="fp-billboard-slide-cap">${slide.caption}</p>` : ''}
-            ${slide.credit ? `<p class="fp-billboard-slide-credit">${slide.credit}</p>` : ''}
+            ${slide.caption ? `<p class="fp-billboard-slide-cap">${escapeHtml(slide.caption)}</p>` : ''}
+            ${slide.credit ? `<p class="fp-billboard-slide-credit">${escapeHtml(slide.credit)}</p>` : ''}
           </div>` : ''}
       `;
       track.appendChild(el);
@@ -1254,6 +1255,12 @@
 
   function escapeHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  // Defensive client-side mirror of the server's protocol allowlist — rejects
+  // javascript:/data:/vbscript: URIs before they're ever assigned to an href.
+  function isSafeLinkUrl(url) {
+    try { return ['http:', 'https:'].includes(new URL(String(url), location.origin).protocol); }
+    catch { return false; }
   }
 
   // ── Donations box in the hero banner — same /api/donations feed
