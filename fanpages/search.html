@@ -38,7 +38,11 @@
     }
     .fp-bg-video--stories {
       background-image: url('/images/home/potential-box-background.png');
-      filter: none;
+      /* Same blur(4px) the Posts wallpaper uses -- still pinned (not
+         scrolling with the page like Posts' own) since Stories paginates
+         rather than being one fixed-length grid; only the blur amount was
+         asked to match, not the scroll behavior. */
+      filter: blur(4px);
     }
     /* Posts is the one wallpaper that actually scrolls with the page
        instead of staying pinned -- a fixed-length grid of cards (unlike
@@ -68,8 +72,16 @@
     }
     /* Starts right where the side panel ends instead of running full-bleed
        underneath it -- 250px column + the 2.5rem the panel's own
-       negative margin pulls it flush past. */
+       negative margin pulls it flush past. Once the side panel is
+       collapsed that column is gone, so the video goes back to
+       full-bleed -- otherwise the freed-up strip on the left just shows
+       blank page background instead of video. --sidebar-collapsed is
+       toggled directly by setSidebarPanelCollapsed() in the script below
+       (not a .fp-layout--sidebar-collapsed descendant rule) because this
+       video sits outside <main class="fp-layout"> as a sibling, not a
+       descendant of it. */
     .fp-bg-video-el--active { display: block; left: calc(250px + 2.5rem); width: calc(100% - 250px - 2.5rem); }
+    .fp-bg-video-el--active.fp-bg-video-el--sidebar-collapsed { left: 0; width: 100%; }
     /* A couple of sparkle accents floating over the Posts wallpaper
        specifically -- scroll with it (position:absolute, same as the
        wallpaper itself) since it's one big image with no cards breaking
@@ -135,6 +147,14 @@
        declaration order alone would decide it) -- mirrors the plain
        .fp-layout--filters-collapsed rule further down. */
     .fp-layout--submissions.fp-layout--filters-collapsed { grid-template-columns: 250px 1fr 0px; }
+    /* Both panels collapsed at once on Posts needs its own three-class
+       combo -- without it, this and .fp-layout--sidebar-collapsed.
+       fp-layout--submissions above are both (0,2,0) specificity, and
+       whichever is declared later in the stylesheet (this one) wins
+       outright, permanently pinning column 1 at 250px even once the left
+       fab had added --sidebar-collapsed. That's why toggling the left fab
+       while the right one was already collapsed did nothing visible. */
+    .fp-layout--sidebar-collapsed.fp-layout--filters-collapsed.fp-layout--submissions { grid-template-columns: 0px 1fr 0px; }
     /* Hidden everywhere except the Posts view -- default .fp-layout has no
        3rd-column content of its own to give this room, so it only ever
        renders where .fp-layout--submissions has already made column 3
@@ -233,10 +253,23 @@
        the side panel, so the fixed background video underneath never has
        to move (nothing else on the page scrolls to begin with). */
     .fp-layout--profiles .fp-results-col {
-      max-width: 680px; margin: 0 auto;
+      /* width:100% is required alongside max-width here -- without it,
+         margin:auto on a grid item with an otherwise-auto width makes the
+         box shrink-wrap to its content's intrinsic size (the profile
+         rows' own natural width, ~564px) instead of stretching to fill
+         the grid column up to the cap. That meant this column never
+         actually reached 680px before either; it just happened to look
+         plausible. */
+      width: 100%; max-width: 680px; margin: 0 auto;
       position: sticky; top: 76px; height: calc(100vh - 76px); overflow-y: auto;
       overscroll-behavior: contain; padding-right: 0.5rem;
+      transition: max-width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
     }
+    /* Collapsing the left tab box frees up its 250px column + 2rem gap --
+       widen the cap by that same amount (rounded) instead of leaving the
+       centered column stuck at its old width with blank space on both
+       sides of it now that there's more room to use. */
+    .fp-layout--sidebar-collapsed.fp-layout--profiles .fp-results-col { max-width: 960px; }
     .fp-layout--profiles .fp-results-col::-webkit-scrollbar { width: 8px; }
     .fp-layout--profiles .fp-results-col::-webkit-scrollbar-track { background: transparent; }
     .fp-layout--profiles .fp-results-col::-webkit-scrollbar-thumb { background: #444; border-radius: 8px; }
@@ -2105,6 +2138,12 @@ function setSidebarPanelCollapsed(collapsed) {
   sidebarRailToggle.title = label;
   sidebarRailToggle.setAttribute('aria-label', label);
   sessionStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
+  // #fp-bg-video-el lives outside <main class="fp-layout"> (a sibling, not
+  // a descendant), so a CSS rule scoped under .fp-layout--sidebar-collapsed
+  // can never reach it -- toggle its own class directly instead so the
+  // Profiles video goes full-bleed once the side panel it was leaving room
+  // for is gone.
+  document.getElementById('fp-bg-video-el').classList.toggle('fp-bg-video-el--sidebar-collapsed', collapsed);
 }
 sidebarRailToggle.addEventListener('click', () => setSidebarPanelCollapsed(!fpLayoutEl.classList.contains('fp-layout--sidebar-collapsed')));
 setSidebarPanelCollapsed(sessionStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1');
@@ -2177,10 +2216,9 @@ const isBrowseMode = new URLSearchParams(window.location.search).get('browse') =
 // order. Browse links always set an explicit ?view= already, so this
 // never touches Browse.
 if (!currentView && !isBrowseMode) currentView = 'submissions';
-// The unblurred box-background-5 wallpaper + fp-bcard grid belong to any
+// The potential-box-background wallpaper + fp-bcard grid belong to any
 // Story-tab result set -- Browse's own "Recent Stories" feed AND a normal
-// filtered Story search/tag click both count. Posts/Profiles keep the
-// original blurred wallpaper untouched. isBrowseStories narrows further
+// filtered Story search/tag click both count. isBrowseStories narrows further
 // to just Browse's feed (no side filter panel) for the bits that need to
 // know that specifically -- the 6-per-page limit and the 3-per-row grid
 // (the filtered search still has its side panel eating width, so it gets
