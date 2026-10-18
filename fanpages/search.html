@@ -2185,10 +2185,10 @@ async function runSearch() {
   if (f.completion.length < STORY_COMPLETION_VALUES.length) apiParams.set('completion', f.completion.join(','));
   if (f.sort) apiParams.set('sort', f.sort);
   apiParams.set('page', f.page);
-  // Browse mode is a plain "recent updates" feed, AO3-style — 6 per page
-  // (2 per row x 3 rows) so it paginates like a real feed instead of
-  // dumping the latest 30 into one long unpaginated list.
-  if (isBrowseStories) apiParams.set('limit', '6');
+  // Browse mode is a plain "recent updates" feed, AO3-style -- 20 per
+  // page (matches the filtered search's own server-side default) so it
+  // paginates like a real feed instead of dumping everything at once.
+  if (isBrowseStories) apiParams.set('limit', '20');
 
   try {
     const res = await fetch(`/api/search/works?${apiParams.toString()}`);
@@ -2462,10 +2462,9 @@ if (!currentView && !isBrowseMode) currentView = 'submissions';
 // The potential-box-background wallpaper + fp-bcard grid belong to any
 // Story-tab result set -- Browse's own "Recent Stories" feed AND a normal
 // filtered Story search/tag click both count. isBrowseStories narrows further
-// to just Browse's feed (no side filter panel) for the bits that need to
-// know that specifically -- the 6-per-page limit and the 3-per-row grid
-// (the filtered search still has its side panel eating width, so it gets
-// 2-per-row instead via fp-bcard-grid--narrow).
+// to just Browse's feed (no side filter panel) for the one bit that still
+// needs to know that specifically -- the explicit 20-per-page limit (set
+// to match the filtered search's own server-side default).
 const isStoriesView = currentView !== 'submissions' && currentView !== 'profiles';
 const isBrowseStories = isBrowseMode && isStoriesView;
 document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--stories', isStoriesView);
