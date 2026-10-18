@@ -561,34 +561,38 @@
     }
     .fp-bcard-tags-scrollbar-thumb:hover { filter: brightness(1.15); }
     .fp-bcard-tags-scrollbar-thumb:active { cursor: grabbing; }
-    /* Stats -- three small individual boxes instead of one shared strip.
-       Padding kept tight (not "thick") so the label text can run bigger
-       without the box itself growing tall. */
-    .fp-bcard-statpanel { display: flex; justify-content: center; gap: 0.35rem; margin-bottom: 0.4rem; }
-    .fp-bcard-stat {
-      flex: 1; min-width: 0; text-align: center; padding: 0.18rem 0.2rem;
-      background: linear-gradient(160deg, rgba(240,192,96,0.12), rgba(127,168,217,0.08));
-      border: 1px solid rgba(240,192,96,0.28); border-radius: 8px;
-    }
-    .fp-bcard-stat-val { display: block; font-size: 0.86rem; font-weight: 800; color: #f0c060; text-shadow: 0 0 8px rgba(240,192,96,0.4); }
-    .fp-bcard-stat-label { display: block; font-size: 0.68rem; font-weight: 600; color: #ccc; margin-top: 0.02rem; }
+    /* Description now sits right under the tags row (bigger + starts
+       higher, per request) instead of below the stat panel. */
     .fp-bcard-synopsis {
-      font-size: 0.85rem; line-height: 1.42; color: #ddd; margin-bottom: 0.4rem;
+      font-size: 0.97rem; line-height: 1.4; color: #ddd; margin-bottom: 0.45rem;
       display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
     }
-    /* Character teaser row -- always renders something (real chips or the
-       "No Linked Characters" placeholder) so this slot's height is
-       consistent whether or not a story has any characters tagged. */
-    .fp-bcard-chars { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: auto; }
+    /* Bottom row: character teaser chips on the left, the (now much
+       smaller) stat trio pinned bottom-right on the same line -- always
+       renders chars (real chips or the "No Linked Characters" placeholder)
+       so this slot's height is consistent whether or not a story has any
+       characters tagged. */
+    .fp-bcard-bottom-row { display: flex; align-items: center; gap: 0.5rem; margin-top: auto; }
+    .fp-bcard-chars { display: flex; flex-wrap: nowrap; overflow: hidden; gap: 0.35rem; flex: 1; min-width: 0; }
     .fp-bcard-char-chip {
       display: flex; align-items: center; gap: 0.35rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
       border-radius: 20px; padding: 0.2rem 0.65rem 0.2rem 0.2rem; font-size: 0.74rem; color: #ddd; font-weight: 600;
-      text-decoration: none; transition: border-color 0.15s, color 0.15s;
+      text-decoration: none; transition: border-color 0.15s, color 0.15s; flex-shrink: 0;
     }
     .fp-bcard-char-chip:hover { border-color: #7fa8d9; color: #fff; }
     .fp-bcard-char-chip img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
     .fp-bcard-char-chip--empty { color: #888; cursor: default; font-style: italic; }
     .fp-bcard-char-chip--empty:hover { border-color: rgba(255,255,255,0.1); color: #888; }
+    /* Stats -- compact icon+value pills, shrunk down and moved to share
+       the bottom row with the character chips instead of their own row. */
+    .fp-bcard-statpanel { display: flex; gap: 0.3rem; flex-shrink: 0; }
+    .fp-bcard-stat {
+      display: flex; align-items: center; gap: 0.22rem; white-space: nowrap; padding: 0.14rem 0.45rem;
+      background: linear-gradient(160deg, rgba(240,192,96,0.12), rgba(127,168,217,0.08));
+      border: 1px solid rgba(240,192,96,0.28); border-radius: 8px;
+      font-size: 0.68rem; color: #ccc;
+    }
+    .fp-bcard-stat-val { font-weight: 800; color: #f0c060; text-shadow: 0 0 6px rgba(240,192,96,0.4); }
     /* Sparkle accent -- decoration-8 tucked into the card's top-right
        corner, same treatment as the homepage Spotlight cards. */
     .fp-bcard-deco--tr { position: absolute; z-index: 2; pointer-events: none; object-fit: contain; opacity: 0.9; top: -10px; right: -8px; width: 32px; height: 32px; }
@@ -1011,10 +1015,10 @@
       .fp-bcard-tags-row { gap: 0.25rem; margin-bottom: 0.25rem; }
       .fp-bcard-tags-fixed .fp-tag-pill { font-size: 0.6rem; padding: 0.18em 0.5em; }
       .fp-bcard-tags-scroll-wrap { display: none; }
-      .fp-bcard-statpanel { gap: 0.2rem; margin-bottom: 0.22rem; }
-      .fp-bcard-stat { padding: 0.08rem 0.12rem; }
+      .fp-bcard-bottom-row { margin-top: 0.2rem; }
+      .fp-bcard-statpanel { gap: 0.2rem; }
+      .fp-bcard-stat { padding: 0.08rem 0.12rem; font-size: 0.56rem; }
       .fp-bcard-stat-val { font-size: 0.66rem; }
-      .fp-bcard-stat-label { font-size: 0.52rem; }
       .fp-bcard-synopsis { font-size: 0.68rem; line-height: 1.28; -webkit-line-clamp: 2; margin-bottom: 0; }
       .fp-bcard-chars { display: none; }
       .fp-bcard-deco--tr { width: 20px; height: 20px; top: -5px; right: -4px; }
@@ -1393,7 +1397,7 @@ function setProfilesMenuCount(text) {
 function truncateSynopsis(s) {
   const text = (s || '').trim();
   if (!text) return 'No description yet.';
-  return text.length > 250 ? text.slice(0, 250).trim() + '…' : text;
+  return text.length > 350 ? text.slice(0, 350).trim() + '…' : text;
 }
 function ratingClass(rating) {
   if (rating === 'mature') return 'fp-tag-pill--rating-teen';
@@ -1594,13 +1598,15 @@ function browseResultCard(w) {
           ${bcardTagsFixedHtml(w)}
           ${bcardTagsScrollHtml(w)}
         </div>
-        <div class="fp-bcard-statpanel">
-          <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${(w.hits || 0).toLocaleString()}</span><span class="fp-bcard-stat-label">👁 Reads</span></div>
-          <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${(w.kudos || 0).toLocaleString()}</span><span class="fp-bcard-stat-label">❤️ Likes</span></div>
-          <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${w.word_count != null ? w.word_count.toLocaleString() : '—'}</span><span class="fp-bcard-stat-label">📖 Words</span></div>
-        </div>
         <p class="fp-bcard-synopsis">${escapeHtml(truncateSynopsis(w.synopsis))}</p>
-        ${bcardCharsHtml(w)}
+        <div class="fp-bcard-bottom-row">
+          ${bcardCharsHtml(w)}
+          <div class="fp-bcard-statpanel">
+            <div class="fp-bcard-stat">👁 <span class="fp-bcard-stat-val">${(w.hits || 0).toLocaleString()}</span></div>
+            <div class="fp-bcard-stat">❤️ <span class="fp-bcard-stat-val">${(w.kudos || 0).toLocaleString()}</span></div>
+            <div class="fp-bcard-stat">📖 <span class="fp-bcard-stat-val">${w.word_count != null ? w.word_count.toLocaleString() : '—'}</span></div>
+          </div>
+        </div>
       </div>
     </div>
   `;
