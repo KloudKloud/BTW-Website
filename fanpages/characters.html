@@ -53,12 +53,14 @@
        width jump collapsing to 0 caused. Always starts open on a fresh
        load (no persisted state). ── */
     .fp-layout--sidebar-collapsed { grid-template-columns: 24px 1fr; }
-    /* 24px is half the previous 48px strip, per request -- only fits
-       because the toggle button itself also shrinks to 22px below (was
-       34px): 22 (button) + 2 (border-right) = 24 exactly, with zero
-       padding left to spare, so padding-left/right go to 0 here instead
-       of the small amount the wider strip had room for. */
-    .fp-layout--sidebar-collapsed .fp-char-sidebar { padding-left: 0; padding-right: 0; }
+    /* 24px is half the previous 48px strip, per request -- the toggle
+       button itself stays full-size (34px, unchanged from the open
+       state) rather than shrinking to fit; it simply overflows past the
+       narrow strip's own edge instead. overflow:visible is safe here
+       specifically because .fp-char-sidebar-content is display:none
+       while collapsed, so there's nothing left inside this box that
+       actually needs the normal overflow-y:auto scrolling. */
+    .fp-layout--sidebar-collapsed .fp-char-sidebar { padding-left: 0; padding-right: 0; overflow: visible; }
     .fp-layout--sidebar-collapsed .fp-char-sidebar-content { display: none; }
     /* Background normally starts after the 280px sidebar (see .fp-bg-img
        below) -- the collapsed 24px strip still needs its own matching
@@ -73,10 +75,16 @@
       transition: background 0.15s, color 0.15s;
     }
     .fp-char-sidebar-toggle:hover { background: linear-gradient(160deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04)); color: #fff; }
-    /* Shrinks only while collapsed -- the open-state button (top-right
-       corner of the full 280px sidebar) stays its normal 34px; only the
-       collapsed 24px strip needs the smaller button to fit at all. */
-    .fp-layout--sidebar-collapsed .fp-char-sidebar-toggle { width: 22px; height: 22px; font-size: 0.65rem; margin-bottom: 0.75rem; }
+    /* While collapsed, the button hangs over the strip's right edge into
+       the main column instead of overflowing left off the edge of the
+       page -- align-self:flex-end (the open-state alignment, flush to
+       the sidebar's own right/inner edge) would push the overflow the
+       wrong way, off the left side of the viewport and half-clipped by
+       it, since this box already sits flush against x:0. flex-start
+       keeps the button's left edge anchored inside the strip and lets
+       the rest of its width spill rightward over visible page content
+       instead. Size/font untouched -- only position changes. */
+    .fp-layout--sidebar-collapsed .fp-char-sidebar-toggle { align-self: flex-start; }
 
     .fp-char-drawer-toggle { display: none; }
     /* Base state was missing entirely -- only the ≤720px media query below
