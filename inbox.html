@@ -499,8 +499,17 @@ async function openThread(threadId, backTab, uptoId) {
       msgWrap.appendChild(row);
     });
 
-    // Scroll to bottom after layout is computed
-    requestAnimationFrame(() => { msgWrap.scrollTop = msgWrap.scrollHeight; });
+    // Scroll to bottom after layout is computed — and again once any
+    // attached images/videos finish loading, since those grow the thread's
+    // height after the initial measurement.
+    const pinToBottom = () => { msgWrap.scrollTop = msgWrap.scrollHeight; };
+    requestAnimationFrame(pinToBottom);
+    msgWrap.querySelectorAll('img').forEach(img => {
+      if (!img.complete) img.addEventListener('load', pinToBottom, { once: true });
+    });
+    msgWrap.querySelectorAll('video').forEach(vid => {
+      vid.addEventListener('loadedmetadata', pinToBottom, { once: true });
+    });
 
     // Refresh nav badge — opening a thread marks messages as read
     if (!_isAdmin) refreshInboxBadge();
