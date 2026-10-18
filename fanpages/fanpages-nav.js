@@ -1241,6 +1241,11 @@ window.wikiSetCoverSlot = function (el, site, opts) {
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[target="_blank"]');
     if (!a || !a.href) return;
+    // Explicit, per-link opt-out for a link that already has its own
+    // deliberate click behavior this interstitial would otherwise block by
+    // capturing the click first (e.g. character pages' Spotify
+    // try-the-app-then-fall-back-to-web trick).
+    if (a.dataset.skipLeavingWarning) return;
     let url;
     try { url = new URL(a.href, location.href); } catch { return; }
     if (!['http:', 'https:'].includes(url.protocol)) return;
