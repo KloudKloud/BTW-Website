@@ -3480,8 +3480,7 @@ app.post('/api/track', async (req, res) => {
 
 // ── Admin stats ───────────────────────────────────────────────────────────────
 // POST /api/admin/newsletter — send email blast to all opted-in users
-app.post('/api/admin/newsletter', requireAuth, uploadInbox.array('attachments', 4), async (req, res) => {
-  if (!await checkAdmin(req)) return res.status(403).json({ error: 'Forbidden.' });
+app.post('/api/admin/newsletter', requireAuth, requireAdmin, uploadInbox.array('attachments', 4), async (req, res) => {
   const { subject, body } = req.body;
   if (!subject?.trim()) return res.status(400).json({ error: 'Subject is required.' });
   if (!body?.trim())    return res.status(400).json({ error: 'Message body is required.' });
@@ -3561,8 +3560,7 @@ app.post('/api/admin/newsletter', requireAuth, uploadInbox.array('attachments', 
 });
 
 // GET /api/admin/newsletter/count — how many opted-in users
-app.get('/api/admin/newsletter/count', requireAuth, async (req, res) => {
-  if (!await checkAdmin(req)) return res.status(403).json({ error: 'Forbidden.' });
+app.get('/api/admin/newsletter/count', requireAuth, requireAdmin, async (req, res) => {
   const { rows: [r] } = await pool.query(
     `SELECT COUNT(*)::int AS count FROM users WHERE email_newsletter = true AND verified = true`
   );
@@ -8529,10 +8527,41 @@ app.post('/api/content-comments', async (req, res) => {
   });
 });
 
+// Resolves the owning club's id for the three club-related comment target
+// types, so a club owner/admin can moderate comments on their own club's
+// content the same way a story moderator already can on their own story's
+// content. Returns null for every non-club target type (or a dangling
+// target), in which case the caller falls back to author-or-global-admin.
+async function clubIdForCommentTarget(targetType, targetId) {
+  if (targetType === 'club_post') {
+    const { rows: [r] } = await pool.query('SELECT club_id FROM club_posts WHERE id = $1', [targetId]);
+    return r ? r.club_id : null;
+  }
+  if (targetType === 'club_gallery_image') {
+    const { rows: [r] } = await pool.query(
+      `SELECT p.club_id FROM club_page_gallery_images g JOIN club_pages p ON p.id = g.page_id WHERE g.id = $1`, [targetId]
+    );
+    return r ? r.club_id : null;
+  }
+  if (targetType === 'club_page') {
+    const { rows: [r] } = await pool.query('SELECT club_id FROM club_pages WHERE id = $1', [targetId]);
+    return r ? r.club_id : null;
+  }
+  return null;
+}
+
 app.delete('/api/content-comments/:id', requireAuth, async (req, res) => {
   const { rows: [comment] } = await pool.query('SELECT * FROM content_comments WHERE id = $1', [req.params.id]);
   if (!comment) return res.status(404).json({ error: 'Not found.' });
-  if (comment.user_id !== req.user.id && !await checkAdmin(req)) return res.status(403).json({ error: 'Not your comment.' });
+  let allowed = comment.user_id === req.user.id || await checkAdmin(req);
+  if (!allowed) {
+    const clubId = await clubIdForCommentTarget(comment.target_type, comment.target_id);
+    if (clubId) {
+      const role = await getClubRole(clubId, req.user.id);
+      allowed = role === 'owner' || role === 'admin';
+    }
+  }
+  if (!allowed) return res.status(403).json({ error: 'Not your comment.' });
   await pool.query('DELETE FROM content_comments WHERE id = $1', [req.params.id]);
   res.json({ message: 'Deleted.' });
 });

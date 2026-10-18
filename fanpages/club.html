@@ -4772,10 +4772,15 @@ function ccAvatarHtml(c) {
   const name = c.display_name || c.username || '?';
   const initial = escapeHtml(name.charAt(0).toUpperCase());
   return c.avatar
-    ? `<img class="cc-avatar" src="${c.avatar}" alt="" />`
+    ? `<img class="cc-avatar" src="${escapeHtml(c.avatar)}" alt="" />`
     : `<span class="cc-avatar-fallback">${initial}</span>`;
 }
 function ccIsMine(c) { return currentUser && (currentUser.id === c.user_id || currentUser.is_admin); }
+// A club owner/admin can also moderate comments on their own club's
+// content, same as the server-side check in DELETE /api/content-comments/:id.
+function ccCanDelete(c) {
+  return ccIsMine(c) || !!(currentClub && (currentClub.viewer_role === 'owner' || currentClub.viewer_role === 'admin'));
+}
 
 function ccCommentEl(c, isReply) {
   const wrap = document.createElement('div');
@@ -4805,7 +4810,7 @@ function ccCommentEl(c, isReply) {
         <span class="cc-save-label">${c.user_saved ? 'Saved' : 'Save'}</span>
       </button>
       ${token && !isReply ? '<button class="cc-action-btn" data-action="reply">Reply</button>' : ''}
-      ${ccIsMine(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : (token ? '<button class="cc-action-btn cc-action-btn--flag" data-action="report" title="Report">&#127987;&#65039;</button>' : '')}
+      ${ccCanDelete(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : (token ? '<button class="cc-action-btn cc-action-btn--flag" data-action="report" title="Report">&#127987;&#65039;</button>' : '')}
     </div>
   `;
   wrap.appendChild(body);
