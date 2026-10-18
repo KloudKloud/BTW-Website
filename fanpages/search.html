@@ -485,7 +485,7 @@
        pinned to the cover's own height regardless of row width. */
     .fp-bcard-grid, .fp-bcard-grid--narrow { display: grid; grid-template-columns: 1fr; gap: 0.9rem; }
     .fp-bcard {
-      display: flex; flex-direction: row; cursor: pointer; overflow: hidden; position: relative; height: 270px;
+      display: flex; flex-direction: row; cursor: pointer; overflow: hidden; position: relative; height: 220px;
       background: linear-gradient(160deg, rgba(10,8,14,0.86), rgba(10,8,14,0.76)), url('/images/home/potential-box-background.png');
       background-size: cover; background-position: center;
       border: 1px solid rgba(255,255,255,0.22); border-radius: 14px;
@@ -512,8 +512,8 @@
        the row. The strip clips at the card edge -- a fade + arrow button
        (only shown when there's actually overflow, via initBcardTagScrollers)
        lets you click through the rest instead of dragging. */
-    .fp-bcard-tags-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.6rem; min-width: 0; }
-    .fp-bcard-tags-fixed { display: flex; gap: 0.4rem; flex-shrink: 0; }
+    .fp-bcard-tags-row { display: flex; align-items: flex-start; gap: 0.4rem; margin-bottom: 0.5rem; min-width: 0; }
+    .fp-bcard-tags-fixed { display: flex; gap: 0.4rem; flex-shrink: 0; margin-top: 0.08rem; }
     /* Rating colors are hard-pinned to a plain green/yellow/red
        traffic-light scheme here specifically (General/Mature/Explicit),
        separate from the site's usual green/gold/orange rating palette
@@ -524,21 +524,43 @@
     .fp-bcard-tags-fixed .fp-tag-pill--rating-mature { background: rgba(224,80,74,0.2); color: #ff8079; border-color: rgba(224,80,74,0.55); }
     .fp-tag-pill--status-ongoing { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
     .fp-tag-pill--status-complete { background: rgba(127,168,217,0.2); color: #a8c6e8; border-color: rgba(127,168,217,0.5); }
-    .fp-bcard-tags-scroll-wrap { position: relative; flex: 1; min-width: 0; overflow: hidden; }
+    /* The strip itself sits in a flex column: the scrollable pills on top,
+       a thin draggable scrollbar underneath (only shown once there's real
+       overflow) -- the scrollbar is what lets you jump around quickly and
+       go backward, not just nudge forward one arrow-click at a time. */
+    .fp-bcard-tags-scroll-wrap { display: flex; flex-direction: column; gap: 0.22rem; flex: 1; min-width: 0; }
+    .fp-bcard-tags-scroll-inner { position: relative; min-width: 0; overflow: hidden; }
     .fp-bcard-tags-scroll {
       display: flex; gap: 0.4rem; overflow-x: auto; scroll-behavior: smooth;
-      scrollbar-width: none; padding-right: 0.2rem;
+      scrollbar-width: none;
     }
     .fp-bcard-tags-scroll::-webkit-scrollbar { display: none; }
     .fp-bcard-tags-scroll .fp-tag-pill { font-size: 0.78rem; padding: 0.28em 0.8em; white-space: nowrap; }
     .fp-bcard-tags-arrow {
-      display: none; position: absolute; right: 0; top: 0; bottom: 0; width: 2rem;
+      display: none; position: absolute; top: 0; bottom: 0; width: 1.8rem;
       align-items: center; justify-content: center; border: none; cursor: pointer; padding: 0;
-      background: linear-gradient(to right, transparent, rgba(10,8,14,0.92) 45%);
-      color: #f0c060; font-size: 1.15rem; font-weight: 800;
+      color: #f0c060; font-size: 1.1rem; font-weight: 800;
     }
-    .fp-bcard-tags-scroll-wrap.fp-bcard-tags-has-overflow .fp-bcard-tags-arrow { display: flex; }
+    .fp-bcard-tags-arrow--right { right: 0; background: linear-gradient(to right, transparent, rgba(10,8,14,0.92) 45%); }
+    .fp-bcard-tags-arrow--left { left: 0; background: linear-gradient(to left, transparent, rgba(10,8,14,0.92) 45%); }
+    .fp-bcard-tags-scroll-wrap.fp-bcard-tags-has-overflow:not(.fp-bcard-tags-at-end) .fp-bcard-tags-arrow--right { display: flex; }
+    .fp-bcard-tags-scroll-wrap.fp-bcard-tags-has-overflow:not(.fp-bcard-tags-at-start) .fp-bcard-tags-arrow--left { display: flex; }
     .fp-bcard-tags-arrow:hover { color: #fff; }
+    /* Slim gold track + draggable thumb -- click-to-jump on the track,
+       drag the thumb for fine control. Hidden entirely on cards whose
+       tags all fit (initBcardTagScrollers only adds --has-overflow when
+       there's something to scroll). */
+    .fp-bcard-tags-scrollbar {
+      display: none; position: relative; height: 4px; border-radius: 3px;
+      background: rgba(255,255,255,0.1); cursor: pointer;
+    }
+    .fp-bcard-tags-scroll-wrap.fp-bcard-tags-has-overflow .fp-bcard-tags-scrollbar { display: block; }
+    .fp-bcard-tags-scrollbar-thumb {
+      position: absolute; top: 0; left: 0; height: 100%; min-width: 14%; border-radius: 3px;
+      background: linear-gradient(90deg, #f0c060, #e0504a); cursor: grab; touch-action: none;
+    }
+    .fp-bcard-tags-scrollbar-thumb:hover { filter: brightness(1.15); }
+    .fp-bcard-tags-scrollbar-thumb:active { cursor: grabbing; }
     /* Stats -- three small individual boxes instead of one shared strip.
        Padding kept tight (not "thick") so the label text can run bigger
        without the box itself growing tall. */
@@ -552,7 +574,7 @@
     .fp-bcard-stat-label { display: block; font-size: 0.68rem; font-weight: 600; color: #ccc; margin-top: 0.02rem; }
     .fp-bcard-synopsis {
       font-size: 0.85rem; line-height: 1.42; color: #ddd; margin-bottom: 0.4rem;
-      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
     }
     /* Character teaser row -- always renders something (real chips or the
        "No Linked Characters" placeholder) so this slot's height is
@@ -1371,7 +1393,7 @@ function setProfilesMenuCount(text) {
 function truncateSynopsis(s) {
   const text = (s || '').trim();
   if (!text) return 'No description yet.';
-  return text.length > 650 ? text.slice(0, 650).trim() + '…' : text;
+  return text.length > 250 ? text.slice(0, 250).trim() + '…' : text;
 }
 function ratingClass(rating) {
   if (rating === 'mature') return 'fp-tag-pill--rating-teen';
@@ -1475,8 +1497,9 @@ function bcardTagsFixedHtml(w) {
   `;
 }
 // Every other tag (fandoms, relationships, categories, free tags) packed
-// into one horizontally-scrolling strip -- the arrow button only becomes
-// visible once initBcardTagScrollers() detects actual overflow.
+// into one horizontally-scrolling strip, with a left/right arrow pair and
+// a thin draggable scrollbar underneath -- all three only become visible
+// once initBcardTagScrollers() detects actual overflow.
 function bcardTagsScrollHtml(w) {
   const tags = [];
   (w.fandoms || []).forEach(f => tags.push(`<a class="fp-tag-pill fp-tag-pill--fandom" href="${tagSearchUrl({ fandoms: f })}">${escapeHtml(f)}</a>`));
@@ -1486,29 +1509,75 @@ function bcardTagsScrollHtml(w) {
   if (!tags.length) return '<div class="fp-bcard-tags-scroll-wrap"></div>';
   return `
     <div class="fp-bcard-tags-scroll-wrap">
-      <div class="fp-bcard-tags-scroll">${tags.join('')}</div>
-      <button type="button" class="fp-bcard-tags-arrow" aria-label="Show more tags" onclick="scrollBcardTags(this)">›</button>
+      <div class="fp-bcard-tags-scroll-inner">
+        <button type="button" class="fp-bcard-tags-arrow fp-bcard-tags-arrow--left" aria-label="Scroll tags back" onclick="scrollBcardTags(this, -1)">‹</button>
+        <div class="fp-bcard-tags-scroll">${tags.join('')}</div>
+        <button type="button" class="fp-bcard-tags-arrow fp-bcard-tags-arrow--right" aria-label="Scroll tags forward" onclick="scrollBcardTags(this, 1)">›</button>
+      </div>
+      <div class="fp-bcard-tags-scrollbar"><div class="fp-bcard-tags-scrollbar-thumb"></div></div>
     </div>
   `;
 }
-// After the arrow is clicked enough times to hit the end of the strip,
-// loop back to the start rather than leaving it stuck with a dead button.
-function scrollBcardTags(btn) {
+function scrollBcardTags(btn, dir) {
   const wrap = btn.closest('.fp-bcard-tags-scroll-wrap');
-  const scrollEl = wrap.querySelector('.fp-bcard-tags-scroll');
-  if (scrollEl.scrollLeft + scrollEl.clientWidth >= scrollEl.scrollWidth - 4) {
-    scrollEl.scrollTo({ left: 0, behavior: 'smooth' });
-  } else {
-    scrollEl.scrollBy({ left: 160, behavior: 'smooth' });
-  }
+  wrap.querySelector('.fp-bcard-tags-scroll').scrollBy({ left: dir * 160, behavior: 'smooth' });
 }
-// Only show the arrow on cards that actually have more tags than fit --
-// call once after the grid's innerHTML is set.
+// Keeps a tag strip's scrollbar thumb sized/positioned to match its real
+// scroll state, and toggles the at-start/at-end classes the arrows' CSS
+// visibility depends on.
+function updateBcardTagsScrollbar(wrap) {
+  const scrollEl = wrap.querySelector('.fp-bcard-tags-scroll');
+  const thumb = wrap.querySelector('.fp-bcard-tags-scrollbar-thumb');
+  if (!scrollEl || !thumb) return;
+  const maxScroll = scrollEl.scrollWidth - scrollEl.clientWidth;
+  const widthPct = Math.max((scrollEl.clientWidth / scrollEl.scrollWidth) * 100, 14);
+  thumb.style.width = `${widthPct}%`;
+  const travel = Math.max(100 - widthPct, 0);
+  thumb.style.left = `${maxScroll > 0 ? (scrollEl.scrollLeft / maxScroll) * travel : 0}%`;
+  wrap.classList.toggle('fp-bcard-tags-at-start', scrollEl.scrollLeft <= 1);
+  wrap.classList.toggle('fp-bcard-tags-at-end', scrollEl.scrollLeft >= maxScroll - 1);
+}
+// Only activate the arrows/scrollbar on cards that actually have more tags
+// than fit -- call once after the grid's innerHTML is set. Wires up the
+// scrollbar thumb as a drag handle and the track itself as click-to-jump,
+// both routed through stopPropagation so they don't trigger the card's own
+// whole-card-is-a-link click handler.
 function initBcardTagScrollers() {
   document.querySelectorAll('.fp-bcard-tags-scroll-wrap').forEach(wrap => {
     const scrollEl = wrap.querySelector('.fp-bcard-tags-scroll');
-    if (!scrollEl) return;
-    wrap.classList.toggle('fp-bcard-tags-has-overflow', scrollEl.scrollWidth > scrollEl.clientWidth + 2);
+    const track = wrap.querySelector('.fp-bcard-tags-scrollbar');
+    const thumb = wrap.querySelector('.fp-bcard-tags-scrollbar-thumb');
+    if (!scrollEl || !track || !thumb) return;
+    const hasOverflow = scrollEl.scrollWidth > scrollEl.clientWidth + 2;
+    wrap.classList.toggle('fp-bcard-tags-has-overflow', hasOverflow);
+    if (!hasOverflow || wrap.dataset.scrollerWired) return;
+    wrap.dataset.scrollerWired = '1';
+    updateBcardTagsScrollbar(wrap);
+    scrollEl.addEventListener('scroll', () => updateBcardTagsScrollbar(wrap));
+
+    const scrollToClientX = (clientX) => {
+      const trackRect = track.getBoundingClientRect();
+      const thumbWidth = thumb.offsetWidth;
+      const x = Math.max(0, Math.min(clientX - trackRect.left - thumbWidth / 2, trackRect.width - thumbWidth));
+      const maxScroll = scrollEl.scrollWidth - scrollEl.clientWidth;
+      const travel = trackRect.width - thumbWidth;
+      scrollEl.scrollLeft = travel > 0 ? (x / travel) * maxScroll : 0;
+    };
+
+    thumb.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      thumb.setPointerCapture(e.pointerId);
+    });
+    thumb.addEventListener('pointermove', (e) => {
+      if (!thumb.hasPointerCapture(e.pointerId)) return;
+      scrollToClientX(e.clientX);
+    });
+    thumb.addEventListener('click', (e) => e.stopPropagation());
+    track.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (e.target === thumb) return;
+      scrollToClientX(e.clientX);
+    });
   });
 }
 function browseResultCard(w) {
