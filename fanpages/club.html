@@ -589,12 +589,12 @@
       background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
       box-shadow: 0 12px 32px rgba(0,0,0,0.5); overflow: hidden; padding: 0.35rem;
     }
-    .cl-post-menu-dropdown button {
+    .cl-post-menu-dropdown button, .cl-post-menu-dropdown a {
       display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
       color: #e0e0e0; font-family: inherit; font-size: 0.85rem; padding: 0.55rem 0.7rem; border-radius: 8px;
-      white-space: nowrap;
+      white-space: nowrap; text-decoration: none; box-sizing: border-box;
     }
-    .cl-post-menu-dropdown button:hover { background: rgba(255,255,255,0.08); }
+    .cl-post-menu-dropdown button:hover, .cl-post-menu-dropdown a:hover { background: rgba(255,255,255,0.08); }
     .cl-post-menu-dropdown button.cl-menu-danger { color: #e8849e; }
     .cl-post-menu-dropdown button.cl-menu-danger:hover { background: rgba(194,84,122,0.12); }
     .cl-admin-post-thumb {
@@ -4020,16 +4020,20 @@ function wireAdminPostRowActions(row, post) {
   });
 }
 
-// "•••" post-actions menu -- Save/Unsave shows for any logged-in viewer;
-// Edit/Delete are added on top of that only for the post's own author or a
-// club owner/admin (matches the server-side check in DELETE
-// /api/clubs/:slug/posts/:postId exactly). Returns null (no menu rendered)
-// at all for a logged-out viewer, since there's nothing for them to do here.
+// "•••" post-actions menu -- Save/Unsave shows for any logged-in viewer.
+// Delete is added on top of that for the post's own author OR a club
+// owner/admin/site admin (matches the server-side check in DELETE
+// /api/clubs/:slug/posts/:postId exactly). Edit is author-only, full stop --
+// not even a club owner/admin gets to edit someone else's post, matching
+// the equally-tightened server-side check in PUT .../posts/:postId. Returns
+// null (no menu rendered) at all for a logged-out viewer.
 function clPostMenu(post) {
   if (!currentUser) return null;
   const isOwnerOrAdmin = currentClub && (currentClub.viewer_role === 'owner' || currentClub.viewer_role === 'admin');
   const isSiteAdmin = currentUser.is_admin;
-  const canDelete = post.author.id === currentUser.id || isOwnerOrAdmin || isSiteAdmin;
+  const isAuthor = post.author.id === currentUser.id;
+  const canEdit = isAuthor;
+  const canDelete = isAuthor || isOwnerOrAdmin || isSiteAdmin;
 
   const wrap = document.createElement('div');
   wrap.className = 'cl-post-menu-wrap';
@@ -4062,13 +4066,16 @@ function clPostMenu(post) {
   });
   dropdown.appendChild(saveBtn);
 
-  if (canDelete) {
+  if (canEdit) {
     const editLink = document.createElement('a');
+    editLink.className = 'cl-post-menu-edit-link';
     editLink.href = window.fpUrl(`/create-club-post?club=${encodeURIComponent(slug)}&id=${post.id}`);
     editLink.textContent = 'Edit';
     editLink.addEventListener('click', (e) => e.stopPropagation());
     dropdown.appendChild(editLink);
+  }
 
+  if (canDelete) {
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
     delBtn.className = 'cl-menu-danger';
@@ -4420,6 +4427,15 @@ function updatePostMetaUI(post) {
   saveBtn.classList.toggle('saved', !!post.user_saved);
   saveBtn.title = post.user_saved ? 'Unsave this post' : 'Save this post';
   document.getElementById('cl-post-save-label').textContent = post.user_saved ? 'Saved' : 'Save';
+
+  // Reporting your own post makes no sense -- swap that button into a
+  // Delete for the post's own author (the click handler below branches on
+  // this same dataset flag).
+  const reportBtn = document.getElementById('cl-post-report-btn');
+  const isMine = !!(currentUser && post.author && post.author.id === currentUser.id);
+  reportBtn.dataset.mode = isMine ? 'delete' : 'report';
+  reportBtn.title = isMine ? 'Delete this post' : 'Report this post';
+  reportBtn.innerHTML = isMine ? '&#128465;&#65039;' : '&#127987;&#65039;';
 }
 async function castPostVote(value) {
   if (!currentPostDetail) return;
@@ -4460,9 +4476,25 @@ document.getElementById('cl-post-share-btn').addEventListener('click', (e) => {
   if (!currentPostDetail) return;
   window.fpShare(e.currentTarget, `${window.location.origin}${buildClubUrl({ post: currentPostDetail.id })}`);
 });
-document.getElementById('cl-post-report-btn').addEventListener('click', () => {
+document.getElementById('cl-post-report-btn').addEventListener('click', async (e) => {
   if (!currentPostDetail) return;
-  reportContent('club_post', currentPostDetail.id);
+  if (e.currentTarget.dataset.mode !== 'delete') {
+    reportContent('club_post', currentPostDetail.id);
+    return;
+  }
+  if (!confirm('Delete this post? This cannot be undone.')) return;
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${currentPostDetail.id}`, { method: 'DELETE', headers: authHeaders() });
+    if (!res.ok) return;
+    if (currentPostDetail.is_admin_post) loadAdminPosts();
+    else socialPostsCache = null;
+    if (currentClub) {
+      currentClub.post_count = Math.max(0, (currentClub.post_count || 0) - 1);
+      const el = document.getElementById('cl-side-post-count');
+      if (el) el.textContent = currentClub.post_count;
+    }
+    navigateTo({ post: null });
+  } catch {}
 });
 document.getElementById('cl-post-back-btn').addEventListener('click', () => {
   // "View in Page" (Promotion Page builder's "•••" menu) tags this history

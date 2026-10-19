@@ -10475,8 +10475,10 @@ app.put('/api/clubs/:slug/posts/:postId', requireAuth, async (req, res) => {
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const { rows: [existing] } = await pool.query('SELECT * FROM club_posts WHERE id = $1 AND club_id = $2', [req.params.postId, club.id]);
   if (!existing) return res.status(404).json({ error: 'Post not found.' });
+  // Editing is author-only, full stop -- unlike deleting, a club owner/admin
+  // (or site admin) does NOT get to edit someone else's post, only remove it.
   const role = await getClubRole(club.id, req.user.id);
-  const allowed = existing.author_user_id === req.user.id || role === 'owner' || role === 'admin' || await checkAdmin(req);
+  const allowed = existing.author_user_id === req.user.id;
   if (!allowed) return res.status(403).json({ error: "You don't have permission to edit this post." });
 
   const title = String(req.body.title || '').trim().slice(0, 120);
