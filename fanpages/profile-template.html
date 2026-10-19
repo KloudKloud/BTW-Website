@@ -842,6 +842,12 @@
     .fp-featured-card {
       display: block; width: 150px; text-decoration: none; color: inherit; position: relative;
     }
+    /* Positioned ancestor for the NSFW lock overlay -- without its own
+       wrapper, .fp-nsfw-lock-overlay's inset:0 resolves against
+       .fp-featured-card itself (the nearest positioned ancestor), which
+       spans the image AND the title below it, covering text that's
+       supposed to stay fully visible and un-blurred. */
+    .fp-featured-card-imgwrap { position: relative; }
     .fp-featured-card-img {
       width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; display: block;
       background: #1e1e1e; border: 1px solid rgba(255,255,255,0.08); transition: transform 0.15s;
@@ -3362,9 +3368,13 @@
       // page would hit, instead of silently navigating into a 403.
       if (locked) card.href = '#';
       else card.href = realHref;
+      // Only the image box gets blurred/locked -- the title underneath
+      // stays fully visible and un-blurred, same as the unlocked state.
       card.innerHTML = `
-        <img class="fp-featured-card-img"${locked ? ' style="filter: blur(16px);"' : ''} src="${locked ? '/images/gallery/kloudsaphbedroom_1.png' : (item.image_url || '/images/gallery/kloudsaphbedroom_1.png')}" alt="${item.title}" />
-        ${locked ? '<div class="fp-nsfw-lock-overlay"><span>18+</span><span>Must Sign In to Access Content</span></div>' : ''}
+        <div class="fp-featured-card-imgwrap">
+          <img class="fp-featured-card-img"${locked ? ' style="filter: blur(6px) grayscale(0.2) brightness(0.85);"' : ''} src="${locked ? '/images/gallery/kloudsaphbedroom_1.png' : (item.image_url || '/images/gallery/kloudsaphbedroom_1.png')}" alt="${item.title}" />
+          ${locked ? '<div class="fp-nsfw-lock-overlay"><span>🔒 18+</span><span>Must Sign In to Access Content</span></div>' : ''}
+        </div>
         <p class="fp-featured-card-title">${item.title}</p>
       `;
       if (locked) {
