@@ -465,7 +465,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
 
   window.reportContent = function (targetType, targetId) {
     const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
-    if (!token) { window.fpRequireSignIn(); return; }
+    if (!token) { window.fpShowSignInGate('Must Sign In to Report Content'); return; }
     build();
     const textarea = document.getElementById('fp-report-textarea');
     const alertEl = document.getElementById('fp-report-alert');
