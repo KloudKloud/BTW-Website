@@ -739,11 +739,28 @@ try {
 function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
-// A post's Cover Media can be a short video/GIF clip, not just a static
-// image -- detected off the uploaded file's own extension (see
-// create-club-post.html's uploadPostMedia), no separate type field needed.
-function isVideoUrl(url) {
-  return /\.(mp4|webm|mov)(\?.*)?$/i.test(url || '');
+// A post's Cover Media can be a YouTube link, not just an uploaded image --
+// detected purely off the URL's own shape (the server always normalizes a
+// saved YouTube link to this exact canonical form), no separate type field
+// needed anywhere this gets stored.
+function extractYoutubeId(url) {
+  const s = String(url || '').trim();
+  const patterns = [
+    /^https?:\/\/(?:www\.)?youtube\.com\/watch\?(?:[^#]*&)?v=([A-Za-z0-9_-]{11})(?:&.*)?$/,
+    /^https?:\/\/(?:www\.)?youtu\.be\/([A-Za-z0-9_-]{11})(?:\?.*)?$/,
+    /^https?:\/\/(?:www\.)?youtube\.com\/embed\/([A-Za-z0-9_-]{11})(?:\?.*)?$/,
+    /^https?:\/\/(?:www\.)?youtube\.com\/shorts\/([A-Za-z0-9_-]{11})(?:\?.*)?$/,
+  ];
+  for (const re of patterns) {
+    const m = s.match(re);
+    if (m) return m[1];
+  }
+  return null;
+}
+function isYouTubeUrl(url) { return !!extractYoutubeId(url); }
+function youtubeThumbUrl(url) {
+  const id = extractYoutubeId(url);
+  return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : '';
 }
 
 // ── Sidebar: user block ─────────────────────────────────────────────────
@@ -1053,8 +1070,8 @@ function feedCard(p, mode) {
   // the old pan-position-on-the-full-image approach for older posts.
   const thumbImg = p.preview_image_url
     ? `<img class="soc-feed-card-thumb" src="${escapeHtml(p.preview_image_url)}" alt="" />`
-    : isVideoUrl(p.image_url)
-      ? `<video class="soc-feed-card-thumb" src="${escapeHtml(p.image_url)}" controls preload="metadata" playsinline style="object-position:${previewX}% ${previewY}%;"></video>`
+    : isYouTubeUrl(p.image_url)
+      ? `<img class="soc-feed-card-thumb" src="${escapeHtml(youtubeThumbUrl(p.image_url))}" alt="" />`
       : `<img class="soc-feed-card-thumb" src="${escapeHtml(p.image_url || '/images/noimage.png')}" alt="" style="object-position:${previewX}% ${previewY}%;" />`;
   const thumbWrapClass = p.preview_image_url ? 'soc-feed-card-thumb-wrap soc-feed-card-thumb-wrap--square' : 'soc-feed-card-thumb-wrap';
   const thumbHtml = (isCard && !hasImage) ? '' : (isCard ? `<div class="${thumbWrapClass}">${thumbImg}</div>` : thumbImg);

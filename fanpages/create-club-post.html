@@ -148,6 +148,44 @@
       transition: border-color 0.15s, color 0.15s;
     }
     .cl-edit-slideshow-add:hover { border-color: rgba(127,168,217,0.6); color: #7fa8d9; }
+    /* "Insert YouTube Video" tile -- sits right before the "+" add tile in
+       the slideshow stack (same size/shape, distinct red accent) so it
+       reads as a second, parallel way to add a slide. */
+    .cl-edit-slideshow-add--youtube {
+      font-size: 0.8rem; font-weight: 700; font-family: 'Inter', sans-serif; color: #e05a52;
+      border-color: rgba(224,90,82,0.4); flex-direction: column; gap: 0.3rem; text-align: center; padding: 0.5rem;
+    }
+    .cl-edit-slideshow-add--youtube:hover { border-color: #e05a52; color: #ff7a70; }
+    .cl-edit-slideshow-add--youtube .cl-yt-icon { font-size: 1.3rem; }
+    /* Static-mode equivalent -- sits below the single imgbox, left-aligned,
+       next to the "No Media" remove button. */
+    .cl-cover-actions-row { display: flex; align-items: center; gap: 0.85rem; margin-top: 0.75rem; flex-wrap: wrap; }
+    .cl-youtube-insert-btn {
+      background: transparent; border: 1px solid rgba(224,90,82,0.4); color: #e05a52; border-radius: 8px;
+      padding: 0.5em 0.9em; font-family: 'Inter', sans-serif; font-size: 0.82rem; font-weight: 700; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .cl-youtube-insert-btn:hover { border-color: #e05a52; color: #ff7a70; }
+    /* "Insert YouTube Video" popup -- Fredoka per the site's bubbly-heading
+       convention (see CLAUDE.md), matching crop-modal.js's overlay pattern
+       but its own self-contained markup, per this codebase's duplication-
+       over-shared-components convention. */
+    .cl-yt-modal-overlay {
+      position: fixed; inset: 0; z-index: 600; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center; padding: 1rem;
+    }
+    .cl-yt-modal-overlay[hidden] { display: none; }
+    .cl-yt-modal-box {
+      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); border-radius: 16px;
+      padding: 1.75rem; width: min(90vw, 420px); box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    .cl-yt-modal-title {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.3rem; font-weight: 700; color: #fff;
+      margin: 0 0 1rem; text-align: center;
+    }
+    .cl-yt-modal-input { width: 100%; box-sizing: border-box; }
+    .cl-yt-modal-error { color: #e05a52; font-size: 0.82rem; margin: 0.6rem 0 0; font-family: 'Inter', sans-serif; }
+    .cl-yt-modal-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 1.35rem; }
     .cl-edit-hint { color: #888; font-size: 0.78rem; margin: 0; }
     .cl-edit-pages-create-btn {
       width: 100%; box-sizing: border-box; padding: 0.55em 0.7em; border-radius: 8px; cursor: pointer;
@@ -247,7 +285,7 @@
     <div class="cp-field-title-row" style="margin-top:1.75rem;">
       <h3 class="char-editor-title" style="font-size:1.1rem; margin:0;">Media</h3>
       <button class="wiki-tags-tip-icon" type="button" aria-label="Media help">💡</button>
-      <div class="wiki-tags-tip-popover" hidden><p>Pick a Static Media (image, GIF, or short video), or a Slideshow that cycles through several. It's good practice to credit sources you use, if the art/images/videos aren't yours.<br><br>Optional — if your post is a discussion, you can skip adding one, and no cover will show on your post whatsoever~</p></div>
+      <div class="wiki-tags-tip-popover" hidden><p>Pick a Static Image/GIF, a YouTube video, or a Slideshow that cycles through several. It's good practice to credit sources you use, if the art/images aren't yours.<br><br>Optional — if your post is a discussion, you can skip adding one, and no cover will show on your post whatsoever~</p></div>
     </div>
     <div class="cl-edit-mode-toggle">
       <button class="cl-edit-mode-btn active" id="cp-cover-mode-static" type="button">Static Media</button>
@@ -256,16 +294,18 @@
     <div id="cp-cover-static">
       <div class="cl-edit-imgbox" id="cp-cover-wrap" style="aspect-ratio: 16 / 9;">
         <img id="cp-cover-preview" src="/images/nopicture2.png" alt="" />
-        <video id="cp-cover-preview-video" muted loop autoplay playsinline hidden></video>
-        <div class="cl-edit-imgbox-overlay">📷 Change Cover Media</div>
+        <div class="cl-edit-imgbox-overlay">📷 Change Cover Image</div>
         <button type="button" class="fp-recrop-btn" id="cp-cover-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;" hidden>✏️ Recrop</button>
       </div>
-      <input type="file" id="cp-cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" style="display:none;" />
-      <button type="button" class="cl-splash-rules-link" id="cp-cover-remove-btn" style="margin-top:0.75rem;" hidden>✕ No Media</button>
+      <input type="file" id="cp-cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+      <div class="cl-cover-actions-row">
+        <button type="button" class="cl-youtube-insert-btn" id="cp-cover-youtube-btn">▶ Insert YouTube Video</button>
+        <button type="button" class="cl-splash-rules-link" id="cp-cover-remove-btn" hidden>✕ No Media</button>
+      </div>
     </div>
     <div id="cp-cover-slideshow" hidden>
       <div class="cl-edit-slideshow-stack" id="cp-cover-slideshow-stack"></div>
-      <input type="file" id="cp-cover-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" style="display:none;" />
+      <input type="file" id="cp-cover-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
       <div class="slideshow-randomize-row">
         <label class="slideshow-randomize-label" for="cp-cover-slideshow-randomize">Randomize</label>
         <label class="slideshow-randomize-switch">
@@ -342,6 +382,18 @@
     </div>
   </div>
 </main>
+
+<div class="cl-yt-modal-overlay" id="cl-yt-modal-overlay" hidden>
+  <div class="cl-yt-modal-box">
+    <p class="cl-yt-modal-title">▶ Insert YouTube Video</p>
+    <input type="text" class="mod-input cl-yt-modal-input" id="cl-yt-modal-input" placeholder="Paste a YouTube link…" autocomplete="off" />
+    <p class="cl-yt-modal-error" id="cl-yt-modal-error" hidden>That doesn't look like a YouTube link — double-check it and try again.</p>
+    <div class="cl-yt-modal-actions">
+      <button type="button" class="mod-btn mod-btn--cancel" id="cl-yt-modal-cancel">Cancel</button>
+      <button type="button" class="mod-btn" id="cl-yt-modal-save">Save</button>
+    </div>
+  </div>
+</div>
 
 <script src="/fanpages/fanpages-nav.js"></script>
 <script src="/fanpages/btw-cropper.js"></script>
@@ -470,21 +522,78 @@
     const data = await res.json();
     return data.url || '';
   }
-  // Cover Media (+ an Additional Field's own Cover slot) can be a video/GIF
-  // clip, not just a static image -- uploads straight to the file (no crop
-  // step, since a canvas crop can't operate on video) via the wider
-  // uploadModMedia-backed endpoint. The Side Image slot and the feed-thumbnail
-  // Post Preview crop stay image-only and keep using uploadPostImage above.
-  async function uploadPostMedia(file) {
-    const fd = new FormData();
-    fd.append('image', file, file.name || 'media');
-    const res = await fetch('/api/moderator/club-post-media', { method: 'POST', headers: authHeaders(), body: fd });
-    if (!res.ok) return '';
-    const data = await res.json();
-    return data.url || '';
+
+  // A Cover slot's URL is either our own uploaded image/GIF, or a YouTube
+  // link -- detected purely off the URL's own shape (the server always
+  // normalizes a saved YouTube link to this exact canonical form), no
+  // separate type field needed anywhere this gets stored.
+  function extractYoutubeId(url) {
+    const s = String(url || '').trim();
+    const patterns = [
+      /^https?:\/\/(?:www\.)?youtube\.com\/watch\?(?:[^#]*&)?v=([A-Za-z0-9_-]{11})(?:&.*)?$/,
+      /^https?:\/\/(?:www\.)?youtu\.be\/([A-Za-z0-9_-]{11})(?:\?.*)?$/,
+      /^https?:\/\/(?:www\.)?youtube\.com\/embed\/([A-Za-z0-9_-]{11})(?:\?.*)?$/,
+      /^https?:\/\/(?:www\.)?youtube\.com\/shorts\/([A-Za-z0-9_-]{11})(?:\?.*)?$/,
+    ];
+    for (const re of patterns) {
+      const m = s.match(re);
+      if (m) return m[1];
+    }
+    return null;
   }
-  function isVideoUrl(url) {
-    return /\.(mp4|webm|mov)(\?.*)?$/i.test(url || '');
+  function isYouTubeUrl(url) { return !!extractYoutubeId(url); }
+  function youtubeThumbUrl(url) {
+    const id = extractYoutubeId(url);
+    return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : '';
+  }
+  // Shows the "Insert YouTube Video" popup and resolves to the canonical
+  // saved URL on success, or null if cancelled. Forces a real YouTube link:
+  // an unrecognized paste shows an inline error and the popup stays open
+  // (both here, client-side, AND re-checked server-side -- the real trust
+  // boundary -- by /api/moderator/youtube-link below).
+  function promptYoutubeLink() {
+    return new Promise((resolve) => {
+      const overlay = document.getElementById('cl-yt-modal-overlay');
+      const input = document.getElementById('cl-yt-modal-input');
+      const errorEl = document.getElementById('cl-yt-modal-error');
+      const saveBtn = document.getElementById('cl-yt-modal-save');
+      const cancelBtn = document.getElementById('cl-yt-modal-cancel');
+      input.value = '';
+      errorEl.hidden = true;
+      overlay.hidden = false;
+      input.focus();
+      function cleanup() {
+        overlay.hidden = true;
+        saveBtn.removeEventListener('click', onSave);
+        cancelBtn.removeEventListener('click', onCancel);
+        input.removeEventListener('keydown', onKeydown);
+      }
+      function onCancel() { cleanup(); resolve(null); }
+      async function onSave() {
+        const raw = input.value.trim();
+        if (!extractYoutubeId(raw)) { errorEl.hidden = false; return; }
+        errorEl.hidden = true;
+        saveBtn.disabled = true;
+        try {
+          const res = await fetch('/api/moderator/youtube-link', {
+            method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: raw }),
+          });
+          saveBtn.disabled = false;
+          if (!res.ok) { errorEl.hidden = false; return; }
+          const data = await res.json();
+          cleanup();
+          resolve(data.url);
+        } catch {
+          saveBtn.disabled = false;
+          errorEl.hidden = false;
+        }
+      }
+      function onKeydown(e) { if (e.key === 'Enter') onSave(); else if (e.key === 'Escape') onCancel(); }
+      saveBtn.addEventListener('click', onSave);
+      cancelBtn.addEventListener('click', onCancel);
+      input.addEventListener('keydown', onKeydown);
+    });
   }
 
   // ── Cover Media ──────────────────────────────────────────────────────
@@ -510,38 +619,23 @@
     document.getElementById('cp-cover-file-input').click();
   });
   function setCoverPreviewEl(url) {
-    const imgEl = document.getElementById('cp-cover-preview');
-    const videoEl = document.getElementById('cp-cover-preview-video');
-    if (isVideoUrl(url)) {
-      videoEl.src = url;
-      videoEl.hidden = false;
-      imgEl.hidden = true;
-    } else {
-      imgEl.src = url || '/images/nopicture2.png';
-      imgEl.hidden = false;
-      videoEl.hidden = true;
-      videoEl.removeAttribute('src');
-    }
+    document.getElementById('cp-cover-preview').src = isYouTubeUrl(url) ? youtubeThumbUrl(url) : (url || '/images/nopicture2.png');
   }
   document.getElementById('cp-cover-file-input').addEventListener('change', (e) => {
     const file = e.target.files[0];
     e.target.value = '';
     if (!file) return;
-    if (file.type.startsWith('video/')) {
-      uploadPostMedia(file).then((url) => { if (url) saveCoverMediaUrl(url); });
-      return;
-    }
     openCropModal({ title: 'Crop Cover Image', imageSrc: URL.createObjectURL(file), aspectRatio: 16 / 9, round: false, onSave: saveCoverImage });
   });
   document.getElementById('cp-cover-recrop-btn').addEventListener('click', (e) => {
     e.stopPropagation();
-    if (!cover.image_url || isVideoUrl(cover.image_url)) return;
+    if (!cover.image_url || isYouTubeUrl(cover.image_url)) return;
     openCropModal({ title: 'Crop Cover Image', imageSrc: cover.image_url, aspectRatio: 16 / 9, round: false, onSave: saveCoverImage });
   });
   function saveCoverMediaUrl(url) {
     cover.image_url = url;
     setCoverPreviewEl(url);
-    document.getElementById('cp-cover-recrop-btn').hidden = isVideoUrl(url);
+    document.getElementById('cp-cover-recrop-btn').hidden = isYouTubeUrl(url);
     document.getElementById('cp-cover-remove-btn').hidden = false;
     cpDirty = true;
     updatePostPreviewField();
@@ -551,6 +645,11 @@
     if (!url) return;
     saveCoverMediaUrl(url);
   }
+  document.getElementById('cp-cover-youtube-btn').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const url = await promptYoutubeLink();
+    if (url) saveCoverMediaUrl(url);
+  });
   document.getElementById('cp-cover-remove-btn').addEventListener('click', (e) => {
     e.stopPropagation();
     cover.image_url = '';
@@ -561,9 +660,8 @@
     updatePostPreviewField();
   });
   function slideshowItemInnerHtml(url) {
-    return isVideoUrl(url)
-      ? `<video src="${escapeHtml(url)}" muted loop autoplay playsinline></video><button type="button" class="cl-edit-slideshow-remove">✕</button>`
-      : `<img src="${escapeHtml(url)}" alt="" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
+    const src = isYouTubeUrl(url) ? youtubeThumbUrl(url) : url;
+    return `<img src="${escapeHtml(src)}" alt="" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
   }
   function renderCoverSlideshow() {
     const stack = document.getElementById('cp-cover-slideshow-stack');
@@ -581,10 +679,24 @@
       });
       stack.appendChild(item);
     });
+    const ytBtn = document.createElement('button');
+    ytBtn.className = 'cl-edit-slideshow-add cl-edit-slideshow-add--youtube';
+    ytBtn.type = 'button';
+    ytBtn.title = 'Insert YouTube Video';
+    ytBtn.innerHTML = '<span class="cl-yt-icon">▶</span>YouTube';
+    ytBtn.addEventListener('click', async () => {
+      const url = await promptYoutubeLink();
+      if (!url) return;
+      cover.slideshow.push({ image_url: url });
+      cpDirty = true;
+      renderCoverSlideshow();
+      updatePostPreviewField();
+    });
+    stack.appendChild(ytBtn);
     const addBtn = document.createElement('button');
     addBtn.className = 'cl-edit-slideshow-add';
     addBtn.type = 'button';
-    addBtn.title = 'Add Media';
+    addBtn.title = 'Add Image';
     addBtn.textContent = '+';
     addBtn.addEventListener('click', () => document.getElementById('cp-cover-slideshow-file-input').click());
     stack.appendChild(addBtn);
@@ -593,16 +705,6 @@
     const file = e.target.files[0];
     e.target.value = '';
     if (!file) return;
-    if (file.type.startsWith('video/')) {
-      uploadPostMedia(file).then((url) => {
-        if (!url) return;
-        cover.slideshow.push({ image_url: url });
-        cpDirty = true;
-        renderCoverSlideshow();
-        updatePostPreviewField();
-      });
-      return;
-    }
     openCropModal({
       title: 'Crop Slideshow Image', imageSrc: URL.createObjectURL(file), aspectRatio: 16 / 9, round: false,
       onSave: async (blob) => {
@@ -630,10 +732,10 @@
   function updatePostPreviewField() {
     const field = document.getElementById('cp-preview-field');
     const src = currentCoverPreviewSrc();
-    // A video cover has no feed-thumbnail position/zoom crop -- there's no
-    // frame to position against here, so the feed card just falls back to
-    // showing/playing the video itself at its default framing.
-    if (!src || isVideoUrl(src)) {
+    // A YouTube cover has no feed-thumbnail position/zoom crop -- there's
+    // no frame to position against here, so the feed card just falls back
+    // to showing YouTube's own thumbnail at its default framing.
+    if (!src || isYouTubeUrl(src)) {
       field.hidden = true;
       if (postCreateCropper) { postCreateCropper.destroy(); postCreateCropper = null; }
       return;
@@ -682,39 +784,37 @@
   let textFieldDragIdx = null;
   const TF_IMG_HINT = 'Optional. Every text field can have a main body image and side image.';
   function textFieldImageSlotHtml(field, prefix, aspect, label, maxWidth) {
-    // Only the Cover slot (not Side) accepts video/GIF -- see uploadPostMedia.
-    const allowVideo = prefix === 'cover';
+    // Only the Cover slot (not Side) gets the "Insert YouTube Video" option.
+    const allowYoutube = prefix === 'cover';
     const mode = field[`${prefix}_mode`] === 'slideshow' ? 'slideshow' : 'static';
     const imageUrl = field[`${prefix}_image_url`] || '';
-    const accept = allowVideo
-      ? 'image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime'
-      : 'image/png,image/jpeg,image/webp,image/gif';
+    const previewSrc = allowYoutube && isYouTubeUrl(imageUrl) ? youtubeThumbUrl(imageUrl) : imageUrl;
     return `
       <div class="cl-tf-img-slot" data-slot="${prefix}">
         <div class="cp-field-title-row">
-          <label class="mod-field-label-standalone">${allowVideo ? 'Cover Media' : label}</label>
+          <label class="mod-field-label-standalone">${allowYoutube ? 'Cover Media' : label}</label>
           <button class="wiki-tags-tip-icon" type="button" aria-label="${label} help">💡</button>
           <div class="wiki-tags-tip-popover" hidden><p>${TF_IMG_HINT}</p></div>
         </div>
         <div class="cl-edit-mode-toggle cl-tf-mode-toggle">
-          <button type="button" class="cl-edit-mode-btn${mode !== 'slideshow' ? ' active' : ''}" data-mode="static">${allowVideo ? 'Static Media' : 'Static Image'}</button>
+          <button type="button" class="cl-edit-mode-btn${mode !== 'slideshow' ? ' active' : ''}" data-mode="static">${allowYoutube ? 'Static Media' : 'Static Image'}</button>
           <button type="button" class="cl-edit-mode-btn${mode === 'slideshow' ? ' active' : ''}" data-mode="slideshow">Slideshow</button>
         </div>
         <div class="cl-tf-static" ${mode === 'slideshow' ? 'hidden' : ''}>
           <div class="cl-tf-img-row">
             <div class="cl-edit-imgbox cl-tf-imgbox" style="aspect-ratio:${aspect}; width:${maxWidth}px; max-width:${maxWidth}px;">
-              <img class="cl-tf-preview" src="${imageUrl || '/images/nopicture2.png'}" alt="" />
-              ${allowVideo ? '<video class="cl-tf-preview-video" muted loop autoplay playsinline hidden></video>' : ''}
-              <div class="cl-edit-imgbox-overlay">📷 Change ${allowVideo ? 'Media' : 'Image'}</div>
+              <img class="cl-tf-preview" src="${previewSrc || '/images/nopicture2.png'}" alt="" />
+              <div class="cl-edit-imgbox-overlay">📷 Change Image</div>
               <button type="button" class="fp-recrop-btn cl-tf-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;" ${imageUrl ? '' : 'hidden'}>✏️ Recrop</button>
             </div>
-            <button type="button" class="cl-splash-rules-link cl-tf-remove-img-btn" ${imageUrl ? '' : 'hidden'}>✕ No ${allowVideo ? 'Media' : 'Image'}</button>
+            <button type="button" class="cl-splash-rules-link cl-tf-remove-img-btn" ${imageUrl ? '' : 'hidden'}>✕ No ${allowYoutube ? 'Media' : 'Image'}</button>
           </div>
-          <input type="file" class="cl-tf-file-input" accept="${accept}" style="display:none;" />
+          <input type="file" class="cl-tf-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+          ${allowYoutube ? '<button type="button" class="cl-youtube-insert-btn cl-tf-youtube-btn" style="margin-top:0.6rem;">▶ Insert YouTube Video</button>' : ''}
         </div>
         <div class="cl-tf-slideshow" ${mode === 'static' ? 'hidden' : ''}>
           <div class="cl-edit-slideshow-stack cl-tf-slideshow-stack"></div>
-          <input type="file" class="cl-tf-slideshow-file-input" accept="${accept}" style="display:none;" />
+          <input type="file" class="cl-tf-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
           <div class="slideshow-randomize-row">
             <label class="slideshow-randomize-label">Randomize</label>
             <label class="slideshow-randomize-switch">
@@ -727,16 +827,16 @@
     `;
   }
   function wireTextFieldImageSlot(row, i, prefix, aspect) {
-    const allowVideo = prefix === 'cover';
+    const allowYoutube = prefix === 'cover';
     const slot = row.querySelector(`.cl-tf-img-slot[data-slot="${prefix}"]`);
     const staticWrap = slot.querySelector('.cl-tf-static');
     const slideshowWrap = slot.querySelector('.cl-tf-slideshow');
     const imgboxEl = slot.querySelector('.cl-tf-imgbox');
     const previewEl = slot.querySelector('.cl-tf-preview');
-    const previewVideoEl = slot.querySelector('.cl-tf-preview-video');
     const recropBtn = slot.querySelector('.cl-tf-recrop-btn');
     const fileInput = slot.querySelector('.cl-tf-file-input');
     const removeBtn = slot.querySelector('.cl-tf-remove-img-btn');
+    const youtubeBtn = slot.querySelector('.cl-tf-youtube-btn');
     const ssStack = slot.querySelector('.cl-tf-slideshow-stack');
     const ssFileInput = slot.querySelector('.cl-tf-slideshow-file-input');
     const ssRandomizeToggle = slot.querySelector('.cl-tf-slideshow-randomize');
@@ -744,12 +844,6 @@
       postTextFields[i][`${prefix}_randomize`] = ssRandomizeToggle.checked;
       cpDirty = true;
     });
-    // Fix up the initial preview if this field already has a saved video
-    // cover (textFieldImageSlotHtml's template always renders the <img>
-    // tag regardless of media type) -- no-op for images/empty slots.
-    if (allowVideo && isVideoUrl(postTextFields[i][`${prefix}_image_url`])) {
-      setPreviewEl(postTextFields[i][`${prefix}_image_url`]);
-    }
 
     slot.querySelectorAll('.cl-tf-mode-toggle .cl-edit-mode-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -763,15 +857,7 @@
     });
 
     function setPreviewEl(url) {
-      if (allowVideo && isVideoUrl(url)) {
-        previewVideoEl.src = url;
-        previewVideoEl.hidden = false;
-        previewEl.hidden = true;
-      } else {
-        previewEl.src = url || '/images/nopicture2.png';
-        previewEl.hidden = false;
-        if (previewVideoEl) { previewVideoEl.hidden = true; previewVideoEl.removeAttribute('src'); }
-      }
+      previewEl.src = (allowYoutube && isYouTubeUrl(url)) ? youtubeThumbUrl(url) : (url || '/images/nopicture2.png');
     }
     imgboxEl.addEventListener('click', (e) => {
       if (e.target.closest('.cl-tf-recrop-btn')) return;
@@ -790,24 +876,25 @@
       const file = e.target.files[0];
       e.target.value = '';
       if (!file) return;
-      if (allowVideo && file.type.startsWith('video/')) {
-        uploadPostMedia(file).then((url) => {
-          if (!url) return;
-          postTextFields[i][`${prefix}_image_url`] = url;
-          setPreviewEl(url);
-          recropBtn.hidden = true;
-          removeBtn.hidden = false;
-          cpDirty = true;
-        });
-        return;
-      }
       openCropModal({ title: 'Crop Image', imageSrc: URL.createObjectURL(file), aspectRatio: aspect, round: false, onSave: saveImage });
     });
     recropBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (!previewEl.src || (allowVideo && isVideoUrl(postTextFields[i][`${prefix}_image_url`]))) return;
+      if (!postTextFields[i][`${prefix}_image_url`] || (allowYoutube && isYouTubeUrl(postTextFields[i][`${prefix}_image_url`]))) return;
       openCropModal({ title: 'Crop Image', imageSrc: previewEl.src, aspectRatio: aspect, round: false, onSave: saveImage });
     });
+    if (youtubeBtn) {
+      youtubeBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const url = await promptYoutubeLink();
+        if (!url) return;
+        postTextFields[i][`${prefix}_image_url`] = url;
+        setPreviewEl(url);
+        recropBtn.hidden = true;
+        removeBtn.hidden = false;
+        cpDirty = true;
+      });
+    }
     removeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       postTextFields[i][`${prefix}_image_url`] = '';
@@ -818,9 +905,8 @@
     });
 
     function slideshowItemInnerHtml(url) {
-      return allowVideo && isVideoUrl(url)
-        ? `<video src="${escapeHtml(url)}" muted loop autoplay playsinline></video><button type="button" class="cl-edit-slideshow-remove">✕</button>`
-        : `<img src="${escapeHtml(url)}" alt="" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
+      const src = (allowYoutube && isYouTubeUrl(url)) ? youtubeThumbUrl(url) : url;
+      return `<img src="${escapeHtml(src)}" alt="" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
     }
     function renderStack() {
       ssStack.innerHTML = '';
@@ -836,10 +922,26 @@
         });
         ssStack.appendChild(item);
       });
+      if (allowYoutube) {
+        const ytBtn = document.createElement('button');
+        ytBtn.className = 'cl-edit-slideshow-add cl-edit-slideshow-add--youtube';
+        ytBtn.type = 'button';
+        ytBtn.title = 'Insert YouTube Video';
+        ytBtn.innerHTML = '<span class="cl-yt-icon">▶</span>YouTube';
+        ytBtn.addEventListener('click', async () => {
+          const url = await promptYoutubeLink();
+          if (!url) return;
+          if (!postTextFields[i][`${prefix}_slideshow`]) postTextFields[i][`${prefix}_slideshow`] = [];
+          postTextFields[i][`${prefix}_slideshow`].push({ image_url: url });
+          cpDirty = true;
+          renderStack();
+        });
+        ssStack.appendChild(ytBtn);
+      }
       const addBtn = document.createElement('button');
       addBtn.className = 'cl-edit-slideshow-add';
       addBtn.type = 'button';
-      addBtn.title = 'Add Media';
+      addBtn.title = 'Add Image';
       addBtn.textContent = '+';
       addBtn.addEventListener('click', () => ssFileInput.click());
       ssStack.appendChild(addBtn);
@@ -849,16 +951,6 @@
       const file = e.target.files[0];
       e.target.value = '';
       if (!file) return;
-      if (allowVideo && file.type.startsWith('video/')) {
-        uploadPostMedia(file).then((url) => {
-          if (!url) return;
-          if (!postTextFields[i][`${prefix}_slideshow`]) postTextFields[i][`${prefix}_slideshow`] = [];
-          postTextFields[i][`${prefix}_slideshow`].push({ image_url: url });
-          cpDirty = true;
-          renderStack();
-        });
-        return;
-      }
       openCropModal({
         title: 'Crop Image', imageSrc: URL.createObjectURL(file), aspectRatio: aspect, round: false,
         onSave: async (blob) => {
@@ -1135,7 +1227,7 @@
       document.getElementById('cp-cover-slideshow-randomize').checked = cover.randomize;
       if (cover.image_url) {
         setCoverPreviewEl(cover.image_url);
-        document.getElementById('cp-cover-recrop-btn').hidden = isVideoUrl(cover.image_url);
+        document.getElementById('cp-cover-recrop-btn').hidden = isYouTubeUrl(cover.image_url);
         document.getElementById('cp-cover-remove-btn').hidden = false;
       }
       renderCoverSlideshow();

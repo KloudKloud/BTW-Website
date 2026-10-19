@@ -3805,80 +3805,6 @@ const uploadModAudio = multer({
   },
 });
 
-// Club post/page "Cover Media" — same shape as uploadModImage, but also
-// accepts short video clips/GIFs-as-video so a cover or slideshow slide can
-// be a video instead of a static image. No transcoding happens here (this
-// server has no ffmpeg pipeline) -- whatever's uploaded is served back
-// as-is, so the cap is generous-but-not-reckless given raw files get served
-// directly to every viewer with no compression pass. Scoped to just the
-// cover-media upload routes, NOT the general uploadModImage used everywhere
-// else (avatars, banners, side-image slots, etc. stay image-only).
-const uploadModMedia = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => cb(null, MOD_IMAGES_DIR),
-    filename: (req, file, cb) => {
-      const ext = ({
-        'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif',
-        'video/mp4': '.mp4', 'video/webm': '.webm', 'video/quicktime': '.mov',
-      })[file.mimetype] || '.jpg';
-      cb(null, `${req.user.id}_${Date.now()}_${file.fieldname}${ext}`);
-    },
-  }),
-  limits: { fileSize: 100 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    cb(null, ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/webm', 'video/quicktime'].includes(file.mimetype));
-  },
-});
-
-// ── Cloudflare R2 offload for Cover Media uploads ───────────────────────
-// Cover Media (video/GIF covers + slideshows) is the single fastest way to
-// fill this VPS's one shared disk partition -- Postgres lives on that same
-// partition, so a full disk doesn't just break uploads, it can break every
-// write in the app. R2 is object storage (not a database swap -- Postgres
-// still just stores a short URL string either way), has no egress fee, and
-// scales without a fixed ceiling the way this VPS's disk does.
-// Deliberately scoped to ONLY the uploadModMedia-backed routes (the actual
-// disk hogs) for now, not every upload endpoint on the site -- avatars,
-// banners, chapter images, etc. stay on local disk exactly as before.
-// Entirely opt-in via env vars: until all four R2_* vars are set, r2Client
-// is null and uploadToR2() always resolves to null, so every caller's
-// existing "fall back to the local /images/moderators/ path" behavior is
-// completely unchanged -- this cannot break anything before R2 is wired up.
-let r2Client = null;
-const R2_BUCKET = process.env.R2_BUCKET || '';
-const R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, '');
-if (process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && R2_BUCKET && R2_PUBLIC_URL) {
-  const { S3Client } = require('@aws-sdk/client-s3');
-  r2Client = new S3Client({
-    region: 'auto',
-    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: process.env.R2_ACCESS_KEY_ID,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-    },
-  });
-  console.log('R2 offload enabled for Cover Media uploads ->', R2_PUBLIC_URL);
-}
-// Uploads a just-received multer file (disk-backed) to R2 and deletes the
-// local temp copy on success. Returns the public R2 URL, or null if R2
-// isn't configured or the upload failed -- callers keep the local
-// /images/moderators/ URL they already had in that case, so this is a
-// strict "upgrade if possible, never a hard dependency."
-async function uploadToR2(file, keyPrefix) {
-  if (!r2Client || !file) return null;
-  try {
-    const { PutObjectCommand } = require('@aws-sdk/client-s3');
-    const key = `${keyPrefix}/${file.filename}`;
-    const body = fs.readFileSync(file.path);
-    await r2Client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.mimetype }));
-    fs.unlink(file.path, () => {});
-    return `${R2_PUBLIC_URL}/${key}`;
-  } catch (err) {
-    console.error('R2 upload failed, keeping local copy:', err.message);
-    return null;
-  }
-}
-
 // Card/spotlight-sized JPEG copy of a character ref_image or gallery
 // image_url, generated next to the original -- used by the Homepage
 // Character/Gallery Spotlight and Recent Submissions (see thumb_image_url
@@ -6690,6 +6616,41 @@ function cleanUploadedImagePath(str) {
   return /^\/images\/[A-Za-z0-9_\-./]+$/.test(s) ? s : '';
 }
 
+// Extracts an 11-char YouTube video ID from any of the URL shapes people
+// actually paste (watch?v=, youtu.be/, /embed/, /shorts/, with or without
+// extra query params/timestamps) -- returns null for anything that doesn't
+// match, which is the real trust boundary (this is also what the client's
+// "paste a link" popup hits before saving, so a bad/non-YouTube link fails
+// loudly instead of silently storing garbage).
+function extractYoutubeId(url) {
+  const s = String(url || '').trim();
+  const patterns = [
+    /^https?:\/\/(?:www\.)?youtube\.com\/watch\?(?:[^#]*&)?v=([A-Za-z0-9_-]{11})(?:&.*)?$/,
+    /^https?:\/\/(?:www\.)?youtu\.be\/([A-Za-z0-9_-]{11})(?:\?.*)?$/,
+    /^https?:\/\/(?:www\.)?youtube\.com\/embed\/([A-Za-z0-9_-]{11})(?:\?.*)?$/,
+    /^https?:\/\/(?:www\.)?youtube\.com\/shorts\/([A-Za-z0-9_-]{11})(?:\?.*)?$/,
+  ];
+  for (const re of patterns) {
+    const m = s.match(re);
+    if (m) return m[1];
+  }
+  return null;
+}
+// A Cover slot's URL can be either our own uploaded image/GIF, or a YouTube
+// link -- this accepts either shape and always normalizes a YouTube link
+// down to one canonical form (https://www.youtube.com/watch?v=ID) so
+// client-side URL-shape detection (isYouTubeUrl()) stays simple and so two
+// different pastes of "the same video" don't end up stored differently.
+// Only used for Cover slots (post cover, page cover, a text field's Cover
+// slot) -- Side stays image-only via cleanUploadedImagePath, same scoping
+// video previously had.
+function cleanCoverMediaUrl(str) {
+  const local = cleanUploadedImagePath(str);
+  if (local) return local;
+  const ytId = extractYoutubeId(str);
+  return ytId ? `https://www.youtube.com/watch?v=${ytId}` : '';
+}
+
 // Chapter body sanitizer — the real trust boundary for rich-text chapter
 // content. The chapter-editor's own sanitizePastedHtml() only runs
 // client-side on paste, so a hand-crafted PUT to
@@ -7385,15 +7346,16 @@ app.post('/api/moderator/character-image', requireAuth, uploadModImage.single('i
   res.json({ url: `/images/moderators/${req.file.filename}` });
 });
 
-// Club post "Cover Media" upload — same shape as character-image above, but
-// via uploadModMedia so a post's main cover (or an Additional Field's cover
-// slot) can be a video/GIF clip, not just a static image. Used only by
-// create-club-post.html's cover + field-cover slots; the side-image slot
-// still posts to character-image above and stays image-only.
-app.post('/api/moderator/club-post-media', requireAuth, uploadModMedia.single('image'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Media is required.' });
-  const r2Url = await uploadToR2(req.file, 'club-media');
-  res.json({ url: r2Url || `/images/moderators/${req.file.filename}` });
+// A Cover slot's "Insert YouTube Video" option -- same "get a URL back"
+// shape as character-image above, just resolving a pasted link instead of
+// an uploaded file. Rejects anything that isn't a real YouTube URL outright
+// (the client-side popup also validates before calling this, but this is
+// the real trust boundary -- a hand-crafted request bypassing the popup
+// can't smuggle an arbitrary external URL into a cover slot this way).
+app.post('/api/moderator/youtube-link', requireAuth, async (req, res) => {
+  const id = extractYoutubeId(req.body && req.body.url);
+  if (!id) return res.status(400).json({ error: 'That doesn\'t look like a YouTube link.' });
+  res.json({ url: `https://www.youtube.com/watch?v=${id}` });
 });
 
 // Voice Claim MP3 upload — same "upload it, get a URL back" shape as the
@@ -10297,8 +10259,8 @@ function sanitizeClubPostImageSlot(raw) {
   const slideshow = Array.isArray(raw && raw.slideshow) ? raw.slideshow : [];
   return {
     mode: (raw && raw.mode === 'slideshow') ? 'slideshow' : 'static',
-    image_url: cleanUploadedImagePath(raw && raw.image_url),
-    slideshow: slideshow.slice(0, 10).map(s => ({ image_url: cleanUploadedImagePath(s && s.image_url) })).filter(s => s.image_url),
+    image_url: cleanCoverMediaUrl(raw && raw.image_url),
+    slideshow: slideshow.slice(0, 10).map(s => ({ image_url: cleanCoverMediaUrl(s && s.image_url) })).filter(s => s.image_url),
     // Whether a slideshow cycles starting from a random slide (the
     // longstanding default) or always plays back in the saved order.
     randomize: (raw && raw.randomize) !== false,
@@ -10910,11 +10872,14 @@ app.delete('/api/clubs/:slug/pages/:pageSlug/banner', requireAuth, async (req, r
 // this sanitizer just whitelists/round-trips whatever the client already
 // has cached for those keys alongside the title/body edit.
 function sanitizeTextFieldImageSlot(f, prefix) {
+  // Only the Cover slot (not Side) can hold a YouTube link -- same scoping
+  // video previously had.
+  const clean = prefix === 'cover' ? cleanCoverMediaUrl : cleanUploadedImagePath;
   const slideshow = Array.isArray(f && f[`${prefix}_slideshow`]) ? f[`${prefix}_slideshow`] : [];
   return {
     [`${prefix}_mode`]: (f && f[`${prefix}_mode`] === 'slideshow') ? 'slideshow' : 'static',
-    [`${prefix}_image_url`]: cleanUploadedImagePath(f && f[`${prefix}_image_url`]),
-    [`${prefix}_slideshow`]: slideshow.slice(0, 10).map(s => ({ image_url: cleanUploadedImagePath(s && s.image_url) })).filter(s => s.image_url),
+    [`${prefix}_image_url`]: clean(f && f[`${prefix}_image_url`]),
+    [`${prefix}_slideshow`]: slideshow.slice(0, 10).map(s => ({ image_url: clean(s && s.image_url) })).filter(s => s.image_url),
     // Whether this slot's slideshow cycles from a random starting slide
     // (the longstanding default) or always plays back in the saved order.
     [`${prefix}_randomize`]: (f && f[`${prefix}_randomize`]) !== false,
@@ -10962,8 +10927,7 @@ function deleteIfModeratorUpload(url) {
 // Cover and Side share an identical mode/image/slideshow shape -- registered
 // together so both slots get the same five endpoints without duplicating
 // the logic twice.
-function registerTextFieldImageEndpoints(prefix, allowVideo) {
-  const uploader = allowVideo ? uploadModMedia : uploadModImage;
+function registerTextFieldImageEndpoints(prefix) {
   app.put(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-mode`, requireAuth, async (req, res) => {
     const ctx = await requireClubPageTextField(req, res);
     if (!ctx) return;
@@ -10976,14 +10940,13 @@ function registerTextFieldImageEndpoints(prefix, allowVideo) {
     res.json({ text_fields: ctx.fields });
   });
 
-  app.put(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-image`, requireAuth, uploader.single('image'), async (req, res) => {
+  app.put(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-image`, requireAuth, uploadModImage.single('image'), async (req, res) => {
     const ctx = await requireClubPageTextField(req, res);
     if (!ctx) return;
     if (!req.file) return res.status(400).json({ error: 'Image is required.' });
     const field = ctx.fields[ctx.idx];
     deleteIfModeratorUpload(field[`${prefix}_image_url`]);
-    const r2Url = allowVideo ? await uploadToR2(req.file, 'club-media') : null;
-    field[`${prefix}_image_url`] = r2Url || `/images/moderators/${req.file.filename}`;
+    field[`${prefix}_image_url`] = `/images/moderators/${req.file.filename}`;
     await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(ctx.fields), ctx.page.id]);
     res.json({ text_fields: ctx.fields });
   });
@@ -10998,15 +10961,14 @@ function registerTextFieldImageEndpoints(prefix, allowVideo) {
     res.json({ text_fields: ctx.fields });
   });
 
-  app.post(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-slideshow`, requireAuth, uploader.single('image'), async (req, res) => {
+  app.post(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-slideshow`, requireAuth, uploadModImage.single('image'), async (req, res) => {
     const ctx = await requireClubPageTextField(req, res);
     if (!ctx) return;
     if (!req.file) return res.status(400).json({ error: 'Image is required.' });
     const field = ctx.fields[ctx.idx];
     const list = Array.isArray(field[`${prefix}_slideshow`]) ? field[`${prefix}_slideshow`] : [];
     if (list.length >= 10) return res.status(400).json({ error: 'Maximum of 10 images.' });
-    const r2Url = allowVideo ? await uploadToR2(req.file, 'club-media') : null;
-    list.push({ image_url: r2Url || `/images/moderators/${req.file.filename}` });
+    list.push({ image_url: `/images/moderators/${req.file.filename}` });
     field[`${prefix}_slideshow`] = list;
     await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(ctx.fields), ctx.page.id]);
     res.json({ text_fields: ctx.fields });
@@ -11025,9 +10987,38 @@ function registerTextFieldImageEndpoints(prefix, allowVideo) {
     await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(ctx.fields), ctx.page.id]);
     res.json({ text_fields: ctx.fields });
   });
+
+  // "Insert YouTube Video" — only the Cover slot (not Side) gets these two
+  // extra routes, same scoping video previously had.
+  if (prefix === 'cover') {
+    app.put(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-youtube`, requireAuth, async (req, res) => {
+      const ctx = await requireClubPageTextField(req, res);
+      if (!ctx) return;
+      const id = extractYoutubeId(req.body && req.body.youtube_url);
+      if (!id) return res.status(400).json({ error: 'That doesn\'t look like a YouTube link.' });
+      const field = ctx.fields[ctx.idx];
+      deleteIfModeratorUpload(field[`${prefix}_image_url`]);
+      field[`${prefix}_image_url`] = `https://www.youtube.com/watch?v=${id}`;
+      await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(ctx.fields), ctx.page.id]);
+      res.json({ text_fields: ctx.fields });
+    });
+    app.post(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-youtube-slideshow`, requireAuth, async (req, res) => {
+      const ctx = await requireClubPageTextField(req, res);
+      if (!ctx) return;
+      const id = extractYoutubeId(req.body && req.body.youtube_url);
+      if (!id) return res.status(400).json({ error: 'That doesn\'t look like a YouTube link.' });
+      const field = ctx.fields[ctx.idx];
+      const list = Array.isArray(field[`${prefix}_slideshow`]) ? field[`${prefix}_slideshow`] : [];
+      if (list.length >= 10) return res.status(400).json({ error: 'Maximum of 10 slides.' });
+      list.push({ image_url: `https://www.youtube.com/watch?v=${id}` });
+      field[`${prefix}_slideshow`] = list;
+      await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(ctx.fields), ctx.page.id]);
+      res.json({ text_fields: ctx.fields });
+    });
+  }
 }
-registerTextFieldImageEndpoints('cover', true);
-registerTextFieldImageEndpoints('side', false);
+registerTextFieldImageEndpoints('cover');
+registerTextFieldImageEndpoints('side');
 
 app.put('/api/clubs/:slug/pages/:pageSlug/cover-mode', requireAuth, async (req, res) => {
   const ctx = await requireClubPageAdmin(req, res);
@@ -11038,12 +11029,26 @@ app.put('/api/clubs/:slug/pages/:pageSlug/cover-mode', requireAuth, async (req, 
   res.json({ cover_mode: mode, cover_randomize: randomize });
 });
 
-app.put('/api/clubs/:slug/pages/:pageSlug/cover-image', requireAuth, uploadModMedia.single('image'), async (req, res) => {
+app.put('/api/clubs/:slug/pages/:pageSlug/cover-image', requireAuth, uploadModImage.single('image'), async (req, res) => {
   const ctx = await requireClubPageAdmin(req, res);
   if (!ctx) return;
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
-  const r2Url = await uploadToR2(req.file, 'club-media');
-  const imageUrl = r2Url || `/images/moderators/${req.file.filename}`;
+  const imageUrl = `/images/moderators/${req.file.filename}`;
+  if (ctx.page.cover_image_url.startsWith('/images/moderators/')) {
+    const oldPath = path.join('/var/www/btw', ctx.page.cover_image_url);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+  await pool.query('UPDATE club_pages SET cover_image_url = $1 WHERE id = $2', [imageUrl, ctx.page.id]);
+  res.json({ cover_image_url: imageUrl });
+});
+
+// "Insert YouTube Video" counterpart to cover-image above.
+app.put('/api/clubs/:slug/pages/:pageSlug/cover-youtube', requireAuth, async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  const id = extractYoutubeId(req.body && req.body.youtube_url);
+  if (!id) return res.status(400).json({ error: 'That doesn\'t look like a YouTube link.' });
+  const imageUrl = `https://www.youtube.com/watch?v=${id}`;
   if (ctx.page.cover_image_url.startsWith('/images/moderators/')) {
     const oldPath = path.join('/var/www/btw', ctx.page.cover_image_url);
     if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
@@ -11079,12 +11084,28 @@ app.get('/api/clubs/:slug/pages/:pageSlug/slideshow', async (req, res) => {
   res.json({ images: rows });
 });
 
-app.post('/api/clubs/:slug/pages/:pageSlug/slideshow', requireAuth, uploadModMedia.single('image'), async (req, res) => {
+app.post('/api/clubs/:slug/pages/:pageSlug/slideshow', requireAuth, uploadModImage.single('image'), async (req, res) => {
   const ctx = await requireClubPageAdmin(req, res);
   if (!ctx) return;
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
-  const r2Url = await uploadToR2(req.file, 'club-media');
-  const imageUrl = r2Url || `/images/moderators/${req.file.filename}`;
+  const imageUrl = `/images/moderators/${req.file.filename}`;
+  const { rows: [{ maxOrder }] } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM club_page_slideshow_images WHERE page_id = $1', [ctx.page.id]
+  );
+  const { rows: [image] } = await pool.query(
+    'INSERT INTO club_page_slideshow_images (page_id, image_url, sort_order) VALUES ($1, $2, $3) RETURNING id, image_url',
+    [ctx.page.id, imageUrl, maxOrder + 1]
+  );
+  res.json({ image });
+});
+
+// "Insert YouTube Video" counterpart to the slideshow POST above.
+app.post('/api/clubs/:slug/pages/:pageSlug/slideshow-youtube', requireAuth, async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  const id = extractYoutubeId(req.body && req.body.youtube_url);
+  if (!id) return res.status(400).json({ error: 'That doesn\'t look like a YouTube link.' });
+  const imageUrl = `https://www.youtube.com/watch?v=${id}`;
   const { rows: [{ maxOrder }] } = await pool.query(
     'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM club_page_slideshow_images WHERE page_id = $1', [ctx.page.id]
   );
