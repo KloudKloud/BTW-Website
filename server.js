@@ -8997,9 +8997,15 @@ app.get('/api/spotlight/clubs', async (req, res) => {
 app.get('/api/activity-feed', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 24, 40);
   const { nsfwAllowed } = await getViewerNsfwAccess(req);
-  // Over-fetch before filtering — Mature/Explicit/NSFW rows get dropped
-  // (art) or image-blanked (character) in JS below, so asking the DB for
-  // exactly `limit` rows first could leave the feed short after filtering.
+  // Mature/Explicit chapters and art are excluded in SQL now, not just
+  // filtered out of the result after the fact -- this site's real data is
+  // skewed heavily toward Mature-rated stories (most of its published
+  // chapters belong to one), so the old "fetch the newest `limit*2` rows
+  // across everything, then drop the NSFW ones in JS" approach could end up
+  // filtering out most of that window and returning a feed far short of
+  // `limit` even though there was plenty of eligible SFW content further
+  // back. Characters still come through unfiltered (NSFW refs stay in with
+  // their image withheld, same blur-not-hide treatment as everywhere else).
   const { rows } = await pool.query(
     `SELECT * FROM (
        -- Story creation itself isn't shown — a story with nothing published
@@ -9017,6 +9023,7 @@ app.get('/api/activity-feed', async (req, res) => {
        JOIN moderator_sites ms ON ms.id = mc.site_id
        JOIN users u ON u.id = ms.owner_user_id
        WHERE mc.status = 'published' AND length(trim(mc.body)) > 0
+         AND (ms.rating = 'sfw' OR $2::boolean)
 
        UNION ALL
 
@@ -9032,6 +9039,7 @@ app.get('/api/activity-feed', async (req, res) => {
        ) gsl ON true
        LEFT JOIN moderator_sites ms ON ms.id = gsl.site_id
        JOIN users u ON u.id = mg.owner_user_id
+       WHERE (mg.category = 'sfw' OR $2::boolean)
 
        UNION ALL
 
@@ -9050,15 +9058,14 @@ app.get('/api/activity-feed', async (req, res) => {
      ) feed
      ORDER BY created_at DESC
      LIMIT $1`,
-    [limit * 2]
+    [limit, nsfwAllowed]
   );
   const items = rows
-    // Mature/Explicit gallery posts AND chapters from a Mature/Explicit-
-    // rated story are excluded entirely for viewers who can't see NSFW —
-    // never sent to the client at all, unlike NSFW character refs (which
-    // stay in the feed with their image withheld instead).
+    // Belt-and-suspenders re-check of the SQL WHERE clauses above (art/
+    // chapter rows are already excluded there, before LIMIT is applied) —
+    // character refs are the one type that stays in the feed either way,
+    // with the image withheld instead of the row being dropped.
     .filter(r => !((r.type === 'art' || r.type === 'chapter') && r.category !== 'sfw' && !nsfwAllowed))
-    .slice(0, limit)
     .map(r => {
       const charLocked = r.type === 'character' && r.ref_is_nsfw && !nsfwAllowed;
       return {
