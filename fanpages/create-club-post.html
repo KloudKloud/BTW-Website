@@ -120,6 +120,12 @@
       padding: 0.4rem 0.75rem; border-radius: 16px; white-space: nowrap; transition: background 0.15s, border-color 0.15s;
     }
     .cl-splash-rules-link:hover { background: rgba(127,168,217,0.12); border-color: #7fa8d9; }
+    /* Boxes the Media section the same way club.html's Home editor boxes
+       Cover Media/Club Icon/etc -- same recipe (.cl-edit-panel there). */
+    .cl-media-panel {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px; padding: 1.75rem 2rem; margin-top: 1.75rem;
+    }
     .cl-edit-mode-toggle { display: flex; gap: 0.6rem; margin-bottom: 1rem; }
     .cl-edit-mode-btn {
       flex: 1; padding: 0.55em 0.8em; border-radius: 10px; cursor: pointer;
@@ -148,7 +154,7 @@
       transition: border-color 0.15s, color 0.15s;
     }
     .cl-edit-slideshow-add:hover { border-color: rgba(127,168,217,0.6); color: #7fa8d9; }
-    /* "Insert YouTube Video" tile -- sits right before the "+" add tile in
+    /* "Add YT Video" tile -- sits right before the "+" add tile in
        the slideshow stack (same size/shape, distinct red accent) so it
        reads as a second, parallel way to add a slide. */
     .cl-edit-slideshow-add--youtube {
@@ -166,7 +172,21 @@
       transition: border-color 0.15s, color 0.15s;
     }
     .cl-youtube-insert-btn:hover { border-color: #e05a52; color: #ff7a70; }
-    /* "Insert YouTube Video" popup -- Fredoka per the site's bubbly-heading
+    /* Compact variant -- same footprint as the Randomize row's label+switch
+       (small, borderless-feeling, not a bulky button) for spots sitting
+       right alongside it, or where the full-size pill reads too heavy
+       (an Additional Field's narrow Cover column). */
+    .cl-youtube-insert-btn--compact {
+      border: none; background: none; padding: 0; font-size: 0.95rem; font-weight: 600;
+      font-family: 'Fredoka', 'Lato', cursive; letter-spacing: 0.02em;
+    }
+    /* An Additional Field's Cover slideshow puts the compact YT button and
+       Randomize on the same row, split to either end, instead of the full-
+       size tile the top-level Media slideshow uses -- that tile reads as
+       "this huge thing" crammed into the field's much narrower column. */
+    .slideshow-randomize-row--split { justify-content: space-between; }
+    .slideshow-randomize-row-controls { display: flex; align-items: center; gap: 0.5rem; }
+    /* "Add YT Video" popup -- Fredoka per the site's bubbly-heading
        convention (see CLAUDE.md), matching crop-modal.js's overlay pattern
        but its own self-contained markup, per this codebase's duplication-
        over-shared-components convention. */
@@ -282,36 +302,38 @@
       <input class="mod-input" id="cp-title-input" maxlength="120" placeholder="Give your post a title" />
     </div>
 
-    <div class="cp-field-title-row" style="margin-top:1.75rem;">
-      <h3 class="char-editor-title" style="font-size:1.1rem; margin:0;">Media</h3>
-      <button class="wiki-tags-tip-icon" type="button" aria-label="Media help">💡</button>
-      <div class="wiki-tags-tip-popover" hidden><p>Pick a Static Image/GIF, a YouTube video, or a Slideshow that cycles through several. It's good practice to credit sources you use, if the art/images aren't yours.<br><br>Optional — if your post is a discussion, you can skip adding one, and no cover will show on your post whatsoever~</p></div>
-    </div>
-    <div class="cl-edit-mode-toggle">
-      <button class="cl-edit-mode-btn active" id="cp-cover-mode-static" type="button">Static Media</button>
-      <button class="cl-edit-mode-btn" id="cp-cover-mode-slideshow" type="button">Slideshow</button>
-    </div>
-    <div id="cp-cover-static">
-      <div class="cl-edit-imgbox" id="cp-cover-wrap" style="aspect-ratio: 16 / 9;">
-        <img id="cp-cover-preview" src="/images/nopicture2.png" alt="" />
-        <div class="cl-edit-imgbox-overlay">📷 Change Cover Image</div>
-        <button type="button" class="fp-recrop-btn" id="cp-cover-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;" hidden>✏️ Recrop</button>
+    <div class="cl-media-panel">
+      <div class="cp-field-title-row">
+        <h3 class="char-editor-title" style="font-size:1.1rem; margin:0;">Media</h3>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Media help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Pick a single image/GIF, a YouTube video, or a Slideshow that cycles through several. It's good practice to credit sources you use, if the art/images aren't yours.<br><br>Optional — if your post is a discussion, you can skip adding one, and no cover will show on your post whatsoever~</p></div>
       </div>
-      <input type="file" id="cp-cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-      <div class="cl-cover-actions-row">
-        <button type="button" class="cl-youtube-insert-btn" id="cp-cover-youtube-btn">▶ Insert YouTube Video</button>
-        <button type="button" class="cl-splash-rules-link" id="cp-cover-remove-btn" hidden>✕ No Media</button>
+      <div class="cl-edit-mode-toggle">
+        <button class="cl-edit-mode-btn active" id="cp-cover-mode-static" type="button">Single</button>
+        <button class="cl-edit-mode-btn" id="cp-cover-mode-slideshow" type="button">Slideshow</button>
       </div>
-    </div>
-    <div id="cp-cover-slideshow" hidden>
-      <div class="cl-edit-slideshow-stack" id="cp-cover-slideshow-stack"></div>
-      <input type="file" id="cp-cover-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-      <div class="slideshow-randomize-row">
-        <label class="slideshow-randomize-label" for="cp-cover-slideshow-randomize">Randomize</label>
-        <label class="slideshow-randomize-switch">
-          <input type="checkbox" id="cp-cover-slideshow-randomize" checked />
-          <span class="slideshow-randomize-slider"></span>
-        </label>
+      <div id="cp-cover-static">
+        <div class="cl-edit-imgbox" id="cp-cover-wrap" style="aspect-ratio: 16 / 9;">
+          <img id="cp-cover-preview" src="/images/nopicture2.png" alt="" />
+          <div class="cl-edit-imgbox-overlay">📷 Change Cover Media</div>
+          <button type="button" class="fp-recrop-btn" id="cp-cover-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;" hidden>✏️ Recrop</button>
+        </div>
+        <input type="file" id="cp-cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+        <div class="cl-cover-actions-row">
+          <button type="button" class="cl-youtube-insert-btn cl-youtube-insert-btn--compact" id="cp-cover-youtube-btn">▶ Add YT Video</button>
+          <button type="button" class="cl-splash-rules-link" id="cp-cover-remove-btn" hidden>✕ No Media</button>
+        </div>
+      </div>
+      <div id="cp-cover-slideshow" hidden>
+        <div class="cl-edit-slideshow-stack" id="cp-cover-slideshow-stack"></div>
+        <input type="file" id="cp-cover-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+        <div class="slideshow-randomize-row">
+          <label class="slideshow-randomize-label" for="cp-cover-slideshow-randomize">Randomize</label>
+          <label class="slideshow-randomize-switch">
+            <input type="checkbox" id="cp-cover-slideshow-randomize" checked />
+            <span class="slideshow-randomize-slider"></span>
+          </label>
+        </div>
       </div>
     </div>
 
@@ -385,7 +407,7 @@
 
 <div class="cl-yt-modal-overlay" id="cl-yt-modal-overlay" hidden>
   <div class="cl-yt-modal-box">
-    <p class="cl-yt-modal-title">▶ Insert YouTube Video</p>
+    <p class="cl-yt-modal-title">▶ Add YT Video</p>
     <input type="text" class="mod-input cl-yt-modal-input" id="cl-yt-modal-input" placeholder="Paste a YouTube link…" autocomplete="off" />
     <p class="cl-yt-modal-error" id="cl-yt-modal-error" hidden>That doesn't look like a YouTube link — double-check it and try again.</p>
     <div class="cl-yt-modal-actions">
@@ -546,7 +568,7 @@
     const id = extractYoutubeId(url);
     return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : '';
   }
-  // Shows the "Insert YouTube Video" popup and resolves to the canonical
+  // Shows the "Add YT Video" popup and resolves to the canonical
   // saved URL on success, or null if cancelled. Forces a real YouTube link:
   // an unrecognized paste shows an inline error and the popup stays open
   // (both here, client-side, AND re-checked server-side -- the real trust
@@ -625,12 +647,12 @@
     const file = e.target.files[0];
     e.target.value = '';
     if (!file) return;
-    openCropModal({ title: 'Crop Cover Image', imageSrc: URL.createObjectURL(file), aspectRatio: 16 / 9, round: false, onSave: saveCoverImage });
+    openCropModal({ title: 'Crop Cover Media', imageSrc: URL.createObjectURL(file), aspectRatio: 16 / 9, round: false, onSave: saveCoverImage });
   });
   document.getElementById('cp-cover-recrop-btn').addEventListener('click', (e) => {
     e.stopPropagation();
     if (!cover.image_url || isYouTubeUrl(cover.image_url)) return;
-    openCropModal({ title: 'Crop Cover Image', imageSrc: cover.image_url, aspectRatio: 16 / 9, round: false, onSave: saveCoverImage });
+    openCropModal({ title: 'Crop Cover Media', imageSrc: cover.image_url, aspectRatio: 16 / 9, round: false, onSave: saveCoverImage });
   });
   function saveCoverMediaUrl(url) {
     cover.image_url = url;
@@ -682,7 +704,7 @@
     const ytBtn = document.createElement('button');
     ytBtn.className = 'cl-edit-slideshow-add cl-edit-slideshow-add--youtube';
     ytBtn.type = 'button';
-    ytBtn.title = 'Insert YouTube Video';
+    ytBtn.title = 'Add YT Video';
     ytBtn.innerHTML = '<span class="cl-yt-icon">▶</span>YouTube';
     ytBtn.addEventListener('click', async () => {
       const url = await promptYoutubeLink();
@@ -784,7 +806,7 @@
   let textFieldDragIdx = null;
   const TF_IMG_HINT = 'Optional. Every text field can have a main body image and side image.';
   function textFieldImageSlotHtml(field, prefix, aspect, label, maxWidth) {
-    // Only the Cover slot (not Side) gets the "Insert YouTube Video" option.
+    // Only the Cover slot (not Side) gets the "Add YT Video" option.
     const allowYoutube = prefix === 'cover';
     const mode = field[`${prefix}_mode`] === 'slideshow' ? 'slideshow' : 'static';
     const imageUrl = field[`${prefix}_image_url`] || '';
@@ -797,7 +819,7 @@
           <div class="wiki-tags-tip-popover" hidden><p>${TF_IMG_HINT}</p></div>
         </div>
         <div class="cl-edit-mode-toggle cl-tf-mode-toggle">
-          <button type="button" class="cl-edit-mode-btn${mode !== 'slideshow' ? ' active' : ''}" data-mode="static">${allowYoutube ? 'Static Media' : 'Static Image'}</button>
+          <button type="button" class="cl-edit-mode-btn${mode !== 'slideshow' ? ' active' : ''}" data-mode="static">Single</button>
           <button type="button" class="cl-edit-mode-btn${mode === 'slideshow' ? ' active' : ''}" data-mode="slideshow">Slideshow</button>
         </div>
         <div class="cl-tf-static" ${mode === 'slideshow' ? 'hidden' : ''}>
@@ -810,17 +832,20 @@
             <button type="button" class="cl-splash-rules-link cl-tf-remove-img-btn" ${imageUrl ? '' : 'hidden'}>✕ No ${allowYoutube ? 'Media' : 'Image'}</button>
           </div>
           <input type="file" class="cl-tf-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-          ${allowYoutube ? '<button type="button" class="cl-youtube-insert-btn cl-tf-youtube-btn" style="margin-top:0.6rem;">▶ Insert YouTube Video</button>' : ''}
+          ${allowYoutube ? '<button type="button" class="cl-youtube-insert-btn cl-youtube-insert-btn--compact cl-tf-youtube-btn" style="margin-top:0.6rem;">▶ Add YT Video</button>' : ''}
         </div>
         <div class="cl-tf-slideshow" ${mode === 'static' ? 'hidden' : ''}>
           <div class="cl-edit-slideshow-stack cl-tf-slideshow-stack"></div>
           <input type="file" class="cl-tf-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-          <div class="slideshow-randomize-row">
-            <label class="slideshow-randomize-label">Randomize</label>
-            <label class="slideshow-randomize-switch">
-              <input type="checkbox" class="cl-tf-slideshow-randomize" ${field[`${prefix}_randomize`] !== false ? 'checked' : ''} />
-              <span class="slideshow-randomize-slider"></span>
-            </label>
+          <div class="slideshow-randomize-row${allowYoutube ? ' slideshow-randomize-row--split' : ''}">
+            ${allowYoutube ? '<button type="button" class="cl-youtube-insert-btn cl-youtube-insert-btn--compact cl-tf-slideshow-youtube-btn">▶ Add YT Video</button>' : ''}
+            <div class="slideshow-randomize-row-controls">
+              <label class="slideshow-randomize-label">Randomize</label>
+              <label class="slideshow-randomize-switch">
+                <input type="checkbox" class="cl-tf-slideshow-randomize" ${field[`${prefix}_randomize`] !== false ? 'checked' : ''} />
+                <span class="slideshow-randomize-slider"></span>
+              </label>
+            </div>
           </div>
         </div>
       </div>
@@ -922,22 +947,6 @@
         });
         ssStack.appendChild(item);
       });
-      if (allowYoutube) {
-        const ytBtn = document.createElement('button');
-        ytBtn.className = 'cl-edit-slideshow-add cl-edit-slideshow-add--youtube';
-        ytBtn.type = 'button';
-        ytBtn.title = 'Insert YouTube Video';
-        ytBtn.innerHTML = '<span class="cl-yt-icon">▶</span>YouTube';
-        ytBtn.addEventListener('click', async () => {
-          const url = await promptYoutubeLink();
-          if (!url) return;
-          if (!postTextFields[i][`${prefix}_slideshow`]) postTextFields[i][`${prefix}_slideshow`] = [];
-          postTextFields[i][`${prefix}_slideshow`].push({ image_url: url });
-          cpDirty = true;
-          renderStack();
-        });
-        ssStack.appendChild(ytBtn);
-      }
       const addBtn = document.createElement('button');
       addBtn.className = 'cl-edit-slideshow-add';
       addBtn.type = 'button';
@@ -947,6 +956,17 @@
       ssStack.appendChild(addBtn);
     }
     renderStack();
+    const ssYoutubeBtn = slot.querySelector('.cl-tf-slideshow-youtube-btn');
+    if (ssYoutubeBtn) {
+      ssYoutubeBtn.addEventListener('click', async () => {
+        const url = await promptYoutubeLink();
+        if (!url) return;
+        if (!postTextFields[i][`${prefix}_slideshow`]) postTextFields[i][`${prefix}_slideshow`] = [];
+        postTextFields[i][`${prefix}_slideshow`].push({ image_url: url });
+        cpDirty = true;
+        renderStack();
+      });
+    }
     ssFileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       e.target.value = '';
@@ -985,7 +1005,7 @@
           <label>Body</label>
           <textarea class="mod-textarea" data-field="body" rows="4" maxlength="5000">${escapeHtml(field.body || '')}</textarea>
         </div>
-        ${textFieldImageSlotHtml(field, 'cover', '16 / 9', 'Cover Image', 320)}
+        ${textFieldImageSlotHtml(field, 'cover', '16 / 9', 'Cover Media', 320)}
         ${textFieldImageSlotHtml(field, 'side', '3 / 4', 'Side Image', 180)}
         <div class="cl-page-text-field-actions">
           <button type="button" class="cl-page-text-field-remove">🗑️ Remove Section</button>

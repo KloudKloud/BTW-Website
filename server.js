@@ -10554,6 +10554,21 @@ app.put('/api/clubs/:slug/cover-image', requireAuth, uploadModImage.single('imag
   res.json({ cover_image_url: imageUrl });
 });
 
+// "Add YT Video" counterpart to cover-image above.
+app.put('/api/clubs/:slug/cover-youtube', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const id = extractYoutubeId(req.body && req.body.youtube_url);
+  if (!id) return res.status(400).json({ error: 'That doesn\'t look like a YouTube link.' });
+  const imageUrl = `https://www.youtube.com/watch?v=${id}`;
+  if (ctx.club.cover_image_url.startsWith('/images/moderators/')) {
+    const oldPath = path.join('/var/www/btw', ctx.club.cover_image_url);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+  await pool.query('UPDATE clubs SET cover_image_url = $1 WHERE id = $2', [imageUrl, ctx.club.id]);
+  res.json({ cover_image_url: imageUrl });
+});
+
 app.get('/api/clubs/:slug/slideshow', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
@@ -10569,6 +10584,23 @@ app.post('/api/clubs/:slug/slideshow', requireAuth, uploadModImage.single('image
   if (!ctx) return;
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
   const imageUrl = `/images/moderators/${req.file.filename}`;
+  const { rows: [{ maxOrder }] } = await pool.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM club_slideshow_images WHERE club_id = $1', [ctx.club.id]
+  );
+  const { rows: [image] } = await pool.query(
+    'INSERT INTO club_slideshow_images (club_id, image_url, sort_order) VALUES ($1, $2, $3) RETURNING id, image_url',
+    [ctx.club.id, imageUrl, maxOrder + 1]
+  );
+  res.json({ image });
+});
+
+// "Add YT Video" counterpart to the slideshow POST above.
+app.post('/api/clubs/:slug/slideshow-youtube', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const id = extractYoutubeId(req.body && req.body.youtube_url);
+  if (!id) return res.status(400).json({ error: 'That doesn\'t look like a YouTube link.' });
+  const imageUrl = `https://www.youtube.com/watch?v=${id}`;
   const { rows: [{ maxOrder }] } = await pool.query(
     'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM club_slideshow_images WHERE club_id = $1', [ctx.club.id]
   );
