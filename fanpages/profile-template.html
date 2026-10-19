@@ -782,6 +782,12 @@
       box-shadow: 0 1px 8px rgba(0,0,0,0.25); transition: border-color 0.15s, box-shadow 0.15s;
     }
     .fp-bcard:hover { border-color: rgba(240,192,96,0.5); box-shadow: 0 1px 8px rgba(0,0,0,0.25), 0 0 22px rgba(240,192,96,0.18); }
+    /* Wraps the cover+body pair when a card is NSFW-locked, so the blur/
+       grayscale filter (.fp-nsfwcard-blur) and the full-card lock overlay
+       can both apply without disturbing .fp-bcard's own flex layout --
+       same display:flex row .fp-bcard itself used before this wrapper
+       existed, just one layer in. */
+    .fp-bcard-innerwrap { display: flex; flex-direction: row; width: 100%; height: 100%; }
     .fp-bcard-cover-link { width: auto; height: 100%; aspect-ratio: 2 / 3; flex-shrink: 0; display: block; overflow: hidden; position: relative; }
     .fp-bcard-cover-link img, .fp-bcard-cover-link .wiki-generated-cover { width: 100%; height: 100%; border-radius: 0; border: none; box-shadow: none; object-fit: cover; }
     .fp-bcard-body { min-width: 0; flex: 1; display: flex; flex-direction: column; padding: 0.55rem 0.85rem 0.5rem; overflow: hidden; }
@@ -1957,35 +1963,38 @@
     if (!locked) card.dataset.href = storyHref;
     card.innerHTML = `
       ${w.is_draft_only ? '<span class="fp-story-teaser-draft-badge">Draft</span>' : ''}
-      <a class="fp-bcard-cover-link" href="${locked ? '#' : storyHref}" style="${locked ? 'position:relative;' : ''}">${bcardCoverHtml(w)}${locked ? '<div class="fp-nsfw-lock-overlay"><span>18+</span><span>Must Sign In to Access Content</span></div>' : ''}</a>
-      <img class="fp-bcard-deco--tr" src="/images/home/decoration-8.png" alt="" />
-      <div class="fp-bcard-body">
-        <div class="fp-bcard-head">
-          <a class="fp-bcard-title" href="${locked ? '#' : storyHref}">${escapeHtml(w.site_title || 'Untitled Story')}</a>
-          ${bcardAuthorHtml(w)}
+      <div class="fp-bcard-innerwrap${locked ? ' fp-nsfwcard-blur' : ''}">
+        <a class="fp-bcard-cover-link" href="${locked ? '#' : storyHref}">${bcardCoverHtml(w)}</a>
+        <img class="fp-bcard-deco--tr" src="/images/home/decoration-8.png" alt="" />
+        <div class="fp-bcard-body">
+          <div class="fp-bcard-head">
+            <a class="fp-bcard-title" href="${locked ? '#' : storyHref}">${escapeHtml(w.site_title || 'Untitled Story')}</a>
+            ${bcardAuthorHtml(w)}
+          </div>
+          <div class="fp-bcard-badges">
+            ${w.rating ? `<span class="fp-tag-pill ${ratingClass(w.rating)}">${escapeHtml(ratingLabel(w.rating))}</span>` : ''}
+            <span class="fp-tag-pill ${isComplete ? 'fp-tag-pill--status-complete' : 'fp-tag-pill--status-ongoing'}">${isComplete ? 'Complete' : 'Ongoing'}</span>
+          </div>
+          <div class="fp-bcard-statpanel">
+            <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${(w.hits || 0).toLocaleString()}</span><span class="fp-bcard-stat-label">👁 <span class="fp-bcard-stat-label-text">Reads</span></span></div>
+            <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${(w.kudos || 0).toLocaleString()}</span><span class="fp-bcard-stat-label">❤️ <span class="fp-bcard-stat-label-text">Likes</span></span></div>
+            <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${w.word_count != null ? Number(w.word_count).toLocaleString() : '—'}</span><span class="fp-bcard-stat-label">📖 <span class="fp-bcard-stat-label-text">Words</span></span></div>
+          </div>
+          <p class="fp-bcard-synopsis">${escapeHtml(truncateSynopsis(w.synopsis))}</p>
+          ${bcardCharsHtml(w)}
         </div>
-        <div class="fp-bcard-badges">
-          ${w.rating ? `<span class="fp-tag-pill ${ratingClass(w.rating)}">${escapeHtml(ratingLabel(w.rating))}</span>` : ''}
-          <span class="fp-tag-pill ${isComplete ? 'fp-tag-pill--status-complete' : 'fp-tag-pill--status-ongoing'}">${isComplete ? 'Complete' : 'Ongoing'}</span>
-        </div>
-        <div class="fp-bcard-statpanel">
-          <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${(w.hits || 0).toLocaleString()}</span><span class="fp-bcard-stat-label">👁 <span class="fp-bcard-stat-label-text">Reads</span></span></div>
-          <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${(w.kudos || 0).toLocaleString()}</span><span class="fp-bcard-stat-label">❤️ <span class="fp-bcard-stat-label-text">Likes</span></span></div>
-          <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${w.word_count != null ? Number(w.word_count).toLocaleString() : '—'}</span><span class="fp-bcard-stat-label">📖 <span class="fp-bcard-stat-label-text">Words</span></span></div>
-        </div>
-        <p class="fp-bcard-synopsis">${escapeHtml(truncateSynopsis(w.synopsis))}</p>
-        ${bcardCharsHtml(w)}
       </div>
+      ${locked ? '<div class="fp-nsfw-lock-overlay fp-nsfw-lock-overlay--full"><span>18+</span><span>Must Sign In to Access Content</span></div>' : ''}
     `;
     if (locked) {
-      const coverImg = card.querySelector('.fp-bcard-cover-link img');
-      if (coverImg) coverImg.style.filter = 'blur(16px)';
       card.querySelectorAll('a[href="#"]').forEach(a => {
         a.addEventListener('click', (e) => {
           e.preventDefault();
           if (window.fpShowAdultGate) window.fpShowAdultGate();
         });
       });
+      const overlay = card.querySelector('.fp-nsfw-lock-overlay--full');
+      if (overlay) overlay.addEventListener('click', () => { if (window.fpShowAdultGate) window.fpShowAdultGate(); });
     }
     return card;
   }
