@@ -49,6 +49,17 @@
     .soc-sidebar-avatar-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 1.25rem; }
     .soc-sidebar-username { font-weight: 700; font-size: 1.1rem; color: #f0f0f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .soc-sidebar-login { font-size: 1rem; color: #7fa8d9; text-decoration: none; display: block; padding: 0.4rem 0.4rem 0.9rem; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .soc-sidebar-guest-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+      padding: 0.75rem 0.4rem 1.1rem; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .soc-sidebar-guest-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; }
+    .soc-sidebar-guest-tag { font-weight: 700; font-size: 1rem; color: #f0f0f0; }
+    .soc-sidebar-guest-signin-btn {
+      background: #93b8e2; color: #0a0a0a; border: none; border-radius: 16px; padding: 0.4rem 1.1rem;
+      font-weight: 700; font-size: 0.85rem; cursor: pointer; font-family: inherit;
+    }
+    .soc-sidebar-guest-signin-btn:hover { background: #a8c6e8; }
     .soc-sidebar-user-menu {
       position: absolute; top: 60px; left: 0.2rem; right: 0.2rem;
       background: #1c1c1e; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
@@ -594,7 +605,7 @@
     .cl-admin-post-meta { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: #888; margin: 0 0 0.3rem; flex-wrap: wrap; }
     .cl-admin-post-author { color: #aaa; }
     .cl-admin-post-title {
-      font-size: 1.05rem; font-weight: 600; color: #e8e8e8; margin: 0; line-height: 1.4;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 600; color: #e8e8e8; margin: 0; line-height: 1.4;
       overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
       -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     }
@@ -710,14 +721,9 @@
     .cl-post-detail-author-name { font-weight: 700; color: #ddd; font-size: 0.95rem; }
     .cl-post-detail-meta-text { font-size: 0.82rem; color: #888; }
     .cl-post-detail-title {
-      font-family: 'Cinzel', Georgia, serif; font-size: 1.7rem; font-weight: 700; color: #f0f0f0;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.7rem; font-weight: 700; color: #f0f0f0;
       margin: 0 0 1.5rem;
     }
-    /* A Promotion page's cards are posts (promotion_page_id set) -- their
-       titles get the site's bubbly Fredoka heading font instead of the base
-       Cinzel every other post/gallery-image detail title still uses (see
-       renderPostDetail's class toggle, keyed off post.promotion_page_slug). */
-    .cl-post-detail-title--promo { font-family: 'Fredoka', 'Lato', cursive; }
     /* Scoped by ID (beats the shared class above) -- a custom page's own
        title is a Hub-page heading like Home's .cl-name, not a content-detail
        title like a single post/gallery image, so it gets the exact same
@@ -2857,7 +2863,14 @@ if (token && currentUser) {
     if (!sidebarMenu.hidden && !e.target.closest('.soc-sidebar-user-wrap')) sidebarMenu.hidden = true;
   });
 } else {
-  sidebarUserSlot.innerHTML = `<a class="soc-sidebar-login" href="${window.fpUrl(`/login?from=${encodeURIComponent(location.pathname + location.search)}`)}">Sign In</a>`;
+  sidebarUserSlot.innerHTML = `
+    <div class="soc-sidebar-guest-wrap">
+      <img class="soc-sidebar-guest-avatar" src="/images/defaultchar.jpg" alt="" />
+      <span class="soc-sidebar-guest-tag">Guest</span>
+      <button type="button" class="soc-sidebar-guest-signin-btn" id="soc-sidebar-guest-signin-btn">Sign In</button>
+    </div>
+  `;
+  document.getElementById('soc-sidebar-guest-signin-btn').addEventListener('click', () => window.fpOpenLoginModal());
 }
 
 function clubIconHtml(c, sizeClass) {
