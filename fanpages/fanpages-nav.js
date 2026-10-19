@@ -572,12 +572,10 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
 
         <div class="fpnav-level-badge" id="fpnav-level-badge" style="display:none;" title="">
           <div class="fpnav-level-circle" id="fpnav-level-circle"></div>
-          <div class="fpnav-level-progress-col">
-            <span class="fpnav-level-progress-text" id="fpnav-level-progress-text"></span>
-            <div class="fpnav-level-progress-track">
-              <div class="fpnav-level-progress-fill" id="fpnav-level-progress-fill"></div>
-            </div>
+          <div class="fpnav-level-progress-track">
+            <div class="fpnav-level-progress-fill" id="fpnav-level-progress-fill"></div>
           </div>
+          <span class="fpnav-level-progress-text" id="fpnav-level-progress-text"></span>
         </div>
 
         <div class="fpnav-dropdown-wrap">

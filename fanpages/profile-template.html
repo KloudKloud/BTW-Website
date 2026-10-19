@@ -567,9 +567,16 @@
        even with barely any content. */
     .fp-home-grid {
       max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto; padding: 2rem;
-      display: grid; grid-template-columns: 340px 1fr; gap: 2rem; align-items: stretch;
+      display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 2rem; align-items: stretch;
     }
-    .fp-home-main { display: flex; flex-direction: column; gap: 2.5rem; }
+    /* min-width:0 on the grid item itself, not just the 1fr track -- a bare
+       1fr track's implicit minimum is still "auto" (content-based) on some
+       engines, and a story with dozens of long nowrap tag pills deep inside
+       (e.g. a long-running WIP with a big tag list) was enough to blow the
+       whole row wider than the viewport, forcing the entire Home tab to
+       scroll horizontally just to see one card -- instead of the tag strip
+       itself scrolling internally the way it's designed to. */
+    .fp-home-main { display: flex; flex-direction: column; gap: 2.5rem; min-width: 0; }
 
     .fp-home-side {
       position: relative; overflow: hidden; display: flex; flex-direction: column;
@@ -768,7 +775,7 @@
        "duplication over shared components" convention, but laid out one
        per row instead of Search's 2-up grid -- shorter/thinner and wider
        to match, so it reads as a slim horizontal strip rather than a tile. */
-    .fp-bcard-grid { display: flex; flex-direction: column; gap: 0.9rem; }
+    .fp-bcard-grid { display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }
     .fp-tag-pill {
       display: inline-block; border-radius: 20px; padding: 0.32em 0.9em; font-size: 0.82rem; font-weight: 700;
       text-decoration: none; cursor: pointer; border: 1px solid transparent; white-space: nowrap;
@@ -1132,7 +1139,7 @@
     [hidden] { display: none !important; }
 
     @media (max-width: 800px) {
-      .fp-home-grid { grid-template-columns: 1fr; }
+      .fp-home-grid { grid-template-columns: minmax(0, 1fr); }
       .fp-home-side { height: auto; }
     }
 
@@ -1240,7 +1247,7 @@
       .fp-tab-view { padding: 1.25rem 1rem; }
       .fp-gallery-page-row { padding: 0 1rem; }
       .fp-gallery-page-row .mod-gallery-main { grid-template-columns: 1fr; gap: 1.5rem; }
-      .fp-home-grid { padding: 1.25rem 1rem 2.5rem; grid-template-columns: 1fr !important; gap: 1.5rem; }
+      .fp-home-grid { padding: 1.25rem 1rem 2.5rem; grid-template-columns: minmax(0, 1fr) !important; gap: 1.5rem; }
       /* Characters/Gallery tabs -- fixed 3-column grid. Both .fp-char-grid
          (fanpages.css sets 900px/640px breakpoints of its own, dropping to
          2 columns well before phone width) and .gallery-grid--4up (same
@@ -4242,6 +4249,14 @@
   function renderFeaturedClubEditor() {
     const wrap = document.getElementById('fp-featured-club-editor');
     wrap.innerHTML = '';
+    // Always drop any body-appended dropdown from a previous render first --
+    // the "selected card" branch below used to skip this, leaving a stray
+    // position:fixed/z-index:3000 panel on screen with no search input left
+    // to blur it closed. Chrome happened to fire that input's blur event
+    // before wrap.innerHTML='' finished destroying it, hiding the dropdown
+    // as a side effect; Firefox doesn't, so the leftover panel sat there
+    // intercepting every click on the page until a refresh.
+    document.getElementById('fp-featured-club-dropdown')?.remove();
 
     if (editFeaturedClub) {
       const card = document.createElement('div');
