@@ -4452,12 +4452,11 @@ function recDiversify(scored, limit, perAuthorCap) {
 
 app.get('/api/recommendations/stories', async (req, res) => {
   const limit = Math.min(30, Math.max(1, parseInt(req.query.limit, 10) || 10));
-  let viewerId = null;
-  const auth = req.headers.authorization;
-  if (auth && auth.startsWith('Bearer ')) {
-    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
-  }
+  const { viewerId, nsfwAllowed } = await getViewerNsfwAccess(req);
 
+  // Mature/Explicit stories are excluded entirely for a viewer who can't
+  // see NSFW -- same rule as the Story Spotlight and Recent Submissions
+  // boxes right above/below this one on the homepage.
   const { rows: pool_stories } = await pool.query(`
     SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.synopsis, ms.tags, ms.fandoms, ms.owner_user_id,
            u.username, u.display_name, u.avatar,
@@ -4476,7 +4475,8 @@ app.get('/api/recommendations/stories', async (req, res) => {
      ) lc ON true
     LEFT JOIN LATERAL (SELECT COUNT(*)::int AS count FROM moderator_bookmarks WHERE site_id = ms.id) bc ON true
     WHERE pubchap.published_count > 0
-  `);
+      AND (ms.rating = 'sfw' OR $1::boolean)
+  `, [nsfwAllowed]);
 
   if (!viewerId) {
     const scored = pool_stories.map(s => ({ ...s, score: recTrendingScore(s), reason: 'Trending now' }));
@@ -8944,6 +8944,10 @@ app.get('/api/spotlight/stories', async (req, res) => {
   // Same "actually discoverable" rule as the public browse/search endpoint —
   // a story only counts once it has at least one published chapter with
   // real text, so a story that's still all-drafts never gets spotlighted.
+  // Mature/Explicit stories are excluded from the rotation entirely for a
+  // viewer who can't see NSFW -- same as the gallery spotlight below,
+  // which drops Mature/Explicit art rather than blurring it.
+  const { nsfwAllowed } = await getViewerNsfwAccess(req);
   const { rows } = await pool.query(
     `SELECT ms.slug, ms.story_path, ms.site_title, ms.cover_url, u.username, u.display_name, u.avatar
      FROM moderator_sites ms
@@ -8952,8 +8956,9 @@ app.get('/api/spotlight/stories', async (req, res) => {
        SELECT 1 FROM moderator_chapters mc
        WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
      )
+       AND (ms.rating = 'sfw' OR $2::boolean)
      ORDER BY RANDOM() LIMIT $1`,
-    [limit]
+    [limit, nsfwAllowed]
   );
   res.json({
     stories: rows.map(r => ({
@@ -9007,7 +9012,7 @@ app.get('/api/activity-feed', async (req, res) => {
               ms.cover_position_x AS position_x, ms.cover_position_y AS position_y,
               ms.story_path, ms.site_title AS site_title,
               u.username, u.display_name, u.avatar,
-              NULL::text AS category, false AS ref_is_nsfw
+              ms.rating AS category, false AS ref_is_nsfw
        FROM moderator_chapters mc
        JOIN moderator_sites ms ON ms.id = mc.site_id
        JOIN users u ON u.id = ms.owner_user_id
@@ -9048,10 +9053,11 @@ app.get('/api/activity-feed', async (req, res) => {
     [limit * 2]
   );
   const items = rows
-    // Mature/Explicit gallery posts are excluded entirely for viewers who
-    // can't see NSFW — never sent to the client at all, unlike NSFW
-    // character refs.
-    .filter(r => !(r.type === 'art' && r.category !== 'sfw' && !nsfwAllowed))
+    // Mature/Explicit gallery posts AND chapters from a Mature/Explicit-
+    // rated story are excluded entirely for viewers who can't see NSFW —
+    // never sent to the client at all, unlike NSFW character refs (which
+    // stay in the feed with their image withheld instead).
+    .filter(r => !((r.type === 'art' || r.type === 'chapter') && r.category !== 'sfw' && !nsfwAllowed))
     .slice(0, limit)
     .map(r => {
       const charLocked = r.type === 'character' && r.ref_is_nsfw && !nsfwAllowed;
