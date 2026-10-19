@@ -6538,12 +6538,26 @@ document.getElementById('cl-gallery-editor-grid').addEventListener('dragover', (
   // clears the dragged tile's own edge in the direction of travel is a much
   // shorter, snappier threshold and symmetric in both directions.
   const dragRect = dragEl.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  // The grid wraps once there's more than a row's worth of tiles (see
+  // .cl-gallery-editor-grid's auto-fill columns) -- the clientX-only
+  // threshold below only makes sense comparing two tiles IN THE SAME row.
+  // Across rows the dragged tile's horizontal position relative to a
+  // target several rows down is meaningless (e.g. dragging from the end
+  // of row 1 to the start of row 2 can mean clientX is well to the LEFT
+  // of dragRect even though the move is clearly meant to go "forward"),
+  // which is exactly why reordering past the first row silently did
+  // nothing before -- the X-threshold just never fired. Once `target`
+  // (already found above via elementFromPoint/nearest-distance, which
+  // both work fine across rows) is confirmed to be on a different row,
+  // skip the same-row X-threshold and swap immediately.
+  const sameRow = Math.abs(targetRect.top - dragRect.top) < Math.min(targetRect.height, dragRect.height) / 2;
   const targetComesAfter = !!(dragEl.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING);
   if (targetComesAfter) {
-    if (e.clientX > dragRect.right && target.nextElementSibling !== dragEl) {
+    if ((!sameRow || e.clientX > dragRect.right) && target.nextElementSibling !== dragEl) {
       grid.insertBefore(dragEl, target.nextElementSibling);
     }
-  } else if (e.clientX < dragRect.left && target.previousElementSibling !== dragEl) {
+  } else if ((!sameRow || e.clientX < dragRect.left) && target.previousElementSibling !== dragEl) {
     grid.insertBefore(dragEl, target);
   }
 });
