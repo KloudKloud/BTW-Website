@@ -4770,6 +4770,7 @@ async function fetchStoryCardsById(ids) {
   const { rows } = await pool.query(
     `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.synopsis,
             ms.rating, ms.is_complete, ms.view_count,
+            ms.tags, ms.fandoms, ms.categories, ms.relationships,
             u.username, u.display_name, u.avatar,
             pubchap.word_count, COALESCE(lc.count, 0) AS like_count,
             charsj.chars AS characters
@@ -4802,6 +4803,7 @@ async function fetchStoryCardsById(ids) {
   return ids.map(id => byId[id]).filter(Boolean).map(r => ({
     id: r.id, slug: r.slug, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url,
     synopsis: r.synopsis || '', rating: r.rating, is_complete: !!r.is_complete,
+    tags: r.tags || [], fandoms: r.fandoms || [], categories: r.categories || [], relationships: r.relationships || [],
     author: r.display_name || r.username, author_username: r.username, author_avatar: r.avatar || null,
     hits: r.view_count || 0, kudos: Number(r.like_count), word_count: r.word_count,
     characters: r.characters || [],
