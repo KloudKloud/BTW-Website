@@ -3805,6 +3805,31 @@ const uploadModAudio = multer({
   },
 });
 
+// Club post/page "Cover Media" — same shape as uploadModImage, but also
+// accepts short video clips/GIFs-as-video so a cover or slideshow slide can
+// be a video instead of a static image. No transcoding happens here (this
+// server has no ffmpeg pipeline) -- whatever's uploaded is served back
+// as-is, so the cap is generous-but-not-reckless given raw files get served
+// directly to every viewer with no compression pass. Scoped to just the
+// cover-media upload routes, NOT the general uploadModImage used everywhere
+// else (avatars, banners, side-image slots, etc. stay image-only).
+const uploadModMedia = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, MOD_IMAGES_DIR),
+    filename: (req, file, cb) => {
+      const ext = ({
+        'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif',
+        'video/mp4': '.mp4', 'video/webm': '.webm', 'video/quicktime': '.mov',
+      })[file.mimetype] || '.jpg';
+      cb(null, `${req.user.id}_${Date.now()}_${file.fieldname}${ext}`);
+    },
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    cb(null, ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/webm', 'video/quicktime'].includes(file.mimetype));
+  },
+});
+
 // Card/spotlight-sized JPEG copy of a character ref_image or gallery
 // image_url, generated next to the original -- used by the Homepage
 // Character/Gallery Spotlight and Recent Submissions (see thumb_image_url
@@ -7311,6 +7336,16 @@ app.post('/api/moderator/character-image', requireAuth, uploadModImage.single('i
   res.json({ url: `/images/moderators/${req.file.filename}` });
 });
 
+// Club post "Cover Media" upload — same shape as character-image above, but
+// via uploadModMedia so a post's main cover (or an Additional Field's cover
+// slot) can be a video/GIF clip, not just a static image. Used only by
+// create-club-post.html's cover + field-cover slots; the side-image slot
+// still posts to character-image above and stays image-only.
+app.post('/api/moderator/club-post-media', requireAuth, uploadModMedia.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Media is required.' });
+  res.json({ url: `/images/moderators/${req.file.filename}` });
+});
+
 // Voice Claim MP3 upload — same "upload it, get a URL back" shape as the
 // reference image, embedded into the create/update JSON payload afterward.
 app.post('/api/moderator/character-voice', requireAuth, uploadModAudio.single('audio'), async (req, res) => {
@@ -10225,17 +10260,13 @@ function sanitizeClubPostImageSlot(raw) {
 // Fields the poster added themselves -- 4 total.
 function buildClubPostTextFields(raw) {
   const fieldsIn = Array.isArray(raw) ? raw.slice(0, 4) : [];
-  return fieldsIn.map(f => {
-    const cover = sanitizeClubPostImageSlot(f && f.cover);
-    const side = sanitizeClubPostImageSlot(f && f.side);
-    return {
-      title: String((f && f.title) || '').trim().slice(0, 80),
-      body: String((f && f.body) || '').trim().slice(0, 5000),
-      collapsed: !!(f && f.collapsed),
-      cover_mode: cover.mode, cover_image_url: cover.image_url, cover_slideshow: cover.slideshow, cover_randomize: cover.randomize,
-      side_mode: side.mode, side_image_url: side.image_url, side_slideshow: side.slideshow, side_randomize: side.randomize,
-    };
-  }).filter(f => f.title || f.body || f.cover_image_url || f.side_image_url || f.cover_slideshow.length || f.side_slideshow.length);
+  return fieldsIn.map(f => ({
+    title: String((f && f.title) || '').trim().slice(0, 80),
+    body: String((f && f.body) || '').trim().slice(0, 5000),
+    collapsed: !!(f && f.collapsed),
+    ...sanitizeTextFieldImageSlot(f, 'cover'),
+    ...sanitizeTextFieldImageSlot(f, 'side'),
+  })).filter(f => f.title || f.body || f.cover_image_url || f.side_image_url || f.cover_slideshow.length || f.side_slideshow.length);
 }
 
 // POST /api/clubs/:slug/posts — members only. is_admin_post is a deliberate
@@ -10881,7 +10912,8 @@ function deleteIfModeratorUpload(url) {
 // Cover and Side share an identical mode/image/slideshow shape -- registered
 // together so both slots get the same five endpoints without duplicating
 // the logic twice.
-function registerTextFieldImageEndpoints(prefix) {
+function registerTextFieldImageEndpoints(prefix, allowVideo) {
+  const uploader = allowVideo ? uploadModMedia : uploadModImage;
   app.put(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-mode`, requireAuth, async (req, res) => {
     const ctx = await requireClubPageTextField(req, res);
     if (!ctx) return;
@@ -10894,7 +10926,7 @@ function registerTextFieldImageEndpoints(prefix) {
     res.json({ text_fields: ctx.fields });
   });
 
-  app.put(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-image`, requireAuth, uploadModImage.single('image'), async (req, res) => {
+  app.put(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-image`, requireAuth, uploader.single('image'), async (req, res) => {
     const ctx = await requireClubPageTextField(req, res);
     if (!ctx) return;
     if (!req.file) return res.status(400).json({ error: 'Image is required.' });
@@ -10915,7 +10947,7 @@ function registerTextFieldImageEndpoints(prefix) {
     res.json({ text_fields: ctx.fields });
   });
 
-  app.post(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-slideshow`, requireAuth, uploadModImage.single('image'), async (req, res) => {
+  app.post(`/api/clubs/:slug/pages/:pageSlug/text-fields/:fieldIdx/${prefix}-slideshow`, requireAuth, uploader.single('image'), async (req, res) => {
     const ctx = await requireClubPageTextField(req, res);
     if (!ctx) return;
     if (!req.file) return res.status(400).json({ error: 'Image is required.' });
@@ -10942,8 +10974,8 @@ function registerTextFieldImageEndpoints(prefix) {
     res.json({ text_fields: ctx.fields });
   });
 }
-registerTextFieldImageEndpoints('cover');
-registerTextFieldImageEndpoints('side');
+registerTextFieldImageEndpoints('cover', true);
+registerTextFieldImageEndpoints('side', false);
 
 app.put('/api/clubs/:slug/pages/:pageSlug/cover-mode', requireAuth, async (req, res) => {
   const ctx = await requireClubPageAdmin(req, res);
@@ -10954,7 +10986,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug/cover-mode', requireAuth, async (req, 
   res.json({ cover_mode: mode, cover_randomize: randomize });
 });
 
-app.put('/api/clubs/:slug/pages/:pageSlug/cover-image', requireAuth, uploadModImage.single('image'), async (req, res) => {
+app.put('/api/clubs/:slug/pages/:pageSlug/cover-image', requireAuth, uploadModMedia.single('image'), async (req, res) => {
   const ctx = await requireClubPageAdmin(req, res);
   if (!ctx) return;
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
@@ -10994,7 +11026,7 @@ app.get('/api/clubs/:slug/pages/:pageSlug/slideshow', async (req, res) => {
   res.json({ images: rows });
 });
 
-app.post('/api/clubs/:slug/pages/:pageSlug/slideshow', requireAuth, uploadModImage.single('image'), async (req, res) => {
+app.post('/api/clubs/:slug/pages/:pageSlug/slideshow', requireAuth, uploadModMedia.single('image'), async (req, res) => {
   const ctx = await requireClubPageAdmin(req, res);
   if (!ctx) return;
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
