@@ -571,8 +571,13 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
       <div class="fpnav-right">
 
         <div class="fpnav-level-badge" id="fpnav-level-badge" style="display:none;" title="">
-          <span class="fpnav-level-badge-icon" id="fpnav-level-badge-icon"></span>
-          <span id="fpnav-level-badge-num"></span>
+          <div class="fpnav-level-circle" id="fpnav-level-circle"></div>
+          <div class="fpnav-level-progress-col">
+            <span class="fpnav-level-progress-text" id="fpnav-level-progress-text"></span>
+            <div class="fpnav-level-progress-track">
+              <div class="fpnav-level-progress-fill" id="fpnav-level-progress-fill"></div>
+            </div>
+          </div>
         </div>
 
         <div class="fpnav-dropdown-wrap">
@@ -1040,8 +1045,12 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
       if (levelBadge && u.level) {
         levelBadge.style.display = '';
         levelBadge.title = u.milestone_badge || `Level ${u.level}`;
-        document.getElementById('fpnav-level-badge-num').textContent = `Lv. ${u.level}`;
-        document.getElementById('fpnav-level-badge-icon').textContent = u.milestone_badge ? '★' : '';
+        document.getElementById('fpnav-level-circle').textContent = u.level;
+        const into = u.xp_into_level || 0;
+        const need = u.xp_for_next_level || 1;
+        document.getElementById('fpnav-level-progress-text').textContent = `${into}/${need}`;
+        const pct = Math.max(0, Math.min(100, (into / need) * 100));
+        document.getElementById('fpnav-level-progress-fill').style.width = `${pct}%`;
       }
 
       document.getElementById('fpnav-avatar-img-wrap').innerHTML = u.avatar
