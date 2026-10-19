@@ -3300,7 +3300,10 @@ function fadeInImg(className, url) {
 // and only swaps in the real (heavier) iframe once actually clicked, so a
 // page full of YouTube covers costs nothing bandwidth-wise until someone
 // actually wants to watch one.
-function youtubeEmbedEl(url, className) {
+// onPlay (optional): called once the real iframe actually mounts, so a
+// slideshow caller can freeze its own autoplay timer -- otherwise the
+// rotation yanks the viewer away from a video they just started playing.
+function youtubeEmbedEl(url, className, onPlay) {
   const id = extractYoutubeId(url);
   const wrap = document.createElement('div');
   wrap.className = `${className} cl-yt-embed`;
@@ -3311,6 +3314,7 @@ function youtubeEmbedEl(url, className) {
   wrap.querySelector('.cl-yt-embed-play').addEventListener('click', (e) => {
     e.stopPropagation();
     wrap.innerHTML = `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1" title="YouTube video" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+    if (onPlay) onPlay();
   });
   return wrap;
 }
@@ -3434,7 +3438,9 @@ function showSlideshowImage(url) {
     imgA.classList.remove('cl-active');
     imgB.classList.remove('cl-active');
     ytEl.innerHTML = '';
-    ytEl.appendChild(youtubeEmbedEl(url, ''));
+    ytEl.appendChild(youtubeEmbedEl(url, '', () => {
+      if (clSlideshowTimer) { clearInterval(clSlideshowTimer); clSlideshowTimer = null; }
+    }));
     ytEl.classList.add('cl-active');
     return;
   }
@@ -4491,7 +4497,9 @@ function cpvShowSlideshowImage(url) {
     imgA.classList.remove('cl-active');
     imgB.classList.remove('cl-active');
     ytEl.innerHTML = '';
-    ytEl.appendChild(youtubeEmbedEl(url, ''));
+    ytEl.appendChild(youtubeEmbedEl(url, '', () => {
+      if (cpvSlideshowTimer) { clearInterval(cpvSlideshowTimer); cpvSlideshowTimer = null; }
+    }));
     ytEl.classList.add('cl-active');
     return;
   }
@@ -4560,7 +4568,9 @@ function fieldSlideshowEl(images, aspect, extraClass, randomize) {
       imgA.classList.remove('cl-active');
       imgB.classList.remove('cl-active');
       ytEl.innerHTML = '';
-      ytEl.appendChild(youtubeEmbedEl(url, ''));
+      ytEl.appendChild(youtubeEmbedEl(url, '', () => {
+        if (timer) { clearInterval(timer); timer = null; }
+      }));
       ytEl.classList.add('cl-active');
       return;
     }
