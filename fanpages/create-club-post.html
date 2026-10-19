@@ -107,7 +107,7 @@
       display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.9rem; margin-bottom: 1rem;
     }
     .cl-tf-img-row .cl-tf-imgbox { margin: 0; flex: 0 0 auto; }
-    .cl-edit-imgbox img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
+    .cl-edit-imgbox img, .cl-edit-imgbox video { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
     .cl-edit-imgbox-overlay {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       background: rgba(0,0,0,0.45); color: #fff; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600;
@@ -134,7 +134,7 @@
       position: relative; width: 190px; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden;
       background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); cursor: default;
     }
-    .cl-edit-slideshow-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cl-edit-slideshow-item img, .cl-edit-slideshow-item video { width: 100%; height: 100%; object-fit: cover; display: block; }
     .cl-edit-slideshow-remove {
       position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%;
       background: rgba(0,0,0,0.7); border: none; color: #fff; font-size: 0.7rem; line-height: 1; cursor: pointer;
@@ -247,24 +247,25 @@
     <div class="cp-field-title-row" style="margin-top:1.75rem;">
       <h3 class="char-editor-title" style="font-size:1.1rem; margin:0;">Media</h3>
       <button class="wiki-tags-tip-icon" type="button" aria-label="Media help">💡</button>
-      <div class="wiki-tags-tip-popover" hidden><p>Pick a Static Image, or a Slideshow that cycles through several. It's good practice to credit sources you use, if the art/images aren't yours.<br><br>Optional — if your post is a discussion, you can skip adding one, and no cover will show on your post whatsoever~</p></div>
+      <div class="wiki-tags-tip-popover" hidden><p>Pick a Static Media (image, GIF, or short video), or a Slideshow that cycles through several. It's good practice to credit sources you use, if the art/images/videos aren't yours.<br><br>Optional — if your post is a discussion, you can skip adding one, and no cover will show on your post whatsoever~</p></div>
     </div>
     <div class="cl-edit-mode-toggle">
-      <button class="cl-edit-mode-btn active" id="cp-cover-mode-static" type="button">Static Image</button>
+      <button class="cl-edit-mode-btn active" id="cp-cover-mode-static" type="button">Static Media</button>
       <button class="cl-edit-mode-btn" id="cp-cover-mode-slideshow" type="button">Slideshow</button>
     </div>
     <div id="cp-cover-static">
       <div class="cl-edit-imgbox" id="cp-cover-wrap" style="aspect-ratio: 16 / 9;">
         <img id="cp-cover-preview" src="/images/nopicture2.png" alt="" />
-        <div class="cl-edit-imgbox-overlay">📷 Change Cover Image</div>
+        <video id="cp-cover-preview-video" muted loop autoplay playsinline hidden></video>
+        <div class="cl-edit-imgbox-overlay">📷 Change Cover Media</div>
         <button type="button" class="fp-recrop-btn" id="cp-cover-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;" hidden>✏️ Recrop</button>
       </div>
-      <input type="file" id="cp-cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-      <button type="button" class="cl-splash-rules-link" id="cp-cover-remove-btn" style="margin-top:0.75rem;" hidden>✕ No Image</button>
+      <input type="file" id="cp-cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" style="display:none;" />
+      <button type="button" class="cl-splash-rules-link" id="cp-cover-remove-btn" style="margin-top:0.75rem;" hidden>✕ No Media</button>
     </div>
     <div id="cp-cover-slideshow" hidden>
       <div class="cl-edit-slideshow-stack" id="cp-cover-slideshow-stack"></div>
-      <input type="file" id="cp-cover-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+      <input type="file" id="cp-cover-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" style="display:none;" />
       <div class="slideshow-randomize-row">
         <label class="slideshow-randomize-label" for="cp-cover-slideshow-randomize">Randomize</label>
         <label class="slideshow-randomize-switch">
@@ -469,6 +470,22 @@
     const data = await res.json();
     return data.url || '';
   }
+  // Cover Media (+ an Additional Field's own Cover slot) can be a video/GIF
+  // clip, not just a static image -- uploads straight to the file (no crop
+  // step, since a canvas crop can't operate on video) via the wider
+  // uploadModMedia-backed endpoint. The Side Image slot and the feed-thumbnail
+  // Post Preview crop stay image-only and keep using uploadPostImage above.
+  async function uploadPostMedia(file) {
+    const fd = new FormData();
+    fd.append('image', file, file.name || 'media');
+    const res = await fetch('/api/moderator/club-post-media', { method: 'POST', headers: authHeaders(), body: fd });
+    if (!res.ok) return '';
+    const data = await res.json();
+    return data.url || '';
+  }
+  function isVideoUrl(url) {
+    return /\.(mp4|webm|mov)(\?.*)?$/i.test(url || '');
+  }
 
   // ── Cover Media ──────────────────────────────────────────────────────
   let cover = { mode: 'static', image_url: '', slideshow: [], randomize: true };
@@ -492,43 +509,69 @@
     if (e.target.closest('#cp-cover-recrop-btn')) return;
     document.getElementById('cp-cover-file-input').click();
   });
+  function setCoverPreviewEl(url) {
+    const imgEl = document.getElementById('cp-cover-preview');
+    const videoEl = document.getElementById('cp-cover-preview-video');
+    if (isVideoUrl(url)) {
+      videoEl.src = url;
+      videoEl.hidden = false;
+      imgEl.hidden = true;
+    } else {
+      imgEl.src = url || '/images/nopicture2.png';
+      imgEl.hidden = false;
+      videoEl.hidden = true;
+      videoEl.removeAttribute('src');
+    }
+  }
   document.getElementById('cp-cover-file-input').addEventListener('change', (e) => {
     const file = e.target.files[0];
     e.target.value = '';
     if (!file) return;
+    if (file.type.startsWith('video/')) {
+      uploadPostMedia(file).then((url) => { if (url) saveCoverMediaUrl(url); });
+      return;
+    }
     openCropModal({ title: 'Crop Cover Image', imageSrc: URL.createObjectURL(file), aspectRatio: 16 / 9, round: false, onSave: saveCoverImage });
   });
   document.getElementById('cp-cover-recrop-btn').addEventListener('click', (e) => {
     e.stopPropagation();
-    if (!cover.image_url) return;
+    if (!cover.image_url || isVideoUrl(cover.image_url)) return;
     openCropModal({ title: 'Crop Cover Image', imageSrc: cover.image_url, aspectRatio: 16 / 9, round: false, onSave: saveCoverImage });
   });
-  async function saveCoverImage(blob) {
-    const url = await uploadPostImage(blob);
-    if (!url) return;
+  function saveCoverMediaUrl(url) {
     cover.image_url = url;
-    document.getElementById('cp-cover-preview').src = url;
-    document.getElementById('cp-cover-recrop-btn').hidden = false;
+    setCoverPreviewEl(url);
+    document.getElementById('cp-cover-recrop-btn').hidden = isVideoUrl(url);
     document.getElementById('cp-cover-remove-btn').hidden = false;
     cpDirty = true;
     updatePostPreviewField();
   }
+  async function saveCoverImage(blob) {
+    const url = await uploadPostImage(blob);
+    if (!url) return;
+    saveCoverMediaUrl(url);
+  }
   document.getElementById('cp-cover-remove-btn').addEventListener('click', (e) => {
     e.stopPropagation();
     cover.image_url = '';
-    document.getElementById('cp-cover-preview').src = '/images/nopicture2.png';
+    setCoverPreviewEl('');
     document.getElementById('cp-cover-recrop-btn').hidden = true;
     document.getElementById('cp-cover-remove-btn').hidden = true;
     cpDirty = true;
     updatePostPreviewField();
   });
+  function slideshowItemInnerHtml(url) {
+    return isVideoUrl(url)
+      ? `<video src="${escapeHtml(url)}" muted loop autoplay playsinline></video><button type="button" class="cl-edit-slideshow-remove">✕</button>`
+      : `<img src="${escapeHtml(url)}" alt="" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
+  }
   function renderCoverSlideshow() {
     const stack = document.getElementById('cp-cover-slideshow-stack');
     stack.innerHTML = '';
     cover.slideshow.forEach((img, idx) => {
       const item = document.createElement('div');
       item.className = 'cl-edit-slideshow-item';
-      item.innerHTML = `<img src="${escapeHtml(img.image_url)}" alt="" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
+      item.innerHTML = slideshowItemInnerHtml(img.image_url);
       item.querySelector('.cl-edit-slideshow-remove').addEventListener('click', (e) => {
         e.stopPropagation();
         cover.slideshow.splice(idx, 1);
@@ -541,7 +584,7 @@
     const addBtn = document.createElement('button');
     addBtn.className = 'cl-edit-slideshow-add';
     addBtn.type = 'button';
-    addBtn.title = 'Add Image';
+    addBtn.title = 'Add Media';
     addBtn.textContent = '+';
     addBtn.addEventListener('click', () => document.getElementById('cp-cover-slideshow-file-input').click());
     stack.appendChild(addBtn);
@@ -550,6 +593,16 @@
     const file = e.target.files[0];
     e.target.value = '';
     if (!file) return;
+    if (file.type.startsWith('video/')) {
+      uploadPostMedia(file).then((url) => {
+        if (!url) return;
+        cover.slideshow.push({ image_url: url });
+        cpDirty = true;
+        renderCoverSlideshow();
+        updatePostPreviewField();
+      });
+      return;
+    }
     openCropModal({
       title: 'Crop Slideshow Image', imageSrc: URL.createObjectURL(file), aspectRatio: 16 / 9, round: false,
       onSave: async (blob) => {
@@ -577,7 +630,10 @@
   function updatePostPreviewField() {
     const field = document.getElementById('cp-preview-field');
     const src = currentCoverPreviewSrc();
-    if (!src) {
+    // A video cover has no feed-thumbnail position/zoom crop -- there's no
+    // frame to position against here, so the feed card just falls back to
+    // showing/playing the video itself at its default framing.
+    if (!src || isVideoUrl(src)) {
       field.hidden = true;
       if (postCreateCropper) { postCreateCropper.destroy(); postCreateCropper = null; }
       return;
@@ -626,33 +682,39 @@
   let textFieldDragIdx = null;
   const TF_IMG_HINT = 'Optional. Every text field can have a main body image and side image.';
   function textFieldImageSlotHtml(field, prefix, aspect, label, maxWidth) {
+    // Only the Cover slot (not Side) accepts video/GIF -- see uploadPostMedia.
+    const allowVideo = prefix === 'cover';
     const mode = field[`${prefix}_mode`] === 'slideshow' ? 'slideshow' : 'static';
     const imageUrl = field[`${prefix}_image_url`] || '';
+    const accept = allowVideo
+      ? 'image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime'
+      : 'image/png,image/jpeg,image/webp,image/gif';
     return `
       <div class="cl-tf-img-slot" data-slot="${prefix}">
         <div class="cp-field-title-row">
-          <label class="mod-field-label-standalone">${label}</label>
+          <label class="mod-field-label-standalone">${allowVideo ? 'Cover Media' : label}</label>
           <button class="wiki-tags-tip-icon" type="button" aria-label="${label} help">💡</button>
           <div class="wiki-tags-tip-popover" hidden><p>${TF_IMG_HINT}</p></div>
         </div>
         <div class="cl-edit-mode-toggle cl-tf-mode-toggle">
-          <button type="button" class="cl-edit-mode-btn${mode !== 'slideshow' ? ' active' : ''}" data-mode="static">Static Image</button>
+          <button type="button" class="cl-edit-mode-btn${mode !== 'slideshow' ? ' active' : ''}" data-mode="static">${allowVideo ? 'Static Media' : 'Static Image'}</button>
           <button type="button" class="cl-edit-mode-btn${mode === 'slideshow' ? ' active' : ''}" data-mode="slideshow">Slideshow</button>
         </div>
         <div class="cl-tf-static" ${mode === 'slideshow' ? 'hidden' : ''}>
           <div class="cl-tf-img-row">
             <div class="cl-edit-imgbox cl-tf-imgbox" style="aspect-ratio:${aspect}; width:${maxWidth}px; max-width:${maxWidth}px;">
               <img class="cl-tf-preview" src="${imageUrl || '/images/nopicture2.png'}" alt="" />
-              <div class="cl-edit-imgbox-overlay">📷 Change Image</div>
+              ${allowVideo ? '<video class="cl-tf-preview-video" muted loop autoplay playsinline hidden></video>' : ''}
+              <div class="cl-edit-imgbox-overlay">📷 Change ${allowVideo ? 'Media' : 'Image'}</div>
               <button type="button" class="fp-recrop-btn cl-tf-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;" ${imageUrl ? '' : 'hidden'}>✏️ Recrop</button>
             </div>
-            <button type="button" class="cl-splash-rules-link cl-tf-remove-img-btn" ${imageUrl ? '' : 'hidden'}>✕ No Image</button>
+            <button type="button" class="cl-splash-rules-link cl-tf-remove-img-btn" ${imageUrl ? '' : 'hidden'}>✕ No ${allowVideo ? 'Media' : 'Image'}</button>
           </div>
-          <input type="file" class="cl-tf-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+          <input type="file" class="cl-tf-file-input" accept="${accept}" style="display:none;" />
         </div>
         <div class="cl-tf-slideshow" ${mode === 'static' ? 'hidden' : ''}>
           <div class="cl-edit-slideshow-stack cl-tf-slideshow-stack"></div>
-          <input type="file" class="cl-tf-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+          <input type="file" class="cl-tf-slideshow-file-input" accept="${accept}" style="display:none;" />
           <div class="slideshow-randomize-row">
             <label class="slideshow-randomize-label">Randomize</label>
             <label class="slideshow-randomize-switch">
@@ -665,11 +727,13 @@
     `;
   }
   function wireTextFieldImageSlot(row, i, prefix, aspect) {
+    const allowVideo = prefix === 'cover';
     const slot = row.querySelector(`.cl-tf-img-slot[data-slot="${prefix}"]`);
     const staticWrap = slot.querySelector('.cl-tf-static');
     const slideshowWrap = slot.querySelector('.cl-tf-slideshow');
     const imgboxEl = slot.querySelector('.cl-tf-imgbox');
     const previewEl = slot.querySelector('.cl-tf-preview');
+    const previewVideoEl = slot.querySelector('.cl-tf-preview-video');
     const recropBtn = slot.querySelector('.cl-tf-recrop-btn');
     const fileInput = slot.querySelector('.cl-tf-file-input');
     const removeBtn = slot.querySelector('.cl-tf-remove-img-btn');
@@ -680,6 +744,12 @@
       postTextFields[i][`${prefix}_randomize`] = ssRandomizeToggle.checked;
       cpDirty = true;
     });
+    // Fix up the initial preview if this field already has a saved video
+    // cover (textFieldImageSlotHtml's template always renders the <img>
+    // tag regardless of media type) -- no-op for images/empty slots.
+    if (allowVideo && isVideoUrl(postTextFields[i][`${prefix}_image_url`])) {
+      setPreviewEl(postTextFields[i][`${prefix}_image_url`]);
+    }
 
     slot.querySelectorAll('.cl-tf-mode-toggle .cl-edit-mode-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -692,6 +762,17 @@
       });
     });
 
+    function setPreviewEl(url) {
+      if (allowVideo && isVideoUrl(url)) {
+        previewVideoEl.src = url;
+        previewVideoEl.hidden = false;
+        previewEl.hidden = true;
+      } else {
+        previewEl.src = url || '/images/nopicture2.png';
+        previewEl.hidden = false;
+        if (previewVideoEl) { previewVideoEl.hidden = true; previewVideoEl.removeAttribute('src'); }
+      }
+    }
     imgboxEl.addEventListener('click', (e) => {
       if (e.target.closest('.cl-tf-recrop-btn')) return;
       fileInput.click();
@@ -700,7 +781,7 @@
       const url = await uploadPostImage(blob);
       if (!url) return;
       postTextFields[i][`${prefix}_image_url`] = url;
-      previewEl.src = url;
+      setPreviewEl(url);
       recropBtn.hidden = false;
       removeBtn.hidden = false;
       cpDirty = true;
@@ -709,28 +790,44 @@
       const file = e.target.files[0];
       e.target.value = '';
       if (!file) return;
+      if (allowVideo && file.type.startsWith('video/')) {
+        uploadPostMedia(file).then((url) => {
+          if (!url) return;
+          postTextFields[i][`${prefix}_image_url`] = url;
+          setPreviewEl(url);
+          recropBtn.hidden = true;
+          removeBtn.hidden = false;
+          cpDirty = true;
+        });
+        return;
+      }
       openCropModal({ title: 'Crop Image', imageSrc: URL.createObjectURL(file), aspectRatio: aspect, round: false, onSave: saveImage });
     });
     recropBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (!previewEl.src) return;
+      if (!previewEl.src || (allowVideo && isVideoUrl(postTextFields[i][`${prefix}_image_url`]))) return;
       openCropModal({ title: 'Crop Image', imageSrc: previewEl.src, aspectRatio: aspect, round: false, onSave: saveImage });
     });
     removeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       postTextFields[i][`${prefix}_image_url`] = '';
-      previewEl.src = '/images/nopicture2.png';
+      setPreviewEl('');
       recropBtn.hidden = true;
       removeBtn.hidden = true;
       cpDirty = true;
     });
 
+    function slideshowItemInnerHtml(url) {
+      return allowVideo && isVideoUrl(url)
+        ? `<video src="${escapeHtml(url)}" muted loop autoplay playsinline></video><button type="button" class="cl-edit-slideshow-remove">✕</button>`
+        : `<img src="${escapeHtml(url)}" alt="" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
+    }
     function renderStack() {
       ssStack.innerHTML = '';
       (postTextFields[i][`${prefix}_slideshow`] || []).forEach((img, slideIdx) => {
         const item = document.createElement('div');
         item.className = 'cl-edit-slideshow-item';
-        item.innerHTML = `<img src="${escapeHtml(img.image_url)}" alt="" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
+        item.innerHTML = slideshowItemInnerHtml(img.image_url);
         item.querySelector('.cl-edit-slideshow-remove').addEventListener('click', (e) => {
           e.stopPropagation();
           postTextFields[i][`${prefix}_slideshow`].splice(slideIdx, 1);
@@ -742,7 +839,7 @@
       const addBtn = document.createElement('button');
       addBtn.className = 'cl-edit-slideshow-add';
       addBtn.type = 'button';
-      addBtn.title = 'Add Image';
+      addBtn.title = 'Add Media';
       addBtn.textContent = '+';
       addBtn.addEventListener('click', () => ssFileInput.click());
       ssStack.appendChild(addBtn);
@@ -752,6 +849,16 @@
       const file = e.target.files[0];
       e.target.value = '';
       if (!file) return;
+      if (allowVideo && file.type.startsWith('video/')) {
+        uploadPostMedia(file).then((url) => {
+          if (!url) return;
+          if (!postTextFields[i][`${prefix}_slideshow`]) postTextFields[i][`${prefix}_slideshow`] = [];
+          postTextFields[i][`${prefix}_slideshow`].push({ image_url: url });
+          cpDirty = true;
+          renderStack();
+        });
+        return;
+      }
       openCropModal({
         title: 'Crop Image', imageSrc: URL.createObjectURL(file), aspectRatio: aspect, round: false,
         onSave: async (blob) => {
@@ -1027,8 +1134,8 @@
       setCoverMode(cover.mode);
       document.getElementById('cp-cover-slideshow-randomize').checked = cover.randomize;
       if (cover.image_url) {
-        document.getElementById('cp-cover-preview').src = cover.image_url;
-        document.getElementById('cp-cover-recrop-btn').hidden = false;
+        setCoverPreviewEl(cover.image_url);
+        document.getElementById('cp-cover-recrop-btn').hidden = isVideoUrl(cover.image_url);
         document.getElementById('cp-cover-remove-btn').hidden = false;
       }
       renderCoverSlideshow();
