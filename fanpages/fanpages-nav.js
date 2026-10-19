@@ -1257,20 +1257,38 @@ window.wikiSetCoverSlot = function (el, site, opts) {
     const wrap = document.createElement('div');
     wrap.innerHTML = `
       <div class="fpnav-modal-overlay" id="fp-adultgate-overlay" hidden>
-        <div class="fpnav-modal-card">
-          <p class="fpnav-modal-title">18+ Content</p>
-          <p class="fpnav-modal-text">You must be logged in to access adult content.</p>
+        <div class="fpnav-modal-card fp-adultgate-card">
+          <div class="fp-adultgate-icon">🔒</div>
+          <p class="fpnav-modal-title fp-adultgate-title">18+ Content <img src="/images/home/decoration-1.png" alt="" /></p>
+          <p class="fpnav-modal-text fp-adultgate-text">You must be logged in to access adult content.</p>
           <div class="fp-leaving-btn-row">
             <button type="button" class="fpnav-modal-cta fpnav-modal-cta--secondary" id="fp-adultgate-bet">Bet</button>
-            <button type="button" class="fpnav-modal-cta" id="fp-adultgate-signin">Sign In</button>
+            <button type="button" class="fpnav-modal-cta fp-adultgate-signin-btn" id="fp-adultgate-signin">Sign In</button>
           </div>
         </div>
       </div>
     `;
     document.body.appendChild(wrap.firstElementChild);
     overlay = document.getElementById('fp-adultgate-overlay');
+    // "Bet" never navigates anywhere -- it just closes the popup and leaves
+    // the guest exactly where they were, so a locked card can be clicked
+    // again for the same prompt (a deliberate loop, not a dead end). For a
+    // persistent gate (a direct link straight to 18+ content, where the
+    // whole page has nothing real to show once the popup's gone), Bet
+    // instead closes and immediately reopens the same prompt -- there's no
+    // "where they were" to return to short of Sign In actually resolving it.
     document.getElementById('fp-adultgate-bet').addEventListener('click', () => {
-      window.location.href = window.fpUrl('/');
+      if (overlay.dataset.persistent === '1') {
+        overlay.hidden = true;
+        document.body.classList.remove('fpnav-modal-open');
+        requestAnimationFrame(() => {
+          overlay.hidden = false;
+          document.body.classList.add('fpnav-modal-open');
+        });
+        return;
+      }
+      overlay.hidden = true;
+      document.body.classList.remove('fpnav-modal-open');
     });
     document.getElementById('fp-adultgate-signin').addEventListener('click', () => {
       overlay.hidden = true;
@@ -1281,8 +1299,14 @@ window.wikiSetCoverSlot = function (el, site, opts) {
   // No outside-click/Escape dismissal and no close button — the guest must
   // actively choose Bet or Sign In, since the page underneath has nothing
   // valid to show them either way.
-  window.fpShowAdultGate = function () {
+  // opts.persistent: true for a full-page gate (a direct visit to 18+
+  // content with nothing else behind the popup) so Bet loops back to the
+  // same prompt instead of leaving a blank page exposed; omitted/false for
+  // a gate triggered by clicking a locked card on an otherwise-normal page,
+  // where Bet should just close it and return to that page.
+  window.fpShowAdultGate = function (opts) {
     build();
+    overlay.dataset.persistent = (opts && opts.persistent) ? '1' : '';
     overlay.hidden = false;
     document.body.classList.add('fpnav-modal-open');
   };

@@ -21,7 +21,7 @@ window.ModeratorSite = {
         // content it would otherwise render with no site data.
         if (res.status === 403) {
           const data = await res.json().catch(() => null);
-          if (data && data.nsfw_locked && window.fpShowAdultGate) window.fpShowAdultGate();
+          if (data && data.nsfw_locked && window.fpShowAdultGate) window.fpShowAdultGate({ persistent: true });
         }
         return null;
       }
