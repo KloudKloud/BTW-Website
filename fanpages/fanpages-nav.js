@@ -383,6 +383,53 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   };
 })();
 
+// ── Sign-in gate (Bet/Sign In) — same cozy box-background-art card and
+// two-button layout as window.fpShowAdultGate, for account-only actions
+// that deserve a real popup instead of the small closable
+// window.fpRequireSignIn notice above (currently just Follow — the
+// clearest "you need an account for this one specific thing" moment).
+// Bet just closes it and leaves the guest exactly where they were, same
+// non-persistent behavior as the adult gate's card-click case; Sign In
+// opens the real login modal.
+(function () {
+  let overlay = null;
+  function build() {
+    if (overlay) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="fpnav-modal-overlay" id="fp-signingate-overlay" hidden>
+        <div class="fpnav-modal-card fp-signingate-card">
+          <div class="fp-signingate-icon">🔑</div>
+          <p class="fpnav-modal-title fp-signingate-title" id="fp-signingate-title-text"></p>
+          <p class="fpnav-modal-text fp-signingate-text">Create a free account or sign in to keep going!</p>
+          <div class="fp-leaving-btn-row">
+            <button type="button" class="fpnav-modal-cta fpnav-modal-cta--secondary" id="fp-signingate-bet">Bet</button>
+            <button type="button" class="fpnav-modal-cta fp-signingate-signin-btn" id="fp-signingate-signin">Sign In</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrap.firstElementChild);
+    overlay = document.getElementById('fp-signingate-overlay');
+    document.getElementById('fp-signingate-bet').addEventListener('click', () => {
+      overlay.hidden = true;
+      document.body.classList.remove('fpnav-modal-open');
+    });
+    document.getElementById('fp-signingate-signin').addEventListener('click', () => {
+      overlay.hidden = true;
+      document.body.classList.remove('fpnav-modal-open');
+      window.fpOpenLoginModal();
+    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) document.getElementById('fp-signingate-bet').click(); });
+  }
+  window.fpShowSignInGate = function (title) {
+    build();
+    document.getElementById('fp-signingate-title-text').textContent = title || 'You must sign in to do that';
+    overlay.hidden = false;
+    document.body.classList.add('fpnav-modal-open');
+  };
+})();
+
 // ── Report modal — shared by every "🏳️" flag button on the site (comments,
 // stories, DMs, user profiles). Named `window.reportContent` (not fp-
 // prefixed) so it's a drop-in replacement for the identical function that
