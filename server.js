@@ -3830,6 +3830,55 @@ const uploadModMedia = multer({
   },
 });
 
+// ── Cloudflare R2 offload for Cover Media uploads ───────────────────────
+// Cover Media (video/GIF covers + slideshows) is the single fastest way to
+// fill this VPS's one shared disk partition -- Postgres lives on that same
+// partition, so a full disk doesn't just break uploads, it can break every
+// write in the app. R2 is object storage (not a database swap -- Postgres
+// still just stores a short URL string either way), has no egress fee, and
+// scales without a fixed ceiling the way this VPS's disk does.
+// Deliberately scoped to ONLY the uploadModMedia-backed routes (the actual
+// disk hogs) for now, not every upload endpoint on the site -- avatars,
+// banners, chapter images, etc. stay on local disk exactly as before.
+// Entirely opt-in via env vars: until all four R2_* vars are set, r2Client
+// is null and uploadToR2() always resolves to null, so every caller's
+// existing "fall back to the local /images/moderators/ path" behavior is
+// completely unchanged -- this cannot break anything before R2 is wired up.
+let r2Client = null;
+const R2_BUCKET = process.env.R2_BUCKET || '';
+const R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, '');
+if (process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && R2_BUCKET && R2_PUBLIC_URL) {
+  const { S3Client } = require('@aws-sdk/client-s3');
+  r2Client = new S3Client({
+    region: 'auto',
+    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    },
+  });
+  console.log('R2 offload enabled for Cover Media uploads ->', R2_PUBLIC_URL);
+}
+// Uploads a just-received multer file (disk-backed) to R2 and deletes the
+// local temp copy on success. Returns the public R2 URL, or null if R2
+// isn't configured or the upload failed -- callers keep the local
+// /images/moderators/ URL they already had in that case, so this is a
+// strict "upgrade if possible, never a hard dependency."
+async function uploadToR2(file, keyPrefix) {
+  if (!r2Client || !file) return null;
+  try {
+    const { PutObjectCommand } = require('@aws-sdk/client-s3');
+    const key = `${keyPrefix}/${file.filename}`;
+    const body = fs.readFileSync(file.path);
+    await r2Client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.mimetype }));
+    fs.unlink(file.path, () => {});
+    return `${R2_PUBLIC_URL}/${key}`;
+  } catch (err) {
+    console.error('R2 upload failed, keeping local copy:', err.message);
+    return null;
+  }
+}
+
 // Card/spotlight-sized JPEG copy of a character ref_image or gallery
 // image_url, generated next to the original -- used by the Homepage
 // Character/Gallery Spotlight and Recent Submissions (see thumb_image_url
@@ -7343,7 +7392,8 @@ app.post('/api/moderator/character-image', requireAuth, uploadModImage.single('i
 // still posts to character-image above and stays image-only.
 app.post('/api/moderator/club-post-media', requireAuth, uploadModMedia.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Media is required.' });
-  res.json({ url: `/images/moderators/${req.file.filename}` });
+  const r2Url = await uploadToR2(req.file, 'club-media');
+  res.json({ url: r2Url || `/images/moderators/${req.file.filename}` });
 });
 
 // Voice Claim MP3 upload — same "upload it, get a URL back" shape as the
@@ -10932,7 +10982,8 @@ function registerTextFieldImageEndpoints(prefix, allowVideo) {
     if (!req.file) return res.status(400).json({ error: 'Image is required.' });
     const field = ctx.fields[ctx.idx];
     deleteIfModeratorUpload(field[`${prefix}_image_url`]);
-    field[`${prefix}_image_url`] = `/images/moderators/${req.file.filename}`;
+    const r2Url = allowVideo ? await uploadToR2(req.file, 'club-media') : null;
+    field[`${prefix}_image_url`] = r2Url || `/images/moderators/${req.file.filename}`;
     await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(ctx.fields), ctx.page.id]);
     res.json({ text_fields: ctx.fields });
   });
@@ -10954,7 +11005,8 @@ function registerTextFieldImageEndpoints(prefix, allowVideo) {
     const field = ctx.fields[ctx.idx];
     const list = Array.isArray(field[`${prefix}_slideshow`]) ? field[`${prefix}_slideshow`] : [];
     if (list.length >= 10) return res.status(400).json({ error: 'Maximum of 10 images.' });
-    list.push({ image_url: `/images/moderators/${req.file.filename}` });
+    const r2Url = allowVideo ? await uploadToR2(req.file, 'club-media') : null;
+    list.push({ image_url: r2Url || `/images/moderators/${req.file.filename}` });
     field[`${prefix}_slideshow`] = list;
     await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(ctx.fields), ctx.page.id]);
     res.json({ text_fields: ctx.fields });
@@ -10990,7 +11042,8 @@ app.put('/api/clubs/:slug/pages/:pageSlug/cover-image', requireAuth, uploadModMe
   const ctx = await requireClubPageAdmin(req, res);
   if (!ctx) return;
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
-  const imageUrl = `/images/moderators/${req.file.filename}`;
+  const r2Url = await uploadToR2(req.file, 'club-media');
+  const imageUrl = r2Url || `/images/moderators/${req.file.filename}`;
   if (ctx.page.cover_image_url.startsWith('/images/moderators/')) {
     const oldPath = path.join('/var/www/btw', ctx.page.cover_image_url);
     if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
@@ -11030,7 +11083,8 @@ app.post('/api/clubs/:slug/pages/:pageSlug/slideshow', requireAuth, uploadModMed
   const ctx = await requireClubPageAdmin(req, res);
   if (!ctx) return;
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
-  const imageUrl = `/images/moderators/${req.file.filename}`;
+  const r2Url = await uploadToR2(req.file, 'club-media');
+  const imageUrl = r2Url || `/images/moderators/${req.file.filename}`;
   const { rows: [{ maxOrder }] } = await pool.query(
     'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM club_page_slideshow_images WHERE page_id = $1', [ctx.page.id]
   );
