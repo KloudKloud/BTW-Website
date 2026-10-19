@@ -3308,9 +3308,19 @@ function youtubeEmbedEl(url, className, onPlay) {
   const wrap = document.createElement('div');
   wrap.className = `${className} cl-yt-embed`;
   wrap.innerHTML = `
-    <img class="cl-yt-embed-thumb" src="https://img.youtube.com/vi/${id}/hqdefault.jpg" alt="" />
+    <img class="cl-yt-embed-thumb" src="https://img.youtube.com/vi/${id}/maxresdefault.jpg" alt="" />
     <button type="button" class="cl-yt-embed-play" aria-label="Play video">▶</button>
   `;
+  // maxresdefault isn't generated for every video -- YouTube's img server
+  // still returns 200 for a missing one, just a tiny 120x90 grey
+  // placeholder instead of a real 404, so onerror never fires. Checking
+  // the loaded width is the only reliable way to detect that and fall
+  // back to hqdefault (480x360, always available), which still looks far
+  // less blurry stretched across a cover-sized box than the old default.
+  const thumbImg = wrap.querySelector('.cl-yt-embed-thumb');
+  thumbImg.addEventListener('load', () => {
+    if (thumbImg.naturalWidth <= 120) thumbImg.src = `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+  }, { once: true });
   wrap.querySelector('.cl-yt-embed-play').addEventListener('click', (e) => {
     e.stopPropagation();
     wrap.innerHTML = `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1" title="YouTube video" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
