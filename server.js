@@ -1532,6 +1532,15 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cover_mode TEXT NOT NULL DEFAULT 'static';
     ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cover_image_url TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('clubs cover/welcome-title migration:', e.message));
+  // Slideshow covers (Home, pages, posts, and their per-field Cover/Side
+  // slots) always picked a random starting slide and cycled on from there,
+  // ignoring the order the owner dragged them into -- this toggle lets
+  // them opt out and just play back in that saved order instead. Defaults
+  // true everywhere so every existing slideshow keeps behaving exactly as
+  // it already did until someone explicitly turns it off.
+  await pool.query(`
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cover_randomize BOOLEAN NOT NULL DEFAULT true;
+  `).catch(e => console.error('clubs cover_randomize migration:', e.message));
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS club_slideshow_images (
@@ -1558,6 +1567,9 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS cover_image_url TEXT NOT NULL DEFAULT '';
     ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS text_fields JSONB NOT NULL DEFAULT '[]';
   `).catch(e => console.error('club_pages general-template migration:', e.message));
+  await pool.query(`
+    ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS cover_randomize BOOLEAN NOT NULL DEFAULT true;
+  `).catch(e => console.error('club_pages cover_randomize migration:', e.message));
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS club_page_slideshow_images (
@@ -1676,6 +1688,9 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS cover_slideshow JSONB NOT NULL DEFAULT '[]';
     ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS text_fields JSONB NOT NULL DEFAULT '[]';
   `).catch(e => console.error('club_posts mini-page migration:', e.message));
+  await pool.query(`
+    ALTER TABLE club_posts ADD COLUMN IF NOT EXISTS cover_randomize BOOLEAN NOT NULL DEFAULT true;
+  `).catch(e => console.error('club_posts cover_randomize migration:', e.message));
 
   // Promotion Page template, v2 — a Promotion page is now just a list of
   // real posts (same shape as a Social post) scoped to that page, instead
@@ -9525,6 +9540,7 @@ function clubPublicShape(c, viewerRole) {
     theme: c.theme || 'default', theme_bg_url: c.theme_bg_url || '',
     sidebar_title: c.sidebar_title || '', sidebar_message: c.sidebar_message || '', is_nsfw: !!c.is_nsfw,
     welcome_title: c.welcome_title || '', cover_mode: c.cover_mode || 'static', cover_image_url: c.cover_image_url || '',
+    cover_randomize: c.cover_randomize !== false,
     featured_cards_title: c.featured_cards_title || 'Featured Cards',
     club_types: c.club_types || [],
     member_count: Number(c.member_count) || 0,
@@ -9924,7 +9940,7 @@ function clubPostPublicShape(p, voteRows, viewerId) {
   return {
     id: p.id, title: p.title,
     cover_mode: p.cover_mode || 'static', cover_image_url: p.cover_image_url || '',
-    cover_slideshow: p.cover_slideshow || [],
+    cover_slideshow: p.cover_slideshow || [], cover_randomize: p.cover_randomize !== false,
     text_fields: p.text_fields || [],
     preview_position_x: p.preview_position_x, preview_position_y: p.preview_position_y,
     preview_image_url: p.preview_image_url || '',
@@ -10196,6 +10212,9 @@ function sanitizeClubPostImageSlot(raw) {
     mode: (raw && raw.mode === 'slideshow') ? 'slideshow' : 'static',
     image_url: cleanUploadedImagePath(raw && raw.image_url),
     slideshow: slideshow.slice(0, 10).map(s => ({ image_url: cleanUploadedImagePath(s && s.image_url) })).filter(s => s.image_url),
+    // Whether a slideshow cycles starting from a random slide (the
+    // longstanding default) or always plays back in the saved order.
+    randomize: (raw && raw.randomize) !== false,
   };
 }
 
@@ -10211,8 +10230,8 @@ function buildClubPostTextFields(raw) {
       title: String((f && f.title) || '').trim().slice(0, 80),
       body: String((f && f.body) || '').trim().slice(0, 5000),
       collapsed: !!(f && f.collapsed),
-      cover_mode: cover.mode, cover_image_url: cover.image_url, cover_slideshow: cover.slideshow,
-      side_mode: side.mode, side_image_url: side.image_url, side_slideshow: side.slideshow,
+      cover_mode: cover.mode, cover_image_url: cover.image_url, cover_slideshow: cover.slideshow, cover_randomize: cover.randomize,
+      side_mode: side.mode, side_image_url: side.image_url, side_slideshow: side.slideshow, side_randomize: side.randomize,
     };
   }).filter(f => f.title || f.body || f.cover_image_url || f.side_image_url || f.cover_slideshow.length || f.side_slideshow.length);
 }
@@ -10273,9 +10292,9 @@ app.post('/api/clubs/:slug/posts', requireAuth, async (req, res) => {
   }
 
   const { rows: [post] } = await pool.query(
-    `INSERT INTO club_posts (club_id, author_user_id, title, cover_mode, cover_image_url, cover_slideshow, text_fields, preview_position_x, preview_position_y, preview_image_url, poll, is_admin_post, promotion_page_id, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
-    [club.id, req.user.id, title, cover.mode, cover.image_url, JSON.stringify(cover.slideshow), JSON.stringify(textFields), previewX, previewY, previewImageUrl, poll ? JSON.stringify(poll) : null, isAdminPost, promotionPageId, sortOrder]
+    `INSERT INTO club_posts (club_id, author_user_id, title, cover_mode, cover_image_url, cover_slideshow, cover_randomize, text_fields, preview_position_x, preview_position_y, preview_image_url, poll, is_admin_post, promotion_page_id, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+    [club.id, req.user.id, title, cover.mode, cover.image_url, JSON.stringify(cover.slideshow), cover.randomize, JSON.stringify(textFields), previewX, previewY, previewImageUrl, poll ? JSON.stringify(poll) : null, isAdminPost, promotionPageId, sortOrder]
   );
   const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
   // Promotion-page cards (e.g. one post per book chapter) don't notify the
@@ -10324,10 +10343,10 @@ app.put('/api/clubs/:slug/posts/:postId', requireAuth, async (req, res) => {
   const previewImageUrl = req.body.preview_image_url !== undefined ? cleanUploadedImagePath(req.body.preview_image_url) : existing.preview_image_url;
 
   const { rows: [post] } = await pool.query(
-    `UPDATE club_posts SET title = $1, cover_mode = $2, cover_image_url = $3, cover_slideshow = $4, text_fields = $5,
-       preview_position_x = $6, preview_position_y = $7, preview_image_url = $8, poll = $9, is_admin_post = $10
-     WHERE id = $11 RETURNING *`,
-    [title, cover.mode, cover.image_url, JSON.stringify(cover.slideshow), JSON.stringify(textFields),
+    `UPDATE club_posts SET title = $1, cover_mode = $2, cover_image_url = $3, cover_slideshow = $4, cover_randomize = $5, text_fields = $6,
+       preview_position_x = $7, preview_position_y = $8, preview_image_url = $9, poll = $10, is_admin_post = $11
+     WHERE id = $12 RETURNING *`,
+    [title, cover.mode, cover.image_url, JSON.stringify(cover.slideshow), cover.randomize, JSON.stringify(textFields),
      previewX, previewY, previewImageUrl, poll ? JSON.stringify(poll) : null, isAdminPost, existing.id]
   );
   const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [post.author_user_id]);
@@ -10472,8 +10491,9 @@ app.put('/api/clubs/:slug/cover-mode', requireAuth, async (req, res) => {
   const ctx = await requireClubAdmin(req, res);
   if (!ctx) return;
   const mode = req.body.cover_mode === 'slideshow' ? 'slideshow' : 'static';
-  await pool.query('UPDATE clubs SET cover_mode = $1 WHERE id = $2', [mode, ctx.club.id]);
-  res.json({ cover_mode: mode });
+  const randomize = req.body.randomize !== undefined ? req.body.randomize !== false : ctx.club.cover_randomize !== false;
+  await pool.query('UPDATE clubs SET cover_mode = $1, cover_randomize = $2 WHERE id = $3', [mode, randomize, ctx.club.id]);
+  res.json({ cover_mode: mode, cover_randomize: randomize });
 });
 
 app.put('/api/clubs/:slug/cover-image', requireAuth, uploadModImage.single('image'), async (req, res) => {
@@ -10655,7 +10675,7 @@ app.get('/api/clubs/:slug/pages/:pageSlug', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const { rows: [page] } = await pool.query(
-    'SELECT id, slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y FROM club_pages WHERE club_id = $1 AND slug = $2',
+    'SELECT id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y FROM club_pages WHERE club_id = $1 AND slug = $2',
     [club.id, req.params.pageSlug]
   );
   if (!page) return res.status(404).json({ error: 'Page not found.' });
@@ -10734,7 +10754,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => {
   const title = req.body.title !== undefined ? String(req.body.title).trim().slice(0, 60) || existing.title : existing.title;
   const content = req.body.content !== undefined ? String(req.body.content).slice(0, 20000) : existing.content;
   const { rows: [page] } = await pool.query(
-    'UPDATE club_pages SET title = $1, content = $2 WHERE id = $3 RETURNING id, slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y',
+    'UPDATE club_pages SET title = $1, content = $2 WHERE id = $3 RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y',
     [title, content, existing.id]
   );
   res.json({ page });
@@ -10747,7 +10767,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug/theme', requireAuth, async (req, res) 
   if (!ctx) return;
   const theme = req.body.theme === 'custom' ? 'custom' : 'default';
   const { rows: [updated] } = await pool.query(
-    'UPDATE club_pages SET theme = $1 WHERE id = $2 RETURNING id, slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y',
+    'UPDATE club_pages SET theme = $1 WHERE id = $2 RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y',
     [theme, ctx.page.id]
   );
   res.json({ page: updated });
@@ -10760,7 +10780,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug/theme-bg', requireAuth, uploadModImage
   const bgUrl = `/images/moderators/${req.file.filename}`;
   const { rows: [updated] } = await pool.query(
     `UPDATE club_pages SET theme_bg_url = $1, theme = 'custom' WHERE id = $2
-     RETURNING id, slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
+     RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
     [bgUrl, ctx.page.id]
   );
   res.json({ page: updated });
@@ -10782,7 +10802,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug/banner', requireAuth, uploadModImage.s
   }
   const { rows: [updated] } = await pool.query(
     `UPDATE club_pages SET banner_url = $1, banner_position_x = $2, banner_position_y = $3 WHERE id = $4
-     RETURNING id, slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
+     RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
     [bannerUrl, positionX, positionY, ctx.page.id]
   );
   res.json({ page: updated });
@@ -10796,7 +10816,7 @@ app.delete('/api/clubs/:slug/pages/:pageSlug/banner', requireAuth, async (req, r
   deleteIfModeratorUpload(ctx.page.banner_url);
   const { rows: [updated] } = await pool.query(
     `UPDATE club_pages SET banner_url = '', banner_position_x = 50, banner_position_y = 50 WHERE id = $1
-     RETURNING id, slug, title, type, content, cover_mode, cover_image_url, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
+     RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
     [ctx.page.id]
   );
   res.json({ page: updated });
@@ -10812,6 +10832,9 @@ function sanitizeTextFieldImageSlot(f, prefix) {
     [`${prefix}_mode`]: (f && f[`${prefix}_mode`] === 'slideshow') ? 'slideshow' : 'static',
     [`${prefix}_image_url`]: cleanUploadedImagePath(f && f[`${prefix}_image_url`]),
     [`${prefix}_slideshow`]: slideshow.slice(0, 10).map(s => ({ image_url: cleanUploadedImagePath(s && s.image_url) })).filter(s => s.image_url),
+    // Whether this slot's slideshow cycles from a random starting slide
+    // (the longstanding default) or always plays back in the saved order.
+    [`${prefix}_randomize`]: (f && f[`${prefix}_randomize`]) !== false,
   };
 }
 // PUT /api/clubs/:slug/pages/:pageSlug/text-fields — index 0 is always the
@@ -10862,6 +10885,9 @@ function registerTextFieldImageEndpoints(prefix) {
     if (!ctx) return;
     const mode = req.body[`${prefix}_mode`] === 'slideshow' ? 'slideshow' : 'static';
     ctx.fields[ctx.idx][`${prefix}_mode`] = mode;
+    if (req.body[`${prefix}_randomize`] !== undefined) {
+      ctx.fields[ctx.idx][`${prefix}_randomize`] = req.body[`${prefix}_randomize`] !== false;
+    }
     await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(ctx.fields), ctx.page.id]);
     res.json({ text_fields: ctx.fields });
   });
@@ -10921,8 +10947,9 @@ app.put('/api/clubs/:slug/pages/:pageSlug/cover-mode', requireAuth, async (req, 
   const ctx = await requireClubPageAdmin(req, res);
   if (!ctx) return;
   const mode = req.body.cover_mode === 'slideshow' ? 'slideshow' : 'static';
-  await pool.query('UPDATE club_pages SET cover_mode = $1 WHERE id = $2', [mode, ctx.page.id]);
-  res.json({ cover_mode: mode });
+  const randomize = req.body.randomize !== undefined ? req.body.randomize !== false : ctx.page.cover_randomize !== false;
+  await pool.query('UPDATE club_pages SET cover_mode = $1, cover_randomize = $2 WHERE id = $3', [mode, randomize, ctx.page.id]);
+  res.json({ cover_mode: mode, cover_randomize: randomize });
 });
 
 app.put('/api/clubs/:slug/pages/:pageSlug/cover-image', requireAuth, uploadModImage.single('image'), async (req, res) => {

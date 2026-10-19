@@ -265,7 +265,14 @@
     <div id="cp-cover-slideshow" hidden>
       <div class="cl-edit-slideshow-stack" id="cp-cover-slideshow-stack"></div>
       <input type="file" id="cp-cover-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-      <p class="cl-edit-hint">Cycles randomly on your post. Drag thumbnails to reorder.</p>
+      <div class="slideshow-randomize-row">
+        <label class="slideshow-randomize-label" for="cp-cover-slideshow-randomize">🔀 Randomize</label>
+        <label class="slideshow-randomize-switch">
+          <input type="checkbox" id="cp-cover-slideshow-randomize" checked />
+          <span class="slideshow-randomize-slider"></span>
+        </label>
+      </div>
+      <p class="cl-edit-hint">Drag thumbnails to reorder. Randomize picks a random slide to start on each visit; turned off, it always starts from the first one in this order.</p>
     </div>
 
     <div class="mod-field" id="cp-preview-field" hidden style="margin-top:1.5rem;">
@@ -465,7 +472,7 @@
   }
 
   // ── Cover Media ──────────────────────────────────────────────────────
-  let cover = { mode: 'static', image_url: '', slideshow: [] };
+  let cover = { mode: 'static', image_url: '', slideshow: [], randomize: true };
   function setCoverMode(mode) {
     cover.mode = mode;
     const isSlideshow = mode === 'slideshow';
@@ -477,6 +484,10 @@
   }
   document.getElementById('cp-cover-mode-static').addEventListener('click', () => setCoverMode('static'));
   document.getElementById('cp-cover-mode-slideshow').addEventListener('click', () => setCoverMode('slideshow'));
+  document.getElementById('cp-cover-slideshow-randomize').addEventListener('change', function () {
+    cover.randomize = this.checked;
+    cpDirty = true;
+  });
 
   document.getElementById('cp-cover-wrap').addEventListener('click', (e) => {
     if (e.target.closest('#cp-cover-recrop-btn')) return;
@@ -643,7 +654,14 @@
         <div class="cl-tf-slideshow" ${mode === 'static' ? 'hidden' : ''}>
           <div class="cl-edit-slideshow-stack cl-tf-slideshow-stack"></div>
           <input type="file" class="cl-tf-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-          <p class="cl-edit-hint">The live post shows one image from this list (no cross-fade/arrows).</p>
+          <div class="slideshow-randomize-row">
+            <label class="slideshow-randomize-label">🔀 Randomize</label>
+            <label class="slideshow-randomize-switch">
+              <input type="checkbox" class="cl-tf-slideshow-randomize" ${field[`${prefix}_randomize`] !== false ? 'checked' : ''} />
+              <span class="slideshow-randomize-slider"></span>
+            </label>
+          </div>
+          <p class="cl-edit-hint">Randomize picks a random slide to start on each visit; turned off, it always starts from the first one added.</p>
         </div>
       </div>
     `;
@@ -659,6 +677,11 @@
     const removeBtn = slot.querySelector('.cl-tf-remove-img-btn');
     const ssStack = slot.querySelector('.cl-tf-slideshow-stack');
     const ssFileInput = slot.querySelector('.cl-tf-slideshow-file-input');
+    const ssRandomizeToggle = slot.querySelector('.cl-tf-slideshow-randomize');
+    ssRandomizeToggle.addEventListener('change', () => {
+      postTextFields[i][`${prefix}_randomize`] = ssRandomizeToggle.checked;
+      cpDirty = true;
+    });
 
     slot.querySelectorAll('.cl-tf-mode-toggle .cl-edit-mode-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1001,8 +1024,10 @@
         mode: post.cover_mode === 'slideshow' ? 'slideshow' : 'static',
         image_url: post.cover_image_url || '',
         slideshow: post.cover_slideshow || [],
+        randomize: post.cover_randomize !== false,
       };
       setCoverMode(cover.mode);
+      document.getElementById('cp-cover-slideshow-randomize').checked = cover.randomize;
       if (cover.image_url) {
         document.getElementById('cp-cover-preview').src = cover.image_url;
         document.getElementById('cp-cover-recrop-btn').hidden = false;

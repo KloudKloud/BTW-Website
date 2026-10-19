@@ -2316,7 +2316,14 @@
             <div id="cl-edit-cover-slideshow" hidden>
               <div class="cl-edit-slideshow-stack" id="cl-edit-slideshow-stack"></div>
               <input type="file" id="cl-edit-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-              <p class="cl-edit-hint">Cycles randomly on your Hub. Drag thumbnails to reorder.</p>
+              <div class="slideshow-randomize-row">
+                <label class="slideshow-randomize-label" for="cl-edit-slideshow-randomize">🔀 Randomize</label>
+                <label class="slideshow-randomize-switch">
+                  <input type="checkbox" id="cl-edit-slideshow-randomize" checked />
+                  <span class="slideshow-randomize-slider"></span>
+                </label>
+              </div>
+              <p class="cl-edit-hint">Drag thumbnails to reorder. Randomize picks a random slide to start on each visit; turned off, it always starts from the first one in this order.</p>
             </div>
           </div>
 
@@ -2457,7 +2464,14 @@
             <div id="cl-page-cover-slideshow" hidden>
               <div class="cl-edit-slideshow-stack" id="cl-page-slideshow-stack"></div>
               <input type="file" id="cl-page-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-              <p class="cl-edit-hint">Cycles randomly on this page. Drag thumbnails to reorder.</p>
+              <div class="slideshow-randomize-row">
+                <label class="slideshow-randomize-label" for="cl-page-slideshow-randomize">🔀 Randomize</label>
+                <label class="slideshow-randomize-switch">
+                  <input type="checkbox" id="cl-page-slideshow-randomize" checked />
+                  <span class="slideshow-randomize-slider"></span>
+                </label>
+              </div>
+              <p class="cl-edit-hint">Drag thumbnails to reorder. Randomize picks a random slide to start on each visit; turned off, it always starts from the first one in this order.</p>
             </div>
 
             <div class="mod-field" style="margin-top:2.25rem;">
@@ -3235,7 +3249,7 @@ async function renderClubCover(club) {
       const images = data.images || [];
       if (images.length) {
         clSlideshowImages = images.map(i => i.image_url);
-        clSlideshowIdx = Math.floor(Math.random() * clSlideshowImages.length);
+        clSlideshowIdx = club.cover_randomize === false ? 0 : Math.floor(Math.random() * clSlideshowImages.length);
         showSlideshowImage(clSlideshowImages[clSlideshowIdx]);
         const hasMultiple = clSlideshowImages.length > 1;
         prevBtn.style.display = hasMultiple ? 'flex' : 'none';
@@ -4052,9 +4066,9 @@ function renderPostDetail(post) {
   updatePostMetaUI(post);
 
   if (post.cover_mode === 'slideshow') {
-    renderCoverMediaBlock('slideshow', null, post.cover_slideshow || []);
+    renderCoverMediaBlock('slideshow', null, post.cover_slideshow || [], post.cover_randomize !== false);
   } else {
-    renderCoverMediaBlock('static', post.cover_image_url, null);
+    renderCoverMediaBlock('static', post.cover_image_url, null, true);
   }
   renderTextFieldSections(post.text_fields || []);
 
@@ -4270,7 +4284,7 @@ let currentPageData = null;
 // on navigation (their DOM gets wiped via fieldsWrap.innerHTML = '', but
 // a running setInterval keeps firing against detached nodes otherwise).
 let cpvFieldSlideshowTimers = [];
-function fieldSlideshowEl(images, aspect, extraClass) {
+function fieldSlideshowEl(images, aspect, extraClass, randomize) {
   const wrap = document.createElement('div');
   wrap.className = `cl-slideshow-wrap ${extraClass}`;
   wrap.style.aspectRatio = aspect;
@@ -4282,7 +4296,7 @@ function fieldSlideshowEl(images, aspect, extraClass) {
   `;
   const [imgA, imgB, prevBtn, nextBtn] = wrap.children;
   let activeLayer = 'a';
-  let idx = Math.floor(Math.random() * images.length);
+  let idx = randomize === false ? 0 : Math.floor(Math.random() * images.length);
   let timer = null;
   let loadToken = 0;
   function show(url) {
@@ -4463,10 +4477,10 @@ async function loadCustomPage(pageSlug, tab) {
       try {
         const ssRes = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(pageSlug)}/slideshow`);
         const ssData = await ssRes.json();
-        renderCoverMediaBlock('slideshow', null, ssData.images || []);
+        renderCoverMediaBlock('slideshow', null, ssData.images || [], page.cover_randomize !== false);
       } catch {}
     } else {
-      renderCoverMediaBlock('static', page.cover_image_url, null);
+      renderCoverMediaBlock('static', page.cover_image_url, null, true);
     }
 
     // Text sections — index 0 is the mandatory Body Text box, which has no
@@ -4501,14 +4515,14 @@ async function loadCustomPage(pageSlug, tab) {
 // text-fields pair rather than duplicating the markup+logic per view --
 // pageContentMoveTo() below relocates that shared element into whichever
 // container is currently active, same idea as ccMoveTo() for comments.
-function renderCoverMediaBlock(mode, imageUrl, slideshowList) {
+function renderCoverMediaBlock(mode, imageUrl, slideshowList, randomize) {
   const slideshowWrap = document.getElementById('cl-page-view-slideshow-wrap');
   if (cpvSlideshowTimer) { clearInterval(cpvSlideshowTimer); cpvSlideshowTimer = null; }
   cpvSlideshowImages = [];
   slideshowWrap.hidden = true;
   if (mode === 'slideshow' && (slideshowList || []).length) {
     cpvSlideshowImages = slideshowList.map(s => (typeof s === 'string' ? s : s.image_url));
-    cpvSlideshowIdx = Math.floor(Math.random() * cpvSlideshowImages.length);
+    cpvSlideshowIdx = randomize === false ? 0 : Math.floor(Math.random() * cpvSlideshowImages.length);
     cpvShowSlideshowImage(cpvSlideshowImages[cpvSlideshowIdx]);
     const hasMultiple = cpvSlideshowImages.length > 1;
     document.getElementById('cl-page-view-slideshow-prev').style.display = hasMultiple ? 'flex' : 'none';
@@ -4552,12 +4566,12 @@ function renderTextFieldSections(fields) {
     const coverSlot = section.querySelector('.cl-tf-cover-slot');
     const sideSlot = section.querySelector('.cl-tf-side-slot');
     if (coverIsSlideshow) {
-      coverSlot.appendChild(fieldSlideshowEl(field.cover_slideshow.map(s => s.image_url), '16 / 9', 'cl-page-text-section-cover'));
+      coverSlot.appendChild(fieldSlideshowEl(field.cover_slideshow.map(s => s.image_url), '16 / 9', 'cl-page-text-section-cover', field.cover_randomize !== false));
     } else if (field.cover_image_url) {
       coverSlot.appendChild(fadeInImg('cl-page-text-section-cover', field.cover_image_url));
     }
     if (sideIsSlideshow) {
-      sideSlot.appendChild(fieldSlideshowEl(field.side_slideshow.map(s => s.image_url), '3 / 4', 'cl-page-text-section-side'));
+      sideSlot.appendChild(fieldSlideshowEl(field.side_slideshow.map(s => s.image_url), '3 / 4', 'cl-page-text-section-side', field.side_randomize !== false));
     } else if (field.side_image_url) {
       sideSlot.appendChild(fadeInImg('cl-page-text-section-side', field.side_image_url));
     }
@@ -5554,6 +5568,7 @@ function populateHomeEditor(club) {
   document.getElementById('cl-edit-nsfw-toggle').checked = !!club.is_nsfw;
   setEditCoverMode(club.cover_mode || 'static', true);
   document.getElementById('cl-edit-cover-preview').src = club.cover_image_url || '/images/nopicture2.png';
+  document.getElementById('cl-edit-slideshow-randomize').checked = club.cover_randomize !== false;
   loadEditSlideshow();
   loadEditCards();
 }
@@ -5680,6 +5695,15 @@ function setEditCoverMode(mode, skipSave) {
 }
 document.getElementById('cl-edit-mode-static').addEventListener('click', () => setEditCoverMode('static'));
 document.getElementById('cl-edit-mode-slideshow').addEventListener('click', () => setEditCoverMode('slideshow'));
+
+document.getElementById('cl-edit-slideshow-randomize').addEventListener('change', async function () {
+  const randomize = this.checked;
+  const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/cover-mode`, {
+    method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cover_mode: currentClub ? currentClub.cover_mode : 'slideshow', randomize }),
+  });
+  if (res.ok && currentClub) { currentClub.cover_randomize = randomize; renderClubCover(currentClub); }
+});
 
 document.getElementById('cl-edit-cover-wrap').addEventListener('click', (e) => {
   if (e.target.closest('#cl-edit-cover-recrop-btn')) return;
@@ -5945,6 +5969,7 @@ async function populatePageEditor(pageSlug) {
     setEditPageCoverMode(full.cover_mode || 'static', true);
     document.getElementById('cl-page-cover-preview').src = full.cover_image_url || '/images/nopicture2.png';
     document.getElementById('cl-page-cover-remove-btn').hidden = !full.cover_image_url;
+    document.getElementById('cl-page-slideshow-randomize').checked = full.cover_randomize !== false;
     // Index 0 is always the mandatory Body Text box (empty title, no
     // images) -- same reserved-slot shape create-club-post.html's post
     // builder uses, kept as a real array entry (not split out into its
@@ -5981,6 +6006,17 @@ function setEditPageCoverMode(mode, skipSave) {
 }
 document.getElementById('cl-page-mode-static').addEventListener('click', () => setEditPageCoverMode('static'));
 document.getElementById('cl-page-mode-slideshow').addEventListener('click', () => setEditPageCoverMode('slideshow'));
+
+document.getElementById('cl-page-slideshow-randomize').addEventListener('change', async function () {
+  if (!editActivePageSlug) return;
+  const randomize = this.checked;
+  const currentMode = document.getElementById('cl-page-mode-slideshow').classList.contains('active') ? 'slideshow' : 'static';
+  await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/cover-mode`, {
+    method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cover_mode: currentMode, randomize }),
+  });
+  if (currentPageSlug === editActivePageSlug) loadCustomPage(editActivePageSlug);
+});
 
 document.getElementById('cl-page-cover-wrap').addEventListener('click', (e) => {
   if (e.target.closest('#cl-page-cover-recrop-btn')) return;
@@ -6144,7 +6180,14 @@ function textFieldImageSlotHtml(field, prefix, aspect, label, maxWidth) {
       <div class="cl-tf-slideshow" ${mode === 'static' ? 'hidden' : ''}>
         <div class="cl-edit-slideshow-stack cl-tf-slideshow-stack"></div>
         <input type="file" class="cl-tf-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-        <p class="cl-edit-hint">The live page shows one image from this list (no cross-fade/arrows).</p>
+        <div class="slideshow-randomize-row">
+          <label class="slideshow-randomize-label">🔀 Randomize</label>
+          <label class="slideshow-randomize-switch">
+            <input type="checkbox" class="cl-tf-slideshow-randomize" ${field[`${prefix}_randomize`] !== false ? 'checked' : ''} />
+            <span class="slideshow-randomize-slider"></span>
+          </label>
+        </div>
+        <p class="cl-edit-hint">Randomize picks a random slide to start on each visit; turned off, it always starts from the first one added.</p>
       </div>
     </div>
   `;
@@ -6183,6 +6226,16 @@ function wireTextFieldImageSlot(row, i, prefix, aspect) {
   const removeBtn = slot.querySelector('.cl-tf-remove-img-btn');
   const ssStack = slot.querySelector('.cl-tf-slideshow-stack');
   const ssFileInput = slot.querySelector('.cl-tf-slideshow-file-input');
+  const ssRandomizeToggle = slot.querySelector('.cl-tf-slideshow-randomize');
+  ssRandomizeToggle.addEventListener('change', async () => {
+    const randomize = ssRandomizeToggle.checked;
+    editPageTextFields[i][`${prefix}_randomize`] = randomize;
+    await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/text-fields/${i}/${prefix}-mode`, {
+      method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [`${prefix}_mode`]: editPageTextFields[i][`${prefix}_mode`] || 'static', [`${prefix}_randomize`]: randomize }),
+    });
+    if (currentPageSlug === editActivePageSlug) loadCustomPage(editActivePageSlug);
+  });
 
   slot.querySelectorAll('.cl-tf-mode-toggle .cl-edit-mode-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
