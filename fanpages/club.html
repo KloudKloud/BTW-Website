@@ -1516,6 +1516,27 @@
     }
     .cl-edit-layout { display: flex; align-items: flex-start; }
     .cl-edit-main { flex: 1; min-width: 0; }
+
+    /* ── Edit Info: full-page takeover ── same reasoning/pattern as Edit
+       Club just above (less lag than a modal, consistent with +Create
+       Story/Character/Gallery and the Story Editor) -- reuses the same
+       body.cl-editing-active mechanism to hide the persistent nav, just
+       with its own narrower content column since this editor (Splash
+       Title/Description, Club Rules, Moderators) never needed Edit
+       Club's wide two-column Pages layout. */
+    #cl-splash-edit-overlay {
+      display: block; padding: 0; overflow-y: auto;
+      background: #0d0a12; backdrop-filter: none; -webkit-backdrop-filter: none;
+    }
+    .cl-splash-page-modal {
+      max-width: 620px; width: 100%; box-sizing: border-box; margin: 0 auto;
+      max-height: none; overflow-y: visible; background: transparent; border: none;
+      box-shadow: none; border-radius: 0; padding: calc(84px + 2.5rem) 1.5rem 5rem;
+    }
+    /* .mod-edit-bar-title's shared base font is still the old Baloo 2/
+       Cinzel pairing -- new title text gets the bubbly Fredoka pass
+       instead of introducing another Cinzel usage. */
+    #cl-splash-topbar .mod-edit-bar-title { font-family: 'Fredoka', 'Lato', cursive; }
     /* Groups each Home-editor section (Cover Media, Club Icon, NSFW,
        Welcome Message, Featured Cards) into its own boxed card, same
        recipe as the Creator Hub's .cs-panel -- reads as distinct, tidy
@@ -2870,13 +2891,27 @@
   </div>
 </div>
 
-<!-- Sidebar splash title/message — small, focused editor. Also the home
-     for "Make Rules" (club_rules CRUD), a second view switched to via the
-     link at the top rather than a separate modal. -->
+<!-- Sidebar splash title/message — full-page takeover, same pattern as
+     Edit Club (see #cl-splash-edit-overlay's own CSS comment above for the
+     reasoning: less lag than a modal, consistent with +Create Story/
+     Character/Gallery and the Story Editor). Also the home for "Make
+     Rules" (club_rules CRUD) and Moderators, both just sections on this
+     same page rather than separate modals. -->
 <div class="char-editor-overlay" id="cl-splash-edit-overlay" hidden>
-  <div class="char-editor-modal" style="max-width: 460px;">
+  <div class="mod-edit-bar" id="cl-splash-topbar">
+    <div class="mod-edit-bar-left">
+      <div class="mod-edit-bar-titles">
+        <span class="mod-edit-bar-label">Editing</span>
+        <span class="mod-edit-bar-title">Edit Info</span>
+      </div>
+    </div>
+    <div class="mod-edit-bar-actions">
+      <button class="mod-edit-bar-cancel" id="cl-splash-cancel-btn" type="button">Cancel</button>
+      <button class="mod-edit-bar-save" id="cl-splash-save-btn" type="button">Save</button>
+    </div>
+  </div>
+  <div class="char-editor-modal cl-splash-page-modal">
     <div id="cl-splash-main-view">
-      <h2 class="char-editor-title">Edit Info</h2>
       <div class="mod-field">
         <div class="cl-field-title-row">
           <label for="cl-splash-title-input">Splash Title</label>
@@ -2934,10 +2969,6 @@
       </button>
 
       <p class="mod-panel-msg" id="cl-splash-msg"></p>
-      <div class="char-editor-actions">
-        <button class="mod-btn mod-btn--cancel" id="cl-splash-cancel-btn" type="button">Cancel</button>
-        <button class="mod-btn" id="cl-splash-save-btn" type="button">Save</button>
-      </div>
     </div>
   </div>
 </div>
@@ -5808,8 +5839,19 @@ document.getElementById('cl-page-view-theme-bg-file-input').addEventListener('ch
 });
 document.getElementById('cl-page-view-edit-btn').addEventListener('click', () => openEditClubModal());
 
-// ── "Edit Info" — sidebar splash title/message + Rules, small standalone
-// editor, separate from the Hub's Welcome Title/Description. ─────────────
+// ── "Edit Info" — sidebar splash title/message + Rules + Moderators, full-
+// page takeover (see #cl-splash-edit-overlay's CSS comment), separate from
+// the Hub's Welcome Title/Description. Opening/closing mirrors
+// openEditClubModal/closeEditClubModal exactly -- same body.cl-editing-
+// active class hides the persistent nav either way, and since this is all
+// still just showing/hiding an overlay on the same page (not a real
+// navigation), the club page underneath is untouched the whole time --
+// Cancel/Save land you right back where you were, scroll position and all. ──
+function closeSplashEdit() {
+  document.getElementById('cl-splash-edit-overlay').hidden = true;
+  document.body.classList.remove('cl-editing-active');
+  document.body.style.overflow = '';
+}
 document.getElementById('cl-side-edit-btn').addEventListener('click', () => {
   if (!currentClub) return;
   document.getElementById('cl-splash-title-input').value = currentClub.sidebar_title || '';
@@ -5817,12 +5859,13 @@ document.getElementById('cl-side-edit-btn').addEventListener('click', () => {
   document.getElementById('cl-splash-msg').textContent = '';
   closeRuleForm();
   document.getElementById('cl-splash-edit-overlay').hidden = false;
+  document.body.classList.add('cl-editing-active');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('cl-splash-edit-overlay').scrollTop = 0;
   loadEditRules();
   renderEditInfoMods();
 });
-document.getElementById('cl-splash-cancel-btn').addEventListener('click', () => {
-  document.getElementById('cl-splash-edit-overlay').hidden = true;
-});
+document.getElementById('cl-splash-cancel-btn').addEventListener('click', closeSplashEdit);
 document.getElementById('cl-splash-save-btn').addEventListener('click', async () => {
   const btn = document.getElementById('cl-splash-save-btn');
   const msg = document.getElementById('cl-splash-msg');
@@ -5841,7 +5884,7 @@ document.getElementById('cl-splash-save-btn').addEventListener('click', async ()
     if (!res.ok) throw new Error();
     const data = await res.json();
     renderClub(data.club);
-    document.getElementById('cl-splash-edit-overlay').hidden = true;
+    closeSplashEdit();
   } catch {
     msg.className = 'mod-panel-msg mod-panel-msg--error';
     msg.textContent = 'Could not save — please try again.';
