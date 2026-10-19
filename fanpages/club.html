@@ -4821,7 +4821,7 @@ function ccCommentEl(c, isReply) {
         <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
         <span class="cc-save-label">${c.user_saved ? 'Saved' : 'Save'}</span>
       </button>
-      ${token && !isReply ? '<button class="cc-action-btn" data-action="reply">Reply</button>' : ''}
+      ${!isReply ? '<button class="cc-action-btn" data-action="reply">Reply</button>' : ''}
       ${ccCanDelete(c) ? '<button class="cc-action-btn" data-action="delete">Delete</button>' : (token ? '<button class="cc-action-btn cc-action-btn--flag" data-action="report" title="Report">&#127987;&#65039;</button>' : '')}
     </div>
   `;
@@ -4867,7 +4867,13 @@ function ccCommentEl(c, isReply) {
   });
 
   const replyBtn = body.querySelector('[data-action="reply"]');
-  if (replyBtn) replyBtn.addEventListener('click', () => ccOpenReplyBox(body, c));
+  if (replyBtn) replyBtn.addEventListener('click', () => {
+    // Guests see a normal-looking Reply button, same as Follow elsewhere --
+    // clicking it opens the Bet/Sign In gate instead of a reply box they
+    // couldn't actually submit.
+    if (!token) { window.fpShowSignInGate('Sign in to join the conversation!'); return; }
+    ccOpenReplyBox(body, c);
+  });
   const deleteBtn = body.querySelector('[data-action="delete"]');
   if (deleteBtn) deleteBtn.addEventListener('click', () => ccDeleteComment(c.id));
   const reportBtn = body.querySelector('[data-action="report"]');
