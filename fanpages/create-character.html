@@ -527,9 +527,19 @@
     .then(d => { speciesSynonyms = new Map(d.synonyms.map(s => [s.alias.toLowerCase(), s.canonical])); }).catch(() => {});
 
   // Cancel returns to whatever page you were actually on when you clicked
-  // "+ Character", instead of always dumping you at the Fanpage Hub.
+  // "+ Character", instead of always dumping you at the Fanpage Hub. Referer
+  // headers never carry a URL fragment, so if we came from the Creator Hub
+  // (document.referrer lacks the #characters/#gallery hash), read back the
+  // tab the hub stashed in sessionStorage right before navigating here.
   if (document.referrer && document.referrer.startsWith(window.location.origin)) {
-    document.getElementById('char-editor-cancel').href = document.referrer;
+    let backHref = document.referrer;
+    if (new URL(document.referrer).pathname.replace(/\/$/, '').endsWith('/editor')) {
+      try {
+        const lastTab = sessionStorage.getItem('btw_editor_last_tab');
+        if (lastTab && lastTab !== 'stories') backHref = backHref.replace(/#.*$/, '') + `#${lastTab}`;
+      } catch {}
+    }
+    document.getElementById('char-editor-cancel').href = backHref;
   }
 
   // ── Top bar Cancel/Create — same big always-visible pair as +Story's

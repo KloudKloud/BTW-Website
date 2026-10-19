@@ -336,9 +336,19 @@
   window.fpFixLinks();
 
   // Cancel returns to whatever page you were actually on when you clicked
-  // "+ Gallery", instead of always dumping you at the Fanpage Hub.
+  // "+ Gallery", instead of always dumping you at the Fanpage Hub. Referer
+  // headers never carry a URL fragment, so if we came from the Creator Hub
+  // (document.referrer lacks the #gallery/#characters hash), read back the
+  // tab the hub stashed in sessionStorage right before navigating here.
   if (document.referrer && document.referrer.startsWith(window.location.origin)) {
-    document.getElementById('gallery-editor-cancel').href = document.referrer;
+    let backHref = document.referrer;
+    if (new URL(document.referrer).pathname.replace(/\/$/, '').endsWith('/editor')) {
+      try {
+        const lastTab = sessionStorage.getItem('btw_editor_last_tab');
+        if (lastTab && lastTab !== 'stories') backHref = backHref.replace(/#.*$/, '') + `#${lastTab}`;
+      } catch {}
+    }
+    document.getElementById('gallery-editor-cancel').href = backHref;
   }
 
   // ── Top bar Cancel/Create + unsaved-changes guard — same pattern as
@@ -919,8 +929,8 @@
     editingGalleryId = id;
     try {
       const [itemRes, linksRes] = await Promise.all([
-        fetch(`/api/gallery/${id}`),
-        fetch(`/api/gallery/${id}/links`),
+        fetch(`/api/gallery/${id}`, { headers: authHeaders() }),
+        fetch(`/api/gallery/${id}/links`, { headers: authHeaders() }),
       ]);
       if (!itemRes.ok) return;
       const { item } = await itemRes.json();
