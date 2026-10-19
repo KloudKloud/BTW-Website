@@ -1764,6 +1764,24 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
   await pool.query(`
     DELETE FROM club_members WHERE user_id IN (SELECT id FROM users WHERE username IN ('holly_allen', 'holly_chan'))
   `).catch(e => console.error('holly_allen/holly_chan club membership cleanup:', e.message));
+
+  // ── Leveling system — xp/level cached on the user row, xp_log as the audit
+  // trail + source of truth (see awardXp() below for the actual math).
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS xp INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS level INTEGER NOT NULL DEFAULT 1;
+  `).catch(e => console.error('users xp/level migration:', e.message));
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS xp_log (
+      id          SERIAL      PRIMARY KEY,
+      user_id     INTEGER     NOT NULL REFERENCES users(id),
+      source_type TEXT        NOT NULL,
+      source_id   INTEGER,
+      xp_amount   INTEGER     NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_xp_log_user ON xp_log(user_id);
+  `).catch(e => console.error('xp_log migration:', e.message));
 }
 
 // ── Email encryption helpers ──────────────────────────────────────────────────
@@ -2169,19 +2187,22 @@ app.post('/api/auth/login', authRateLimiter, async (req, res) => {
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
     `SELECT id, username, display_name, avatar, avatar_position_x, avatar_position_y, email_hash,
-            notif_theme, notif_theme_bg_url, reader_theme, reader_theme_bg_url, nsfw_enabled
+            notif_theme, notif_theme_bg_url, reader_theme, reader_theme_bg_url, nsfw_enabled, xp, level
      FROM users WHERE id = $1`, [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
   const is_admin = user.email_hash === process.env.ADMIN_EMAIL_HASH;
   const { rows: modRows } = await pool.query('SELECT 1 FROM moderator_sites WHERE owner_user_id = $1 LIMIT 1', [user.id]);
   const is_moderator = modRows.length > 0;
+  const milestone = milestoneForLevel(user.level);
   res.json({ user: {
     id: user.id, username: user.username, display_name: user.display_name, avatar: user.avatar || null,
     avatar_position_x: user.avatar_position_x, avatar_position_y: user.avatar_position_y,
     is_admin, is_moderator, nsfw_enabled: user.nsfw_enabled,
     notif_theme: user.notif_theme || 'default', notif_theme_bg_url: user.notif_theme_bg_url || '',
     reader_theme: user.reader_theme || 'dark', reader_theme_bg_url: user.reader_theme_bg_url || '',
+    xp: user.xp, level: user.level, xp_into_level: user.xp - cumulativeXpForLevel(user.level),
+    xp_for_next_level: xpToNextLevel(user.level), milestone_badge: milestone ? milestone.badge : null,
   } });
 });
 
@@ -2223,6 +2244,7 @@ app.post('/api/comments', requireAuth, async (req, res) => {
     const { rows: [user] } = await pool.query(
       'SELECT display_name, username, avatar FROM users WHERE id = $1', [req.user.id]
     );
+    const levelUp = await awardXp(req.user.id, 'comment', row.id, 5);
 
     res.json({
       comment: {
@@ -2233,6 +2255,7 @@ app.post('/api/comments', requireAuth, async (req, res) => {
         avatar:       user.avatar,
         created_at:   new Date().toISOString(),
       },
+      levelUp,
     });
   } catch (err) {
     console.error('Comment error:', err);
@@ -3258,7 +3281,8 @@ app.post('/api/community/posts', requireAuth, uploadCommunityImg.array('attachme
     FROM community_posts p LEFT JOIN users u ON p.user_id = u.id WHERE p.id = $1
   `, [row.id]);
 
-  res.json({ post });
+  const levelUp = await awardXp(req.user.id, 'club_post', row.id, 20);
+  res.json({ post, levelUp });
 });
 
 // POST /api/community/posts/:id/like
@@ -3312,7 +3336,8 @@ app.post('/api/community/posts/:id/comments', requireAuth, async (req, res) => {
     FROM community_comments c LEFT JOIN users u ON c.user_id = u.id WHERE c.id = $1
   `, [row.id]);
 
-  res.json({ comment });
+  const levelUp = await awardXp(req.user.id, 'comment', row.id, 5);
+  res.json({ comment, levelUp });
 });
 
 // PATCH /api/community/posts/:id/nsfw  (admin only — toggle NSFW flag)
@@ -5301,7 +5326,8 @@ app.post('/api/newspaper', requireAuth, uploadInbox.array('attachments', 4), asy
   await notifyFollowers(req.user.id, 'new_newspaper',
     `posted a new newspaper${title ? `: "${title}"` : '.'}`,
     `/${actor.username}?news=${post.id}#newspaper`);
-  res.json({ post: { ...post, comment_count: 0 } });
+  const levelUp = await awardXp(req.user.id, 'newspaper', post.id, 50);
+  res.json({ post: { ...post, comment_count: 0 }, levelUp });
 });
 
 app.put('/api/newspaper/:id', requireAuth, async (req, res) => {
@@ -5361,11 +5387,13 @@ app.post('/api/newspaper/post/:id/comments', requireAuth, async (req, res) => {
   await notifyUser(post.user_id, req.user.id, 'newspaper_comment',
     `commented on your newspaper${post.title ? ` "${post.title}"` : ''}.`,
     `/${post.owner_username}?news=${post.id}#newspaper`);
+  const levelUp = await awardXp(req.user.id, 'comment', comment.id, 5);
   res.json({
     comment: {
       id: comment.id, body: comment.body, created_at: comment.created_at,
       author: { username: me.username, display_name: me.display_name || me.username, avatar: me.avatar || null },
     },
+    levelUp,
   });
 });
 
@@ -7216,6 +7244,7 @@ app.put('/api/moderator/chapters/:id/status', requireAuth, requireModerator, asy
   // Only notify followers on the draft→published transition, not every save
   // -- also the one moment a story jumps back to the top of the owner's
   // profile Page Order (editing an already-published chapter doesn't).
+  let levelUp = null;
   if (existing && existing.status !== 'published' && status === 'published') {
     await notifyFollowers(req.user.id, 'new_chapter',
       `published a new chapter: "${chapter.title}".`,
@@ -7226,8 +7255,9 @@ app.put('/api/moderator/chapters/:id/status', requireAuth, requireModerator, asy
        ) WHERE id = $2`,
       [req.user.id, req.modSite.id]
     );
+    levelUp = await awardXp(req.user.id, 'chapter', chapter.id, 50);
   }
-  res.json({ chapter });
+  res.json({ chapter, levelUp });
 });
 
 // Saves title + body text from the chapter editor page — plain JSON, no
@@ -7476,7 +7506,8 @@ app.post('/api/moderator/characters', requireAuth, requireModerator, async (req,
   );
   const thumb = await generateThumbnail(character.ref_image);
   if (thumb) { await pool.query('UPDATE moderator_characters SET thumb_image_url = $1 WHERE id = $2', [thumb, character.id]); character.thumb_image_url = thumb; }
-  res.json({ character });
+  const levelUp = await awardXp(req.user.id, 'character', character.id, 50);
+  res.json({ character, levelUp });
 });
 
 // Editing a character is about owning it, not which story screen you're on —
@@ -7832,7 +7863,8 @@ app.post('/api/characters', requireAuth, async (req, res) => {
     `/${actor.username}?char=${character.id}#characters`);
   const thumb = await generateThumbnail(character.ref_image);
   if (thumb) { await pool.query('UPDATE moderator_characters SET thumb_image_url = $1 WHERE id = $2', [thumb, character.id]); character.thumb_image_url = thumb; }
-  res.json({ character });
+  const levelUp = await awardXp(req.user.id, 'character', character.id, 50);
+  res.json({ character, levelUp });
 });
 
 // Additive-only linking — used right after standalone character creation to
@@ -7955,7 +7987,8 @@ app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage
     `/${actor1.username}?gallery=${item.id}#gallery`);
   const thumb = await generateThumbnail(imageUrl);
   if (thumb) { await pool.query('UPDATE moderator_gallery SET thumb_image_url = $1 WHERE id = $2', [thumb, item.id]); item.thumb_image_url = thumb; }
-  res.json({ item });
+  const levelUp = await awardXp(req.user.id, 'gallery', item.id, 50);
+  res.json({ item, levelUp });
 });
 
 // Same idea as /api/moderator/characters/reorder — persists
@@ -8248,7 +8281,8 @@ app.post('/api/gallery', requireAuth, uploadModImage.fields([{ name: 'image', ma
     `/${actor2.username}?gallery=${item.id}#gallery`);
   const thumb = await generateThumbnail(imageUrl);
   if (thumb) { await pool.query('UPDATE moderator_gallery SET thumb_image_url = $1 WHERE id = $2', [thumb, item.id]); item.thumb_image_url = thumb; }
-  res.json({ item });
+  const levelUp = await awardXp(req.user.id, 'gallery', item.id, 50);
+  res.json({ item, levelUp });
 });
 
 // Additive-only linking — used right after creating (or editing) a gallery
@@ -8458,6 +8492,73 @@ app.post('/api/chapters/:id/progress', requireAuth, async (req, res) => {
   );
   res.json({ ok: true, percent: row.percent });
 });
+
+// ── Leveling system ──────────────────────────────────────────────────────────
+// Curve: level 1→2 costs a flat 50 XP (so a single first post levels you up),
+// levels 2-49 scale geometrically (~+11.7%/level, landing at 9,999 for the
+// 49→50 jump), and level 50+ is a flat 10,000 XP/level forever — no cap on
+// how high you can go, it just stops getting more expensive. See CLAUDE.md
+// "leveling system" notes for the full math writeup this came from.
+const XP_LEVEL_RATE = 1.1167;
+const XP_FLAT_LEVEL = 50;       // level at which cost stops scaling
+const XP_FLAT_COST = 10000;     // flat per-level cost from XP_FLAT_LEVEL onward
+const XP_FLAT_CUMULATIVE = Math.round(50 * (Math.pow(XP_LEVEL_RATE, XP_FLAT_LEVEL - 1) - 1) / (XP_LEVEL_RATE - 1)); // ~95,200
+
+function xpToNextLevel(level) {
+  if (level < XP_FLAT_LEVEL) return Math.round(50 * Math.pow(XP_LEVEL_RATE, level - 1));
+  return XP_FLAT_COST;
+}
+function cumulativeXpForLevel(level) {
+  if (level <= 1) return 0;
+  if (level <= XP_FLAT_LEVEL) return Math.round(50 * (Math.pow(XP_LEVEL_RATE, level - 1) - 1) / (XP_LEVEL_RATE - 1));
+  return XP_FLAT_CUMULATIVE + (level - XP_FLAT_LEVEL) * XP_FLAT_COST;
+}
+function levelForXp(xp) {
+  if (xp < XP_FLAT_CUMULATIVE) {
+    let level = 1;
+    while (cumulativeXpForLevel(level + 1) <= xp) level++;
+    return level;
+  }
+  return XP_FLAT_LEVEL + Math.floor((xp - XP_FLAT_CUMULATIVE) / XP_FLAT_COST);
+}
+
+// Placeholder names — swap these for real badge names/icons whenever they're
+// decided; nothing else about the system needs to change when they do.
+const XP_MILESTONES = [
+  { level: 1, badge: 'Milestone: Level 1 (placeholder)' },
+  { level: 10, badge: 'Milestone: Level 10 (placeholder)' },
+  { level: 25, badge: 'Milestone: Level 25 (placeholder)' },
+  { level: 45, badge: 'Milestone: Level 45 (placeholder)' },
+  { level: 50, badge: 'Milestone: Level 50 (placeholder)' },
+  { level: 75, badge: 'Milestone: Level 75 (placeholder)' },
+  { level: 100, badge: 'Milestone: Level 100 (placeholder)' },
+];
+function milestoneForLevel(level) {
+  return XP_MILESTONES.find(m => m.level === level) || null;
+}
+
+// Single chokepoint every content/comment-creation endpoint routes through.
+// Logs the award (audit trail + future "why is my XP X" support), bumps the
+// cached xp/level columns, and reports back whether this award crossed a
+// level (and/or a milestone) so the caller can let the client show a toast.
+// No daily caps anywhere — comments are deliberately uncapped per product
+// decision ("let them yap"), and content posts are self-limiting by effort.
+async function awardXp(userId, sourceType, sourceId, amount) {
+  if (!userId || !amount) return null;
+  const { rows: [before] } = await pool.query('SELECT xp, level FROM users WHERE id = $1', [userId]);
+  if (!before) return null;
+  await pool.query(
+    'INSERT INTO xp_log (user_id, source_type, source_id, xp_amount) VALUES ($1, $2, $3, $4)',
+    [userId, sourceType, sourceId || null, amount]
+  ).catch(e => console.error('xp_log insert:', e.message));
+  const newXp = before.xp + amount;
+  const newLevel = levelForXp(newXp);
+  await pool.query('UPDATE users SET xp = $1, level = $2 WHERE id = $3', [newXp, newLevel, userId])
+    .catch(e => console.error('users xp/level update:', e.message));
+  if (newLevel === before.level) return null;
+  const milestonesHit = XP_MILESTONES.filter(m => m.level > before.level && m.level <= newLevel);
+  return { leveledUp: true, oldLevel: before.level, newLevel, xp: newXp, milestones: milestonesHit };
+}
 
 // ── Notifications — generic fan-out helpers used by every real event below
 // (follow, like, bookmark, top-level comment, new chapter/character/gallery/
@@ -8709,6 +8810,9 @@ app.post('/api/content-comments', async (req, res) => {
     }
   }
 
+  // No XP for guest comments (viewerId null) -- there's no account to credit.
+  const levelUp = viewerId ? await awardXp(viewerId, 'comment', comment.id, 5) : null;
+
   res.json({
     comment: {
       id: comment.id, body: text, gif_url: gifUrl, paragraph_index: paragraphIndex,
@@ -8721,6 +8825,7 @@ app.post('/api/content-comments', async (req, res) => {
       like_count: 0, user_vote: 0, user_saved: false,
       parent_id: rootParentId, replies: [],
     },
+    levelUp,
   });
 });
 
@@ -10344,7 +10449,9 @@ app.post('/api/clubs/:slug/posts', requireAuth, async (req, res) => {
   const { rows: [author] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
   // Promotion-page cards (e.g. one post per book chapter) don't notify the
   // whole membership the way a real Social post does -- nobody wants 20
-  // notifications for a chapter archive being filled in.
+  // notifications for a chapter archive being filled in. Same reasoning
+  // applies to XP: a promotion card isn't a genuine club social post.
+  let levelUp = null;
   if (!promotionPageId) {
     const { rows: members } = await pool.query('SELECT user_id FROM club_members WHERE club_id = $1', [club.id]);
     const postLink = `/club?slug=${encodeURIComponent(club.slug)}&post=${post.id}`;
@@ -10355,8 +10462,9 @@ app.post('/api/clubs/:slug/posts', requireAuth, async (req, res) => {
         .map(uid => notifyUser(uid, req.user.id, 'club_post',
           `posted "${title}" in ${club.name}.`, postLink))
     );
+    levelUp = await awardXp(req.user.id, 'club_post', post.id, 20);
   }
-  res.json({ post: clubPostPublicShape({ ...post, username: author.username, display_name: author.display_name, avatar: author.avatar }) });
+  res.json({ post: clubPostPublicShape({ ...post, username: author.username, display_name: author.display_name, avatar: author.avatar }), levelUp });
 });
 
 // PUT /api/clubs/:slug/posts/:postId — editing a post resubmits the whole

@@ -570,6 +570,11 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
       </div>
       <div class="fpnav-right">
 
+        <div class="fpnav-level-badge" id="fpnav-level-badge" style="display:none;" title="">
+          <span class="fpnav-level-badge-icon" id="fpnav-level-badge-icon"></span>
+          <span id="fpnav-level-badge-num"></span>
+        </div>
+
         <div class="fpnav-dropdown-wrap">
           <button class="fpnav-link fpnav-trigger-link" id="fpnav-community-btn" type="button">Community <span class="fpnav-caret">▾</span></button>
           <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
@@ -1030,6 +1035,14 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
           else el.hidden = true;
         });
       }).catch(() => {});
+
+      const levelBadge = document.getElementById('fpnav-level-badge');
+      if (levelBadge && u.level) {
+        levelBadge.style.display = '';
+        levelBadge.title = u.milestone_badge || `Level ${u.level}`;
+        document.getElementById('fpnav-level-badge-num').textContent = `Lv. ${u.level}`;
+        document.getElementById('fpnav-level-badge-icon').textContent = u.milestone_badge ? '★' : '';
+      }
 
       document.getElementById('fpnav-avatar-img-wrap').innerHTML = u.avatar
         ? `<img src="${u.avatar}" alt="" />`
