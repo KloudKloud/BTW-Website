@@ -527,7 +527,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
           <button class="fpnav-link fpnav-trigger-link" id="fpnav-community-btn" type="button">Community <span class="fpnav-caret">▾</span></button>
           <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
             <a href="${fpUrl('/discord')}">Discord</a>
-            <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donations</a>
+            <a href="${fpUrl('/donations')}">Donations</a>
             <div class="fpnav-dropdown-divider"></div>
             <a href="${homeHref}">BTW Homepage</a>
             <a href="${fpUrl('/tos')}">Terms of Service</a>
@@ -1179,9 +1179,10 @@ window.wikiSetCoverSlot = function (el, site, opts) {
       const wrap = document.createElement('div');
       wrap.innerHTML = `
         <div class="fpnav-modal-overlay" id="fp-leaving-overlay" hidden>
-          <div class="fpnav-modal-card">
-            <p class="fpnav-modal-title">You are leaving BTWFics</p>
-            <p class="fpnav-modal-text">
+          <div class="fpnav-modal-card fp-leaving-card">
+            <div class="fp-leaving-icon">🔗</div>
+            <p class="fpnav-modal-title fp-leaving-title">You're Leaving BTWFics <img src="/images/home/decoration-1.png" alt="" /></p>
+            <p class="fpnav-modal-text fp-leaving-text">
               This link was posted by another user and goes to
               <strong id="fp-leaving-host"></strong>, a site we don't control.
               Make sure you trust it before continuing.
@@ -1193,7 +1194,7 @@ window.wikiSetCoverSlot = function (el, site, opts) {
             </label>
             <div class="fp-leaving-btn-row">
               <button type="button" class="fpnav-modal-cta fpnav-modal-cta--secondary" id="fp-leaving-cancel">Go Back</button>
-              <button type="button" class="fpnav-modal-cta" id="fp-leaving-continue">Continue</button>
+              <button type="button" class="fpnav-modal-cta fp-leaving-continue-btn" id="fp-leaving-continue">Continue</button>
             </div>
           </div>
         </div>
