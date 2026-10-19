@@ -1793,19 +1793,19 @@ function requireAuth(req, res, next) {
 
 // Resolves the optional (not required) viewer from a Bearer token, and
 // whether they're allowed to see NSFW content. Guests (no token at all)
-// are allowed by default now — the AO3-style age gate at the door is what
-// stands in for that instead. The ONLY way mature/explicit content is
-// hidden is a logged-in account that has deliberately turned SFW Mode on.
-// Used anywhere spicy/NSFW content might get shuffled into a public,
-// no-auth-required feed (spotlights, activity feed) so it can be
-// filtered/blurred server-side instead of trusting the client.
+// are NEVER allowed to see mature/explicit content — there is no age gate
+// at the door anymore, so logged-out is the only thing that unconditionally
+// hides it. A logged-in account additionally needs SFW Mode (nsfw_enabled)
+// turned on to see it. Used anywhere spicy/NSFW content might get shuffled
+// into a public, no-auth-required feed (spotlights, activity feed) so it
+// can be filtered/blurred server-side instead of trusting the client.
 async function getViewerNsfwAccess(req) {
   let viewerId = null;
   const auth = req.headers.authorization;
   if (auth && auth.startsWith('Bearer ')) {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
-  if (viewerId === null) return { viewerId: null, nsfwAllowed: true };
+  if (viewerId === null) return { viewerId: null, nsfwAllowed: false };
   const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
   return { viewerId, nsfwAllowed: !!(row && row.nsfw_enabled) };
 }
@@ -4203,9 +4203,20 @@ app.get('/api/search/works', async (req, res) => {
 
   const orderBy = sortKey === 'best_match' ? `${relevanceExpr} DESC, last_chapter_update DESC NULLS LAST` : SEARCH_SORTS[sortKey];
 
+  // Guests never see mature/explicit stories in search/browse at all —
+  // not an opt-in checkbox like `ratings` above, an unconditional exclusion
+  // regardless of what the ratings checklist says. A logged-in account
+  // still only needs the `ratings` checklist (SFW Mode doesn't gate
+  // search, same as before).
+  let searchViewerId = null;
+  const searchAuth = req.headers.authorization;
+  if (searchAuth && searchAuth.startsWith('Bearer ')) {
+    try { searchViewerId = jwt.verify(searchAuth.slice(7), process.env.JWT_SECRET).id; } catch {}
+  }
+
   const params = [
     q, fandoms, tagsInclude, tagsExclude, categories, relationships,
-    ratings, wordMin, wordMax, completion, limit, offset,
+    ratings, wordMin, wordMax, completion, limit, offset, !!searchViewerId,
   ];
 
   const { rows } = await pool.query(`
@@ -4307,6 +4318,7 @@ app.get('/api/search/works', async (req, res) => {
       AND ($8::int IS NULL OR pubchap.word_count >= $8)
       AND ($9::int IS NULL OR pubchap.word_count <= $9)
       AND ($10 = 'all' OR ($10 = 'complete' AND ms.is_complete) OR ($10 = 'wip' AND NOT ms.is_complete))
+      AND (ms.rating = 'sfw' OR $13::boolean)
     ORDER BY ${orderBy}
     LIMIT $11 OFFSET $12
   `, params);
@@ -4815,6 +4827,11 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
   if (auth && auth.startsWith('Bearer ')) {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
+  let profileNsfwAllowed = false;
+  if (viewerId) {
+    const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
+    profileNsfwAllowed = !!(row && row.nsfw_enabled);
+  }
 
   // Draft-only stories (nothing published with real text yet) are visible
   // only to their own owner — everyone else gets the same "actually
@@ -4897,7 +4914,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     pool.query(
       `SELECT ufi.ref_id, COALESCE(mc.name, ufi.title) AS title,
               COALESCE(mc.ref_image, ufi.image_url) AS image_url, ufi.link_url,
-              mcu.username AS owner_username
+              mcu.username AS owner_username, COALESCE(mc.ref_is_nsfw, false) AS is_nsfw
        FROM user_featured_items ufi
        LEFT JOIN moderator_characters mc ON ufi.ref_id ~ '^[0-9]+$' AND mc.id = ufi.ref_id::int
        LEFT JOIN users mcu ON mcu.id = mc.owner_user_id
@@ -4907,7 +4924,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     pool.query(
       `SELECT ufi.ref_id, COALESCE(mg.title, ufi.title) AS title,
               COALESCE(mg.image_url, ufi.image_url) AS image_url, ufi.link_url,
-              mgu.username AS owner_username
+              mgu.username AS owner_username, COALESCE(mg.category <> 'sfw', false) AS is_nsfw
        FROM user_featured_items ufi
        LEFT JOIN moderator_gallery mg ON ufi.ref_id ~ '^[0-9]+$' AND mg.id = ufi.ref_id::int
        LEFT JOIN users mgu ON mgu.id = mg.owner_user_id
@@ -5021,23 +5038,40 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
   // section's editor (see PUT /api/account/featured), real rows get written
   // and this fallback stops being reached — permanently "locking" it in,
   // with no separate locked flag needed.
-  const featuredCharacters = featuredChars.rows.length
+  const rawFeaturedCharacters = featuredChars.rows.length
     ? featuredChars.rows
     : (await pool.query(
-        `SELECT id::text AS ref_id, name AS title, ref_image AS image_url
+        `SELECT id::text AS ref_id, name AS title, ref_image AS image_url, COALESCE(ref_is_nsfw, false) AS is_nsfw
          FROM moderator_characters WHERE owner_user_id = $1 ORDER BY created_at DESC LIMIT 3`,
         [author.id]
       )).rows;
-  const featuredGalleryItems = featuredGallery.rows.length
+  const rawFeaturedGalleryItems = featuredGallery.rows.length
     ? featuredGallery.rows
     : (await pool.query(
-        `SELECT id::text AS ref_id, title, image_url
+        `SELECT id::text AS ref_id, title, image_url, COALESCE(category <> 'sfw', false) AS is_nsfw
          FROM moderator_gallery WHERE owner_user_id = $1 ORDER BY created_at DESC LIMIT 3`,
         [author.id]
       )).rows;
-  const featuredStories = featuredStoryIds.rows.length
+  // Featured Characters/Gallery/Stories are a teaser on the profile Home
+  // tab, visible to guests even when the rest of that item would be fully
+  // locked elsewhere -- so instead of hiding the slot, the image itself is
+  // withheld and nsfw_locked tells the frontend to blur a placeholder and
+  // show the "18+ Must Sign In" overlay instead of the real art.
+  const featuredCharacters = rawFeaturedCharacters.map(item => {
+    const locked = item.is_nsfw && !profileNsfwAllowed;
+    return { ...item, image_url: locked ? null : item.image_url, nsfw_locked: !!locked };
+  });
+  const featuredGalleryItems = rawFeaturedGalleryItems.map(item => {
+    const locked = item.is_nsfw && !profileNsfwAllowed;
+    return { ...item, image_url: locked ? null : item.image_url, nsfw_locked: !!locked };
+  });
+  const featuredStories = (featuredStoryIds.rows.length
     ? await fetchStoryCardsById(featuredStoryIds.rows.map(r => Number(r.ref_id)))
-    : await fetchDefaultStoryCards(author.id, 3);
+    : await fetchDefaultStoryCards(author.id, 3)
+  ).map(w => {
+    const locked = w.rating && w.rating !== 'sfw' && !profileNsfwAllowed;
+    return { ...w, cover_url: locked ? null : w.cover_url, nsfw_locked: !!locked };
+  });
 
   // Re-checked against live membership (not just the stored slug) so a
   // club the user has since left quietly stops showing instead of leaking
@@ -6152,6 +6186,17 @@ async function sendSiteLookup(query, params, req, res) {
   // + NSFW mode -> full access.
   const nsfwLock = !loggedIn ? 'login' : (!viewerNsfwEnabled ? 'sfw_mode' : null);
 
+  // A Mature/Explicit-RATED STORY is a hard block for the whole thing (every
+  // page -- Home/Chapters/Characters/Gallery/reader all call this same
+  // lookup), same as a standalone gallery post or character -- not just the
+  // embedded gallery sub-list's per-item filtering below, which still
+  // applies independently on top for a story whose own rating is sfw but
+  // that links a Mature/Explicit gallery post.
+  const isOwner = viewerId === site.owner_user_id;
+  if (site.rating && site.rating !== 'sfw' && nsfwLock && !isOwner) {
+    return res.status(403).json({ error: 'This story is marked 18+.', nsfw_locked: true, reason: nsfwLock });
+  }
+
   const [{ rows: chapters }, { rows: characters }, { rows: gallery }, isFollowing, isBookmarked, likedGalleryIds, bookmarkedGalleryIds, siteLikeCount, siteCommentCount, siteBookmarkCount] = await Promise.all([
     // Drafts only ever show to the story's own owner (previewing via "View
     // as Reader") — everyone else only ever sees published chapters.
@@ -6250,8 +6295,16 @@ async function sendSiteLookup(query, params, req, res) {
   // "Is this MY character" (I own it), not just "am I the story owner" —
   // a story owner can link a friend's character onto their roster, and that
   // borrowed character must never be editable through this story's page.
+  // Same blur-not-hide treatment as everywhere else an NSFW character ref
+  // can appear -- a story's own rating can be sfw while an individual
+  // character linked onto its roster is separately marked NSFW.
   characters.forEach(c => {
     c.is_mine = viewerId !== null && viewerId === c.owner_user_id;
+    const charLocked = c.ref_is_nsfw && !viewerNsfwEnabled && !c.is_mine;
+    if (charLocked) {
+      c.ref_image = null;
+    }
+    c.nsfw_locked = !!charLocked;
     delete c.owner_user_id;
   });
 
@@ -7563,11 +7616,7 @@ app.post('/api/moderator/characters/:id/link', requireAuth, requireModerator, as
 // a relationship-linked character who isn't part of the current story's
 // cast (or the current profile's roster) without navigating away.
 app.get('/api/characters/:id', async (req, res) => {
-  let viewerId = null;
-  const auth = req.headers.authorization;
-  if (auth && auth.startsWith('Bearer ')) {
-    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
-  }
+  const { viewerId, nsfwAllowed } = await getViewerNsfwAccess(req);
   const { rows: [character] } = await pool.query(
     `SELECT mc.*, u.username AS owner_username, u.display_name AS owner_display_name,
             (SELECT COUNT(*)::int FROM moderator_character_likes mcl WHERE mcl.character_id = mc.id) AS like_count,
@@ -7580,6 +7629,15 @@ app.get('/api/characters/:id', async (req, res) => {
   );
   if (!character) return res.status(404).json({ error: 'Not found.' });
   character.is_mine = viewerId !== null && viewerId === character.owner_user_id;
+  // Same blur-not-hide treatment used everywhere else an NSFW character ref
+  // can appear (spotlight, search, roster cards) -- the bio/lore/stats stay
+  // visible, only the reference image itself is withheld.
+  const charLocked = character.ref_is_nsfw && !nsfwAllowed && !character.is_mine;
+  if (charLocked) {
+    character.ref_image = null;
+    character.thumb_image_url = null;
+  }
+  character.nsfw_locked = !!charLocked;
   res.json({ character });
 });
 
@@ -7973,11 +8031,7 @@ app.post('/api/moderator/gallery/:id/link', requireAuth, requireModerator, async
 // Gallery tab. Plain requireAuth, same reasoning as standalone characters.
 // Public, unscoped gallery-post lookup — backs the standalone edit page.
 app.get('/api/gallery/:id', async (req, res) => {
-  let viewerId = null;
-  const auth = req.headers.authorization;
-  if (auth && auth.startsWith('Bearer ')) {
-    try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
-  }
+  const { viewerId, nsfwAllowed } = await getViewerNsfwAccess(req);
   const { rows: [item] } = await pool.query(
     `SELECT mg.*, u.username AS owner_username, u.display_name AS owner_display_name, u.avatar AS owner_avatar,
             (SELECT COUNT(*)::int FROM moderator_gallery_likes WHERE gallery_id = mg.id) AS like_count,
@@ -7990,6 +8044,12 @@ app.get('/api/gallery/:id', async (req, res) => {
     [req.params.id, viewerId || 0]
   );
   if (!item) return res.status(404).json({ error: 'Not found.' });
+  // Mature/Explicit gallery posts are a hard block for anyone who can't see
+  // NSFW (owner is always exempt from their own gate) -- the frontend shows
+  // the "must be logged in" popup instead of any real content.
+  if (item.category !== 'sfw' && !nsfwAllowed && item.owner_user_id !== viewerId) {
+    return res.status(403).json({ error: 'This content is marked 18+.', nsfw_locked: true, reason: viewerId ? 'sfw_mode' : 'login' });
+  }
   res.json({ item });
 });
 
@@ -9467,11 +9527,11 @@ app.get('/api/clubs', async (req, res) => {
   const type = CLUB_TYPES.includes(req.query.type) ? req.query.type : null;
 
   // Same SFW Mode gate used for spicy gallery/character content — NSFW
-  // clubs drop out of public browse only for an account that's turned SFW
-  // Mode on; guests (no viewerId) see everything now. mineOnly is exempt:
-  // your own clubs (owned or joined) always stay visible in your own list
-  // regardless of SFW Mode.
-  let nsfwAllowed = true;
+  // clubs drop out of public browse for guests always, and for a logged-in
+  // account that's turned SFW Mode on. mineOnly is exempt: your own clubs
+  // (owned or joined) always stay visible in your own list regardless of
+  // SFW Mode.
+  let nsfwAllowed = false;
   if (viewerId) {
     const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
     nsfwAllowed = !!(row && row.nsfw_enabled);
@@ -9541,10 +9601,10 @@ app.get('/api/clubs/:slug', async (req, res) => {
   if (club.is_nsfw && !viewerRoleEarly) {
     // Members always keep access to their own club regardless of SFW Mode —
     // this gate is about hiding NSFW clubs from browsing/direct links for
-    // everyone else. Guests (no viewerId) see everything now; only an
-    // account with SFW Mode on gets filtered, same as spicy gallery/
-    // character content.
-    let nsfwAllowed = true;
+    // everyone else. Guests (no viewerId) are always locked out; a logged-
+    // in account additionally needs SFW Mode off to see it, same as spicy
+    // gallery/character content.
+    let nsfwAllowed = false;
     if (viewerId) {
       const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
       nsfwAllowed = !!(row && row.nsfw_enabled);
@@ -11130,7 +11190,7 @@ app.get('/api/clubs-feed', async (req, res) => {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
   if (mineOnly && !viewerId) return res.status(401).json({ error: 'Sign in required.' });
-  let nsfwAllowed = true; // guests see everything now; only SFW Mode filters
+  let nsfwAllowed = false; // guests are always locked out; only a logged-in account with SFW Mode off sees NSFW
   if (viewerId) {
     const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
     nsfwAllowed = !!(row && row.nsfw_enabled);
@@ -11193,7 +11253,7 @@ app.get('/api/clubs-recommended', async (req, res) => {
   if (auth && auth.startsWith('Bearer ')) {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
-  let nsfwAllowed = true; // guests see everything now; only SFW Mode filters
+  let nsfwAllowed = false; // guests are always locked out; only a logged-in account with SFW Mode off sees NSFW
   if (viewerId) {
     const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
     nsfwAllowed = !!(row && row.nsfw_enabled);
@@ -11311,7 +11371,7 @@ app.get('/api/clubs-explore', async (req, res) => {
   if (auth && auth.startsWith('Bearer ')) {
     try { viewerId = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id; } catch {}
   }
-  let nsfwAllowed = true; // guests see everything now; only SFW Mode filters
+  let nsfwAllowed = false; // guests are always locked out; only a logged-in account with SFW Mode off sees NSFW
   if (viewerId) {
     const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
     nsfwAllowed = !!(row && row.nsfw_enabled);

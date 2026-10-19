@@ -1399,7 +1399,11 @@ async function showCharacterDetail(id, locked) {
     const res = await fetch(`/api/characters/${id}`, { headers: authHeaders() });
     if (!res.ok) throw new Error();
     const { character } = await res.json();
-    renderCharDetailProfile(character, !!locked);
+    // character.nsfw_locked comes straight from this fetch now (server.js's
+    // /api/characters/:id), so a direct deep-link lands locked correctly
+    // too -- the `locked` param passed in from a list-card click is only a
+    // fallback for the brief window before this response lands.
+    renderCharDetailProfile(character, !!(character.nsfw_locked || locked));
   } catch {
     profileEl.innerHTML = '<p class="fp-char-empty">Couldn\'t load this character right now.</p>';
   }

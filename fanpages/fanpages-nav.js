@@ -27,23 +27,6 @@ window.fpFixLinks = function (container) {
   });
 };
 
-// ── Site-wide 18+ age gate ───────────────────────────────────────────────
-// Runs before anything else on this script (topbar injection, favicon
-// swap, etc.) so there's minimal flash of the underlying page. Every
-// unregistered visitor must accept once, no matter which page they land
-// on first. Logged-in users skip this — they already agreed to the 18+
-// notice at signup. Guests are asked exactly once; remembered in
-// localStorage until they clear it themselves (no expiry).
-(function () {
-  const hasToken = !!(localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token'));
-  const confirmed = localStorage.getItem('btw_age_confirmed') === '1';
-  const gateUrl = window.fpUrl('/agecheck');
-  const onGatePage = location.pathname.replace(/\/$/, '') === gateUrl.replace(/\/$/, '');
-  if (hasToken || confirmed || onGatePage) return;
-  const from = location.pathname + location.search;
-  window.location.replace(`${gateUrl}?from=${encodeURIComponent(from)}`);
-})();
-
 // btwfics.net gets its own favicon so the browser tab visually distinguishes
 // it from btwfanfic.net, even though every page's static <link rel="icon">
 // markup still points at the shared default (same file serves both domains).
@@ -1255,4 +1238,51 @@ window.wikiSetCoverSlot = function (el, site, opts) {
     e.stopPropagation();
     showLeavingModal(url.href);
   }, true);
+})();
+
+// ── Adult-content login gate — the popup shown whenever a guest (no
+// btw_token) tries to reach mature/explicit content (a story, chapter,
+// gallery post, character, or club marked 18+). Logged-in accounts never
+// hit this; SFW Mode on a logged-in account is a separate, pre-existing
+// gate (inline "Hidden by SFW Mode" messaging), not this one. Every
+// detail-page fetch that can return 18+ content checks the response for a
+// lock signal and calls window.fpShowAdultGate() instead of rendering
+// anything, so a guest never sees so much as a flashed frame of the real
+// content before the popup appears.
+(function () {
+  let overlay = null;
+  function build() {
+    if (overlay) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="fpnav-modal-overlay" id="fp-adultgate-overlay" hidden>
+        <div class="fpnav-modal-card">
+          <p class="fpnav-modal-title">18+ Content</p>
+          <p class="fpnav-modal-text">You must be logged in to access adult content.</p>
+          <div class="fp-leaving-btn-row">
+            <button type="button" class="fpnav-modal-cta fpnav-modal-cta--secondary" id="fp-adultgate-bet">Bet</button>
+            <button type="button" class="fpnav-modal-cta" id="fp-adultgate-signin">Sign In</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrap.firstElementChild);
+    overlay = document.getElementById('fp-adultgate-overlay');
+    document.getElementById('fp-adultgate-bet').addEventListener('click', () => {
+      window.location.href = window.fpUrl('/');
+    });
+    document.getElementById('fp-adultgate-signin').addEventListener('click', () => {
+      overlay.hidden = true;
+      document.body.classList.remove('fpnav-modal-open');
+      window.fpOpenLoginModal();
+    });
+  }
+  // No outside-click/Escape dismissal and no close button — the guest must
+  // actively choose Bet or Sign In, since the page underneath has nothing
+  // valid to show them either way.
+  window.fpShowAdultGate = function () {
+    build();
+    overlay.hidden = false;
+    document.body.classList.add('fpnav-modal-open');
+  };
 })();

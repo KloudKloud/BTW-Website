@@ -13,7 +13,18 @@ window.ModeratorSite = {
     const url = slug.includes('/') ? `/api/moderator-sites/by-path/${slug}` : `/api/moderator-sites/${slug}`;
     try {
       const res = await fetch(url, { headers });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        // A Mature/Explicit story is a hard block for anyone who can't see
+        // NSFW (server.js's sendSiteLookup) -- every page built on this
+        // loader (Home/Chapters/Characters/Gallery/reader) shows the same
+        // "must be logged in" popup instead of whatever partial/blank
+        // content it would otherwise render with no site data.
+        if (res.status === 403) {
+          const data = await res.json().catch(() => null);
+          if (data && data.nsfw_locked && window.fpShowAdultGate) window.fpShowAdultGate();
+        }
+        return null;
+      }
       return await res.json();
     } catch { return null; }
   },

@@ -593,7 +593,16 @@ document.addEventListener('click', () => { document.getElementById('fp-gallery-d
   }
   try {
     const res = await fetch(`/api/gallery/${GALLERY_ID}`, { headers: authHeaders() });
-    if (!res.ok) throw new Error();
+    if (!res.ok) {
+      if (res.status === 403) {
+        const lockData = await res.json().catch(() => null);
+        if (lockData && lockData.nsfw_locked && window.fpShowAdultGate) {
+          window.fpShowAdultGate();
+          return;
+        }
+      }
+      throw new Error();
+    }
     const { item } = await res.json();
     currentItem = item;
 

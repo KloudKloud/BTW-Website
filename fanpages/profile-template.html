@@ -1947,16 +1947,21 @@
   }
   function featuredStoryCardEl(w) {
     const isComplete = !!w.is_complete;
+    const locked = !!w.nsfw_locked;
+    const storyHref = window.fpUrl(`/${escapeHtml(w.story_path)}`);
     const card = document.createElement('div');
     card.className = 'fp-bcard';
-    card.dataset.href = window.fpUrl(`/${escapeHtml(w.story_path)}`);
+    // A locked featured story is a teaser only -- no real navigation target,
+    // clicking anywhere on it (card, cover, title) opens the same adult-
+    // content gate a direct visit to the story would hit instead.
+    if (!locked) card.dataset.href = storyHref;
     card.innerHTML = `
       ${w.is_draft_only ? '<span class="fp-story-teaser-draft-badge">Draft</span>' : ''}
-      <a class="fp-bcard-cover-link" href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">${bcardCoverHtml(w)}</a>
+      <a class="fp-bcard-cover-link" href="${locked ? '#' : storyHref}" style="${locked ? 'position:relative;' : ''}">${bcardCoverHtml(w)}${locked ? '<div class="fp-nsfw-lock-overlay"><span>18+</span><span>Must Sign In to Access Content</span></div>' : ''}</a>
       <img class="fp-bcard-deco--tr" src="/images/home/decoration-8.png" alt="" />
       <div class="fp-bcard-body">
         <div class="fp-bcard-head">
-          <a class="fp-bcard-title" href="${window.fpUrl(`/${escapeHtml(w.story_path)}`)}">${escapeHtml(w.site_title || 'Untitled Story')}</a>
+          <a class="fp-bcard-title" href="${locked ? '#' : storyHref}">${escapeHtml(w.site_title || 'Untitled Story')}</a>
           ${bcardAuthorHtml(w)}
         </div>
         <div class="fp-bcard-badges">
@@ -1972,6 +1977,16 @@
         ${bcardCharsHtml(w)}
       </div>
     `;
+    if (locked) {
+      const coverImg = card.querySelector('.fp-bcard-cover-link img');
+      if (coverImg) coverImg.style.filter = 'blur(16px)';
+      card.querySelectorAll('a[href="#"]').forEach(a => {
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+          if (window.fpShowAdultGate) window.fpShowAdultGate();
+        });
+      });
+    }
     return card;
   }
   function renderFeaturedStories(containerId, items) {
@@ -3321,6 +3336,7 @@
     const row = document.createElement('div');
     row.className = 'fp-featured-row';
     items.forEach(item => {
+      const locked = !!item.nsfw_locked;
       const card = document.createElement('a');
       card.className = 'fp-featured-card';
       // "Other Characters"/"Other Gallery" (fp-featured-tab-other) lets a
@@ -3329,13 +3345,25 @@
       // profile. Falls back to USERNAME for the common own-item case (and
       // for the rare deleted-item edge case where the server has no owner
       // to report).
-      card.href = kind === 'character'
+      const realHref = kind === 'character'
         ? window.fpUrl(`/${item.owner_username || USERNAME}?char=${encodeURIComponent(item.ref_id)}#characters`)
         : window.fpUrl(`/gallery-post?id=${encodeURIComponent(item.ref_id)}`);
+      // A locked featured item stays a teaser, not a dead end -- clicking
+      // it opens the same adult-content gate a direct visit to the real
+      // page would hit, instead of silently navigating into a 403.
+      if (locked) card.href = '#';
+      else card.href = realHref;
       card.innerHTML = `
-        <img class="fp-featured-card-img" src="${item.image_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="${item.title}" />
+        <img class="fp-featured-card-img"${locked ? ' style="filter: blur(16px);"' : ''} src="${locked ? '/images/gallery/kloudsaphbedroom_1.png' : (item.image_url || '/images/gallery/kloudsaphbedroom_1.png')}" alt="${item.title}" />
+        ${locked ? '<div class="fp-nsfw-lock-overlay"><span>18+</span><span>Must Sign In to Access Content</span></div>' : ''}
         <p class="fp-featured-card-title">${item.title}</p>
       `;
+      if (locked) {
+        card.addEventListener('click', (e) => {
+          e.preventDefault();
+          if (window.fpShowAdultGate) window.fpShowAdultGate();
+        });
+      }
       row.appendChild(card);
     });
     wrap.appendChild(row);
