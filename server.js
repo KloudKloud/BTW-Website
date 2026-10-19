@@ -6418,18 +6418,21 @@ app.get('/api/moderator/my-sites', requireAuth, async (req, res) => {
 app.put('/api/moderator/sites/profile-order', requireAuth, async (req, res) => {
   const order = req.body.order;
   if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of site IDs.' });
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     for (let i = 0; i < order.length; i++) {
-      await pool.query(
+      await client.query(
         'UPDATE moderator_sites SET profile_sort_order = $1 WHERE id = $2 AND owner_user_id = $3',
         [i, order[i], req.user.id]
       );
     }
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (e) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     return res.status(500).json({ error: 'Could not save the new order.' });
+  } finally {
+    client.release();
   }
   res.json({ message: 'Order saved.' });
 });
@@ -7208,18 +7211,21 @@ app.put('/api/moderator/chapters/:id/body', requireAuth, requireModerator, async
 app.put('/api/moderator/chapters/reorder', requireAuth, requireModerator, async (req, res) => {
   const order = req.body.order;
   if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of chapter IDs.' });
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     for (let i = 0; i < order.length; i++) {
-      await pool.query(
+      await client.query(
         'UPDATE moderator_chapters SET sort_order = $1 WHERE id = $2 AND site_id = $3',
         [i, order[i], req.modSite.id]
       );
     }
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (e) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     return res.status(500).json({ error: 'Could not save the new order.' });
+  } finally {
+    client.release();
   }
   res.json({ message: 'Order saved.' });
 });
@@ -7330,18 +7336,21 @@ app.get('/api/moderator/characters', requireAuth, requireModerator, async (req, 
 app.put('/api/moderator/characters/reorder', requireAuth, requireModerator, async (req, res) => {
   const order = req.body.order;
   if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of character IDs.' });
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     for (let i = 0; i < order.length; i++) {
-      await pool.query(
+      await client.query(
         'UPDATE character_story_links SET sort_order = $1 WHERE character_id = $2 AND site_id = $3',
         [i, order[i], req.modSite.id]
       );
     }
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (e) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     return res.status(500).json({ error: 'Could not save the new order.' });
+  } finally {
+    client.release();
   }
   res.json({ message: 'Order saved.' });
 });
@@ -7355,18 +7364,21 @@ app.put('/api/moderator/characters/reorder', requireAuth, requireModerator, asyn
 app.put('/api/moderator/characters/profile-order', requireAuth, async (req, res) => {
   const order = req.body.order;
   if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of character IDs.' });
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     for (let i = 0; i < order.length; i++) {
-      await pool.query(
+      await client.query(
         'UPDATE moderator_characters SET sort_order = $1 WHERE id = $2 AND owner_user_id = $3',
         [i, order[i], req.user.id]
       );
     }
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (e) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     return res.status(500).json({ error: 'Could not save the new order.' });
+  } finally {
+    client.release();
   }
   res.json({ message: 'Order saved.' });
 });
@@ -7889,18 +7901,21 @@ app.post('/api/moderator/gallery', requireAuth, requireModerator, uploadModImage
 app.put('/api/moderator/gallery/reorder', requireAuth, requireModerator, async (req, res) => {
   const order = req.body.order;
   if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of gallery IDs.' });
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     for (let i = 0; i < order.length; i++) {
-      await pool.query(
+      await client.query(
         'UPDATE gallery_story_links SET sort_order = $1 WHERE gallery_id = $2 AND site_id = $3',
         [i, order[i], req.modSite.id]
       );
     }
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (e) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     return res.status(500).json({ error: 'Could not save the new order.' });
+  } finally {
+    client.release();
   }
   res.json({ message: 'Order saved.' });
 });
@@ -7911,18 +7926,21 @@ app.put('/api/moderator/gallery/reorder', requireAuth, requireModerator, async (
 app.put('/api/moderator/gallery/profile-order', requireAuth, async (req, res) => {
   const order = req.body.order;
   if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of gallery IDs.' });
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     for (let i = 0; i < order.length; i++) {
-      await pool.query(
+      await client.query(
         'UPDATE moderator_gallery SET sort_order = $1 WHERE id = $2 AND owner_user_id = $3',
         [i, order[i], req.user.id]
       );
     }
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (e) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     return res.status(500).json({ error: 'Could not save the new order.' });
+  } finally {
+    client.release();
   }
   res.json({ message: 'Order saved.' });
 });
@@ -10373,6 +10391,44 @@ app.post('/api/clubs/:slug/featured-cards', requireAuth, uploadModImage.single('
   res.json({ card });
 });
 
+// PUT /api/clubs/:slug/featured-cards/reorder — { order: [cardId, ...] }.
+// Registered BEFORE the PUT .../featured-cards/:cardId route below —
+// Express matches routes in registration order, so with :cardId first, a
+// PUT to .../featured-cards/reorder was matching THAT route instead, with
+// :cardId literally set to the string "reorder". Its SELECT then crashed
+// the whole process (invalid input syntax for type integer: "reorder",
+// unhandled — fatal) every single time this endpoint was ever called, which
+// is what was actually behind the reorder feature's "Failed to save".
+app.put('/api/clubs/:slug/featured-cards/reorder', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const order = req.body.order;
+  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of card IDs.' });
+  // BEGIN/COMMIT/ROLLBACK must run on the SAME connection as the UPDATEs
+  // between them -- pool.query() checks a connection back in after every
+  // call, so the old bare pool.query('BEGIN')/pool.query('COMMIT') version
+  // had no guarantee any of these statements shared a connection at all.
+  // Same pool.connect()/client.query() pattern already used by
+  // PUT /api/account/featured above.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (let i = 0; i < order.length; i++) {
+      await client.query(
+        'UPDATE club_featured_cards SET sort_order = $1 WHERE id = $2 AND club_id = $3',
+        [i, order[i], ctx.club.id]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    return res.status(500).json({ error: 'Could not save the new order.' });
+  } finally {
+    client.release();
+  }
+  res.json({ message: 'Order saved.' });
+});
+
 // PUT /api/clubs/:slug/featured-cards/:cardId — edit a card (image optional).
 app.put('/api/clubs/:slug/featured-cards/:cardId', requireAuth, uploadModImage.single('image'), async (req, res) => {
   const ctx = await requireClubAdmin(req, res);
@@ -10408,28 +10464,6 @@ app.delete('/api/clubs/:slug/featured-cards/:cardId', requireAuth, async (req, r
   );
   if (!rowCount) return res.status(404).json({ error: 'Card not found.' });
   res.json({ message: 'Card deleted.' });
-});
-
-// PUT /api/clubs/:slug/featured-cards/reorder — { order: [cardId, ...] }.
-app.put('/api/clubs/:slug/featured-cards/reorder', requireAuth, async (req, res) => {
-  const ctx = await requireClubAdmin(req, res);
-  if (!ctx) return;
-  const order = req.body.order;
-  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of card IDs.' });
-  await pool.query('BEGIN');
-  try {
-    for (let i = 0; i < order.length; i++) {
-      await pool.query(
-        'UPDATE club_featured_cards SET sort_order = $1 WHERE id = $2 AND club_id = $3',
-        [i, order[i], ctx.club.id]
-      );
-    }
-    await pool.query('COMMIT');
-  } catch (e) {
-    await pool.query('ROLLBACK');
-    return res.status(500).json({ error: 'Could not save the new order.' });
-  }
-  res.json({ message: 'Order saved.' });
 });
 
 // ── Home page Cover Image — static single image or a slideshow of several,
@@ -10500,18 +10534,21 @@ app.put('/api/clubs/:slug/slideshow/reorder', requireAuth, async (req, res) => {
   if (!ctx) return;
   const order = req.body.order;
   if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of image IDs.' });
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     for (let i = 0; i < order.length; i++) {
-      await pool.query(
+      await client.query(
         'UPDATE club_slideshow_images SET sort_order = $1 WHERE id = $2 AND club_id = $3',
         [i, order[i], ctx.club.id]
       );
     }
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (e) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     return res.status(500).json({ error: 'Could not save the new order.' });
+  } finally {
+    client.release();
   }
   res.json({ message: 'Order saved.' });
 });
@@ -10548,6 +10585,33 @@ app.post('/api/clubs/:slug/rules', requireAuth, async (req, res) => {
   res.json({ rule });
 });
 
+// PUT /api/clubs/:slug/rules/reorder — { order: [ruleId, ...] }. Registered
+// BEFORE the PUT/DELETE .../rules/:ruleId routes below -- same route-
+// shadowing bug as featured-cards/reorder (see that route's comment):
+// with :ruleId registered first, a PUT to .../rules/reorder matched THAT
+// route instead, with :ruleId literally the string "reorder", crashing
+// the whole process on the resulting invalid-integer Postgres error.
+app.put('/api/clubs/:slug/rules/reorder', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const order = req.body.order;
+  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of rule IDs.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (let i = 0; i < order.length; i++) {
+      await client.query('UPDATE club_rules SET sort_order = $1 WHERE id = $2 AND club_id = $3', [i, order[i], ctx.club.id]);
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    return res.status(500).json({ error: 'Failed to reorder rules.' });
+  } finally {
+    client.release();
+  }
+  res.json({ message: 'Reordered.' });
+});
+
 app.put('/api/clubs/:slug/rules/:ruleId', requireAuth, async (req, res) => {
   const ctx = await requireClubAdmin(req, res);
   if (!ctx) return;
@@ -10572,25 +10636,6 @@ app.delete('/api/clubs/:slug/rules/:ruleId', requireAuth, async (req, res) => {
   );
   if (!rowCount) return res.status(404).json({ error: 'Rule not found.' });
   res.json({ message: 'Rule deleted.' });
-});
-
-// PUT /api/clubs/:slug/rules/reorder — { order: [ruleId, ...] }.
-app.put('/api/clubs/:slug/rules/reorder', requireAuth, async (req, res) => {
-  const ctx = await requireClubAdmin(req, res);
-  if (!ctx) return;
-  const order = req.body.order;
-  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of rule IDs.' });
-  await pool.query('BEGIN');
-  try {
-    for (let i = 0; i < order.length; i++) {
-      await pool.query('UPDATE club_rules SET sort_order = $1 WHERE id = $2 AND club_id = $3', [i, order[i], ctx.club.id]);
-    }
-    await pool.query('COMMIT');
-  } catch (err) {
-    await pool.query('ROLLBACK');
-    return res.status(500).json({ error: 'Failed to reorder rules.' });
-  }
-  res.json({ message: 'Reordered.' });
 });
 
 // GET /api/clubs/:slug/pages — sidebar "More Pages" list (slug + title
@@ -10661,15 +10706,18 @@ app.put('/api/clubs/:slug/pages/reorder', requireAuth, async (req, res) => {
   if (!ctx) return;
   const order = req.body.order;
   if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of page slugs.' });
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     for (let i = 0; i < order.length; i++) {
-      await pool.query('UPDATE club_pages SET sort_order = $1 WHERE club_id = $2 AND slug = $3', [i, ctx.club.id, order[i]]);
+      await client.query('UPDATE club_pages SET sort_order = $1 WHERE club_id = $2 AND slug = $3', [i, ctx.club.id, order[i]]);
     }
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (err) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     return res.status(500).json({ error: 'Failed to reorder pages.' });
+  } finally {
+    client.release();
   }
   res.json({ message: 'Reordered.' });
 });
@@ -10952,18 +11000,21 @@ app.put('/api/clubs/:slug/pages/:pageSlug/slideshow/reorder', requireAuth, async
   if (!ctx) return;
   const order = req.body.order;
   if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of image IDs.' });
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     for (let i = 0; i < order.length; i++) {
-      await pool.query(
+      await client.query(
         'UPDATE club_page_slideshow_images SET sort_order = $1 WHERE id = $2 AND page_id = $3',
         [i, order[i], ctx.page.id]
       );
     }
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (err) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     return res.status(500).json({ error: 'Failed to reorder images.' });
+  } finally {
+    client.release();
   }
   res.json({ message: 'Reordered.' });
 });
@@ -11078,18 +11129,21 @@ app.put('/api/clubs/:slug/pages/:pageSlug/gallery/reorder', requireAuth, async (
   if (!ctx) return;
   const order = req.body.order;
   if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of image IDs.' });
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     for (let i = 0; i < order.length; i++) {
-      await pool.query(
+      await client.query(
         'UPDATE club_page_gallery_images SET sort_order = $1 WHERE id = $2 AND page_id = $3',
         [i, order[i], ctx.page.id]
       );
     }
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (err) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     return res.status(500).json({ error: 'Failed to reorder images.' });
+  } finally {
+    client.release();
   }
   res.json({ message: 'Reordered.' });
 });
@@ -11151,18 +11205,21 @@ app.put('/api/clubs/:slug/pages/:pageSlug/promotion-posts/reorder', requireAuth,
   if (ctx.page.type !== 'promotion') return res.status(400).json({ error: 'Not a Promotion page.' });
   const order = req.body.order;
   if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of post IDs.' });
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     for (let i = 0; i < order.length; i++) {
-      await pool.query(
+      await client.query(
         'UPDATE club_posts SET sort_order = $1 WHERE id = $2 AND promotion_page_id = $3',
         [i, order[i], ctx.page.id]
       );
     }
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
   } catch (err) {
-    await pool.query('ROLLBACK');
+    await client.query('ROLLBACK');
     return res.status(500).json({ error: 'Failed to reorder cards.' });
+  } finally {
+    client.release();
   }
   res.json({ message: 'Reordered.' });
 });
