@@ -1153,8 +1153,18 @@
     /* ── All-Members modal -- opened from the "Members" stat above. Same
        owner/moderators-first order as the sidebar's Moderators section
        (server-side ORDER BY on GET /api/clubs/:slug), just showing
-       everyone instead of a capped preview. Owner/admin viewers get a "+"
-       button next to any plain member to fast-promote them right there. ── */
+       everyone instead of a capped preview. No in-line promote button here
+       any more -- promoting now only happens through the dedicated "Add
+       Moderator" picker (sidebar "+" / Edit Info), so this list is purely
+       informational. ── */
+    /* Custom themed scrollbar (purple, matches the rest of the site's
+       accent) instead of the default browser one, reused on every
+       scrollable list/panel in this file. */
+    .cl-scroll-custom { scrollbar-width: thin; scrollbar-color: rgba(168,112,217,0.45) transparent; }
+    .cl-scroll-custom::-webkit-scrollbar { width: 7px; }
+    .cl-scroll-custom::-webkit-scrollbar-track { background: transparent; }
+    .cl-scroll-custom::-webkit-scrollbar-thumb { background: rgba(168,112,217,0.45); border-radius: 6px; }
+    .cl-scroll-custom::-webkit-scrollbar-thumb:hover { background: rgba(168,112,217,0.7); }
     .cl-members-modal-list { display: flex; flex-direction: column; gap: 0.3rem; max-height: 55vh; overflow-y: auto; margin-top: 0.5rem; }
     .cl-members-modal-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.4rem; border-radius: 8px; transition: background 0.15s; }
     .cl-members-modal-row:hover { background: rgba(255,255,255,0.04); }
@@ -1170,14 +1180,6 @@
     .cl-members-modal-role--owner { color: #f0c060; background: rgba(240,192,96,0.12); }
     .cl-members-modal-role--admin { color: #7fa8d9; background: rgba(127,168,217,0.12); }
     .cl-members-modal-role--member { color: #999; background: rgba(255,255,255,0.06); }
-    .cl-members-modal-promote-btn {
-      width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; margin-left: 0.5rem;
-      background: rgba(127,168,217,0.14); border: 1px solid rgba(127,168,217,0.35); color: #7fa8d9;
-      font-size: 1rem; font-weight: 700; line-height: 1; cursor: pointer; padding: 0;
-      display: flex; align-items: center; justify-content: center; transition: background 0.15s, box-shadow 0.15s;
-    }
-    .cl-members-modal-promote-btn:hover { background: rgba(127,168,217,0.28); box-shadow: 0 0 10px rgba(127,168,217,0.5); }
-    .cl-members-modal-promote-btn:disabled { opacity: 0.5; cursor: default; }
 
     .cl-side-rule2 { border: none; border-top: 1px solid rgba(255,255,255,0.12); margin: 1.35rem 0; }
     .cl-side-pages-divider { border: none; border-top: 1px solid rgba(255,255,255,0.09); margin: 0.2rem 0 0.15rem; }
@@ -1237,7 +1239,20 @@
     .cl-side-page-home-star { color: #f0c060; }
     .cl-edit-pages-home-heart { color: #7fa8d9; margin-right: 0.4em; font-size: 0.9em; }
 
-    /* ── Moderators — vertical stack of owners/admins. ── */
+    /* ── Moderators — vertical stack of owners/admins. Owner gets a "+"
+       next to the section title (opens the Add Moderator picker) and a
+       small remove button on every admin row (owner can demote an admin
+       back to a plain member right from here; the owner's own row never
+       gets one). ── */
+    .cl-side-section-title-row { display: flex; align-items: center; justify-content: space-between; margin: 0 0 0.8rem; }
+    .cl-side-section-title-row .cl-side-section-title { margin: 0; }
+    .cl-side-mod-add-btn {
+      width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+      background: rgba(168,112,217,0.14); border: 1px solid rgba(168,112,217,0.4); color: #c293e8;
+      font-size: 0.95rem; font-weight: 700; line-height: 1; cursor: pointer; padding: 0;
+      display: flex; align-items: center; justify-content: center; transition: background 0.15s, box-shadow 0.15s;
+    }
+    .cl-side-mod-add-btn:hover { background: rgba(168,112,217,0.28); box-shadow: 0 0 10px rgba(168,112,217,0.5); }
     .cl-side-mods-list { display: flex; flex-direction: column; gap: 0.65rem; }
     .cl-side-mod-row { display: flex; align-items: center; gap: 0.6rem; text-decoration: none; color: inherit; }
     .cl-side-mod-avatar, .cl-side-mod-avatar-fallback { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
@@ -1247,6 +1262,69 @@
     }
     .cl-side-mod-name { font-size: 0.86rem; color: #ddd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cl-side-mod-role { font-size: 0.64rem; color: #f0c060; font-weight: 700; text-transform: uppercase; margin-left: auto; flex-shrink: 0; }
+    .cl-side-mod-row.cl-side-mod-row--has-remove .cl-side-mod-role { margin-left: 0.5rem; }
+    .cl-side-mod-remove-btn {
+      width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; margin-left: 0.4rem;
+      background: rgba(217,122,114,0.12); border: 1px solid rgba(217,122,114,0.35); color: #d97a72;
+      font-size: 0.65rem; font-weight: 700; line-height: 1; cursor: pointer; padding: 0;
+      display: flex; align-items: center; justify-content: center; transition: background 0.15s, box-shadow 0.15s;
+    }
+    .cl-side-mod-remove-btn:hover { background: rgba(217,122,114,0.25); box-shadow: 0 0 8px rgba(217,122,114,0.5); }
+
+    /* ── Add Moderator picker -- opened from the sidebar "+" or Edit Info's
+       own Moderators section (same modal either way, just two trigger
+       points). Smart search over the member roster, same body-appended
+       pattern as every other suggest dropdown on the site, just rendered
+       inline inside a char-editor-modal since this one doesn't need to
+       follow a scrolling input around the page. ── */
+    .cl-modpicker-search {
+      width: 100%; background: #1e1e1e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
+      color: #f0f0f0; font-family: inherit; font-size: 0.9rem; padding: 0.6rem 0.75rem; box-sizing: border-box;
+      margin-bottom: 0.75rem;
+    }
+    .cl-modpicker-search:focus { outline: none; border-color: #c293e8; }
+    .cl-modpicker-list { display: flex; flex-direction: column; gap: 0.2rem; max-height: 40vh; overflow-y: auto; }
+    .cl-modpicker-option {
+      width: 100%; display: flex; align-items: center; gap: 0.6rem; background: none; border: none;
+      padding: 0.5rem 0.5rem; cursor: pointer; text-align: left; color: #ddd; font-family: inherit; font-size: 0.88rem;
+      border-radius: 8px; transition: background 0.15s;
+    }
+    .cl-modpicker-option:hover { background: rgba(168,112,217,0.14); color: #c293e8; }
+    .cl-modpicker-option img, .cl-modpicker-option-fallback {
+      width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    }
+    .cl-modpicker-option-fallback {
+      display: flex; align-items: center; justify-content: center; background: #2a2a2a; color: #999; font-weight: 700; font-size: 0.82rem;
+    }
+    .cl-modpicker-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cl-modpicker-empty { color: #888; font-size: 0.85rem; padding: 0.5rem; margin: 0; }
+
+    /* ── "Cool custom" confirm screens for promote/demote -- same visual
+       recipe as the site's 18+/sign-in gates (window.fpShowAdultGate etc.
+       in fanpages-nav.js): box-background-3.png + dark scrim, Fredoka type,
+       a colored top border. Reuses .fpnav-modal-overlay/-card (loaded via
+       fanpages-nav.css on every fanpage) rather than redefining that base,
+       just like .fp-adultgate-card does. Purple accent since that's this
+       club UI's own accent color (.cl-side-mod-add-btn etc.), distinct
+       from the gold (18+) and blue (leaving-site) gates elsewhere. One
+       shared card serves both promote and demote -- only the text/button
+       label/color differ, toggled via the --danger modifier. */
+    .cl-mod-confirm-card {
+      background: linear-gradient(160deg, rgba(10,8,14,0.88), rgba(10,8,14,0.82)), url('/images/home/box-background-3.png');
+      background-size: cover; background-position: center;
+      border-top: 3px solid #a870d9;
+    }
+    .cl-mod-confirm-icon { font-size: 1.8rem; margin-bottom: 0.3rem; }
+    .cl-mod-confirm-title {
+      font-family: 'Fredoka', 'Lato', cursive !important;
+      display: flex; align-items: center; justify-content: center; gap: 0.45rem; color: #f0f0f0;
+    }
+    .cl-mod-confirm-text { font-family: 'Fredoka', 'Lato', cursive; }
+    .cl-mod-confirm-card .fpnav-modal-cta { font-family: 'Fredoka', 'Lato', cursive; }
+    .cl-mod-confirm-yes-btn { background: linear-gradient(135deg, #c293e8, #a870d9); color: #1a1408; }
+    .cl-mod-confirm-yes-btn:hover { background: linear-gradient(135deg, #d1aaf0, #c293e8); }
+    .cl-mod-confirm-yes-btn--danger { background: linear-gradient(135deg, #e8849e, #c2547a); }
+    .cl-mod-confirm-yes-btn--danger:hover { background: linear-gradient(135deg, #f0a0b5, #e8849e); }
 
     @media (max-width: 1100px) {
       .cl-body-row { flex-direction: column; }
@@ -2361,8 +2439,11 @@
 
       <hr class="cl-side-rule2" />
 
-      <p class="cl-side-section-title">Moderators</p>
-      <div class="cl-side-mods-list" id="cl-side-mods-list"><p class="cl-side-empty">Loading…</p></div>
+      <div class="cl-side-section-title-row">
+        <p class="cl-side-section-title">Moderators</p>
+        <button type="button" class="cl-side-mod-add-btn" id="cl-side-mod-add-btn" title="Add a Moderator" style="display:none;">+</button>
+      </div>
+      <div class="cl-side-mods-list cl-scroll-custom" id="cl-side-mods-list"><p class="cl-side-empty">Loading…</p></div>
     </aside>
   </div>
 </div>
@@ -2829,6 +2910,18 @@
         </div>
       </div>
 
+      <hr class="cl-side-rule2" />
+
+      <div class="cl-field-title-row" style="margin-bottom:0.35rem;">
+        <h2 class="char-editor-title" style="margin:0;">Moderators</h2>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Moderators help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Owners and admins run the club together. Promote a member to Admin here, or remove an existing admin back to a plain member (owner only).</p></div>
+      </div>
+      <div class="cl-edit-cards-list cl-scroll-custom" id="cl-editinfo-mods-list" style="max-height: 220px; overflow-y: auto;"></div>
+      <button class="gallery-linkto-add-tile" id="cl-editinfo-mod-add-btn" type="button" style="margin-top:0.75rem;">
+        <span class="gallery-linkto-add-tile-icon">➕</span> Add Moderator
+      </button>
+
       <p class="mod-panel-msg" id="cl-splash-msg"></p>
       <div class="char-editor-actions">
         <button class="mod-btn mod-btn--cancel" id="cl-splash-cancel-btn" type="button">Cancel</button>
@@ -2847,10 +2940,38 @@
 <div class="char-editor-overlay" id="cl-members-modal-overlay" hidden>
   <div class="char-editor-modal" style="max-width: 420px;">
     <h2 class="char-editor-title">Members (<span id="cl-members-modal-count">0</span>)</h2>
-    <div class="cl-members-modal-list" id="cl-members-modal-list"><p class="cl-side-empty">Loading…</p></div>
+    <div class="cl-members-modal-list cl-scroll-custom" id="cl-members-modal-list"><p class="cl-side-empty">Loading…</p></div>
     <div class="char-editor-actions" style="margin-top:1.25rem;">
       <button class="mod-btn mod-btn--cancel" id="cl-members-modal-close-btn" type="button">Close</button>
     </div>
+  </div>
+</div>
+
+<!-- Add Moderator picker -- smart search over the member roster, opened
+     from either the sidebar Moderators "+" or Edit Info's own Moderators
+     section. Picking a result doesn't promote immediately -- it hands off
+     to the cool confirm screen below first. -->
+<div class="char-editor-overlay" id="cl-modpicker-overlay" hidden>
+  <div class="char-editor-modal" style="max-width: 380px;">
+    <h2 class="char-editor-title">Add a Moderator</h2>
+    <input type="text" class="cl-modpicker-search" id="cl-modpicker-search" placeholder="Search members by name…" autocomplete="off" />
+    <div class="cl-modpicker-list cl-scroll-custom" id="cl-modpicker-list"></div>
+    <div class="char-editor-actions" style="margin-top:1.25rem;">
+      <button class="mod-btn mod-btn--cancel" id="cl-modpicker-close-btn" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cool custom confirm -- shared by promote (Add Moderator picker) and
+     demote (clicking the remove button on an admin row). Same look as the
+     site's 18+/sign-in gates; see .cl-mod-confirm-card for the rationale. -->
+<div class="fpnav-modal-overlay" id="cl-mod-confirm-overlay" hidden>
+  <div class="fpnav-modal-card cl-mod-confirm-card">
+    <div class="cl-mod-confirm-icon" id="cl-mod-confirm-icon">🎗️</div>
+    <p class="fpnav-modal-title cl-mod-confirm-title" id="cl-mod-confirm-title"></p>
+    <p class="fpnav-modal-text cl-mod-confirm-text" id="cl-mod-confirm-text"></p>
+    <button type="button" class="fpnav-modal-cta fpnav-modal-cta--secondary" id="cl-mod-confirm-cancel" style="margin-bottom:0.6rem;">Cancel</button>
+    <button type="button" class="fpnav-modal-cta cl-mod-confirm-yes-btn" id="cl-mod-confirm-yes"></button>
   </div>
 </div>
 
@@ -3629,25 +3750,50 @@ function highlightSidebarPages(activePageSlug, activeTab) {
 }
 
 // ── Moderators — vertical stack of owners/admins, off the same member
-// roster already fetched alongside the club. ───────────────────────────────
+// roster already fetched alongside the club. Owner gets a small remove
+// button on every admin row (demotes back to plain member) -- never on
+// the owner's own row, and never shown to a viewer who's merely an admin
+// (matches the server's own owner-only restriction on PUT .../members/:id
+// with role=member). ─────────────────────────────────────────────────────
 const CL_MODS_CAP = 4;
 function modRow(m) {
-  const row = document.createElement('a');
-  row.className = 'cl-side-mod-row';
-  row.href = window.fpUrl(`/${encodeURIComponent(m.username)}`);
+  const viewerIsOwner = currentClub && currentClub.viewer_role === 'owner';
+  const showRemove = viewerIsOwner && m.role === 'admin';
+  const row = document.createElement('div');
+  row.className = 'cl-side-mod-row' + (showRemove ? ' cl-side-mod-row--has-remove' : '');
   const avatarHtml = m.avatar
     ? `<img class="cl-side-mod-avatar" src="${m.avatar}" alt="" />`
     : `<span class="cl-side-mod-avatar-fallback">${escapeHtml(m.display_name.charAt(0).toUpperCase())}</span>`;
   row.innerHTML = `
-    ${avatarHtml}
-    <span class="cl-side-mod-name">${escapeHtml(m.display_name)}</span>
+    <a class="cl-side-mod-row" style="flex:1; min-width:0;" href="${window.fpUrl(`/${encodeURIComponent(m.username)}`)}">
+      ${avatarHtml}
+      <span class="cl-side-mod-name">${escapeHtml(m.display_name)}</span>
+    </a>
     <span class="cl-side-mod-role">${m.role === 'owner' ? 'Owner' : 'Admin'}</span>
+    ${showRemove ? `<button type="button" class="cl-side-mod-remove-btn" title="Remove from admin team">✕</button>` : ''}
   `;
+  if (showRemove) {
+    row.querySelector('.cl-side-mod-remove-btn').addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showModConfirm({
+        icon: '⚠️',
+        title: 'Remove from admin team?',
+        text: `${m.display_name} will go back to being a regular member. You can promote them again later.`,
+        confirmLabel: 'Remove Admin',
+        danger: true,
+        onConfirm: () => changeMemberRole(m.id, 'member'),
+      });
+    });
+  }
   return row;
 }
 
 function renderClubMods(members) {
   const list = document.getElementById('cl-side-mods-list');
+  const addBtn = document.getElementById('cl-side-mod-add-btn');
+  const isOwnerOrAdmin = currentClub && (currentClub.viewer_role === 'owner' || currentClub.viewer_role === 'admin');
+  addBtn.style.display = isOwnerOrAdmin ? '' : 'none';
   // Owner always sorts first already (see GET /api/clubs/:slug's ORDER BY),
   // so capping at N naturally keeps the owner in the visible set.
   const mods = (members || []).filter(m => m.role === 'owner' || m.role === 'admin');
@@ -3671,10 +3817,9 @@ function renderClubMods(members) {
 
 // ── All-Members modal — reuses currentMembers (already fetched by
 // loadClub(), already owner/admins-first per the API's own ORDER BY), so
-// opening it never needs its own network round-trip. ─────────────────────
+// opening it never needs its own network round-trip. Purely informational
+// now -- promoting only happens through the Add Moderator picker below. ──
 function memberModalRow(m) {
-  const isOwnerOrAdmin = currentClub && (currentClub.viewer_role === 'owner' || currentClub.viewer_role === 'admin');
-  const canPromote = isOwnerOrAdmin && m.role === 'member';
   const row = document.createElement('div');
   row.className = 'cl-members-modal-row';
   const avatarHtml = m.avatar
@@ -3687,11 +3832,7 @@ function memberModalRow(m) {
       <span class="cl-members-modal-name">${escapeHtml(m.display_name)}</span>
     </a>
     <span class="cl-members-modal-role cl-members-modal-role--${m.role}">${roleLabel}</span>
-    ${canPromote ? `<button type="button" class="cl-members-modal-promote-btn" title="Make moderator">+</button>` : ''}
   `;
-  if (canPromote) {
-    row.querySelector('.cl-members-modal-promote-btn').addEventListener('click', () => promoteMember(m.id, row));
-  }
   return row;
 }
 
@@ -3703,25 +3844,6 @@ function renderMembersModalList() {
   currentMembers.forEach(m => list.appendChild(memberModalRow(m)));
 }
 
-async function promoteMember(userId, rowEl) {
-  const btn = rowEl.querySelector('.cl-members-modal-promote-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '…'; }
-  try {
-    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/members/${userId}`, {
-      method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'admin' }),
-    });
-    if (res.ok) {
-      const m = currentMembers.find(x => x.id === userId);
-      if (m) m.role = 'admin';
-      renderMembersModalList();
-      renderClubMods(currentMembers);
-      return;
-    }
-  } catch {}
-  if (btn) { btn.disabled = false; btn.textContent = '+'; }
-}
-
 document.getElementById('cl-side-members-btn').addEventListener('click', () => {
   renderMembersModalList();
   document.getElementById('cl-members-modal-overlay').hidden = false;
@@ -3729,6 +3851,151 @@ document.getElementById('cl-side-members-btn').addEventListener('click', () => {
 document.getElementById('cl-members-modal-close-btn').addEventListener('click', () => {
   document.getElementById('cl-members-modal-overlay').hidden = true;
 });
+
+// ── Role changes — single function backing both promote (Add Moderator
+// picker) and demote (sidebar/Edit Info remove button), both of which
+// route through the cool confirm screen first. Mirrors the server's own
+// PUT /api/clubs/:slug/members/:userId exactly (owner can set any
+// non-owner member's role; an admin can only fast-promote a plain member
+// to admin, which is reflected in who ever sees an admin-promotable "+"
+// or a remove button in the first place). ────────────────────────────────
+async function changeMemberRole(userId, role) {
+  try {
+    const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/members/${userId}`, {
+      method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
+    });
+    if (!res.ok) return false;
+    const m = currentMembers.find(x => x.id === userId);
+    if (m) m.role = role;
+    renderClubMods(currentMembers);
+    renderMembersModalList();
+    if (!document.getElementById('cl-splash-edit-overlay').hidden) renderEditInfoMods();
+    return true;
+  } catch { return false; }
+}
+
+// ── Cool custom confirm — shared promote/demote confirmation screen,
+// same visual language as window.fpShowAdultGate/fpShowSignInGate
+// (fanpages-nav.js) but scoped to this file (see .cl-mod-confirm-card).
+// Only one of these is ever open at a time, so a single overlay + a
+// stashed onConfirm closure is enough -- no need for a stack. ────────────
+let modConfirmOnYes = null;
+function showModConfirm({ icon, title, text, confirmLabel, danger, onConfirm }) {
+  document.getElementById('cl-mod-confirm-icon').textContent = icon || '🎗️';
+  document.getElementById('cl-mod-confirm-title').textContent = title;
+  document.getElementById('cl-mod-confirm-text').textContent = text;
+  const yesBtn = document.getElementById('cl-mod-confirm-yes');
+  yesBtn.textContent = confirmLabel;
+  yesBtn.className = 'fpnav-modal-cta cl-mod-confirm-yes-btn' + (danger ? ' cl-mod-confirm-yes-btn--danger' : '');
+  yesBtn.disabled = false;
+  modConfirmOnYes = onConfirm;
+  document.getElementById('cl-mod-confirm-overlay').hidden = false;
+}
+function hideModConfirm() {
+  document.getElementById('cl-mod-confirm-overlay').hidden = true;
+  modConfirmOnYes = null;
+}
+document.getElementById('cl-mod-confirm-cancel').addEventListener('click', hideModConfirm);
+document.getElementById('cl-mod-confirm-overlay').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) hideModConfirm();
+});
+document.getElementById('cl-mod-confirm-yes').addEventListener('click', async () => {
+  if (!modConfirmOnYes) return;
+  const yesBtn = document.getElementById('cl-mod-confirm-yes');
+  yesBtn.disabled = true;
+  const ok = await modConfirmOnYes();
+  hideModConfirm();
+  if (!ok) { /* silent -- the picker/sidebar state just won't have changed */ }
+});
+
+// ── Add Moderator picker — smart search over currentMembers (already in
+// hand, no network round-trip), filtered to plain members only (nothing
+// else is eligible to be promoted). Opened from either the sidebar "+" or
+// Edit Info's own Moderators section. ─────────────────────────────────────
+function modPickerOptionRow(m) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'cl-modpicker-option';
+  const avatarHtml = m.avatar
+    ? `<img src="${m.avatar}" alt="" />`
+    : `<span class="cl-modpicker-option-fallback">${escapeHtml(m.display_name.charAt(0).toUpperCase())}</span>`;
+  btn.innerHTML = `${avatarHtml}<span>${escapeHtml(m.display_name)}</span>`;
+  btn.addEventListener('click', () => {
+    document.getElementById('cl-modpicker-overlay').hidden = true;
+    showModConfirm({
+      icon: '🎗️',
+      title: 'Promote to Admin?',
+      text: `${m.display_name} will be able to help manage ${currentClub ? currentClub.name : 'this club'} as an admin.`,
+      confirmLabel: 'Promote to Admin',
+      danger: false,
+      onConfirm: () => changeMemberRole(m.id, 'admin'),
+    });
+  });
+  return btn;
+}
+function renderModPicker(query) {
+  const list = document.getElementById('cl-modpicker-list');
+  const q = (query || '').trim().toLowerCase();
+  const members = (currentMembers || []).filter(m => m.role === 'member');
+  const matches = q ? members.filter(m => m.display_name.toLowerCase().includes(q)) : members;
+  list.innerHTML = '';
+  if (!matches.length) {
+    list.innerHTML = `<p class="cl-modpicker-empty">${members.length ? 'No matches.' : 'No plain members left to promote.'}</p>`;
+    return;
+  }
+  matches.forEach(m => list.appendChild(modPickerOptionRow(m)));
+}
+function openModPicker() {
+  document.getElementById('cl-modpicker-search').value = '';
+  renderModPicker('');
+  document.getElementById('cl-modpicker-overlay').hidden = false;
+}
+document.getElementById('cl-modpicker-search').addEventListener('input', (e) => renderModPicker(e.target.value));
+document.getElementById('cl-modpicker-close-btn').addEventListener('click', () => {
+  document.getElementById('cl-modpicker-overlay').hidden = true;
+});
+document.getElementById('cl-side-mod-add-btn').addEventListener('click', openModPicker);
+document.getElementById('cl-editinfo-mod-add-btn').addEventListener('click', openModPicker);
+
+// ── Edit Info's own Moderators section — same roster, read/remove only
+// (promoting is the "+ Add Moderator" button below it, which opens the
+// exact same picker as the sidebar). ──────────────────────────────────────
+function editInfoModRow(m) {
+  const viewerIsOwner = currentClub && currentClub.viewer_role === 'owner';
+  const showRemove = viewerIsOwner && m.role === 'admin';
+  const row = document.createElement('div');
+  row.className = 'cl-edit-card-row';
+  row.style.cursor = 'default';
+  const avatarHtml = m.avatar
+    ? `<img class="cl-edit-card-row-pic" style="border-radius:50%;" src="${m.avatar}" alt="" />`
+    : `<span class="cl-members-modal-avatar-fallback">${escapeHtml(m.display_name.charAt(0).toUpperCase())}</span>`;
+  row.innerHTML = `
+    ${avatarHtml}
+    <span class="cl-edit-card-row-name" style="cursor:default;">${escapeHtml(m.display_name)}</span>
+    <span class="cl-members-modal-role cl-members-modal-role--${m.role}">${m.role === 'owner' ? 'Owner' : 'Admin'}</span>
+    ${showRemove ? `<button type="button" class="cl-edit-card-row-btn cl-edit-card-row-btn--danger">Remove</button>` : ''}
+  `;
+  if (showRemove) {
+    row.querySelector('.cl-edit-card-row-btn--danger').addEventListener('click', () => {
+      showModConfirm({
+        icon: '⚠️',
+        title: 'Remove from admin team?',
+        text: `${m.display_name} will go back to being a regular member. You can promote them again later.`,
+        confirmLabel: 'Remove Admin',
+        danger: true,
+        onConfirm: () => changeMemberRole(m.id, 'member'),
+      });
+    });
+  }
+  return row;
+}
+function renderEditInfoMods() {
+  const list = document.getElementById('cl-editinfo-mods-list');
+  const mods = (currentMembers || []).filter(m => m.role === 'owner' || m.role === 'admin');
+  list.innerHTML = '';
+  mods.forEach(m => list.appendChild(editInfoModRow(m)));
+}
 
 // ── Rules — preview title always visible, full description opens on
 // click. ────────────────────────────────────────────────────────────────
@@ -5530,6 +5797,7 @@ document.getElementById('cl-side-edit-btn').addEventListener('click', () => {
   closeRuleForm();
   document.getElementById('cl-splash-edit-overlay').hidden = false;
   loadEditRules();
+  renderEditInfoMods();
 });
 document.getElementById('cl-splash-cancel-btn').addEventListener('click', () => {
   document.getElementById('cl-splash-edit-overlay').hidden = true;
