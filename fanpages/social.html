@@ -139,6 +139,8 @@
     .soc-sidebar-club-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .soc-sidebar-club-owner-rose { flex-shrink: 0; font-size: 0.85rem; }
     .soc-sidebar-empty, .soc-sidebar-note { font-size: 0.9rem; color: #888; padding: 0.4rem 0.5rem; line-height: 1.5; }
+    .soc-sidebar-sfw-note { font-size: 0.8rem; margin-top: 0.3rem; }
+    .soc-sidebar-sfw-note a { color: #7fa8d9; text-decoration: underline; }
 
     /* Moderation section — label row with a collapse arrow (screenshot
        reference: Discord's "COMMUNITIES ⌃" header), a Manage button that
@@ -826,11 +828,19 @@ async function loadSidebarClubs() {
     renderModClubsPreview();
 
     if (!clubs.length) {
-      wrap.innerHTML = '<p class="soc-sidebar-note">You haven\'t joined any clubs yet.</p>';
+      wrap.innerHTML = data.hidden_nsfw_count
+        ? `<p class="soc-sidebar-note">${data.hidden_nsfw_count} club${data.hidden_nsfw_count === 1 ? '' : 's'} hidden — <a href="${window.fpUrl('/account-settings')}">enable NSFW</a> to see every joined club.</p>`
+        : '<p class="soc-sidebar-note">You haven\'t joined any clubs yet.</p>';
       return;
     }
     wrap.innerHTML = '';
     clubs.forEach(c => wrap.appendChild(sidebarClubLink(c, c.viewer_role === 'owner')));
+    if (data.hidden_nsfw_count) {
+      const note = document.createElement('p');
+      note.className = 'soc-sidebar-note soc-sidebar-sfw-note';
+      note.innerHTML = `${data.hidden_nsfw_count} club${data.hidden_nsfw_count === 1 ? '' : 's'} hidden — <a href="${window.fpUrl('/account-settings')}">enable NSFW</a> to see every joined club.`;
+      wrap.appendChild(note);
+    }
   } catch {
     wrap.innerHTML = '<p class="soc-sidebar-note">Couldn\'t load your clubs.</p>';
     modSection.style.display = 'none';

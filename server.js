@@ -9811,7 +9811,19 @@ app.get('/api/clubs', async (req, res) => {
      LIMIT $3`,
     type ? [viewerId, q, limit, JSON.stringify([type])] : [viewerId, q, limit]
   );
-  res.json({ clubs: rows.map(r => clubPublicShape(r, r.viewer_role)) });
+  // "My Clubs" specifically -- how many of the viewer's own joined/modded
+  // clubs just got hidden by SFW Mode, so the frontend can say so under the
+  // list instead of a joined club silently vanishing with no explanation.
+  let hiddenNsfwCount = 0;
+  if (mineOnly && hideNsfw) {
+    const { rows: [{ n }] } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM clubs c
+       WHERE c.is_nsfw = TRUE AND EXISTS (SELECT 1 FROM club_members m2 WHERE m2.club_id = c.id AND m2.user_id = $1)`,
+      [viewerId]
+    );
+    hiddenNsfwCount = n;
+  }
+  res.json({ clubs: rows.map(r => clubPublicShape(r, r.viewer_role)), hidden_nsfw_count: hiddenNsfwCount });
 });
 
 // POST /api/clubs — create a club; creator becomes owner. Description is no
