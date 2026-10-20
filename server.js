@@ -35,9 +35,16 @@ const avatarStorage = multer.diskStorage({
     const ext = ({ 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' })[file.mimetype] || '.jpg';
     // Two files can land in the same request now (the baked crop + the
     // untouched original, see /api/auth/avatar) -- suffix by fieldname so
-    // they don't collide on the same {userId}{ext} filename.
+    // they don't collide on the same filename. A timestamp is baked into
+    // the filename itself (not just a `?t=` query param on the in-page
+    // preview) so every upload gets a brand-new URL -- Cloudflare/the
+    // browser cache static images by extension for hours regardless of
+    // origin headers, and a fixed {userId}{ext} name meant a *repeat*
+    // upload could keep serving the previous picture from cache at that
+    // same URL even though the DB and disk already had the new one.
+    if (!req._avatarUploadTs) req._avatarUploadTs = Date.now();
     const suffix = file.fieldname === 'avatar_original' ? '-original' : '';
-    cb(null, `${req.user.id}${suffix}${ext}`);
+    cb(null, `${req.user.id}-${req._avatarUploadTs}${suffix}${ext}`);
   },
 });
 const uploadAvatar = multer({
@@ -2484,12 +2491,9 @@ app.post('/api/auth/avatar', requireAuth, (req, res, next) => {
     const avatarFile = req.files && req.files.avatar && req.files.avatar[0];
     if (!avatarFile) return res.status(400).json({ error: 'No file uploaded.' });
 
-    const exts = ['.jpg', '.png', '.webp', '.gif'];
-    const newFile = avatarFile.filename;
-    exts.forEach(ext => {
-      const old = path.join(AVATARS_DIR, `${req.user.id}${ext}`);
-      if (path.basename(old) !== newFile && fs.existsSync(old)) fs.unlinkSync(old);
-    });
+    const { rows: [existing] } = await pool.query(
+      'SELECT avatar, avatar_original_url FROM users WHERE id = $1', [req.user.id]
+    );
 
     const avatarUrl = `/images/avatars/${avatarFile.filename}`;
     // `avatar_original` is only sent the first time a NEW source photo is
@@ -2497,8 +2501,22 @@ app.post('/api/auth/avatar', requireAuth, (req, res, next) => {
     // existing original, so avatar_original_url stays untouched. Same
     // pattern as the story banner/cover-card fix.
     const originalFile = req.files.avatar_original && req.files.avatar_original[0];
-    if (originalFile) {
-      const originalUrl = `/images/avatars/${originalFile.filename}`;
+    const originalUrl = originalFile ? `/images/avatars/${originalFile.filename}` : null;
+
+    // Clean up the file(s) this upload replaces, now that the new ones are
+    // safely written -- every upload gets its own timestamped filename (see
+    // avatarStorage above), so the old URL is simply orphaned rather than
+    // reused, and deleting it here is just disk hygiene, not cache-safety.
+    if (existing.avatar && existing.avatar !== avatarUrl) {
+      const oldPath = path.join('/var/www/btw', existing.avatar);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+    if (originalUrl && existing.avatar_original_url && existing.avatar_original_url !== originalUrl) {
+      const oldOriginalPath = path.join('/var/www/btw', existing.avatar_original_url);
+      if (fs.existsSync(oldOriginalPath)) fs.unlinkSync(oldOriginalPath);
+    }
+
+    if (originalUrl) {
       await pool.query(
         'UPDATE users SET avatar = $1, avatar_original_url = $2, avatar_position_x = 50, avatar_position_y = 50, avatar_zoom = 100 WHERE id = $3',
         [avatarUrl, originalUrl, req.user.id]
