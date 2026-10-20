@@ -4296,20 +4296,15 @@ app.get('/api/search/works', async (req, res) => {
 
   const orderBy = sortKey === 'best_match' ? `${relevanceExpr} DESC, last_chapter_update DESC NULLS LAST` : SEARCH_SORTS[sortKey];
 
-  // Guests never see mature/explicit stories in search/browse at all —
-  // not an opt-in checkbox like `ratings` above, an unconditional exclusion
-  // regardless of what the ratings checklist says. A logged-in account
-  // still only needs the `ratings` checklist (SFW Mode doesn't gate
-  // search, same as before).
-  let searchViewerId = null;
-  const searchAuth = req.headers.authorization;
-  if (searchAuth && searchAuth.startsWith('Bearer ')) {
-    try { searchViewerId = jwt.verify(searchAuth.slice(7), process.env.JWT_SECRET).id; } catch {}
-  }
+  // Mature/Explicit stories are an unconditional exclusion on top of the
+  // `ratings` checklist, not replaced by it -- a guest or an account with
+  // SFW Mode on never sees them in search/browse no matter what the
+  // checklist says, same rule as every other NSFW-gated list on the site.
+  const { nsfwAllowed: searchNsfwAllowed } = await getViewerNsfwAccess(req);
 
   const params = [
     q, fandoms, tagsInclude, tagsExclude, categories, relationships,
-    ratings, wordMin, wordMax, completion, limit, offset, !!searchViewerId,
+    ratings, wordMin, wordMax, completion, limit, offset, searchNsfwAllowed,
   ];
 
   const { rows } = await pool.query(`

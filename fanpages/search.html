@@ -896,6 +896,16 @@
     .fp-filter-details[open] summary::before { transform: rotate(90deg); }
     .fp-filter-options { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.8rem; padding-left: 0.2rem; }
     .fp-filter-options label { display: flex; align-items: center; gap: 0.55rem; font-size: 1rem; color: #ccc; cursor: pointer; }
+    /* SFW Mode (or logged-out) can never actually surface Mature/Explicit
+       results -- server.js forces that exclusion regardless of what these
+       checkboxes say -- so leaving them clickable just invites confusion
+       about why checking "Mature" didn't change anything. Blurred +
+       unclickable instead, with the notice below explaining why. */
+    .fp-filter-options label.fp-rating-locked { filter: blur(3px); opacity: 0.6; cursor: not-allowed; pointer-events: none; }
+    .fp-rating-sfw-notice {
+      margin: 0.7rem 0 0; padding-left: 0.2rem; font-size: 0.82rem; line-height: 1.5; color: #999;
+    }
+    .fp-rating-sfw-notice a { color: #7fa8d9; text-decoration: underline; cursor: pointer; }
 
     .fp-filter-freeform-label { display: block; font-size: 0.92rem; color: #999; margin: 0.7rem 0 0.4rem; }
     .fp-filter-panel input[type="text"], .fp-filter-panel input[type="number"] {
@@ -1275,6 +1285,9 @@
           <label><input type="checkbox" value="mature" checked /> Mature</label>
           <label><input type="checkbox" value="explicit" checked /> Explicit</label>
         </div>
+        <p class="fp-rating-sfw-notice" id="f-rating-options-notice" hidden>
+          Currently browsing Safe Mode. <a href="#" id="f-rating-options-notice-link">Sign In</a> to see mature and explicit posts.
+        </p>
       </details>
       <details class="fp-filter-details">
         <summary>Categories</summary>
@@ -1372,6 +1385,9 @@
         <label><input type="checkbox" value="mature" checked /> Mature</label>
         <label><input type="checkbox" value="explicit" checked /> Explicit</label>
       </div>
+      <p class="fp-rating-sfw-notice" id="fp-posts-ratings-notice" hidden>
+        Currently browsing Safe Mode. <a href="#" id="fp-posts-ratings-notice-link">Sign In</a> to see mature and explicit posts.
+      </p>
     </div>
 
     <div class="fp-filter-section">
@@ -2655,6 +2671,45 @@ if (currentView === 'submissions' || currentView === 'profiles') {
   runSearch();
 }
 if (!isBrowseMode || isBrowseStories) refreshInactiveMenuCounts(currentView === 'submissions' || currentView === 'profiles' ? currentView : 'story');
+
+// Ratings filter -- Mature/Explicit never actually surface anything while
+// SFW Mode is on (guest, or a logged-in account with it toggled on) --
+// server.js enforces that exclusion unconditionally regardless of these
+// checkboxes -- so blur + disable both and point at the actual fix instead
+// of leaving a control that looks like it should work but silently does
+// nothing.
+async function initRatingLockUI() {
+  let restricted = true;
+  if (token) {
+    try {
+      const res = await fetch('/api/auth/me', { headers: authHeaders() });
+      if (res.ok) {
+        const { user } = await res.json();
+        restricted = !user.nsfw_enabled;
+      }
+    } catch {}
+  }
+  ['f-rating-options', 'fp-posts-ratings'].forEach(id => {
+    const wrap = document.getElementById(id);
+    if (!wrap) return;
+    wrap.querySelectorAll('input[value="mature"], input[value="explicit"]').forEach(cb => {
+      cb.disabled = restricted;
+      cb.closest('label').classList.toggle('fp-rating-locked', restricted);
+    });
+    const notice = document.getElementById(`${id}-notice`);
+    if (!notice) return;
+    notice.hidden = !restricted;
+    const link = document.getElementById(`${id}-notice-link`);
+    if (!link) return;
+    link.textContent = token ? 'Change Account Settings' : 'Sign In';
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (token) window.location.href = window.fpUrl(`/account-settings?from=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+      else if (window.fpOpenLoginModal) window.fpOpenLoginModal();
+    });
+  });
+}
+initRatingLockUI();
 
 // ── Mobile-only "Options" drawer (FurAffinity reference) — Browse → Posts
 // has no filter panel and Profiles has never had one, so this only applies
