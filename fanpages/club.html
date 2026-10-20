@@ -200,23 +200,24 @@
        a dark letterbox fill -- on a page taller than one screen that left
        a hard black cutoff below the fold (the fixed 100vh box only ever
        painted one viewport's worth of picture, never the rest of the
-       scrolled page). Home/Social's own background never has this problem
-       since it scrolls with the document and cover-crops -- matching that
-       same cover treatment here (while keeping the box itself pinned to
-       the viewport, not scrolling) fills the whole fixed box with no
-       letterbox bars and no cutoff, just a crop like Home already uses. */
+       scrolled page). Hub's own background never has this problem since it
+       scrolls with the document and cover-crops -- matching that same cover
+       treatment here (while keeping the box itself pinned to the viewport,
+       not scrolling) fills the whole fixed box with no letterbox bars and
+       no cutoff, just a crop like Hub already uses. */
     body.cl-page-bg-static #cl-page-bg-img {
       background-size: cover;
     }
-    /* Additional pages (General/Gallery/Promotion) have no top banner, so
-       there's no "continue the banner's art downward" reason to stretch
-       this across the whole scrolling document the way Home needs to --
-       pin it to the viewport instead. Sidesteps the "zoom gets worse the
-       taller the page is" tradeoff entirely (a fixed background's height
-       is just the viewport, not the document), and shows the picture at
-       a clean, constant size instead of an ever-growing crop. Toggled on
-       <body> by renderFromUrl() only while a pageSlug is active -- Home
-       and post-detail keep the original scrolling behavior. */
+    /* Additional pages (General/Gallery/Promotion), the Social tab, and a
+       post's own detail view have no top banner, so there's no "continue
+       the banner's art downward" reason to stretch this across the whole
+       scrolling document the way Hub needs to -- pin it to the viewport
+       instead. Sidesteps the "zoom gets worse the taller the page/comment
+       thread is" tradeoff entirely (a fixed background's height is just the
+       viewport, not the document), and shows the picture at a clean,
+       constant size instead of an ever-growing crop. Toggled on <body> by
+       renderFromUrl() whenever a postId or pageSlug is active, or the
+       Social tab is -- only Hub keeps the original scrolling behavior. */
     body.cl-page-bg-static #cl-page-bg-wrap { position: fixed; height: 100vh !important; }
 
     /* ── Banner + pfp (the only header content left for now) ── */
@@ -4570,15 +4571,16 @@ function renderFromUrl() {
     bannerPostBtn.style.display = 'block';
     clHeader.style.display = '';
   }
-  // Stationary/full-size theme background -- custom pages, and now the
-  // Social tab too (see body.cl-page-bg-static above). Social still shows
-  // the owner's Home background image, but a post with a huge comment
-  // thread shouldn't keep stretching/zooming that art taller and taller --
-  // pin it to the viewport like a custom page's background instead of
-  // scrolling it with the document. Hub keeps the original scrolling
-  // behavior (it still needs to continue the banner's art downward).
+  // Stationary/full-size theme background -- custom pages, the Social tab,
+  // and a single post's own detail view all get this now (see
+  // body.cl-page-bg-static above). They all still show the owner's Home
+  // background image, but a post with a huge comment thread shouldn't keep
+  // stretching/zooming that art taller and taller -- pin it to the viewport
+  // like a custom page's background instead of scrolling it with the
+  // document. Only Hub keeps the original scrolling behavior (it still
+  // needs to continue the banner's art downward).
   const isSocialTab = !postId && !pageSlug && tab === 'social';
-  document.body.classList.toggle('cl-page-bg-static', !!pageSlug || isSocialTab);
+  document.body.classList.toggle('cl-page-bg-static', !!postId || !!pageSlug || isSocialTab);
 
   if (postId) {
     loadAndShowPost(postId);
