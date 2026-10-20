@@ -593,6 +593,24 @@ async function initDb() {
     ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS ref_is_nsfw BOOLEAN NOT NULL DEFAULT false;
   `).catch(e => console.error('moderator_characters ref_is_nsfw migration:', e.message));
 
+  // General/Mature/Explicit rating for the character's reference art, same
+  // 3-tier scale as stories/gallery. Replaces the old SFW/NSFW toggle --
+  // ref_is_nsfw stays in sync (rating <> 'sfw') so existing lock checks
+  // elsewhere don't need to change. Pre-existing NSFW-flagged characters
+  // backfill to 'mature' since the old toggle had no explicit tier.
+  await pool.query(`
+    ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS ref_rating TEXT NOT NULL DEFAULT 'sfw';
+  `).catch(e => console.error('moderator_characters ref_rating migration:', e.message));
+  await pool.query(`
+    UPDATE moderator_characters SET ref_rating = 'mature' WHERE ref_is_nsfw = true AND ref_rating = 'sfw';
+  `).catch(e => console.error('moderator_characters ref_rating backfill:', e.message));
+  await pool.query(`
+    ALTER TABLE moderator_characters DROP CONSTRAINT IF EXISTS moderator_characters_ref_rating_check;
+  `).catch(e => console.error('moderator_characters ref_rating constraint drop:', e.message));
+  await pool.query(`
+    ALTER TABLE moderator_characters ADD CONSTRAINT moderator_characters_ref_rating_check CHECK (ref_rating IN ('sfw','mature','explicit'));
+  `).catch(e => console.error('moderator_characters ref_rating constraint migration:', e.message));
+
   // Backs the Characters browse page's "Date Updated" sort -- created_at
   // alone would never move once a character's been edited.
   await pool.query(`
@@ -7594,19 +7612,20 @@ app.put('/api/moderator/characters/profile-order', requireAuth, async (req, res)
 // link to this story is a separate row, so the same character can later be
 // linked into other stories too without being duplicated.
 app.post('/api/moderator/characters', requireAuth, requireModerator, async (req, res) => {
-  const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url } = req.body;
+  const { name, ref_image, description, stats, facts, lore, relationships, ref_rating, is_official_art, official_art_source_url, voice_claim_url } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
+  const cleanRating = GALLERY_CATEGORIES.includes(ref_rating) ? ref_rating : 'sfw';
   const cleanStats = await sanitizeCharacterStats(stats || {});
   // New characters jump to the top of the owner's profile Page Order.
   const { rows: [{ minOrder: profileMinOrder }] } = await pool.query(
     'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_characters WHERE owner_user_id = $1', [req.user.id]
   );
   const { rows: [character] } = await pool.query(
-    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_rating, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
-     JSON.stringify(relationships || []), !!ref_is_nsfw,
+     JSON.stringify(relationships || []), cleanRating, cleanRating !== 'sfw',
      is_official_art !== undefined ? !!is_official_art : true, cleanLinkUrl(official_art_source_url), cleanLinkUrl(voice_claim_url), profileMinOrder]
   );
   const { rows: [{ maxOrder }] } = await pool.query(
@@ -7629,7 +7648,8 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
     'SELECT * FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
   );
   if (!existing) return res.status(404).json({ error: 'Not found.' });
-  const { name, ref_image, description, stats, facts, lore, relationships, sort_order, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url } = req.body;
+  const { name, ref_image, description, stats, facts, lore, relationships, sort_order, ref_rating, is_official_art, official_art_source_url, voice_claim_url } = req.body;
+  const cleanRating = ref_rating !== undefined ? (GALLERY_CATEGORIES.includes(ref_rating) ? ref_rating : 'sfw') : null;
   const cleanStats = stats !== undefined ? await sanitizeCharacterStats(stats) : undefined;
   // A real art change, not just this save happening to repeat the same URL
   // -- drives ref_image_updated_at below, which is what puts this in Recent
@@ -7645,7 +7665,8 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
        lore                    = COALESCE($6, lore),
        relationships           = COALESCE($7, relationships),
        sort_order              = COALESCE($8, sort_order),
-       ref_is_nsfw             = COALESCE($9, ref_is_nsfw),
+       ref_rating              = COALESCE($9, ref_rating),
+       ref_is_nsfw             = COALESCE($9, ref_rating) <> 'sfw',
        is_official_art         = COALESCE($10, is_official_art),
        official_art_source_url = COALESCE($11, official_art_source_url),
        voice_claim_url         = COALESCE($14, voice_claim_url),
@@ -7657,7 +7678,7 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
      facts !== undefined ? JSON.stringify(facts) : null,
      lore !== undefined ? JSON.stringify(lore) : null,
      relationships !== undefined ? JSON.stringify(relationships) : null,
-     sort_order, ref_is_nsfw !== undefined ? !!ref_is_nsfw : null,
+     sort_order, cleanRating,
      is_official_art !== undefined ? !!is_official_art : null,
      official_art_source_url !== undefined ? cleanLinkUrl(official_art_source_url) : null,
      existing.id, artChanged, voice_claim_url !== undefined ? cleanLinkUrl(voice_claim_url) : null]
@@ -7955,18 +7976,19 @@ app.delete('/api/characters/:id/link-gallery/:galleryId', requireAuth, async (re
 // requireModerator — RPers/artists with zero stories should still be able
 // to make characters).
 app.post('/api/characters', requireAuth, async (req, res) => {
-  const { name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url } = req.body;
+  const { name, ref_image, description, stats, facts, lore, relationships, ref_rating, is_official_art, official_art_source_url, voice_claim_url } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
+  const cleanRating = GALLERY_CATEGORIES.includes(ref_rating) ? ref_rating : 'sfw';
   const cleanStats = await sanitizeCharacterStats(stats || {});
   const { rows: [{ minOrder: profileMinOrder }] } = await pool.query(
     'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_characters WHERE owner_user_id = $1', [req.user.id]
   );
   const { rows: [character] } = await pool.query(
-    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_rating, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
-     JSON.stringify(relationships || []), !!ref_is_nsfw,
+     JSON.stringify(relationships || []), cleanRating, cleanRating !== 'sfw',
      is_official_art !== undefined ? !!is_official_art : true, cleanLinkUrl(official_art_source_url), cleanLinkUrl(voice_claim_url), profileMinOrder]
   );
   const { rows: [actor] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);

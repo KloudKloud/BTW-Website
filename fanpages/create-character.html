@@ -163,18 +163,6 @@
     <div class="mod-field char-editor-nsfw-field" id="char-editor-nsfw-field" style="display:none;">
       <div class="nsfw-toggle-row">
         <label class="nsfw-toggle-switch">
-          <input type="checkbox" id="char-editor-nsfw-toggle" />
-          <span class="nsfw-toggle-slider"></span>
-        </label>
-        <span class="nsfw-toggle-label nsfw-toggle-label--sfw" id="char-editor-nsfw-toggle-label">Safe For Work</span>
-        <span class="tip-icon-wrap">
-          <button class="wiki-tags-tip-icon" type="button" aria-label="NSFW image help">💡</button>
-          <div class="wiki-tags-tip-popover" hidden><p>Is your character reference image NSFW? If so, please label it above! :3</p></div>
-        </span>
-      </div>
-
-      <div class="nsfw-toggle-row" style="margin-top:0.85rem;">
-        <label class="nsfw-toggle-switch">
           <input type="checkbox" id="char-editor-official-toggle" />
           <span class="nsfw-toggle-slider"></span>
         </label>
@@ -192,6 +180,30 @@
     </div>
 
     <hr class="char-editor-field-hr" />
+
+    <div class="gallery-cat-field">
+      <div class="cc-field-title-row">
+        <p class="gallery-cat-label">Rating</p>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Rating help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden>
+          <p>This refers mainly to reference art used. If you're reference art is mature or explicit, please label it so! :3 By nature, characters are General until NSFW artwork is used a reference.</p>
+        </div>
+      </div>
+      <div class="gallery-cat-row" id="char-editor-rating-row">
+        <label class="gallery-cat-option">
+          <input type="radio" name="char-editor-rating" value="sfw" checked />
+          <span>General</span>
+        </label>
+        <label class="gallery-cat-option gallery-cat-option--spicy">
+          <input type="radio" name="char-editor-rating" value="mature" />
+          <span>Mature</span>
+        </label>
+        <label class="gallery-cat-option gallery-cat-option--spicy">
+          <input type="radio" name="char-editor-rating" value="explicit" />
+          <span>Explicit</span>
+        </label>
+      </div>
+    </div>
 
     <div class="mod-field">
       <label for="char-editor-name">Name <span class="mod-required-star">*</span></label>
@@ -582,15 +594,6 @@
     document.addEventListener('click', (e) => {
       if (!pop.hidden && !pop.contains(e.target) && e.target !== icon) pop.hidden = true;
     });
-  });
-
-  function setCharNsfwToggleLabel(isNsfw) {
-    const label = document.getElementById('char-editor-nsfw-toggle-label');
-    label.textContent = isNsfw ? 'NSFW' : 'Safe For Work';
-    label.classList.toggle('nsfw-toggle-label--sfw', !isNsfw);
-  }
-  document.getElementById('char-editor-nsfw-toggle').addEventListener('change', function () {
-    setCharNsfwToggleLabel(this.checked);
   });
 
   // Official Art toggle -- unchecked (left, like the SFW switch's default
@@ -1165,7 +1168,7 @@
     const body = {
       name,
       ref_image: uploadedRefUrl,
-      ref_is_nsfw: document.getElementById('char-editor-nsfw-toggle').checked,
+      ref_rating: document.querySelector('input[name="char-editor-rating"]:checked').value,
       is_official_art: isOfficialArt,
       official_art_source_url: isOfficialArt ? '' : document.getElementById('char-editor-art-source').value.trim(),
       description: document.getElementById('char-editor-desc').value.trim(),
@@ -1274,6 +1277,10 @@
       document.getElementById('char-editor-delete-forever').style.display = '';
       document.getElementById('cc-topbar-delete').style.display = '';
 
+      const rating = character.ref_rating || (character.ref_is_nsfw ? 'mature' : 'sfw');
+      const ratingInput = document.querySelector(`input[name="char-editor-rating"][value="${rating}"]`);
+      if (ratingInput) ratingInput.checked = true;
+
       document.getElementById('char-editor-name').value = character.name || '';
       document.getElementById('char-editor-desc').value = character.description || '';
       const stats = character.stats || {};
@@ -1301,8 +1308,6 @@
         if (character.ref_image !== '/images/defaultchar.jpg') {
           document.getElementById('char-editor-ref-recrop-btn').style.display = 'block';
           document.getElementById('char-editor-nsfw-field').style.display = 'block';
-          document.getElementById('char-editor-nsfw-toggle').checked = !!character.ref_is_nsfw;
-          setCharNsfwToggleLabel(!!character.ref_is_nsfw);
           const isOfficial = character.is_official_art !== false;
           document.getElementById('char-editor-official-toggle').checked = !isOfficial;
           document.getElementById('char-editor-art-source').value = character.official_art_source_url || '';
