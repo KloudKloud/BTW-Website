@@ -1077,6 +1077,22 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
     .catch(() => {});
 })();
 
+// ── Live avatar refresh — called by account-settings.html right after a
+// successful avatar upload, so the top-right nav icon (desktop dropdown,
+// mobile pfp icon, and hamburger drawer icon) updates immediately instead
+// of waiting for a full page reload to re-run the /api/auth/me fetch above.
+// Global (not inside the topbar IIFE) so it's callable from any page that
+// loads this script, same pattern as window.fpShare below. ─────────────
+window.fpUpdateNavAvatar = function (avatarUrl) {
+  const avatarHtml = `<img src="${avatarUrl}" alt="" />`;
+  const imgWrap = document.getElementById('fpnav-avatar-img-wrap');
+  if (imgWrap) imgWrap.innerHTML = avatarHtml;
+  const mobilePfpIcon = document.getElementById('fpnav-mobile-pfp-icon');
+  if (mobilePfpIcon) mobilePfpIcon.innerHTML = avatarHtml;
+  const drawerProfileIcon = document.getElementById('fpnav-drawer-profile-icon');
+  if (drawerProfileIcon) drawerProfileIcon.innerHTML = avatarHtml;
+};
+
 // ── Shared "Share" button behavior — used by the small share icon buttons
 // on story pages, profiles, gallery posts, and character pages. Opens a
 // tiny "Copy Link?" popover anchored to the button instead of copying
