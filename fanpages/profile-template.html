@@ -3249,7 +3249,11 @@
           method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify({ target_type: ccTargetType, target_id: ccTargetId, body: text, parent_id: parentComment.id }),
         });
-        if (res.ok) await ccLoadComments();
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data && data.levelUp && window.fpnavShowXpGain) window.fpnavShowXpGain(data.levelUp, btn);
+          await ccLoadComments();
+        }
       } finally { btn.disabled = false; }
     });
     const repliesWrap = bodyEl.querySelector('.cc-replies');
@@ -3307,7 +3311,11 @@
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ target_type: ccTargetType, target_id: ccTargetId, body: text }),
       });
-      if (res.ok) { input.value = ''; await ccLoadComments(); }
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data && data.levelUp && window.fpnavShowXpGain) window.fpnavShowXpGain(data.levelUp, btn);
+        input.value = ''; await ccLoadComments();
+      }
     } finally { btn.disabled = false; }
   }
   document.getElementById('fp-char-cc-compose-btn').addEventListener('click', ccHandleCompose);
@@ -4554,11 +4562,12 @@
               body: JSON.stringify({ body }),
             });
             if (res2.ok) {
-              const { comment } = await res2.json();
+              const { comment, levelUp } = await res2.json();
               document.getElementById('fp-newspaper-comment-list').appendChild(newspaperCommentEl(comment));
               input.value = '';
               const p = NEWSPAPER_POSTS.find(p2 => String(p2.id) === String(postId));
               if (p) p.comment_count++;
+              if (levelUp && window.fpnavShowXpGain) window.fpnavShowXpGain(levelUp, btn);
             }
           } catch {}
           btn.disabled = false;
@@ -4840,7 +4849,8 @@
         msgEl.textContent = data.error || 'Something went wrong. Please try again.';
         return;
       }
-      const { post } = await res.json();
+      const { post, levelUp } = await res.json();
+      if (levelUp && window.fpnavShowXpGain) window.fpnavShowXpGain(levelUp, btn);
       closeNewspaperComposer();
       NEWSPAPER_POSTS = [];
       newspaperTabLoaded = false;

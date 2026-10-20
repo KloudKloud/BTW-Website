@@ -1461,13 +1461,17 @@ document.getElementById('ce-publish-btn').addEventListener('click', async () => 
     if (!ok) throw new Error('save failed');
     // For a draft, this button also flips it to published — writing is
     // done, this is the moment it becomes visible to readers.
+    let chapterLevelUp = null;
     if (wasDraft) {
-      await fetch(`${API}/moderator/chapters/${CHAPTER_ID}/status`, {
+      const statusRes = await fetch(`${API}/moderator/chapters/${CHAPTER_ID}/status`, {
         method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'published' }),
       });
+      const statusData = await statusRes.json().catch(() => null);
+      chapterLevelUp = statusData && statusData.levelUp;
       currentChapter.status = 'published';
       updateButtonsForStatus();
+      if (chapterLevelUp && window.fpnavShowXpGain) window.fpnavShowXpGain(chapterLevelUp, btn);
     }
     updateStatusLine();
     btn.textContent = 'Saved ✓';
@@ -1479,6 +1483,7 @@ document.getElementById('ce-publish-btn').addEventListener('click', async () => 
       everPublished = true;
       sessionStorage.setItem('btw_just_published', JSON.stringify({
         title, storyTitle: document.getElementById('ce-story-title').textContent,
+        levelUp: (chapterLevelUp && chapterLevelUp.leveledUp) ? chapterLevelUp : null,
       }));
       window.location.href = `${STORY_BASE}/edit#chapters`;
       return;

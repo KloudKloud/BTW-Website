@@ -8656,10 +8656,12 @@ function milestoneForLevel(level) {
 
 // Single chokepoint every content/comment-creation endpoint routes through.
 // Logs the award (audit trail + future "why is my XP X" support), bumps the
-// cached xp/level columns, and reports back whether this award crossed a
-// level (and/or a milestone) so the caller can let the client show a toast.
-// No daily caps anywhere — comments are deliberately uncapped per product
-// decision ("let them yap"), and content posts are self-limiting by effort.
+// cached xp/level columns, and reports back the award + resulting bar
+// position every time (not just on a level crossing) so the client can
+// always show a "+N XP" toast, with leveledUp/milestones layered on top
+// when a level boundary was actually crossed. No daily caps anywhere —
+// comments are deliberately uncapped per product decision ("let them
+// yap"), and content posts are self-limiting by effort.
 async function awardXp(userId, sourceType, sourceId, amount) {
   if (!userId || !amount) return null;
   const { rows: [before] } = await pool.query('SELECT xp, level FROM users WHERE id = $1', [userId]);
@@ -8672,9 +8674,13 @@ async function awardXp(userId, sourceType, sourceId, amount) {
   const newLevel = levelForXp(newXp);
   await pool.query('UPDATE users SET xp = $1, level = $2 WHERE id = $3', [newXp, newLevel, userId])
     .catch(e => console.error('users xp/level update:', e.message));
-  if (newLevel === before.level) return null;
-  const milestonesHit = XP_MILESTONES.filter(m => m.level > before.level && m.level <= newLevel);
-  return { leveledUp: true, oldLevel: before.level, newLevel, xp: newXp, milestones: milestonesHit };
+  const leveledUp = newLevel !== before.level;
+  const milestonesHit = leveledUp ? XP_MILESTONES.filter(m => m.level > before.level && m.level <= newLevel) : [];
+  return {
+    amount, leveledUp, oldLevel: before.level, newLevel, xp: newXp,
+    xp_into_level: newXp - cumulativeXpForLevel(newLevel), xp_for_next_level: xpToNextLevel(newLevel),
+    milestones: milestonesHit,
+  };
 }
 
 // ── Notifications — generic fan-out helpers used by every real event below

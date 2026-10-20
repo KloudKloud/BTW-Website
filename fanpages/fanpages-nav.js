@@ -1044,13 +1044,23 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         levelBadge.style.display = '';
         levelBadge.title = u.milestone_badge || `Level ${u.level}`;
         levelBadge.onclick = () => { location.href = fpUrl('/levels'); };
-        document.getElementById('fpnav-level-circle').textContent = u.level;
-        const into = u.xp_into_level || 0;
-        const need = u.xp_for_next_level || 1;
-        document.getElementById('fpnav-level-progress-text').textContent = `${into}/${need}`;
-        const pct = Math.max(0, Math.min(100, (into / need) * 100));
-        document.getElementById('fpnav-level-progress-fill').style.width = `${pct}%`;
+        fpnavSetLevelBadge(u.level, u.xp_into_level || 0, u.xp_for_next_level || 1);
       }
+
+      // An XP-granting action on the *previous* page (e.g. publishing a
+      // chapter, which always redirects away afterward) couldn't show its
+      // own flare before navigating — it stashes the levelUp payload here
+      // instead, and whichever page loads next (any of them, since this
+      // script runs on all of them) picks it up and fires the flare once
+      // the badge above has its fresh post-award numbers in place.
+      try {
+        const pending = sessionStorage.getItem('btw_pending_xp');
+        if (pending) {
+          sessionStorage.removeItem('btw_pending_xp');
+          const pendingLevelUp = JSON.parse(pending);
+          setTimeout(() => window.fpnavShowXpGain(pendingLevelUp), 500);
+        }
+      } catch {}
 
       document.getElementById('fpnav-avatar-img-wrap').innerHTML = u.avatar
         ? `<img src="${u.avatar}" alt="" />`
@@ -1092,6 +1102,99 @@ window.fpUpdateNavAvatar = function (avatarUrl) {
   if (mobilePfpIcon) mobilePfpIcon.innerHTML = avatarHtml;
   const drawerProfileIcon = document.getElementById('fpnav-drawer-profile-icon');
   if (drawerProfileIcon) drawerProfileIcon.innerHTML = avatarHtml;
+};
+
+// ── Level badge fill — shared by the one-shot /api/auth/me load above and
+// fpnavShowXpGain() below, so both paths render the circle/track the same
+// way. ────────────────────────────────────────────────────────────────────
+function fpnavSetLevelBadge(level, into, need) {
+  const circle = document.getElementById('fpnav-level-circle');
+  const text = document.getElementById('fpnav-level-progress-text');
+  const fill = document.getElementById('fpnav-level-progress-fill');
+  if (circle) circle.textContent = level;
+  if (text) text.textContent = `${into}/${need}`;
+  if (fill) fill.style.width = `${Math.max(0, Math.min(100, (into / need) * 100))}%`;
+}
+
+// ── XP gain flare — call this with the `levelUp` object any XP-granting
+// endpoint now returns (see awardXp() in server.js — it always returns
+// {amount, leveledUp, oldLevel, newLevel, xp, xp_into_level,
+// xp_for_next_level, milestones}, not just on an actual level crossing)
+// right after a successful fetch response. Floats a "+N XP" toast from the
+// triggering element (or the nav badge itself, if no element is given/
+// visible) up into the level bar, animates the bar filling, and — if the
+// award crossed a level — follows up with the center-screen level-up card.
+// Global so every page's comment/post/chapter/character/gallery submit
+// handler can call it without this script exporting anything page-specific.
+window.fpnavShowXpGain = function (levelUp, sourceEl) {
+  if (!levelUp || !levelUp.amount) return;
+
+  const badge = document.getElementById('fpnav-level-badge');
+  const badgeVisible = badge && badge.offsetParent !== null && getComputedStyle(badge).display !== 'none';
+  const anchor = (sourceEl && sourceEl.getBoundingClientRect) ? sourceEl : (badgeVisible ? badge : null);
+
+  const toast = document.createElement('div');
+  toast.className = 'fpnav-xp-toast';
+  toast.textContent = `+${levelUp.amount} XP`;
+  if (anchor) {
+    const rect = anchor.getBoundingClientRect();
+    toast.style.left = `${rect.left + rect.width / 2}px`;
+    toast.style.top = `${rect.top}px`;
+  } else {
+    // No badge on screen (mobile nav hides it) and no source element given
+    // — fall back to a fixed spot near the top of the viewport so the toast
+    // still appears somewhere sensible.
+    toast.style.left = '50%';
+    toast.style.top = '70px';
+  }
+  document.body.appendChild(toast);
+  toast.addEventListener('animationend', () => toast.remove());
+
+  if (badgeVisible) {
+    if (levelUp.leveledUp) {
+      // Snap empty first so the refill visibly animates from 0 rather than
+      // jumping backward (new level's bar starts lower than the old one).
+      const fill = document.getElementById('fpnav-level-progress-fill');
+      if (fill) {
+        fill.style.transition = 'none';
+        fill.style.width = '0%';
+        void fill.offsetWidth;
+        fill.style.transition = '';
+      }
+    }
+    fpnavSetLevelBadge(levelUp.newLevel, levelUp.xp_into_level, levelUp.xp_for_next_level);
+  }
+
+  if (levelUp.leveledUp) {
+    setTimeout(() => window.fpnavShowLevelUp(levelUp), badgeVisible ? 300 : 0);
+  }
+};
+
+// ── Stash XP for the next page load — use this instead of fpnavShowXpGain
+// when the current action redirects away immediately after succeeding (a
+// character/gallery create, a newspaper post, etc. all send the user
+// somewhere else right after the fetch resolves), so the flare isn't lost
+// mid-navigation. Picked up and fired by the /api/auth/me handler above on
+// whichever page loads next.
+window.fpnavStashXpGain = function (levelUp) {
+  if (!levelUp || !levelUp.amount) return;
+  try { sessionStorage.setItem('btw_pending_xp', JSON.stringify(levelUp)); } catch {}
+};
+
+window.fpnavShowLevelUp = function (levelUp) {
+  const milestone = levelUp.milestones && levelUp.milestones.length
+    ? levelUp.milestones[levelUp.milestones.length - 1] : null;
+  const overlay = document.createElement('div');
+  overlay.className = 'fpnav-levelup-overlay';
+  overlay.innerHTML = `
+    <div class="fpnav-levelup-card">
+      <div class="fpnav-levelup-label">Level Up!</div>
+      <div class="fpnav-levelup-number">${levelUp.newLevel}</div>
+      ${milestone ? `<div class="fpnav-levelup-milestone">${milestone.badge}</div>` : ''}
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.remove(), 3300);
 };
 
 // ── Shared "Share" button behavior — used by the small share icon buttons

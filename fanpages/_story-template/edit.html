@@ -3470,10 +3470,12 @@ function openChapterEditorPage(ch) {
 async function toggleSeChapterStatus(ch) {
   const newStatus = ch.status === 'draft' ? 'published' : 'draft';
   try {
-    await fetch(`/api/moderator/chapters/${ch.id}/status`, {
+    const res = await fetch(`/api/moderator/chapters/${ch.id}/status`, {
       method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
     });
+    const data = await res.json().catch(() => null);
+    if (data && data.levelUp && window.fpnavShowXpGain) window.fpnavShowXpGain(data.levelUp);
     loadSeChapters();
   } catch {}
 }
@@ -3595,9 +3597,12 @@ document.getElementById('ce-congrats-btn').addEventListener('click', () => {
   if (!raw) return;
   sessionStorage.removeItem('btw_just_published');
   try {
-    const { title, storyTitle } = JSON.parse(raw);
+    const { title, storyTitle, levelUp } = JSON.parse(raw);
     document.getElementById('ce-congrats-title').textContent = `Congrats! You published "${title}" for ${storyTitle}!`;
     document.getElementById('ce-congrats-overlay').hidden = false;
+    if (levelUp && levelUp.leveledUp && window.fpnavShowLevelUp) {
+      setTimeout(() => window.fpnavShowLevelUp(levelUp), 500);
+    }
   } catch {}
 })();
 

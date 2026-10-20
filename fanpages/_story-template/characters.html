@@ -1266,7 +1266,11 @@ function ccOpenReplyBox(bodyEl, parentComment) {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ target_type: ccTargetType, target_id: ccTargetId, body: text, parent_id: parentComment.id, guest_name: guestName }),
       });
-      if (res.ok) await ccLoadComments();
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data && data.levelUp && window.fpnavShowXpGain) window.fpnavShowXpGain(data.levelUp, btn);
+        await ccLoadComments();
+      }
     } finally { btn.disabled = false; }
   });
   const repliesWrap = bodyEl.querySelector('.cc-replies');
@@ -1326,7 +1330,11 @@ document.getElementById('cc-compose-btn').addEventListener('click', async () => 
       method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ target_type: ccTargetType, target_id: ccTargetId, body: text, guest_name: guestName }),
     });
-    if (res.ok) { input.value = ''; await ccLoadComments(); }
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data && data.levelUp && window.fpnavShowXpGain) window.fpnavShowXpGain(data.levelUp, btn);
+      input.value = ''; await ccLoadComments();
+    }
   } finally { btn.disabled = false; }
 });
 

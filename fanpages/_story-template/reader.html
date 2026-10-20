@@ -1465,7 +1465,7 @@ async function submitComment(prefix, parentId, text, gifUrl, paragraphIndex, col
     localStorage.setItem('btw_guest_name', guestName);
   }
   try {
-    await fetch('/api/content-comments', {
+    const res = await fetch('/api/content-comments', {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1473,6 +1473,11 @@ async function submitComment(prefix, parentId, text, gifUrl, paragraphIndex, col
         paragraph_index: paragraphIndex, parent_id: parentId, body: text, gif_url: gifUrl, guest_name: guestName,
       }),
     });
+    const data = await res.json().catch(() => null);
+    if (data && data.levelUp && window.fpnavShowXpGain) {
+      const sendBtn = document.getElementById(prefix === 'rd-cp' ? 'rd-cp-send' : 'rd-bc-send');
+      window.fpnavShowXpGain(data.levelUp, sendBtn);
+    }
     if (prefix === 'rd-cp') loadParagraphThread();
     else loadAllChapterComments();
   } catch {}
