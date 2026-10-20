@@ -1376,20 +1376,35 @@ window.wikiSetCoverSlot = function (el, site, opts) {
     document.getElementById('fp-adultgate-signin').addEventListener('click', () => {
       overlay.hidden = true;
       document.body.classList.remove('fpnav-modal-open');
-      window.fpOpenLoginModal();
+      const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+      if (token) {
+        window.location.href = window.fpUrl(`/account-settings?from=${encodeURIComponent(window.location.pathname)}`);
+      } else {
+        window.fpOpenLoginModal();
+      }
     });
   }
   // No outside-click/Escape dismissal and no close button — the guest must
-  // actively choose Bet or Sign In, since the page underneath has nothing
-  // valid to show them either way.
+  // actively choose Bet or Sign In/Settings, since the page underneath has
+  // nothing valid to show them either way.
   // opts.persistent: true for a full-page gate (a direct visit to 18+
   // content with nothing else behind the popup) so Bet loops back to the
   // same prompt instead of leaving a blank page exposed; omitted/false for
   // a gate triggered by clicking a locked card on an otherwise-normal page,
   // where Bet should just close it and return to that page.
+  // A logged-in account only ever lands on this gate because their own SFW
+  // Mode is hiding the content (guests are the only other case, and they
+  // have no account to be logged into) -- so the wording/second button
+  // swap to "must enable NSFW access" + "Settings" (straight to Account
+  // Settings) instead of the guest-facing "must be logged in" + "Sign In".
   window.fpShowAdultGate = function (opts) {
     build();
     overlay.dataset.persistent = (opts && opts.persistent) ? '1' : '';
+    const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+    overlay.querySelector('.fp-adultgate-text').textContent = token
+      ? 'Must enable NSFW access to see content.'
+      : 'You must be logged in to access adult content.';
+    overlay.querySelector('.fp-adultgate-signin-btn').textContent = token ? 'Settings' : 'Sign In';
     overlay.hidden = false;
     document.body.classList.add('fpnav-modal-open');
   };
