@@ -4819,6 +4819,7 @@ app.get('/api/recommended-followers', async (req, res) => {
            + (CASE WHEN raw.last_chapter_at >= NOW() - INTERVAL '30 days' THEN 6 ELSE 0 END) AS score
     ) s ON true
     WHERE u.username NOT IN ('btwteam', 'holly_allen', 'holly_chan')
+      AND u.verified = true
       AND ($1::int IS NULL OR u.id != $1)
       AND NOT EXISTS (
         SELECT 1 FROM user_follows f WHERE f.follower_id = $1 AND f.followed_id = u.id
@@ -9615,7 +9616,9 @@ app.get('/api/search/profiles', async (req, res) => {
          (SELECT MAX(mc.updated_at) FROM moderator_chapters mc JOIN moderator_sites ms ON ms.id = mc.site_id
           WHERE ms.owner_user_id = u.id AND mc.status = 'published') AS last_chapter_at
      ) raw ON true
-     WHERE (cardinality($1::text[]) = 0 OR (
+     WHERE u.verified = true
+       AND u.username NOT IN ('btwteam', 'holly_allen', 'holly_chan')
+       AND (cardinality($1::text[]) = 0 OR (
          SELECT bool_and(u.username ILIKE '%' || w || '%' OR COALESCE(u.display_name, '') ILIKE '%' || w || '%')
          FROM unnest($1::text[]) AS w
        ))
