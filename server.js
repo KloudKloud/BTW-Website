@@ -9783,16 +9783,18 @@ app.get('/api/clubs', async (req, res) => {
   const type = CLUB_TYPES.includes(req.query.type) ? req.query.type : null;
 
   // Same SFW Mode gate used for spicy gallery/character content — NSFW
-  // clubs drop out of public browse for guests always, and for a logged-in
-  // account that's turned SFW Mode on. mineOnly is exempt: your own clubs
-  // (owned or joined) always stay visible in your own list regardless of
-  // SFW Mode.
+  // clubs drop out of browse for guests always, and for a logged-in
+  // account that's turned SFW Mode on. This applies to mineOnly too: SFW
+  // Mode is a personal viewing preference, not a membership gate, so an
+  // NSFW club you belong to still hides from your own "My Clubs" list
+  // while it's on (same as your own Mature/Explicit story blurring on your
+  // own profile instead of getting a membership-style exemption).
   let nsfwAllowed = false;
   if (viewerId) {
     const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
     nsfwAllowed = !!(row && row.nsfw_enabled);
   }
-  const hideNsfw = !mineOnly && !nsfwAllowed;
+  const hideNsfw = !nsfwAllowed;
 
   const { rows } = await pool.query(
     `SELECT c.*, COUNT(cm.id)::int AS member_count,
@@ -9854,12 +9856,14 @@ app.get('/api/clubs/:slug', async (req, res) => {
   if (!club) return res.status(404).json({ error: 'Club not found.' });
 
   const viewerRoleEarly = await getClubRole(club.id, viewerId);
-  if (club.is_nsfw && !viewerRoleEarly) {
-    // Members always keep access to their own club regardless of SFW Mode —
-    // this gate is about hiding NSFW clubs from browsing/direct links for
-    // everyone else. Guests (no viewerId) are always locked out; a logged-
-    // in account additionally needs SFW Mode off to see it, same as spicy
-    // gallery/character content.
+  if (club.is_nsfw) {
+    // SFW Mode hides an NSFW club even from its own members/mods -- it's a
+    // personal viewing preference, not a membership gate, so being in the
+    // club doesn't exempt you from your own setting (same as a Mature/
+    // Explicit story or gallery post you posted yourself still blurring on
+    // your own profile while SFW Mode is on). Guests (no viewerId) are
+    // always locked out; a logged-in account additionally needs SFW Mode
+    // off to see it.
     let nsfwAllowed = false;
     if (viewerId) {
       const { rows: [row] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [viewerId]);
