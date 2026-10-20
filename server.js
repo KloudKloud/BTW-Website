@@ -267,6 +267,9 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS club_profile_banner_position_y INTEGER NOT NULL DEFAULT 50;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS club_profile_banner_zoom INTEGER NOT NULL DEFAULT 100;
   `).catch(e => console.error('club_profile_banner migration:', e.message));
+  // Cooldown tracking for self-serve username changes (Account Settings) --
+  // null means "never changed," so existing accounts aren't blocked on day one.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username_changed_at TIMESTAMPTZ`).catch(e => console.error('username_changed_at migration:', e.message));
   // Inbox threading columns
   await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS thread_id INTEGER`).catch(e => console.error('migration thread_id:', e.message));
   await pool.query(`ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS subject TEXT DEFAULT 'No Subject'`).catch(e => console.error('migration subject:', e.message));
@@ -1949,6 +1952,8 @@ app.post('/api/auth/register', authRateLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 8 characters.' });
     if (!/^[a-zA-Z0-9_]+$/.test(username))
       return res.status(400).json({ error: 'Username may only contain letters, numbers and underscores.' });
+    if (username.length < 4)
+      return res.status(400).json({ error: 'Username must be at least 4 characters.' });
 
     const { rows: [existing] } = await pool.query(
       'SELECT id FROM users WHERE email_hash = $1 OR username = $2',
@@ -2290,11 +2295,41 @@ app.delete('/api/comments/:id', requireAuth, async (req, res) => {
 
 app.put('/api/auth/profile', requireAuth, async (req, res) => {
   try {
-    const { display_name, email, current_password, email_newsletter, nsfw_enabled } = req.body;
+    const { display_name, email, current_password, email_newsletter, nsfw_enabled, username } = req.body;
     const { rows: [user] } = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
     const updates = {};
+
+    // Username — self-serve, gated to once every three days (username_changed_at
+    // migration above; null means "never changed," so a fresh account's first
+    // change isn't blocked). Only touches the DB if the value actually differs
+    // from the current one, so a no-op resubmit never burns the cooldown.
+    if (username !== undefined) {
+      const uname = username.trim();
+      if (uname.toLowerCase() !== user.username.toLowerCase()) {
+        if (!/^[a-zA-Z0-9_]+$/.test(uname))
+          return res.status(400).json({ error: 'Username may only contain letters, numbers and underscores.' });
+        if (uname.length < 4)
+          return res.status(400).json({ error: 'Username must be at least 4 characters.' });
+
+        if (user.username_changed_at) {
+          const nextAllowedAt = new Date(new Date(user.username_changed_at).getTime() + 3 * 24 * 60 * 60 * 1000);
+          if (nextAllowedAt > new Date()) {
+            const daysLeft = Math.max(1, Math.ceil((nextAllowedAt - new Date()) / (24 * 60 * 60 * 1000)));
+            return res.status(429).json({ error: `You may only change your username once every three days. Try again in ${daysLeft} day${daysLeft === 1 ? '' : 's'}.` });
+          }
+        }
+
+        const { rows: [exists] } = await pool.query(
+          'SELECT id FROM users WHERE username = $1 AND id != $2', [uname.toLowerCase(), user.id]
+        );
+        if (exists) return res.status(409).json({ error: 'That username is already taken.' });
+
+        updates.username = uname.toLowerCase();
+        updates.username_changed_at = new Date();
+      }
+    }
 
     if (display_name !== undefined) {
       const dn = display_name.trim().slice(0, 20);

@@ -43,6 +43,7 @@
     }
     .profile-card-title-deco { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
     .profile-field input[readonly] { opacity: 0.55; cursor: default; }
+    .username-change-note { font-size: 0.78rem; color: rgba(255,255,255,0.5); margin: 0.35rem 0 0; line-height: 1.5; }
     .email-pending-badge {
       display: inline-block; margin-left: 0.5rem; padding: 0.1rem 0.5rem;
       background: rgba(240,192,96,0.15); border: 1px solid rgba(240,192,96,0.4);
@@ -122,6 +123,11 @@
       <div class="profile-field">
         <label for="prof-displayname">Display Name</label>
         <input type="text" id="prof-displayname" maxlength="20" placeholder="Display name" />
+      </div>
+      <div class="profile-field">
+        <label for="prof-username">Username</label>
+        <input type="text" id="prof-username" minlength="4" placeholder="Username" />
+        <p class="username-change-note">Change your username? Note: You may only change this once every three days!</p>
       </div>
       <div class="profile-field">
         <label for="prof-email">Email <span id="email-pending-badge" class="email-pending-badge" hidden>Pending</span></label>
@@ -293,6 +299,7 @@
       const u = data.user;
       currentEmail = u.email;
       document.getElementById('prof-displayname').value    = u.display_name || '';
+      document.getElementById('prof-username').value       = u.username || '';
       document.getElementById('prof-email').value          = u.email || '';
       document.getElementById('prof-newsletter').checked   = u.email_newsletter !== false;
       setEmailPending(!!u.email_change_pending);
@@ -561,11 +568,15 @@
   document.getElementById('profile-save-btn').addEventListener('click', async () => {
     const btn         = document.getElementById('profile-save-btn');
     const displayName = document.getElementById('prof-displayname').value.trim();
+    const username     = document.getElementById('prof-username').value.trim();
 
     if (!displayName) { showAlert('profile-alert', 'Display name cannot be empty.', 'error'); return; }
+    if (username.length < 4) { showAlert('profile-alert', 'Username must be at least 4 characters.', 'error'); return; }
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) { showAlert('profile-alert', 'Username may only contain letters, numbers and underscores.', 'error'); return; }
 
     const body = {
       display_name:     displayName,
+      username:         username,
       email_newsletter: document.getElementById('prof-newsletter').checked,
     };
 
@@ -579,7 +590,8 @@
       const data = await res.json();
       if (!res.ok) { showAlert('profile-alert', data.error, 'error'); return; }
 
-      updateStoredUser({ display_name: displayName });
+      updateStoredUser({ display_name: displayName, username: username.toLowerCase() });
+      document.getElementById('prof-username').value = username.toLowerCase();
       showAlert('profile-alert', 'Profile saved!', 'success');
     } catch { showAlert('profile-alert', 'Network error. Please try again.', 'error'); }
     finally { btn.disabled = false; }
