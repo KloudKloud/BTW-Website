@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <style>
-    body { background: #0d0d0d; }
+    body { background: #0d0d0d; color: #f0f0f0; position: relative; overflow-x: hidden; }
     /* Hub Image Builder's crop box -- .char-editor-ref-wrap is a shared
        class (plain "click to upload" preview elsewhere), so this overrides
        just its own image positioning for BtwCropper's pan/zoom contract
@@ -19,24 +19,83 @@
       width: auto; height: auto; max-width: none; object-fit: none;
       position: absolute; top: 0; left: 0; transform-origin: 0 0;
     }
-    .adm-wrap { max-width: 1000px; margin: 0 auto; padding: 3rem 2rem 5rem; }
-    .adm-title { font-family: 'Cinzel', serif; font-size: 1.8rem; color: #f0f0f0; margin-bottom: 1.5rem; }
 
-    /* Tab bar — hash-routed, all three panels live in this one page. */
-    .adm-tabs { display: flex; gap: 2rem; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 2.5rem; }
+    /* Scrolling page background -- same "Browse > Posts" wallpaper technique
+       as the Characters/Posts browse pages: position:absolute with a
+       JS-measured height (see syncBgHeight below), since percentage/inset
+       sizing can't resolve against a body whose height is just "however
+       tall its content is." Admin is a long settings page, so this scrolls
+       with the content rather than staying pinned. */
+    .adm-bg-img {
+      position: absolute; top: 0; left: 0; right: 0; width: 100%; height: 100vh;
+      object-fit: cover; object-position: center top; filter: blur(4px); z-index: 0;
+    }
+    .adm-bg-overlay { position: fixed; inset: 0; background: rgba(8,6,10,0.55); z-index: 0; }
+    .adm-content-z { position: relative; z-index: 1; }
+
+    .adm-wrap { max-width: 1000px; margin: 0 auto; padding: 2.5rem 2rem 5rem; }
+
+    /* Hero title bar -- box-background-3 + scrim, matches the hero-panel
+       language used on Levels/the homepage instead of a flat Cinzel h1. */
+    .adm-hero {
+      display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap;
+      border-radius: 18px; padding: 1.3rem 1.8rem; margin-bottom: 2rem; position: relative; overflow: hidden;
+      background-image: linear-gradient(160deg, rgba(10,8,20,0.55), rgba(10,8,20,0.8)), url('/images/home/box-background-3.png');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(255,255,255,0.12);
+      box-shadow: 0 14px 50px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    .adm-hero img { width: 26px; height: 26px; filter: drop-shadow(0 0 4px rgba(240,192,96,0.5)); }
+    .adm-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.9rem; color: #f0f0f0; margin: 0; }
+
+    /* Tab bar — hash-routed, all three panels live in this one page.
+       Pill style with box-background art fill + gold border/glow for
+       "you are here," same as the active-nav-item convention elsewhere
+       (the fill is art now, not a flat color, so active can't just swap
+       a background color). */
+    .adm-tabs { display: flex; gap: 0.6rem; margin-bottom: 2.2rem; flex-wrap: wrap; }
     .adm-tab {
-      background: none; border: none; cursor: pointer; color: #999;
-      font-family: 'Inter', sans-serif; font-size: 0.95rem; font-weight: 700;
-      padding: 0.9rem 0.1rem; position: relative;
+      background-image: linear-gradient(160deg, rgba(6,6,16,0.6), rgba(6,6,16,0.82)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(255,255,255,0.12); cursor: pointer; color: #c9bfe0;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.92rem; font-weight: 600;
+      padding: 0.6rem 1.3rem; border-radius: 20px; transition: all 0.15s ease;
     }
-    .adm-tab:hover { color: #ccc; }
-    .adm-tab.active { color: #f0f0f0; }
-    .adm-tab.active::after {
-      content: ''; position: absolute; left: 0; right: 0; bottom: -1px;
-      height: 3px; background: #f0c060; border-radius: 2px;
-    }
+    .adm-tab:hover { color: #f0f0f0; border-color: rgba(255,255,255,0.25); }
+    .adm-tab.active { color: var(--gold); border-color: var(--gold); box-shadow: 0 0 14px rgba(240,192,96,0.32); }
     .adm-panel { display: none; }
     .adm-panel.active { display: block; }
+
+    /* Section heading helper -- Fredoka + decoration sprite, same pattern
+       as Levels'/Browse's section titles. */
+    .adm-section-title {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.25rem; color: #f0f0f0;
+      display: flex; align-items: center; gap: 0.5rem; margin: 0 0 1rem;
+    }
+    .adm-section-title img { width: 20px; height: 20px; }
+
+    /* Scoped overrides for the shared .stats-* classes from style.css --
+       this <style> block only applies to this document, so overriding them
+       here can't leak into other pages that happen to reuse those class
+       names for something unrelated. Swaps the flat rgba fills for the
+       box-background-2 art + scrim treatment used by Levels' stat tiles
+       and boxes. */
+    #adm-panel-stats .stats-title,
+    #adm-panel-stats .stats-panel-title { font-family: 'Fredoka', 'Lato', cursive; }
+    #adm-panel-stats .stats-card,
+    #adm-panel-stats .adm-catalog-card {
+      background-image: linear-gradient(160deg, rgba(6,6,16,0.55), rgba(6,6,16,0.75)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+    }
+    #adm-panel-stats .stats-card-num,
+    #adm-panel-stats .adm-catalog-card-num { font-family: 'Fredoka', 'Lato', cursive; color: var(--gold); }
+    #adm-panel-stats .stats-panel {
+      background-image: linear-gradient(160deg, rgba(6,6,16,0.55), rgba(6,6,16,0.75)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    #adm-panel-stats .stats-user-list::-webkit-scrollbar { width: 8px; }
+    #adm-panel-stats .stats-user-list::-webkit-scrollbar-thumb { background: rgba(240,192,96,0.4); border-radius: 8px; }
 
     .hb-frame-toggle { display: flex; justify-content: center; gap: 0.6rem; margin: 0 0 0.6rem; }
     .hb-frame-tab { opacity: 0.55; }
@@ -45,8 +104,9 @@
     .hb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1.25rem; margin-top: 1.25rem; }
     .hb-card {
       background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
-      overflow: hidden;
+      overflow: hidden; transition: box-shadow 0.15s ease, border-color 0.15s ease;
     }
+    .hb-card:hover { border-color: rgba(240,192,96,0.45); box-shadow: 0 0 16px rgba(240,192,96,0.15); }
     .hb-card-img-wrap { position: relative; width: 100%; aspect-ratio: 21 / 9; overflow: hidden; background: #1a1a1a; }
     .hb-card-badge {
       position: absolute; top: 8px; right: 8px; z-index: 2;
@@ -76,7 +136,7 @@
     .adm-catalog-summary { margin-bottom: 2.5rem; }
     .adm-catalog-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
     .adm-catalog-card {
-      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
       border-top: 3px solid var(--gold); border-radius: 14px;
       padding: 1.25rem 1.5rem; text-align: center;
     }
@@ -92,7 +152,7 @@
       content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.1);
     }
     .adm-dict-section { margin-bottom: 2.5rem; }
-    .adm-dict-heading { font-family: 'Cinzel', serif; font-size: 1.2rem; color: #f0f0f0; margin: 0 0 0.35rem; }
+    .adm-dict-heading { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.2rem; color: #f0f0f0; margin: 0 0 0.35rem; }
     .adm-dict-sub { color: #888; font-size: 0.82rem; margin: 0 0 1rem; }
     .adm-dict-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
     /* Long dictionaries (Additional Tags especially) used to run the page
@@ -136,8 +196,9 @@
     .adm-dict-savebar {
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 150;
       display: flex; align-items: center; justify-content: space-between;
-      background: #161616; border-top: 1px solid rgba(255,255,255,0.1);
-      padding: 1rem 2rem; font-family: 'Inter', sans-serif; font-size: 0.88rem; color: #ccc;
+      background: #161616; border-top: 1px solid var(--gold);
+      box-shadow: 0 -8px 28px rgba(0,0,0,0.4);
+      padding: 1rem 2rem; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.88rem; color: var(--gold);
     }
     .adm-dict-savebar-actions { display: flex; gap: 0.75rem; }
     .adm-dict-save-btn {
@@ -151,6 +212,10 @@
 </head>
 <body class="mod-theme">
 
+<img class="adm-bg-img" id="adm-bg-img" src="/images/home/potential-box-background.png" alt="" />
+<div class="adm-bg-overlay"></div>
+
+<div class="adm-content-z">
 <!-- Fanpages-side admin — this domain's own dedicated page now (used to
      share one file with the root-domain admin via a ?ctx=main query param,
      but btwfics.net split into its own domain made the two contexts
@@ -160,7 +225,11 @@
 <script src="/fanpages/btw-cropper.js"></script>
 
 <div class="adm-wrap" id="adm-wrap" style="display:none;">
-  <h1 class="adm-title">Admin</h1>
+  <div class="adm-hero">
+    <img src="/images/home/decoration-8.png" alt="" />
+    <h1 class="adm-title">Admin</h1>
+    <img src="/images/home/decoration-1.png" alt="" />
+  </div>
 
   <div class="adm-tabs">
     <button class="adm-tab active" id="adm-tab-stats" type="button" data-tab="stats">Stats</button>
@@ -196,7 +265,7 @@
       </div>
 
       <div class="adm-catalog-summary">
-        <h2 class="stats-panel-title" style="margin-bottom:1rem;">Fandom &amp; Tag Catalog</h2>
+        <h2 class="adm-section-title"><img src="/images/home/decoration-8.png" alt="" /> Fandom &amp; Tag Catalog</h2>
         <div class="adm-catalog-cards">
           <div class="adm-catalog-card">
             <span class="adm-catalog-card-num" id="cat-fandom-count">—</span>
@@ -249,6 +318,7 @@
 
   <!-- ══ Bulletin (Hub Image Builder) ══════════════════════════════════ -->
   <div class="adm-panel" id="adm-panel-bulletin">
+    <h2 class="adm-section-title"><img src="/images/home/decoration-1.png" alt="" /> Hub Image Builder</h2>
     <p class="hb-sub">Manage the promo slides that cycle on the Fanpages hub billboard. Add, edit, or remove slides here and they show up in the rotation instantly — no deploy needed.</p>
 
     <button class="chars-create-btn" id="hb-add-btn" type="button" style="max-width: 260px;">
@@ -260,6 +330,7 @@
 
   <!-- ══ Tag Dictionary ══════════════════════════════════════════════ -->
   <div class="adm-panel" id="adm-panel-dictionary">
+    <h2 class="adm-section-title"><img src="/images/home/decoration-8.png" alt="" /> Tag Dictionary</h2>
     <p class="hb-sub">Every entry currently in the Fandom, Additional Tags, Gallery Tags, Relationships, and Character Species typeahead catalogs — the shared vocabulary suggested to writers as they tag a story, gallery post, or character. Gallery Tags is its own independent dictionary from Additional Tags (stories) — the two no longer share suggestions. Click ✕ to mark an entry for removal, then Save to commit.</p>
 
     <div class="adm-dict-search">
@@ -486,9 +557,24 @@
   </div>
 </div>
 
+</div><!-- /.adm-content-z -->
+
 <script>
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
 const authHeaders = () => ({ Authorization: `Bearer ${token}` });
+
+// Scrolling background -- JS-measured height since percentage/inset
+// sizing can't resolve against a body whose height is "however tall its
+// content is." Re-run after grid renders and on resize (same pattern as
+// Characters/Posts).
+function syncBgHeight() {
+  const bgEl = document.getElementById('adm-bg-img');
+  bgEl.style.height = '0';
+  bgEl.style.height = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
+}
+let admBgResizeTimer = null;
+window.addEventListener('resize', () => { clearTimeout(admBgResizeTimer); admBgResizeTimer = setTimeout(syncBgHeight, 200); });
+window.addEventListener('load', syncBgHeight);
 
 function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -506,6 +592,7 @@ function switchAdmTab(tab) {
   // The dictionary's save bar only makes sense while its own tab is open —
   // pending removals stay staged either way, just hidden from view.
   if (typeof updateSavebar === 'function') updateSavebar();
+  if (typeof syncBgHeight === 'function') setTimeout(syncBgHeight, 0);
 }
 ADM_TABS.forEach(t => document.getElementById(`adm-tab-${t}`).addEventListener('click', () => switchAdmTab(t)));
 window.addEventListener('hashchange', () => switchAdmTab(location.hash.slice(1)));
@@ -1308,6 +1395,7 @@ document.getElementById('adm-pending-merge-btn').addEventListener('click', async
     dictData = summary;
     renderDictionary('');
     await loadSiteStats();
+    syncBgHeight();
   } catch {
     document.getElementById('adm-forbidden').style.display = 'block';
   }
