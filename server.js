@@ -8680,6 +8680,12 @@ async function awardXp(userId, sourceType, sourceId, amount) {
     amount, leveledUp, oldLevel: before.level, newLevel, xp: newXp,
     xp_into_level: newXp - cumulativeXpForLevel(newLevel), xp_for_next_level: xpToNextLevel(newLevel),
     milestones: milestonesHit,
+    // The milestone title *as of* each level, not just newly-hit ones —
+    // the level-up card shows this continuously (old title under the old
+    // number, flipping to the new title only if it actually changed),
+    // not just when a milestone boundary itself was crossed.
+    oldMilestone: leveledUp ? milestoneForLevel(before.level) : null,
+    newMilestone: leveledUp ? milestoneForLevel(newLevel) : null,
   };
 }
 

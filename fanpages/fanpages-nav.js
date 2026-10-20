@@ -1181,20 +1181,62 @@ window.fpnavStashXpGain = function (levelUp) {
   try { sessionStorage.setItem('btw_pending_xp', JSON.stringify(levelUp)); } catch {}
 };
 
+// Shows the OLD level (and OLD milestone title, if any) first, holds, then
+// does a real 3D flip to the NEW level — and to the NEW milestone title too,
+// but only if a milestone boundary was actually crossed this jump, so a
+// plain level-up (no milestone change) just keeps the same title in place
+// underneath the flipping number the whole time. Timing here must stay in
+// sync with the CSS (fpnav-levelup-overlay-fade / -card-pop, both 4.8s).
 window.fpnavShowLevelUp = function (levelUp) {
-  const milestone = levelUp.milestones && levelUp.milestones.length
-    ? levelUp.milestones[levelUp.milestones.length - 1] : null;
+  const oldMilestone = levelUp.oldMilestone || null;
+  const newMilestone = levelUp.newMilestone
+    || (levelUp.milestones && levelUp.milestones.length ? levelUp.milestones[levelUp.milestones.length - 1] : null);
+  const milestoneChanged = !!(newMilestone && (!oldMilestone || oldMilestone.badge !== newMilestone.badge));
+
+  let milestoneHtml = '';
+  if (milestoneChanged) {
+    milestoneHtml = `
+      <div class="fpnav-levelup-flip-wrap fpnav-levelup-flip-wrap--milestone">
+        <div class="fpnav-levelup-flip-inner fpnav-levelup-ms-inner">
+          <div class="fpnav-levelup-flip-face fpnav-levelup-flip-front fpnav-levelup-milestone">${oldMilestone ? oldMilestone.badge : ''}</div>
+          <div class="fpnav-levelup-flip-face fpnav-levelup-flip-back fpnav-levelup-milestone">${newMilestone.badge}</div>
+        </div>
+      </div>`;
+  } else if (newMilestone) {
+    milestoneHtml = `<div class="fpnav-levelup-milestone">${newMilestone.badge}</div>`;
+  }
+
   const overlay = document.createElement('div');
   overlay.className = 'fpnav-levelup-overlay';
   overlay.innerHTML = `
     <div class="fpnav-levelup-card">
       <div class="fpnav-levelup-label">Level Up!</div>
-      <div class="fpnav-levelup-number">${levelUp.newLevel}</div>
-      ${milestone ? `<div class="fpnav-levelup-milestone">${milestone.badge}</div>` : ''}
+      <div class="fpnav-levelup-flip-wrap fpnav-levelup-flip-wrap--number">
+        <div class="fpnav-levelup-flip-inner fpnav-levelup-num-inner">
+          <div class="fpnav-levelup-flip-face fpnav-levelup-flip-front fpnav-levelup-number">${levelUp.oldLevel}</div>
+          <div class="fpnav-levelup-flip-face fpnav-levelup-flip-back fpnav-levelup-number">${levelUp.newLevel}</div>
+        </div>
+      </div>
+      ${milestoneHtml}
     </div>
   `;
   document.body.appendChild(overlay);
-  setTimeout(() => overlay.remove(), 3300);
+
+  // Hold on the old level for a beat, then flip the number — and the
+  // milestone title a touch after, for a small cascading feel instead of
+  // both snapping at once.
+  setTimeout(() => {
+    const numInner = overlay.querySelector('.fpnav-levelup-num-inner');
+    if (numInner) numInner.classList.add('fpnav-levelup-flip-inner--go');
+  }, 1300);
+  if (milestoneChanged) {
+    setTimeout(() => {
+      const msInner = overlay.querySelector('.fpnav-levelup-ms-inner');
+      if (msInner) msInner.classList.add('fpnav-levelup-flip-inner--go');
+    }, 1450);
+  }
+
+  setTimeout(() => overlay.remove(), 4900);
 };
 
 // ── Shared "Share" button behavior — used by the small share icon buttons
