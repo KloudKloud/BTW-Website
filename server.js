@@ -8655,22 +8655,35 @@ function milestoneForLevel(level) {
   return eligible.length ? eligible[eligible.length - 1] : null;
 }
 
+// Minimum gap between XP awards for the same user, regardless of source —
+// stops the "post a comment, delete it, post it again" loop (or any other
+// quick create/delete/recreate cycle) from farming XP by spamming cheap
+// actions seconds apart. The gated INSERT below (not a separate SELECT
+// check beforehand) keeps this atomic against two near-simultaneous
+// requests both slipping through.
+const XP_AWARD_COOLDOWN_SECONDS = 30;
+
 // Single chokepoint every content/comment-creation endpoint routes through.
 // Logs the award (audit trail + future "why is my XP X" support), bumps the
 // cached xp/level columns, and reports back the award + resulting bar
 // position every time (not just on a level crossing) so the client can
 // always show a "+N XP" toast, with leveledUp/milestones layered on top
-// when a level boundary was actually crossed. No daily caps anywhere —
-// comments are deliberately uncapped per product decision ("let them
-// yap"), and content posts are self-limiting by effort.
+// when a level boundary was actually crossed. No daily caps beyond the
+// cooldown above — comments are deliberately uncapped per product decision
+// ("let them yap"), and content posts are self-limiting by effort.
 async function awardXp(userId, sourceType, sourceId, amount) {
   if (!userId || !amount) return null;
   const { rows: [before] } = await pool.query('SELECT xp, level FROM users WHERE id = $1', [userId]);
   if (!before) return null;
-  await pool.query(
-    'INSERT INTO xp_log (user_id, source_type, source_id, xp_amount) VALUES ($1, $2, $3, $4)',
+  const { rowCount } = await pool.query(
+    `INSERT INTO xp_log (user_id, source_type, source_id, xp_amount)
+     SELECT $1, $2, $3, $4
+     WHERE NOT EXISTS (
+       SELECT 1 FROM xp_log WHERE user_id = $1 AND created_at > NOW() - INTERVAL '${XP_AWARD_COOLDOWN_SECONDS} seconds'
+     )`,
     [userId, sourceType, sourceId || null, amount]
-  ).catch(e => console.error('xp_log insert:', e.message));
+  ).catch(e => { console.error('xp_log insert:', e.message); return { rowCount: 0 }; });
+  if (!rowCount) return null; // within cooldown — action succeeds, just no XP this time
   const newXp = before.xp + amount;
   const newLevel = levelForXp(newXp);
   await pool.query('UPDATE users SET xp = $1, level = $2 WHERE id = $3', [newXp, newLevel, userId])
