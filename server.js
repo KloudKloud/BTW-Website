@@ -2223,6 +2223,62 @@ app.post('/api/auth/logout', requireAuth, (req, res) => {
   res.json({ message: 'Logged out.' });
 });
 
+// GET /api/level-hub — everything the "Levels" page needs in one call: the
+// viewer's own level/xp/badge progress, their recent XP activity, and the
+// weekly + all-time XP leaderboards.
+const XP_SOURCE_LABELS = {
+  comment: 'Posted a comment', club_post: 'Posted in a club', newspaper: 'Published a newspaper post',
+  chapter: 'Published a chapter', character: 'Added a character', gallery: 'Posted gallery art',
+};
+app.get('/api/level-hub', requireAuth, async (req, res) => {
+  const { rows: [user] } = await pool.query(
+    `SELECT id, username, display_name, avatar, xp, level, created_at FROM users WHERE id = $1`, [req.user.id]
+  );
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+
+  const badges = XP_MILESTONES.map(m => ({
+    level: m.level, name: m.badge, icon: m.icon, earned: user.level >= m.level,
+  }));
+  const currentMilestone = milestoneForLevel(user.level);
+
+  const { rows: activityRows } = await pool.query(
+    `SELECT source_type, source_id, xp_amount, created_at FROM xp_log
+     WHERE user_id = $1 ORDER BY created_at DESC LIMIT 15`, [user.id]
+  );
+  const recent_activity = activityRows.map(r => ({
+    label: XP_SOURCE_LABELS[r.source_type] || 'Earned XP', xp_amount: r.xp_amount, created_at: r.created_at,
+  }));
+
+  const { rows: weeklyRows } = await pool.query(
+    `SELECT u.id, u.username, u.display_name, u.avatar, u.level, SUM(x.xp_amount)::int AS weekly_xp
+     FROM xp_log x JOIN users u ON u.id = x.user_id
+     WHERE x.created_at >= NOW() - INTERVAL '7 days'
+     GROUP BY u.id ORDER BY weekly_xp DESC LIMIT 10`
+  );
+  const { rows: globalRows } = await pool.query(
+    `SELECT id, username, display_name, avatar, level, xp FROM users
+     WHERE xp > 0 ORDER BY xp DESC LIMIT 10`
+  );
+
+  res.json({
+    user: {
+      id: user.id, username: user.username, display_name: user.display_name, avatar: user.avatar || null,
+      xp: user.xp, level: user.level, xp_into_level: user.xp - cumulativeXpForLevel(user.level),
+      xp_for_next_level: xpToNextLevel(user.level), member_since: user.created_at,
+      title: currentMilestone ? currentMilestone.badge : null, title_icon: currentMilestone ? currentMilestone.icon : null,
+      badges_earned: badges.filter(b => b.earned).length, badges_total: badges.length,
+    },
+    badges,
+    recent_activity,
+    leaderboard_weekly: weeklyRows.map(r => ({
+      id: r.id, username: r.username, display_name: r.display_name, avatar: r.avatar || null, level: r.level, xp: r.weekly_xp,
+    })),
+    leaderboard_global: globalRows.map(r => ({
+      id: r.id, username: r.username, display_name: r.display_name, avatar: r.avatar || null, level: r.level, xp: r.xp,
+    })),
+  });
+});
+
 // ── Comments (art) ────────────────────────────────────────────────────────────
 
 app.get('/api/comments', async (req, res) => {
@@ -8577,19 +8633,25 @@ function levelForXp(xp) {
   return XP_FLAT_LEVEL + Math.floor((xp - XP_FLAT_CUMULATIVE) / XP_FLAT_COST);
 }
 
-// Placeholder names — swap these for real badge names/icons whenever they're
-// decided; nothing else about the system needs to change when they do.
+// Icons are placeholder art (free villager icons) until real badge art is
+// commissioned — swap the icon paths whenever that happens, nothing else
+// about the system needs to change.
 const XP_MILESTONES = [
-  { level: 1, badge: 'Milestone: Level 1 (placeholder)' },
-  { level: 10, badge: 'Milestone: Level 10 (placeholder)' },
-  { level: 25, badge: 'Milestone: Level 25 (placeholder)' },
-  { level: 45, badge: 'Milestone: Level 45 (placeholder)' },
-  { level: 50, badge: 'Milestone: Level 50 (placeholder)' },
-  { level: 75, badge: 'Milestone: Level 75 (placeholder)' },
-  { level: 100, badge: 'Milestone: Level 100 (placeholder)' },
+  { level: 1, badge: 'Snout Boopers', icon: '/images/badges/snout-boopers.png' },
+  { level: 5, badge: 'Paw Gazers', icon: '/images/badges/paw-gazers.png' },
+  { level: 15, badge: 'Kobold Yipper', icon: '/images/badges/kobold-yipper.png' },
+  { level: 25, badge: 'Scales Washer', icon: '/images/badges/scales-washer.png' },
+  { level: 50, badge: 'Cosmo Fluffs', icon: '/images/badges/cosmo-fluffs.png' },
+  { level: 60, badge: 'Star Walker', icon: '/images/badges/star-walker.png' },
+  { level: 75, badge: 'Tail Chaser', icon: '/images/badges/tail-chaser.png' },
+  { level: 90, badge: 'Autumn Wind', icon: '/images/badges/autumn-wind.png' },
+  { level: 100, badge: 'BTW Wizard', icon: '/images/badges/btw-wizard.png' },
 ];
 function milestoneForLevel(level) {
-  return XP_MILESTONES.find(m => m.level === level) || null;
+  // Highest milestone reached so far (not an exact-level match) — e.g. a
+  // level 30 user's current title is still "Scales Washer" (25), not null.
+  const eligible = XP_MILESTONES.filter(m => m.level <= level);
+  return eligible.length ? eligible[eligible.length - 1] : null;
 }
 
 // Single chokepoint every content/comment-creation endpoint routes through.

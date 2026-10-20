@@ -1043,6 +1043,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
       if (levelBadge && u.level) {
         levelBadge.style.display = '';
         levelBadge.title = u.milestone_badge || `Level ${u.level}`;
+        levelBadge.onclick = () => { location.href = fpUrl('/levels'); };
         document.getElementById('fpnav-level-circle').textContent = u.level;
         const into = u.xp_into_level || 0;
         const need = u.xp_for_next_level || 1;
