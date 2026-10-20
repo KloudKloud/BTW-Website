@@ -3505,6 +3505,15 @@ function youtubeEmbedEl(url, className, onPlay) {
   });
   return wrap;
 }
+// Setting hidden on a detail view's container doesn't unload anything
+// already mounted inside it -- a .cl-yt-embed that's been clicked into its
+// real <iframe> keeps playing (and keeps making sound) even while hidden,
+// including after navigating away with the Back button. Blanking the
+// iframe's src is what actually stops YouTube's player; call this any time
+// a view that might contain one gets torn down/hidden.
+function stopAllYoutubeIframes() {
+  document.querySelectorAll('.cl-yt-embed iframe').forEach(f => { f.src = ''; });
+}
 // Same as fadeInImg, but for a Cover slot that may hold a YouTube link
 // instead of a static image (only Cover slots can -- Side stays image-only,
 // so this is never called for one).
@@ -4538,6 +4547,7 @@ function renderFromUrl() {
   document.getElementById('cl-post-detail-view').hidden = true;
   document.getElementById('cl-gallery-detail-view').hidden = true;
   document.getElementById('cl-body-row').classList.remove('cl-detail-mode');
+  stopAllYoutubeIframes();
   setGalleryFocus(false);
   document.body.classList.remove('cl-post-open');
 
@@ -4560,9 +4570,15 @@ function renderFromUrl() {
     bannerPostBtn.style.display = 'block';
     clHeader.style.display = '';
   }
-  // Stationary/full-size theme background -- custom pages only (see
-  // body.cl-page-bg-static above), not Home and not a post detail view.
-  document.body.classList.toggle('cl-page-bg-static', !!pageSlug);
+  // Stationary/full-size theme background -- custom pages, and now the
+  // Social tab too (see body.cl-page-bg-static above). Social still shows
+  // the owner's Home background image, but a post with a huge comment
+  // thread shouldn't keep stretching/zooming that art taller and taller --
+  // pin it to the viewport like a custom page's background instead of
+  // scrolling it with the document. Hub keeps the original scrolling
+  // behavior (it still needs to continue the banner's art downward).
+  const isSocialTab = !postId && !pageSlug && tab === 'social';
+  document.body.classList.toggle('cl-page-bg-static', !!pageSlug || isSocialTab);
 
   if (postId) {
     loadAndShowPost(postId);
