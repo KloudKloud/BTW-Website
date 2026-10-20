@@ -5246,14 +5246,21 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       recent_activity: recentActivity,
       is_self: viewerId === author.id,
     },
-    stories: sites.map(s => ({
-      slug: s.slug, story_path: s.story_path || s.slug, site_title: s.site_title, cover_url: s.cover_url,
-      synopsis: s.synopsis || '', characters: (charsBySite[s.id] || []).slice(0, 4),
-      tags: s.tags || [], fandoms: s.fandoms || [], is_draft_only: s.is_draft_only,
-      rating: s.rating, is_complete: !!s.is_complete, word_count: s.word_count,
-      author: author.display_name || author.username, author_username: author.username, author_avatar: author.avatar || null,
-      hits: s.view_count || 0, kudos: Number(s.like_count), comments: Number(s.comment_count), bookmarks: Number(s.bookmark_count),
-    })),
+    stories: sites.map(s => {
+      // Same blur-not-hide treatment as Featured Stories above -- a mature/
+      // explicit story still shows up in the Stories tab roster, just as a
+      // locked teaser (no cover, nsfw_locked flag) for a viewer who can't
+      // see NSFW (guest or SFW Mode on), instead of leaking the cover art.
+      const locked = s.rating && s.rating !== 'sfw' && !profileNsfwAllowed;
+      return {
+        slug: s.slug, story_path: s.story_path || s.slug, site_title: s.site_title, cover_url: locked ? null : s.cover_url,
+        synopsis: s.synopsis || '', characters: (charsBySite[s.id] || []).slice(0, 4),
+        tags: s.tags || [], fandoms: s.fandoms || [], is_draft_only: s.is_draft_only,
+        rating: s.rating, is_complete: !!s.is_complete, word_count: s.word_count, nsfw_locked: !!locked,
+        author: author.display_name || author.username, author_username: author.username, author_avatar: author.avatar || null,
+        hits: s.view_count || 0, kudos: Number(s.like_count), comments: Number(s.comment_count), bookmarks: Number(s.bookmark_count),
+      };
+    }),
     follower_count: followerCount.rows[0].n,
     following_count: followingCount.rows[0].n,
     club_count: clubCount.rows[0].n,
