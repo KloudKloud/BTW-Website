@@ -10,8 +10,38 @@
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <style>
     body { background: #0d0d0d; }
-    .profile-wrapper { padding-top: 6.5rem; }
-    .profile-card-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1rem; letter-spacing: 0.04em; text-transform: none; }
+
+    /* Page wallpaper — same "scrolls with the page" lightly-blurred
+       potential-box-background.png treatment as Browse/Characters, instead
+       of a flat dark fill. No sidebar on this page, so it runs full-bleed
+       left:0 (unlike characters.html's sidebar-offset version). Height is
+       measured in JS (syncBgHeight) since percentage/inset sizing can't
+       resolve against a body whose height is just "however tall its
+       content is." */
+    .fp-bg-img {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100vh;
+      object-fit: cover; object-position: center top;
+      filter: blur(4px); z-index: 0; pointer-events: none;
+    }
+    .fp-bg-overlay { position: fixed; inset: 0; background: rgba(8,6,10,0.5); z-index: 0; pointer-events: none; }
+    .profile-wrapper { position: relative; z-index: 1; padding-top: 2rem; }
+
+    /* Boxes now use the same cozy box-background-3 + dark scrim + Fredoka
+       recipe as the site's 18+/sign-in gate cards (.fp-adultgate-card /
+       .fp-signingate-card in fanpages-nav.css) instead of a flat #111 fill —
+       keeps the border-top accent colors style.css already assigns
+       (.profile-card--password / --danger) but swaps the fill underneath. */
+    .profile-card {
+      background: linear-gradient(160deg, rgba(10,8,14,0.88), rgba(10,8,14,0.82)), url('/images/home/box-background-3.png');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+    }
+    .profile-card-title {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1rem; letter-spacing: 0.04em; text-transform: none;
+      display: flex; align-items: center; gap: 0.4rem;
+    }
+    .profile-card-title-deco { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
     .profile-field input[readonly] { opacity: 0.55; cursor: default; }
     .email-pending-badge {
       display: inline-block; margin-left: 0.5rem; padding: 0.1rem 0.5rem;
@@ -30,7 +60,9 @@
     }
     .email-modal {
       width: 100%; max-width: 420px;
-      background: #141018; border: 1px solid rgba(240,192,96,0.25); border-radius: 18px;
+      background: linear-gradient(160deg, rgba(10,8,14,0.9), rgba(10,8,14,0.85)), url('/images/home/box-background-3.png');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(240,192,96,0.25); border-top: 3px solid var(--gold); border-radius: 18px;
       padding: 2rem 2.25rem; box-shadow: 0 30px 90px rgba(0,0,0,0.6);
     }
 
@@ -61,15 +93,16 @@
 </head>
 <body>
 
+<img class="fp-bg-img" src="/images/home/potential-box-background.png" alt="" />
+<div class="fp-bg-overlay"></div>
+
 <div id="fanpages-topbar-root"></div>
 
 <main class="profile-wrapper" id="profile-main" hidden>
 
-  <a href="/fanpages" id="profile-back-link" class="btn btn-green" style="align-self: flex-start;">&larr; Return</a>
-
   <!-- Avatar + basic info -->
   <div class="profile-card">
-    <p class="profile-card-title">Profile</p>
+    <p class="profile-card-title">Profile <img src="/images/home/decoration-1.png" alt="" class="profile-card-title-deco" /></p>
 
     <div class="profile-avatar-row">
       <img id="profile-avatar-img" class="profile-avatar-img" src="" alt="Avatar" hidden />
@@ -120,7 +153,7 @@
 
   <!-- Change password -->
   <div class="profile-card profile-card--password">
-    <p class="profile-card-title">Change Password</p>
+    <p class="profile-card-title">Change Password <img src="/images/home/decoration-2.png" alt="" class="profile-card-title-deco" /></p>
     <div class="profile-fields">
       <div class="profile-field">
         <label for="pw-current">Current Password</label>
@@ -141,7 +174,7 @@
 
   <!-- Blocked users -->
   <div class="profile-card">
-    <p class="profile-card-title">Blocked Users</p>
+    <p class="profile-card-title">Blocked Users <img src="/images/home/decoration-8.png" alt="" class="profile-card-title-deco" /></p>
     <p class="danger-text" style="margin-bottom:1rem;">Blocked users can't message you, and you can't message them. Unblock anyone here if you change your mind.</p>
     <div id="blocked-users-preview" class="blocked-users-list"></div>
     <button class="profile-avatar-btn profile-avatar-btn--ghost" id="blocked-users-viewall-btn" type="button" style="margin-top:0.75rem;" hidden>View All</button>
@@ -149,7 +182,7 @@
 
   <!-- Danger zone -->
   <div class="profile-card profile-card--danger">
-    <p class="profile-card-title">Danger Zone</p>
+    <p class="profile-card-title">Danger Zone <img src="/images/home/decoration-1.png" alt="" class="profile-card-title-deco" /></p>
     <p class="danger-text">Permanently deletes your account and all your comments, stories, and posts inside of the community. This cannot be undone.</p>
     <button class="danger-btn" id="delete-account-btn">Delete My Account</button>
     <div id="delete-confirm" hidden style="margin-top:1rem;">
@@ -225,7 +258,6 @@
   // Wherever the user came from on the Fanpages side — send them back there
   // instead of always landing on the Fanpages hub.
   const returnTo = params.get('from') || window.fpUrl('/');
-  document.getElementById('profile-back-link').href = returnTo;
   document.getElementById('profile-gate-login').href = window.fpUrl(`/login?from=${encodeURIComponent(returnTo)}`);
 
   if (!token) {
@@ -236,6 +268,19 @@
     loadProfile();
     loadBlockedUsers();
   }
+
+  // Background wallpaper scrolls with the page rather than staying pinned —
+  // same syncBgHeight pattern as characters.html/search.html, re-measured
+  // after content that can change the page's height finishes loading.
+  function syncBgHeight() {
+    const bgEl = document.querySelector('.fp-bg-img');
+    bgEl.style.height = '0';
+    bgEl.style.height = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
+  }
+  let bgResizeTimer = null;
+  window.addEventListener('resize', () => { clearTimeout(bgResizeTimer); bgResizeTimer = setTimeout(syncBgHeight, 200); });
+  window.addEventListener('load', syncBgHeight);
+  syncBgHeight();
 
   let currentEmail = '';
 
@@ -344,6 +389,7 @@
       const data = await res.json();
       blockedUsers = data.blocked || [];
       renderBlockedUsers();
+      syncBgHeight();
     } catch {}
   }
 
@@ -571,12 +617,14 @@
   document.getElementById('delete-account-btn').addEventListener('click', () => {
     document.getElementById('delete-confirm').hidden      = false;
     document.getElementById('delete-account-btn').hidden  = true;
+    syncBgHeight();
   });
 
   document.getElementById('delete-cancel-btn').addEventListener('click', () => {
     document.getElementById('delete-confirm').hidden      = true;
     document.getElementById('delete-account-btn').hidden  = false;
     document.getElementById('delete-pw').value            = '';
+    syncBgHeight();
   });
 
   document.getElementById('delete-confirm-btn').addEventListener('click', async () => {
