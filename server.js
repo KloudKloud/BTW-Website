@@ -118,6 +118,9 @@ const pool = new Pool({
   port:     5432,
 });
 
+// Shared gem economy (site + Discord bot) — see gems.js. Every balance change goes through gems.awardGems().
+const gems = require('./gems')(pool);
+
 async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -266,6 +269,24 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_id TEXT UNIQUE;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_username TEXT;
   `).catch(e => console.error('gems/discord link migration:', e.message));
+  // Gem ledger + the per-user cooldown stamps/streak the shared economy needs
+  // (site presence, Discord chat rewards, and the universal daily claim).
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_presence_at TIMESTAMPTZ;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_chat_reward_at TIMESTAMPTZ;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_daily_claim_at TIMESTAMPTZ;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_streak INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE IF NOT EXISTS gem_ledger (
+      id            SERIAL      PRIMARY KEY,
+      user_id       INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount        INTEGER     NOT NULL,
+      reason        TEXT        NOT NULL,
+      ref           TEXT,
+      balance_after INTEGER     NOT NULL,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS gem_ledger_user_idx ON gem_ledger (user_id, created_at DESC);
+  `).catch(e => console.error('gem ledger migration:', e.message));
   // Zoom for the account banner/avatar crop — same 100-400 scale as the hub
   // billboard's zoom, 100 = no zoom (matches the pre-existing default crop).
   await pool.query(`
@@ -8153,30 +8174,37 @@ app.delete('/api/characters/:id/link-gallery/:galleryId', requireAuth, async (re
 // profile Characters tab. Requires nothing beyond a regular account (not
 // requireModerator — RPers/artists with zero stories should still be able
 // to make characters).
-app.post('/api/characters', requireAuth, async (req, res) => {
-  const { name, ref_image, description, stats, facts, lore, relationships, ref_rating, is_official_art, official_art_source_url, voice_claim_url } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
+// The creation logic lives in a function (not inline in the route) so the
+// Discord bot's /api/bot/characters can run the exact same code path: same
+// sanitizing, thumbnail, follower notification and XP/gems as the website.
+async function createCharacterForUser(userId, { name, ref_image, description, stats, facts, lore, relationships, ref_rating, is_official_art, official_art_source_url, voice_claim_url }) {
   const cleanRating = GALLERY_CATEGORIES.includes(ref_rating) ? ref_rating : 'sfw';
   const cleanStats = await sanitizeCharacterStats(stats || {});
   const { rows: [{ minOrder: profileMinOrder }] } = await pool.query(
-    'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_characters WHERE owner_user_id = $1', [req.user.id]
+    'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_characters WHERE owner_user_id = $1', [userId]
   );
   const { rows: [character] } = await pool.query(
     `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_rating, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url, sort_order)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
-    [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
+    [userId, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
      JSON.stringify(relationships || []), cleanRating, cleanRating !== 'sfw',
      is_official_art !== undefined ? !!is_official_art : true, cleanLinkUrl(official_art_source_url), cleanLinkUrl(voice_claim_url), profileMinOrder]
   );
-  const { rows: [actor] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
-  await notifyFollowers(req.user.id, 'new_character',
+  const { rows: [actor] } = await pool.query('SELECT username FROM users WHERE id = $1', [userId]);
+  await notifyFollowers(userId, 'new_character',
     `uploaded a new character: "${character.name}".`,
     `/${actor.username}?char=${character.id}#characters`);
   const thumb = await generateThumbnail(character.ref_image);
   if (thumb) { await pool.query('UPDATE moderator_characters SET thumb_image_url = $1 WHERE id = $2', [thumb, character.id]); character.thumb_image_url = thumb; }
-  const levelUp = await awardXp(req.user.id, 'character', character.id, 50);
-  res.json({ character, levelUp });
+  const levelUp = await awardXp(userId, 'character', character.id, 50);
+  return { character, levelUp };
+}
+
+app.post('/api/characters', requireAuth, async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
+  res.json(await createCharacterForUser(req.user.id, req.body));
 });
 
 // Additive-only linking — used right after standalone character creation to
@@ -8888,10 +8916,13 @@ async function awardXp(userId, sourceType, sourceId, amount) {
   const newLevel = levelForXp(newXp);
   await pool.query('UPDATE users SET xp = $1, level = $2 WHERE id = $3', [newXp, newLevel, userId])
     .catch(e => console.error('users xp/level update:', e.message));
+  // XP actions also pay gems 1:1 (shared with the Discord bot). Rides on the
+  // XP cooldown above, so it can't be farmed any faster than XP can.
+  await gems.awardGems(userId, amount, `xp:${sourceType}`, sourceId);
   const leveledUp = newLevel !== before.level;
   const milestonesHit = leveledUp ? XP_MILESTONES.filter(m => m.level > before.level && m.level <= newLevel) : [];
   return {
-    amount, leveledUp, oldLevel: before.level, newLevel, xp: newXp,
+    amount, gems_awarded: amount, leveledUp, oldLevel: before.level, newLevel, xp: newXp,
     xp_into_level: newXp - cumulativeXpForLevel(newLevel), xp_for_next_level: xpToNextLevel(newLevel),
     milestones: milestonesHit,
     // The milestone title *as of* each level, not just newly-hit ones —
@@ -12165,6 +12196,10 @@ app.get('/api/clubs-explore', async (req, res) => {
     sections,
   });
 });
+
+// ── Gems (site routes) + the Discord bot's private API ───────────────────────
+require('./gems').mountSiteRoutes(app, { requireAuth, gems });
+require('./bot-routes')(app, { pool, gems, createCharacterForUser, isValidHttpUrl, MOD_IMAGES_DIR });
 
 // ── Error handler ────────────────────────────────────────────────────────────
 // Catches multer errors (oversized file, bad field, etc.) that would

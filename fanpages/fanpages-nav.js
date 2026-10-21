@@ -1574,3 +1574,47 @@ window.wikiSetCoverSlot = function (el, site, opts) {
     document.body.classList.add('fpnav-modal-open');
   };
 })();
+
+// ── Gems for being on the site ───────────────────────────────────────────────
+// A heartbeat that runs on every page this script is on, for logged-in users
+// only. It ticks once a minute but only SENDS if the tab is visible AND the
+// person did something (mouse, scroll, key, tap) in the last two minutes — so a
+// background tab or an idle laptop earns nothing. It's just a signal: the
+// server decides the amount and pays at most once every ~5 minutes per account
+// (so several tabs/devices don't stack), which means tampering with this file
+// can't speed anything up. Payouts show a small "+N 💎" pill and fire a
+// 'btw:gems' event so a page showing the balance (the Arcade) can update live.
+window.fpnavShowGemGain = function (amount) {
+  const toast = document.createElement('div');
+  toast.className = 'fpnav-gem-toast';
+  toast.textContent = `+${amount} 💎`;
+  document.body.appendChild(toast);
+  toast.addEventListener('animationend', () => toast.remove());
+};
+
+(function () {
+  const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+  if (!token) return;
+
+  const TICK_MS = 60 * 1000;
+  const IDLE_MS = 2 * 60 * 1000;
+  let lastActive = Date.now();
+  ['mousemove', 'mousedown', 'keydown', 'scroll', 'wheel', 'touchstart'].forEach((ev) =>
+    window.addEventListener(ev, () => { lastActive = Date.now(); }, { passive: true, capture: true })
+  );
+
+  async function beat() {
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() - lastActive > IDLE_MS) return;
+    try {
+      const res = await fetch('/api/gems/presence', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.awarded) {
+        window.fpnavShowGemGain(data.amount);
+        document.dispatchEvent(new CustomEvent('btw:gems', { detail: { gems: data.gems, amount: data.amount } }));
+      }
+    } catch { /* offline or logged out — try again next tick */ }
+  }
+  setInterval(beat, TICK_MS);
+})();

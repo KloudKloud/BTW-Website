@@ -112,6 +112,11 @@
     }
     .ar-profile-discord-btn--link { background: #5865F2; color: #fff; }
     .ar-profile-discord-btn--link:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(88,101,242,0.4); }
+    .ar-daily { width: 100%; display: flex; flex-direction: column; gap: 0.4rem; align-items: center; }
+    .ar-daily-sub { font-size: 0.72rem; color: #9fc9bf; text-align: center; min-height: 1em; }
+    .ar-daily-btn { background: linear-gradient(135deg, #7fe0c9, #5ea893); color: #10201c; }
+    .ar-daily-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(127,224,201,0.35); }
+    .ar-daily-btn:disabled { background: rgba(255,255,255,0.08); color: #8fb8ac; cursor: default; }
     .ar-profile-discord-btn--unlink { background: rgba(255,255,255,0.08); color: #ddd; border: 1px solid rgba(255,255,255,0.2); }
     .ar-profile-discord-btn--unlink:hover { border-color: rgba(255,120,120,0.5); color: #ff9b9b; }
     .ar-id-banner {
@@ -265,6 +270,12 @@
             <div class="ar-profile-gems-num" id="ar-gems-num">0</div>
             <div class="ar-profile-gems-lbl">Gems</div>
           </div>
+        </div>
+
+        <!-- Daily gems: one claim per 24h, shared with the Discord bot's /gem daily -->
+        <div class="ar-daily">
+          <div class="ar-daily-sub" id="ar-daily-sub"></div>
+          <button class="ar-profile-discord-btn ar-daily-btn" id="ar-daily-btn" hidden></button>
         </div>
 
         <div class="ar-profile-divider"></div>
@@ -451,6 +462,7 @@ async function loadArcade() {
     renderPulls(sample.slice(0, 10));
 
     renderDiscordStatus(data.discord);
+    loadDaily();
 
     document.getElementById('ar-loading').hidden = true;
     document.getElementById('ar-content').hidden = false;
@@ -459,6 +471,70 @@ async function loadArcade() {
     document.getElementById('ar-loading').textContent = "Couldn't load the Arcade — try refreshing.";
   }
 }
+
+// ── Daily gems ──────────────────────────────────────────────────────────────
+// One claim per 24h, shared with the Discord bot's /gem daily. The streak
+// grows each day and breaks if more than 48h pass between claims.
+let dailyTimer = null;
+
+function formatCountdown(secs) {
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${Math.max(1, m)}m`;
+}
+
+function renderDaily(d) {
+  const btn = document.getElementById('ar-daily-btn');
+  const sub = document.getElementById('ar-daily-sub');
+  clearInterval(dailyTimer);
+  btn.hidden = false;
+  if (d.can_claim) {
+    btn.disabled = false;
+    btn.textContent = `Claim ${d.next_reward.toLocaleString()} 💎`;
+    btn.onclick = claimDaily;
+    sub.textContent = d.chain_broken
+      ? 'Your streak reset — start a new one today!'
+      : (d.streak > 0 ? `Day ${d.next_streak} of your streak` : 'Claim your daily gems');
+  } else {
+    btn.disabled = true;
+    btn.onclick = null;
+    let left = d.cooldown_seconds;
+    const tick = () => {
+      btn.textContent = `Next claim in ${formatCountdown(left)}`;
+      if (left-- <= 0) { clearInterval(dailyTimer); loadDaily(); }
+    };
+    tick();
+    dailyTimer = setInterval(tick, 30000);
+    sub.textContent = `🔥 Day ${d.streak} streak`;
+  }
+}
+
+async function loadDaily() {
+  try {
+    const res = await fetch('/api/gems/daily', { headers: authHeaders() });
+    if (res.ok) renderDaily(await res.json());
+  } catch (e) { /* leave the claim row hidden */ }
+}
+
+async function claimDaily() {
+  const btn = document.getElementById('ar-daily-btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/gems/daily/claim', { method: 'POST', headers: authHeaders() });
+    const d = await res.json();
+    if (d.claimed) {
+      document.getElementById('ar-gems-num').textContent = d.gems.toLocaleString();
+      if (window.fpnavShowGemGain) window.fpnavShowGemGain(d.reward);
+    }
+    if (res.ok) renderDaily(d);
+  } catch (e) {
+    btn.disabled = false;
+  }
+}
+
+// The "being on the site" heartbeat (fanpages-nav.js) pays out in the background — keep the balance live.
+document.addEventListener('btw:gems', (e) => {
+  document.getElementById('ar-gems-num').textContent = e.detail.gems.toLocaleString();
+});
 
 function renderDiscordStatus(d) {
   const statusEl = document.getElementById('ar-discord-status');
