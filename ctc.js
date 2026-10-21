@@ -68,7 +68,6 @@ const ERRORS = {
 const schemaSql = `
   ALTER TABLE users ADD COLUMN IF NOT EXISTS last_free_spin_at TIMESTAMPTZ;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS respin_tokens INTEGER NOT NULL DEFAULT 0;
-  ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS shiny_image_url TEXT;
 
   CREATE TABLE IF NOT EXISTS ctc_cards (
     user_id       INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,

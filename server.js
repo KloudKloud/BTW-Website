@@ -7864,7 +7864,7 @@ async function updateCharacterForUser(userId, characterId, body) {
     'SELECT * FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [characterId, userId]
   );
   if (!existing) return null;
-  const { name, ref_image, description, stats, facts, lore, relationships, sort_order, ref_rating, is_official_art, official_art_source_url, voice_claim_url, shiny_image_url } = body;
+  const { name, ref_image, description, stats, facts, lore, relationships, sort_order, ref_rating, is_official_art, official_art_source_url, voice_claim_url } = body;
   const cleanRating = ref_rating !== undefined ? (GALLERY_CATEGORIES.includes(ref_rating) ? ref_rating : 'sfw') : null;
   const cleanStats = stats !== undefined ? await sanitizeCharacterStats(stats) : undefined;
   // A real art change, not just this save happening to repeat the same URL
@@ -7886,7 +7886,6 @@ async function updateCharacterForUser(userId, characterId, body) {
        is_official_art         = COALESCE($10, is_official_art),
        official_art_source_url = COALESCE($11, official_art_source_url),
        voice_claim_url         = COALESCE($14, voice_claim_url),
-       shiny_image_url         = COALESCE($15, shiny_image_url),
        ref_image_updated_at    = CASE WHEN $13 THEN NOW() ELSE ref_image_updated_at END,
        updated_at              = NOW()
      WHERE id = $12 RETURNING *`,
@@ -7898,8 +7897,7 @@ async function updateCharacterForUser(userId, characterId, body) {
      sort_order, cleanRating,
      is_official_art !== undefined ? !!is_official_art : null,
      official_art_source_url !== undefined ? cleanLinkUrl(official_art_source_url) : null,
-     existing.id, artChanged, voice_claim_url !== undefined ? cleanLinkUrl(voice_claim_url) : null,
-     shiny_image_url || null]
+     existing.id, artChanged, voice_claim_url !== undefined ? cleanLinkUrl(voice_claim_url) : null]
   );
   // Only regenerate when ref_image was actually part of this save -- an
   // unrelated edit (description, stats, etc.) shouldn't re-touch the image.

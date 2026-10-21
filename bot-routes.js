@@ -183,10 +183,9 @@ module.exports = function mountBotRoutes(app, { pool, gems, ctc, createCharacter
       if (!RATINGS.includes(b.ref_rating)) return res.status(400).json({ error: 'Rating must be sfw, mature or explicit.' });
       patch.ref_rating = b.ref_rating;
     }
-    for (const key of ['ref_image', 'shiny_image_url']) {
-      if (b[key] === undefined) continue;
-      if (!ownImage(req.botUser.id, b[key])) return res.status(400).json({ error: 'Invalid image.' });
-      patch[key] = b[key];
+    if (b.ref_image !== undefined) {
+      if (!ownImage(req.botUser.id, b.ref_image)) return res.status(400).json({ error: 'Invalid image.' });
+      patch.ref_image = b.ref_image;
     }
     if (b.voice_claim_url !== undefined) {
       const v = clamp(b.voice_claim_url, 300);
