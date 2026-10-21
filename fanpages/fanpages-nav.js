@@ -771,7 +771,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
 
   // ── Fixed bottom icon bar — Home / Search / Create / Updates / Clubs.
   // Appended straight to <body>, mobile-only via CSS (hidden entirely above
-  // 720px). Create goes straight to the Creator Hub (no more choice sheet);
+  // 1360px). Create goes straight to the Creator Hub (no more choice sheet);
   // the rest are plain navigation, matching Wattpad's own bottom nav.
   document.body.classList.add('fpnav-has-bottombar');
   // Trailing-slash-insensitive match -- the Home link's own href
@@ -847,7 +847,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   // reappearing. ──
   (function () {
     const bottombar = document.getElementById('fpnav-bottombar');
-    const mq = window.matchMedia('(max-width: 720px)');
+    const mq = window.matchMedia('(max-width: 1360px)');
     function makeScrollHider(getScrollTop) {
       let lastY = getScrollTop();
       return function onScroll() {
