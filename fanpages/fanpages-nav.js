@@ -564,14 +564,6 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
       </div>
       <div class="fpnav-right">
 
-        <div class="fpnav-level-badge" id="fpnav-level-badge" style="display:none;" title="">
-          <div class="fpnav-level-circle" id="fpnav-level-circle"></div>
-          <div class="fpnav-level-progress-track">
-            <div class="fpnav-level-progress-fill" id="fpnav-level-progress-fill"></div>
-          </div>
-          <span class="fpnav-level-progress-text" id="fpnav-level-progress-text"></span>
-        </div>
-
         <div class="fpnav-dropdown-wrap fpnav-desktop-only-action">
           <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
           <div class="fpnav-dropdown" id="fpnav-upload-dropdown" hidden>
@@ -579,6 +571,14 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
             <div class="fpnav-dropdown-divider"></div>
             <a href="${fpUrl('/upload')}" data-gate="${fpUrl('/upload')}"><span class="fpnav-plus-badge">+</span> Upload</a>
           </div>
+        </div>
+
+        <div class="fpnav-level-badge" id="fpnav-level-badge" style="display:none;" title="">
+          <div class="fpnav-level-circle" id="fpnav-level-circle"></div>
+          <div class="fpnav-level-progress-track">
+            <div class="fpnav-level-progress-fill" id="fpnav-level-progress-fill"></div>
+          </div>
+          <span class="fpnav-level-progress-text" id="fpnav-level-progress-text"></span>
         </div>
 
         <button class="fpnav-login-btn" id="fpnav-login-btn" type="button">Sign In</button>

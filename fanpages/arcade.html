@@ -120,11 +120,10 @@
     .ar-id-banner--ok { background: rgba(127,224,201,0.14); border: 1px solid rgba(127,224,201,0.4); color: var(--gem); }
     .ar-id-banner--err { background: rgba(255,120,120,0.12); border: 1px solid rgba(255,120,120,0.4); color: #ff9b9b; }
 
-    /* ── Splash box grid -- same shared box look as Levels/Characters.
-       Columns are deliberately uneven (not every box needs equal weight)
-       -- Spin is the more "real" preview of the two so it gets more room. ── */
-    .ar-splash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; margin-top: 1.4rem; }
-    .ar-splash-grid--uneven { grid-template-columns: 1.3fr 1fr; }
+    /* ── Shuffle/Spin/Collection row -- Character Shuffle is a fixed-ratio
+       square (room to add text/etc. under it later), Spin and Collection
+       fill the rest of the row beside it and stretch to match its height. ── */
+    .ar-shuffle-row { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 1.4rem; margin-top: 1.4rem; align-items: stretch; }
     .ar-section { margin-top: 1.4rem; }
     .ar-section-title { font-size: 1.4rem; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
     .ar-section-title img { width: 20px; height: 20px; }
@@ -139,9 +138,10 @@
     .ar-box-title { font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.9rem; }
     .ar-box-title img { width: 18px; height: 18px; }
 
-    /* ── Character Shuffle ─────────────────────────────────────────────── */
+    /* ── Character Shuffle -- a normal square, not a wide banner-style
+       stage, so there's natural room to add text/etc. underneath later. ── */
     .ar-shuffle-stage {
-      position: relative; height: 280px; border-radius: 12px; overflow: hidden;
+      position: relative; width: 100%; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden;
       background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
     }
     .ar-shuffle-img {
@@ -159,7 +159,7 @@
     .ar-shuffle-caption-owner { font-size: 0.75rem; color: #9fb3c9; }
     .ar-shuffle-caption-owner a { color: #f0c060; text-decoration: none; }
     .ar-shuffle-caption-owner a:hover { text-decoration: underline; }
-    .ar-shuffle-empty { display: flex; align-items: center; justify-content: center; height: 280px; color: #8d85a3; font-size: 0.9rem; text-align: center; padding: 0 1rem; }
+    .ar-shuffle-empty { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 1 / 1; color: #8d85a3; font-size: 0.9rem; text-align: center; padding: 0 1rem; }
 
     /* ── Spin mechanic -- mocked up, clearly labeled, not pretending to
        work yet. The gem economy (how you earn them, odds, rarities) isn't
@@ -233,7 +233,7 @@
 
     .ar-loading { text-align: center; padding: 4rem 0; color: #8d85a3; font-size: 1rem; }
 
-    @media (max-width: 860px) { .ar-splash-grid, .ar-splash-grid--uneven { grid-template-columns: 1fr; } }
+    @media (max-width: 860px) { .ar-shuffle-row { grid-template-columns: 1fr; } }
     @media (max-width: 720px) {
       .ar-wrap { padding: 1.2rem 1rem 3rem; }
       .ar-top-row { flex-direction: column; }
@@ -285,16 +285,14 @@
       </div>
     </div>
 
-    <section class="ar-section">
+    <div class="ar-shuffle-row">
       <div class="ar-box">
         <div class="ar-box-title"><img src="/images/home/decoration-1.png" alt="" /> Character Shuffle</div>
         <div class="ar-shuffle-stage" id="ar-shuffle-stage">
           <div class="ar-shuffle-empty">Loading characters…</div>
         </div>
       </div>
-    </section>
 
-    <div class="ar-splash-grid ar-splash-grid--uneven">
       <div class="ar-box">
         <div class="ar-box-title"><img src="/images/home/decoration-2.png" alt="" /> Spin</div>
         <div class="ar-spin-wrap">
@@ -347,41 +345,49 @@ function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// Promotional banner art -- empty until real Arcade promo images are
-// uploaded. Recommended size: ~1800x640px (roughly the banner's own
-// rendered ratio at its new, bigger height) so they fill the box without
-// stretching. Falls back to a single plain art slide + the Arcade label
-// when empty.
-const ARCADE_BANNER_IMAGES = [];
+// Promotional banner art -- pulled from Admin -> Arcade (arcade_banner_slides).
+// Falls back to a single plain art slide + the Arcade label when none have
+// been added yet.
 let bannerTimer = null;
 
-function renderBanner() {
+function renderBanner(slides) {
   const el = document.getElementById('ar-banner');
-  if (!ARCADE_BANNER_IMAGES.length) {
+  if (!slides.length) {
     el.innerHTML = `
       <div class="ar-banner-slide active" style="background-image:linear-gradient(160deg, rgba(8,20,18,0.35), rgba(8,20,18,0.72)), url('/images/home/box-background-3.png');"></div>
       <div class="ar-banner-fallback-label"><img src="/images/home/decoration-2.png" alt="" /><span>Arcade</span></div>
     `;
     return;
   }
+  // .ar-banner-slide itself (not a wrapper) becomes the <a> when there's a
+  // link -- it needs the slide's own position:absolute/inset:0 to actually
+  // be clickable, since an <a> around an absolutely-positioned child with no
+  // text content of its own collapses to zero size and swallows no clicks.
+  const slideHtml = (s, i) => {
+    const cls = `ar-banner-slide${i === 0 ? ' active' : ''}`;
+    const style = `background-image:url('${escapeHtml(s.image_url)}');`;
+    return s.link
+      ? `<a class="${cls}" href="${escapeHtml(s.link)}" style="${style}"></a>`
+      : `<div class="${cls}" style="${style}"></div>`;
+  };
   el.innerHTML =
-    ARCADE_BANNER_IMAGES.map((src, i) => `<div class="ar-banner-slide${i === 0 ? ' active' : ''}" style="background-image:url('${escapeHtml(src)}');"></div>`).join('') +
-    (ARCADE_BANNER_IMAGES.length > 1
-      ? `<div class="ar-banner-dots">${ARCADE_BANNER_IMAGES.map((_, i) => `<button class="ar-banner-dot${i === 0 ? ' active' : ''}" data-i="${i}"></button>`).join('')}</div>`
+    slides.map(slideHtml).join('') +
+    (slides.length > 1
+      ? `<div class="ar-banner-dots">${slides.map((_, i) => `<button class="ar-banner-dot${i === 0 ? ' active' : ''}" data-i="${i}"></button>`).join('')}</div>`
       : '');
-  if (ARCADE_BANNER_IMAGES.length > 1) {
+  if (slides.length > 1) {
     let current = 0;
-    const slides = el.querySelectorAll('.ar-banner-slide');
+    const slideEls = el.querySelectorAll('.ar-banner-slide');
     const dots = el.querySelectorAll('.ar-banner-dot');
     const show = (i) => {
       current = i;
-      slides.forEach((s, j) => s.classList.toggle('active', j === i));
+      slideEls.forEach((s, j) => s.classList.toggle('active', j === i));
       dots.forEach((d, j) => d.classList.toggle('active', j === i));
     };
     dots.forEach(d => d.addEventListener('click', () => { show(parseInt(d.dataset.i, 10)); resetBannerTimer(); }));
     function resetBannerTimer() {
       clearInterval(bannerTimer);
-      bannerTimer = setInterval(() => show((current + 1) % slides.length), 5000);
+      bannerTimer = setInterval(() => show((current + 1) % slideEls.length), 5000);
     }
     resetBannerTimer();
   }
@@ -435,12 +441,14 @@ async function loadArcade() {
       ? `<img src="${escapeHtml(u.avatar)}" alt="" />`
       : `<span class="ar-profile-avatar-fallback">${escapeHtml(name.charAt(0).toUpperCase())}</span>`;
 
-    renderBanner();
+    fetch('/api/arcade/banner-slides', { headers: authHeaders() })
+      .then(r => r.json()).then(d => renderBanner(d.slides || []))
+      .catch(() => renderBanner([]));
 
     const sample = data.character_shuffle || [];
     shuffleChars = sample.slice(0, 6);
     renderShuffle();
-    renderPulls(sample);
+    renderPulls(sample.slice(0, 10));
 
     renderDiscordStatus(data.discord);
 

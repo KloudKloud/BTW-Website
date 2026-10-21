@@ -876,6 +876,19 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE hub_billboard_slides ADD COLUMN IF NOT EXISTS is_vip BOOLEAN NOT NULL DEFAULT false;
   `).catch(e => console.error('hub_billboard_slides is_vip migration:', e.message));
 
+  // Arcade page promo banner — a much simpler cousin of the hub billboard
+  // above: just an ordered list of images (optionally clickable) for the
+  // carousel at the top of /fanpages/arcade, no crop/pan/zoom editor.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS arcade_banner_slides (
+      id         SERIAL      PRIMARY KEY,
+      image_url  TEXT        NOT NULL,
+      link       TEXT        NOT NULL DEFAULT '',
+      sort_order INTEGER     NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(e => console.error('arcade_banner_slides migration:', e.message));
+
   // Notifications — the bell icon on Fanpages. Covers system messages (the
   // welcome note) today; bookmark/follow/like/comment/social activity gets
   // wired up to insert rows here as those features land.
@@ -4305,6 +4318,37 @@ app.delete('/api/admin/hub-billboard/:id', requireAuth, requireAdmin, async (req
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
   await pool.query('DELETE FROM hub_billboard_slides WHERE id = $1', [slide.id]);
+  res.json({ message: 'Deleted.' });
+});
+
+// ── Arcade promo banner — a plain ordered image carousel, admin-managed
+// from Admin → Arcade. Public GET backs both the live page and the admin
+// grid (same reasoning as /api/hub-billboard above: no separate "preview"
+// endpoint needed since there's no NSFW gating here to worry about). ────────
+app.get('/api/arcade/banner-slides', async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM arcade_banner_slides ORDER BY sort_order, id');
+  res.json({ slides: rows });
+});
+
+app.post('/api/admin/arcade-banner', requireAuth, requireAdmin, uploadModImage.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const imageUrl = `/images/moderators/${req.file.filename}`;
+  const { rows: [{ maxOrder }] } = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM arcade_banner_slides');
+  const { rows: [slide] } = await pool.query(
+    'INSERT INTO arcade_banner_slides (image_url, link, sort_order) VALUES ($1, $2, $3) RETURNING *',
+    [imageUrl, cleanLinkUrl(req.body.link), maxOrder + 1]
+  );
+  res.json({ slide });
+});
+
+app.delete('/api/admin/arcade-banner/:id', requireAuth, requireAdmin, async (req, res) => {
+  const { rows: [slide] } = await pool.query('SELECT * FROM arcade_banner_slides WHERE id = $1', [req.params.id]);
+  if (!slide) return res.status(404).json({ error: 'Not found.' });
+  if (slide.image_url.startsWith('/images/moderators/')) {
+    const filePath = path.join('/var/www/btw', slide.image_url);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
+  await pool.query('DELETE FROM arcade_banner_slides WHERE id = $1', [slide.id]);
   res.json({ message: 'Deleted.' });
 });
 
