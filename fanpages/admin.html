@@ -593,6 +593,13 @@ function switchAdmTab(tab) {
   // pending removals stay staged either way, just hidden from view.
   if (typeof updateSavebar === 'function') updateSavebar();
   if (typeof syncBgHeight === 'function') setTimeout(syncBgHeight, 0);
+  // loadSlides() runs once at page init while Stats (the default tab) is
+  // showing, so the Bulletin panel is still display:none and its cards'
+  // clientWidth/clientHeight read 0 -- coverBgSize() bakes that in as a
+  // permanent 0%/0% background-size that never gets recalculated on its
+  // own. Redo the sizing once the panel is actually visible and has real
+  // dimensions to measure.
+  if (tab === 'bulletin' && typeof refreshGridBgSizes === 'function') setTimeout(refreshGridBgSizes, 0);
 }
 ADM_TABS.forEach(t => document.getElementById(`adm-tab-${t}`).addEventListener('click', () => switchAdmTab(t)));
 window.addEventListener('hashchange', () => switchAdmTab(location.hash.slice(1)));
@@ -777,6 +784,26 @@ async function renderGrid() {
       bg.style.backgroundSize = `${size.w}% ${size.h}%`;
       bg.style.backgroundPosition = `${slide.position_x}% ${slide.position_y}%`;
     });
+  });
+}
+
+// Re-applies each already-rendered card's background sizing using its
+// current (real) clientWidth/clientHeight -- needed because renderGrid()
+// can run while the Bulletin panel is still display:none (see switchAdmTab),
+// which bakes in a bogus 0%/0% size that a plain re-render wouldn't fix.
+function refreshGridBgSizes() {
+  const grid = document.getElementById('hb-grid');
+  const cards = grid.querySelectorAll('.hb-card');
+  cards.forEach((card, i) => {
+    const slide = slides[i];
+    const dims = slide && imgDimsCache[slide.image_url];
+    if (!slide || !dims) return;
+    const bg = card.querySelector('.hb-preview-bg');
+    const boxW = bg.clientWidth, boxH = bg.clientHeight;
+    if (!boxW || !boxH) return;
+    const size = coverBgSize(dims, boxW, boxH, slide.zoom);
+    bg.style.backgroundSize = `${size.w}% ${size.h}%`;
+    bg.style.backgroundPosition = `${slide.position_x}% ${slide.position_y}%`;
   });
 }
 
