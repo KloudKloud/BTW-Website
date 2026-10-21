@@ -33,6 +33,13 @@
        only because the video sat at z-index:0, not negative) is no longer
        necessary, but is harmless to leave in place. */
     .notif-main { max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto; padding: 3rem 2rem 5rem; position: relative; z-index: 1; }
+    /* The 5rem bottom padding above is meant for the plain Notifications
+       feed (breathing room after the last item) -- on the Inbox tab it
+       just left a dead gap of empty page below the already-sized .dm-app
+       box instead of letting the box itself reach the bottom. Zeroed here
+       (toggled by switchNotifTab()) so syncDmAppHeight()'s own measurement
+       is the only thing deciding how far down the box goes. */
+    .notif-main.dm-tab-active { padding-bottom: 0; }
 
     .notif-content { min-width: 0; }
 
@@ -116,6 +123,12 @@
       border: 1px solid rgba(255,255,255,0.14); border-radius: 14px;
       overflow: hidden;
     }
+    /* calc(100vh - 15rem) above is only the pre-JS fallback (first paint
+       before syncDmAppHeight() runs) -- it guessed wrong and left a visible
+       gap of empty page below the box. syncDmAppHeight() sets an inline
+       height instead, measuring this box's own real top offset so it
+       reaches all the way to the bottom of the viewport regardless of nav
+       height/content above it. */
     .dm-sidebar {
       width: 260px; flex-shrink: 0;
       background: transparent;
@@ -866,6 +879,21 @@
   const notifTabInbox = document.getElementById('notif-tab-inbox');
   const notifListEl = document.getElementById('notif-list');
   const notifInboxEl = document.getElementById('notif-inbox');
+  const notifMainEl = document.querySelector('.notif-main');
+
+  // Measures #dm-app's own top offset and stretches it to the real bottom
+  // of the viewport instead of the calc(100vh - 15rem) guess in the CSS
+  // fallback, which left a dead gap of page below the box. Desktop-only --
+  // the ≤720px layout already sizes .dm-content itself via its own calc()
+  // and .dm-app there is height:auto, so an inline height here would just
+  // fight that rule once the window narrows past the breakpoint.
+  const dmAppHeightEl = document.getElementById('dm-app');
+  function syncDmAppHeight() {
+    if (!dmAppHeightEl || window.innerWidth <= 720) { if (dmAppHeightEl) dmAppHeightEl.style.height = ''; return; }
+    const top = dmAppHeightEl.getBoundingClientRect().top;
+    dmAppHeightEl.style.height = Math.max(window.innerHeight - top, 520) + 'px';
+  }
+  window.addEventListener('resize', syncDmAppHeight);
 
   function switchNotifTab(tab, pushHash) {
     const isInbox = tab === 'inbox';
@@ -873,7 +901,8 @@
     notifTabNotifications.classList.toggle('active', !isInbox);
     notifInboxEl.style.display = isInbox ? '' : 'none';
     notifListEl.style.display = isInbox ? 'none' : '';
-    if (isInbox) initDmAppOnce();
+    notifMainEl.classList.toggle('dm-tab-active', isInbox);
+    if (isInbox) { initDmAppOnce(); syncDmAppHeight(); }
     else dmStopThreadPolling();
     if (pushHash !== false) location.hash = tab;
   }
