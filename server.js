@@ -120,6 +120,8 @@ const pool = new Pool({
 
 // Shared gem economy (site + Discord bot) — see gems.js. Every balance change goes through gems.awardGems().
 const gems = require('./gems')(pool);
+// Character Trading Cards (the collecting game) — rules and storage live in ctc.js.
+const ctc = require('./ctc')(pool, gems);
 
 async function initDb() {
   await pool.query(`
@@ -1855,6 +1857,8 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     );
     CREATE INDEX IF NOT EXISTS idx_xp_log_user ON xp_log(user_id);
   `).catch(e => console.error('xp_log migration:', e.message));
+  // Card-game tables go LAST: they reference moderator_characters and users.
+  await pool.query(require('./ctc').schemaSql).catch(e => console.error('ctc migration:', e.message));
 }
 
 // ── Email encryption helpers ──────────────────────────────────────────────────
@@ -2378,7 +2382,7 @@ app.post('/api/discord/unlink', requireAuth, async (req, res) => {
 // someone clicks into.
 app.get('/api/arcade/hub', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
-    `SELECT username, display_name, avatar, gems, level, discord_id, discord_username FROM users WHERE id = $1`,
+    `SELECT username, display_name, avatar, gems, level, discord_id, discord_username, created_at FROM users WHERE id = $1`,
     [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
@@ -2394,10 +2398,20 @@ app.get('/api/arcade/hub', requireAuth, async (req, res) => {
     [nsfwAllowed]
   );
 
+  // Cute per-user stat tiles for the Overview tab -- own character/gallery
+  // counts, in place of the old Spin/Collection coming-soon boxes.
+  const { rows: [{ charactersOwned }] } = await pool.query(
+    'SELECT COUNT(*)::int AS "charactersOwned" FROM moderator_characters WHERE owner_user_id = $1', [req.user.id]
+  );
+  const { rows: [{ galleryOwned }] } = await pool.query(
+    'SELECT COUNT(*)::int AS "galleryOwned" FROM moderator_gallery WHERE owner_user_id = $1', [req.user.id]
+  );
+
   res.json({
     user: {
       username: user.username, display_name: user.display_name, avatar: user.avatar || null,
-      gems: user.gems || 0, level: user.level,
+      gems: user.gems || 0, level: user.level, member_since: user.created_at,
+      characters_owned: charactersOwned, gallery_owned: galleryOwned,
     },
     discord: { linked: !!user.discord_id, username: user.discord_username || null },
     character_shuffle: charRows.map(r => ({
@@ -7842,12 +7856,15 @@ app.post('/api/moderator/characters', requireAuth, requireModerator, async (req,
 
 // Editing a character is about owning it, not which story screen you're on —
 // works the same whether it's linked to one story, ten, or none at all.
-app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
+// The edit logic is a function (not inline in the route) so the Discord bot's
+// /char build runs the exact same code. Returns the updated row, or null if
+// the character doesn't exist or isn't this user's.
+async function updateCharacterForUser(userId, characterId, body) {
   const { rows: [existing] } = await pool.query(
-    'SELECT * FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]
+    'SELECT * FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [characterId, userId]
   );
-  if (!existing) return res.status(404).json({ error: 'Not found.' });
-  const { name, ref_image, description, stats, facts, lore, relationships, sort_order, ref_rating, is_official_art, official_art_source_url, voice_claim_url } = req.body;
+  if (!existing) return null;
+  const { name, ref_image, description, stats, facts, lore, relationships, sort_order, ref_rating, is_official_art, official_art_source_url, voice_claim_url, shiny_image_url } = body;
   const cleanRating = ref_rating !== undefined ? (GALLERY_CATEGORIES.includes(ref_rating) ? ref_rating : 'sfw') : null;
   const cleanStats = stats !== undefined ? await sanitizeCharacterStats(stats) : undefined;
   // A real art change, not just this save happening to repeat the same URL
@@ -7869,6 +7886,7 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
        is_official_art         = COALESCE($10, is_official_art),
        official_art_source_url = COALESCE($11, official_art_source_url),
        voice_claim_url         = COALESCE($14, voice_claim_url),
+       shiny_image_url         = COALESCE($15, shiny_image_url),
        ref_image_updated_at    = CASE WHEN $13 THEN NOW() ELSE ref_image_updated_at END,
        updated_at              = NOW()
      WHERE id = $12 RETURNING *`,
@@ -7880,7 +7898,8 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
      sort_order, cleanRating,
      is_official_art !== undefined ? !!is_official_art : null,
      official_art_source_url !== undefined ? cleanLinkUrl(official_art_source_url) : null,
-     existing.id, artChanged, voice_claim_url !== undefined ? cleanLinkUrl(voice_claim_url) : null]
+     existing.id, artChanged, voice_claim_url !== undefined ? cleanLinkUrl(voice_claim_url) : null,
+     shiny_image_url || null]
   );
   // Only regenerate when ref_image was actually part of this save -- an
   // unrelated edit (description, stats, etc.) shouldn't re-touch the image.
@@ -7888,6 +7907,12 @@ app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
     const thumb = await generateThumbnail(character.ref_image);
     if (thumb) { await pool.query('UPDATE moderator_characters SET thumb_image_url = $1 WHERE id = $2', [thumb, character.id]); character.thumb_image_url = thumb; }
   }
+  return character;
+}
+
+app.put('/api/moderator/characters/:id', requireAuth, async (req, res) => {
+  const character = await updateCharacterForUser(req.user.id, req.params.id, req.body);
+  if (!character) return res.status(404).json({ error: 'Not found.' });
   res.json({ character });
 });
 
@@ -8238,7 +8263,18 @@ app.post('/api/characters/:id/link-many', requireAuth, async (req, res) => {
 });
 
 // Permanent delete — the only way a character actually goes away. Cascades
-// character_story_links automatically via FK.
+// character_story_links automatically via FK. Shared by the website and the
+// Discord bot so deleting always cleans up the same things.
+async function deleteCharacterAndCleanup(characterId, byUserId) {
+  // Collectors of this card lose it, so each gets a free respin to make up for it (see ctc.js).
+  await ctc.refundCollectors(characterId, byUserId);
+  await pool.query('DELETE FROM moderator_characters WHERE id = $1', [characterId]);
+  // Anyone who featured this character (favorites are cached by ref_id, not
+  // an FK — see user_featured_items migration comment) would otherwise be
+  // stuck showing a dead entry with no live row to fall back to.
+  await pool.query(`DELETE FROM user_featured_items WHERE kind = 'character' AND ref_id = $1`, [String(characterId)]);
+}
+
 app.delete('/api/characters/:id', requireAuth, async (req, res) => {
   const isAdmin = await checkAdmin(req);
   const { rows: [existing] } = await pool.query(
@@ -8248,11 +8284,7 @@ app.delete('/api/characters/:id', requireAuth, async (req, res) => {
     isAdmin ? [req.params.id] : [req.params.id, req.user.id]
   );
   if (!existing) return res.status(404).json({ error: 'Not found.' });
-  await pool.query('DELETE FROM moderator_characters WHERE id = $1', [existing.id]);
-  // Anyone who featured this character (favorites are cached by ref_id, not
-  // an FK — see user_featured_items migration comment) would otherwise be
-  // stuck showing a dead entry with no live row to fall back to.
-  await pool.query(`DELETE FROM user_featured_items WHERE kind = 'character' AND ref_id = $1`, [String(existing.id)]);
+  await deleteCharacterAndCleanup(existing.id, req.user.id);
   res.json({ message: 'Deleted.' });
 });
 
@@ -12199,7 +12231,7 @@ app.get('/api/clubs-explore', async (req, res) => {
 
 // ── Gems (site routes) + the Discord bot's private API ───────────────────────
 require('./gems').mountSiteRoutes(app, { requireAuth, gems });
-require('./bot-routes')(app, { pool, gems, createCharacterForUser, isValidHttpUrl, MOD_IMAGES_DIR });
+require('./bot-routes')(app, { pool, gems, ctc, createCharacterForUser, updateCharacterForUser, deleteCharacterAndCleanup, isValidHttpUrl, MOD_IMAGES_DIR });
 
 // ── Error handler ────────────────────────────────────────────────────────────
 // Catches multer errors (oversized file, bad field, etc.) that would
