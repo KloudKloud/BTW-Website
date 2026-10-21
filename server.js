@@ -2336,6 +2336,43 @@ app.post('/api/discord/unlink', requireAuth, async (req, res) => {
   res.json({ linked: false });
 });
 
+// GET /api/arcade/hub — everything the Arcade page needs in one call: the
+// viewer's own gems/avatar for the profile card, Discord link status, and a
+// random sample of character refs for the character-shuffle box. NSFW refs
+// are excluded outright (not blurred) since this is a decorative shuffle,
+// not a detail view someone clicks into.
+app.get('/api/arcade/hub', requireAuth, async (req, res) => {
+  const { rows: [user] } = await pool.query(
+    `SELECT username, display_name, avatar, gems, level, discord_id, discord_username FROM users WHERE id = $1`,
+    [req.user.id]
+  );
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+
+  const { nsfwAllowed } = await getViewerNsfwAccess(req);
+  const { rows: charRows } = await pool.query(
+    `SELECT mc.id, mc.name, COALESCE(NULLIF(mc.thumb_image_url, ''), mc.ref_image) AS image,
+            mc.ref_position_x, mc.ref_position_y, u2.username, u2.display_name
+     FROM moderator_characters mc
+     JOIN users u2 ON u2.id = mc.owner_user_id
+     WHERE mc.ref_image <> '' AND (mc.ref_is_nsfw = false OR $1::boolean)
+     ORDER BY RANDOM() LIMIT 14`,
+    [nsfwAllowed]
+  );
+
+  res.json({
+    user: {
+      username: user.username, display_name: user.display_name, avatar: user.avatar || null,
+      gems: user.gems || 0, level: user.level,
+    },
+    discord: { linked: !!user.discord_id, username: user.discord_username || null },
+    character_shuffle: charRows.map(r => ({
+      id: r.id, name: r.name, image: r.image,
+      position_x: r.ref_position_x, position_y: r.ref_position_y,
+      owner: r.display_name || r.username, owner_username: r.username,
+    })),
+  });
+});
+
 // GET /api/level-hub — everything the "Levels" page needs in one call: the
 // viewer's own level/xp/badge progress, their recent XP activity, and the
 // weekly + all-time XP leaderboards.
