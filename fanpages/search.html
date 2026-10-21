@@ -57,31 +57,13 @@
       position: absolute; top: 0; left: 0; right: 0; bottom: auto; height: 100vh;
     }
     .fp-bg-overlay { position: fixed; inset: 0; background: rgba(8,6,10,0.45); z-index: 0; }
-    /* Profiles gets the actual main-background-4 video instead of a still
-       image -- locked in place (fixed, full frame, no scroll) since the
-       page itself never scrolls here; only the results column does (see
-       .fp-layout--profiles .fp-results-col below). Hidden by default,
-       shown only on the Profiles tab via JS. */
-    .fp-bg-video-el {
-      display: none; position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0;
-      /* Anchored to the bottom -- cover crops top+bottom equally by
-         default, and the sliver lost off the top sits under the topbar
-         anyway, so anchoring bottom keeps the whole lower portion (where
-         cover crops were most noticeable) actually on screen. */
-      object-position: center bottom;
-    }
-    /* Starts right where the side panel ends instead of running full-bleed
-       underneath it -- 250px column + the 2.5rem the panel's own
-       negative margin pulls it flush past. Once the side panel is
-       collapsed that column is gone, so the video goes back to
-       full-bleed -- otherwise the freed-up strip on the left just shows
-       blank page background instead of video. --sidebar-collapsed is
-       toggled directly by setSidebarPanelCollapsed() in the script below
-       (not a .fp-layout--sidebar-collapsed descendant rule) because this
-       video sits outside <main class="fp-layout"> as a sibling, not a
-       descendant of it. */
-    .fp-bg-video-el--active { display: block; left: calc(250px + 2.5rem); width: calc(100% - 250px - 2.5rem); }
-    .fp-bg-video-el--active.fp-bg-video-el--sidebar-collapsed { left: 0; width: 100%; }
+    /* Profiles now shares the same potential-box-background wallpaper as
+       Posts/Characters instead of the old main-background-4 video -- the
+       video read as out-of-place next to every other tab's art-based
+       background. Stays fixed (not scroll-with-page like Posts' own)
+       since the Profiles results column is the thing that scrolls here
+       (see .fp-layout--profiles .fp-results-col below), not the page. */
+    .fp-bg-video--profiles { background-image: url('/images/home/potential-box-background.png'); filter: blur(4px); }
     /* A couple of sparkle accents floating over the Posts wallpaper
        specifically -- scroll with it (position:absolute, same as the
        wallpaper itself) since it's one big image with no cards breaking
@@ -279,9 +261,14 @@
        centered column stuck at its old width with blank space on both
        sides of it now that there's more room to use. */
     .fp-layout--sidebar-collapsed.fp-layout--profiles .fp-results-col { max-width: 960px; }
-    .fp-layout--profiles .fp-results-col::-webkit-scrollbar { width: 8px; }
+    /* Purple themed scrollbar, same recipe as the club Members list
+       (.cl-scroll-custom in club.html) rather than the old plain gray
+       thumb. */
+    .fp-layout--profiles .fp-results-col { scrollbar-width: thin; scrollbar-color: rgba(168,112,217,0.45) transparent; }
+    .fp-layout--profiles .fp-results-col::-webkit-scrollbar { width: 7px; }
     .fp-layout--profiles .fp-results-col::-webkit-scrollbar-track { background: transparent; }
-    .fp-layout--profiles .fp-results-col::-webkit-scrollbar-thumb { background: #444; border-radius: 8px; }
+    .fp-layout--profiles .fp-results-col::-webkit-scrollbar-thumb { background: rgba(168,112,217,0.45); border-radius: 6px; }
+    .fp-layout--profiles .fp-results-col::-webkit-scrollbar-thumb:hover { background: rgba(168,112,217,0.7); }
 
     .fp-profile-tabs { display: flex; gap: 2rem; border-bottom: 1px solid rgba(255,255,255,0.14); margin-bottom: 1.5rem; }
     .fp-profile-tab {
@@ -292,18 +279,18 @@
     .fp-profile-tab:hover { color: #ddd; }
     .fp-profile-tab--active { color: #fff; border-bottom-color: #7fa8d9; }
 
-    /* Boxed card instead of a plain borderless row -- box-background-2
-       art (cropped to a couple of alternating regions) + a dark scrim,
-       same system as the rest of the site's boxed cards. */
+    /* Flat row instead of the old per-card box-background-4.jpg art --
+       same quiet, no-art treatment as the club Members list
+       (.cl-members-modal-row in club.html), just a hover tint rather than
+       a hover-only border color swap. Info/layout inside is unchanged. */
     .fp-profile-card {
       display: flex; align-items: center; gap: 1.3rem; padding: 1.3rem 1.5rem; cursor: pointer;
       border-radius: 14px; margin-bottom: 1rem; position: relative; overflow: hidden;
-      background: linear-gradient(160deg, rgba(10,8,14,0.82), rgba(10,8,14,0.72)), url('/images/home/box-background-4.jpg');
-      background-size: cover; background-position: 40% 85%;
-      border: 1px solid rgba(255,255,255,0.16);
-      transition: border-color 0.15s;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.1);
+      transition: background 0.15s, border-color 0.15s;
     }
-    .fp-profile-card:hover { border-color: rgba(240,192,96,0.4); }
+    .fp-profile-card:hover { background: rgba(255,255,255,0.06); border-color: rgba(240,192,96,0.4); }
     .fp-profile-card-deco { position: absolute; top: -10px; right: -8px; width: 38px; height: 38px; object-fit: contain; opacity: 0.9; pointer-events: none; }
     .fp-profile-avatar, .fp-profile-avatar-fallback {
       width: 76px; height: 76px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
@@ -955,7 +942,6 @@
          column -- the panel always shows and the floating arrow hides. */
       .fp-layout, .fp-layout--filters-collapsed, .fp-layout--submissions, .fp-layout--profiles, .fp-layout--no-side { grid-template-columns: 1fr; row-gap: 1.5rem; }
       .fp-layout--profiles .fp-results-col { max-width: none; }
-      .fp-bg-video-el--active { left: 0; width: 100%; }
       .fp-results-col { grid-column: 1; }
       .fp-filter-panel, .fp-layout--filters-collapsed .fp-filter-panel {
         grid-column: 1; display: flex;
@@ -1179,9 +1165,6 @@
 <body>
 
 <div class="fp-bg-video"></div>
-<video class="fp-bg-video-el" id="fp-bg-video-el" autoplay muted loop playsinline>
-  <source src="/images/home/main-background-4.mp4" type="video/mp4" />
-</video>
 <img class="fp-bg-sparkle fp-bg-sparkle--b" src="/images/home/decoration-8.png" alt="" />
 <div class="fp-bg-overlay"></div>
 
@@ -2488,12 +2471,6 @@ function setSidebarPanelCollapsed(collapsed) {
   sidebarRailToggle.setAttribute('aria-label', label);
   // Same reasoning as setFiltersCollapsed's guard above.
   if (!isBrowseMode) sessionStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
-  // #fp-bg-video-el lives outside <main class="fp-layout"> (a sibling, not
-  // a descendant), so a CSS rule scoped under .fp-layout--sidebar-collapsed
-  // can never reach it -- toggle its own class directly instead so the
-  // Profiles video goes full-bleed once the side panel it was leaving room
-  // for is gone.
-  document.getElementById('fp-bg-video-el').classList.toggle('fp-bg-video-el--sidebar-collapsed', collapsed);
 }
 sidebarRailToggle.addEventListener('click', () => {
   flipResultsGrid(() => setSidebarPanelCollapsed(!fpLayoutEl.classList.contains('fp-layout--sidebar-collapsed')));
@@ -2608,11 +2585,7 @@ const isBrowseStories = isBrowseMode && isStoriesView;
 document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--stories', isStoriesView);
 const isPostsView = currentView === 'submissions';
 document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--posts', isPostsView);
-// Profiles gets the main-background-4 video instead -- only the results
-// column scrolls on this tab (see .fp-layout--profiles .fp-results-col),
-// so the video can stay locked in place same as before it ever needed to
-// account for page scroll.
-document.getElementById('fp-bg-video-el').classList.toggle('fp-bg-video-el--active', currentView === 'profiles');
+document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--profiles', currentView === 'profiles');
 // The Posts wallpaper is position:absolute (scrolls with the page) instead
 // of the fixed/inset:0 every other variant uses, so it needs an explicit
 // pixel height matching the full page -- percentage/inset heights can't
