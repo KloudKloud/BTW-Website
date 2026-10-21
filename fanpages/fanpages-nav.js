@@ -1001,8 +1001,38 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   if (!token) return; // login button + gated links already handle the logged-out state
 
   fetch('/api/auth/me', { headers: authHeaders() })
-    .then(r => (r.ok ? r.json() : null))
+    .then(r => (r.status === 401 ? { expired: true } : (r.ok ? r.json() : null)))
     .then(data => {
+      // A stale/expired token in storage still makes `token` above truthy,
+      // which is what the mobile pfp button and hamburger drawer use to
+      // optimistically paint themselves as logged in (cached avatar +
+      // username) before this fetch ever resolves -- the desktop avatar
+      // dropdown doesn't have this problem since it starts hidden and only
+      // reveals itself once /api/auth/me actually succeeds (below). Without
+      // this branch, a 401 here just fell through the `!data` check right
+      // below and left that stale mobile UI in place forever: the user
+      // looks "shadow" logged in (own pfp/username showing) but every real
+      // authenticated action (Account Settings, Follow) correctly bounces
+      // them to sign in, since the server never accepted the dead token.
+      // Clearing the dead token out of storage now means `token` is gone on
+      // the next page load, so every page (mobile included) renders
+      // honestly logged-out from the start instead of needing this repair
+      // every time.
+      if (data && data.expired) {
+        localStorage.removeItem('btw_token'); localStorage.removeItem('btw_user');
+        sessionStorage.removeItem('btw_token'); sessionStorage.removeItem('btw_user');
+        const loginBtn = document.getElementById('fpnav-login-btn');
+        const avatarWrap = document.getElementById('fpnav-avatar-wrap');
+        if (loginBtn) loginBtn.style.display = '';
+        if (avatarWrap) avatarWrap.style.display = 'none';
+        const mobilePfpIcon = document.getElementById('fpnav-mobile-pfp-icon');
+        if (mobilePfpIcon) mobilePfpIcon.innerHTML = genericPfpSvg;
+        const drawerProfileIcon = document.getElementById('fpnav-drawer-profile-icon');
+        if (drawerProfileIcon) drawerProfileIcon.innerHTML = genericPfpSvg;
+        const drawerProfileName = document.getElementById('fpnav-drawer-profile-name');
+        if (drawerProfileName) drawerProfileName.textContent = 'Sign In';
+        return;
+      }
       if (!data || !data.user) return;
       const u = data.user;
       // Persist the fresh /api/auth/me payload (includes is_admin) back into
