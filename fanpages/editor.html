@@ -17,38 +17,62 @@
        space back in. */
     html { overflow-y: scroll; scrollbar-gutter: stable; }
     body {
-      background: #0d0d0d;
+      background: #0d0d0d; position: relative; overflow-x: hidden;
       color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; margin: 0; padding: 0;
     }
     a { color: inherit; }
     [hidden] { display: none !important; }
 
+    /* Scrolling page background -- same recipe as Admin/Levels: position:
+       absolute with a JS-measured height (see syncBgHeight below), since
+       percentage/inset sizing can't resolve against a body whose height is
+       just "however tall its content is." Blurred PotentialBoxBackground,
+       not the old flat unblurred box-background-3 wallpaper. */
+    .ed-bg-img {
+      position: absolute; top: 0; left: 0; right: 0; width: 100%; height: 100vh;
+      object-fit: cover; object-position: center top; filter: blur(4px); z-index: 0;
+    }
+    .ed-bg-overlay { position: fixed; inset: 0; background: rgba(8,6,10,0.55); z-index: 0; }
+    .ed-content-z { position: relative; z-index: 1; }
+
     .ed-page { max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto; padding: 6rem 2rem 5rem; }
+    /* Hero title bar -- box-background-3 + scrim, same hero-panel language
+       as Admin/Levels, instead of a plain floating centered title. */
+    .ed-hero {
+      display: flex; align-items: center; justify-content: center; gap: 0.7rem;
+      border-radius: 18px; padding: 1.3rem 1.8rem; margin-bottom: 2rem;
+      background-image: linear-gradient(160deg, rgba(10,8,20,0.55), rgba(10,8,20,0.8)), url('/images/home/box-background-3.png');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(255,255,255,0.12);
+      box-shadow: 0 14px 50px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    .ed-hero-deco { width: 26px; height: 26px; filter: drop-shadow(0 0 4px rgba(240,192,96,0.5)); }
     /* Cool-blue spotlight glow -- same recipe as the homepage's Featured
        Characters/Gallery/Stories card titles. */
     .ed-title {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 2.2rem; font-weight: 700; color: #7fa8d9;
       text-shadow: 0 0 18px rgba(127,168,217,0.55), 0 1px 3px rgba(0,0,0,0.5);
-      text-align: center; margin: 0 0 1.5rem;
+      margin: 0;
     }
-    /* Bigger, centered, and unmistakably "there" -- pill-shaped buttons
-       instead of a plain underline row, so this reads as real navigation
-       rather than a subtle text row easy to miss. */
+    /* Bigger, centered, and unmistakably "there" -- pill-shaped buttons with
+       box-background-2 art fill (same convention as Admin's tab bar) instead
+       of a flat glass fill, so "active" reads via border/glow rather than a
+       flat color swap. */
     .ed-tabs {
-      display: flex; justify-content: center; gap: 1.25rem; margin-bottom: 2.5rem;
+      display: flex; justify-content: center; gap: 1rem; margin-bottom: 2.5rem; flex-wrap: wrap;
     }
     .ed-tab {
-      background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
-      border: 1px solid rgba(255,255,255,0.14); border-radius: 30px; cursor: pointer; color: #bbb;
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.25rem; font-weight: 700;
+      background-image: linear-gradient(160deg, rgba(6,6,16,0.6), rgba(6,6,16,0.82)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(255,255,255,0.14); border-radius: 30px; cursor: pointer; color: #c9bfe0;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.2rem; font-weight: 600;
       padding: 0.75rem 2.2rem; position: relative;
       transition: color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s;
     }
     .ed-tab:hover { color: #fff; border-color: rgba(240,192,96,0.5); box-shadow: 0 0 18px rgba(240,192,96,0.25); transform: translateY(-1px); }
     .ed-tab.active {
-      color: #1a1408; border-color: #f0c060;
-      background: linear-gradient(135deg, #b8863a, #f0c060);
-      box-shadow: 0 0 24px rgba(240,192,96,0.55);
+      color: #f0c060; border-color: #f0c060;
+      box-shadow: 0 0 22px rgba(240,192,96,0.45);
     }
     .ed-tab.active:hover { transform: none; }
 
@@ -318,7 +342,7 @@
          Search/Browse pages' mobile layout, instead of the generous
          desktop-oriented 6rem top padding + 2rem side gutters. */
       .ed-page { padding: 1.1rem 0.75rem 3rem; }
-      .ed-title { display: none; }
+      .ed-hero { display: none; }
       .ed-tabs { display: none; }
       .ed-mobile-tabbar {
         display: flex; align-items: center; gap: 0.7rem; position: relative;
@@ -358,17 +382,20 @@
 </head>
 <body>
 
+<!-- Scrolling blurred PotentialBoxBackground wallpaper -- same recipe as
+     the Admin/Levels pages, replacing the old flat unblurred box-background-3
+     fill this page used to carry on its own .mod-page-bg-wrap main element. -->
+<img class="ed-bg-img" id="ed-bg-img" src="/images/home/potential-box-background.png" alt="" />
+<div class="ed-bg-overlay"></div>
+
+<div class="ed-content-z">
 <div id="fanpages-topbar-root"></div>
 
-<!-- Same forced, blurred box-background-3 wallpaper as the Story Editor
-     (_story-template/edit.html) — this is a private, owner-only management
-     page too, so it gets the same "Home-tab-only theme" treatment rather
-     than the old plain fixed-attachment browse-background-3.jpg. -->
-<main class="ed-page mod-page-bg-wrap">
-  <img class="mod-page-bg-img" src="/images/home/box-background-3.png" alt="" />
-  <div class="mod-page-bg-overlay" style="background: rgba(10,8,14,0.72);"></div>
-
-  <h1 class="ed-title">My Creator Hub</h1>
+<main class="ed-page">
+  <div class="ed-hero">
+    <img class="ed-hero-deco" src="/images/home/decoration-8.png" alt="" />
+    <h1 class="ed-title">My Creator Hub</h1>
+  </div>
 
   <div class="ed-tabs">
     <button class="ed-tab active" id="ed-tab-stories" type="button" data-tab="stories">Stories</button>
@@ -442,6 +469,7 @@
     </div>
   </div>
 </div>
+</div><!-- /.ed-content-z -->
 
 <script src="/fanpages/fanpages-nav.js"></script>
 <script>
@@ -889,6 +917,7 @@
         }
       )));
     }
+    if (typeof syncBgHeight === 'function') setTimeout(syncBgHeight, 0);
   }
 
   async function renderTab(tab) {
@@ -965,6 +994,7 @@
     const list = document.getElementById('ed-list');
     list.innerHTML = '';
     items.forEach(item => list.appendChild(edReorderRowEl(currentTab, item)));
+    if (typeof syncBgHeight === 'function') setTimeout(syncBgHeight, 0);
   }
   function exitEdReorderMode() {
     edReorderActive = false;
@@ -996,6 +1026,21 @@
     exitEdReorderMode();
     renderTab(currentTab);
   });
+
+  // Keeps the scrolling blurred background's height matched to the page's
+  // actual content height -- same recipe as Admin/Levels, re-run after any
+  // render that can change the page's length (new tab, search filter,
+  // reorder mode toggling) since percentage/inset sizing can't resolve
+  // against a body whose height is just "however tall its content is."
+  function syncBgHeight() {
+    const bgEl = document.getElementById('ed-bg-img');
+    if (!bgEl) return;
+    bgEl.style.height = '0';
+    bgEl.style.height = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
+  }
+  let edBgResizeTimer = null;
+  window.addEventListener('resize', () => { clearTimeout(edBgResizeTimer); edBgResizeTimer = setTimeout(syncBgHeight, 200); });
+  window.addEventListener('load', syncBgHeight);
 
   const initialTab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'stories';
   switchEdTab(initialTab);
