@@ -550,13 +550,13 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
            to the level badge -- landed here per request.) -->
       <a class="fpnav-link fpnav-link--arcade${here === fpUrl('/arcade') ? ' active' : ''}" href="${fpUrl('/arcade')}">Arcade</a>
 
-      <a class="fpnav-link fpnav-link--clubs${here === fpUrl('/social') ? ' active' : ''}" href="${fpUrl('/social')}">Clubs</a>
-
       <!-- Never gets an .active/glow state, even when the current page IS
            /characters — Browse's own "Characters" entry points at the same
            URL, and having both light up this top-level button felt wrong,
            so per request it just never lights up at all. -->
       <a class="fpnav-link fpnav-trigger-link" href="${fpUrl('/characters')}">Characters</a>
+
+      <a class="fpnav-link fpnav-link--clubs${here === fpUrl('/social') ? ' active' : ''}" href="${fpUrl('/social')}">Clubs</a>
 
       <div class="fpnav-search">
         <button class="fpnav-search-icon" id="fpnav-search-icon-btn" type="button" aria-label="Search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
