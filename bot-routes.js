@@ -26,7 +26,11 @@ const stringList = (v, maxItems, maxLen) =>
 
 function sha(s) { return crypto.createHash('sha256').update(String(s)).digest(); }
 
-module.exports = function mountBotRoutes(app, { pool, gems, createCharacterForUser, isValidHttpUrl, MOD_IMAGES_DIR }) {
+const { CONFIG: CTC_CONFIG } = require('./ctc');
+
+const toInt = (v) => (Number.isInteger(v) ? v : (/^\d{1,10}$/.test(String(v)) ? parseInt(v, 10) : null));
+
+module.exports = function mountBotRoutes(app, { pool, gems, ctc, createCharacterForUser, updateCharacterForUser, deleteCharacterAndCleanup, isValidHttpUrl, MOD_IMAGES_DIR }) {
   const router = express.Router();
 
   // Express 4 doesn't catch errors thrown inside async handlers (an unhandled rejection can take the whole
@@ -39,6 +43,8 @@ module.exports = function mountBotRoutes(app, { pool, gems, createCharacterForUs
   const r = {
     get: (p, ...h) => router.get(p, ...h.map(wrap)),
     post: (p, ...h) => router.post(p, ...h.map(wrap)),
+    put: (p, ...h) => router.put(p, ...h.map(wrap)),
+    delete: (p, ...h) => router.delete(p, ...h.map(wrap)),
   };
 
   router.use((req, res, next) => {
@@ -132,6 +138,119 @@ module.exports = function mountBotRoutes(app, { pool, gems, createCharacterForUs
       owner_username: req.botUser.username,
       levelUp: result.levelUp,
     });
+  });
+
+  // ── Editing & deleting characters (the bot's /char build and /char delete) ─────────────────────
+  // Art must be one this same user uploaded through /character-image (never an arbitrary URL or someone else's file).
+  const ownImage = (userId, v) => typeof v === 'string' && v.startsWith(`/images/moderators/${userId}_`) && !v.includes('..');
+
+  r.put('/characters/:id', withUser, async (req, res) => {
+    const id = toInt(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'Invalid character.' });
+    const { rows: [existing] } = await pool.query('SELECT stats FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [id, req.botUser.id]);
+    if (!existing) return res.status(404).json({ error: "That character doesn't exist, or it isn't yours." });
+    const b = req.body || {};
+    const patch = {};
+
+    if (b.name !== undefined) {
+      const n = clamp(b.name, 40);
+      if (!n) return res.status(400).json({ error: 'A character needs a name.' });
+      patch.name = n;
+    }
+    if (b.description !== undefined) patch.description = clamp(b.description, 5000);
+
+    // Stats are one JSON object on the site; the bot sends single fields, so merge into what's already there.
+    const STAT_FIELDS = { species: ['Species', 60], age: ['Age', 40], interests: ['Interests', 600], theme_song: ['Theme Song', 300] };
+    const stats = { ...(existing.stats || {}) };
+    let statsTouched = false;
+    for (const [key, [label, max]] of Object.entries(STAT_FIELDS)) {
+      if (b[key] === undefined) continue;
+      const v = clamp(b[key], max);
+      if (key === 'theme_song' && v && !isValidHttpUrl(v)) return res.status(400).json({ error: 'The theme song must be a link.' });
+      if (v) stats[label] = v; else delete stats[label];
+      statsTouched = true;
+    }
+    if (statsTouched) patch.stats = stats;
+
+    if (b.facts !== undefined) patch.facts = stringList(b.facts, 10, 200);
+    if (b.lore !== undefined) patch.lore = stringList(b.lore, 30, 3000);
+    if (b.relationships !== undefined) {
+      patch.relationships = (Array.isArray(b.relationships) ? b.relationships : []).slice(0, 20)
+        .map(x => ({ name: clamp(x && x.name, 60), type: clamp(x && x.type, 40), ...(x && x.character_id ? { character_id: String(x.character_id) } : {}) }))
+        .filter(x => x.name);
+    }
+    if (b.ref_rating !== undefined) {
+      if (!RATINGS.includes(b.ref_rating)) return res.status(400).json({ error: 'Rating must be sfw, mature or explicit.' });
+      patch.ref_rating = b.ref_rating;
+    }
+    for (const key of ['ref_image', 'shiny_image_url']) {
+      if (b[key] === undefined) continue;
+      if (!ownImage(req.botUser.id, b[key])) return res.status(400).json({ error: 'Invalid image.' });
+      patch[key] = b[key];
+    }
+    if (b.voice_claim_url !== undefined) {
+      const v = clamp(b.voice_claim_url, 300);
+      if (v && !isValidHttpUrl(v)) return res.status(400).json({ error: 'The voice claim must be a link.' });
+      patch.voice_claim_url = v;
+    }
+
+    const character = await updateCharacterForUser(req.botUser.id, id, patch);
+    if (!character) return res.status(404).json({ error: "That character doesn't exist, or it isn't yours." });
+    res.json({ character: { id: character.id, name: character.name }, owner_username: req.botUser.username });
+  });
+
+  r.delete('/characters/:id', withUser, async (req, res) => {
+    const id = toInt(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'Invalid character.' });
+    const { rows: [existing] } = await pool.query('SELECT id, name FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [id, req.botUser.id]);
+    if (!existing) return res.status(404).json({ error: "That character doesn't exist, or it isn't yours." });
+    const { rows: [{ collectors }] } = await pool.query('SELECT COUNT(*)::int AS collectors FROM ctc_cards WHERE character_id = $1 AND user_id <> $2', [id, req.botUser.id]);
+    await deleteCharacterAndCleanup(id, req.botUser.id);
+    res.json({ deleted: true, name: existing.name, collectors_refunded: collectors });
+  });
+
+  // ── Character Trading Cards (all rules live in ctc.js) ────────────────────────────────────────
+  const send = (res, result) => res.status(result && result.error ? 400 : 200).json(result);
+
+  r.get('/ctc/config', async (req, res) => res.json({ config: CTC_CONFIG }));
+  r.get('/ctc/status', withUser, async (req, res) => send(res, await ctc.status(req.botUser.id)));
+
+  r.post('/ctc/spin', withUser, async (req, res) => {
+    send(res, await ctc.spin(req.botUser.id, req.body && req.body.mode === 'premium' ? 'premium' : 'auto'));
+  });
+  r.get('/ctc/spin/pending', withUser, async (req, res) => send(res, await ctc.getPendingSpin(req.botUser.id)));
+  r.post('/ctc/spin/claim', withUser, async (req, res) => {
+    const index = toInt(req.body && req.body.index);
+    if (index === null) return res.status(400).json({ error: 'Pick one of the two cards.' });
+    send(res, await ctc.claim(req.botUser.id, index));
+  });
+
+  for (const [route, fn] of [['buy', 'buy'], ['upgrade', 'upgrade'], ['hunt', 'setHunt']]) {
+    r.post(`/ctc/${route}`, withUser, async (req, res) => {
+      const characterId = toInt(req.body && req.body.character_id);
+      if (characterId === null) return res.status(400).json({ error: 'Pick a character.' });
+      send(res, await ctc[fn](req.botUser.id, characterId));
+    });
+  }
+  r.post('/ctc/hunt/clear', withUser, async (req, res) => send(res, await ctc.clearHunt(req.botUser.id)));
+
+  r.post('/ctc/trades', withUser, async (req, res) => {
+    const b = req.body || {};
+    const offer = toInt(b.offer_character_id), request = toInt(b.request_character_id);
+    if (offer === null || request === null || !/^\d{15,25}$/.test(String(b.to_discord_id || ''))) return res.status(400).json({ error: 'Invalid trade.' });
+    const { rows: [target] } = await pool.query('SELECT id FROM users WHERE discord_id = $1', [String(b.to_discord_id)]);
+    if (!target) return res.status(400).json({ error: 'target_not_found', message: "That player hasn't linked a btwfics.net account." });
+    send(res, await ctc.offerTrade(req.botUser.id, target.id, offer, request));
+  });
+  r.post('/ctc/trades/:id/respond', withUser, async (req, res) => {
+    const id = toInt(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'Invalid trade.' });
+    send(res, await ctc.respondTrade(id, req.botUser.id, !!(req.body && req.body.accept)));
+  });
+  r.post('/ctc/trades/:id/cancel', withUser, async (req, res) => {
+    const id = toInt(req.params.id);
+    if (id === null) return res.status(400).json({ error: 'Invalid trade.' });
+    send(res, await ctc.cancelTrade(id, req.botUser.id));
   });
 
   app.use('/api/bot', router);

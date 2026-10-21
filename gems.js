@@ -141,7 +141,8 @@ module.exports = function createGems(pool) {
     }
   }
 
-  return { awardGems, claimPresence, claimChat, getDailyStatus, claimDaily };
+  // applyChange joins a caller's own transaction (used by the card game so a spend + a card grant commit together).
+  return { awardGems, applyChange, claimPresence, claimChat, getDailyStatus, claimDaily };
 };
 
 // ── Routes for logged-in site users ─────────────────────────────────────────
