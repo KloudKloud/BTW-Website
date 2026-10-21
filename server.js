@@ -255,6 +255,17 @@ async function initDb() {
   // NSFW viewing mode — everyone agreed to 18+ at signup, so default ON for
   // both new and existing accounts; flipping it OFF opts into SFW Mode.
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS nsfw_enabled BOOLEAN NOT NULL DEFAULT true`).catch(() => {});
+  // Arcade currency — earned passively on the site and (eventually) via the
+  // Discord bot, spent on spins. Starts at 0 for everyone; how it accrues
+  // is still being designed, this just gives it a home. discord_id/username
+  // are set once an account links its Discord via the OAuth flow below —
+  // discord_id is the unique key (one Discord account can't link to two
+  // BTW accounts), discord_username is display-only, refreshed on relink.
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS gems INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_id TEXT UNIQUE;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS discord_username TEXT;
+  `).catch(e => console.error('gems/discord link migration:', e.message));
   // Zoom for the account banner/avatar crop — same 100-400 scale as the hub
   // billboard's zoom, 100 = no zoom (matches the pre-existing default crop).
   await pool.query(`
@@ -2217,7 +2228,7 @@ app.post('/api/auth/login', authRateLimiter, async (req, res) => {
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
     `SELECT id, username, display_name, avatar, avatar_position_x, avatar_position_y, email_hash,
-            notif_theme, notif_theme_bg_url, reader_theme, reader_theme_bg_url, nsfw_enabled, xp, level
+            notif_theme, notif_theme_bg_url, reader_theme, reader_theme_bg_url, nsfw_enabled, xp, level, gems
      FROM users WHERE id = $1`, [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
@@ -2233,12 +2244,89 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
     reader_theme: user.reader_theme || 'dark', reader_theme_bg_url: user.reader_theme_bg_url || '',
     xp: user.xp, level: user.level, xp_into_level: user.xp - cumulativeXpForLevel(user.level),
     xp_for_next_level: xpToNextLevel(user.level), milestone_badge: milestone ? milestone.badge : null,
+    gems: user.gems,
   } });
 });
 
 // POST /api/auth/logout
 app.post('/api/auth/logout', requireAuth, (req, res) => {
   res.json({ message: 'Logged out.' });
+});
+
+// ── Discord account linking (Arcade page) ──────────────────────────────────
+// Standard OAuth2 authorization-code flow. The browser navigates away to
+// Discord and back, so there's no Authorization header on the callback --
+// the signed `state` JWT (minted by /link/start, which IS behind
+// requireAuth) is what carries the user's id across that round trip
+// instead. Only needs the `identify` scope (Discord user id + username),
+// nothing about the bot's own guild/message permissions.
+function discordConfigured() {
+  return !!(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET && process.env.DISCORD_REDIRECT_URI);
+}
+
+app.get('/api/discord/status', requireAuth, async (req, res) => {
+  const { rows: [row] } = await pool.query('SELECT discord_id, discord_username FROM users WHERE id = $1', [req.user.id]);
+  res.json({ linked: !!(row && row.discord_id), discord_username: row ? row.discord_username : null });
+});
+
+app.get('/api/discord/link/start', requireAuth, (req, res) => {
+  if (!discordConfigured()) return res.status(503).json({ error: 'Discord linking is not configured yet.' });
+  const state = jwt.sign({ uid: req.user.id, purpose: 'discord_link' }, process.env.JWT_SECRET, { expiresIn: '10m' });
+  const params = new URLSearchParams({
+    client_id: process.env.DISCORD_CLIENT_ID,
+    redirect_uri: process.env.DISCORD_REDIRECT_URI,
+    response_type: 'code',
+    scope: 'identify',
+    state,
+  });
+  res.json({ auth_url: `https://discord.com/api/oauth2/authorize?${params.toString()}` });
+});
+
+app.get('/api/discord/callback', async (req, res) => {
+  const arcadeUrl = `${process.env.SITE_HOST || 'https://btwfics.net'}/fanpages/arcade`;
+  if (!discordConfigured()) return res.redirect(`${arcadeUrl}?discord=error&reason=not_configured`);
+  const { code, state } = req.query;
+  let uid;
+  try {
+    uid = jwt.verify(state, process.env.JWT_SECRET).uid;
+  } catch {
+    return res.redirect(`${arcadeUrl}?discord=error&reason=expired`);
+  }
+  try {
+    const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.DISCORD_CLIENT_ID,
+        client_secret: process.env.DISCORD_CLIENT_SECRET,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: process.env.DISCORD_REDIRECT_URI,
+      }),
+    });
+    const tokenJson = await tokenRes.json();
+    if (!tokenJson.access_token) throw new Error('no access_token');
+
+    const meRes = await fetch('https://discord.com/api/users/@me', {
+      headers: { Authorization: `Bearer ${tokenJson.access_token}` },
+    });
+    const me = await meRes.json();
+    if (!me.id) throw new Error('no discord user id');
+
+    await pool.query('UPDATE users SET discord_id = $1, discord_username = $2 WHERE id = $3', [me.id, me.username, uid]);
+    res.redirect(`${arcadeUrl}?discord=linked`);
+  } catch (err) {
+    // Unique violation -- that Discord account is already linked to a
+    // different BTW account.
+    if (err.code === '23505') return res.redirect(`${arcadeUrl}?discord=error&reason=already_linked`);
+    console.error('Discord OAuth callback error:', err.message);
+    res.redirect(`${arcadeUrl}?discord=error&reason=unknown`);
+  }
+});
+
+app.post('/api/discord/unlink', requireAuth, async (req, res) => {
+  await pool.query('UPDATE users SET discord_id = NULL, discord_username = NULL WHERE id = $1', [req.user.id]);
+  res.json({ linked: false });
 });
 
 // GET /api/level-hub — everything the "Levels" page needs in one call: the
@@ -2250,7 +2338,7 @@ const XP_SOURCE_LABELS = {
 };
 app.get('/api/level-hub', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
-    `SELECT id, username, display_name, avatar, xp, level, created_at FROM users WHERE id = $1`, [req.user.id]
+    `SELECT id, username, display_name, avatar, xp, level, gems, created_at FROM users WHERE id = $1`, [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
 
@@ -2285,6 +2373,7 @@ app.get('/api/level-hub', requireAuth, async (req, res) => {
       xp_for_next_level: xpToNextLevel(user.level), member_since: user.created_at,
       title: currentMilestone ? currentMilestone.badge : null, title_icon: currentMilestone ? currentMilestone.icon : null,
       badges_earned: badges.filter(b => b.earned).length, badges_total: badges.length,
+      gems: user.gems,
     },
     badges,
     recent_activity,

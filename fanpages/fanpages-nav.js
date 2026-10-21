@@ -570,6 +570,11 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
       </div>
       <div class="fpnav-right">
 
+        <!-- Arcade sits here, left of the level badge, on purpose -- it's a
+             full hub page (gems, spins, the card collection), the same tier
+             as Characters/Clubs, not a dropdown-worthy sub-menu yet. -->
+        <a class="fpnav-link fpnav-link--arcade${here === fpUrl('/arcade') ? ' active' : ''}" href="${fpUrl('/arcade')}">Arcade</a>
+
         <div class="fpnav-level-badge" id="fpnav-level-badge" style="display:none;" title="">
           <div class="fpnav-level-circle" id="fpnav-level-circle"></div>
           <div class="fpnav-level-progress-track">
@@ -676,6 +681,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
 
           <a href="${fpUrl('/social')}">Clubs</a>
           <a href="${fpUrl('/characters')}">Characters</a>
+          <a href="${fpUrl('/arcade')}">Arcade</a>
           <a href="${fpUrl('/library')}">Bookmarks</a>
 
           <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donate</a>
