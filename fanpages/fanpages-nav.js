@@ -543,13 +543,6 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         </div>
       </div>
 
-      <!-- Arcade sits here, after Browse and before Characters, on purpose
-           -- it's a full hub page (gems, spins, the card collection), the
-           same tier as Characters/Clubs, not a dropdown-worthy sub-menu
-           yet. (Tried it between Clubs/Create, then right of Search next
-           to the level badge -- landed here per request.) -->
-      <a class="fpnav-link fpnav-link--arcade${here === fpUrl('/arcade') ? ' active' : ''}" href="${fpUrl('/arcade')}">Arcade</a>
-
       <!-- Never gets an .active/glow state, even when the current page IS
            /characters — Browse's own "Characters" entry points at the same
            URL, and having both light up this top-level button felt wrong,
@@ -557,6 +550,15 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
       <a class="fpnav-link fpnav-trigger-link" href="${fpUrl('/characters')}">Characters</a>
 
       <a class="fpnav-link fpnav-link--clubs${here === fpUrl('/social') ? ' active' : ''}" href="${fpUrl('/social')}">Clubs</a>
+
+      <div class="fpnav-dropdown-wrap fpnav-desktop-only-action">
+        <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
+        <div class="fpnav-dropdown" id="fpnav-upload-dropdown" hidden>
+          <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
+          <div class="fpnav-dropdown-divider"></div>
+          <a href="${fpUrl('/upload')}" data-gate="${fpUrl('/upload')}"><span class="fpnav-plus-badge">+</span> Upload</a>
+        </div>
+      </div>
 
       <div class="fpnav-search">
         <button class="fpnav-search-icon" id="fpnav-search-icon-btn" type="button" aria-label="Search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
@@ -572,12 +574,12 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
           <span class="fpnav-level-progress-text" id="fpnav-level-progress-text"></span>
         </div>
 
-        <div class="fpnav-dropdown-wrap fpnav-desktop-only-action">
-          <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
-          <div class="fpnav-dropdown" id="fpnav-upload-dropdown" hidden>
-            <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
-            <div class="fpnav-dropdown-divider"></div>
-            <a href="${fpUrl('/upload')}" data-gate="${fpUrl('/upload')}"><span class="fpnav-plus-badge">+</span> Upload</a>
+        <div class="fpnav-dropdown-wrap">
+          <button class="fpnav-link fpnav-trigger-link" id="fpnav-community-btn" type="button">Community <span class="fpnav-caret">▾</span></button>
+          <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
+            <a href="${fpUrl('/donations')}">Donations</a>
+            <a href="${fpUrl('/discord')}">Discord</a>
+            <a href="${fpUrl('/tos')}">TOS</a>
           </div>
         </div>
 
@@ -596,9 +598,6 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
             <a href="${fpUrl('/notifications')}" id="fpnav-notif-link">Updates <span class="fpnav-notif-badge" id="fpnav-notif-badge" hidden></span></a>
             <a href="${fpUrl('/notifications#inbox')}" id="fpnav-updates-link">Inbox</a>
             <div class="fpnav-dropdown-divider"></div>
-            <a href="${fpUrl('/discord')}">Discord</a>
-            <a href="${fpUrl('/donations')}">Donations</a>
-            <a href="${fpUrl('/tos')}">TOS</a>
             <a href="#" id="fpnav-edit-profile-link">Settings</a>
             <a href="#" id="fpnav-logout-link">Logout</a>
           </div>
@@ -626,8 +625,8 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   // always fits exactly what's expanded inside it (e.g. opening Browse AND
   // Settings at once just makes the whole panel taller). Reuses the same
   // links already computed above for the desktop dropdowns. Browse/Create/
-  // Settings are collapsible accordion sections (data-drawer-target pairs a
-  // toggle button with its #fpnav-drawer-sub-<target> submenu);
+  // Community/Settings are collapsible accordion sections (data-drawer-target
+  // pairs a toggle button with its #fpnav-drawer-sub-<target> submenu);
   // Search/Clubs/Characters/Bookmarks are flat top-level links.
   let cachedUser = null;
   try { cachedUser = JSON.parse(localStorage.getItem('btw_user') || sessionStorage.getItem('btw_user') || 'null'); } catch {}
@@ -659,8 +658,6 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
             </div>
           </div>
 
-          <a href="${fpUrl('/arcade')}">Arcade</a>
-
           <button class="fpnav-drawer-item" id="fpnav-drawer-search-btn" type="button">Search</button>
 
           <div class="fpnav-drawer-accordion">
@@ -678,12 +675,19 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
           <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donate</a>
 
           <div class="fpnav-drawer-accordion">
+            <button class="fpnav-drawer-toggle" data-drawer-target="community" type="button">Community <span class="fpnav-caret">&#9662;</span></button>
+            <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-community" hidden>
+              <a href="${fpUrl('/donations')}">Donations</a>
+              <a href="${fpUrl('/discord')}">Discord</a>
+              <a href="${fpUrl('/tos')}">TOS</a>
+            </div>
+          </div>
+
+          <div class="fpnav-drawer-accordion">
             <button class="fpnav-drawer-toggle" data-drawer-target="settings" type="button">Settings <span class="fpnav-caret">&#9662;</span></button>
             <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-settings" hidden>
               <a href="${fpUrl(`/account-settings?from=${encodeURIComponent(here)}`)}">Account Settings</a>
-              <a href="${fpUrl('/discord')}">Discord</a>
               <a href="/fanpages/notifications#inbox/new/veekitpaws">Feedback</a>
-              <a href="${fpUrl('/tos')}">Terms of Service</a>
             </div>
           </div>
         </div>
@@ -909,9 +913,9 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   }
   wireDropdown('fpnav-upload-btn', 'fpnav-upload-dropdown');
   wireDropdown('fpnav-avatar-btn', 'fpnav-avatar-dropdown');
-  // Browse also opens on hover (not just click), unlike the Create/avatar
-  // menus — it's pure navigation with no login-gating to worry about, so
-  // there's no downside to making it quicker to get to.
+  // Community and Browse also open on hover (not just click), unlike the
+  // Create/avatar menus — they're pure navigation with no login-gating to
+  // worry about, so there's no downside to making them quicker to get to.
   // Closing is debounced on a short timer (cleared by re-entering either
   // the button or the menu) so crossing the small visual gap between them
   // on the way down doesn't get treated as "left the menu" and slam it shut.
@@ -953,6 +957,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
     });
   }
   wireHoverDropdown('fpnav-browse-btn', 'fpnav-browse-dropdown');
+  wireHoverDropdown('fpnav-community-btn', 'fpnav-community-dropdown');
   document.addEventListener('click', (e) => {
     if (e.target.closest('.fpnav-dropdown-wrap')) return;
     closeAllDropdowns();
