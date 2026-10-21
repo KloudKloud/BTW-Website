@@ -10,18 +10,18 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scrollbar-gutter: stable; }
     body {
-      background: #000; color: #f0f0f0;
+      background: #000 url('/images/home/arcade-background.jpg') center top / cover no-repeat fixed;
+      color: #f0f0f0;
       font-family: 'Lato', Arial, sans-serif;
-      min-height: 100vh; overflow-x: hidden;
+      /* A hair taller than the viewport so the page background is
+         actually reachable by scrolling, instead of being completely
+         hidden behind a hero that exactly fills the screen. More content
+         boxes land below the hero as they're built, pushing this further
+         anyway -- this is just enough room for now. */
+      min-height: 130vh; overflow-x: hidden;
     }
     a { color: inherit; }
     h1, h2, h3, .ar-font-display { font-family: 'Fredoka', 'Lato', cursive; }
-
-    /* Gem teal is this page's one accent color, same role gold plays on
-       the Levels page (XP) or blue plays for Spotlight features -- keeps
-       "what color means what" consistent site-wide instead of reusing gold
-       for a currency that isn't XP. */
-    :root { --gem: #7fe0c9; }
 
     /* ── Full-width video hero -- sits directly in the page flow (not
        inside a max-width wrap), same full-bleed pattern as the homepage's
@@ -33,40 +33,9 @@
       position: absolute; inset: 0;
       background: linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.75) 100%);
     }
-    /* Promo card -- shows the admin-managed slides (Admin -> Arcade) as a
-       framed graphic over the video, Steam-event-banner style. Falls back
-       to a plain title card when no slides have been added yet. */
-    .ar-hero-card-wrap { position: absolute; left: 2.5rem; bottom: 2rem; z-index: 2; max-width: 460px; }
-    .ar-hero-card {
-      position: relative; width: 420px; max-width: 100%; height: 160px; border-radius: 16px; overflow: hidden;
-      border: 1px solid rgba(255,255,255,0.18);
-      box-shadow: 0 14px 40px rgba(0,0,0,0.5);
-    }
-    .ar-hero-slide {
-      position: absolute; inset: 0; opacity: 0; transition: opacity 0.6s ease;
-      background-size: cover; background-position: center;
-    }
-    .ar-hero-slide.active { opacity: 1; }
-    .ar-hero-fallback {
-      position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.3rem;
-      padding: 1.2rem 1.4rem;
-      background-image: linear-gradient(160deg, rgba(8,20,18,0.55), rgba(8,20,18,0.85)), url('/images/home/box-background-3.png');
-      background-size: cover; background-position: center;
-    }
-    .ar-hero-fallback-title { display: flex; align-items: center; gap: 0.5rem; font-size: 1.5rem; font-weight: 600; }
-    .ar-hero-fallback-title img { width: 26px; height: 26px; }
-    .ar-hero-fallback-sub { color: #bcd9d1; font-size: 0.88rem; max-width: 340px; }
-    .ar-hero-dots { position: absolute; right: 0.9rem; bottom: 0.8rem; z-index: 3; display: flex; gap: 0.35rem; }
-    .ar-hero-dot {
-      width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.4);
-      border: none; padding: 0; cursor: pointer; transition: background 0.15s ease;
-    }
-    .ar-hero-dot.active { background: var(--gem); }
 
     @media (max-width: 720px) {
       .ar-hero { height: 280px; }
-      .ar-hero-card-wrap { left: 1rem; right: 1rem; bottom: 1rem; max-width: none; }
-      .ar-hero-card { width: 100%; height: 130px; }
     }
   </style>
 </head>
@@ -79,73 +48,14 @@
     <source src="/images/home/main-background.mp4" type="video/mp4" />
   </video>
   <div class="ar-hero-scrim"></div>
-  <div class="ar-hero-card-wrap">
-    <div class="ar-hero-card" id="ar-hero-card"></div>
-  </div>
 </section>
 
 <script src="/fanpages/fanpages-nav.js"></script>
 <script>
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
-const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
 
 if (!token) {
   location.href = window.fpUrl('/');
-}
-
-function escapeHtml(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
-// ── Hero promo card -- pulled from Admin -> Arcade (arcade_banner_slides).
-// Falls back to a plain title card when none have been added yet. ────────
-let heroTimer = null;
-
-function renderHeroCard(slides) {
-  const el = document.getElementById('ar-hero-card');
-  if (!slides.length) {
-    el.innerHTML = `
-      <div class="ar-hero-fallback">
-        <div class="ar-hero-fallback-title"><img src="/images/home/decoration-2.png" alt="" /> Arcade</div>
-        <p class="ar-hero-fallback-sub">Collect gems, spin for characters and shinies, and build your collection.</p>
-      </div>
-    `;
-    return;
-  }
-  const slideHtml = (s, i) => {
-    const cls = `ar-hero-slide${i === 0 ? ' active' : ''}`;
-    const style = `background-image:url('${escapeHtml(s.image_url)}');`;
-    return s.link
-      ? `<a class="${cls}" href="${escapeHtml(s.link)}" style="${style}"></a>`
-      : `<div class="${cls}" style="${style}"></div>`;
-  };
-  el.innerHTML =
-    slides.map(slideHtml).join('') +
-    (slides.length > 1
-      ? `<div class="ar-hero-dots">${slides.map((_, i) => `<button class="ar-hero-dot${i === 0 ? ' active' : ''}" data-i="${i}"></button>`).join('')}</div>`
-      : '');
-  if (slides.length > 1) {
-    let current = 0;
-    const slideEls = el.querySelectorAll('.ar-hero-slide');
-    const dots = el.querySelectorAll('.ar-hero-dot');
-    const show = (i) => {
-      current = i;
-      slideEls.forEach((s, j) => s.classList.toggle('active', j === i));
-      dots.forEach((d, j) => d.classList.toggle('active', j === i));
-    };
-    dots.forEach(d => d.addEventListener('click', () => { show(parseInt(d.dataset.i, 10)); resetHeroTimer(); }));
-    function resetHeroTimer() {
-      clearInterval(heroTimer);
-      heroTimer = setInterval(() => show((current + 1) % slideEls.length), 5000);
-    }
-    resetHeroTimer();
-  }
-}
-
-if (token) {
-  fetch('/api/arcade/banner-slides', { headers: authHeaders() })
-    .then(r => r.json()).then(d => renderHeroCard(d.slides || []))
-    .catch(() => renderHeroCard([]));
 }
 </script>
 </body>
