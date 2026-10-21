@@ -547,6 +547,13 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         </div>
       </div>
 
+      <!-- Arcade sits here, after Browse and before Characters, on purpose
+           -- it's a full hub page (gems, spins, the card collection), the
+           same tier as Characters/Clubs, not a dropdown-worthy sub-menu
+           yet. (Tried it between Clubs/Create, then right of Search next
+           to the level badge -- landed here per request.) -->
+      <a class="fpnav-link fpnav-link--arcade${here === fpUrl('/arcade') ? ' active' : ''}" href="${fpUrl('/arcade')}">Arcade</a>
+
       <!-- Never gets an .active/glow state, even when the current page IS
            /characters — Browse's own "Characters" entry points at the same
            URL, and having both light up this top-level button felt wrong,
@@ -569,11 +576,6 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         <input type="search" id="fpnav-search-input" placeholder="Search" />
       </div>
       <div class="fpnav-right">
-
-        <!-- Arcade sits here, left of the level badge, on purpose -- it's a
-             full hub page (gems, spins, the card collection), the same tier
-             as Characters/Clubs, not a dropdown-worthy sub-menu yet. -->
-        <a class="fpnav-link fpnav-link--arcade${here === fpUrl('/arcade') ? ' active' : ''}" href="${fpUrl('/arcade')}">Arcade</a>
 
         <div class="fpnav-level-badge" id="fpnav-level-badge" style="display:none;" title="">
           <div class="fpnav-level-circle" id="fpnav-level-circle"></div>
@@ -669,6 +671,8 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
             </div>
           </div>
 
+          <a href="${fpUrl('/arcade')}">Arcade</a>
+
           <button class="fpnav-drawer-item" id="fpnav-drawer-search-btn" type="button">Search</button>
 
           <div class="fpnav-drawer-accordion">
@@ -681,7 +685,6 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
 
           <a href="${fpUrl('/social')}">Clubs</a>
           <a href="${fpUrl('/characters')}">Characters</a>
-          <a href="${fpUrl('/arcade')}">Arcade</a>
           <a href="${fpUrl('/library')}">Bookmarks</a>
 
           <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donate</a>
