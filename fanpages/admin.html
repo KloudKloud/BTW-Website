@@ -131,14 +131,6 @@
     #hb-caption, #hb-credit { font-family: 'Fredoka', 'Lato', cursive; }
     .hb-preview-bg { position: absolute; inset: 0; background-repeat: no-repeat; }
 
-    /* Arcade Banner tab — a plain image list, no crop/pan/zoom editor like
-       the Bulletin billboard above gets, so this reuses the hb-grid/hb-card
-       shell but with its own (wider, ~1800x640) aspect ratio and a simple
-       always-visible add row instead of a modal. */
-    .arb-add-row { display: flex; align-items: flex-end; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
-    .arb-card-img-wrap { aspect-ratio: 1800 / 640; }
-    .arb-card-link { font-size: 0.78rem; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 0.6rem; }
-
     /* Fandom/catalog summary — sits at the top of Stats, ahead of the
        general site numbers, per request. */
     .adm-catalog-summary { margin-bottom: 2.5rem; }
@@ -242,7 +234,6 @@
   <div class="adm-tabs">
     <button class="adm-tab active" id="adm-tab-stats" type="button" data-tab="stats">Stats</button>
     <button class="adm-tab" id="adm-tab-bulletin" type="button" data-tab="bulletin">Bulletin</button>
-    <button class="adm-tab" id="adm-tab-arcade" type="button" data-tab="arcade">Arcade</button>
     <button class="adm-tab" id="adm-tab-dictionary" type="button" data-tab="dictionary">Tag Dictionary</button>
   </div>
 
@@ -335,26 +326,6 @@
     </button>
 
     <div class="hb-grid" id="hb-grid"></div>
-  </div>
-
-  <!-- ══ Arcade Banner ═══════════════════════════════════════════════ -->
-  <div class="adm-panel" id="adm-panel-arcade">
-    <h2 class="adm-section-title"><img src="/images/home/decoration-1.png" alt="" /> Arcade Banner</h2>
-    <p class="hb-sub">Images that cycle in the promo banner at the top of the Arcade page. Add as many as you want — they rotate automatically once there's more than one, with dots to jump between them. Recommended size: ~1800x640px so they fill the banner without stretching.</p>
-
-    <div class="arb-add-row">
-      <div class="mod-field" style="max-width:360px;">
-        <label for="arb-link-input">Link <span style="font-weight:400;color:#888;">(optional — makes the slide clickable)</span></label>
-        <input class="mod-input" id="arb-link-input" maxlength="300" placeholder="https:// or /path" />
-      </div>
-      <input type="file" id="arb-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-      <button class="chars-create-btn" id="arb-add-btn" type="button" style="max-width: 260px;">
-        <span class="chars-create-btn-icon">➕</span> Add Banner Image
-      </button>
-    </div>
-    <p class="mod-panel-msg" id="arb-msg"></p>
-
-    <div class="hb-grid" id="arb-grid"></div>
   </div>
 
   <!-- ══ Tag Dictionary ══════════════════════════════════════════════ -->
@@ -586,16 +557,6 @@
   </div>
 </div>
 
-<div class="mod-confirm-overlay" id="arb-delete-confirm-overlay" hidden>
-  <div class="mod-confirm-modal">
-    <p class="mod-confirm-title">Delete this banner image?</p>
-    <p class="mod-confirm-text">This can't be undone.</p>
-    <div class="mod-confirm-actions">
-      <button class="mod-btn" id="arb-delete-confirm-cancel" type="button">Cancel</button>
-      <button class="mod-btn mod-btn--danger" id="arb-delete-confirm-yes" type="button">Delete</button>
-    </div>
-  </div>
-</div>
 
 </div><!-- /.adm-content-z -->
 
@@ -621,7 +582,7 @@ function escapeHtml(s) {
 }
 
 // ── Tabs ─────────────────────────────────────────────────────────────────
-const ADM_TABS = ['stats', 'bulletin', 'arcade', 'dictionary'];
+const ADM_TABS = ['stats', 'bulletin', 'dictionary'];
 function switchAdmTab(tab) {
   if (!ADM_TABS.includes(tab)) tab = 'stats';
   ADM_TABS.forEach(t => {
@@ -1019,97 +980,6 @@ document.getElementById('hb-editor-delete').addEventListener('click', async () =
   } finally {
     deleteBtn.disabled = false;
     deleteBtn.textContent = 'Delete';
-  }
-});
-
-/* ═══════════════════════════════════════════════════════════════════════
-   Arcade Banner — a plain image list, no crop/pan/zoom editor needed.
-   ═══════════════════════════════════════════════════════════════════════ */
-let arcadeBannerSlides = [];
-
-function renderArcadeBannerGrid() {
-  const grid = document.getElementById('arb-grid');
-  if (!arcadeBannerSlides.length) {
-    grid.innerHTML = '<p class="hb-empty-state">No banner images yet — add one to get the Arcade banner cycling!</p>';
-    return;
-  }
-  grid.innerHTML = arcadeBannerSlides.map(slide => `
-    <div class="hb-card">
-      <div class="hb-card-img-wrap arb-card-img-wrap">
-        <img src="${escapeHtml(slide.image_url)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" />
-      </div>
-      <div class="hb-card-body">
-        ${slide.link ? `<p class="arb-card-link">↗ ${escapeHtml(slide.link)}</p>` : '<p class="hb-card-empty-text">No link</p>'}
-        <div class="hb-card-actions">
-          <button class="mod-btn mod-btn--small mod-btn--danger" type="button" data-id="${slide.id}">Delete</button>
-        </div>
-      </div>
-    </div>
-  `).join('');
-  grid.querySelectorAll('.hb-card-actions button').forEach(btn => {
-    btn.addEventListener('click', () => confirmDeleteArcadeBannerSlide(parseInt(btn.dataset.id, 10)));
-  });
-}
-
-async function loadArcadeBannerSlides() {
-  const res = await fetch('/api/arcade/banner-slides', { headers: authHeaders() });
-  const data = await res.json();
-  arcadeBannerSlides = data.slides || [];
-  renderArcadeBannerGrid();
-}
-
-document.getElementById('arb-add-btn').addEventListener('click', () => {
-  document.getElementById('arb-file-input').click();
-});
-document.getElementById('arb-file-input').addEventListener('change', async () => {
-  const fileInput = document.getElementById('arb-file-input');
-  const file = fileInput.files[0];
-  if (!file) return;
-  const addBtn = document.getElementById('arb-add-btn');
-  const msg = document.getElementById('arb-msg');
-  msg.textContent = '';
-  addBtn.disabled = true;
-  addBtn.textContent = 'Uploading…';
-  try {
-    const formData = new FormData();
-    formData.append('image', file);
-    formData.append('link', document.getElementById('arb-link-input').value.trim());
-    const res = await fetch('/api/admin/arcade-banner', { method: 'POST', headers: authHeaders(), body: formData });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Upload failed.');
-    document.getElementById('arb-link-input').value = '';
-    await loadArcadeBannerSlides();
-  } catch (e) {
-    msg.textContent = e.message;
-  } finally {
-    fileInput.value = '';
-    addBtn.disabled = false;
-    addBtn.innerHTML = '<span class="chars-create-btn-icon">➕</span> Add Banner Image';
-  }
-});
-
-let arcadeBannerDeleteId = null;
-function confirmDeleteArcadeBannerSlide(id) {
-  arcadeBannerDeleteId = id;
-  document.getElementById('arb-delete-confirm-overlay').hidden = false;
-}
-document.getElementById('arb-delete-confirm-cancel').addEventListener('click', () => {
-  document.getElementById('arb-delete-confirm-overlay').hidden = true;
-  arcadeBannerDeleteId = null;
-});
-document.getElementById('arb-delete-confirm-yes').addEventListener('click', async () => {
-  if (arcadeBannerDeleteId == null) return;
-  const yesBtn = document.getElementById('arb-delete-confirm-yes');
-  yesBtn.disabled = true;
-  yesBtn.textContent = 'Deleting…';
-  try {
-    await fetch(`/api/admin/arcade-banner/${arcadeBannerDeleteId}`, { method: 'DELETE', headers: authHeaders() });
-    document.getElementById('arb-delete-confirm-overlay').hidden = true;
-    arcadeBannerDeleteId = null;
-    await loadArcadeBannerSlides();
-  } finally {
-    yesBtn.disabled = false;
-    yesBtn.textContent = 'Delete';
   }
 });
 
@@ -1549,7 +1419,6 @@ document.getElementById('adm-pending-merge-btn').addEventListener('click', async
     switchAdmTab(location.hash.slice(1));
 
     await loadSlides();
-    await loadArcadeBannerSlides();
     const summary = await loadCatalogSummary();
     dictData = summary;
     renderDictionary('');
