@@ -2500,6 +2500,34 @@ sidebarRailToggle.addEventListener('click', () => {
 });
 setSidebarPanelCollapsed(!isBrowseMode && sessionStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1');
 
+// Both collapse fabs are meant to sit on the same axis as the left tab
+// box's "Stories" row -- the CSS top:476px they ship with only happens to
+// land there at the exact topbar height Chrome/a 1080p desktop gives it.
+// fanpages-nav.css flips the topbar from fixed (76px spacer) to in-flow
+// (height:auto) at <=1360px, which shifts every row below it by whatever
+// that height delta is -- a hardcoded px value can't track that, so measure
+// the real row instead. #fp-side-menu-story is display:none while the panel
+// itself is collapsed (.fp-layout--sidebar-collapsed .fp-side-panel), so a
+// collapsed measurement is skipped rather than snapping the fabs to 0 --
+// the already-set top from the last time the panel was open is correct
+// there too, since .fp-sidebar-fab--collapsed only overrides `left`.
+function syncFabVerticalAlign() {
+  const row = document.getElementById('fp-side-menu-story');
+  if (!row) return;
+  const rect = row.getBoundingClientRect();
+  if (rect.height === 0) return;
+  const centerY = `${Math.round(rect.top + rect.height / 2)}px`;
+  filterRailToggle.style.top = centerY;
+  sidebarRailToggle.style.top = centerY;
+}
+window.addEventListener('resize', syncFabVerticalAlign);
+window.addEventListener('load', syncFabVerticalAlign);
+syncFabVerticalAlign();
+// The topbar (#fanpages-topbar-root) is filled in by fanpages-nav.js after
+// this script already ran, which is exactly the height that drives this
+// alignment -- one more pass once that's had time to land.
+setTimeout(syncFabVerticalAlign, 300);
+
 // Keeps the current query attached to all three left-panel tab links, so
 // clicking Story -> Submissions -> Profiles carries whatever you searched
 // across every switch instead of resetting to "Everything" each time.
