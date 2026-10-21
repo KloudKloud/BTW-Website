@@ -590,6 +590,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
           </button>
           <div class="fpnav-dropdown" id="fpnav-avatar-dropdown" hidden>
             <a href="#" id="fpnav-my-profile-link">My Profile</a>
+            <a href="${fpUrl('/admin')}" id="fpnav-admin-link" style="display:none;">Admin</a>
             <div class="fpnav-dropdown-divider"></div>
             <a href="${fpUrl('/library')}" id="fpnav-library-link">Bookmarks</a>
             <a href="${fpUrl('/notifications')}" id="fpnav-notif-link">Updates <span class="fpnav-notif-badge" id="fpnav-notif-badge" hidden></span></a>
@@ -600,7 +601,6 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
             <a href="${fpUrl('/tos')}">Terms of Service</a>
             <div class="fpnav-dropdown-divider"></div>
             <a href="#" id="fpnav-edit-profile-link">Account Settings</a>
-            <a href="${fpUrl('/admin')}" id="fpnav-admin-link" style="display:none;">Admin</a>
             <a href="#" id="fpnav-logout-link">Logout</a>
           </div>
         </div>
