@@ -596,11 +596,10 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
             <a href="${fpUrl('/notifications')}" id="fpnav-notif-link">Updates <span class="fpnav-notif-badge" id="fpnav-notif-badge" hidden></span></a>
             <a href="${fpUrl('/notifications#inbox')}" id="fpnav-updates-link">Inbox</a>
             <div class="fpnav-dropdown-divider"></div>
+            <a href="#" id="fpnav-edit-profile-link">Settings</a>
             <a href="${fpUrl('/discord')}">Discord</a>
             <a href="${fpUrl('/donations')}">Donations</a>
             <a href="${fpUrl('/tos')}">Terms of Service</a>
-            <div class="fpnav-dropdown-divider"></div>
-            <a href="#" id="fpnav-edit-profile-link">Account Settings</a>
             <a href="#" id="fpnav-logout-link">Logout</a>
           </div>
         </div>
