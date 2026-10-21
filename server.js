@@ -2338,9 +2338,10 @@ app.post('/api/discord/unlink', requireAuth, async (req, res) => {
 
 // GET /api/arcade/hub — everything the Arcade page needs in one call: the
 // viewer's own gems/avatar for the profile card, Discord link status, and a
-// random sample of character refs for the character-shuffle box. NSFW refs
-// are excluded outright (not blurred) since this is a decorative shuffle,
-// not a detail view someone clicks into.
+// random sample of character refs shared by the character-shuffle box and
+// the Recent Pulls preview list. NSFW refs are excluded outright (not
+// blurred) since both of those are decorative showcases, not a detail view
+// someone clicks into.
 app.get('/api/arcade/hub', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
     `SELECT username, display_name, avatar, gems, level, discord_id, discord_username FROM users WHERE id = $1`,
@@ -2355,7 +2356,7 @@ app.get('/api/arcade/hub', requireAuth, async (req, res) => {
      FROM moderator_characters mc
      JOIN users u2 ON u2.id = mc.owner_user_id
      WHERE mc.ref_image <> '' AND (mc.ref_is_nsfw = false OR $1::boolean)
-     ORDER BY RANDOM() LIMIT 14`,
+     ORDER BY RANDOM() LIMIT 20`,
     [nsfwAllowed]
   );
 

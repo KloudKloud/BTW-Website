@@ -524,10 +524,6 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
   const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
   const here = window.location.pathname;
-  // Already on the "BTW Homepage" confirm screen — clicking the nav item
-  // again should just reload this same page (keeping whatever `from` it
-  // already had), not jump straight to this site's own home page.
-  const homeHref = here === fpUrl('/leaving') ? window.location.href : fpUrl(`/leaving?from=${encodeURIComponent(here)}`);
 
   root.innerHTML = `
     <div class="fpnav-bar">
@@ -562,15 +558,6 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
 
       <a class="fpnav-link fpnav-link--clubs${here === fpUrl('/social') ? ' active' : ''}" href="${fpUrl('/social')}">Clubs</a>
 
-      <div class="fpnav-dropdown-wrap fpnav-desktop-only-action">
-        <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
-        <div class="fpnav-dropdown" id="fpnav-upload-dropdown" hidden>
-          <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
-          <div class="fpnav-dropdown-divider"></div>
-          <a href="${fpUrl('/upload')}" data-gate="${fpUrl('/upload')}"><span class="fpnav-plus-badge">+</span> Upload</a>
-        </div>
-      </div>
-
       <div class="fpnav-search">
         <button class="fpnav-search-icon" id="fpnav-search-icon-btn" type="button" aria-label="Search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
         <input type="search" id="fpnav-search-input" placeholder="Search" />
@@ -585,14 +572,12 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
           <span class="fpnav-level-progress-text" id="fpnav-level-progress-text"></span>
         </div>
 
-        <div class="fpnav-dropdown-wrap">
-          <button class="fpnav-link fpnav-trigger-link" id="fpnav-community-btn" type="button">Community <span class="fpnav-caret">▾</span></button>
-          <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
-            <a href="${fpUrl('/discord')}">Discord</a>
-            <a href="${fpUrl('/donations')}">Donations</a>
+        <div class="fpnav-dropdown-wrap fpnav-desktop-only-action">
+          <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
+          <div class="fpnav-dropdown" id="fpnav-upload-dropdown" hidden>
+            <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
             <div class="fpnav-dropdown-divider"></div>
-            <a href="${homeHref}">BTW Homepage</a>
-            <a href="${fpUrl('/tos')}">Terms of Service</a>
+            <a href="${fpUrl('/upload')}" data-gate="${fpUrl('/upload')}"><span class="fpnav-plus-badge">+</span> Upload</a>
           </div>
         </div>
 
@@ -609,6 +594,10 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
             <a href="${fpUrl('/library')}" id="fpnav-library-link">Bookmarks</a>
             <a href="${fpUrl('/notifications')}" id="fpnav-notif-link">Updates <span class="fpnav-notif-badge" id="fpnav-notif-badge" hidden></span></a>
             <a href="${fpUrl('/notifications#inbox')}" id="fpnav-updates-link">Inbox</a>
+            <div class="fpnav-dropdown-divider"></div>
+            <a href="${fpUrl('/discord')}">Discord</a>
+            <a href="${fpUrl('/donations')}">Donations</a>
+            <a href="${fpUrl('/tos')}">Terms of Service</a>
             <div class="fpnav-dropdown-divider"></div>
             <a href="#" id="fpnav-edit-profile-link">Account Settings</a>
             <a href="${fpUrl('/admin')}" id="fpnav-admin-link" style="display:none;">Admin</a>
@@ -638,8 +627,8 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   // always fits exactly what's expanded inside it (e.g. opening Browse AND
   // Settings at once just makes the whole panel taller). Reuses the same
   // links already computed above for the desktop dropdowns. Browse/Create/
-  // Community/Settings are collapsible accordion sections (data-drawer-target
-  // pairs a toggle button with its #fpnav-drawer-sub-<target> submenu);
+  // Settings are collapsible accordion sections (data-drawer-target pairs a
+  // toggle button with its #fpnav-drawer-sub-<target> submenu);
   // Search/Clubs/Characters/Bookmarks are flat top-level links.
   let cachedUser = null;
   try { cachedUser = JSON.parse(localStorage.getItem('btw_user') || sessionStorage.getItem('btw_user') || 'null'); } catch {}
@@ -690,17 +679,10 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
           <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donate</a>
 
           <div class="fpnav-drawer-accordion">
-            <button class="fpnav-drawer-toggle" data-drawer-target="community" type="button">Community <span class="fpnav-caret">&#9662;</span></button>
-            <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-community" hidden>
-              <a href="${fpUrl('/discord')}">Discord</a>
-              <a href="${homeHref}">BTW Homepage</a>
-            </div>
-          </div>
-
-          <div class="fpnav-drawer-accordion">
             <button class="fpnav-drawer-toggle" data-drawer-target="settings" type="button">Settings <span class="fpnav-caret">&#9662;</span></button>
             <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-settings" hidden>
               <a href="${fpUrl(`/account-settings?from=${encodeURIComponent(here)}`)}">Account Settings</a>
+              <a href="${fpUrl('/discord')}">Discord</a>
               <a href="/fanpages/notifications#inbox/new/veekitpaws">Feedback</a>
               <a href="${fpUrl('/tos')}">Terms of Service</a>
             </div>
@@ -928,9 +910,9 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
   }
   wireDropdown('fpnav-upload-btn', 'fpnav-upload-dropdown');
   wireDropdown('fpnav-avatar-btn', 'fpnav-avatar-dropdown');
-  // Community and Browse also open on hover (not just click), unlike the
-  // Create/avatar menus — they're pure navigation with no login-gating to
-  // worry about, so there's no downside to making them quicker to get to.
+  // Browse also opens on hover (not just click), unlike the Create/avatar
+  // menus — it's pure navigation with no login-gating to worry about, so
+  // there's no downside to making it quicker to get to.
   // Closing is debounced on a short timer (cleared by re-entering either
   // the button or the menu) so crossing the small visual gap between them
   // on the way down doesn't get treated as "left the menu" and slam it shut.
@@ -972,7 +954,6 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
     });
   }
   wireHoverDropdown('fpnav-browse-btn', 'fpnav-browse-dropdown');
-  wireHoverDropdown('fpnav-community-btn', 'fpnav-community-dropdown');
   document.addEventListener('click', (e) => {
     if (e.target.closest('.fpnav-dropdown-wrap')) return;
     closeAllDropdowns();
