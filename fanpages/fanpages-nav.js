@@ -562,20 +562,20 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
 
       <a class="fpnav-link fpnav-link--clubs${here === fpUrl('/social') ? ' active' : ''}" href="${fpUrl('/social')}">Clubs</a>
 
-      <div class="fpnav-dropdown-wrap fpnav-desktop-only-action">
-        <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
-        <div class="fpnav-dropdown" id="fpnav-upload-dropdown" hidden>
-          <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
-          <div class="fpnav-dropdown-divider"></div>
-          <a href="${fpUrl('/upload')}" data-gate="${fpUrl('/upload')}"><span class="fpnav-plus-badge">+</span> Upload</a>
-        </div>
-      </div>
-
       <div class="fpnav-search">
         <button class="fpnav-search-icon" id="fpnav-search-icon-btn" type="button" aria-label="Search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
         <input type="search" id="fpnav-search-input" placeholder="Search" />
       </div>
       <div class="fpnav-right">
+
+        <div class="fpnav-dropdown-wrap fpnav-desktop-only-action">
+          <button class="fpnav-trigger-btn" id="fpnav-upload-btn" type="button">Create <span class="fpnav-caret">▾</span></button>
+          <div class="fpnav-dropdown" id="fpnav-upload-dropdown" hidden>
+            <a href="${fpUrl('/editor')}" data-gate="${fpUrl('/editor')}">Creator Hub</a>
+            <div class="fpnav-dropdown-divider"></div>
+            <a href="${fpUrl('/upload')}" data-gate="${fpUrl('/upload')}"><span class="fpnav-plus-badge">+</span> Upload</a>
+          </div>
+        </div>
 
         <div class="fpnav-level-badge" id="fpnav-level-badge" style="display:none;" title="">
           <div class="fpnav-level-circle" id="fpnav-level-circle"></div>
