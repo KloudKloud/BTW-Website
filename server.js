@@ -2283,12 +2283,19 @@ app.get('/api/discord/link/start', requireAuth, (req, res) => {
 });
 
 app.get('/api/discord/callback', async (req, res) => {
-  const arcadeUrl = `${process.env.SITE_HOST || 'https://btwfics.net'}/fanpages/arcade`;
+  // SITE_HOST is a bare domain with no scheme, so it can't be used as a redirect
+  // target. Build an absolute https URL from the host the user arrived on (the
+  // registered redirect URI's domain), defaulting to btwfics.net.
+  const reqHost = req.get('host');
+  const arcadeUrl = `https://${ALLOWED_HOSTS.includes(reqHost) ? reqHost : 'btwfics.net'}/fanpages/arcade`;
   if (!discordConfigured()) return res.redirect(`${arcadeUrl}?discord=error&reason=not_configured`);
   const { code, state } = req.query;
   let uid;
   try {
-    uid = jwt.verify(state, process.env.JWT_SECRET).uid;
+    const payload = jwt.verify(state, process.env.JWT_SECRET);
+    // Only a token minted by /link/start counts, not any other JWT signed with this secret.
+    if (payload.purpose !== 'discord_link') throw new Error('wrong state purpose');
+    uid = payload.uid;
   } catch {
     return res.redirect(`${arcadeUrl}?discord=error&reason=expired`);
   }
