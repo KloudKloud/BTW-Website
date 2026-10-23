@@ -2971,7 +2971,12 @@
     selectFpCharacter(id, scroll);
     syncScrollBgHeight();
   }
+  let charDetailBackIsHome = false;
   function closeCharDetail() {
+    if (charDetailBackIsHome) {
+      window.location.href = window.fpUrl('/');
+      return;
+    }
     clearTimeout(pendingViewTimer);
     document.getElementById('fp-chars-detail-view').hidden = true;
     document.getElementById('fp-chars-grid-view').hidden = false;
@@ -5027,6 +5032,10 @@
   if (deepGalleryId) {
     window.location.replace(window.fpUrl(`/gallery-post?id=${encodeURIComponent(deepGalleryId)}`));
   } else if (initialTab === 'characters' && deepCharId) {
+    // Arrived via the homepage Character Spotlight (?char=&from=home) --
+    // "Back" should return to the homepage instead of this profile's own
+    // character grid, since the viewer never chose to browse this profile.
+    if (deepParams.get('from') === 'home') charDetailBackIsHome = true;
     loadCharactersTab().then(() => openCharDetail(deepCharId, true));
   }
 </script>
