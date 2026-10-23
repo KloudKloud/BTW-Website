@@ -34,17 +34,10 @@
     .lv-hero {
       display: flex; align-items: center; gap: 1.8rem; flex-wrap: wrap;
       border-radius: 20px; padding: 2rem; position: relative; overflow: hidden;
+      background-image: linear-gradient(160deg, rgba(10,8,20,0.55), rgba(10,8,20,0.78)), url('/images/home/potential-box-background.png');
+      background-size: cover; background-position: center;
       border: 1px solid rgba(255,255,255,0.12);
       box-shadow: 0 14px 50px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08);
-    }
-    /* Blurred backdrop layer (not a direct background-image) so the blur
-       filter doesn't also soften the avatar/text sitting on top of it --
-       .lv-hero is flex, so this ::before (z-index:auto, first in tree
-       order) naturally paints beneath the real flex-item children. */
-    .lv-hero::before {
-      content: ''; position: absolute; inset: -10px;
-      background-image: linear-gradient(160deg, rgba(10,8,20,0.55), rgba(10,8,20,0.78)), url('/images/home/potential-box-background.png');
-      background-size: cover; background-position: center; filter: blur(4px);
     }
     .lv-hero-avatar-wrap {
       width: 128px; height: 128px; border-radius: 20px; flex-shrink: 0; overflow: hidden;
@@ -98,15 +91,10 @@
     /* ── Stat tiles ────────────────────────────────────────────────────── */
     .lv-stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-top: 1.4rem; }
     .lv-stat-tile {
-      border-radius: 14px; padding: 1rem 1.1rem; text-align: center; position: relative; overflow: hidden;
-      border: 1px solid rgba(255,255,255,0.12);
-    }
-    /* Same blurred-backdrop trick as .lv-hero -- negative z-index keeps it
-       beneath the (non-flex, normal in-flow) number/label text. */
-    .lv-stat-tile::before {
-      content: ''; position: absolute; inset: -8px; z-index: -1;
+      border-radius: 14px; padding: 1rem 1.1rem; text-align: center;
       background-image: linear-gradient(160deg, rgba(6,6,16,0.55), rgba(6,6,16,0.75)), url('/images/home/box-background-2.png');
-      background-size: cover; background-position: center; filter: blur(4px);
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(255,255,255,0.12);
     }
     .lv-stat-tile .lv-stat-num {
       font-size: 1.6rem; font-weight: 700; font-family: 'Fredoka', cursive; color: #ffffff;
@@ -157,10 +145,16 @@
     /* ── Banner row: almost-full-width admin-managed image carousel, with a
        narrow side column holding a shrunk/rectangular Leaderboard box and
        the Recent Activity box stacked underneath it. Mirrors the Home
-       hero's "main area + narrow flanking side boxes" shape. ───────────── */
-    .lv-banner-row { display: flex; gap: 1.6rem; align-items: stretch; }
+       hero's "main area + narrow flanking side boxes" shape. The banner is
+       deliberately NOT as tall as the side column -- JS (syncBannerHeight)
+       pins its top to the vertical midpoint of the Leaderboard box and its
+       bottom to the midpoint of the Recent Activity box, via margin-top +
+       height, so it reads as a shorter, less-square strip "threaded"
+       between the two side boxes rather than matching their full span. The
+       height/margin-top below are just a pre-JS fallback. ─────────────── */
+    .lv-banner-row { display: flex; gap: 1.6rem; align-items: flex-start; }
     .lv-banner-main {
-      flex: 1; min-width: 0; position: relative; min-height: 340px; border-radius: 16px; overflow: hidden;
+      flex: 1; min-width: 0; position: relative; height: 200px; border-radius: 16px; overflow: hidden;
       border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 10px 40px rgba(0,0,0,0.4); background: #0a0812;
     }
     .lv-banner-slide {
@@ -196,7 +190,11 @@
       /* flex:1 (flex-basis:0) only grows into space the column already has,
          but an auto-height column container has none to give -- pin an
          explicit height here instead of relying on flex-grow. */
-      .lv-banner-main { flex: none; height: 200px; }
+      /* align-items is flex-start on desktop now (not stretch), which in
+         column mode controls the cross axis (width) -- without an explicit
+         width here the banner collapses to its own intrinsic (near-zero)
+         width instead of filling the column. */
+      .lv-banner-main { flex: none; width: 100%; height: 200px; }
       .lv-banner-side { width: 100%; }
       .lv-stats-row { grid-template-columns: repeat(2, 1fr); }
     }
@@ -407,6 +405,7 @@ async function loadLevelHub() {
     document.getElementById('lv-loading').hidden = true;
     document.getElementById('lv-content').hidden = false;
     syncBgHeight();
+    syncBannerHeight();
   } catch (e) {
     document.getElementById('lv-loading').textContent = "Couldn't load your level data — try refreshing.";
   }
@@ -481,10 +480,39 @@ function renderLeaderboard(which) {
       <div class="lv-lb-xp">${r.xp.toLocaleString()} XP</div>
     </div>
   `).join('');
+  syncBannerHeight();
 }
 
 document.getElementById('lv-lb-tab-weekly').addEventListener('click', () => renderLeaderboard('weekly'));
 document.getElementById('lv-lb-tab-global').addEventListener('click', () => renderLeaderboard('global'));
+
+// Pins the banner's top to the vertical midpoint of the Leaderboard box and
+// its bottom to the midpoint of the Recent Activity box underneath it, so
+// it reads as a shorter strip "threaded" between the two rather than
+// matching their full combined height. Measures via getBoundingClientRect
+// deltas (relative to the row's own top) rather than offsetTop -- offsetTop
+// is relative to the nearest *positioned* ancestor (here, .lv-content-z,
+// much further up the page), not to the row itself, so using it directly
+// as a margin-top way overshoots. No-op (clears any inline override) below
+// the 860px breakpoint where the row collapses to a single column.
+function syncBannerHeight() {
+  const row = document.querySelector('.lv-banner-row');
+  const main = document.getElementById('lv-banner-main');
+  const boxes = document.querySelectorAll('.lv-banner-side .lv-box');
+  if (!main || !row) return;
+  if (boxes.length < 2 || window.innerWidth <= 860) {
+    main.style.marginTop = '';
+    main.style.height = '';
+    return;
+  }
+  const rowTop = row.getBoundingClientRect().top;
+  const r1 = boxes[0].getBoundingClientRect();
+  const r2 = boxes[1].getBoundingClientRect();
+  const mid1 = (r1.top - rowTop) + r1.height / 2;
+  const mid2 = (r2.top - rowTop) + r2.height / 2;
+  main.style.marginTop = `${mid1}px`;
+  main.style.height = `${Math.max(80, mid2 - mid1)}px`;
+}
 
 function syncBgHeight() {
   const bgEl = document.getElementById('lv-bg-img');
@@ -493,8 +521,11 @@ function syncBgHeight() {
   bgEl.style.height = h;
 }
 let bgResizeTimer = null;
-window.addEventListener('resize', () => { clearTimeout(bgResizeTimer); bgResizeTimer = setTimeout(syncBgHeight, 200); });
-window.addEventListener('load', syncBgHeight);
+window.addEventListener('resize', () => {
+  clearTimeout(bgResizeTimer);
+  bgResizeTimer = setTimeout(() => { syncBgHeight(); syncBannerHeight(); }, 200);
+});
+window.addEventListener('load', () => { syncBgHeight(); syncBannerHeight(); });
 
 if (token) {
   loadLevelHub();
