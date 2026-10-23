@@ -160,6 +160,7 @@
     .lv-banner-slide {
       position: absolute; inset: 0; opacity: 0; transition: opacity 0.7s ease;
       background-size: cover; background-position: center; display: block;
+      background-repeat: no-repeat;
     }
     .lv-banner-slide.active { opacity: 1; z-index: 1; }
     .lv-banner-main > a { position: absolute; inset: 0; display: block; }
@@ -355,6 +356,41 @@ let LV_BANNER_SLIDES = [];
 let lvBannerIdx = 0;
 let lvBannerTimer = null;
 
+// Same admin-cropped background-size/position technique as the Fanpages
+// hub billboard (position_x/position_y/zoom, cover-fit then zoomed/panned
+// relative to that) instead of a plain CSS `background-size: cover` --
+// lets the Admin → Levels Banner crop editor's choice actually take effect
+// here instead of every slide just auto-centering.
+const lvBannerImgDims = {};
+function lvLoadImageDims(url) {
+  if (lvBannerImgDims[url]) return Promise.resolve(lvBannerImgDims[url]);
+  return new Promise(resolve => {
+    const probe = new Image();
+    probe.onload = () => { const d = { w: probe.naturalWidth || 1, h: probe.naturalHeight || 1 }; lvBannerImgDims[url] = d; resolve(d); };
+    probe.onerror = () => resolve({ w: 1, h: 1 });
+    probe.src = url;
+  });
+}
+function lvCoverBgSize(dims, boxW, boxH, zoomPercent) {
+  const scale = Math.max(boxW / dims.w, boxH / dims.h) || 1;
+  const renderedW = dims.w * scale, renderedH = dims.h * scale;
+  const factor = (zoomPercent || 100) / 100;
+  return { w: (renderedW / (boxW || 1)) * 100 * factor, h: (renderedH / (boxH || 1)) * 100 * factor };
+}
+function lvApplyBannerCrop() {
+  const main = document.getElementById('lv-banner-main');
+  const boxW = main.clientWidth, boxH = main.clientHeight;
+  if (!boxW || !boxH) return;
+  main.querySelectorAll('.lv-banner-slide').forEach((el, i) => {
+    const slide = LV_BANNER_SLIDES[i];
+    const dims = slide && lvBannerImgDims[slide.image_url];
+    if (!slide || !dims) return;
+    const size = lvCoverBgSize(dims, boxW, boxH, slide.zoom);
+    el.style.backgroundSize = `${size.w}% ${size.h}%`;
+    el.style.backgroundPosition = `${slide.position_x}% ${slide.position_y}%`;
+  });
+}
+
 async function loadLevelsBanner() {
   const main = document.getElementById('lv-banner-main');
   try {
@@ -370,6 +406,8 @@ async function loadLevelsBanner() {
   }
   lvBannerIdx = 0;
   renderLevelsBanner();
+  await Promise.all(LV_BANNER_SLIDES.map(s => lvLoadImageDims(s.image_url)));
+  lvApplyBannerCrop();
   if (LV_BANNER_SLIDES.length > 1) {
     clearInterval(lvBannerTimer);
     lvBannerTimer = setInterval(() => {
@@ -389,6 +427,7 @@ function renderLevelsBanner() {
     ? `<div class="lv-banner-dots">${LV_BANNER_SLIDES.map((_, i) => `<div class="lv-banner-dot${i === lvBannerIdx ? ' active' : ''}"></div>`).join('')}</div>`
     : '';
   main.innerHTML = slidesHtml + dotsHtml;
+  lvApplyBannerCrop();
 }
 
 async function loadLevelHub() {
@@ -503,6 +542,7 @@ function syncBannerHeight() {
   if (boxes.length < 2 || window.innerWidth <= 860) {
     main.style.marginTop = '';
     main.style.height = '';
+    if (typeof lvApplyBannerCrop === 'function') lvApplyBannerCrop();
     return;
   }
   const rowTop = row.getBoundingClientRect().top;
@@ -512,6 +552,7 @@ function syncBannerHeight() {
   const bottom = (r2.top - rowTop) + r2.height * (2 / 3);
   main.style.marginTop = `${top}px`;
   main.style.height = `${Math.max(80, bottom - top)}px`;
+  if (typeof lvApplyBannerCrop === 'function') lvApplyBannerCrop();
 }
 
 function syncBgHeight() {

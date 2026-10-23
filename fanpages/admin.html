@@ -15,7 +15,7 @@
        just its own image positioning for BtwCropper's pan/zoom contract
        (see btw-cropper.js) via the wrap's own ID instead of touching the
        shared rule. */
-    #hb-editor-img-wrap img {
+    #hb-editor-img-wrap img, #lvb-editor-img-wrap img {
       width: auto; height: auto; max-width: none; object-fit: none;
       position: absolute; top: 0; left: 0; transform-origin: 0 0;
     }
@@ -124,14 +124,13 @@
     .hb-card-empty-text { font-size: 0.82rem; color: #666; font-style: italic; margin-bottom: 0.6rem; }
     .hb-card-actions { display: flex; gap: 0.5rem; }
     .hb-empty-state { color: #999; font-size: 0.92rem; padding: 2rem 0; text-align: center; }
-    .lvb-add-form { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
-    .lvb-add-form input[type="file"] { color: #ccc; font-size: 0.85rem; }
-    .lvb-add-form input[type="text"] {
-      flex: 1; min-width: 220px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 8px; padding: 0.55rem 0.8rem; color: #f0f0f0; font-size: 0.88rem;
-    }
-    .lvb-card-img-wrap { position: relative; width: 100%; aspect-ratio: 21 / 9; overflow: hidden; background: #1a1a1a; }
-    .lvb-card-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+    /* 2.003:1 is the live banner's own measured desktop aspect ratio
+       (774x387 at full width, threaded between the Leaderboard/Activity
+       boxes on /fanpages/levels) -- the crop editor and card preview use
+       this instead of the Bulletin's 21:9 so what's shown here matches
+       what the live page actually renders, not a generic widescreen guess. */
+    .lvb-card-img-wrap { position: relative; width: 100%; aspect-ratio: 2.003 / 1; overflow: hidden; background: #1a1a1a; }
+    .lvb-card-img-wrap .hb-preview-bg { background-repeat: no-repeat; }
     .hb-sliders-caption { text-align: center; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #999; margin-bottom: 0.5rem; }
     /* Bubbly Fredoka to match Character/Gallery/Story/Club Spotlight and
        Recent Submissions on the live hub, instead of the generic
@@ -340,15 +339,11 @@
   <!-- ══ Levels Banner ══════════════════════════════════════════════ -->
   <div class="adm-panel" id="adm-panel-levels">
     <h2 class="adm-section-title"><img src="/images/home/decoration-1.png" alt="" /> Levels Page Banner</h2>
-    <p class="hb-sub">Manage the images that cycle in the banner on the Levels page. Add or remove images here — no deploy needed. Images cycle in the order added; set a link to make a slide clickable.</p>
+    <p class="hb-sub">Manage the images that cycle in the banner on the Levels page. Add, crop, or remove slides here — no deploy needed. The crop box below matches the live banner's own aspect ratio, so what you see here is what shows up on the page. Slides cycle in the order added; set a link to make a slide clickable.</p>
 
-    <div class="lvb-add-form">
-      <input type="file" id="lvb-file-input" accept="image/*" />
-      <input type="text" id="lvb-link-input" placeholder="Optional link (https://...)" />
-      <button class="chars-create-btn" id="lvb-add-btn" type="button" style="max-width: 200px;">
-        <span class="chars-create-btn-icon">➕</span> Add Image
-      </button>
-    </div>
+    <button class="chars-create-btn" id="lvb-add-btn" type="button" style="max-width: 260px;">
+      <span class="chars-create-btn-icon">➕</span> Add New Slide
+    </button>
 
     <div class="hb-grid" id="lvb-grid"></div>
   </div>
@@ -582,6 +577,47 @@
   </div>
 </div>
 
+<!-- Levels Banner slide editor modal — same crop editor as the Bulletin's,
+     minus caption/credit/NSFW/VIP/animation (the Levels banner is just a
+     plain link carousel). -->
+<div class="char-editor-overlay" id="lvb-editor-overlay" hidden>
+  <div class="char-editor-modal">
+    <h2 class="char-editor-title" id="lvb-editor-title">Add New Slide</h2>
+
+    <div class="char-editor-ref-wrap" id="lvb-editor-img-wrap" style="max-width: 520px; aspect-ratio: 2.003 / 1; cursor: default;">
+      <img id="lvb-editor-crop-img" alt="" style="display:none;" draggable="false" />
+      <div class="char-editor-ref-placeholder" id="lvb-editor-img-placeholder">Click to upload an image</div>
+    </div>
+    <input type="file" id="lvb-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+    <button type="button" class="mod-btn mod-btn--small" id="lvb-editor-change-img-btn" style="display:none; margin: 0.6rem auto 1rem;">📷 Change Image</button>
+    <p class="char-editor-facts-hint">Drag to move, scroll or pinch to zoom. This crop box is the Levels page banner's own aspect ratio, so the preview here matches what goes live.</p>
+
+    <div class="mod-field">
+      <label for="lvb-link">Link <span style="font-weight:400;color:#888;">(optional — makes the slide clickable)</span></label>
+      <input class="mod-input" id="lvb-link" maxlength="300" placeholder="https:// or /path" />
+    </div>
+
+    <p class="mod-panel-msg" id="lvb-editor-msg"></p>
+
+    <div class="char-editor-actions">
+      <button class="mod-btn mod-btn--danger" id="lvb-editor-delete" type="button" style="display:none;">Delete</button>
+      <button class="mod-btn" id="lvb-editor-cancel" type="button">Cancel</button>
+      <button class="mod-btn" id="lvb-editor-save" type="button" disabled>Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="mod-confirm-overlay" id="lvb-delete-confirm-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title">Delete this slide?</p>
+    <p class="mod-confirm-text">This can't be undone.</p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="lvb-delete-confirm-cancel" type="button">Cancel</button>
+      <button class="mod-btn mod-btn--danger" id="lvb-delete-confirm-yes" type="button">Delete</button>
+    </div>
+  </div>
+</div>
+
 
 </div><!-- /.adm-content-z -->
 
@@ -626,6 +662,7 @@ function switchAdmTab(tab) {
   // own. Redo the sizing once the panel is actually visible and has real
   // dimensions to measure.
   if (tab === 'bulletin' && typeof refreshGridBgSizes === 'function') setTimeout(refreshGridBgSizes, 0);
+  if (tab === 'levels' && typeof refreshLvbGridBgSizes === 'function') setTimeout(refreshLvbGridBgSizes, 0);
 }
 ADM_TABS.forEach(t => document.getElementById(`adm-tab-${t}`).addEventListener('click', () => switchAdmTab(t)));
 window.addEventListener('hashchange', () => switchAdmTab(location.hash.slice(1)));
@@ -1429,11 +1466,53 @@ document.getElementById('adm-pending-merge-btn').addEventListener('click', async
 });
 
 /* ═══════════════════════════════════════════════════════════════════════
-   Levels Banner — plain ordered image list, same minimal add/delete-only
-   pattern as the arcade banner (no crop/caption editor, just an image and
-   an optional link).
+   Levels Banner — same drag/zoom crop editor + card-grid-with-modal pattern
+   as the Bulletin (Hub Image Builder) above, minus caption/credit/NSFW/VIP/
+   animation (the Levels banner is a plain link carousel). The crop box's
+   aspect ratio (2.003:1) is the live banner's own measured desktop render
+   size, not a generic guess, so the preview here matches what goes live.
+   Reuses the Bulletin's loadImageDims()/coverBgSize()/imgDimsCache helpers
+   defined earlier in this script, and the shared BtwCropper component.
    ═══════════════════════════════════════════════════════════════════════ */
 let levelsBannerSlides = [];
+let lvbCropper = null;
+let lvbEditingId = null;
+let lvbSelectedFile = null;
+let lvbPos = { x: 50, y: 50, zoom: 100 };
+let lvbCurrentImageUrl = null;
+
+function lvbCropperToPosition(cropper) {
+  const pos = cropper.getPositionFraction();
+  return {
+    x: Math.round(pos.x * 100),
+    y: Math.round(pos.y * 100),
+    zoom: Math.max(100, Math.min(400, Math.round((cropper.getZoom() / cropper.getMinZoom()) * 100))),
+  };
+}
+function lvbApplyPositionToCropper(cropper, pos) {
+  cropper.setZoom(cropper.getMinZoom() * ((pos.zoom || 100) / 100));
+  cropper.setPositionFraction({ x: (pos.x || 50) / 100, y: (pos.y || 50) / 100 });
+}
+function lvbSaveCropperToPosition() {
+  if (!lvbCropper) return;
+  lvbPos = lvbCropperToPosition(lvbCropper);
+}
+function lvbInitCropper(imageSrc, initialPos) {
+  const img = document.getElementById('lvb-editor-crop-img');
+  const wrap = document.getElementById('lvb-editor-img-wrap');
+  if (lvbCropper) { lvbCropper.destroy(); lvbCropper = null; }
+  img.removeAttribute('src');
+  img.style.display = 'block';
+  document.getElementById('lvb-editor-img-placeholder').style.display = 'none';
+  document.getElementById('lvb-editor-change-img-btn').style.display = 'block';
+  img.onload = () => {
+    requestAnimationFrame(() => {
+      lvbCropper = new BtwCropper(img, wrap, { onChange: lvbSaveCropperToPosition });
+      lvbApplyPositionToCropper(lvbCropper, initialPos);
+    });
+  };
+  img.src = imageSrc;
+}
 
 async function loadLevelsBannerSlides() {
   const res = await fetch('/api/levels/banner-slides', { headers: authHeaders() });
@@ -1445,7 +1524,7 @@ async function loadLevelsBannerSlides() {
 function renderLevelsBannerGrid() {
   const grid = document.getElementById('lvb-grid');
   if (!levelsBannerSlides.length) {
-    grid.innerHTML = '<p class="hb-empty-state">No images yet — add one to start the banner cycling!</p>';
+    grid.innerHTML = '<p class="hb-empty-state">No slides yet — add one to start the banner cycling!</p>';
     return;
   }
   grid.innerHTML = '';
@@ -1453,44 +1532,185 @@ function renderLevelsBannerGrid() {
     const card = document.createElement('div');
     card.className = 'hb-card';
     card.innerHTML = `
-      <div class="lvb-card-img-wrap"><img src="${slide.image_url}" alt="" /></div>
+      <div class="lvb-card-img-wrap"><div class="hb-preview-bg"></div></div>
       <div class="hb-card-body">
         ${slide.link ? `<p class="hb-card-credit">Links to: ${escapeHtml(slide.link)}</p>` : '<p class="hb-card-empty-text">No link</p>'}
         <div class="hb-card-actions">
-          <button class="mod-btn mod-btn--small" type="button">Delete</button>
+          <button class="mod-btn mod-btn--small" type="button">Edit</button>
         </div>
       </div>
     `;
-    card.querySelector('.hb-card-actions button').addEventListener('click', () => deleteLevelsBannerSlide(slide.id));
+    card.querySelector('.hb-card-actions button').addEventListener('click', () => openLevelsBannerEditor(slide));
     grid.appendChild(card);
+
+    loadImageDims(slide.image_url).then(dims => {
+      const bg = card.querySelector('.hb-preview-bg');
+      const boxW = bg.clientWidth, boxH = bg.clientHeight;
+      const size = coverBgSize(dims, boxW, boxH, slide.zoom);
+      bg.style.backgroundImage = `url(${slide.image_url})`;
+      bg.style.backgroundSize = `${size.w}% ${size.h}%`;
+      bg.style.backgroundPosition = `${slide.position_x}% ${slide.position_y}%`;
+    });
   });
 }
 
-document.getElementById('lvb-add-btn').addEventListener('click', async () => {
-  const fileInput = document.getElementById('lvb-file-input');
-  const linkInput = document.getElementById('lvb-link-input');
-  if (!fileInput.files[0]) { alert('Pick an image first.'); return; }
+// Same fix as refreshGridBgSizes() above -- loadLevelsBannerSlides() runs at
+// boot while the Levels panel is still display:none, which bakes in a bogus
+// 0%/0% background-size that a plain re-render won't correct.
+function refreshLvbGridBgSizes() {
+  const grid = document.getElementById('lvb-grid');
+  const cards = grid.querySelectorAll('.hb-card');
+  cards.forEach((card, i) => {
+    const slide = levelsBannerSlides[i];
+    const dims = slide && imgDimsCache[slide.image_url];
+    if (!slide || !dims) return;
+    const bg = card.querySelector('.hb-preview-bg');
+    const boxW = bg.clientWidth, boxH = bg.clientHeight;
+    if (!boxW || !boxH) return;
+    const size = coverBgSize(dims, boxW, boxH, slide.zoom);
+    bg.style.backgroundSize = `${size.w}% ${size.h}%`;
+    bg.style.backgroundPosition = `${slide.position_x}% ${slide.position_y}%`;
+  });
+}
+
+function lvbUpdateSaveButtonState() {
+  const hasImage = !!lvbSelectedFile || !!lvbEditingId;
+  document.getElementById('lvb-editor-save').disabled = !hasImage;
+}
+
+async function openLevelsBannerEditor(slide) {
+  lvbEditingId = slide ? slide.id : null;
+  lvbSelectedFile = null;
+
+  document.getElementById('lvb-editor-title').textContent = slide ? 'Edit Slide' : 'Add New Slide';
+  document.getElementById('lvb-editor-delete').style.display = slide ? '' : 'none';
+  document.getElementById('lvb-editor-save').textContent = slide ? 'Save and Close' : 'Create';
+
+  const placeholder = document.getElementById('lvb-editor-img-placeholder');
+  if (slide) {
+    lvbCurrentImageUrl = slide.image_url;
+    placeholder.style.display = 'none';
+    lvbPos = { x: slide.position_x, y: slide.position_y, zoom: slide.zoom || 100 };
+    lvbInitCropper(slide.image_url, lvbPos);
+  } else {
+    lvbCurrentImageUrl = null;
+    placeholder.style.display = 'block';
+    document.getElementById('lvb-editor-crop-img').style.display = 'none';
+    document.getElementById('lvb-editor-change-img-btn').style.display = 'none';
+    if (lvbCropper) { lvbCropper.destroy(); lvbCropper = null; }
+    lvbPos = { x: 50, y: 50, zoom: 100 };
+  }
+
+  document.getElementById('lvb-link').value = slide ? (slide.link || '') : '';
+  document.getElementById('lvb-editor-msg').textContent = '';
+  lvbUpdateSaveButtonState();
+
+  document.getElementById('lvb-editor-overlay').hidden = false;
+}
+function closeLevelsBannerEditor() {
+  document.getElementById('lvb-editor-overlay').hidden = true;
+}
+document.getElementById('lvb-add-btn').addEventListener('click', () => openLevelsBannerEditor(null));
+document.getElementById('lvb-editor-cancel').addEventListener('click', closeLevelsBannerEditor);
+
+document.getElementById('lvb-editor-img-placeholder').addEventListener('click', () => {
+  document.getElementById('lvb-editor-file-input').click();
+});
+document.getElementById('lvb-editor-change-img-btn').addEventListener('click', () => {
+  document.getElementById('lvb-editor-file-input').click();
+});
+document.getElementById('lvb-editor-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  lvbSelectedFile = file;
+  const objectUrl = URL.createObjectURL(file);
+  lvbCurrentImageUrl = objectUrl;
+  document.getElementById('lvb-editor-img-placeholder').style.display = 'none';
+  lvbPos = { x: 50, y: 50, zoom: 100 };
+  lvbInitCropper(objectUrl, lvbPos);
+  lvbUpdateSaveButtonState();
+});
+
+document.getElementById('lvb-editor-save').addEventListener('click', async () => {
+  const msgEl = document.getElementById('lvb-editor-msg');
+  msgEl.textContent = '';
+
+  if (!lvbEditingId && !lvbSelectedFile) {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Please upload an image.';
+    return;
+  }
+  lvbSaveCropperToPosition();
+
   const fd = new FormData();
-  fd.append('image', fileInput.files[0]);
-  fd.append('link', linkInput.value.trim());
-  const btn = document.getElementById('lvb-add-btn');
-  btn.disabled = true;
+  if (lvbSelectedFile) fd.append('image', lvbSelectedFile);
+  fd.append('position_x', lvbPos.x);
+  fd.append('position_y', lvbPos.y);
+  fd.append('zoom', lvbPos.zoom);
+  fd.append('link', document.getElementById('lvb-link').value.trim());
+
+  const saveBtn = document.getElementById('lvb-editor-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = lvbEditingId ? 'Saving…' : 'Creating…';
   try {
-    const res = await fetch('/api/admin/levels-banner', { method: 'POST', headers: authHeaders(), body: fd });
-    if (!res.ok) { alert('Failed to add image.'); return; }
-    fileInput.value = '';
-    linkInput.value = '';
+    const url = lvbEditingId ? `/api/admin/levels-banner/${lvbEditingId}` : '/api/admin/levels-banner';
+    const method = lvbEditingId ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: authHeaders(), body: fd });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+      msgEl.textContent = data.error || 'Something went wrong. Please try again.';
+      return;
+    }
+    closeLevelsBannerEditor();
     await loadLevelsBannerSlides();
+  } catch {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Network error. Please try again.';
   } finally {
-    btn.disabled = false;
+    saveBtn.disabled = false;
+    saveBtn.textContent = lvbEditingId ? 'Save and Close' : 'Create';
   }
 });
 
-async function deleteLevelsBannerSlide(id) {
-  if (!confirm('Remove this image from the banner?')) return;
-  await fetch(`/api/admin/levels-banner/${id}`, { method: 'DELETE', headers: authHeaders() });
-  await loadLevelsBannerSlides();
+function lvbConfirmDelete() {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('lvb-delete-confirm-overlay');
+    const yesBtn = document.getElementById('lvb-delete-confirm-yes');
+    const cancelBtn = document.getElementById('lvb-delete-confirm-cancel');
+    overlay.hidden = false;
+    const cleanup = (result) => {
+      overlay.hidden = true;
+      yesBtn.removeEventListener('click', onYes);
+      cancelBtn.removeEventListener('click', onCancel);
+      resolve(result);
+    };
+    const onYes = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    yesBtn.addEventListener('click', onYes);
+    cancelBtn.addEventListener('click', onCancel);
+  });
 }
+
+document.getElementById('lvb-editor-delete').addEventListener('click', async () => {
+  if (!lvbEditingId) return;
+  if (!await lvbConfirmDelete()) return;
+
+  const deleteBtn = document.getElementById('lvb-editor-delete');
+  deleteBtn.disabled = true;
+  deleteBtn.textContent = 'Deleting…';
+  try {
+    await fetch(`/api/admin/levels-banner/${lvbEditingId}`, { method: 'DELETE', headers: authHeaders() });
+    closeLevelsBannerEditor();
+    await loadLevelsBannerSlides();
+  } catch {
+    document.getElementById('lvb-editor-msg').className = 'mod-panel-msg mod-panel-msg--error';
+    document.getElementById('lvb-editor-msg').textContent = 'Failed to delete. Please try again.';
+  } finally {
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = 'Delete';
+  }
+});
 
 /* ═══════════════════════════════════════════════════════════════════════
    Boot — one shared admin gate for the whole page.

@@ -912,8 +912,10 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     );
   `).catch(e => console.error('arcade_banner_slides migration:', e.message));
 
-  // Levels page banner — same plain ordered-image-carousel pattern as the
-  // arcade banner above, admin-managed from Admin → Levels Banner.
+  // Levels page banner — admin-managed carousel on /fanpages/levels, with
+  // the same drag/zoom crop editor as the hub billboard (position_x/y/zoom)
+  // rather than the arcade banner's raw-image-only pattern, since the live
+  // banner box's aspect ratio doesn't match most uploads' native crop.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS levels_banner_slides (
       id         SERIAL      PRIMARY KEY,
@@ -923,6 +925,11 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `).catch(e => console.error('levels_banner_slides migration:', e.message));
+  await pool.query(`
+    ALTER TABLE levels_banner_slides ADD COLUMN IF NOT EXISTS position_x INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE levels_banner_slides ADD COLUMN IF NOT EXISTS position_y INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE levels_banner_slides ADD COLUMN IF NOT EXISTS zoom INTEGER NOT NULL DEFAULT 100;
+  `).catch(e => console.error('levels_banner_slides crop migration:', e.message));
 
   // Notifications — the bell icon on Fanpages. Covers system messages (the
   // welcome note) today; bookmark/follow/like/comment/social activity gets
@@ -4400,8 +4407,10 @@ app.delete('/api/admin/arcade-banner/:id', requireAuth, requireAdmin, async (req
   res.json({ message: 'Deleted.' });
 });
 
-// ── Levels page banner — same plain ordered image carousel as the arcade
-// banner above, admin-managed from Admin → Levels Banner. ───────────────────
+// ── Levels page banner — admin-managed carousel on /fanpages/levels, with a
+// drag/zoom crop editor (same position_x/position_y/zoom pattern as the hub
+// billboard) since the live banner box's aspect ratio rarely matches an
+// upload's native crop. ──────────────────────────────────────────────────
 app.get('/api/levels/banner-slides', async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM levels_banner_slides ORDER BY sort_order, id');
   res.json({ slides: rows });
@@ -4409,11 +4418,39 @@ app.get('/api/levels/banner-slides', async (req, res) => {
 
 app.post('/api/admin/levels-banner', requireAuth, requireAdmin, uploadModImage.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const positionX = clampPosition(req.body.position_x);
+  const positionY = clampPosition(req.body.position_y);
+  const zoom = clampZoom(req.body.zoom, 100);
   const imageUrl = `/images/moderators/${req.file.filename}`;
   const { rows: [{ maxOrder }] } = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM levels_banner_slides');
   const { rows: [slide] } = await pool.query(
-    'INSERT INTO levels_banner_slides (image_url, link, sort_order) VALUES ($1, $2, $3) RETURNING *',
-    [imageUrl, cleanLinkUrl(req.body.link), maxOrder + 1]
+    'INSERT INTO levels_banner_slides (image_url, position_x, position_y, zoom, link, sort_order) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+    [imageUrl, positionX, positionY, zoom, cleanLinkUrl(req.body.link), maxOrder + 1]
+  );
+  res.json({ slide });
+});
+
+app.put('/api/admin/levels-banner/:id', requireAuth, requireAdmin, uploadModImage.single('image'), async (req, res) => {
+  const { rows: [existing] } = await pool.query('SELECT * FROM levels_banner_slides WHERE id = $1', [req.params.id]);
+  if (!existing) return res.status(404).json({ error: 'Not found.' });
+
+  const positionX = req.body.position_x !== undefined ? clampPosition(req.body.position_x) : existing.position_x;
+  const positionY = req.body.position_y !== undefined ? clampPosition(req.body.position_y) : existing.position_y;
+  const zoom = req.body.zoom !== undefined ? clampZoom(req.body.zoom, existing.zoom) : existing.zoom;
+  const link = req.body.link !== undefined ? cleanLinkUrl(req.body.link) : existing.link;
+
+  let imageUrl = existing.image_url;
+  if (req.file) {
+    imageUrl = `/images/moderators/${req.file.filename}`;
+    if (existing.image_url.startsWith('/images/moderators/')) {
+      const oldPath = path.join('/var/www/btw', existing.image_url);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+  }
+
+  const { rows: [slide] } = await pool.query(
+    'UPDATE levels_banner_slides SET image_url = $1, position_x = $2, position_y = $3, zoom = $4, link = $5 WHERE id = $6 RETURNING *',
+    [imageUrl, positionX, positionY, zoom, link, existing.id]
   );
   res.json({ slide });
 });
