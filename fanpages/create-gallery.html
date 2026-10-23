@@ -25,6 +25,11 @@
        overlay use-case — here the page itself scrolls, so the box should
        just grow to fit its content instead of being capped mid-form. */
     .char-editor-modal { margin: 0 auto; max-height: none; overflow-y: visible; }
+    /* Link To: split out of the main card into its own second card (same
+       background treatment, via .cg-page .char-editor-modal below)
+       instead of living as a sub-box at the bottom of one long card --
+       just a gap between the two. */
+    .cg-linkto-modal { margin-top: 2rem; }
 
     /* The shared .char-editor-ref-wrap forces a fixed aspect-ratio box with
        object-fit:cover, which is right for a character ref square but chops
@@ -137,22 +142,22 @@
        undecorated by the in-story gallery modal.
        This card is a full scrolling form (2000px+ tall), not a compact
        ~400px popup, and box-background-3.png has a bright moon baked into
-       it -- `background-size: cover` zoomed in hard enough to crush the
-       art to a sliver (same "cover zooms in harder the taller the
-       container" issue as the homepage's video sections), tiling it
-       repeated that moon as a distracting column of duplicate glows (the
-       "weird glow on the right side"), and `background-attachment: fixed`
-       only painted it for one viewport's height, leaving the rest of the
-       card plain black below the fold. Landed on treating it like a
-       banner instead: shown once, sized to the card's own width (no crop,
-       no zoom, no repeat) at the top, with the scrim gradient ramping up
-       to fully opaque by the time the image's own height runs out -- so
-       it reads as one consistent art-topped card fading into a solid
-       panel, not an abrupt cutoff or a duplicated moon. */
+       it. Earlier attempts: tiling repeated that moon as a distracting
+       column of duplicate glows down the right side; `background-
+       attachment: fixed` only painted it for one viewport's height,
+       leaving the rest plain black below the fold; sizing it to the
+       card's own width and not repeating left the remainder of the card
+       uncovered past the image's natural height, cutting off a third of
+       the way down. `background-size: cover` with no repeat is the one
+       setting that's actually guaranteed to fill the whole box top to
+       bottom by definition (that's what "cover" means) with only ONE
+       instance of the image, so the moon shows exactly once -- it just
+       needed a lighter scrim than the ~400px gate-popup cards use (their
+       rgba(...,0.88/0.82) crushed this much taller card to near-black). */
     .cg-page .char-editor-modal {
-      background-image: linear-gradient(to bottom, rgba(10,8,14,0.35) 0%, rgba(10,8,14,0.6) 16%, rgba(10,8,14,0.97) 32%, rgba(10,8,14,0.97) 100%), url('/images/home/box-background-3.png');
-      background-size: auto, 100% auto;
-      background-position: center top, center top;
+      background-image: linear-gradient(160deg, rgba(10,8,14,0.55), rgba(10,8,14,0.42)), url('/images/home/box-background-3.png');
+      background-size: cover, cover;
+      background-position: center, center;
       background-repeat: no-repeat, no-repeat;
       border-top: 3px solid #1fb6a8;
     }
@@ -352,6 +357,11 @@
       </div>
     </div>
 
+  </div>
+
+  <div class="char-editor-modal cg-linkto-modal">
+    <h2 class="char-editor-title editor-title-glow" style="font-size:1.5rem;">Links</h2>
+
     <div class="mod-field gallery-linkto-box">
       <label>Link To:</label>
 
@@ -452,8 +462,11 @@
   // when the form's dirty. A second, custom confirm() on the Cancel click
   // itself used to stack a duplicate prompt on top of that; removed.
   let cgDirty = false;
-  document.querySelector('.char-editor-modal').addEventListener('input', () => { cgDirty = true; }, true);
-  document.querySelector('.char-editor-modal').addEventListener('change', () => { cgDirty = true; }, true);
+  // .cg-page, not .char-editor-modal -- the Link To fields now live in a
+  // second sibling .char-editor-modal, and querySelector only ever
+  // grabbed the first one anyway.
+  document.querySelector('.cg-page').addEventListener('input', () => { cgDirty = true; }, true);
+  document.querySelector('.cg-page').addEventListener('change', () => { cgDirty = true; }, true);
   window.addEventListener('beforeunload', (e) => {
     if (!cgDirty) return;
     e.preventDefault();
