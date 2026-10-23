@@ -60,10 +60,14 @@
     /* Profiles now shares the same potential-box-background wallpaper as
        Posts/Characters instead of the old main-background-4 video -- the
        video read as out-of-place next to every other tab's art-based
-       background. Stays fixed (not scroll-with-page like Posts' own)
-       since the Profiles results column is the thing that scrolls here
-       (see .fp-layout--profiles .fp-results-col below), not the page. */
-    .fp-bg-video--profiles { background-image: url('/images/home/potential-box-background.png'); filter: blur(4px); }
+       background. Also scrolls with the page now (position:absolute,
+       height set in JS), same as Posts -- the page itself is what scrolls
+       here, not a self-contained results column anymore. */
+    .fp-bg-video--profiles {
+      background-image: url('/images/home/potential-box-background.png');
+      filter: blur(4px);
+      position: absolute; top: 0; left: 0; right: 0; bottom: auto; height: 100vh;
+    }
     /* A couple of sparkle accents floating over the Posts wallpaper
        specifically -- scroll with it (position:absolute, same as the
        wallpaper itself) since it's one big image with no cards breaking
@@ -240,9 +244,11 @@
     .fp-layout--profiles { grid-template-columns: 250px 1fr; }
     .fp-layout--profiles .fp-filter-panel,
     .fp-layout--profiles .fp-filter-fab { display: none; }
-    /* Only this column scrolls -- same sticky/self-contained treatment as
-       the side panel, so the fixed background video underneath never has
-       to move (nothing else on the page scrolls to begin with). */
+    /* Scrolls with the main page now, same as every other tab -- the
+       sticky/self-contained scroller this column used to have (so the
+       background underneath never had to move) read as an out-of-place
+       "mini-scroller" floating inside the page. The background below
+       switches to the Posts-style scroll-with-page treatment instead. */
     .fp-layout--profiles .fp-results-col {
       /* width:100% is required alongside max-width here -- without it,
          margin:auto on a grid item with an otherwise-auto width makes the
@@ -250,8 +256,6 @@
          stretching to fill the grid column up to the cap. Back to
          centered (the left-hugging/widened version didn't land well). */
       width: 100%; max-width: 680px; margin: 0 auto;
-      position: sticky; top: 76px; height: calc(100vh - 76px); overflow-y: auto;
-      overscroll-behavior: contain;
       transition: max-width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
     }
     /* Collapsing the left tab box frees up its 250px column + 2rem gap --
@@ -259,11 +263,6 @@
        centered column stuck at its old width with blank space on both
        sides of it now that there's more room to use. */
     .fp-layout--sidebar-collapsed.fp-layout--profiles .fp-results-col { max-width: 960px; }
-    /* Scrollbar hidden entirely -- the column still scrolls (wheel/touch/
-       keyboard), just without a visible track/thumb taking up space on
-       the right edge. */
-    .fp-layout--profiles .fp-results-col { scrollbar-width: none; }
-    .fp-layout--profiles .fp-results-col::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
     .fp-profile-tabs { display: flex; gap: 2rem; border-bottom: 1px solid rgba(255,255,255,0.14); margin-bottom: 1.5rem; }
     .fp-profile-tab {
@@ -965,7 +964,7 @@
          Follow button in one unbroken row), forcing the whole column --
          and everything in it -- wider than the viewport instead of
          wrapping/shrinking to fit. */
-      .fp-layout--profiles .fp-results-col { position: static; height: auto; overflow: visible; padding-right: 0; min-width: 0; max-width: 100%; }
+      .fp-layout--profiles .fp-results-col { padding-right: 0; min-width: 0; max-width: 100%; }
     }
     /* Mobile-only tab-drawer hamburger/backdrop -- both only ever got
        styled inside the ≤720px block below, with no desktop default, so
@@ -2020,6 +2019,9 @@ async function runProfilesSearch() {
       ? `<p class="fp-search-empty">No accounts match that search.</p>`
       : items.map(accountCardHtml).join('');
     wireFollowButtons();
+    syncPostsBgHeight();
+    // Avatar images loading in can grow the page after this point.
+    resultsEl.querySelectorAll('img').forEach(img => img.addEventListener('load', syncPostsBgHeight, { once: true }));
 
     const totalPages = Math.max(1, Math.ceil((data.total || 0) / limit));
     if (totalPages > 1) {
@@ -2582,15 +2584,16 @@ const isBrowseStories = isBrowseMode && isStoriesView;
 document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--stories', isStoriesView);
 const isPostsView = currentView === 'submissions';
 document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--posts', isPostsView);
-document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--profiles', currentView === 'profiles');
-// The Posts wallpaper is position:absolute (scrolls with the page) instead
-// of the fixed/inset:0 every other variant uses, so it needs an explicit
-// pixel height matching the full page -- percentage/inset heights can't
-// resolve against a body whose own height is just "however tall its
+const isProfilesView = currentView === 'profiles';
+document.querySelector('.fp-bg-video').classList.toggle('fp-bg-video--profiles', isProfilesView);
+// The Posts/Profiles wallpaper is position:absolute (scrolls with the page)
+// instead of the fixed/inset:0 every other variant uses, so it needs an
+// explicit pixel height matching the full page -- percentage/inset heights
+// can't resolve against a body whose own height is just "however tall its
 // content is." Re-measured after the grid actually renders (card images
 // loading in can grow the page) and on resize.
 function syncPostsBgHeight() {
-  if (!isPostsView) return;
+  if (!isPostsView && !isProfilesView) return;
   const bg = document.querySelector('.fp-bg-video');
   // Reset before measuring -- this element is itself position:absolute and
   // taller than the viewport, so it contributes to
@@ -2603,7 +2606,7 @@ function syncPostsBgHeight() {
   const h = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
   bg.style.height = h;
 }
-if (isPostsView) {
+if (isPostsView || isProfilesView) {
   // Debounced -- mobile Safari/Chrome fire `resize` repeatedly as the
   // address bar collapses/expands *during scrolling itself*, not just on
   // an actual viewport size change (same mobile quirk fixed on the profile
