@@ -124,6 +124,14 @@
     .hb-card-empty-text { font-size: 0.82rem; color: #666; font-style: italic; margin-bottom: 0.6rem; }
     .hb-card-actions { display: flex; gap: 0.5rem; }
     .hb-empty-state { color: #999; font-size: 0.92rem; padding: 2rem 0; text-align: center; }
+    .lvb-add-form { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .lvb-add-form input[type="file"] { color: #ccc; font-size: 0.85rem; }
+    .lvb-add-form input[type="text"] {
+      flex: 1; min-width: 220px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px; padding: 0.55rem 0.8rem; color: #f0f0f0; font-size: 0.88rem;
+    }
+    .lvb-card-img-wrap { position: relative; width: 100%; aspect-ratio: 21 / 9; overflow: hidden; background: #1a1a1a; }
+    .lvb-card-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
     .hb-sliders-caption { text-align: center; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #999; margin-bottom: 0.5rem; }
     /* Bubbly Fredoka to match Character/Gallery/Story/Club Spotlight and
        Recent Submissions on the live hub, instead of the generic
@@ -234,6 +242,7 @@
   <div class="adm-tabs">
     <button class="adm-tab active" id="adm-tab-stats" type="button" data-tab="stats">Stats</button>
     <button class="adm-tab" id="adm-tab-bulletin" type="button" data-tab="bulletin">Bulletin</button>
+    <button class="adm-tab" id="adm-tab-levels" type="button" data-tab="levels">Levels Banner</button>
     <button class="adm-tab" id="adm-tab-dictionary" type="button" data-tab="dictionary">Tag Dictionary</button>
   </div>
 
@@ -326,6 +335,22 @@
     </button>
 
     <div class="hb-grid" id="hb-grid"></div>
+  </div>
+
+  <!-- ══ Levels Banner ══════════════════════════════════════════════ -->
+  <div class="adm-panel" id="adm-panel-levels">
+    <h2 class="adm-section-title"><img src="/images/home/decoration-1.png" alt="" /> Levels Page Banner</h2>
+    <p class="hb-sub">Manage the images that cycle in the banner on the Levels page. Add or remove images here — no deploy needed. Images cycle in the order added; set a link to make a slide clickable.</p>
+
+    <div class="lvb-add-form">
+      <input type="file" id="lvb-file-input" accept="image/*" />
+      <input type="text" id="lvb-link-input" placeholder="Optional link (https://...)" />
+      <button class="chars-create-btn" id="lvb-add-btn" type="button" style="max-width: 200px;">
+        <span class="chars-create-btn-icon">➕</span> Add Image
+      </button>
+    </div>
+
+    <div class="hb-grid" id="lvb-grid"></div>
   </div>
 
   <!-- ══ Tag Dictionary ══════════════════════════════════════════════ -->
@@ -582,7 +607,7 @@ function escapeHtml(s) {
 }
 
 // ── Tabs ─────────────────────────────────────────────────────────────────
-const ADM_TABS = ['stats', 'bulletin', 'dictionary'];
+const ADM_TABS = ['stats', 'bulletin', 'levels', 'dictionary'];
 function switchAdmTab(tab) {
   if (!ADM_TABS.includes(tab)) tab = 'stats';
   ADM_TABS.forEach(t => {
@@ -1404,6 +1429,70 @@ document.getElementById('adm-pending-merge-btn').addEventListener('click', async
 });
 
 /* ═══════════════════════════════════════════════════════════════════════
+   Levels Banner — plain ordered image list, same minimal add/delete-only
+   pattern as the arcade banner (no crop/caption editor, just an image and
+   an optional link).
+   ═══════════════════════════════════════════════════════════════════════ */
+let levelsBannerSlides = [];
+
+async function loadLevelsBannerSlides() {
+  const res = await fetch('/api/levels/banner-slides', { headers: authHeaders() });
+  const data = await res.json().catch(() => ({}));
+  levelsBannerSlides = data.slides || [];
+  renderLevelsBannerGrid();
+}
+
+function renderLevelsBannerGrid() {
+  const grid = document.getElementById('lvb-grid');
+  if (!levelsBannerSlides.length) {
+    grid.innerHTML = '<p class="hb-empty-state">No images yet — add one to start the banner cycling!</p>';
+    return;
+  }
+  grid.innerHTML = '';
+  levelsBannerSlides.forEach(slide => {
+    const card = document.createElement('div');
+    card.className = 'hb-card';
+    card.innerHTML = `
+      <div class="lvb-card-img-wrap"><img src="${slide.image_url}" alt="" /></div>
+      <div class="hb-card-body">
+        ${slide.link ? `<p class="hb-card-credit">Links to: ${escapeHtml(slide.link)}</p>` : '<p class="hb-card-empty-text">No link</p>'}
+        <div class="hb-card-actions">
+          <button class="mod-btn mod-btn--small" type="button">Delete</button>
+        </div>
+      </div>
+    `;
+    card.querySelector('.hb-card-actions button').addEventListener('click', () => deleteLevelsBannerSlide(slide.id));
+    grid.appendChild(card);
+  });
+}
+
+document.getElementById('lvb-add-btn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('lvb-file-input');
+  const linkInput = document.getElementById('lvb-link-input');
+  if (!fileInput.files[0]) { alert('Pick an image first.'); return; }
+  const fd = new FormData();
+  fd.append('image', fileInput.files[0]);
+  fd.append('link', linkInput.value.trim());
+  const btn = document.getElementById('lvb-add-btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/admin/levels-banner', { method: 'POST', headers: authHeaders(), body: fd });
+    if (!res.ok) { alert('Failed to add image.'); return; }
+    fileInput.value = '';
+    linkInput.value = '';
+    await loadLevelsBannerSlides();
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function deleteLevelsBannerSlide(id) {
+  if (!confirm('Remove this image from the banner?')) return;
+  await fetch(`/api/admin/levels-banner/${id}`, { method: 'DELETE', headers: authHeaders() });
+  await loadLevelsBannerSlides();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
    Boot — one shared admin gate for the whole page.
    ═══════════════════════════════════════════════════════════════════════ */
 (async () => {
@@ -1419,6 +1508,7 @@ document.getElementById('adm-pending-merge-btn').addEventListener('click', async
     switchAdmTab(location.hash.slice(1));
 
     await loadSlides();
+    await loadLevelsBannerSlides();
     const summary = await loadCatalogSummary();
     dictData = summary;
     renderDictionary('');

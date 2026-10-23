@@ -34,7 +34,7 @@
     .lv-hero {
       display: flex; align-items: center; gap: 1.8rem; flex-wrap: wrap;
       border-radius: 20px; padding: 2rem; position: relative; overflow: hidden;
-      background-image: linear-gradient(160deg, rgba(10,8,20,0.55), rgba(10,8,20,0.78)), url('/images/home/box-background-3.png');
+      background-image: linear-gradient(160deg, rgba(10,8,20,0.55), rgba(10,8,20,0.78)), url('/images/home/potential-box-background.png');
       background-size: cover; background-position: center;
       border: 1px solid rgba(255,255,255,0.12);
       box-shadow: 0 14px 50px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08);
@@ -144,9 +144,52 @@
     .lv-badge-req { font-size: 0.72rem; color: #a89bc4; }
     .lv-badge-card:not(.earned) .lv-badge-req::before { content: '🔒 '; }
 
-    /* ── Two-column: activity + leaderboard ───────────────────────────── */
-    .lv-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.6rem; align-items: start; }
-    @media (max-width: 860px) { .lv-two-col { grid-template-columns: 1fr; } .lv-stats-row { grid-template-columns: repeat(2, 1fr); } }
+    /* ── Banner row: almost-full-width admin-managed image carousel, with a
+       narrow side column holding a shrunk/rectangular Leaderboard box and
+       the Recent Activity box stacked underneath it. Mirrors the Home
+       hero's "main area + narrow flanking side boxes" shape. ───────────── */
+    .lv-banner-row { display: flex; gap: 1.6rem; align-items: stretch; }
+    .lv-banner-main {
+      flex: 1; min-width: 0; position: relative; height: 260px; border-radius: 16px; overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 10px 40px rgba(0,0,0,0.4); background: #0a0812;
+    }
+    .lv-banner-slide {
+      position: absolute; inset: 0; opacity: 0; transition: opacity 0.7s ease;
+      background-size: cover; background-position: center; display: block;
+    }
+    .lv-banner-slide.active { opacity: 1; z-index: 1; }
+    .lv-banner-main > a { position: absolute; inset: 0; display: block; }
+    .lv-banner-empty {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      color: #8d85a3; font-size: 0.95rem; text-align: center; padding: 1rem;
+      background-image: linear-gradient(160deg, rgba(6,6,16,0.55), rgba(6,6,16,0.75)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+    }
+    .lv-banner-dots { position: absolute; bottom: 0.7rem; left: 50%; transform: translateX(-50%); display: flex; gap: 0.4rem; z-index: 2; }
+    .lv-banner-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.4); border: 1px solid rgba(0,0,0,0.3); }
+    .lv-banner-dot.active { background: var(--gold, #f0c060); }
+
+    .lv-banner-side { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 1.2rem; }
+    .lv-banner-side .lv-box { padding: 1rem 1.1rem; }
+    .lv-side-box-title {
+      font-size: 1rem; font-family: 'Fredoka', cursive; display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.7rem;
+    }
+    .lv-side-box-title img { width: 16px; height: 16px; }
+    .lv-scroll-5 {
+      max-height: 215px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.3) transparent;
+    }
+    .lv-scroll-5::-webkit-scrollbar { width: 5px; }
+    .lv-scroll-5::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 4px; }
+
+    @media (max-width: 860px) {
+      .lv-banner-row { flex-direction: column; }
+      /* flex:1 (flex-basis:0) only grows into space the column already has,
+         but an auto-height column container has none to give -- pin an
+         explicit height here instead of relying on flex-grow. */
+      .lv-banner-main { flex: none; height: 200px; }
+      .lv-banner-side { width: 100%; }
+      .lv-stats-row { grid-template-columns: repeat(2, 1fr); }
+    }
 
     .lv-activity-row {
       display: flex; align-items: center; justify-content: space-between; gap: 0.8rem;
@@ -242,25 +285,31 @@
       </div>
     </section>
 
-    <div class="lv-two-col">
-      <section class="lv-section">
-        <h2 class="lv-section-title"><img src="/images/home/decoration-1.png" alt="" /> Recent Activity</h2>
-        <div class="lv-box" id="lv-activity-box">
-          <div class="lv-empty">Loading…</div>
+    <section class="lv-section">
+      <div class="lv-banner-row">
+        <div class="lv-banner-main" id="lv-banner-main">
+          <div class="lv-banner-empty">Loading…</div>
         </div>
-      </section>
 
-      <section class="lv-section">
-        <h2 class="lv-section-title"><img src="/images/home/decoration-1.png" alt="" /> Leaderboard</h2>
-        <div class="lv-box">
-          <div class="lv-lb-tabs">
-            <div class="lv-lb-tab active" data-tab="weekly" id="lv-lb-tab-weekly">This Week</div>
-            <div class="lv-lb-tab" data-tab="global" id="lv-lb-tab-global">All-Time</div>
+        <div class="lv-banner-side">
+          <div class="lv-box">
+            <h3 class="lv-side-box-title"><img src="/images/home/decoration-1.png" alt="" /> Leaderboard</h3>
+            <div class="lv-lb-tabs">
+              <div class="lv-lb-tab active" data-tab="weekly" id="lv-lb-tab-weekly">This Week</div>
+              <div class="lv-lb-tab" data-tab="global" id="lv-lb-tab-global">All-Time</div>
+            </div>
+            <div id="lv-lb-list" class="lv-scroll-5"><div class="lv-empty">Loading…</div></div>
           </div>
-          <div id="lv-lb-list"><div class="lv-empty">Loading…</div></div>
+
+          <div class="lv-box">
+            <h3 class="lv-side-box-title"><img src="/images/home/decoration-8.png" alt="" /> Recent Activity</h3>
+            <div id="lv-activity-box" class="lv-scroll-5">
+              <div class="lv-empty">Loading…</div>
+            </div>
+          </div>
         </div>
-      </section>
-    </div>
+      </div>
+    </section>
   </div>
 </main>
 </div>
@@ -293,6 +342,46 @@ function avatarHtml(user, size) {
   return user.avatar
     ? `<img src="${escapeHtml(user.avatar)}" alt="" />`
     : `<span style="font-size:${size ? size * 0.4 : 14}px;">${initial}</span>`;
+}
+
+let LV_BANNER_SLIDES = [];
+let lvBannerIdx = 0;
+let lvBannerTimer = null;
+
+async function loadLevelsBanner() {
+  const main = document.getElementById('lv-banner-main');
+  try {
+    const res = await fetch('/api/levels/banner-slides');
+    const data = await res.json();
+    LV_BANNER_SLIDES = data.slides || [];
+  } catch (e) {
+    LV_BANNER_SLIDES = [];
+  }
+  if (!LV_BANNER_SLIDES.length) {
+    main.innerHTML = '<div class="lv-banner-empty">No banner images yet — add some from Admin → Levels Banner.</div>';
+    return;
+  }
+  lvBannerIdx = 0;
+  renderLevelsBanner();
+  if (LV_BANNER_SLIDES.length > 1) {
+    clearInterval(lvBannerTimer);
+    lvBannerTimer = setInterval(() => {
+      lvBannerIdx = (lvBannerIdx + 1) % LV_BANNER_SLIDES.length;
+      renderLevelsBanner();
+    }, 5000);
+  }
+}
+
+function renderLevelsBanner() {
+  const main = document.getElementById('lv-banner-main');
+  const slidesHtml = LV_BANNER_SLIDES.map((s, i) => {
+    const bg = `<div class="lv-banner-slide${i === lvBannerIdx ? ' active' : ''}" style="background-image:url('${escapeHtml(s.image_url)}')"></div>`;
+    return s.link ? `<a href="${escapeHtml(s.link)}" target="_blank" rel="noopener">${bg}</a>` : bg;
+  }).join('');
+  const dotsHtml = LV_BANNER_SLIDES.length > 1
+    ? `<div class="lv-banner-dots">${LV_BANNER_SLIDES.map((_, i) => `<div class="lv-banner-dot${i === lvBannerIdx ? ' active' : ''}"></div>`).join('')}</div>`
+    : '';
+  main.innerHTML = slidesHtml + dotsHtml;
 }
 
 async function loadLevelHub() {
@@ -399,7 +488,10 @@ let bgResizeTimer = null;
 window.addEventListener('resize', () => { clearTimeout(bgResizeTimer); bgResizeTimer = setTimeout(syncBgHeight, 200); });
 window.addEventListener('load', syncBgHeight);
 
-if (token) loadLevelHub();
+if (token) {
+  loadLevelHub();
+  loadLevelsBanner();
+}
 </script>
 </body>
 </html>

@@ -912,6 +912,18 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     );
   `).catch(e => console.error('arcade_banner_slides migration:', e.message));
 
+  // Levels page banner — same plain ordered-image-carousel pattern as the
+  // arcade banner above, admin-managed from Admin → Levels Banner.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS levels_banner_slides (
+      id         SERIAL      PRIMARY KEY,
+      image_url  TEXT        NOT NULL,
+      link       TEXT        NOT NULL DEFAULT '',
+      sort_order INTEGER     NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(e => console.error('levels_banner_slides migration:', e.message));
+
   // Notifications — the bell icon on Fanpages. Covers system messages (the
   // welcome note) today; bookmark/follow/like/comment/social activity gets
   // wired up to insert rows here as those features land.
@@ -2442,7 +2454,8 @@ app.get('/api/level-hub', requireAuth, async (req, res) => {
 
   const { rows: activityRows } = await pool.query(
     `SELECT source_type, source_id, xp_amount, created_at FROM xp_log
-     WHERE user_id = $1 ORDER BY created_at DESC LIMIT 15`, [user.id]
+     WHERE user_id = $1 AND created_at >= NOW() - INTERVAL '30 days'
+     ORDER BY created_at DESC LIMIT 50`, [user.id]
   );
   const recent_activity = activityRows.map(r => ({
     label: XP_SOURCE_LABELS[r.source_type] || 'Earned XP', xp_amount: r.xp_amount, created_at: r.created_at,
@@ -4384,6 +4397,35 @@ app.delete('/api/admin/arcade-banner/:id', requireAuth, requireAdmin, async (req
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
   await pool.query('DELETE FROM arcade_banner_slides WHERE id = $1', [slide.id]);
+  res.json({ message: 'Deleted.' });
+});
+
+// ── Levels page banner — same plain ordered image carousel as the arcade
+// banner above, admin-managed from Admin → Levels Banner. ───────────────────
+app.get('/api/levels/banner-slides', async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM levels_banner_slides ORDER BY sort_order, id');
+  res.json({ slides: rows });
+});
+
+app.post('/api/admin/levels-banner', requireAuth, requireAdmin, uploadModImage.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const imageUrl = `/images/moderators/${req.file.filename}`;
+  const { rows: [{ maxOrder }] } = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM levels_banner_slides');
+  const { rows: [slide] } = await pool.query(
+    'INSERT INTO levels_banner_slides (image_url, link, sort_order) VALUES ($1, $2, $3) RETURNING *',
+    [imageUrl, cleanLinkUrl(req.body.link), maxOrder + 1]
+  );
+  res.json({ slide });
+});
+
+app.delete('/api/admin/levels-banner/:id', requireAuth, requireAdmin, async (req, res) => {
+  const { rows: [slide] } = await pool.query('SELECT * FROM levels_banner_slides WHERE id = $1', [req.params.id]);
+  if (!slide) return res.status(404).json({ error: 'Not found.' });
+  if (slide.image_url.startsWith('/images/moderators/')) {
+    const filePath = path.join('/var/www/btw', slide.image_url);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
+  await pool.query('DELETE FROM levels_banner_slides WHERE id = $1', [slide.id]);
   res.json({ message: 'Deleted.' });
 });
 
