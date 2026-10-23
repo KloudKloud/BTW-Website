@@ -147,42 +147,49 @@
        the Recent Activity box stacked underneath it. Mirrors the Home
        hero's "main area + narrow flanking side boxes" shape. The banner is
        deliberately NOT as tall as the side column -- JS (syncBannerHeight)
-       pins its top to the vertical midpoint of the Leaderboard box and its
-       bottom to the midpoint of the Recent Activity box, via margin-top +
-       height, so it reads as a shorter, less-square strip "threaded"
-       between the two side boxes rather than matching their full span. The
-       height/margin-top below are just a pre-JS fallback. ─────────────── */
+       pins its top to 1/4 of the way down the Leaderboard box and its
+       bottom to 1/4 up from the bottom of the Recent Activity box (i.e.
+       3/4 of the way down it), via margin-top + height, so it reads as a
+       shorter strip "threaded" between the two side boxes rather than
+       matching their full span. The height/margin-top below are just a
+       pre-JS fallback. ─────────────────────────────────────────────────── */
     .lv-banner-row { display: flex; gap: 1.6rem; align-items: flex-start; }
     .lv-banner-main {
       flex: 1; min-width: 0; position: relative; height: 200px; border-radius: 16px; overflow: hidden;
       border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 10px 40px rgba(0,0,0,0.4); background: #0a0812;
-      perspective: 1600px;
     }
-    /* Card-flip carousel -- a single two-sided card rotated with CSS 3D
-       transforms instead of the old opacity crossfade. Both faces are
-       always full-size copies of the banner (backface-visibility:hidden
-       keeps only the camera-facing one visible), and the "hidden" face
-       gets the upcoming slide's image painted onto it *before* the flip
-       starts, so swapping is just rotating the card 180deg -- see
-       lvAdvanceBanner() below. */
-    .lv-banner-flip-card {
-      position: absolute; inset: 0; transform-style: preserve-3d; z-index: 1;
-      transition: transform 0.9s cubic-bezier(0.45, 0.05, 0.15, 1);
+    /* Slide carousel -- a flex track of full-width slides translated
+       horizontally, with a real (uncropped) clone of the last slide glued
+       to the front and of the first slide glued to the end so prev/next
+       always has something to slide into in either direction. Landing on
+       either clone triggers an instant (no-transition) jump back to the
+       matching real slide once the animation finishes -- see lvGoTo()/the
+       track's transitionend handler below -- so the loop reads as
+       infinite instead of snapping back visibly. */
+    .lv-banner-track { position: absolute; inset: 0; display: flex; height: 100%; transition: transform 0.6s cubic-bezier(0.3, 0, 0.2, 1); }
+    .lv-banner-slide {
+      flex: 0 0 100%; width: 100%; height: 100%; position: relative;
+      text-decoration: none; color: #fff; display: block;
     }
-    .lv-banner-flip-face {
-      position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
-      background-size: cover; background-position: center; background-repeat: no-repeat;
-    }
-    .lv-banner-flip-face--back { transform: rotateY(180deg); }
-    .lv-banner-flip-link { position: absolute; inset: 0; z-index: 2; display: none; }
+    .lv-banner-slide-bg { position: absolute; inset: 0; background-size: cover; background-position: center; background-repeat: no-repeat; }
     .lv-banner-empty {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       color: #8d85a3; font-size: 0.95rem; text-align: center; padding: 1rem;
       background-image: linear-gradient(160deg, rgba(6,6,16,0.55), rgba(6,6,16,0.75)), url('/images/home/box-background-2.png');
       background-size: cover; background-position: center;
     }
+    .lv-banner-arrow {
+      position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
+      width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(10,8,16,0.55); color: #fff; font-size: 1.2rem; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s, border-color 0.2s; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+    }
+    .lv-banner-arrow:hover { background: rgba(240,192,96,0.25); border-color: rgba(240,192,96,0.5); }
+    .lv-banner-arrow--prev { left: 0.6rem; }
+    .lv-banner-arrow--next { right: 0.6rem; }
     .lv-banner-dots { position: absolute; bottom: 0.7rem; left: 50%; transform: translateX(-50%); display: flex; gap: 0.4rem; z-index: 2; }
-    .lv-banner-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.4); border: 1px solid rgba(0,0,0,0.3); }
+    .lv-banner-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.4); border: 1px solid rgba(0,0,0,0.3); cursor: pointer; }
     .lv-banner-dot.active { background: var(--gold, #f0c060); }
 
     .lv-banner-side { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 1.2rem; }
@@ -364,14 +371,14 @@ function avatarHtml(user, size) {
 }
 
 let LV_BANNER_SLIDES = [];
-let lvBannerIdx = 0;
 let lvBannerTimer = null;
-// Which face (front/back) is currently camera-facing -- the card's resting
-// rotateY alternates 0deg/180deg forever rather than snapping back, so each
-// flip only ever has to rotate 180deg from wherever it already is.
-let lvFlipped = false;
-let lvFrontSlide = null;
-let lvBackSlide = null;
+const LV_BANNER_INTERVAL_MS = 10000;
+// Position within the *extended* track (real slides padded with a clone of
+// the last slide at index 0 and a clone of the first slide at the end) --
+// real slide i sits at track position i+1. See the infinite-loop comment
+// on .lv-banner-track above.
+let lvTrackPos = 1;
+let lvTransitioning = false;
 
 // Same admin-cropped background-size/position technique as the Fanpages
 // hub billboard (position_x/position_y/zoom, cover-fit then zoomed/panned
@@ -394,38 +401,44 @@ function lvCoverBgSize(dims, boxW, boxH, zoomPercent) {
   const factor = (zoomPercent || 100) / 100;
   return { w: (renderedW / (boxW || 1)) * 100 * factor, h: (renderedH / (boxH || 1)) * 100 * factor };
 }
-function lvApplyFaceCrop(faceEl, slide) {
+// Re-applies every slide's (including both clones') crop sizing against the
+// box's *current* dimensions -- needed on resize/syncBannerHeight since the
+// box itself is fluid.
+function lvApplyBannerCrop() {
   const main = document.getElementById('lv-banner-main');
   const boxW = main.clientWidth, boxH = main.clientHeight;
-  const dims = slide && lvBannerImgDims[slide.image_url];
-  if (!faceEl || !slide || !dims || !boxW || !boxH) return;
-  const size = lvCoverBgSize(dims, boxW, boxH, slide.zoom);
-  faceEl.style.backgroundSize = `${size.w}% ${size.h}%`;
-  faceEl.style.backgroundPosition = `${slide.position_x}% ${slide.position_y}%`;
-}
-// Re-applies both faces' crop sizing against the box's *current* dimensions
-// -- needed on resize/syncBannerHeight since the box itself is fluid.
-function lvApplyBannerCrop() {
-  const frontEl = document.getElementById('lv-banner-face-front');
-  const backEl = document.getElementById('lv-banner-face-back');
-  if (lvFrontSlide) lvApplyFaceCrop(frontEl, lvFrontSlide);
-  if (lvBackSlide) lvApplyFaceCrop(backEl, lvBackSlide);
-}
-
-function lvUpdateDots() {
-  document.querySelectorAll('.lv-banner-dot').forEach((dot, i) => {
-    dot.classList.toggle('active', i === lvBannerIdx);
+  if (!boxW || !boxH) return;
+  document.querySelectorAll('.lv-banner-slide-bg').forEach(el => {
+    const slideId = el.dataset.slideId;
+    const slide = LV_BANNER_SLIDES.find(s => String(s.id) === slideId);
+    const dims = slide && lvBannerImgDims[slide.image_url];
+    if (!slide || !dims) return;
+    const size = lvCoverBgSize(dims, boxW, boxH, slide.zoom);
+    el.style.backgroundSize = `${size.w}% ${size.h}%`;
+    el.style.backgroundPosition = `${slide.position_x}% ${slide.position_y}%`;
   });
 }
-function lvUpdateLink(slide) {
-  const link = document.getElementById('lv-banner-flip-link');
-  if (slide && slide.link) {
-    link.href = slide.link;
-    link.style.display = 'block';
-  } else {
-    link.removeAttribute('href');
-    link.style.display = 'none';
-  }
+
+function lvRealIndexFromTrackPos(pos) {
+  const n = LV_BANNER_SLIDES.length;
+  return ((pos - 1) % n + n) % n;
+}
+function lvUpdateDots() {
+  const realIdx = lvRealIndexFromTrackPos(lvTrackPos);
+  document.querySelectorAll('.lv-banner-dot').forEach((dot, i) => {
+    dot.classList.toggle('active', i === realIdx);
+  });
+}
+
+function lvSlideHtml(slide) {
+  const inner = `<div class="lv-banner-slide-bg" data-slide-id="${slide.id}" style="background-image:url('${escapeHtml(slide.image_url)}')"></div>`;
+  return (slide.link && isSafeLinkUrl(slide.link))
+    ? `<a class="lv-banner-slide" href="${escapeHtml(slide.link)}" target="_blank" rel="noopener">${inner}</a>`
+    : `<div class="lv-banner-slide">${inner}</div>`;
+}
+function isSafeLinkUrl(url) {
+  try { return ['http:', 'https:'].includes(new URL(String(url), location.origin).protocol); }
+  catch { return false; }
 }
 
 async function loadLevelsBanner() {
@@ -443,52 +456,96 @@ async function loadLevelsBanner() {
     return;
   }
 
+  const n = LV_BANNER_SLIDES.length;
+  const trackSlides = n > 1
+    ? [LV_BANNER_SLIDES[n - 1], ...LV_BANNER_SLIDES, LV_BANNER_SLIDES[0]]
+    : LV_BANNER_SLIDES;
+  lvTrackPos = n > 1 ? 1 : 0;
+
   main.innerHTML = `
-    <a class="lv-banner-flip-link" id="lv-banner-flip-link" target="_blank" rel="noopener"></a>
-    <div class="lv-banner-flip-card" id="lv-banner-flip-card">
-      <div class="lv-banner-flip-face lv-banner-flip-face--front" id="lv-banner-face-front"></div>
-      <div class="lv-banner-flip-face lv-banner-flip-face--back" id="lv-banner-face-back"></div>
-    </div>
-    ${LV_BANNER_SLIDES.length > 1 ? `<div class="lv-banner-dots">${LV_BANNER_SLIDES.map((_, i) => `<div class="lv-banner-dot${i === 0 ? ' active' : ''}"></div>`).join('')}</div>` : ''}
+    <div class="lv-banner-track" id="lv-banner-track">${trackSlides.map(lvSlideHtml).join('')}</div>
+    ${n > 1 ? `
+      <button class="lv-banner-arrow lv-banner-arrow--prev" id="lv-banner-prev" type="button" aria-label="Previous slide">‹</button>
+      <button class="lv-banner-arrow lv-banner-arrow--next" id="lv-banner-next" type="button" aria-label="Next slide">›</button>
+      <div class="lv-banner-dots" id="lv-banner-dots">${LV_BANNER_SLIDES.map((_, i) => `<div class="lv-banner-dot${i === 0 ? ' active' : ''}" data-idx="${i}"></div>`).join('')}</div>
+    ` : ''}
   `;
 
+  const track = document.getElementById('lv-banner-track');
+  track.style.transition = 'none';
+  track.style.transform = `translateX(-${lvTrackPos * 100}%)`;
+
   await Promise.all(LV_BANNER_SLIDES.map(s => lvLoadImageDims(s.image_url)));
+  lvApplyBannerCrop();
+  void track.offsetWidth;
+  track.style.transition = '';
 
-  lvBannerIdx = 0;
-  lvFlipped = false;
-  lvFrontSlide = LV_BANNER_SLIDES[0];
-  lvBackSlide = null;
-  const frontEl = document.getElementById('lv-banner-face-front');
-  frontEl.style.backgroundImage = `url('${escapeHtml(lvFrontSlide.image_url)}')`;
-  lvApplyFaceCrop(frontEl, lvFrontSlide);
-  document.getElementById('lv-banner-flip-card').style.transform = 'rotateY(0deg)';
-  lvUpdateLink(lvFrontSlide);
-
-  if (LV_BANNER_SLIDES.length > 1) {
-    lvBannerTimer = setInterval(lvAdvanceBanner, 5000);
+  if (n > 1) {
+    document.getElementById('lv-banner-prev').addEventListener('click', () => lvManualNav(-1));
+    document.getElementById('lv-banner-next').addEventListener('click', () => lvManualNav(1));
+    document.querySelectorAll('.lv-banner-dot').forEach(dot => {
+      dot.addEventListener('click', () => lvGoToRealIndex(parseInt(dot.dataset.idx, 10)));
+    });
+    track.addEventListener('transitionend', lvOnTrackTransitionEnd);
+    lvStartAutoplay();
   }
 }
 
-// Flips to the next slide by painting it onto whichever face is currently
-// turned away from the camera, then rotating the card another 180deg --
-// the face that was just hidden becomes the one that gets overwritten next
-// time, so only ever one face is ever mid-transition.
-function lvAdvanceBanner() {
-  if (LV_BANNER_SLIDES.length < 2) return;
-  const nextIdx = (lvBannerIdx + 1) % LV_BANNER_SLIDES.length;
-  const nextSlide = LV_BANNER_SLIDES[nextIdx];
-  const card = document.getElementById('lv-banner-flip-card');
-  const targetFaceEl = document.getElementById(lvFlipped ? 'lv-banner-face-front' : 'lv-banner-face-back');
+function lvStartAutoplay() {
+  clearInterval(lvBannerTimer);
+  if (LV_BANNER_SLIDES.length > 1) lvBannerTimer = setInterval(() => lvStep(1), LV_BANNER_INTERVAL_MS);
+}
 
-  targetFaceEl.style.backgroundImage = `url('${escapeHtml(nextSlide.image_url)}')`;
-  lvApplyFaceCrop(targetFaceEl, nextSlide);
-  if (lvFlipped) lvFrontSlide = nextSlide; else lvBackSlide = nextSlide;
-
-  lvFlipped = !lvFlipped;
-  card.style.transform = `rotateY(${lvFlipped ? 180 : 0}deg)`;
-  lvBannerIdx = nextIdx;
+function lvStep(dir) {
+  if (lvTransitioning || LV_BANNER_SLIDES.length < 2) return;
+  lvTransitioning = true;
+  lvTrackPos += dir;
+  const track = document.getElementById('lv-banner-track');
+  track.style.transform = `translateX(-${lvTrackPos * 100}%)`;
   lvUpdateDots();
-  lvUpdateLink(nextSlide);
+}
+function lvManualNav(dir) {
+  lvStep(dir);
+  lvStartAutoplay();
+}
+function lvGoToRealIndex(targetIdx) {
+  if (lvTransitioning || LV_BANNER_SLIDES.length < 2) return;
+  const n = LV_BANNER_SLIDES.length;
+  const curIdx = lvRealIndexFromTrackPos(lvTrackPos);
+  if (targetIdx === curIdx) return;
+  lvTransitioning = true;
+  // Shortest direction around the loop, expressed as a signed step from the
+  // current track position (not wrapped) so the slide animates through
+  // however many real slides sit between here and the target.
+  let delta = targetIdx - curIdx;
+  if (delta > n / 2) delta -= n;
+  if (delta < -n / 2) delta += n;
+  lvTrackPos += delta;
+  const track = document.getElementById('lv-banner-track');
+  track.style.transform = `translateX(-${lvTrackPos * 100}%)`;
+  lvUpdateDots();
+  lvStartAutoplay();
+}
+// Lands on a clone (position 0 or n+1) -- jump instantly to the matching
+// real slide's position once the slide animation finishes, so the loop
+// reads as infinite instead of visibly snapping back.
+function lvOnTrackTransitionEnd() {
+  const n = LV_BANNER_SLIDES.length;
+  const track = document.getElementById('lv-banner-track');
+  if (lvTrackPos === 0) {
+    lvTrackPos = n;
+    track.style.transition = 'none';
+    track.style.transform = `translateX(-${lvTrackPos * 100}%)`;
+    void track.offsetWidth;
+    track.style.transition = '';
+  } else if (lvTrackPos === n + 1) {
+    lvTrackPos = 1;
+    track.style.transition = 'none';
+    track.style.transform = `translateX(-${lvTrackPos * 100}%)`;
+    void track.offsetWidth;
+    track.style.transition = '';
+  }
+  lvTransitioning = false;
 }
 
 async function loadLevelHub() {
@@ -586,10 +643,10 @@ function renderLeaderboard(which) {
 document.getElementById('lv-lb-tab-weekly').addEventListener('click', () => renderLeaderboard('weekly'));
 document.getElementById('lv-lb-tab-global').addEventListener('click', () => renderLeaderboard('global'));
 
-// Pins the banner's top to 1/3 of the way down the Leaderboard box and its
-// bottom to 2/3 of the way down the Recent Activity box underneath it, so
-// it reads as a thicker strip "threaded" between the two rather than
-// matching their full combined height. Measures via getBoundingClientRect
+// Pins the banner's top to 1/4 of the way down the Leaderboard box and its
+// bottom to 1/4 up from the bottom of the Recent Activity box underneath it
+// (i.e. 3/4 of the way down it), so it reads as a thicker strip "threaded"
+// between the two rather than matching their full combined height. Measures via getBoundingClientRect
 // deltas (relative to the row's own top) rather than offsetTop -- offsetTop
 // is relative to the nearest *positioned* ancestor (here, .lv-content-z,
 // much further up the page), not to the row itself, so using it directly
@@ -609,8 +666,8 @@ function syncBannerHeight() {
   const rowTop = row.getBoundingClientRect().top;
   const r1 = boxes[0].getBoundingClientRect();
   const r2 = boxes[1].getBoundingClientRect();
-  const top = (r1.top - rowTop) + r1.height / 3;
-  const bottom = (r2.top - rowTop) + r2.height * (2 / 3);
+  const top = (r1.top - rowTop) + r1.height / 4;
+  const bottom = (r2.top - rowTop) + r2.height * (3 / 4);
   main.style.marginTop = `${top}px`;
   main.style.height = `${Math.max(80, bottom - top)}px`;
   if (typeof lvApplyBannerCrop === 'function') lvApplyBannerCrop();
