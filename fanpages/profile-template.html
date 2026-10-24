@@ -170,20 +170,32 @@
     .fp-banner-edit-pencil:hover { background: rgba(0,0,0,0.85); }
     body.fp-editing .fp-banner-edit-pencil { display: none !important; }
 
-    .fp-header { max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto; padding: 1.5rem 2rem 0; position: relative; }
+    /* padding-top leaves room for the tab bar, which floats up out of this
+       box (position:absolute, negative top) to straddle the banner seam. */
+    .fp-header { max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto; padding: 2.75rem 2rem 0; position: relative; }
 
-    /* ── Header card: the "neat little area" — pfp, display name/handle and
-       follow stats sit in its top half, the tab bar forms its bottom half.
-       Sized to its own content (not full-bleed) and left-aligned, instead
-       of the old full-width centered header. ── */
-    .fp-header-card {
-      display: inline-flex; flex-direction: column; width: fit-content; max-width: 100%;
-      border-radius: 20px; border: 2px solid rgba(240,192,96,0.3); overflow: hidden;
-      background: linear-gradient(160deg, rgba(10,8,14,0.9), rgba(10,8,14,0.8)), url('/images/home/box-background-3.png');
-      background-size: cover; background-position: center;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    /* ── Top row: two equal boxes -- pfp/name/username on the left,
+       Level/Stories/Characters/Gallery/Page-Views stats on the right. ── */
+    .fp-top-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .fp-pfp-box, .fp-stats-box {
+      display: flex; align-items: center; border-radius: 18px; border: 2px solid rgba(240,192,96,0.3);
+      min-height: 150px; box-shadow: 0 10px 30px rgba(0,0,0,0.4);
     }
-    .fp-header-card-top { display: flex; align-items: center; gap: 1.5rem; padding: 1.5rem 2rem; }
+    .fp-pfp-box {
+      gap: 1.5rem; padding: 1.5rem 2rem;
+      background: linear-gradient(160deg, rgba(10,8,14,0.88), rgba(10,8,14,0.78)), url('/images/home/potential-box-background.png');
+      background-size: cover; background-position: center;
+    }
+    .fp-stats-box {
+      justify-content: space-around; padding: 1.5rem 1rem;
+      background: linear-gradient(160deg, rgba(10,8,14,0.88), rgba(10,8,14,0.78)), url('/images/home/box-background-3.png');
+      background-size: cover; background-position: center;
+    }
+    .fp-stat-tile { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; font-family: 'Fredoka', 'Lato', cursive; }
+    .fp-stat-tile b { font-size: 1.5rem; color: #f0c060; text-shadow: 0 0 12px rgba(240,192,96,0.35); }
+    .fp-stat-tile span { font-size: 0.78rem; color: #bbb; text-transform: uppercase; letter-spacing: 0.04em; }
+
+    .fp-pfp-box-info { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
     .fp-avatar-wrap { position: relative; width: 128px; height: 128px; flex-shrink: 0; }
     .fp-avatar {
       width: 128px; height: 128px; border-radius: 50%;
@@ -221,8 +233,11 @@
       text-align: center; font-size: 0.7rem; line-height: 1.4; color: #999;
     }
 
-    .fp-header-card-info { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
-    .fp-header-action { display: flex; align-items: center; gap: 0.6rem; }
+    /* Sits on the banner itself, top-right -- out of the tab bar's way. */
+    .fp-header-action {
+      position: absolute; top: 1.25rem; right: 1.75rem; z-index: 6;
+      display: flex; align-items: center; gap: 0.6rem;
+    }
     .fp-action-btn {
       display: inline-block; text-decoration: none; border: none; cursor: pointer;
       font-family: inherit; font-size: 1rem; font-weight: 700; box-sizing: border-box;
@@ -301,9 +316,11 @@
       color: #f0f0f0; padding: 0.5rem 1.25rem; min-width: 260px;
     }
     .fp-name-edit-input:focus { outline: none; border-color: #7fa8d9; }
+    /* Sits right next to the display name now (same axis), not on its own
+       line below it. */
     .fp-handle {
       font-family: 'Fredoka', 'Lato', Arial, sans-serif;
-      color: #999; font-size: 1.05rem; margin-top: 0; text-align: left;
+      color: #999; font-size: 1.1rem;
     }
     /* Sits next to the display name itself now (not the @handle) -- bigger
        and bolder so it reads as a real badge, not a small caption tag. */
@@ -314,18 +331,6 @@
       border-radius: 24px; padding: 0.4em 0.9em;
       white-space: nowrap; flex-shrink: 0;
     }
-
-    .fp-stats {
-      display: flex; justify-content: flex-start; gap: 1.5rem; margin-top: 0.5rem; padding-bottom: 0;
-      font-family: 'Fredoka', 'Lato', Arial, sans-serif;
-    }
-    .fp-stat {
-      background: none; border: none; cursor: pointer; font-family: inherit; color: inherit;
-      padding: 0.15rem 0.3rem; border-radius: 8px; transition: background 0.15s;
-    }
-    .fp-stat:hover { background: rgba(255,255,255,0.08); }
-    .fp-stat b { font-size: 1.15rem; }
-    .fp-stat span { color: #999; font-size: 1rem; margin-left: 0.3rem; }
 
     /* ── Followers / Following list modal (Wattpad-style) ── */
     .fp-follow-modal-overlay {
@@ -384,26 +389,27 @@
     .fp-follow-btn--following .fp-follow-check { font-weight: 700; }
     .fp-follow-empty, .fp-follow-loading { text-align: center; color: #888; font-size: 0.88rem; padding: 2.5rem 1rem; }
 
-    /* ── Home / Characters / Gallery tabs — blocky pill buttons forming the
-       bottom strip of .fp-header-card, instead of the old flat underlined
-       text links. ── */
+    /* ── Home / Characters / Gallery tabs — a single bar straddling the
+       banner's bottom seam (half over the banner image, half over the page
+       background below it), left-aligned under the banner instead of
+       centered. Divided by vertical lines between tabs instead of gaps. ── */
     .fp-tabs-row {
-      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
-      gap: 0.6rem; padding: 0.85rem 1.5rem; border-top: 2px solid rgba(240,192,96,0.22);
-      background: rgba(0,0,0,0.25);
+      position: absolute; left: 0; top: -30px; z-index: 10;
+      display: flex; align-items: stretch;
+      border-radius: 14px; border: 2px solid rgba(240,192,96,0.3); overflow: hidden;
+      background: linear-gradient(160deg, rgba(10,8,14,0.94), rgba(10,8,14,0.88));
+      box-shadow: 0 10px 28px rgba(0,0,0,0.5);
     }
-    .fp-tabs { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .fp-tabs { display: flex; align-items: stretch; }
     .fp-tab {
-      background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.12); cursor: pointer; color: #bbb;
+      background: none; border: none; border-right: 2px solid rgba(240,192,96,0.22); cursor: pointer; color: #bbb;
       font-family: 'Fredoka', 'Lato', cursive; font-size: 0.92rem; font-weight: 700;
       text-transform: uppercase; letter-spacing: 0.03em;
-      padding: 0.6rem 1.15rem; border-radius: 10px; position: relative; transition: all 0.15s;
+      padding: 0.9rem 1.3rem; position: relative; transition: color 0.15s, background 0.15s;
     }
-    .fp-tab:hover { color: #fff; border-color: #7fa8d9; background: rgba(127,168,217,0.12); }
-    .fp-tab.active {
-      color: #1a1408; background: linear-gradient(160deg, #f0c060, #d9a040); border-color: #f0c060;
-      box-shadow: 0 0 14px rgba(240,192,96,0.45);
-    }
+    .fp-tabs .fp-tab:last-child { border-right: none; }
+    .fp-tab:hover { color: #fff; background: rgba(127,168,217,0.12); }
+    .fp-tab.active { color: #f0c060; background: rgba(240,192,96,0.14); }
 
     .fp-tab-view { max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto; padding: 2rem; }
     /* Gallery reuses the story-context .mod-gallery-main layout, which
@@ -657,25 +663,59 @@
     }
     .fp-following-see-more:hover { color: #a8c6e8; text-decoration: underline; }
 
-    /* About box -- big full-width box under the tab bar (Home tab only)
-       holding the account's text fields: Pronouns, Bio, Fun Fact. */
+    /* About box -- big full-width box under the tab bar (Home tab only).
+       Left ~2/3 squeezes Pronouns/Bio/Fun Fact together (no divider lines
+       between them); right ~1/3 is the Featured Submission -- the single
+       latest character/story/gallery post, same square-ref + title look as
+       the main Fanpage Hub's Spotlight cards. */
     .fp-about-box { max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto; padding: 1.75rem 2rem 0; }
     .fp-about-box-inner {
       position: relative; overflow: hidden; border-radius: 18px; border: 1px solid rgba(255,255,255,0.14);
       padding: 1.5rem 1.75rem;
       background: linear-gradient(160deg, rgba(10,8,14,0.86), rgba(10,8,14,0.76)), url('/images/home/box-background-2.png');
       background-size: cover; background-position: center;
+      display: flex; gap: 1.75rem;
     }
+    .fp-about-fields { position: relative; z-index: 1; flex: 2; min-width: 0; }
     .fp-about-box-deco { position: absolute; z-index: 2; pointer-events: none; object-fit: contain; opacity: 0.9; top: -10px; right: -8px; width: 40px; height: 40px; }
-    .fp-about-row { padding: 0.65rem 0; border-bottom: 1px solid rgba(255,255,255,0.06); position: relative; z-index: 1; }
-    .fp-about-row:last-child { border-bottom: none; }
-    .fp-about-row-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #d97a72; margin-bottom: 0.25rem; }
+    .fp-about-row { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+    .fp-about-row:last-child { margin-bottom: 0; }
+    .fp-about-row[data-key="account_bio"] { flex-direction: column; gap: 0.25rem; }
+    .fp-about-row-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #d97a72; flex-shrink: 0; }
     .fp-about-row-value { font-size: 0.9rem; color: #ddd; line-height: 1.6; white-space: pre-line; }
     .fp-about-row input, .fp-about-row textarea {
       width: 100%; background: #1e1e1e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
       color: #f0f0f0; font-family: inherit; font-size: 0.88rem; padding: 0.5rem 0.6rem; resize: vertical;
     }
     .fp-about-row input:focus, .fp-about-row textarea:focus { outline: none; border-color: #7fa8d9; }
+
+    .fp-featured-sub-col {
+      position: relative; z-index: 1; flex: 1; min-width: 0;
+      border-left: 1px solid rgba(255,255,255,0.14); padding-left: 1.75rem;
+      display: flex; flex-direction: column;
+    }
+    /* Square ref + title -- duplicated from the Fanpage Hub homepage's
+       Character/Gallery/Story Spotlight cards (.fp-spotlight-*) per the
+       site's "duplication over shared components" convention; this page
+       doesn't load index.html's stylesheet. */
+    .fp-spotlight-item { display: block; text-decoration: none; color: inherit; text-align: center; }
+    .fp-spotlight-img-wrap {
+      width: 100%; max-width: 190px; margin: 0 auto 0.85rem; aspect-ratio: 1; border-radius: 14px; overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 8px 26px rgba(0,0,0,0.4);
+      background: linear-gradient(135deg, #6b3fa0, #c2547a);
+    }
+    .fp-spotlight-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fp-spotlight-img-wrap--locked { position: relative; }
+    .fp-spotlight-img--blurred { filter: blur(9px) brightness(0.6); transform: scale(1.08); }
+    .fp-spotlight-locked-msg {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      text-align: center; padding: 0 1rem; font-size: 0.7rem; font-weight: 700; color: #fff;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+    }
+    .fp-spotlight-name {
+      font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 1.05rem; color: #fff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.7); line-height: 1.25;
+    }
 
     /* Draft-only story badge -- the Stories tab's own bcards (see
        featuredStoryCardEl) are the only thing that still uses this, styled
@@ -1138,18 +1178,9 @@
     .fp-edit-btn:disabled { opacity: 0.6; cursor: default; }
 
     /* ── Edit-mode layout reorganization — hides everything that isn't
-       actually editable here (handle/follow stats, tabs, the Recent
-       Activity feed, Latest Newspaper, the disclaimer). Featured Stories/
-       Characters/Gallery stay visible since their inline picker editors
-       live right there in the same sections. ── */
+       actually editable here (handle, tabs). ── */
     body.fp-editing .fp-handle,
-    body.fp-editing .fp-stats,
-    body.fp-editing .fp-tabs-row,
-    body.fp-editing .fp-home-side-activity,
-    body.fp-editing .fp-home-side-following,
-    body.fp-editing .fp-home-side-divider:last-of-type,
-    body.fp-editing .fp-newspaper-home,
-    body.fp-editing .fp-disclaimer {
+    body.fp-editing .fp-tabs-row {
       display: none !important;
     }
 
@@ -1229,38 +1260,30 @@
       .fp-avatar-camera-btn { width: 34px; height: 34px; font-size: 0.95rem; }
       .fp-recrop-btn--avatar { width: 24px; height: 24px; font-size: 0.7rem; }
       .fp-avatar-hint { width: 140px; font-size: 0.65rem; }
-      .fp-header { padding: 1rem 1.1rem 0; }
-      /* The header card drops to full width and stacks avatar above the
-         name/handle/stats instead of the desktop side-by-side row. */
-      .fp-header-card { width: 100%; }
-      .fp-header-card-top { flex-direction: column; text-align: center; padding: 1.25rem 1rem; gap: 0.75rem; }
-      .fp-header-card-info { align-items: center; }
+      .fp-header { padding: 2.25rem 1.1rem 0; }
+      /* Both top-row boxes drop to one column, each stacking its own
+         avatar/stats above its label instead of the desktop side-by-side
+         row. */
+      .fp-top-row { grid-template-columns: 1fr; }
+      .fp-pfp-box { flex-direction: column; text-align: center; padding: 1.25rem 1rem; gap: 0.75rem; }
+      .fp-pfp-box-info { align-items: center; }
       .fp-name-row { justify-content: center; }
       .fp-name-edit-box { align-items: center; }
-      .fp-handle { text-align: center; }
-      .fp-stats { justify-content: center; gap: 1.5rem; }
+      .fp-stats-box { flex-wrap: wrap; gap: 0.75rem 0; }
       .fp-action-btn { font-size: 0.9rem; padding: 0 1.2rem; height: 42px; }
       .fp-name { font-size: 1.7rem; }
 
-      /* Edit Profile/Share (fp-header-action) move above the tabs instead
-         of sharing a row with them -- column-reverse flips the visual
-         order of .fp-tabs-row's two children (tabs, then header-action in
-         DOM order) without touching the DOM itself, so desktop's own
-         row/space-between layout is untouched. Freeing that width from the
-         tabs' row is also what lets the tabs themselves run bigger below. */
-      .fp-tabs-row { flex-direction: column-reverse; align-items: center; gap: 0.7rem; overflow-x: visible; padding: 0.85rem 1rem; }
-      .fp-header-action { flex-wrap: wrap; justify-content: center; width: 100%; margin-bottom: 0; }
-      /* Five equal-width flex columns spanning the full row instead of
-         gap-separated auto-width buttons -- lets each tab run as large as
-         possible while guaranteeing all five stay on one line (a long
-         label can only ever push its own column, via ellipsis, never the
-         layout). */
-      .fp-tabs { gap: 0.3rem; width: 100%; }
+      /* The floating tab bar runs full width at the header's left edge
+         instead of sizing to its own content. */
+      .fp-tabs-row { left: 1.1rem; right: 1.1rem; top: -24px; }
+      .fp-tabs { width: 100%; }
       .fp-tab {
         flex: 1 1 0; min-width: 0; text-align: center; white-space: nowrap;
         overflow: hidden; text-overflow: ellipsis;
-        font-size: 0.78rem; padding: 0.7rem 0.1rem;
+        font-size: 0.7rem; padding: 0.7rem 0.1rem;
       }
+      .fp-header-action { top: 0.6rem; right: 0.6rem; }
+      .fp-header-action .fp-action-btn { font-size: 0.78rem; padding: 0 1rem; height: 36px; }
 
       .fp-tab-view { padding: 1.25rem 1rem; }
       .fp-gallery-page-row { padding: 0 1rem; }
@@ -1286,7 +1309,8 @@
       .fp-banner-edit-pencil { bottom: 0.6rem; right: 0.6rem; width: 38px; height: 38px; }
 
       .fp-about-box { padding: 1.25rem 1rem 0; }
-      .fp-about-box-inner { padding: 1.1rem 1.25rem; }
+      .fp-about-box-inner { padding: 1.1rem 1.25rem; flex-direction: column; }
+      .fp-featured-sub-col { border-left: none; border-top: 1px solid rgba(255,255,255,0.14); padding-left: 0; padding-top: 1.1rem; }
     }
 
     @media (max-width: 480px) {
@@ -1329,6 +1353,10 @@
 <div class="fp-banner-wrap" id="fp-banner-wrap">
   <div id="fp-banner-img"></div>
 
+  <!-- Edit Profile / Follow / Message / More -- out of the tab bar's way,
+       sitting on the banner itself instead. -->
+  <div class="fp-header-action" id="fp-header-actions"></div>
+
   <button type="button" class="fp-banner-edit-pencil" id="fp-banner-edit-pencil" hidden title="Edit banner image">✏️</button>
 
   <div class="fp-banner-camera-wrap" id="fp-banner-camera-wrap" hidden>
@@ -1354,11 +1382,21 @@
   </div>
 
 <div class="fp-header">
-  <!-- "Neat little area" -- pfp, display name/handle and follow stats sit
-       together in the card's top half; the tab bar is the card's bottom
-       half, per the pfp-left-under-the-banner redesign. -->
-  <div class="fp-header-card">
-    <div class="fp-header-card-top">
+  <!-- Tabs float half over the banner's bottom edge, half over the page
+       background below it -- left-aligned, divided by vertical lines
+       instead of gaps between buttons. -->
+  <div class="fp-tabs-row">
+    <div class="fp-tabs">
+      <button class="fp-tab active" id="fp-tab-home" type="button">Home</button>
+      <button class="fp-tab" id="fp-tab-characters" type="button">Characters</button>
+      <button class="fp-tab" id="fp-tab-gallery" type="button">Gallery</button>
+      <button class="fp-tab" id="fp-tab-stories" type="button">Stories</button>
+      <button class="fp-tab" id="fp-tab-newspaper" type="button">Newspapers</button>
+    </div>
+  </div>
+
+  <div class="fp-top-row">
+    <div class="fp-pfp-box">
       <div class="fp-avatar-wrap">
         <div class="fp-avatar" id="fp-avatar-img" style="display:none;"></div>
         <div class="fp-avatar fp-avatar-fallback" id="fp-avatar-fallback">?</div>
@@ -1367,133 +1405,45 @@
         <button type="button" class="fp-recrop-btn fp-recrop-btn--avatar" id="fp-avatar-recrop-btn" hidden title="Recrop">✏️</button>
         <p class="fp-avatar-hint" id="fp-avatar-hint" hidden>Recommended: 400 × 400px</p>
       </div>
-
-      <div class="fp-header-card-info">
+      <div class="fp-pfp-box-info">
         <div class="fp-name-row">
           <h1 class="fp-name" id="fp-name">Loading…</h1>
+          <span class="fp-handle" id="fp-handle"></span>
           <span class="fp-follows-you-badge" id="fp-follows-you-badge" hidden>Follows You</span>
-          <div class="fp-name-edit-box" id="fp-name-edit-box" hidden>
-            <span class="fp-name-edit-label">Name</span>
-            <input type="text" class="fp-name-edit-input" id="fp-name-edit-input" maxlength="20" placeholder="Display name" />
-          </div>
         </div>
-        <p class="fp-handle" id="fp-handle"></p>
-
-        <div class="fp-stats">
-          <button type="button" class="fp-stat" id="fp-following-stat"><b id="fp-following-count">0</b><span>Following</span></button>
-          <button type="button" class="fp-stat" id="fp-follower-stat"><b id="fp-follower-count">0</b><span>Followers</span></button>
-          <button type="button" class="fp-stat" id="fp-clubs-stat"><b id="fp-clubs-count">0</b><span>Clubs</span></button>
+        <div class="fp-name-edit-box" id="fp-name-edit-box" hidden>
+          <span class="fp-name-edit-label">Name</span>
+          <input type="text" class="fp-name-edit-input" id="fp-name-edit-input" maxlength="20" placeholder="Display name" />
         </div>
       </div>
     </div>
 
-    <div class="fp-tabs-row">
-      <div class="fp-tabs">
-        <button class="fp-tab active" id="fp-tab-home" type="button">Home</button>
-        <button class="fp-tab" id="fp-tab-characters" type="button">Characters</button>
-        <button class="fp-tab" id="fp-tab-gallery" type="button">Gallery</button>
-        <button class="fp-tab" id="fp-tab-stories" type="button">Stories</button>
-        <button class="fp-tab" id="fp-tab-newspaper" type="button">Newspapers</button>
-      </div>
-      <div class="fp-header-action" id="fp-header-actions"></div>
+    <div class="fp-stats-box">
+      <div class="fp-stat-tile"><b id="fp-stat-level">1</b><span>Level</span></div>
+      <div class="fp-stat-tile"><b id="fp-stat-stories">0</b><span>Stories</span></div>
+      <div class="fp-stat-tile"><b id="fp-stat-characters">0</b><span>Characters</span></div>
+      <div class="fp-stat-tile"><b id="fp-stat-gallery">0</b><span>Gallery</span></div>
+      <div class="fp-stat-tile"><b id="fp-stat-views">0</b><span>Page Views</span></div>
     </div>
   </div>
 </div>
 
 <div id="fp-home-view">
 
-  <!-- Big "Text" info box -- Bio, Pronouns, Fun Fact. Sits right under the
-       header card, above the Featured Stories/Characters/Gallery grid. -->
+  <!-- Big box -- Bio/Pronouns/Fun Fact squeezed together on the left 2/3,
+       Featured Submission (latest post across character/story/gallery) on
+       the right 1/3. -->
   <div class="fp-about-box">
     <div class="fp-about-box-inner">
-      <img class="fp-about-box-deco" src="/images/home/decoration-8.png" alt="" />
-      <p class="fp-home-side-label">About</p>
-      <div id="fp-about-rows"></div>
-    </div>
-  </div>
-
-  <div class="fp-home-grid">
-
-    <aside class="fp-home-side">
-      <img class="fp-home-side-deco" src="/images/home/decoration-1.png" alt="" />
-
-      <div class="fp-home-side-section fp-home-side-featured-club">
-        <p class="fp-home-side-label">Featured Club</p>
-        <a class="fp-side-club-card" id="fp-side-club-card" href="#" hidden>
-          <img id="fp-side-club-badge" src="" alt="" />
-          <span id="fp-side-club-name"></span>
-        </a>
-        <p class="fp-side-club-empty" id="fp-side-club-empty" hidden><em>No Featured Clubs.</em></p>
-        <div id="fp-feature-club-section" hidden>
-          <p class="fp-featured-editor-note">Pick a club you're a member of to showcase on your profile! Its badge (or icon, if it hasn't set a custom badge) will appear next to its name here.</p>
-          <div id="fp-featured-club-editor"></div>
-        </div>
+      <div class="fp-about-fields">
+        <img class="fp-about-box-deco" src="/images/home/decoration-8.png" alt="" />
+        <p class="fp-home-side-label">About</p>
+        <div id="fp-about-rows"></div>
       </div>
-
-      <div class="fp-home-side-divider"></div>
-
-      <div class="fp-home-side-section">
-        <p class="fp-home-side-label">Links</p>
-        <ul class="fp-links-list" id="fp-links-list"></ul>
-        <div id="fp-links-editor" hidden></div>
-        <p id="fp-links-error" class="fp-links-error" hidden>Please put a valid link.</p>
+      <div class="fp-featured-sub-col">
+        <p class="fp-home-side-label">Featured Submission</p>
+        <div id="fp-featured-sub"><p class="fp-featured-empty">Loading…</p></div>
       </div>
-
-      <div class="fp-home-side-divider"></div>
-
-      <div class="fp-home-side-section fp-home-side-activity">
-        <p class="fp-home-side-label">Recent Activity</p>
-        <div class="fp-activity-list" id="fp-activity-list"><p class="fp-featured-empty">Loading…</p></div>
-      </div>
-
-      <div class="fp-home-side-divider"></div>
-
-      <div class="fp-home-side-section fp-home-side-following">
-        <p class="fp-home-side-label">Following</p>
-        <div class="fp-following-preview-list" id="fp-following-preview-list"><p class="fp-featured-empty">Loading…</p></div>
-      </div>
-    </aside>
-
-    <div class="fp-home-main">
-
-      <section class="fp-featured">
-        <p class="fp-featured-title">Featured Stories<img class="fp-featured-title-deco" src="/images/home/decoration-1.png" alt="" /></p>
-        <div id="fp-featured-stories"></div>
-        <div id="fp-featured-stories-editor" hidden></div>
-      </section>
-
-      <section class="fp-featured">
-        <p class="fp-featured-title">Featured Characters<img class="fp-featured-title-deco" src="/images/home/decoration-2.png" alt="" /></p>
-        <div id="fp-featured-characters"></div>
-        <div id="fp-featured-characters-editor" hidden></div>
-      </section>
-
-      <section class="fp-featured">
-        <p class="fp-featured-title">Featured Gallery<img class="fp-featured-title-deco" src="/images/home/decoration-3.png" alt="" /></p>
-        <div id="fp-featured-gallery"></div>
-        <div id="fp-featured-gallery-editor" hidden></div>
-      </section>
-
-      <section class="fp-featured fp-newspaper-home">
-        <div class="fp-newspaper-home-header">
-          <p class="fp-featured-title" style="margin-bottom:0;">Latest Newspaper<img class="fp-featured-title-deco" src="/images/home/decoration-4.png" alt="" /></p>
-          <button class="fp-newspaper-new-btn" id="fp-newspaper-new-btn-home" type="button" hidden>+ New Post</button>
-        </div>
-        <div id="fp-newspaper-home"><p class="fp-featured-empty">Loading…</p></div>
-      </section>
-
-    </div>
-
-  </div>
-
-  <div class="fp-disclaimer">
-    <div class="fp-disclaimer-box">
-      <p>
-        <span class="fp-disclaimer-highlight" id="fp-disclaimer-domain">this site</span> is a website made by <a href="/fanpages/veekitpaws">VeekitPaws</a>, the author of <strong>Between Two Worlds</strong>.
-        Consider supporting our website and the original book by <a href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">Donating Here</a>.
-        Donations are completely optional, and they help support this site + keep this little 'vee nice and fed! I appreciate you all for hanging out! &lt;3
-      </p>
-      <span class="fp-disclaimer-sig">— VeekitPaws</span>
     </div>
   </div>
 
@@ -1674,7 +1624,6 @@
     setTimeout(tryScroll, 150);
     setTimeout(tryScroll, 500);
   }
-  document.getElementById('fp-disclaimer-domain').textContent = location.hostname.replace(/^www\./, '');
   window.fpFixLinks();
 
   // Story bcards (Stories tab and Home's Featured Stories both use these
@@ -3461,8 +3410,6 @@
     }
   }
 
-  document.getElementById('fp-following-stat').addEventListener('click', () => openFollowModal('following'));
-  document.getElementById('fp-follower-stat').addEventListener('click', () => openFollowModal('followers'));
   document.getElementById('fp-follow-modal-close').addEventListener('click', () => { fpFollowModalOverlay.hidden = true; });
   fpFollowModalOverlay.addEventListener('click', (e) => { if (e.target === fpFollowModalOverlay) fpFollowModalOverlay.hidden = true; });
 
@@ -3531,8 +3478,6 @@
       fpFollowList.innerHTML = '<p class="fp-follow-empty">Couldn\'t load this list right now.</p>';
     }
   }
-  document.getElementById('fp-clubs-stat').addEventListener('click', openClubsModal);
-
   // ── Featured rows (display mode) ────────────────────────────────────────
   // Links straight to the specific character/gallery entry on the
   // Characters/Gallery tab (via ?char=/gallery=#tab, read on load below)
@@ -3664,25 +3609,10 @@
     }
   }
 
-  // ── Header action button ────────────────────────────────────────────────
+  // ── Header action button (sits on the banner itself now) ────────────────
   function renderActions(author, isFollowing) {
     const wrap = document.getElementById('fp-header-actions');
     wrap.innerHTML = '';
-
-    // Only the Home tab is really "the profile" worth sharing as a link —
-    // Characters/Gallery/Stories/Newspaper tabs don't get their own share
-    // button here.
-    if (activeTabName === 'home') {
-      const shareBtn = document.createElement('button');
-      shareBtn.className = 'fp-share-icon-btn';
-      shareBtn.type = 'button';
-      shareBtn.title = 'Share this profile';
-      shareBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>';
-      shareBtn.addEventListener('click', (e) => {
-        fpShare(e.currentTarget, window.location.origin + window.fpUrl(`/${USERNAME}`));
-      });
-      wrap.appendChild(shareBtn);
-    }
 
     if (author.is_self) {
       // Home shows the usual "Edit Profile" — every other tab links straight
@@ -3835,16 +3765,6 @@
   function enterEditMode() {
     if (!currentAuthor) return;
     editMode = true;
-    editLinks = (currentAuthor.account_links || []).map(l => ({ ...l }));
-    editFeatured.character = (currentAuthor.featured_characters || []).map(it => ({ ...it }));
-    editFeatured.gallery = (currentAuthor.featured_gallery || []).map(it => ({ ...it }));
-    editFeaturedClub = currentAuthor.featured_club ? { ...currentAuthor.featured_club } : null;
-    // Seeded from the (possibly default-computed, unlocked) list the server
-    // returned -- Saving without changing anything still writes real rows
-    // and permanently locks the category from then on, which is intended.
-    editFeatured.story = (currentAuthor.featured_stories || []).map(it => ({
-      ref_id: String(it.id), title: it.site_title, image_url: it.cover_url, link_url: `/${it.story_path}`,
-    }));
 
     document.body.classList.add('fp-editing');
     document.getElementById('fp-edit-bar').hidden = false;
@@ -3860,14 +3780,6 @@
     document.getElementById('fp-avatar-recrop-btn').hidden = !currentAuthor.avatar;
 
     renderAboutEditor();
-    renderLinksEditor();
-    renderFeaturedEditor('story', 'Feature up to three of your favorite stories! Defaults to your own latest-updated stories until you pick your own set here.');
-    renderFeaturedEditor('character', 'Feature your top three favorite characters! Can be your own characters, if you\'ve made them, or three characters from stories/art/people you love! Feel free to search for those that stand out to you~');
-    renderFeaturedEditor('gallery', 'Feature your top three favorite gallery pieces! Can be your own artwork, if you\'ve posted your commissions/art here, or three art pieces from stories/artists you love on the site! Feel free to search for those that stand out to you~');
-    document.getElementById('fp-side-club-card').hidden = true;
-    document.getElementById('fp-side-club-empty').hidden = true;
-    document.getElementById('fp-feature-club-section').hidden = false;
-    renderFeaturedClubEditor();
   }
 
   function exitEditMode() {
@@ -3880,16 +3792,6 @@
     document.getElementById('fp-avatar-hint').hidden = true;
     document.getElementById('fp-banner-recrop-btn').hidden = true;
     document.getElementById('fp-avatar-recrop-btn').hidden = true;
-    document.getElementById('fp-links-editor').hidden = true;
-    document.getElementById('fp-links-list').hidden = false;
-    document.getElementById('fp-featured-stories-editor').hidden = true;
-    document.getElementById('fp-featured-stories').hidden = false;
-    document.getElementById('fp-featured-characters-editor').hidden = true;
-    document.getElementById('fp-featured-characters').hidden = false;
-    document.getElementById('fp-featured-gallery-editor').hidden = true;
-    document.getElementById('fp-featured-gallery').hidden = false;
-    document.getElementById('fp-feature-club-section').hidden = true;
-    document.getElementById('fp-featured-club-dropdown')?.remove();
     document.getElementById('fp-name').hidden = false;
     document.getElementById('fp-name-edit-box').hidden = true;
     loadProfile();
@@ -4036,23 +3938,6 @@
   document.getElementById('fp-edit-cancel').addEventListener('click', exitEditMode);
 
   document.getElementById('fp-edit-save').addEventListener('click', async () => {
-    const linksError = document.getElementById('fp-links-error');
-    document.querySelectorAll('#fp-links-editor input[data-field="url"]').forEach(inp => inp.classList.remove('fp-link-input--invalid'));
-    linksError.hidden = true;
-    let firstInvalidInput = null;
-    editLinks.forEach((l, i) => {
-      if (l.url && l.url.trim() && !isSafeLinkUrl(l.url)) {
-        const inp = document.querySelector(`#fp-links-editor input[data-field="url"][data-i="${i}"]`);
-        if (inp) { inp.classList.add('fp-link-input--invalid'); firstInvalidInput = firstInvalidInput || inp; }
-      }
-    });
-    if (firstInvalidInput) {
-      linksError.hidden = false;
-      firstInvalidInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      firstInvalidInput.focus();
-      return;
-    }
-
     const saveBtn = document.getElementById('fp-edit-save');
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving…';
@@ -4062,8 +3947,6 @@
         const el = document.getElementById(`fp-edit-${key}`);
         if (el) fields[key] = el.value;
       });
-      fields.account_links = editLinks.filter(l => l.url);
-      fields.featured_club_slug = editFeaturedClub ? editFeaturedClub.slug : '';
       const nameVal = document.getElementById('fp-name-edit-input').value.trim();
       if (nameVal) fields.display_name = nameVal;
 
@@ -4072,14 +3955,6 @@
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(fields),
       });
-
-      await Promise.all(['character', 'gallery', 'story'].map(kind =>
-        fetch('/api/account/featured', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...authHeaders() },
-          body: JSON.stringify({ kind, items: editFeatured[kind] }),
-        })
-      ));
     } catch {}
     saveBtn.disabled = false;
     saveBtn.textContent = 'Save';
@@ -4440,7 +4315,11 @@
   }
 
   async function loadNewspaperHome() {
+    // The Home tab's "Latest Newspaper" preview section was removed in the
+    // profile redesign -- this is still called from the compose/delete
+    // flows below, so it just no-ops once that container's gone.
     const wrap = document.getElementById('fp-newspaper-home');
+    if (!wrap) return;
     const newBtn = document.getElementById('fp-newspaper-new-btn-home');
     newBtn.hidden = !(currentAuthor && currentAuthor.is_self);
     try {
@@ -4713,7 +4592,6 @@
     document.getElementById('fp-newspaper-compose-overlay').hidden = true;
     document.getElementById('fp-newspaper-gif-picker').hidden = true;
   }
-  document.getElementById('fp-newspaper-new-btn-home').addEventListener('click', () => openNewspaperComposer(null));
   document.getElementById('fp-newspaper-compose-close').addEventListener('click', closeNewspaperComposer);
   document.getElementById('fp-newspaper-cancel-btn').addEventListener('click', closeNewspaperComposer);
 
@@ -4902,9 +4780,6 @@
       document.getElementById('fp-name').textContent = a.display_name;
       document.getElementById('fp-handle').textContent = `@${a.username}`;
       document.getElementById('fp-follows-you-badge').hidden = a.is_self || !data.follows_viewer;
-      document.getElementById('fp-follower-count').textContent = data.follower_count;
-      document.getElementById('fp-following-count').textContent = data.following_count;
-      document.getElementById('fp-clubs-count').textContent = data.club_count || 0;
       document.title = `${a.display_name} ✦ BTW`;
       // Re-derive the background for whichever tab is already active (e.g.
       // a fresh page load straight into #characters/#gallery, where
@@ -4939,7 +4814,8 @@
         document.getElementById('fp-avatar-fallback').textContent = a.display_name.charAt(0).toUpperCase();
       }
 
-      // About stats
+      // About box -- Pronouns/Bio/Fun Fact, squeezed together rather than
+      // a divided list.
       const aboutWrap = document.getElementById('fp-about-rows');
       aboutWrap.innerHTML = '';
       ABOUT_FIELD_DEFS.forEach(([label, key]) => {
@@ -4952,56 +4828,33 @@
         aboutWrap.appendChild(row);
       });
 
-      // Featured Club box -- always visible on every profile, same as
-      // Links/Recent Activity/Following, falling back to an italic
-      // "No Featured Clubs." placeholder when nothing's picked.
-      const fcCard = document.getElementById('fp-side-club-card');
-      const fcEmpty = document.getElementById('fp-side-club-empty');
-      if (a.featured_club) {
-        document.getElementById('fp-side-club-badge').src = a.featured_club.badge_url || '/images/nopicture2.png';
-        document.getElementById('fp-side-club-name').textContent = a.featured_club.name;
-        fcCard.href = window.fpUrl(`/club?slug=${a.featured_club.slug}`);
-        fcCard.hidden = false;
-        fcEmpty.hidden = true;
+      // Stats box -- Level, then total Stories/Characters/Gallery posted
+      // and total page views across all three.
+      document.getElementById('fp-stat-level').textContent = a.level || 1;
+      document.getElementById('fp-stat-stories').textContent = a.stats.stories_count;
+      document.getElementById('fp-stat-characters').textContent = a.stats.characters_count;
+      document.getElementById('fp-stat-gallery').textContent = a.stats.gallery_count;
+      document.getElementById('fp-stat-views').textContent = a.stats.total_views;
+
+      // Featured Submission -- defaults to the single latest character/
+      // story/gallery post across all three kinds (pinning a permanent
+      // choice is a later pass).
+      const subWrap = document.getElementById('fp-featured-sub');
+      const sub = a.latest_submission;
+      if (sub) {
+        const locked = sub.nsfw_locked;
+        subWrap.innerHTML = `
+          <a class="fp-spotlight-item" href="${locked ? '#' : window.fpUrl(sub.link_url)}">
+            <div class="fp-spotlight-img-wrap${locked ? ' fp-spotlight-img-wrap--locked' : ''}">
+              <img class="fp-spotlight-img${locked ? ' fp-spotlight-img--blurred' : ''}" src="${locked ? '/images/defaultchar.jpg' : (sub.image_url || '/images/nopicture2.png')}" alt="" />
+              ${locked ? '<span class="fp-spotlight-locked-msg">18+ Must Sign In</span>' : ''}
+            </div>
+            <p class="fp-spotlight-name">${escapeHtml(sub.title)}</p>
+          </a>
+        `;
       } else {
-        fcCard.hidden = true;
-        fcEmpty.hidden = false;
+        subWrap.innerHTML = '<p class="fp-featured-empty">Nothing posted yet!</p>';
       }
-
-      // Links box
-      const linksList = document.getElementById('fp-links-list');
-      linksList.innerHTML = '';
-      (a.account_links || []).forEach(l => {
-        const li = document.createElement('li');
-        const link = document.createElement('a');
-        link.className = 'fp-link-item';
-        link.href = isSafeLinkUrl(l.url) ? l.url : '#';
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer nofollow ugc';
-        link.title = l.label;
-        link.textContent = truncate(l.label, 15);
-        li.appendChild(link);
-        const copyBtn = document.createElement('button');
-        copyBtn.type = 'button';
-        copyBtn.className = 'fp-share-btn';
-        copyBtn.title = 'Copy this link';
-        copyBtn.textContent = '🔗';
-        copyBtn.addEventListener('click', () => copyLinkUrl(l.url, copyBtn));
-        li.appendChild(copyBtn);
-        linksList.appendChild(li);
-      });
-
-      // Featured Stories / Featured Characters / Featured Gallery
-      renderFeaturedStories('fp-featured-stories', a.featured_stories);
-      renderFeaturedRow('fp-featured-characters', a.featured_characters, 'No featured characters.', 'character');
-      renderFeaturedRow('fp-featured-gallery', a.featured_gallery, 'No featured gallery.', 'gallery');
-
-      // Recent Activity + Following preview (Home tab's left info box)
-      renderRecentActivity(a.recent_activity, a.display_name || a.username);
-      loadFollowingPreview();
-
-      // Newspaper (Home tab preview)
-      loadNewspaperHome();
 
       // Stories -- loadProfile() is async and switchTab(initialTab) below
       // runs synchronously right after it's kicked off (not after it

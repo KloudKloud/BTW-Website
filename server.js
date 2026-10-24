@@ -5689,7 +5689,7 @@ async function fetchDefaultStoryCards(ownerId, limit) {
 app.get('/api/fanpage-profile/:username', async (req, res) => {
   const { rows: [author] } = await pool.query(
     `SELECT id, username, display_name, avatar, avatar_original_url, avatar_position_x, avatar_position_y, avatar_zoom,
-            pronouns, favorite_pokemon, account_bio, fun_fact, account_links,
+            pronouns, favorite_pokemon, account_bio, fun_fact, account_links, level,
             account_banner_url, account_banner_position_x, account_banner_position_y, account_banner_zoom,
             club_profile_banner_url, club_profile_banner_position_x, club_profile_banner_position_y, club_profile_banner_zoom,
             profile_theme, profile_theme_bg_url, featured_club_slug
@@ -5722,7 +5722,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
   };
   const storyOrderBy = STORY_SORTS[req.query.sort] || STORY_SORTS.page;
 
-  const [{ rows: sites }, followerCount, followingCount, clubCount, isFollowing, followsViewer, featuredChars, featuredGallery, featuredStoryIds, activity] = await Promise.all([
+  const [{ rows: sites }, followerCount, followingCount, clubCount, isFollowing, followsViewer, featuredChars, featuredGallery, featuredStoryIds, activity, statsCounts, latestSubmission] = await Promise.all([
     pool.query(
       `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.synopsis,
               ms.tags, ms.fandoms, ms.view_count, ms.rating, ms.is_complete,
@@ -5888,6 +5888,42 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
        ORDER BY ts DESC LIMIT 5`,
       [author.id]
     ),
+    // Stats box -- total Stories/Characters/Gallery posted (regardless of
+    // draft/NSFW status -- this is the owner's own gross count, not a
+    // viewer-filtered list) and total page views summed across all three.
+    pool.query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM moderator_sites WHERE owner_user_id = $1) AS stories_count,
+         (SELECT COUNT(*)::int FROM moderator_characters WHERE owner_user_id = $1) AS characters_count,
+         (SELECT COUNT(*)::int FROM moderator_gallery WHERE owner_user_id = $1) AS gallery_count,
+         (SELECT COALESCE(SUM(view_count), 0)::int FROM moderator_sites WHERE owner_user_id = $1)
+         + (SELECT COALESCE(SUM(view_count), 0)::int FROM moderator_characters WHERE owner_user_id = $1)
+         + (SELECT COALESCE(SUM(view_count), 0)::int FROM moderator_gallery WHERE owner_user_id = $1) AS total_views`,
+      [author.id]
+    ),
+    // Featured Submission -- the single latest post across all three kinds
+    // (a permanent pin is a later pass). Draft-only stories are excluded
+    // for non-owners, same visibility rule as the Stories tab itself.
+    pool.query(
+      `SELECT * FROM (
+         (SELECT 'story' AS kind, ms.id::text AS ref_id, ms.site_title AS title, ms.cover_url AS image_url,
+                 ms.story_path AS story_path, ms.created_at AS ts, false AS is_nsfw
+          FROM moderator_sites ms
+          WHERE ms.owner_user_id = $1
+            AND ($2::int = $1 OR EXISTS (
+              SELECT 1 FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+            ))
+          ORDER BY ms.created_at DESC LIMIT 1)
+         UNION ALL
+         (SELECT 'character', mc.id::text, mc.name, mc.ref_image, NULL, mc.created_at, COALESCE(mc.ref_is_nsfw, false)
+          FROM moderator_characters mc WHERE mc.owner_user_id = $1 ORDER BY mc.created_at DESC LIMIT 1)
+         UNION ALL
+         (SELECT 'gallery', mg.id::text, mg.title, mg.image_url, NULL, mg.created_at, COALESCE(mg.category <> 'sfw', false)
+          FROM moderator_gallery mg WHERE mg.owner_user_id = $1 ORDER BY mg.created_at DESC LIMIT 1)
+       ) combined
+       ORDER BY ts DESC LIMIT 1`,
+      [author.id, viewerId]
+    ),
   ]);
 
   // A few tagged-character thumbnails per story, for the Stories tab's
@@ -6017,6 +6053,25 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       account_links: author.account_links || [],
       profile_theme: author.profile_theme || 'default',
       profile_theme_bg_url: author.profile_theme_bg_url || '',
+      level: author.level || 1,
+      stats: {
+        stories_count: statsCounts.rows[0].stories_count,
+        characters_count: statsCounts.rows[0].characters_count,
+        gallery_count: statsCounts.rows[0].gallery_count,
+        total_views: statsCounts.rows[0].total_views,
+      },
+      latest_submission: (() => {
+        const sub = latestSubmission.rows[0];
+        if (!sub) return null;
+        const locked = sub.is_nsfw && !profileNsfwAllowed;
+        const linkUrl = sub.kind === 'story' ? `/${sub.story_path}`
+          : sub.kind === 'character' ? `/${author.username}?char=${sub.ref_id}#characters`
+          : `/gallery-post?id=${sub.ref_id}`;
+        return {
+          kind: sub.kind, title: sub.title, link_url: linkUrl,
+          image_url: locked ? null : sub.image_url, nsfw_locked: !!locked,
+        };
+      })(),
       featured_characters: featuredCharacters,
       featured_gallery: featuredGalleryItems,
       featured_stories: featuredStories,
