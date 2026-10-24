@@ -2000,7 +2000,7 @@ function renderCardDetail(data) {
                       ${cardBackField('Age', ch.age ? escapeHtml(ch.age) : '', true)}
                       ${cardBackField('Species', ch.species ? escapeHtml(ch.species) : '', true)}
                       ${cardBackField('Interests', ch.interests ? escapeHtml(ch.interests) : '')}
-                      ${cardBackField('Theme Song', ch.theme_song ? `<a href="${escapeHtml(ch.theme_song)}" target="_blank" rel="noopener">${escapeHtml(ch.theme_song)}</a>` : '')}
+                      ${cardBackField('Theme Song', ch.theme_song ? `<a id="lv-card-theme-song-link" href="${escapeHtml(ch.theme_song)}" target="_blank" rel="noopener">Listen</a> 🎵` : '')}
                     </div>
                     <div class="lv-card-back-divider"></div>
                     <div class="lv-card-back-col">
@@ -2032,6 +2032,32 @@ function renderCardDetail(data) {
   `;
   document.getElementById('lv-card-popup-close').addEventListener('click', closeCardDetail);
   document.getElementById('lv-card-flip-btn').addEventListener('click', toggleCardFlip);
+  const themeLink = document.getElementById('lv-card-theme-song-link');
+  if (themeLink) wireSpotifyAppLink(themeLink);
+}
+
+// Same open.spotify.com -> spotify: app-handoff trick used on the real
+// character pages (character.html/profile-template.html/story Characters
+// page) -- try the Spotify app first, fall back to the web link if the tab
+// is still visible after a beat (no app installed).
+function wireSpotifyAppLink(a) {
+  const webUrl = a.href;
+  const m = webUrl.match(/open\.spotify\.com\/(track|album|playlist|artist|episode|show)\/([A-Za-z0-9]+)/);
+  if (!m) return;
+  const spotifyUri = `spotify:${m[1]}:${m[2]}`;
+  a.addEventListener('click', (e) => {
+    e.preventDefault();
+    let fallbackTimer;
+    const cancelFallback = () => {
+      clearTimeout(fallbackTimer);
+      document.removeEventListener('visibilitychange', cancelFallback);
+      window.removeEventListener('blur', cancelFallback);
+    };
+    fallbackTimer = setTimeout(() => { cancelFallback(); window.open(webUrl, '_blank', 'noopener'); }, 1500);
+    document.addEventListener('visibilitychange', cancelFallback, { once: true });
+    window.addEventListener('blur', cancelFallback, { once: true });
+    window.location.href = spotifyUri;
+  });
 }
 
 function toggleCardFlip() {
