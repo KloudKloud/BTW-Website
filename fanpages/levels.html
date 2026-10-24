@@ -280,13 +280,13 @@
       background-image: linear-gradient(160deg, rgba(10,8,20,0.6), rgba(10,8,20,0.85)), url('/images/home/potential-box-background.png');
       background-size: cover; background-position: center;
     }
-    .lv-arcade-menu-tabs { display: flex; gap: 0.5rem; padding: 1rem 1rem 0; }
+    .lv-arcade-menu-tabs { display: flex; gap: 0.8rem; padding: 1.6rem 1.6rem 0; }
     .lv-arcade-menu-tab {
-      flex: 1; text-align: center; padding: 0.75rem 1rem; border-radius: 12px 12px 0 0; cursor: pointer;
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.95rem; color: #c9bfe0;
-      background: rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.08); border-bottom: none;
+      flex: 1; text-align: center; padding: 1rem 1.2rem; border-radius: 14px 14px 0 0; cursor: pointer;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.08rem; font-weight: 600; color: #c9bfe0;
+      background: rgba(0,0,0,0.26); border: 1px solid rgba(255,255,255,0.1); border-bottom: none;
       transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
-      display: flex; align-items: center; justify-content: center; gap: 0.4rem; user-select: none;
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem; user-select: none;
     }
     .lv-arcade-menu-tab:hover { color: #fff; background: rgba(240,192,96,0.14); transform: translateY(-2px); }
     .lv-arcade-menu-tab.active {
@@ -339,17 +339,30 @@
       0%, 100% { transform: translateY(0) rotate(-2deg); }
       50% { transform: translateY(-8px) rotate(2deg); }
     }
+    /* Wrapper's ::before is a blurred conic-gradient "color wheel" halo
+       spinning behind the button -- kept on a separate ancestor rather than
+       the button's own ::before/::after so it doesn't fight the button's
+       own gradient-shift background-position animation. */
+    .lv-arcade-spin-btn-wrap { position: relative; display: inline-flex; }
+    .lv-arcade-spin-btn-wrap::before {
+      content: ''; position: absolute; inset: -16px; border-radius: 999px; z-index: 1;
+      background: conic-gradient(from 0deg, #f0c060, #e8698a, #7fa8d9, #6fd4c0, #b388f0, #f0c060);
+      filter: blur(16px); opacity: 0.8; animation: lvaSpinWheelRotate 5s linear infinite;
+    }
     .lv-arcade-spin-btn {
-      position: relative; z-index: 3; display: inline-flex; align-items: center; gap: 0.6rem;
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.1rem; padding: 0.95rem 2.8rem; border-radius: 999px;
-      border: 2px solid rgba(255,255,255,0.3); cursor: not-allowed;
+      position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 0.7rem;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.35rem; padding: 1.05rem 3.2rem; border-radius: 999px;
+      border: 2px solid rgba(255,255,255,0.35); cursor: pointer;
       background: linear-gradient(135deg, #f0c060, #e8698a 55%, #b388f0); background-size: 200% 200%;
-      color: #1a1200; font-weight: 800; letter-spacing: 0.01em;
+      color: #1a1200; font-weight: 800; letter-spacing: 0.015em;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.3);
       box-shadow: 0 10px 28px rgba(240,192,96,0.4), inset 0 1px 0 rgba(255,255,255,0.45);
       animation: lvaSpinBtnGlow 4s ease-in-out infinite, lvaSpinBtnShift 7s ease infinite;
-      opacity: 0.94;
     }
+    .lv-arcade-spin-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+    .lv-arcade-spin-btn:not(:disabled):hover { transform: translateY(-2px); }
     .lv-arcade-spin-btn-icon { display: inline-block; animation: lvaGemFloat 3s ease-in-out infinite; }
+    @keyframes lvaSpinWheelRotate { to { transform: rotate(360deg); } }
     @keyframes lvaSpinBtnGlow {
       0%, 100% { box-shadow: 0 10px 28px rgba(240,192,96,0.4), inset 0 1px 0 rgba(255,255,255,0.45); }
       50% { box-shadow: 0 10px 38px rgba(240,192,96,0.65), inset 0 1px 0 rgba(255,255,255,0.55); }
@@ -358,6 +371,8 @@
       0%, 100% { background-position: 0% 50%; }
       50% { background-position: 100% 50%; }
     }
+    .lv-arcade-spin-cost { font-size: 0.82rem; color: #a79fc0; }
+    .lv-arcade-spin-cost strong { color: var(--gold, #f0c060); }
 
     /* ── Collection tab: Pokemon-box-style grid ──────────────────────────
        5x5 (25) slots per box, an editable title, and left/right arrows that
@@ -367,21 +382,42 @@
        same-box reordering -- both call the same moveCardTo(). */
     .lv-box-nav { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-bottom: 1.1rem; }
     .lv-box-nav-arrow {
-      width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; cursor: pointer;
-      background: rgba(240,192,96,0.14); border: 1px solid rgba(240,192,96,0.4); color: var(--gold, #f0c060);
-      font-size: 1.2rem; display: flex; align-items: center; justify-content: center;
-      transition: background 0.15s ease, transform 0.15s ease;
+      width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0; cursor: pointer; padding: 0;
+      background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.18), rgba(0,0,0,0.15)), linear-gradient(160deg, #39334e, #201c2c);
+      border: 2px solid rgba(240,192,96,0.4); color: var(--gold, #f0c060);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.12);
+      transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
     }
-    .lv-box-nav-arrow:hover { background: rgba(240,192,96,0.26); transform: scale(1.08); }
-    .lv-box-title-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.15rem; min-width: 220px; }
+    .lv-box-nav-arrow svg { width: 16px; height: 16px; fill: currentColor; }
+    .lv-box-nav-arrow:hover {
+      transform: scale(1.1); border-color: rgba(240,192,96,0.75);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.45), 0 0 14px rgba(240,192,96,0.35), inset 0 1px 0 rgba(255,255,255,0.18);
+    }
+    .lv-box-title-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+    /* The "BOX" pill -- a textured tag (BoxBackground3.png) fused to a
+       cream input field, mirroring the Pokemon-box-style title bar look. */
+    .lv-box-pill {
+      display: flex; align-items: stretch; border-radius: 999px; overflow: hidden; min-width: 200px;
+      background: linear-gradient(180deg, #f6e2a3, #dfb24f);
+      border: 2px solid rgba(255,255,255,0.45);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.5);
+    }
+    .lv-box-pill-tag {
+      display: flex; align-items: center; justify-content: center; padding: 0 1rem;
+      font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 0.92rem; color: #fff;
+      background-image: linear-gradient(160deg, rgba(10,8,20,0.4), rgba(10,8,20,0.62)), url('/images/home/box-background-3.png');
+      background-size: cover; background-position: center;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.7); border-right: 2px solid rgba(255,255,255,0.35);
+      white-space: nowrap;
+    }
     .lv-box-title-input {
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.25rem; font-weight: 700; color: #fff;
-      background: transparent; border: none; border-bottom: 2px dashed rgba(255,255,255,0.22);
-      text-align: center; padding: 0.2rem 0.4rem; width: 220px; max-width: 70vw;
-      transition: border-color 0.15s ease;
+      flex: 1; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.1rem; font-weight: 700; color: #3a2a10;
+      background: transparent; border: none; text-align: center; padding: 0.55rem 1rem; width: 120px;
+      max-width: 50vw;
     }
-    .lv-box-title-input:hover, .lv-box-title-input:focus { border-color: rgba(240,192,96,0.6); outline: none; }
-    .lv-box-title-input::placeholder { color: #8d85a3; }
+    .lv-box-title-input:focus { outline: none; background: rgba(255,255,255,0.25); }
+    .lv-box-title-input::placeholder { color: rgba(58,42,16,0.55); }
     .lv-box-page-lbl { font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; color: #a79fc0; }
 
     .lv-box-hint:not([hidden]) {
@@ -423,6 +459,70 @@
 
     .lv-arcade-shop-empty { text-align: center; padding: 2.2rem 1rem 1rem; color: #a79fc0; }
     .lv-arcade-shop-empty-icon { font-size: 2.3rem; margin-bottom: 0.6rem; }
+
+    /* ── Spin reveal overlay -- the mock spin flow's full-screen "pick a
+       card, then flip it" sequence. Same trading-card look for both the
+       face-down picker and the final reveal (just with/without the
+       .flipped class), so there's one card visual language to design
+       later instead of two. ── */
+    .lv-spin-overlay {
+      position: fixed; inset: 0; z-index: 9999; background: rgba(5,4,10,0.88);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.6rem;
+      padding: 2rem; animation: lvSpinOverlayIn 0.2s ease;
+    }
+    @keyframes lvSpinOverlayIn { from { opacity: 0; } to { opacity: 1; } }
+    .lv-spin-overlay-close {
+      position: absolute; top: 1.4rem; right: 1.6rem; width: 38px; height: 38px; border-radius: 50%;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #fff;
+      font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .lv-spin-overlay-close:hover { background: rgba(255,255,255,0.18); }
+    .lv-spin-overlay-title {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.5rem; color: #fff; text-align: center;
+      display: flex; align-items: center; gap: 0.6rem; text-shadow: 0 0 18px rgba(240,192,96,0.4);
+    }
+    .lv-spin-pick-row { display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; }
+
+    .lv-spin-card { width: 210px; height: 300px; perspective: 1200px; cursor: pointer; }
+    .lv-spin-card-inner {
+      width: 100%; height: 100%; position: relative; transform-style: preserve-3d;
+      transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .lv-spin-card.flipped .lv-spin-card-inner { transform: rotateY(180deg); }
+    .lv-spin-card-face {
+      position: absolute; inset: 0; border-radius: 18px; backface-visibility: hidden;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .lv-spin-card-back {
+      background: radial-gradient(circle at 50% 35%, rgba(240,192,96,0.25), transparent 60%), linear-gradient(160deg, #2a2240, #130f20);
+      border: 3px solid rgba(240,192,96,0.5); align-items: center; justify-content: center; font-size: 3rem;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.6), inset 0 0 50px rgba(240,192,96,0.08);
+    }
+    .lv-spin-card-front {
+      transform: rotateY(180deg); background: #0d0a14; border: 3px solid var(--gold, #f0c060);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.6), 0 0 28px rgba(240,192,96,0.35);
+    }
+    .lv-spin-card-front img { width: 100%; flex: 1; min-height: 0; object-fit: cover; }
+    .lv-spin-card-name {
+      padding: 0.7rem; text-align: center; font-family: 'Fredoka', 'Lato', cursive; font-weight: 700;
+      color: #fff; background: rgba(0,0,0,0.55); flex-shrink: 0;
+    }
+    .lv-spin-card--shiny .lv-spin-card-front {
+      border-color: #9be8ff; animation: lvSpinShinyPulse 1.6s ease-in-out infinite;
+    }
+    @keyframes lvSpinShinyPulse {
+      0%, 100% { box-shadow: 0 12px 32px rgba(0,0,0,0.6), 0 0 26px rgba(155,232,255,0.45); }
+      50% { box-shadow: 0 12px 38px rgba(0,0,0,0.6), 0 0 46px rgba(155,232,255,0.8); }
+    }
+    .lv-spin-card--picking:hover .lv-spin-card-inner { transform: translateY(-8px) scale(1.03); }
+
+    .lv-spin-result-note { font-size: 0.95rem; color: #c9bfe0; text-align: center; }
+    .lv-spin-close-btn {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1rem; padding: 0.75rem 2.4rem; border-radius: 999px;
+      border: 2px solid rgba(255,255,255,0.3); cursor: pointer;
+      background: linear-gradient(135deg, #f0c060, #e8698a); color: #1a1200; font-weight: 700;
+      box-shadow: 0 8px 20px rgba(240,192,96,0.35);
+    }
 
     @media (max-width: 720px) {
       .lv-arcade-top-row { grid-template-columns: 1fr; }
@@ -611,27 +711,39 @@
 
           <div class="lv-arcade-panel-wrap">
             <div class="lv-arcade-panel active" id="lva-panel-spin">
-              <h3 class="lv-arcade-panel-title">✨ Spin <span class="lv-arcade-badge">Coming Soon</span></h3>
+              <h3 class="lv-arcade-panel-title">✨ Spin <span class="lv-arcade-badge">Beta</span></h3>
               <div class="lv-arcade-spin-stage">
                 <div class="lv-arcade-orbit-wrap" id="lv-arcade-orbit-wrap">
                   <div class="lv-arcade-orbit-track" id="lv-arcade-orbit-track"></div>
                 </div>
-                <button class="lv-arcade-spin-btn" type="button" disabled><span class="lv-arcade-spin-btn-icon">✨</span> Spin to Win!</button>
+                <div class="lv-arcade-spin-btn-wrap">
+                  <button class="lv-arcade-spin-btn" id="lv-arcade-spin-btn" type="button">
+                    <span class="lv-arcade-spin-btn-icon">✨</span> <span id="lv-arcade-spin-btn-label">Spin to Win!</span>
+                  </button>
+                </div>
+                <div class="lv-arcade-spin-cost" id="lv-arcade-spin-cost">Costs <strong>300 gems</strong> per spin</div>
               </div>
             </div>
 
             <div class="lv-arcade-panel" id="lva-panel-collection">
               <h3 class="lv-arcade-panel-title">🃏 Collection</h3>
               <div class="lv-box-nav">
-                <button class="lv-box-nav-arrow" id="lv-box-prev" type="button" aria-label="Previous box">‹</button>
+                <button class="lv-box-nav-arrow" id="lv-box-prev" type="button" aria-label="Previous box">
+                  <svg viewBox="0 0 24 24"><polygon points="15,4 15,20 5,12" /></svg>
+                </button>
                 <div class="lv-box-title-wrap">
-                  <input class="lv-box-title-input" id="lv-box-title-input" type="text" maxlength="40" placeholder="Box 1" />
+                  <div class="lv-box-pill">
+                    <span class="lv-box-pill-tag">Box</span>
+                    <input class="lv-box-title-input" id="lv-box-title-input" type="text" maxlength="40" placeholder="1" />
+                  </div>
                   <span class="lv-box-page-lbl" id="lv-box-page-lbl">1 / 6</span>
                 </div>
-                <button class="lv-box-nav-arrow" id="lv-box-next" type="button" aria-label="Next box">›</button>
+                <button class="lv-box-nav-arrow" id="lv-box-next" type="button" aria-label="Next box">
+                  <svg viewBox="0 0 24 24"><polygon points="9,4 9,20 19,12" /></svg>
+                </button>
               </div>
               <div class="lv-box-hint-wrap">
-                <span class="lv-box-hint" id="lv-box-hint" hidden>Tap another slot to move that card here — tap it again to cancel.</span>
+                <span class="lv-box-hint" id="lv-box-hint" hidden>Tap another slot to move that card here. Tap it again to cancel.</span>
               </div>
               <div class="lv-box-grid" id="lv-box-grid"></div>
               <div class="lv-arcade-collection-empty" id="lv-box-empty-msg" hidden>
@@ -957,6 +1069,157 @@ async function loadArcadeOrbit() {
   }
 }
 
+// ── Spin (mock-tested against the real ctc.js engine/gem ledger, just a
+// plain card-image reveal for now -- "we'll work on card design later") ──
+let ctcSpinBusy = false;
+
+function spinToast(msg) {
+  if (window.fpShowShareToast) window.fpShowShareToast(msg);
+  else alert(msg);
+}
+
+function spinOverlayEl() {
+  let el = document.getElementById('lv-spin-overlay');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'lv-spin-overlay';
+    el.className = 'lv-spin-overlay';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function closeSpinOverlay() {
+  const el = document.getElementById('lv-spin-overlay');
+  if (el) el.remove();
+}
+
+const CTC_SPIN_KIND_LABEL = { free: 'Free Spin!', respin: 'Free Respin', paid: '-300 Gems', premium: 'Premium Spin' };
+
+function spinCardHtml(c, { index, pickable, id, shiny } = {}) {
+  const classes = ['lv-spin-card', pickable && 'lv-spin-card--picking', shiny && 'lv-spin-card--shiny'].filter(Boolean).join(' ');
+  return `
+    <div class="${classes}" ${id ? `id="${id}"` : ''} ${Number.isInteger(index) ? `data-index="${index}"` : ''}>
+      <div class="lv-spin-card-inner">
+        <div class="lv-spin-card-face lv-spin-card-back">❓</div>
+        <div class="lv-spin-card-face lv-spin-card-front">
+          ${c.image ? `<img src="${escapeHtml(c.image)}" alt="" loading="lazy" />` : ''}
+          <div class="lv-spin-card-name">${escapeHtml(c.name)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function showSpinPickOverlay(data) {
+  const overlay = spinOverlayEl();
+  const kindLabel = CTC_SPIN_KIND_LABEL[data.kind] || '';
+  overlay.innerHTML = `
+    <button class="lv-spin-overlay-close" id="lv-spin-overlay-close" type="button" aria-label="Close">&#10005;</button>
+    <div class="lv-spin-overlay-title">Pick a card!${kindLabel ? ` <span class="lv-arcade-badge">${escapeHtml(kindLabel)}</span>` : ''}</div>
+    <div class="lv-spin-pick-row" id="lv-spin-pick-row">
+      ${data.cards.map((c, i) => spinCardHtml(c, { index: i, pickable: true })).join('')}
+    </div>
+  `;
+  overlay.querySelectorAll('.lv-spin-card').forEach(el => {
+    el.addEventListener('click', () => pickSpinCard(parseInt(el.dataset.index, 10)));
+  });
+  document.getElementById('lv-spin-overlay-close').addEventListener('click', closeSpinOverlay);
+}
+
+async function pickSpinCard(index) {
+  const row = document.getElementById('lv-spin-pick-row');
+  if (row) row.querySelectorAll('.lv-spin-card').forEach(el => { el.style.pointerEvents = 'none'; el.style.opacity = '0.6'; });
+  try {
+    const res = await fetch('/api/ctc/spin/claim', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ index }),
+    });
+    const data = await res.json();
+    if (!res.ok) { spinToast(data.message || "Couldn't claim that card."); closeSpinOverlay(); return; }
+    showSpinResult(data);
+  } catch (e) {
+    spinToast("Couldn't claim that card — try again.");
+    closeSpinOverlay();
+  }
+}
+
+const CTC_RESULT_LABEL = {
+  new: 'New Card!', dupe: 'Duplicate',
+  shiny_new: '✨ New Shiny Card! ✨', shiny_upgrade: '✨ Upgraded to Shiny! ✨', shiny_dupe: '✨ Shiny Duplicate ✨',
+};
+
+function showSpinResult(data) {
+  const overlay = spinOverlayEl();
+  const label = CTC_RESULT_LABEL[data.result] || 'Got a card!';
+  const noteBits = [];
+  if (data.refund) noteBits.push(`+${data.refund.toLocaleString()} gems refunded`);
+  if (data.creator_paid) noteBits.push(`the creator earned ${data.creator_paid.toLocaleString()} gems`);
+  if (data.milestones && data.milestones.length) noteBits.push(`milestone bonus +${(data.milestone_bonus * data.milestones.length).toLocaleString()} gems`);
+  overlay.innerHTML = `
+    <button class="lv-spin-overlay-close" id="lv-spin-overlay-close" type="button" aria-label="Close">&#10005;</button>
+    <div class="lv-spin-overlay-title">${escapeHtml(label)}</div>
+    ${spinCardHtml(data.character, { id: 'lv-spin-reveal-card', shiny: data.is_shiny })}
+    ${noteBits.length ? `<div class="lv-spin-result-note">${escapeHtml(noteBits.join(' · '))}</div>` : ''}
+    <button class="lv-spin-close-btn" id="lv-spin-close-btn" type="button">Nice!</button>
+  `;
+  setTimeout(() => {
+    const card = document.getElementById('lv-spin-reveal-card');
+    if (card) card.classList.add('flipped');
+  }, 350);
+  document.getElementById('lv-spin-overlay-close').addEventListener('click', finishSpinFlow);
+  document.getElementById('lv-spin-close-btn').addEventListener('click', finishSpinFlow);
+}
+
+function finishSpinFlow() {
+  closeSpinOverlay();
+  loadArcadeStats();
+  loadCollection();
+}
+
+async function startSpin() {
+  if (ctcSpinBusy) return;
+  ctcSpinBusy = true;
+  const btn = document.getElementById('lv-arcade-spin-btn');
+  const label = document.getElementById('lv-arcade-spin-btn-label');
+  const prevLabel = label.textContent;
+  const track = document.getElementById('lv-arcade-orbit-track');
+  btn.disabled = true;
+  label.textContent = 'Spinning…';
+  track.style.animationDuration = '4s';
+  try {
+    const res = await fetch('/api/ctc/spin', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: '{}',
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      spinToast(data.error === 'insufficient'
+        ? `You need ${data.cost.toLocaleString()} gems for that — you have ${(data.gems || 0).toLocaleString()}.`
+        : (data.message || "Couldn't spin right now."));
+      return;
+    }
+    showSpinPickOverlay(data);
+  } catch (e) {
+    spinToast("Couldn't spin right now — try again.");
+  } finally {
+    track.style.animationDuration = '';
+    btn.disabled = false;
+    label.textContent = prevLabel;
+    ctcSpinBusy = false;
+  }
+}
+document.getElementById('lv-arcade-spin-btn').addEventListener('click', startSpin);
+
+// A spin pending from an earlier visit (paid for, never claimed) needs to
+// resurface so it isn't silently stuck -- re-show the same two cards.
+async function checkPendingSpin() {
+  try {
+    const res = await fetch('/api/ctc/spin/pending', { headers: authHeaders() });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.cards && data.cards.length) showSpinPickOverlay(data);
+  } catch (e) {}
+}
+
 // ── Collection tab: Pokemon-box-style grid ──────────────────────────────
 // Boxes/slot contents come from /api/ctc/collection (server auto-places any
 // newly collected card in the nearest free slot on every load). Reordering
@@ -991,7 +1254,7 @@ function renderCollectionBox() {
 
   const titleInput = document.getElementById('lv-box-title-input');
   titleInput.value = box.title || '';
-  titleInput.placeholder = `Box ${box.index + 1}`;
+  titleInput.placeholder = `${box.index + 1}`;
   document.getElementById('lv-box-page-lbl').textContent = `${ctcCurrentBox + 1} / ${CTC_BOXES.length}`;
 
   const grid = document.getElementById('lv-box-grid');
@@ -1222,6 +1485,7 @@ if (token) {
   loadArcadeStats();
   loadArcadeOrbit();
   loadCollection();
+  checkPendingSpin();
 }
 </script>
 </body>

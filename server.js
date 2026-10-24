@@ -2687,6 +2687,52 @@ app.post('/api/ctc/collection/move', requireAuth, async (req, res) => {
   }
 });
 
+// ── Spin (website front-end for the same ctc.js engine the Discord bot
+// already uses — one unclaimed spin at a time, rolls two cards, the viewer
+// picks one to keep). Spin pricing/odds/free-spin cooldown all live in
+// ctc.js's CONFIG, not here. ctc.js itself only deals in character_id/name
+// (the bot renders those as plain text), so the site-only image field gets
+// stitched on here rather than in the shared module.
+async function ctcImageMap(characterIds) {
+  if (!characterIds.length) return new Map();
+  const { rows } = await pool.query(
+    `SELECT id, COALESCE(NULLIF(thumb_image_url, ''), ref_image) AS image FROM moderator_characters WHERE id = ANY($1::int[])`,
+    [characterIds]
+  );
+  return new Map(rows.map(r => [r.id, r.image]));
+}
+async function withCtcCardImages(result) {
+  if (result.cards) {
+    const images = await ctcImageMap(result.cards.map(c => c.character_id));
+    result.cards = result.cards.map(c => ({ ...c, image: images.get(c.character_id) || null }));
+  }
+  if (result.character) {
+    const images = await ctcImageMap([result.character.id]);
+    result.character = { ...result.character, image: images.get(result.character.id) || null };
+  }
+  return result;
+}
+
+app.post('/api/ctc/spin', requireAuth, async (req, res) => {
+  const mode = req.body && req.body.mode === 'premium' ? 'premium' : 'auto';
+  const result = await ctc.spin(req.user.id, mode);
+  if (result.error) return res.status(400).json(result);
+  res.json(await withCtcCardImages(result));
+});
+
+app.get('/api/ctc/spin/pending', requireAuth, async (req, res) => {
+  const result = await ctc.getPendingSpin(req.user.id);
+  if (result.error) return res.status(404).json(result);
+  res.json(await withCtcCardImages(result));
+});
+
+app.post('/api/ctc/spin/claim', requireAuth, async (req, res) => {
+  const index = parseInt(req.body.index, 10);
+  const result = await ctc.claim(req.user.id, index);
+  if (result.error) return res.status(400).json(result);
+  res.json(await withCtcCardImages(result));
+});
+
 // ── Comments (art) ────────────────────────────────────────────────────────────
 
 app.get('/api/comments', async (req, res) => {
