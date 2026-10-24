@@ -220,7 +220,7 @@ module.exports = function mountBotRoutes(app, { pool, gems, ctc, createCharacter
   r.get('/ctc/spin/pending', withUser, async (req, res) => send(res, await ctc.getPendingSpin(req.botUser.id)));
   r.post('/ctc/spin/claim', withUser, async (req, res) => {
     const index = toInt(req.body && req.body.index);
-    if (index === null) return res.status(400).json({ error: 'Pick one of the two cards.' });
+    if (index === null) return res.status(400).json({ error: 'Pick one of the cards.' });
     send(res, await ctc.claim(req.botUser.id, index));
   });
 

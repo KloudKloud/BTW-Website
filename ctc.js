@@ -10,6 +10,7 @@ const CONFIG = {
   // — prices (gems) —
   SPIN_COST: 300,
   PREMIUM_SPIN_COST: 1000,
+  SPIN_DRAW_COUNT: 3,              // cards rolled per spin; the viewer picks one to keep
   DIRECT_BUY_COST: 25000,
   SHINY_UPGRADE_COST: 125000,
 
@@ -43,7 +44,7 @@ const ERRORS = {
   empty_pool: 'There are no cards in the library to roll yet!',
   insufficient: "You don't have enough gems for that.",
   no_pending: "You don't have a spin waiting to be claimed.",
-  bad_index: 'Pick one of the two cards.',
+  bad_index: 'Pick one of the cards.',
   card_gone: 'That character was deleted — pick the other card.',
   no_character: "That character doesn't exist.",
   already_owned: 'You already own this card.',
@@ -229,11 +230,11 @@ module.exports = function createCtc(pool, gems, { rng = Math.random } = {}) {
     return premium ? C.PREMIUM_SHINY_CHANCE : C.SHINY_CHANCE;
   }
 
-  // Two DIFFERENT characters, uniformly random — except the hunted one counts extra.
-  function pickTwo(pool, huntId) {
+  // `count` DIFFERENT characters, uniformly random — except the hunted one counts extra.
+  function pickCards(pool, huntId, count) {
     const candidates = pool.slice();
     const picks = [];
-    for (let n = 0; n < 2 && candidates.length; n++) {
+    for (let n = 0; n < count && candidates.length; n++) {
       const weights = candidates.map((c) => (c.id === huntId ? C.HUNT_SPAWN_BOOST : 1));
       let roll = rng() * weights.reduce((a, b) => a + b, 0);
       let i = 0;
@@ -284,7 +285,7 @@ module.exports = function createCtc(pool, gems, { rng = Math.random } = {}) {
     };
   }
 
-  // Roll two cards. mode: 'auto' (free weekly -> respin token -> paid) or 'premium'. One unclaimed spin at a time.
+  // Roll CONFIG.SPIN_DRAW_COUNT cards. mode: 'auto' (free weekly -> respin token -> paid) or 'premium'. One unclaimed spin at a time.
   async function spin(userId, mode = 'auto') {
     return withTx(async (client) => {
       let user = await lockUser(client, userId);
@@ -313,7 +314,7 @@ module.exports = function createCtc(pool, gems, { rng = Math.random } = {}) {
       if (kind === 'respin') await client.query('UPDATE users SET respin_tokens = respin_tokens - 1 WHERE id = $1', [userId]);
 
       const { rows: [hunt] } = await client.query('SELECT character_id, chain FROM ctc_hunt WHERE user_id = $1', [userId]);
-      const picks = pickTwo(pool_, hunt ? hunt.character_id : null);
+      const picks = pickCards(pool_, hunt ? hunt.character_id : null, C.SPIN_DRAW_COUNT);
       const rolled = picks.map((c) => {
         const isHunt = !!hunt && hunt.character_id === c.id;
         return { character_id: c.id, shiny: rng() < shinyChance(premium, isHunt, hunt ? hunt.chain : 0) };
