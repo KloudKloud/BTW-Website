@@ -153,26 +153,43 @@
        gold/blue/purple are claimed by those gates. Scoped under .cc-page,
        not the shared .char-editor-modal rule -- that class is still used
        undecorated by the in-story character modal.
-       This card is a full scrolling form (2000px+ tall), not a compact
-       ~400px popup, and box-background-3.png has a bright moon baked into
-       it. Earlier attempts: tiling repeated that moon as a distracting
-       column of duplicate glows down the right side; `background-
-       attachment: fixed` only painted it for one viewport's height,
-       leaving the rest plain black below the fold; sizing it to the
-       card's own width and not repeating left the remainder of the card
-       uncovered past the image's natural height, cutting off a third of
-       the way down. `background-size: cover` with no repeat is the one
-       setting that's actually guaranteed to fill the whole box top to
-       bottom by definition (that's what "cover" means) with only ONE
-       instance of the image, so the moon shows exactly once -- it just
-       needed a lighter scrim than the ~400px gate-popup cards use (their
-       rgba(...,0.88/0.82) crushed this much taller card to near-black). */
+       The art now lives on a ::before instead of the card's own
+       background: a plain `background-image` painted crisp/sharp read as
+       busy behind form text, and a straight `filter: blur()` on the card
+       itself would've blurred the text too. The ::before is blurred and
+       sits at z-index:-1 (paints below the card's normal-flow children
+       without needing z-index on every one of them), with `overflow:
+       hidden` on the card clipping its -20px bleed (sized a bit bigger
+       than the card so the blur doesn't sample a hard edge).
+       Sizing: `background-size: cover` (the original approach) recomputes
+       per element, so the main card (2000px+ tall) and the shorter Links
+       card each zoom the art to a different scale -- the starfield read as
+       two different images side by side. Switched the art layer to a
+       fixed width (not cover) + `repeat-y` so every card tiles the same
+       zoom level of stars top-to-bottom, however tall it is -- `background-
+       attachment: fixed` was tried earlier (see git history) and rejected
+       since it only paints one viewport-height, leaving blank space below
+       the fold on a page this long; tiling is the only approach that
+       actually covers an arbitrarily tall card at a *fixed* scale. Tiling
+       was avoided for box-background-3 (a bright moon repeats as an
+       obvious column of duplicate glows) but box-background-2 is a plain
+       starfield with no single focal object, so a repeat seam isn't
+       noticeable, especially softened by the blur. */
     .cc-page .char-editor-modal {
-      background-image: linear-gradient(160deg, rgba(10,8,14,0.55), rgba(10,8,14,0.42)), url('/images/home/box-background-2.png');
-      background-size: cover, cover;
-      background-position: center, center;
-      background-repeat: no-repeat, no-repeat;
+      position: relative;
+      overflow: hidden;
       border-top: 3px solid #1fb6a8;
+    }
+    .cc-page .char-editor-modal::before {
+      content: '';
+      position: absolute;
+      inset: -20px;
+      background-image: linear-gradient(160deg, rgba(10,8,14,0.42), rgba(10,8,14,0.3)), url('/images/home/box-background-2.png');
+      background-size: cover, 1000px auto;
+      background-position: center, center top;
+      background-repeat: no-repeat, repeat-y;
+      filter: blur(3px);
+      z-index: -1;
     }
     /* Busier art behind the card means the plain grey label text needs a
        touch more contrast to stay legible -- a tight drop shadow, not a
