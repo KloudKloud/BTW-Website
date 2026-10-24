@@ -484,6 +484,15 @@
       box-shadow: 0 0 0 3px rgba(240,192,96,0.5), 0 0 22px rgba(240,192,96,0.65);
     }
     .lv-box-slot img { width: 100%; height: 100%; object-fit: cover; }
+    /* Outside Reorder mode, a filled slot opens the full card detail view
+       instead -- a lighter hover lift than the reorder glow, just enough to
+       signal "clickable" without implying it's grabbable. */
+    .lv-box-grid:not(.lv-box-grid--reorder) .lv-box-slot:not(.lv-box-slot--empty) {
+      cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .lv-box-grid:not(.lv-box-grid--reorder) .lv-box-slot:not(.lv-box-slot--empty):hover {
+      transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.4), 0 0 14px rgba(240,192,96,0.35);
+    }
     .lv-box-slot-shiny {
       position: absolute; top: 3px; right: 4px; font-size: 0.85rem; z-index: 2;
       filter: drop-shadow(0 0 4px rgba(255,255,255,0.8));
@@ -648,7 +657,7 @@
     }
     .lv-spin-pick-row { display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; }
 
-    .lv-spin-card { width: 210px; height: 300px; perspective: 1200px; cursor: pointer; }
+    .lv-spin-card { width: 260px; height: 370px; perspective: 1200px; cursor: pointer; }
     .lv-spin-card-inner {
       width: 100%; height: 100%; position: relative; transform-style: preserve-3d;
       transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -662,6 +671,25 @@
       background: radial-gradient(circle at 50% 35%, rgba(240,192,96,0.25), transparent 60%), linear-gradient(160deg, #2a2240, #130f20);
       border: 3px solid rgba(240,192,96,0.5); align-items: center; justify-content: center; font-size: 3rem;
       box-shadow: 0 12px 32px rgba(0,0,0,0.6), inset 0 0 50px rgba(240,192,96,0.08);
+      position: relative; overflow: hidden;
+    }
+    /* Sparkle twinkle while hovering a pickable card -- four small soft-glow
+       dots, independently staggered, fading/scaling in over the face-down
+       back. Markup lives inside spinCardHtml()'s back face. */
+    .lv-spin-card-sparkle-wrap { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.2s ease; }
+    .lv-spin-card--picking:hover .lv-spin-card-sparkle-wrap { opacity: 1; }
+    .lv-spin-card-sparkle-wrap span {
+      position: absolute; width: 10px; height: 10px; border-radius: 50%;
+      background: radial-gradient(circle, #fff 0%, rgba(255,255,255,0) 70%);
+      animation: lvSpinTwinkle 1.3s ease-in-out infinite;
+    }
+    .lv-spin-card-sparkle-wrap span:nth-child(1) { top: 16%; left: 20%; animation-delay: 0s; }
+    .lv-spin-card-sparkle-wrap span:nth-child(2) { top: 68%; left: 74%; animation-delay: 0.3s; }
+    .lv-spin-card-sparkle-wrap span:nth-child(3) { top: 56%; left: 18%; width: 7px; height: 7px; animation-delay: 0.65s; }
+    .lv-spin-card-sparkle-wrap span:nth-child(4) { top: 22%; left: 68%; width: 7px; height: 7px; animation-delay: 0.95s; }
+    @keyframes lvSpinTwinkle {
+      0%, 100% { transform: scale(0.3); opacity: 0; }
+      50% { transform: scale(1.25); opacity: 0.95; }
     }
     .lv-spin-card-front {
       transform: rotateY(180deg); background: #0d0a14; border: 3px solid var(--gold, #f0c060);
@@ -687,6 +715,102 @@
       border: 2px solid rgba(255,255,255,0.3); cursor: pointer;
       background: linear-gradient(135deg, #f0c060, #e8698a); color: #1a1200; font-weight: 700;
       box-shadow: 0 8px 20px rgba(240,192,96,0.35);
+    }
+
+    /* ── Card detail overlay -- opening an actual collected card, "like a
+       real Pokemon card": big reference art, an animated looping video
+       behind it (normal cards get the hero's TopBackground loop; a shiny
+       card gets MainBackground3 instead, so the shiny-ness is felt the
+       instant the card opens, not just a small badge), owner/creator credit,
+       linked stories/gallery, and the collector stats. Built/torn down via
+       JS the same body-appended-overlay pattern as the spin and box-reorder
+       overlays above. ── */
+    .lv-card-detail-overlay {
+      position: fixed; inset: 0; z-index: 9999; overflow-y: auto;
+      display: flex; align-items: center; justify-content: center;
+      padding: 3rem 1.5rem; background: #050408;
+      animation: lvSpinOverlayIn 0.2s ease;
+    }
+    .lv-card-detail-bg { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+    .lv-card-detail-bg-scrim { position: fixed; inset: 0; background: rgba(6,4,10,0.58); z-index: 1; }
+    .lv-card-detail-back {
+      position: fixed; top: 1.5rem; left: 1.6rem; z-index: 3;
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.95rem; font-weight: 700;
+      padding: 0.6rem 1.3rem; border-radius: 999px; cursor: pointer;
+      background: rgba(10,8,16,0.65); border: 1px solid rgba(240,192,96,0.4); color: var(--gold, #f0c060);
+      box-shadow: 0 0 8px rgba(240,192,96,0.22);
+      transition: background 0.15s ease, box-shadow 0.15s ease;
+    }
+    .lv-card-detail-back:hover { background: rgba(240,192,96,0.18); box-shadow: 0 0 14px rgba(240,192,96,0.4); }
+    .lv-card-detail-back svg { width: 16px; height: 16px; stroke: currentColor; fill: none; }
+    .lv-card-detail-close { z-index: 3; }
+
+    .lv-card-detail-card {
+      position: relative; z-index: 2; width: 100%; max-width: 920px; margin: 2.5rem 0;
+      display: flex; gap: 2rem; padding: 2.2rem;
+      background: linear-gradient(160deg, rgba(14,11,20,0.92), rgba(10,8,14,0.88));
+      border: 2px solid rgba(255,255,255,0.14); border-radius: 26px;
+      box-shadow: 0 30px 90px rgba(0,0,0,0.6);
+    }
+    .lv-card-detail-card--shiny {
+      border-color: rgba(240,192,96,0.65);
+      animation: lvCardDetailShinyGlow 2.2s ease-in-out infinite;
+    }
+    @keyframes lvCardDetailShinyGlow {
+      0%, 100% { box-shadow: 0 30px 90px rgba(0,0,0,0.6), 0 0 30px rgba(240,192,96,0.3); }
+      50% { box-shadow: 0 30px 90px rgba(0,0,0,0.6), 0 0 55px rgba(240,192,96,0.65); }
+    }
+
+    .lv-card-detail-art-wrap {
+      flex-shrink: 0; width: 300px; position: relative; border-radius: 18px; overflow: hidden;
+      border: 3px solid rgba(255,255,255,0.18); box-shadow: 0 14px 40px rgba(0,0,0,0.5);
+      background: #1a1626; align-self: flex-start;
+    }
+    .lv-card-detail-card--shiny .lv-card-detail-art-wrap { border-color: var(--gold, #f0c060); }
+    .lv-card-detail-art-wrap img { width: 100%; display: block; object-fit: cover; }
+    .lv-card-detail-shiny-tag {
+      position: absolute; top: 0.7rem; right: 0.7rem; font-size: 0.78rem; font-weight: 700;
+      font-family: 'Fredoka', 'Lato', cursive; color: #1a1408; padding: 0.3rem 0.75rem; border-radius: 999px;
+      background: linear-gradient(135deg, #f6e2a3, #dfb24f); box-shadow: 0 0 14px rgba(240,192,96,0.65);
+    }
+
+    .lv-card-detail-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1.1rem; }
+    .lv-card-detail-name { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.9rem; color: #fff; }
+    .lv-card-detail-owner-row { display: flex; align-items: center; gap: 0.6rem; font-size: 0.92rem; color: #c9bfe0; }
+    .lv-card-detail-owner-avatar {
+      width: 30px; height: 30px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+      background: #1a1626; display: flex; align-items: center; justify-content: center;
+      border: 1px solid rgba(255,255,255,0.15); font-size: 0.85rem; font-family: 'Fredoka', cursive; color: var(--gold, #f0c060);
+    }
+    .lv-card-detail-owner-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .lv-card-detail-owner-row a { color: #fff; font-weight: 600; text-decoration: none; }
+    .lv-card-detail-owner-row a:hover { text-decoration: underline; }
+    .lv-card-detail-desc { font-size: 0.9rem; color: #a79fc0; line-height: 1.6; max-width: 56ch; white-space: pre-line; }
+
+    .lv-card-detail-stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; }
+    .lv-card-detail-stat {
+      border-radius: 12px; padding: 0.8rem; text-align: center;
+      background-image: linear-gradient(160deg, rgba(6,6,16,0.55), rgba(6,6,16,0.75)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .lv-card-detail-stat-num { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.2rem; font-weight: 700; color: #fff; }
+    .lv-card-detail-stat-lbl { font-size: 0.7rem; color: #c9bfe0; margin-top: 0.15rem; }
+
+    .lv-card-detail-section-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1rem; color: #e4ddf2; margin-bottom: 0.5rem; }
+    .lv-card-detail-chip-row { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+    .lv-card-detail-chip {
+      display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.8rem 0.4rem 0.4rem; border-radius: 999px;
+      background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.12); text-decoration: none; color: #f0f0f0;
+      font-size: 0.82rem; transition: border-color 0.15s ease, transform 0.15s ease;
+    }
+    .lv-card-detail-chip:hover { border-color: rgba(240,192,96,0.5); transform: translateY(-1px); }
+    .lv-card-detail-chip img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+
+    @media (max-width: 720px) {
+      .lv-card-detail-card { flex-direction: column; }
+      .lv-card-detail-art-wrap { width: 100%; }
     }
 
     @media (max-width: 720px) {
@@ -1295,7 +1419,10 @@ function spinCardHtml(c, { index, pickable, id, shiny } = {}) {
   return `
     <div class="${classes}" ${id ? `id="${id}"` : ''} ${Number.isInteger(index) ? `data-index="${index}"` : ''}>
       <div class="lv-spin-card-inner">
-        <div class="lv-spin-card-face lv-spin-card-back">❓</div>
+        <div class="lv-spin-card-face lv-spin-card-back">
+          ❓
+          <div class="lv-spin-card-sparkle-wrap"><span></span><span></span><span></span><span></span></div>
+        </div>
         <div class="lv-spin-card-face lv-spin-card-front">
           ${c.image ? `<img src="${escapeHtml(c.image)}" alt="" loading="lazy" />` : ''}
           <div class="lv-spin-card-name">${escapeHtml(c.name)}</div>
@@ -1371,16 +1498,38 @@ function finishSpinFlow() {
   loadCollection();
 }
 
+// Changing a *running* CSS animation's duration in place makes the browser
+// recompute its position as (elapsed-time / new-duration) -- shrinking the
+// duration from 65s to 4s this way jumps the track to wherever that ratio
+// lands instead of continuing from where it visibly was, which is the
+// "jerk"/out-of-sync bug. Fix: read the track's current on-screen offset,
+// convert it to a 0..1 fraction of one loop, then restart the animation at
+// the new duration with a matching *negative* animation-delay so playback
+// resumes from that same fraction instead of from frame zero.
+function setOrbitSpeed(durationSec) {
+  const track = document.getElementById('lv-arcade-orbit-track');
+  if (!track) return;
+  const halfWidth = track.scrollWidth / 2; // the loop (-50%) spans half the doubled track
+  let progress = 0;
+  if (halfWidth) {
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(track).transform);
+    progress = (((-matrix.m41) % halfWidth) + halfWidth) % halfWidth / halfWidth;
+  }
+  track.style.animation = 'none';
+  void track.offsetWidth; // force reflow so the 'none' actually takes before re-applying
+  track.style.animation = `lvaOrbitScroll ${durationSec}s linear infinite`;
+  track.style.animationDelay = `-${progress * durationSec}s`;
+}
+
 async function startSpin() {
   if (ctcSpinBusy) return;
   ctcSpinBusy = true;
   const btn = document.getElementById('lv-arcade-spin-btn');
   const label = document.getElementById('lv-arcade-spin-btn-label');
   const prevLabel = label.textContent;
-  const track = document.getElementById('lv-arcade-orbit-track');
   btn.disabled = true;
   label.textContent = 'Spinning…';
-  track.style.animationDuration = '4s';
+  setOrbitSpeed(4);
   try {
     const res = await fetch('/api/ctc/spin', {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: '{}',
@@ -1395,7 +1544,7 @@ async function startSpin() {
   } catch (e) {
     spinToast("Couldn't spin right now — try again.");
   } finally {
-    track.style.animationDuration = '';
+    setOrbitSpeed(65);
     btn.disabled = false;
     label.textContent = prevLabel;
     ctcSpinBusy = false;
@@ -1634,8 +1783,139 @@ function renderCollectionBox() {
       el.addEventListener('dragover', e => e.preventDefault());
       el.addEventListener('drop', onBoxSlotDrop);
     });
+  } else {
+    // Outside Reorder mode, clicking a filled slot opens the real card --
+    // big reference art, animated background, owner/links/stats.
+    grid.querySelectorAll('.lv-box-slot:not(.lv-box-slot--empty)').forEach(el => {
+      el.addEventListener('click', () => openCardDetail(parseInt(el.dataset.characterId, 10)));
+    });
   }
   syncBgHeight();
+}
+
+// ── Card detail overlay: open a collected card "for real" -- big reference
+// art, an animated loop behind it (shiny cards swap in MainBackground3
+// instead of the usual hero loop), who made the character, every
+// story/gallery post it's linked to, and the collector stats (date caught,
+// how many trainers total have it, how many have it shiny). Built/torn down
+// via JS the same body-appended-overlay pattern as the spin/box-reorder
+// overlays above.
+function cardDetailOverlayEl() {
+  let el = document.getElementById('lv-card-detail-overlay');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'lv-card-detail-overlay';
+    el.className = 'lv-card-detail-overlay';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function closeCardDetail() {
+  const el = document.getElementById('lv-card-detail-overlay');
+  if (el) el.remove();
+}
+
+async function openCardDetail(characterId) {
+  if (!Number.isInteger(characterId)) return;
+  const overlay = cardDetailOverlayEl();
+  overlay.innerHTML = `
+    <button class="lv-spin-overlay-close lv-card-detail-close" id="lv-card-detail-close-loading" type="button" aria-label="Close">&#10005;</button>
+    <div class="lv-spin-overlay-title">Loading card…</div>
+  `;
+  document.getElementById('lv-card-detail-close-loading').addEventListener('click', closeCardDetail);
+  try {
+    const res = await fetch(`/api/ctc/card/${characterId}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('bad response');
+    renderCardDetail(await res.json());
+  } catch (e) {
+    overlay.innerHTML = `
+      <button class="lv-spin-overlay-close lv-card-detail-close" id="lv-card-detail-close-err" type="button" aria-label="Close">&#10005;</button>
+      <div class="lv-spin-overlay-title">Couldn't load that card.</div>
+    `;
+    document.getElementById('lv-card-detail-close-err').addEventListener('click', closeCardDetail);
+  }
+}
+
+function renderCardDetail(data) {
+  const overlay = cardDetailOverlayEl();
+  const ch = data.character;
+  const mine = data.mine;
+  const shiny = !!(mine && mine.is_shiny);
+  const bgSrc = shiny ? '/images/home/main-background-3.mp4' : '/images/home/top-background.webm';
+
+  const statsHtml = `
+    <div class="lv-card-detail-stats-row">
+      <div class="lv-card-detail-stat">
+        <div class="lv-card-detail-stat-num">${mine && mine.obtained_at ? new Date(mine.obtained_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</div>
+        <div class="lv-card-detail-stat-lbl">Date Collected</div>
+      </div>
+      <div class="lv-card-detail-stat">
+        <div class="lv-card-detail-stat-num">${data.stats.total_owners.toLocaleString()}</div>
+        <div class="lv-card-detail-stat-lbl">Trainers Own This</div>
+      </div>
+      <div class="lv-card-detail-stat">
+        <div class="lv-card-detail-stat-num">${data.stats.total_shiny_owners.toLocaleString()} ✨</div>
+        <div class="lv-card-detail-stat-lbl">Have It Shiny</div>
+      </div>
+    </div>
+  `;
+
+  const storiesHtml = data.stories.length ? `
+    <div>
+      <div class="lv-card-detail-section-title">📖 Appears In</div>
+      <div class="lv-card-detail-chip-row">
+        ${data.stories.map(s => `
+          <a class="lv-card-detail-chip" href="${fpUrl('/' + s.path)}">
+            ${s.cover ? `<img src="${escapeHtml(s.cover)}" alt="" />` : ''}
+            <span>${escapeHtml(s.title)}</span>
+          </a>
+        `).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  const galleryHtml = data.gallery.length ? `
+    <div>
+      <div class="lv-card-detail-section-title">🖼️ Linked Gallery</div>
+      <div class="lv-card-detail-chip-row">
+        ${data.gallery.map(g => `
+          <a class="lv-card-detail-chip" href="${fpUrl('/gallery-post?id=' + g.id)}">
+            ${g.image ? `<img src="${escapeHtml(g.image)}" alt="" />` : ''}
+            <span>${escapeHtml(g.title || 'Untitled')}</span>
+          </a>
+        `).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  overlay.innerHTML = `
+    <video class="lv-card-detail-bg" autoplay muted loop playsinline src="${bgSrc}"></video>
+    <div class="lv-card-detail-bg-scrim"></div>
+    <button class="lv-card-detail-back" id="lv-card-detail-back" type="button">
+      <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      Back
+    </button>
+    <button class="lv-spin-overlay-close lv-card-detail-close" id="lv-card-detail-close" type="button" aria-label="Close">&#10005;</button>
+    <div class="lv-card-detail-card${shiny ? ' lv-card-detail-card--shiny' : ''}">
+      <div class="lv-card-detail-art-wrap">
+        ${ch.image ? `<img src="${escapeHtml(ch.image)}" alt="${escapeHtml(ch.name)}" />` : ''}
+        ${shiny ? `<div class="lv-card-detail-shiny-tag">✨ Shiny</div>` : ''}
+      </div>
+      <div class="lv-card-detail-body">
+        <div class="lv-card-detail-name">${escapeHtml(ch.name)}</div>
+        <div class="lv-card-detail-owner-row">
+          <div class="lv-card-detail-owner-avatar">${avatarHtml(ch.owner, 30)}</div>
+          <span>Created by <a href="${fpUrl('/' + ch.owner.username)}">${escapeHtml(ch.owner.display_name)}</a></span>
+        </div>
+        ${ch.description ? `<div class="lv-card-detail-desc">${escapeHtml(ch.description)}</div>` : ''}
+        ${statsHtml}
+        ${storiesHtml}
+        ${galleryHtml}
+      </div>
+    </div>
+  `;
+  document.getElementById('lv-card-detail-back').addEventListener('click', closeCardDetail);
+  document.getElementById('lv-card-detail-close').addEventListener('click', closeCardDetail);
 }
 
 // The "Box N" plate: plain text by default, swapped for an inline input on

@@ -2636,6 +2636,63 @@ app.get('/api/ctc/collection', requireAuth, async (req, res) => {
   res.json(await getCollectionBoxes(req.user.id, nsfwAllowed));
 });
 
+// GET /api/ctc/card/:characterId — the full "open the card" detail view: the
+// character's own reference art/bio, who owns the character (the card's
+// creator), every story/gallery post it's linked to (reusing the exact same
+// character_story_links/gallery_character_links join tables the Characters/
+// Gallery pages already read), the viewer's own copy (when collected), and
+// site-wide collector counts (how many trainers have it at all, and how many
+// have the shiny version) so the card reads like a real trading card's back.
+app.get('/api/ctc/card/:characterId', requireAuth, async (req, res) => {
+  const characterId = parseInt(req.params.characterId, 10);
+  if (!Number.isInteger(characterId)) return res.status(400).json({ error: 'Bad character id.' });
+
+  const { rows: [ch] } = await pool.query(
+    `SELECT mc.id, mc.name, mc.description, mc.ref_image, mc.owner_user_id,
+            u.username AS owner_username, u.display_name AS owner_display_name, u.avatar AS owner_avatar
+     FROM moderator_characters mc JOIN users u ON u.id = mc.owner_user_id
+     WHERE mc.id = $1`,
+    [characterId]
+  );
+  if (!ch) return res.status(404).json({ error: 'Character not found.' });
+
+  const { rows: [mine] } = await pool.query(
+    'SELECT is_shiny, claim_count, obtained_at FROM ctc_cards WHERE user_id = $1 AND character_id = $2',
+    [req.user.id, characterId]
+  );
+
+  const { rows: [stats] } = await pool.query(
+    `SELECT COUNT(*)::int AS total_owners, COUNT(*) FILTER (WHERE is_shiny)::int AS total_shiny_owners
+     FROM ctc_cards WHERE character_id = $1`,
+    [characterId]
+  );
+
+  const { rows: stories } = await pool.query(
+    `SELECT ms.id, ms.story_path, ms.site_title, ms.cover_url
+     FROM character_story_links csl JOIN moderator_sites ms ON ms.id = csl.site_id
+     WHERE csl.character_id = $1 ORDER BY ms.id`,
+    [characterId]
+  );
+
+  const { rows: gallery } = await pool.query(
+    `SELECT mg.id, mg.title, mg.preview_image_url, mg.image_url
+     FROM gallery_character_links gcl JOIN moderator_gallery mg ON mg.id = gcl.gallery_id
+     WHERE gcl.character_id = $1 ORDER BY mg.id`,
+    [characterId]
+  );
+
+  res.json({
+    character: {
+      id: ch.id, name: ch.name, description: ch.description, image: ch.ref_image,
+      owner: { username: ch.owner_username, display_name: ch.owner_display_name || ch.owner_username, avatar: ch.owner_avatar || null },
+    },
+    mine: mine ? { is_shiny: mine.is_shiny, claim_count: mine.claim_count, obtained_at: mine.obtained_at } : null,
+    stats: { total_owners: stats.total_owners, total_shiny_owners: stats.total_shiny_owners },
+    stories: stories.map(s => ({ id: s.id, path: s.story_path, title: s.site_title, cover: s.cover_url || null })),
+    gallery: gallery.map(g => ({ id: g.id, title: g.title, image: g.preview_image_url || g.image_url })),
+  });
+});
+
 // PUT /api/ctc/collection/box/:index/title — rename one of the viewer's own boxes.
 app.put('/api/ctc/collection/box/:index/title', requireAuth, async (req, res) => {
   const boxIndex = parseInt(req.params.index, 10);
