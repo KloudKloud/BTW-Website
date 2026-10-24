@@ -121,7 +121,8 @@ const pool = new Pool({
 // Shared gem economy (site + Discord bot) — see gems.js. Every balance change goes through gems.awardGems().
 const gems = require('./gems')(pool);
 // Character Trading Cards (the collecting game) — rules and storage live in ctc.js.
-const ctc = require('./ctc')(pool, gems);
+const ctcModule = require('./ctc');
+const ctc = ctcModule(pool, gems);
 
 async function initDb() {
   await pool.query(`
@@ -2795,6 +2796,40 @@ app.get('/api/ctc/spin/pending', requireAuth, async (req, res) => {
 app.post('/api/ctc/spin/claim', requireAuth, async (req, res) => {
   const index = parseInt(req.body.index, 10);
   const result = await ctc.claim(req.user.id, index);
+  if (result.error) return res.status(400).json(result);
+  res.json(await withCtcCardImages(result));
+});
+
+// GET /api/ctc/shop — the Arcade Shop tab: every rollable character (same real-art pool spins draw
+// from), searchable by name, with the viewer's own owned/owned_shiny flags so the card can show
+// "Owned" instead of a buy button. nsfwAllowed-gated the same way the rest of the Arcade is.
+app.get('/api/ctc/shop', requireAuth, async (req, res) => {
+  const { nsfwAllowed } = await getViewerNsfwAccess(req);
+  const q = String(req.query.q || '').trim().slice(0, 80);
+  const { rows } = await pool.query(
+    `SELECT mc.id, mc.name, COALESCE(NULLIF(mc.thumb_image_url, ''), mc.ref_image) AS image,
+            cc.is_shiny
+     FROM moderator_characters mc
+     LEFT JOIN ctc_cards cc ON cc.character_id = mc.id AND cc.user_id = $1
+     WHERE mc.ref_image IS NOT NULL AND mc.ref_image <> '' AND mc.ref_image <> '/images/defaultchar.jpg'
+       AND (mc.ref_rating = 'sfw' OR $2::boolean)
+       AND ($3 = '' OR mc.name ILIKE '%' || $3 || '%')
+     ORDER BY mc.name ASC LIMIT 200`,
+    [req.user.id, nsfwAllowed, q]
+  );
+  res.json({
+    cost: ctcModule.CONFIG.DIRECT_BUY_COST, shiny_cost: ctcModule.CONFIG.SHOP_SHINY_BUY_COST,
+    characters: rows.map(r => ({
+      id: r.id, name: r.name, image: r.image, owned: r.is_shiny !== null, owned_shiny: r.is_shiny === true,
+    })),
+  });
+});
+
+app.post('/api/ctc/shop/buy', requireAuth, async (req, res) => {
+  const characterId = parseInt(req.body.character_id, 10);
+  if (!Number.isInteger(characterId)) return res.status(400).json({ error: 'Bad character.' });
+  const shiny = !!req.body.shiny;
+  const result = await ctc.buy(req.user.id, characterId, shiny);
   if (result.error) return res.status(400).json(result);
   res.json(await withCtcCardImages(result));
 });

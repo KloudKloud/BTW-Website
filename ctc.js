@@ -11,7 +11,8 @@ const CONFIG = {
   SPIN_COST: 300,
   PREMIUM_SPIN_COST: 1000,
   SPIN_DRAW_COUNT: 3,              // cards rolled per spin; the viewer picks one to keep
-  DIRECT_BUY_COST: 25000,
+  DIRECT_BUY_COST: 50000,
+  SHOP_SHINY_BUY_COST: 200000,
   SHINY_UPGRADE_COST: 125000,
 
   // — shiny odds —
@@ -411,21 +412,32 @@ module.exports = function createCtc(pool, gems, { rng = Math.random } = {}) {
 
   // ── shop & shiny upgrades ────────────────────────────────────────────────────────────────────────
 
-  async function buy(userId, characterId) {
+  // shiny=false buys the normal card outright (DIRECT_BUY_COST); shiny=true buys/upgrades straight to a
+  // shiny card (SHOP_SHINY_BUY_COST) -- if the buyer already owns the normal card it's upgraded in place
+  // rather than inserting a second row for the same character.
+  async function buy(userId, characterId, shiny = false) {
     return withTx(async (client) => {
       const user = await lockUser(client, userId);
       if (!user) return fail('no_user');
       const { rows: [ch] } = await client.query('SELECT id, name, owner_user_id FROM moderator_characters WHERE id = $1', [characterId]);
       if (!ch) return fail('no_character');
-      const { rows: [row] } = await client.query('SELECT 1 FROM ctc_cards WHERE user_id = $1 AND character_id = $2', [userId, ch.id]);
-      if (row) return fail('already_owned');
-      const bal = await gems.applyChange(client, userId, -C.DIRECT_BUY_COST, 'ctc_buy', ch.id);
-      if (bal === null) return fail('insufficient', { cost: C.DIRECT_BUY_COST, gems: user.gems });
-      await client.query(`INSERT INTO ctc_cards (user_id, character_id, obtained_via) VALUES ($1, $2, 'direct_buy')`, [userId, ch.id]);
+      const { rows: [row] } = await client.query('SELECT is_shiny FROM ctc_cards WHERE user_id = $1 AND character_id = $2', [userId, ch.id]);
+      if (row && (!shiny || row.is_shiny)) return fail(row.is_shiny ? 'already_shiny' : 'already_owned');
+      const cost = shiny ? C.SHOP_SHINY_BUY_COST : C.DIRECT_BUY_COST;
+      const bal = await gems.applyChange(client, userId, -cost, 'ctc_buy', ch.id);
+      if (bal === null) return fail('insufficient', { cost, gems: user.gems });
+      if (row) {
+        await client.query('UPDATE ctc_cards SET is_shiny = true, shiny_at = NOW() WHERE user_id = $1 AND character_id = $2', [userId, ch.id]);
+      } else {
+        await client.query(
+          `INSERT INTO ctc_cards (user_id, character_id, is_shiny, shiny_at, obtained_via) VALUES ($1, $2, $3, ${shiny ? 'NOW()' : 'NULL'}, 'direct_buy')`,
+          [userId, ch.id, shiny]
+        );
+      }
       const creatorPaid = await payCreator(client, ch.owner_user_id, userId, ch.id);
       const milestones = await grantMilestones(client, userId);
       return {
-        bought: true, cost: C.DIRECT_BUY_COST, character: { id: ch.id, name: ch.name }, creator_paid: creatorPaid,
+        bought: true, shiny, cost, character: { id: ch.id, name: ch.name }, creator_paid: creatorPaid,
         milestones: milestones.granted, milestone_bonus: C.MILESTONE_BONUS, collection_count: milestones.count,
         gems: await balanceOf(client, userId),
       };
