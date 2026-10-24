@@ -675,6 +675,12 @@ async function initDb() {
     ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS voice_claim_url TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('moderator_characters voice_claim_url migration:', e.message));
 
+  // Short quote shown on the character's Arcade trading card -- falls back
+  // to "<name> was created by <owner>" on the card when left blank.
+  await pool.query(`
+    ALTER TABLE moderator_characters ADD COLUMN IF NOT EXISTS quote TEXT NOT NULL DEFAULT '';
+  `).catch(e => console.error('moderator_characters quote migration:', e.message));
+
   // Same naive per-load view counter as stories/gallery -- and its own
   // Bookmarks table, deliberately separate from moderator_character_likes:
   // "Like" is the quick heart-toggle scattered across every card; "Bookmark"
@@ -2649,12 +2655,14 @@ app.get('/api/ctc/card/:characterId', requireAuth, async (req, res) => {
 
   const { rows: [ch] } = await pool.query(
     `SELECT mc.id, mc.name, mc.description, mc.ref_image, mc.owner_user_id,
+            mc.quote, mc.stats, mc.facts, mc.relationships,
             u.username AS owner_username, u.display_name AS owner_display_name, u.avatar AS owner_avatar
      FROM moderator_characters mc JOIN users u ON u.id = mc.owner_user_id
      WHERE mc.id = $1`,
     [characterId]
   );
   if (!ch) return res.status(404).json({ error: 'Character not found.' });
+  const chStats = ch.stats || {};
 
   const { rows: [mine] } = await pool.query(
     'SELECT is_shiny, claim_count, obtained_at FROM ctc_cards WHERE user_id = $1 AND character_id = $2',
@@ -2684,6 +2692,11 @@ app.get('/api/ctc/card/:characterId', requireAuth, async (req, res) => {
   res.json({
     character: {
       id: ch.id, name: ch.name, description: ch.description, image: ch.ref_image,
+      quote: ch.quote || '',
+      age: chStats['Age'] || '', species: chStats['Species'] || '', interests: chStats['Interests'] || '',
+      theme_song: chStats['Theme Song'] || '',
+      facts: (ch.facts || []).filter(f => f && f !== 'N/A'),
+      relationships: (ch.relationships || []).filter(r => r && r.name),
       owner: { username: ch.owner_username, display_name: ch.owner_display_name || ch.owner_username, avatar: ch.owner_avatar || null },
     },
     mine: mine ? { is_shiny: mine.is_shiny, claim_count: mine.claim_count, obtained_at: mine.obtained_at } : null,
@@ -8309,7 +8322,7 @@ app.put('/api/moderator/characters/profile-order', requireAuth, async (req, res)
 // link to this story is a separate row, so the same character can later be
 // linked into other stories too without being duplicated.
 app.post('/api/moderator/characters', requireAuth, requireModerator, async (req, res) => {
-  const { name, ref_image, description, stats, facts, lore, relationships, ref_rating, is_official_art, official_art_source_url, voice_claim_url } = req.body;
+  const { name, ref_image, description, stats, facts, lore, relationships, ref_rating, is_official_art, official_art_source_url, voice_claim_url, quote } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
   const cleanRating = GALLERY_CATEGORIES.includes(ref_rating) ? ref_rating : 'sfw';
   const cleanStats = await sanitizeCharacterStats(stats || {});
@@ -8318,12 +8331,13 @@ app.post('/api/moderator/characters', requireAuth, requireModerator, async (req,
     'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_characters WHERE owner_user_id = $1', [req.user.id]
   );
   const { rows: [character] } = await pool.query(
-    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_rating, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_rating, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url, quote, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
      JSON.stringify(relationships || []), cleanRating, cleanRating !== 'sfw',
-     is_official_art !== undefined ? !!is_official_art : true, cleanLinkUrl(official_art_source_url), cleanLinkUrl(voice_claim_url), profileMinOrder]
+     is_official_art !== undefined ? !!is_official_art : true, cleanLinkUrl(official_art_source_url), cleanLinkUrl(voice_claim_url),
+     String(quote || '').trim().slice(0, 150), profileMinOrder]
   );
   const { rows: [{ maxOrder }] } = await pool.query(
     'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM character_story_links WHERE site_id = $1', [req.modSite.id]
@@ -8348,7 +8362,7 @@ async function updateCharacterForUser(userId, characterId, body) {
     'SELECT * FROM moderator_characters WHERE id = $1 AND owner_user_id = $2', [characterId, userId]
   );
   if (!existing) return null;
-  const { name, ref_image, description, stats, facts, lore, relationships, sort_order, ref_rating, is_official_art, official_art_source_url, voice_claim_url } = body;
+  const { name, ref_image, description, stats, facts, lore, relationships, sort_order, ref_rating, is_official_art, official_art_source_url, voice_claim_url, quote } = body;
   const cleanRating = ref_rating !== undefined ? (GALLERY_CATEGORIES.includes(ref_rating) ? ref_rating : 'sfw') : null;
   const cleanStats = stats !== undefined ? await sanitizeCharacterStats(stats) : undefined;
   // A real art change, not just this save happening to repeat the same URL
@@ -8370,6 +8384,7 @@ async function updateCharacterForUser(userId, characterId, body) {
        is_official_art         = COALESCE($10, is_official_art),
        official_art_source_url = COALESCE($11, official_art_source_url),
        voice_claim_url         = COALESCE($14, voice_claim_url),
+       quote                   = COALESCE($15, quote),
        ref_image_updated_at    = CASE WHEN $13 THEN NOW() ELSE ref_image_updated_at END,
        updated_at              = NOW()
      WHERE id = $12 RETURNING *`,
@@ -8381,7 +8396,8 @@ async function updateCharacterForUser(userId, characterId, body) {
      sort_order, cleanRating,
      is_official_art !== undefined ? !!is_official_art : null,
      official_art_source_url !== undefined ? cleanLinkUrl(official_art_source_url) : null,
-     existing.id, artChanged, voice_claim_url !== undefined ? cleanLinkUrl(voice_claim_url) : null]
+     existing.id, artChanged, voice_claim_url !== undefined ? cleanLinkUrl(voice_claim_url) : null,
+     quote !== undefined ? String(quote || '').trim().slice(0, 150) : null]
   );
   // Only regenerate when ref_image was actually part of this save -- an
   // unrelated edit (description, stats, etc.) shouldn't re-touch the image.
@@ -8684,19 +8700,20 @@ app.delete('/api/characters/:id/link-gallery/:galleryId', requireAuth, async (re
 // The creation logic lives in a function (not inline in the route) so the
 // Discord bot's /api/bot/characters can run the exact same code path: same
 // sanitizing, thumbnail, follower notification and XP/gems as the website.
-async function createCharacterForUser(userId, { name, ref_image, description, stats, facts, lore, relationships, ref_rating, is_official_art, official_art_source_url, voice_claim_url }) {
+async function createCharacterForUser(userId, { name, ref_image, description, stats, facts, lore, relationships, ref_rating, is_official_art, official_art_source_url, voice_claim_url, quote }) {
   const cleanRating = GALLERY_CATEGORIES.includes(ref_rating) ? ref_rating : 'sfw';
   const cleanStats = await sanitizeCharacterStats(stats || {});
   const { rows: [{ minOrder: profileMinOrder }] } = await pool.query(
     'SELECT COALESCE(MIN(sort_order), 0) - 1 AS "minOrder" FROM moderator_characters WHERE owner_user_id = $1', [userId]
   );
   const { rows: [character] } = await pool.query(
-    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_rating, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+    `INSERT INTO moderator_characters (owner_user_id, name, ref_image, description, stats, facts, lore, relationships, ref_rating, ref_is_nsfw, is_official_art, official_art_source_url, voice_claim_url, quote, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
     [userId, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
      JSON.stringify(relationships || []), cleanRating, cleanRating !== 'sfw',
-     is_official_art !== undefined ? !!is_official_art : true, cleanLinkUrl(official_art_source_url), cleanLinkUrl(voice_claim_url), profileMinOrder]
+     is_official_art !== undefined ? !!is_official_art : true, cleanLinkUrl(official_art_source_url), cleanLinkUrl(voice_claim_url),
+     String(quote || '').trim().slice(0, 150), profileMinOrder]
   );
   const { rows: [actor] } = await pool.query('SELECT username FROM users WHERE id = $1', [userId]);
   await notifyFollowers(userId, 'new_character',
