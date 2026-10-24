@@ -2803,8 +2803,8 @@ app.post('/api/ctc/spin/claim', requireAuth, async (req, res) => {
 // GET /api/ctc/shop — the Arcade Shop tab: every rollable character (same real-art pool spins draw
 // from), searchable by name, with the viewer's own owned/owned_shiny flags so the card can show
 // "Owned" instead of a buy button. nsfwAllowed-gated the same way the rest of the Arcade is.
-// Paginated 30 per page (5-per-row grid x 6 rows) like the rest of the site's browse pages.
-const CTC_SHOP_PAGE_SIZE = 30;
+// Paginated 25 per page (5-per-row grid x 5 rows) like the rest of the site's browse pages.
+const CTC_SHOP_PAGE_SIZE = 25;
 app.get('/api/ctc/shop', requireAuth, async (req, res) => {
   const { nsfwAllowed } = await getViewerNsfwAccess(req);
   const q = String(req.query.q || '').trim().slice(0, 80);
