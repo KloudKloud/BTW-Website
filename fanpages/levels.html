@@ -717,48 +717,35 @@
       box-shadow: 0 8px 20px rgba(240,192,96,0.35);
     }
 
-    /* ── Card detail view -- opening an actual collected card swaps the box
-       grid out for this, in the same panel, at the same footprint
-       (max-width matches .lv-box-grid's own 620px) -- no overlay, no page
-       navigation. The card is ONE continuous object, not an art box sitting
-       above a separate info panel: a single <video> fills the ENTIRE card
-       (normal cards loop the hero's TopBackground; a shiny card gets
-       MainBackground3 instead, so the shiny-ness is felt the instant it
-       opens) and every layer of content -- the square full-bleed reference
-       art, the name, owner credit, stats, linked stories/gallery -- sits on
-       top of that one background in normal document flow, so the video
-       keeps showing through (via a gradient scrim, not a solid panel) all
-       the way to the bottom instead of the background visibly "ending"
-       after the art like a cut-off card. ── */
-    /* #lv-box-detail-view is the "action area" that overtakes the grid --
-       its own full-bleed backdrop is a blurred copy of the opened
-       character's reference art (see .lv-card-detail-backdrop, built in JS
-       per-open since the image is per-character), independent of whatever
-       is drawn on the card itself. overflow:hidden + the oversized/inset
-       backdrop image keeps the blur's soft edge from showing a hard seam. */
-    #lv-box-detail-view {
-      display: flex; flex-direction: column; align-items: center;
-      position: relative; border-radius: 20px; overflow: hidden;
-      padding: 1.6rem 1.4rem 2rem; margin: -1.6rem -1.4rem -2rem;
+    /* ── Card detail view -- a real popup now, not an inline panel swap:
+       #lv-box-detail-view is a fixed, full-viewport overlay (same
+       position:fixed/dark-blur/centered-flex recipe as the site's other
+       modals, .fpnav-modal-overlay in fanpages-nav.css) that floats OVER
+       the still-visible Collection grid underneath. :not([hidden]) is
+       required here -- an unconditional `display:flex` on the ID selector
+       would outrank the browser's own [hidden]{display:none} at equal
+       specificity and the overlay would never actually hide (the exact
+       guest-blur-overlay gotcha from the Characters page redesign).
+       Clicking the dimmed backdrop itself (not the popup box) closes it --
+       see the delegated click handler in closeCardDetail's caller -- and a
+       small X sits at the popup's own top-right corner, just outside the
+       card, so the card's own size/position is never touched by it. ── */
+    #lv-box-detail-view:not([hidden]) {
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 2.5rem 1.5rem; overflow-y: auto;
     }
-    .lv-card-detail-backdrop { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
-    .lv-card-detail-backdrop img {
-      position: absolute; inset: -12%; width: 124%; height: 124%; object-fit: cover;
-      filter: blur(34px) brightness(0.5) saturate(1.15);
+    .lv-card-popup { position: relative; width: 100%; max-width: 620px; margin: auto; }
+    .lv-card-popup-close {
+      position: absolute; top: -16px; right: -16px; z-index: 5;
+      width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+      background: rgba(10,8,16,0.75); border: 1px solid rgba(240,192,96,0.5); color: var(--gold, #f0c060);
+      font-size: 1.05rem; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+      transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
     }
-    .lv-card-detail-backdrop::after { content: ''; position: absolute; inset: 0; background: rgba(8,6,12,0.4); }
-    .lv-card-back-btn, .lv-card-stage { position: relative; z-index: 1; }
-
-    .lv-card-back-btn {
-      align-self: flex-start; display: inline-flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.95rem; font-weight: 700;
-      padding: 0.6rem 1.3rem; border-radius: 999px; cursor: pointer;
-      background: rgba(10,8,16,0.5); border: 1px solid rgba(240,192,96,0.4); color: var(--gold, #f0c060);
-      box-shadow: 0 0 8px rgba(240,192,96,0.22);
-      transition: background 0.15s ease, box-shadow 0.15s ease;
-    }
-    .lv-card-back-btn:hover { background: rgba(240,192,96,0.18); box-shadow: 0 0 14px rgba(240,192,96,0.4); }
-    .lv-card-back-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; }
+    .lv-card-popup-close:hover { background: rgba(240,192,96,0.22); box-shadow: 0 0 14px rgba(240,192,96,0.5); transform: scale(1.08); }
 
     .lv-card-stage-row { display: flex; flex-direction: column; align-items: center; gap: 1rem; width: 100%; }
     .lv-card-stage { width: 100%; max-width: 620px; }
@@ -812,10 +799,9 @@
     .lv-trading-card--shiny .lv-trading-card-art { border-bottom-color: var(--gold, #f0c060); }
     .lv-trading-card-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-    /* Everything below the art is now a grainy black texture (a tiled
+    /* Everything below the art is a grainy black texture (a tiled
        fractal-noise SVG data-URI over a flat near-black fill) instead of
-       the old looping video background -- the video moved up to the
-       page-level backdrop (.lv-card-detail-backdrop) instead. */
+       the old looping video background. */
     .lv-trading-card-info {
       position: relative; z-index: 2; padding: 1.3rem 1.3rem 1.5rem; text-align: center;
       background-color: #0b0b0b;
@@ -1882,40 +1868,40 @@ function renderCollectionBox() {
 }
 
 // ── Card detail view: open a collected card "for real" -- big reference
-// art, an animated loop behind it (shiny cards swap in MainBackground3
-// instead of the usual hero loop), who made the character, every
-// story/gallery post it's linked to, and the collector stats (date caught,
-// how many trainers total have it, how many have it shiny). Swaps the box
-// grid out for #lv-box-detail-view in the same panel -- no overlay, no page
-// navigation -- the same in-page pattern the Characters/Gallery tabs
-// already use elsewhere on the site. closeCardDetail() swaps back.
+// art, who made the character, every story/gallery post it's linked to, a
+// flippable back with its full bio. Now a real popup (#lv-box-detail-view,
+// position:fixed, dark/blurred backdrop) floating OVER the still-visible
+// Collection grid rather than swapping the grid out -- closeCardDetail()
+// just hides/clears the overlay, the grid underneath was never touched.
 function closeCardDetail() {
-  document.getElementById('lv-box-grid-view').hidden = false;
-  document.getElementById('lv-box-detail-view').hidden = true;
-  document.getElementById('lv-box-detail-view').innerHTML = '';
-  syncBgHeight();
+  const detailView = document.getElementById('lv-box-detail-view');
+  detailView.hidden = true;
+  detailView.innerHTML = '';
 }
+
+// Clicking the dimmed backdrop (not the popup box itself) closes the
+// overlay -- delegated once here rather than re-wired on every render.
+document.getElementById('lv-box-detail-view').addEventListener('click', (e) => {
+  if (e.target.id === 'lv-box-detail-view') closeCardDetail();
+});
 
 async function openCardDetail(characterId) {
   if (!Number.isInteger(characterId)) return;
-  const gridView = document.getElementById('lv-box-grid-view');
   const detailView = document.getElementById('lv-box-detail-view');
-  gridView.hidden = true;
   detailView.hidden = false;
-  detailView.innerHTML = `<div class="lv-empty" style="text-align:center;">Loading card…</div>`;
+  detailView.innerHTML = `<div class="lv-empty" style="text-align:center; color:#fff;">Loading card…</div>`;
   try {
     const res = await fetch(`/api/ctc/card/${characterId}`, { headers: authHeaders() });
     if (!res.ok) throw new Error('bad response');
     renderCardDetail(await res.json());
   } catch (e) {
     detailView.innerHTML = `
-      <button class="lv-card-back-btn" id="lv-card-back-btn-err" type="button">
-        <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-        Back
-      </button>
-      <div class="lv-empty" style="text-align:center;">Couldn't load that card.</div>
+      <div class="lv-card-popup">
+        <button class="lv-card-popup-close" id="lv-card-popup-close-err" type="button" aria-label="Close">&#10005;</button>
+        <div class="lv-empty" style="text-align:center; color:#fff;">Couldn't load that card.</div>
+      </div>
     `;
-    document.getElementById('lv-card-back-btn-err').addEventListener('click', closeCardDetail);
+    document.getElementById('lv-card-popup-close-err').addEventListener('click', closeCardDetail);
   }
 }
 
@@ -1987,65 +1973,62 @@ function renderCardDetail(data) {
     : '';
 
   detailView.innerHTML = `
-    <div class="lv-card-detail-backdrop"><img src="${escapeHtml(ch.image || '')}" alt="" /></div>
-    <button class="lv-card-back-btn" id="lv-card-back-btn" type="button">
-      <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-      Back
-    </button>
-    <div class="lv-card-stage-row">
-      <div class="lv-card-stage">
-        <div class="lv-trading-card-flip" id="lv-trading-card-flip">
-          <div class="lv-trading-card-flip-inner">
-            <div class="lv-trading-card lv-trading-card-face lv-trading-card-face--front${shinyClass}">
-              ${shinyTag}
-              <div class="lv-trading-card-art">
-                ${ch.image ? `<img src="${escapeHtml(ch.image)}" alt="${escapeHtml(ch.name)}" />` : ''}
+    <div class="lv-card-popup">
+      <button class="lv-card-popup-close" id="lv-card-popup-close" type="button" aria-label="Close">&#10005;</button>
+      <div class="lv-card-stage-row">
+        <div class="lv-card-stage">
+          <div class="lv-trading-card-flip" id="lv-trading-card-flip">
+            <div class="lv-trading-card-flip-inner">
+              <div class="lv-trading-card lv-trading-card-face lv-trading-card-face--front${shinyClass}">
+                ${shinyTag}
+                <div class="lv-trading-card-art">
+                  ${ch.image ? `<img src="${escapeHtml(ch.image)}" alt="${escapeHtml(ch.name)}" />` : ''}
+                </div>
+                <div class="lv-trading-card-info">
+                  <div class="lv-trading-card-name">${escapeHtml(ch.name)}</div>
+                  <div class="lv-trading-card-quote">${quoteHtml}</div>
+                </div>
               </div>
-              <div class="lv-trading-card-info">
-                <div class="lv-trading-card-name">${escapeHtml(ch.name)}</div>
-                <div class="lv-trading-card-quote">${quoteHtml}</div>
-              </div>
-            </div>
-            <div class="lv-trading-card lv-trading-card-face lv-trading-card-face--back${shinyClass}">
-              <div class="lv-trading-card-back-inner">
-                <div class="lv-card-back-name">${escapeHtml(ch.name)}</div>
-                <div class="lv-card-back-body">
-                  <div class="lv-card-back-col">
-                    ${cardBackField('Age', ch.age ? escapeHtml(ch.age) : '', true)}
-                    ${cardBackField('Species', ch.species ? escapeHtml(ch.species) : '', true)}
-                    ${cardBackField('Interests', ch.interests ? escapeHtml(ch.interests) : '')}
-                    ${cardBackField('Theme Song', ch.theme_song ? `<a href="${escapeHtml(ch.theme_song)}" target="_blank" rel="noopener">${escapeHtml(ch.theme_song)}</a>` : '')}
-                  </div>
-                  <div class="lv-card-back-divider"></div>
-                  <div class="lv-card-back-col">
-                    ${cardBackField('Description', ch.description ? escapeHtml(ch.description) : '')}
-                    ${cardBackField('Relationships', relationshipsHtml)}
-                    ${cardBackField('Fun Facts', factsHtml)}
-                  </div>
-                  <div class="lv-card-back-full">
-                    ${storiesHtml}
-                    ${galleryHtml}
-                    <div class="lv-card-info-owner-row">
-                      <div class="lv-card-info-owner-avatar">${avatarHtml(ch.owner, 28)}</div>
-                      <span>Created by <a href="${fpUrl('/' + ch.owner.username)}">${escapeHtml(ch.owner.display_name)}</a></span>
+              <div class="lv-trading-card lv-trading-card-face lv-trading-card-face--back${shinyClass}">
+                <div class="lv-trading-card-back-inner">
+                  <div class="lv-card-back-name">${escapeHtml(ch.name)}</div>
+                  <div class="lv-card-back-body">
+                    <div class="lv-card-back-col">
+                      ${cardBackField('Age', ch.age ? escapeHtml(ch.age) : '', true)}
+                      ${cardBackField('Species', ch.species ? escapeHtml(ch.species) : '', true)}
+                      ${cardBackField('Interests', ch.interests ? escapeHtml(ch.interests) : '')}
+                      ${cardBackField('Theme Song', ch.theme_song ? `<a href="${escapeHtml(ch.theme_song)}" target="_blank" rel="noopener">${escapeHtml(ch.theme_song)}</a>` : '')}
+                    </div>
+                    <div class="lv-card-back-divider"></div>
+                    <div class="lv-card-back-col">
+                      ${cardBackField('Description', ch.description ? escapeHtml(ch.description) : '')}
+                      ${cardBackField('Relationships', relationshipsHtml)}
+                      ${cardBackField('Fun Facts', factsHtml)}
+                    </div>
+                    <div class="lv-card-back-full">
+                      ${storiesHtml}
+                      ${galleryHtml}
+                      <div class="lv-card-info-owner-row">
+                        <div class="lv-card-info-owner-avatar">${avatarHtml(ch.owner, 28)}</div>
+                        <span>Created by <a href="${fpUrl('/' + ch.owner.username)}">${escapeHtml(ch.owner.display_name)}</a></span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-        <div style="text-align:center;">
-          <button class="lv-card-flip-btn" id="lv-card-flip-btn" type="button">
-            <span id="lv-card-flip-btn-label">🔄 Flip Card</span>
-          </button>
+          <div style="text-align:center;">
+            <button class="lv-card-flip-btn" id="lv-card-flip-btn" type="button">
+              <span id="lv-card-flip-btn-label">🔄 Flip Card</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
   `;
-  document.getElementById('lv-card-back-btn').addEventListener('click', closeCardDetail);
+  document.getElementById('lv-card-popup-close').addEventListener('click', closeCardDetail);
   document.getElementById('lv-card-flip-btn').addEventListener('click', toggleCardFlip);
-  syncBgHeight();
 }
 
 function toggleCardFlip() {
@@ -2054,7 +2037,6 @@ function toggleCardFlip() {
   if (!flipEl) return;
   const flipped = flipEl.classList.toggle('lv-flipped');
   label.textContent = flipped ? '↩️ Flip Back' : '🔄 Flip Card';
-  syncBgHeight();
 }
 
 // The "Box N" plate: plain text by default, swapped for an inline input on
