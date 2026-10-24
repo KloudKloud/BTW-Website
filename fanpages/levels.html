@@ -216,10 +216,12 @@
     }
     .lv-arcade-divider img { width: 20px; height: 20px; filter: drop-shadow(0 0 7px rgba(240,192,96,0.65)); }
 
-    .lv-arcade-row { display: flex; gap: 1.6rem; align-items: stretch; flex-wrap: wrap; }
+    /* Top row: three equal-width stat boxes (gems / collection / leaderboard).
+       The Spin/Collection/Shop menu box sits full-width underneath, not in
+       this row. */
+    .lv-arcade-top-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.6rem; align-items: stretch; margin-bottom: 1.6rem; }
 
     .lv-arcade-gem-box {
-      width: 230px; flex-shrink: 0;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.3rem;
       text-align: center; border-color: rgba(102,210,255,0.25);
     }
@@ -229,10 +231,23 @@
       50% { transform: translateY(-7px) rotate(5deg); }
     }
     .lv-arcade-gem-total { font-family: 'Fredoka', 'Lato', cursive; font-size: 2rem; font-weight: 700; color: #fff; text-shadow: 0 0 18px rgba(102,210,255,0.55); }
-    .lv-arcade-gem-total.lv-arcade-gem-loading { opacity: 0.4; }
+    .lv-arcade-gem-total.lv-arcade-gem-loading, .lv-arcade-collection-stat.lv-arcade-gem-loading, .lv-arcade-collection-total.lv-arcade-gem-loading { opacity: 0.4; }
     .lv-arcade-gem-label { font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: #b9aed4; }
 
-    .lv-arcade-menu-box { flex: 1; min-width: 300px; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .lv-arcade-collection-box {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.15rem;
+      text-align: center; border-color: rgba(240,192,96,0.25);
+    }
+    .lv-arcade-collection-icon { font-size: 2.1rem; margin-bottom: 0.1rem; filter: drop-shadow(0 0 12px rgba(240,192,96,0.5)); }
+    .lv-arcade-collection-stat { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.5rem; font-weight: 700; color: #fff; text-shadow: 0 0 14px rgba(240,192,96,0.45); }
+    .lv-arcade-collection-total { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.15rem; font-weight: 600; color: #e4ddf2; margin-top: 0.5rem; }
+    .lv-arcade-collection-label { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: #b9aed4; }
+
+    .lv-arcade-lb-box { padding: 1.2rem 1.4rem; }
+    .lv-arcade-lb-box .lv-side-box-title { margin-bottom: 0.7rem; }
+    .lv-arcade-lb-box .lv-scroll-5 { max-height: 168px; }
+
+    .lv-arcade-menu-box { width: 100%; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
     .lv-arcade-menu-tabs { display: flex; gap: 0.5rem; padding: 1rem 1rem 0; }
     .lv-arcade-menu-tab {
       flex: 1; text-align: center; padding: 0.75rem 1rem; border-radius: 12px 12px 0 0; cursor: pointer;
@@ -301,8 +316,8 @@
     .lv-arcade-shop-empty-icon { font-size: 2.3rem; margin-bottom: 0.6rem; }
 
     @media (max-width: 720px) {
-      .lv-arcade-row { flex-direction: column; }
-      .lv-arcade-gem-box { width: 100%; flex-direction: row; padding: 1.1rem 1.4rem; }
+      .lv-arcade-top-row { grid-template-columns: 1fr; }
+      .lv-arcade-gem-box { flex-direction: row; padding: 1.1rem 1.4rem; }
       .lv-arcade-gem-icon { font-size: 2.1rem; }
       .lv-arcade-menu-tab .lv-arcade-tab-label { display: none; }
     }
@@ -444,14 +459,29 @@
 
     <section class="lv-section">
       <h2 class="lv-section-title"><img src="/images/home/decoration-8.png" alt="" /> The Arcade</h2>
-      <div class="lv-arcade-row">
+
+      <div class="lv-arcade-top-row">
         <div class="lv-box lv-arcade-gem-box">
           <div class="lv-arcade-gem-icon">💎</div>
           <div class="lv-arcade-gem-total lv-arcade-gem-loading" id="lv-arcade-gem-total">—</div>
           <div class="lv-arcade-gem-label">Gems</div>
         </div>
 
-        <div class="lv-box lv-arcade-menu-box">
+        <div class="lv-box lv-arcade-collection-box">
+          <div class="lv-arcade-collection-icon">🃏</div>
+          <div class="lv-arcade-collection-stat lv-arcade-gem-loading" id="lv-arcade-pool-stat">—/—</div>
+          <div class="lv-arcade-collection-label">Unique Cards</div>
+          <div class="lv-arcade-collection-total lv-arcade-gem-loading" id="lv-arcade-total-stat">—</div>
+          <div class="lv-arcade-collection-label">Total Collected</div>
+        </div>
+
+        <div class="lv-box lv-arcade-lb-box">
+          <h3 class="lv-side-box-title"><img src="/images/home/decoration-1.png" alt="" /> Top Collectors</h3>
+          <div id="lv-arcade-lb-list" class="lv-scroll-5"><div class="lv-empty">Loading…</div></div>
+        </div>
+      </div>
+
+      <div class="lv-box lv-arcade-menu-box">
           <div class="lv-arcade-menu-tabs">
             <button class="lv-arcade-menu-tab active" id="lva-tab-spin" data-tab="spin" type="button">
               <span>✨</span><span class="lv-arcade-tab-label">Spin</span>
@@ -503,7 +533,6 @@
               </div>
             </div>
           </div>
-        </div>
       </div>
     </section>
   </div>
@@ -729,9 +758,6 @@ async function loadLevelHub() {
     LB_DATA.leaderboard_weekly = data.leaderboard_weekly;
     LB_DATA.leaderboard_global = data.leaderboard_global;
     renderLeaderboard('weekly');
-    const gemEl = document.getElementById('lv-arcade-gem-total');
-    gemEl.textContent = (data.user.gems || 0).toLocaleString();
-    gemEl.classList.remove('lv-arcade-gem-loading');
     document.getElementById('lv-loading').hidden = true;
     document.getElementById('lv-content').hidden = false;
     syncBgHeight();
@@ -747,6 +773,48 @@ document.querySelectorAll('.lv-arcade-menu-tab').forEach(tab => {
     document.querySelectorAll('.lv-arcade-panel').forEach(p => p.classList.toggle('active', p.id === `lva-panel-${tab.dataset.tab}`));
   });
 });
+
+// Gems + card-collection stats + the arcade's own "most cards collected"
+// leaderboard snippet -- separate call from /api/level-hub since this data
+// lives in the CTC (Character Trading Cards) game module, not the XP system.
+// Pool/collection counts are NSFW-filtered server-side to the viewer's
+// current SFW Mode setting, so toggling it live hides/reveals mature or
+// explicit cards here the same way it does everywhere else on the site.
+async function loadArcadeStats() {
+  const gemEl = document.getElementById('lv-arcade-gem-total');
+  const poolEl = document.getElementById('lv-arcade-pool-stat');
+  const totalEl = document.getElementById('lv-arcade-total-stat');
+  const lbList = document.getElementById('lv-arcade-lb-list');
+  try {
+    const res = await fetch('/api/ctc/arcade-stats', { headers: authHeaders() });
+    if (!res.ok) throw new Error('bad response');
+    const data = await res.json();
+
+    gemEl.textContent = (data.gems || 0).toLocaleString();
+    gemEl.classList.remove('lv-arcade-gem-loading');
+
+    poolEl.textContent = `${data.pool.owned.toLocaleString()}/${data.pool.total.toLocaleString()}`;
+    poolEl.classList.remove('lv-arcade-gem-loading');
+    totalEl.textContent = data.total_cards_collected.toLocaleString();
+    totalEl.classList.remove('lv-arcade-gem-loading');
+
+    if (!data.leaderboard.length) {
+      lbList.innerHTML = '<div class="lv-empty">Nobody has collected any cards yet.</div>';
+    } else {
+      lbList.innerHTML = data.leaderboard.map((r, i) => `
+        <div class="lv-lb-row">
+          <div class="lv-lb-rank">${i + 1}</div>
+          <div class="lv-lb-avatar">${avatarHtml(r)}</div>
+          <div class="lv-lb-name"><a href="${fpUrl('/' + r.username)}">${escapeHtml(r.display_name || r.username)}</a></div>
+          <div class="lv-lb-xp">${r.card_count.toLocaleString()} 🃏</div>
+        </div>
+      `).join('');
+    }
+    syncBgHeight();
+  } catch (e) {
+    lbList.innerHTML = '<div class="lv-empty">Couldn\'t load the arcade stats.</div>';
+  }
+}
 
 function renderHero(u) {
   const name = u.display_name || u.username;
@@ -869,6 +937,7 @@ window.addEventListener('load', () => { syncBgHeight(); syncBannerHeight(); });
 if (token) {
   loadLevelHub();
   loadLevelsBanner();
+  loadArcadeStats();
 }
 </script>
 </body>

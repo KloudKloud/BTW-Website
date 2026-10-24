@@ -2499,6 +2499,49 @@ app.get('/api/level-hub', requireAuth, async (req, res) => {
   });
 });
 
+// GET /api/ctc/arcade-stats — the Levels page's Arcade section: gem total,
+// pool/collection counts, and a "most cards collected" leaderboard. Pool and
+// collection counts both honor the viewer's NSFW visibility (logged-in +
+// SFW Mode off) the same way the rest of the site does, so toggling SFW Mode
+// continuously hides/reveals mature/explicit cards from these numbers —
+// never a one-time snapshot taken at claim time.
+app.get('/api/ctc/arcade-stats', requireAuth, async (req, res) => {
+  const { nsfwAllowed } = await getViewerNsfwAccess(req);
+
+  const { rows: [{ gems: gemTotal }] } = await pool.query(
+    'SELECT COALESCE(gems, 0) AS gems FROM users WHERE id = $1', [req.user.id]
+  );
+
+  const { rows: [{ total: poolTotal }] } = await pool.query(
+    `SELECT COUNT(*)::int AS total FROM moderator_characters
+     WHERE ref_image IS NOT NULL AND ref_image <> '' AND ref_image <> '/images/defaultchar.jpg'
+       AND (ref_rating = 'sfw' OR $1::boolean)`,
+    [nsfwAllowed]
+  );
+
+  const { rows: [{ unique_owned: uniqueOwned, total_collected: totalCollected }] } = await pool.query(
+    `SELECT COUNT(*)::int AS unique_owned, COALESCE(SUM(cc.claim_count), 0)::int AS total_collected
+     FROM ctc_cards cc JOIN moderator_characters mc ON mc.id = cc.character_id
+     WHERE cc.user_id = $1 AND (mc.ref_rating = 'sfw' OR $2::boolean)`,
+    [req.user.id, nsfwAllowed]
+  );
+
+  const { rows: lbRows } = await pool.query(
+    `SELECT u.id, u.username, u.display_name, u.avatar, COUNT(cc.character_id)::int AS card_count
+     FROM ctc_cards cc JOIN users u ON u.id = cc.user_id
+     GROUP BY u.id ORDER BY card_count DESC LIMIT 10`
+  );
+
+  res.json({
+    gems: gemTotal,
+    pool: { owned: uniqueOwned, total: poolTotal },
+    total_cards_collected: totalCollected,
+    leaderboard: lbRows.map(r => ({
+      id: r.id, username: r.username, display_name: r.display_name, avatar: r.avatar || null, card_count: r.card_count,
+    })),
+  });
+});
+
 // ── Comments (art) ────────────────────────────────────────────────────────────
 
 app.get('/api/comments', async (req, res) => {
