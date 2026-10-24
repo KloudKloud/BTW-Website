@@ -2655,7 +2655,7 @@ app.get('/api/ctc/card/:characterId', requireAuth, async (req, res) => {
 
   const { rows: [ch] } = await pool.query(
     `SELECT mc.id, mc.name, mc.description, mc.ref_image, mc.owner_user_id,
-            mc.quote, mc.stats, mc.facts, mc.relationships,
+            mc.quote, mc.stats, mc.facts, mc.relationships, mc.voice_claim_url,
             u.username AS owner_username, u.display_name AS owner_display_name, u.avatar AS owner_avatar
      FROM moderator_characters mc JOIN users u ON u.id = mc.owner_user_id
      WHERE mc.id = $1`,
@@ -2697,6 +2697,7 @@ app.get('/api/ctc/card/:characterId', requireAuth, async (req, res) => {
       theme_song: chStats['Theme Song'] || '',
       facts: (ch.facts || []).filter(f => f && f !== 'N/A'),
       relationships: (ch.relationships || []).filter(r => r && r.name),
+      voice_claim_url: ch.voice_claim_url || '',
       owner: { username: ch.owner_username, display_name: ch.owner_display_name || ch.owner_username, avatar: ch.owner_avatar || null },
     },
     mine: mine ? { is_shiny: mine.is_shiny, claim_count: mine.claim_count, obtained_at: mine.obtained_at } : null,

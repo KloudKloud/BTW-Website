@@ -6,6 +6,11 @@
   <title>Levels ✦ BTW</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <!-- fanpages.css is only loaded for its voice-claim player (.fp-voice-bar/
+       .fp-voice-icon-btn/.fp-share-icon-btn) -- the shared stylesheet every
+       other character-bio view already reuses for that same mic-button
+       player, so the Arcade card's mic button opens the exact same bar. -->
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scrollbar-gutter: stable; }
@@ -770,6 +775,15 @@
        down the page. */
     .lv-trading-card.lv-trading-card-face--front { position: relative; }
     .lv-trading-card.lv-trading-card-face--back { position: absolute; inset: 0; transform: rotateY(180deg); }
+    /* backface-visibility:hidden only hides PAINT, not hit-testing, in
+       enough browsers that the face rotated away was still swallowing
+       clicks meant for the one facing the viewer (the "Listen"/story/
+       gallery links not being clickable) -- explicit pointer-events per
+       state is the reliable fix. */
+    .lv-trading-card-flip:not(.lv-flipped) .lv-trading-card-face--front { pointer-events: auto; }
+    .lv-trading-card-flip:not(.lv-flipped) .lv-trading-card-face--back { pointer-events: none; }
+    .lv-trading-card-flip.lv-flipped .lv-trading-card-face--front { pointer-events: none; }
+    .lv-trading-card-flip.lv-flipped .lv-trading-card-face--back { pointer-events: auto; }
 
     .lv-card-flip-btn {
       display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 1rem;
@@ -810,23 +824,37 @@
       position: relative; z-index: 2; padding: 1.3rem 1.3rem 1.5rem; text-align: center;
       background-color: #16161a;
     }
+    .lv-trading-card-name-row {
+      display: flex; align-items: center; justify-content: center; gap: 0.6rem; margin-bottom: 0.5rem;
+    }
+    .lv-trading-card-name-row .fp-voice-icon-btn { width: 32px; height: 32px; flex-shrink: 0; }
     .lv-trading-card-name {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 1.7rem; color: #fff;
-      text-shadow: 0 1px 4px rgba(0,0,0,0.8); margin-bottom: 0.5rem;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
     }
     .lv-trading-card-quote {
       font-size: 0.92rem; color: #c9bfe0; font-style: italic; line-height: 1.5;
       max-width: 44ch; margin: 0 auto;
     }
 
+    /* "X Collected" -- bottom-right of both faces, clipped cleanly by the
+       card's own overflow:hidden/border-radius. */
+    .lv-card-collected-badge {
+      position: absolute; bottom: 0.8rem; right: 0.8rem; z-index: 4;
+      font-size: 0.72rem; font-weight: 700; font-family: 'Fredoka', 'Lato', cursive;
+      color: #fff; padding: 0.3rem 0.75rem; border-radius: 999px;
+      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.25);
+      backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+    }
+
     /* ── Back face: the "lots of cool info" side -- two columns split by a
        vertical divider like a real card's stat block, truncated-but-
-       scrollable fields, then full-width Appears In/Linked Gallery below. ── */
+       scrollable fields, then full-width Appears In/Linked Gallery below.
+       Same solid dark gray/black fill as the front's Name+Quote panel. ── */
     .lv-trading-card-back-inner {
       position: relative; z-index: 2; width: 100%; height: 100%; overflow-y: auto;
       padding: 1.3rem 1.3rem 1.5rem;
-      background-color: #0b0b0b;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n2'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n2)' opacity='0.35'/%3E%3C/svg%3E");
+      background-color: #16161a;
     }
     .lv-card-back-name {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 1.2rem; color: #fff; text-align: center;
@@ -865,6 +893,12 @@
     .lv-card-info-owner-avatar img { width: 100%; height: 100%; object-fit: cover; }
     .lv-card-info-owner-row a { color: #fff; font-weight: 600; text-decoration: none; }
     .lv-card-info-owner-row a:hover { text-decoration: underline; }
+
+    .lv-card-back-meta-row {
+      display: flex; align-items: center; justify-content: center; gap: 1.2rem;
+      font-size: 0.76rem; color: #8d85a3; margin-top: 0.5rem; flex-wrap: wrap;
+    }
+    .lv-card-back-meta-row span strong { color: #c9bfe0; font-weight: 600; }
 
     .lv-card-info-section + .lv-card-info-section { margin-top: 1rem; }
     .lv-card-info-section-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 0.95rem; color: #e4ddf2; margin-bottom: 0.5rem; }
@@ -1880,6 +1914,7 @@ function closeCardDetail() {
   const detailView = document.getElementById('lv-box-detail-view');
   detailView.hidden = true;
   detailView.innerHTML = '';
+  fpCloseVoiceBar();
 }
 
 // Clicking the dimmed backdrop (not the popup box itself) closes the
@@ -1975,6 +2010,19 @@ function renderCardDetail(data) {
       `).join('')
     : '';
 
+  const collectedBadge = mine
+    ? `<div class="lv-card-collected-badge">${mine.claim_count}&times; Collected</div>`
+    : '';
+  const dateCollected = mine && mine.obtained_at
+    ? new Date(mine.obtained_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    : '—';
+  const othersHave = Math.max(0, data.stats.total_owners - (mine ? 1 : 0));
+  const micBtnHtml = ch.voice_claim_url
+    ? `<button class="fp-share-icon-btn fp-voice-icon-btn" id="lv-card-voice-btn" type="button" title="Play ${escapeHtml(ch.name)}'s voice claim">
+         <svg viewBox="0 0 24 24" fill="none"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z" fill="currentColor"/><path d="M19 11a7 7 0 0 1-14 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 18v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+       </button>`
+    : '';
+
   detailView.innerHTML = `
     <div class="lv-card-popup">
       <button class="lv-card-popup-close" id="lv-card-popup-close" type="button" aria-label="Close">&#10005;</button>
@@ -1988,9 +2036,13 @@ function renderCardDetail(data) {
                   ${ch.image ? `<img src="${escapeHtml(ch.image)}" alt="${escapeHtml(ch.name)}" />` : ''}
                 </div>
                 <div class="lv-trading-card-info">
-                  <div class="lv-trading-card-name">${escapeHtml(ch.name)}</div>
+                  <div class="lv-trading-card-name-row">
+                    <div class="lv-trading-card-name">${escapeHtml(ch.name)}</div>
+                    ${micBtnHtml}
+                  </div>
                   <div class="lv-trading-card-quote">${quoteHtml}</div>
                 </div>
+                ${collectedBadge}
               </div>
               <div class="lv-trading-card lv-trading-card-face lv-trading-card-face--back${shinyClass}">
                 <div class="lv-trading-card-back-inner">
@@ -2015,9 +2067,14 @@ function renderCardDetail(data) {
                         <div class="lv-card-info-owner-avatar">${avatarHtml(ch.owner, 28)}</div>
                         <span>Created by <a href="${fpUrl('/' + ch.owner.username)}">${escapeHtml(ch.owner.display_name)}</a></span>
                       </div>
+                      <div class="lv-card-back-meta-row">
+                        <span>Day Collected: <strong>${dateCollected}</strong></span>
+                        <span>Others Have: <strong>${othersHave.toLocaleString()}</strong></span>
+                      </div>
                     </div>
                   </div>
                 </div>
+                ${collectedBadge}
               </div>
             </div>
           </div>
@@ -2034,6 +2091,8 @@ function renderCardDetail(data) {
   document.getElementById('lv-card-flip-btn').addEventListener('click', toggleCardFlip);
   const themeLink = document.getElementById('lv-card-theme-song-link');
   if (themeLink) wireSpotifyAppLink(themeLink);
+  const voiceBtn = document.getElementById('lv-card-voice-btn');
+  if (voiceBtn) voiceBtn.addEventListener('click', (e) => { e.stopPropagation(); fpPlayVoiceClip(ch.voice_claim_url, voiceBtn, ch.name); });
 }
 
 // Same open.spotify.com -> spotify: app-handoff trick used on the real
@@ -2044,6 +2103,10 @@ function wireSpotifyAppLink(a) {
   const webUrl = a.href;
   const m = webUrl.match(/open\.spotify\.com\/(track|album|playlist|artist|episode|show)\/([A-Za-z0-9]+)/);
   if (!m) return;
+  // Exempts this link from fanpages-nav.js's "leaving BTWFics" interstitial
+  // (which would otherwise capture the click first and block this
+  // function's own app-then-web-fallback logic from ever running).
+  a.dataset.skipLeavingWarning = '1';
   const spotifyUri = `spotify:${m[1]}:${m[2]}`;
   a.addEventListener('click', (e) => {
     e.preventDefault();
@@ -2058,6 +2121,140 @@ function wireSpotifyAppLink(a) {
     window.addEventListener('blur', cancelFallback, { once: true });
     window.location.href = spotifyUri;
   });
+}
+
+// ── Voice claim player -- same bottom-of-screen bar/mic-button pair used on
+// every other character bio view (characters.html, profile-template.html,
+// character.html, the story Characters page), duplicated here verbatim (same
+// function/element names, so it shares the .fp-voice-bar/.fp-voice-icon-btn
+// CSS already loaded via fanpages.css) so the Arcade card's mic button opens
+// the exact same player instead of a bespoke one. ──
+let fpVoiceSeeking = false;
+function fpFormatVoiceTime(sec) {
+  if (!isFinite(sec) || sec < 0) sec = 0;
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+const FP_VOICE_PLAY_ICON = '<svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7L8 5Z" fill="currentColor"/></svg>';
+const FP_VOICE_PAUSE_ICON = '<svg viewBox="0 0 24 24" fill="none"><path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor"/></svg>';
+function fpSyncVoicePlayPauseIcon() {
+  const btn = document.getElementById('fp-voice-bar-playpause');
+  if (!btn) return;
+  const audio = fpGetVoiceAudio();
+  btn.innerHTML = audio.paused ? FP_VOICE_PLAY_ICON : FP_VOICE_PAUSE_ICON;
+}
+function fpVoiceSliderToGain(pct) {
+  pct = Math.max(0, Math.min(100, Number(pct)));
+  return pct <= 75 ? (pct / 75) : (1 + (pct - 75) / 25);
+}
+let fpVoiceAudioCtx = null;
+let fpVoiceGainNode = null;
+function fpEnsureVoiceGainNode(audio) {
+  if (fpVoiceAudioCtx) return;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    fpVoiceAudioCtx = new Ctx();
+    const source = fpVoiceAudioCtx.createMediaElementSource(audio);
+    fpVoiceGainNode = fpVoiceAudioCtx.createGain();
+    source.connect(fpVoiceGainNode).connect(fpVoiceAudioCtx.destination);
+    audio.volume = 1;
+  } catch {
+    fpVoiceAudioCtx = null;
+    fpVoiceGainNode = null;
+  }
+}
+function fpApplyVoiceVolume(pct) {
+  const audio = fpGetVoiceAudio();
+  const gain = fpVoiceSliderToGain(pct);
+  if (fpVoiceGainNode) fpVoiceGainNode.gain.value = gain;
+  else audio.volume = Math.min(1, gain);
+}
+function fpGetVoiceAudio() {
+  if (window.fpVoiceAudio) return window.fpVoiceAudio;
+  const audio = new Audio();
+  audio.addEventListener('loadedmetadata', () => {
+    const totalEl = document.getElementById('fp-voice-bar-total');
+    if (totalEl) totalEl.textContent = fpFormatVoiceTime(audio.duration);
+  });
+  audio.addEventListener('timeupdate', () => {
+    if (fpVoiceSeeking) return;
+    const seek = document.getElementById('fp-voice-bar-seek');
+    const curEl = document.getElementById('fp-voice-bar-current');
+    if (seek && audio.duration) seek.value = (audio.currentTime / audio.duration) * 100;
+    if (curEl) curEl.textContent = fpFormatVoiceTime(audio.currentTime);
+  });
+  audio.addEventListener('play', fpSyncVoicePlayPauseIcon);
+  audio.addEventListener('pause', fpSyncVoicePlayPauseIcon);
+  window.fpVoiceAudio = audio;
+  fpEnsureVoiceGainNode(audio);
+  return audio;
+}
+function fpEnsureVoiceBar() {
+  let bar = document.getElementById('fp-voice-bar');
+  if (bar) return bar;
+  bar = document.createElement('div');
+  bar.id = 'fp-voice-bar';
+  bar.className = 'fp-voice-bar';
+  bar.hidden = true;
+  bar.innerHTML = `
+    <span class="fp-voice-bar-name" id="fp-voice-bar-name"></span>
+    <button type="button" class="fp-voice-bar-playpause" id="fp-voice-bar-playpause" title="Play/Pause">${FP_VOICE_PAUSE_ICON}</button>
+    <span class="fp-voice-bar-time" id="fp-voice-bar-current">0:00</span>
+    <input type="range" class="fp-voice-bar-seek" id="fp-voice-bar-seek" min="0" max="100" step="0.1" value="0">
+    <span class="fp-voice-bar-time" id="fp-voice-bar-total">0:00</span>
+    <svg class="fp-voice-bar-vol-icon" viewBox="0 0 24 24" fill="none"><path d="M4 9v6h4l5 5V4L8 9H4Z" fill="currentColor"/><path d="M16.3 8.3a5.2 5.2 0 0 1 0 7.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <input type="range" class="fp-voice-bar-volume" id="fp-voice-bar-volume" min="0" max="100" step="1" value="75">
+    <button type="button" class="fp-voice-bar-close" id="fp-voice-bar-close">✕ Close</button>
+  `;
+  document.body.appendChild(bar);
+  bar.querySelector('#fp-voice-bar-playpause').addEventListener('click', () => {
+    const audio = fpGetVoiceAudio();
+    if (audio.paused) fpResumeAndPlay(audio); else audio.pause();
+  });
+  const seek = bar.querySelector('#fp-voice-bar-seek');
+  seek.addEventListener('input', () => {
+    fpVoiceSeeking = true;
+    const audio = fpGetVoiceAudio();
+    const curEl = document.getElementById('fp-voice-bar-current');
+    if (audio.duration) curEl.textContent = fpFormatVoiceTime((seek.value / 100) * audio.duration);
+  });
+  seek.addEventListener('change', () => {
+    const audio = fpGetVoiceAudio();
+    if (audio.duration) audio.currentTime = (seek.value / 100) * audio.duration;
+    fpVoiceSeeking = false;
+  });
+  bar.querySelector('#fp-voice-bar-volume').addEventListener('input', (e) => {
+    fpApplyVoiceVolume(e.target.value);
+  });
+  bar.querySelector('#fp-voice-bar-close').addEventListener('click', fpCloseVoiceBar);
+  fpApplyVoiceVolume(75);
+  return bar;
+}
+function fpResumeAndPlay(audio) {
+  if (fpVoiceAudioCtx && fpVoiceAudioCtx.state === 'suspended') fpVoiceAudioCtx.resume().catch(() => {});
+  audio.play().catch(() => {});
+}
+function fpCloseVoiceBar() {
+  const audio = fpGetVoiceAudio();
+  audio.pause();
+  document.querySelectorAll('.fp-voice-icon-btn.is-playing').forEach(b => b.classList.remove('is-playing'));
+  const bar = document.getElementById('fp-voice-bar');
+  if (bar) bar.hidden = true;
+}
+function fpPlayVoiceClip(url, btn, charName) {
+  const audio = fpGetVoiceAudio();
+  if (audio.dataset.src !== url) { audio.src = url; audio.dataset.src = url; }
+  audio.currentTime = 0;
+  fpResumeAndPlay(audio);
+  document.querySelectorAll('.fp-voice-icon-btn.is-playing').forEach(b => b.classList.remove('is-playing'));
+  btn.classList.add('is-playing');
+  audio.onended = () => btn.classList.remove('is-playing');
+  audio.onpause = () => btn.classList.remove('is-playing');
+  const bar = fpEnsureVoiceBar();
+  bar.hidden = false;
+  document.getElementById('fp-voice-bar-name').textContent = charName ? `${charName}'s Voice Claim` : 'Voice Claim';
+  fpSyncVoicePlayPauseIcon();
 }
 
 function toggleCardFlip() {
