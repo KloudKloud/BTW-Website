@@ -647,7 +647,7 @@
     .lv-spin-overlay {
       position: fixed; inset: 0; z-index: 9999; background: rgba(5,4,10,0.88);
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.6rem;
-      padding: 2rem; animation: lvSpinOverlayIn 0.2s ease;
+      padding: 2rem; animation: lvSpinOverlayIn 0.2s ease; overflow-y: auto;
     }
     @keyframes lvSpinOverlayIn { from { opacity: 0; } to { opacity: 1; } }
     .lv-spin-overlay-close {
@@ -662,20 +662,20 @@
     }
     .lv-spin-pick-row { display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; }
 
-    .lv-spin-card { width: 260px; height: 480px; perspective: 1200px; cursor: pointer; }
+    .lv-spin-card { width: 320px; height: 600px; perspective: 1200px; cursor: pointer; }
     .lv-spin-card-inner {
       width: 100%; height: 100%; position: relative; transform-style: preserve-3d;
       transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
     .lv-spin-card.flipped .lv-spin-card-inner { transform: rotateY(180deg); }
     .lv-spin-card-face {
-      position: absolute; inset: 0; border-radius: 18px; backface-visibility: hidden;
+      position: absolute; inset: 0; border-radius: 20px; backface-visibility: hidden;
       display: flex; flex-direction: column; overflow: hidden;
     }
     .lv-spin-card-back {
       background: radial-gradient(circle at 50% 35%, rgba(240,192,96,0.25), transparent 60%), linear-gradient(160deg, #2a2240, #130f20);
-      border: 3px solid rgba(240,192,96,0.5); align-items: center; justify-content: center; font-size: 3rem;
-      box-shadow: 0 12px 32px rgba(0,0,0,0.6), inset 0 0 50px rgba(240,192,96,0.08);
+      border: 4px solid rgba(240,192,96,0.5); align-items: center; justify-content: center; font-size: 4.5rem;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.6), inset 0 0 60px rgba(240,192,96,0.08);
       position: relative; overflow: hidden;
     }
     /* Sparkle twinkle while hovering a pickable card -- four small soft-glow
@@ -697,20 +697,26 @@
       50% { transform: scale(1.25); opacity: 0.95; }
     }
     .lv-spin-card-front {
-      transform: rotateY(180deg); background: #0d0a14; border: 3px solid var(--gold, #f0c060);
-      box-shadow: 0 12px 32px rgba(0,0,0,0.6), 0 0 28px rgba(240,192,96,0.35);
+      transform: rotateY(180deg); background: #0d0a14; border: 4px solid var(--gold, #f0c060);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.6), 0 0 32px rgba(240,192,96,0.35);
     }
     .lv-spin-card-front img { width: 100%; flex: 1; min-height: 0; object-fit: cover; }
     .lv-spin-card-name {
       padding: 0.7rem; text-align: center; font-family: 'Fredoka', 'Lato', cursive; font-weight: 700;
       color: #fff; background: rgba(0,0,0,0.55); flex-shrink: 0;
     }
+    /* The reveal card's front face shows the real built-out trading card
+       look (.lv-trading-card-art/-info, same classes the Collection's card
+       detail popup uses) instead of a bare image+name strip -- see
+       spinRevealCardHtml(). Those classes size off their own content, so
+       nothing extra is needed here beyond the shared card-face frame above. */
+    .lv-spin-card-front .lv-trading-card-art { aspect-ratio: 1 / 1; }
     .lv-spin-card--shiny .lv-spin-card-front {
       border-color: #9be8ff; animation: lvSpinShinyPulse 1.6s ease-in-out infinite;
     }
     @keyframes lvSpinShinyPulse {
-      0%, 100% { box-shadow: 0 12px 32px rgba(0,0,0,0.6), 0 0 26px rgba(155,232,255,0.45); }
-      50% { box-shadow: 0 12px 38px rgba(0,0,0,0.6), 0 0 46px rgba(155,232,255,0.8); }
+      0%, 100% { box-shadow: 0 16px 40px rgba(0,0,0,0.6), 0 0 30px rgba(155,232,255,0.45); }
+      50% { box-shadow: 0 16px 46px rgba(0,0,0,0.6), 0 0 52px rgba(155,232,255,0.8); }
     }
     .lv-spin-card--picking:hover .lv-spin-card-inner { transform: translateY(-8px) scale(1.03); }
 
@@ -1543,6 +1549,51 @@ function spinCardHtml(c, { index, pickable, id, shiny } = {}) {
   `;
 }
 
+// Same flip-card shell as spinCardHtml(), but the front face shows the real
+// built-out trading card (art/name/quote/mic/shiny tag/collected badge --
+// the same /api/ctc/card/:id payload and classes the Collection's card
+// detail popup uses) instead of a bare image+name strip, so the spin reveal
+// shows the actual card the owner built, not a placeholder preview.
+function spinRevealCardHtml(full, id) {
+  const ch = full.character;
+  const mine = full.mine;
+  const shiny = !!(mine && mine.is_shiny);
+  const quoteHtml = ch.quote
+    ? `"${escapeHtml(ch.quote)}"`
+    : `${escapeHtml(ch.name)} was created by ${escapeHtml(ch.owner.display_name)}`;
+  const shinyTag = shiny ? `<div class="lv-trading-card-shiny-tag">✨ Shiny</div>` : '';
+  const collectedBadge = mine ? `<div class="lv-card-collected-badge">${mine.claim_count}&times; Collected</div>` : '';
+  const micBtnHtml = ch.voice_claim_url
+    ? `<button class="fp-share-icon-btn fp-voice-icon-btn" id="lv-spin-card-voice-btn" type="button" title="Play ${escapeHtml(ch.name)}'s voice claim">
+         <svg viewBox="0 0 24 24" fill="none"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z" fill="currentColor"/><path d="M19 11a7 7 0 0 1-14 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 18v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+       </button>`
+    : '';
+  return `
+    <div class="lv-spin-card${shiny ? ' lv-spin-card--shiny' : ''}" id="${id}">
+      <div class="lv-spin-card-inner">
+        <div class="lv-spin-card-face lv-spin-card-back">
+          ❓
+          <div class="lv-spin-card-sparkle-wrap"><span></span><span></span><span></span><span></span></div>
+        </div>
+        <div class="lv-spin-card-face lv-spin-card-front">
+          ${shinyTag}
+          <div class="lv-trading-card-art">
+            ${ch.image ? `<img src="${escapeHtml(ch.image)}" alt="${escapeHtml(ch.name)}" />` : ''}
+          </div>
+          <div class="lv-trading-card-info">
+            <div class="lv-trading-card-name-row">
+              <div class="lv-trading-card-name">${escapeHtml(ch.name)}</div>
+              ${micBtnHtml}
+            </div>
+            <div class="lv-trading-card-quote">${quoteHtml}</div>
+          </div>
+          ${collectedBadge}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function showSpinPickOverlay(data) {
   const overlay = spinOverlayEl();
   const kindLabel = CTC_SPIN_KIND_LABEL[data.kind] || '';
@@ -1581,7 +1632,7 @@ const CTC_RESULT_LABEL = {
   shiny_new: '✨ New Shiny Card! ✨', shiny_upgrade: '✨ Upgraded to Shiny! ✨', shiny_dupe: '✨ Shiny Duplicate ✨',
 };
 
-function showSpinResult(data) {
+async function showSpinResult(data) {
   const overlay = spinOverlayEl();
   const label = CTC_RESULT_LABEL[data.result] || 'Got a card!';
   const noteBits = [];
@@ -1591,16 +1642,33 @@ function showSpinResult(data) {
   overlay.innerHTML = `
     <button class="lv-spin-overlay-close" id="lv-spin-overlay-close" type="button" aria-label="Close">&#10005;</button>
     <div class="lv-spin-overlay-title">${escapeHtml(label)}</div>
-    ${spinCardHtml(data.character, { id: 'lv-spin-reveal-card', shiny: data.is_shiny })}
+    <div id="lv-spin-reveal-slot">${spinCardHtml(data.character, { id: 'lv-spin-reveal-card', shiny: data.is_shiny })}</div>
     ${noteBits.length ? `<div class="lv-spin-result-note">${escapeHtml(noteBits.join(' · '))}</div>` : ''}
     <button class="lv-spin-close-btn" id="lv-spin-close-btn" type="button">Nice!</button>
   `;
+  document.getElementById('lv-spin-overlay-close').addEventListener('click', finishSpinFlow);
+  document.getElementById('lv-spin-close-btn').addEventListener('click', finishSpinFlow);
+
+  // Swap the placeholder card for the real built-out one (quote/mic/shiny
+  // tag/collected count) before it flips, so what the flip reveals is the
+  // actual trading card -- not the bare image+name preview.
+  let full = null;
+  try {
+    const res = await fetch(`/api/ctc/card/${data.character.id}`, { headers: authHeaders() });
+    if (res.ok) full = await res.json();
+  } catch (e) { /* fall back to the placeholder card below */ }
+
+  const slot = document.getElementById('lv-spin-reveal-slot');
+  if (slot && full) {
+    slot.innerHTML = spinRevealCardHtml(full, 'lv-spin-reveal-card');
+    const voiceBtn = document.getElementById('lv-spin-card-voice-btn');
+    if (voiceBtn) voiceBtn.addEventListener('click', (e) => { e.stopPropagation(); fpPlayVoiceClip(full.character.voice_claim_url, voiceBtn, full.character.name); });
+  }
+
   setTimeout(() => {
     const card = document.getElementById('lv-spin-reveal-card');
     if (card) card.classList.add('flipped');
   }, 350);
-  document.getElementById('lv-spin-overlay-close').addEventListener('click', finishSpinFlow);
-  document.getElementById('lv-spin-close-btn').addEventListener('click', finishSpinFlow);
 }
 
 function finishSpinFlow() {
