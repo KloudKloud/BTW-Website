@@ -2803,9 +2803,21 @@ app.post('/api/ctc/spin/claim', requireAuth, async (req, res) => {
 // GET /api/ctc/shop — the Arcade Shop tab: every rollable character (same real-art pool spins draw
 // from), searchable by name, with the viewer's own owned/owned_shiny flags so the card can show
 // "Owned" instead of a buy button. nsfwAllowed-gated the same way the rest of the Arcade is.
+// Paginated 30 per page (5-per-row grid x 6 rows) like the rest of the site's browse pages.
+const CTC_SHOP_PAGE_SIZE = 30;
 app.get('/api/ctc/shop', requireAuth, async (req, res) => {
   const { nsfwAllowed } = await getViewerNsfwAccess(req);
   const q = String(req.query.q || '').trim().slice(0, 80);
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+
+  const { rows: [{ total }] } = await pool.query(
+    `SELECT COUNT(*)::int AS total FROM moderator_characters mc
+     WHERE mc.ref_image IS NOT NULL AND mc.ref_image <> '' AND mc.ref_image <> '/images/defaultchar.jpg'
+       AND (mc.ref_rating = 'sfw' OR $1::boolean)
+       AND ($2 = '' OR mc.name ILIKE '%' || $2 || '%')`,
+    [nsfwAllowed, q]
+  );
+
   const { rows } = await pool.query(
     `SELECT mc.id, mc.name, COALESCE(NULLIF(mc.thumb_image_url, ''), mc.ref_image) AS image,
             cc.is_shiny
@@ -2814,11 +2826,12 @@ app.get('/api/ctc/shop', requireAuth, async (req, res) => {
      WHERE mc.ref_image IS NOT NULL AND mc.ref_image <> '' AND mc.ref_image <> '/images/defaultchar.jpg'
        AND (mc.ref_rating = 'sfw' OR $2::boolean)
        AND ($3 = '' OR mc.name ILIKE '%' || $3 || '%')
-     ORDER BY mc.name ASC LIMIT 200`,
-    [req.user.id, nsfwAllowed, q]
+     ORDER BY mc.name ASC LIMIT $4 OFFSET $5`,
+    [req.user.id, nsfwAllowed, q, CTC_SHOP_PAGE_SIZE, (page - 1) * CTC_SHOP_PAGE_SIZE]
   );
   res.json({
     cost: ctcModule.CONFIG.DIRECT_BUY_COST, shiny_cost: ctcModule.CONFIG.SHOP_SHINY_BUY_COST,
+    page, total_pages: Math.max(1, Math.ceil(total / CTC_SHOP_PAGE_SIZE)), total,
     characters: rows.map(r => ({
       id: r.id, name: r.name, image: r.image, owned: r.is_shiny !== null, owned_shiny: r.is_shiny === true,
     })),

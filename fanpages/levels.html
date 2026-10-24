@@ -341,14 +341,13 @@
     }
     .lv-arcade-spin-btn-wrap { position: relative; display: inline-flex; }
     .lv-arcade-spin-btn {
-      position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center;
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.1rem; width: 170px; height: 170px; padding: 0 1rem; border-radius: 22px;
+      position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 0.7rem;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.35rem; padding: 1.05rem 3.2rem; border-radius: 999px;
       border: 2px solid rgba(255,255,255,0.35); cursor: pointer;
-      background-image: linear-gradient(160deg, rgba(10,8,20,0.5), rgba(10,8,20,0.72)), url('/images/home/box-background-2.png');
-      background-size: cover; background-position: center;
-      color: #fff; font-weight: 800; letter-spacing: 0.015em; text-align: center;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.6);
-      box-shadow: 0 10px 28px rgba(240,192,96,0.4), inset 0 1px 0 rgba(255,255,255,0.3);
+      background: linear-gradient(135deg, #e676c9, #b388f0 55%, #8a6fe0);
+      color: #fff; font-weight: 800; letter-spacing: 0.015em;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+      box-shadow: 0 10px 28px rgba(179,136,240,0.45), inset 0 1px 0 rgba(255,255,255,0.45);
       animation: lvaSpinBtnPulse 2.8s ease-in-out infinite;
     }
     .lv-arcade-spin-btn:disabled { cursor: not-allowed; opacity: 0.6; animation: none; }
@@ -356,8 +355,8 @@
     /* A gentle extend-and-dim pulse -- scale stays untouched so it doesn't
        fight the hover translateY above, just the glow spread/softness. */
     @keyframes lvaSpinBtnPulse {
-      0%, 100% { box-shadow: 0 10px 28px rgba(240,192,96,0.4), inset 0 1px 0 rgba(255,255,255,0.3); }
-      50% { box-shadow: 0 10px 44px rgba(240,192,96,0.75), inset 0 1px 0 rgba(255,255,255,0.4); }
+      0%, 100% { box-shadow: 0 10px 28px rgba(179,136,240,0.45), inset 0 1px 0 rgba(255,255,255,0.45); }
+      50% { box-shadow: 0 10px 44px rgba(179,136,240,0.85), inset 0 1px 0 rgba(255,255,255,0.55); }
     }
 
     /* ── Collection tab: Pokemon-box-style grid ──────────────────────────
@@ -518,10 +517,11 @@
     }
     .lv-shop-search:focus { outline: none; border-color: rgba(240,192,96,0.55); }
     .lv-shop-search::placeholder { color: #8d85a3; }
-    .lv-shop-cost-note { font-size: 0.8rem; color: #a79fc0; margin: -0.6rem 0 1.1rem; }
-    .lv-shop-cost-note strong { color: var(--gold, #f0c060); }
     .lv-shop-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem;
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem;
+    }
+    @media (max-width: 760px) {
+      .lv-shop-grid { grid-template-columns: repeat(2, 1fr); }
     }
     .lv-shop-card {
       border-radius: 14px; overflow: hidden; background: rgba(0,0,0,0.3);
@@ -552,6 +552,16 @@
     .lv-shop-buy-btn:disabled { cursor: default; opacity: 0.55; background: rgba(255,255,255,0.12); color: #a79fc0; }
     .lv-shop-card--shiny .lv-shop-buy-btn:not(:disabled) { background: linear-gradient(135deg, #7fa8d9, #b388f0); color: #fff; }
     .lv-shop-empty { text-align: center; padding: 2rem 1rem; color: #a79fc0; grid-column: 1 / -1; }
+    .lv-shop-pagination { display: flex; align-items: center; justify-content: center; gap: 0.4rem; margin-top: 1.4rem; flex-wrap: wrap; }
+    .lv-shop-page-btn {
+      min-width: 34px; height: 34px; padding: 0 0.5rem; border-radius: 8px; cursor: pointer;
+      background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); color: #c9bfe0;
+      font-family: 'Fredoka', cursive; font-size: 0.88rem; transition: all 0.15s ease;
+    }
+    .lv-shop-page-btn:hover:not(:disabled):not(.lv-shop-page-btn--active) { border-color: #7fa8d9; color: #7fa8d9; }
+    .lv-shop-page-btn:disabled { opacity: 0.35; cursor: default; }
+    .lv-shop-page-btn--active { background: var(--gold, #f0c060); border-color: var(--gold, #f0c060); color: #14121a; box-shadow: 0 0 16px rgba(240,192,96,0.65); }
+    .lv-shop-page-ellipsis { color: #8d85a3; padding: 0 0.2rem; }
 
     /* ── Spin reveal overlay -- the mock spin flow's full-screen "pick a
        card, then flip it" sequence. Same trading-card look for both the
@@ -858,10 +868,10 @@
               <div class="lv-shop-search-row">
                 <input class="lv-shop-search" id="lv-shop-search" type="text" placeholder="Search characters…" autocomplete="off" />
               </div>
-              <p class="lv-shop-cost-note" id="lv-shop-cost-note">Every character costs <strong>💎 50,000</strong> gems.</p>
               <div class="lv-shop-grid" id="lv-shop-grid">
                 <div class="lv-empty">Loading…</div>
               </div>
+              <div class="lv-shop-pagination" id="lv-shop-pagination"></div>
             </div>
           </div>
       </div>
@@ -1321,6 +1331,23 @@ let ctcShopCost = { normal: 50000, shiny: 200000 };
 let ctcShopLoaded = false;
 let ctcShopSearchTimer = null;
 let ctcShopBusyId = null;
+let ctcShopPage = 1;
+
+function ctcShopPaginationHtml(page, totalPages) {
+  if (totalPages <= 1) return '';
+  const pageSet = new Set([1, totalPages, page]);
+  for (let i = page - 2; i <= page + 2; i++) if (i >= 1 && i <= totalPages) pageSet.add(i);
+  const sorted = [...pageSet].sort((a, b) => a - b);
+  let html = `<button type="button" class="lv-shop-page-btn" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''} aria-label="Previous page">‹</button>`;
+  let prev = 0;
+  sorted.forEach(p => {
+    if (p - prev > 1) html += '<span class="lv-shop-page-ellipsis">…</span>';
+    html += `<button type="button" class="lv-shop-page-btn${p === page ? ' lv-shop-page-btn--active' : ''}" data-page="${p}">${p}</button>`;
+    prev = p;
+  });
+  html += `<button type="button" class="lv-shop-page-btn" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''} aria-label="Next page">›</button>`;
+  return html;
+}
 
 function ctcShopCardHtml(c) {
   const shiny = ctcShopKind === 'shiny';
@@ -1345,22 +1372,26 @@ function ctcShopCardHtml(c) {
 
 async function loadShop() {
   const grid = document.getElementById('lv-shop-grid');
+  const pager = document.getElementById('lv-shop-pagination');
   const q = document.getElementById('lv-shop-search').value.trim();
   try {
-    const res = await fetch(`/api/ctc/shop?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+    const res = await fetch(`/api/ctc/shop?q=${encodeURIComponent(q)}&page=${ctcShopPage}`, { headers: authHeaders() });
     const data = await res.json();
-    if (!res.ok) { grid.innerHTML = `<div class="lv-shop-empty">Couldn't load the shop.</div>`; return; }
+    if (!res.ok) { grid.innerHTML = `<div class="lv-shop-empty">Couldn't load the shop.</div>`; pager.innerHTML = ''; return; }
     ctcShopCost = { normal: data.cost, shiny: data.shiny_cost };
-    document.getElementById('lv-shop-cost-note').innerHTML = ctcShopKind === 'shiny'
-      ? `Shiny characters cost <strong>💎 ${ctcShopCost.shiny.toLocaleString()}</strong> gems.`
-      : `Every character costs <strong>💎 ${ctcShopCost.normal.toLocaleString()}</strong> gems.`;
-    if (!data.characters.length) { grid.innerHTML = `<div class="lv-shop-empty">No characters found.</div>`; return; }
+    if (!data.characters.length) { grid.innerHTML = `<div class="lv-shop-empty">No characters found.</div>`; pager.innerHTML = ''; return; }
     grid.innerHTML = data.characters.map(ctcShopCardHtml).join('');
     grid.querySelectorAll('.lv-shop-buy-btn').forEach(btn => {
       btn.addEventListener('click', () => buyFromShop(parseInt(btn.dataset.charId, 10)));
     });
+    pager.innerHTML = ctcShopPaginationHtml(data.page, data.total_pages);
+    pager.querySelectorAll('.lv-shop-page-btn').forEach(btn => {
+      if (btn.disabled) return;
+      btn.addEventListener('click', () => { ctcShopPage = parseInt(btn.dataset.page, 10); loadShop(); });
+    });
   } catch (e) {
     grid.innerHTML = `<div class="lv-shop-empty">Couldn't load the shop.</div>`;
+    pager.innerHTML = '';
   }
 }
 
@@ -1395,13 +1426,14 @@ document.querySelectorAll('.lv-shop-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     if (tab.dataset.shopTab === ctcShopKind) return;
     ctcShopKind = tab.dataset.shopTab;
+    ctcShopPage = 1;
     document.querySelectorAll('.lv-shop-tab').forEach(t => t.classList.toggle('active', t === tab));
     loadShop();
   });
 });
 document.getElementById('lv-shop-search').addEventListener('input', () => {
   clearTimeout(ctcShopSearchTimer);
-  ctcShopSearchTimer = setTimeout(loadShop, 300);
+  ctcShopSearchTimer = setTimeout(() => { ctcShopPage = 1; loadShop(); }, 300);
 });
 document.getElementById('lva-tab-shop').addEventListener('click', () => {
   if (!ctcShopLoaded) { ctcShopLoaded = true; loadShop(); }
