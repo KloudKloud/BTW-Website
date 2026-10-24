@@ -344,10 +344,10 @@
       position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 0.7rem;
       font-family: 'Fredoka', 'Lato', cursive; font-size: 1.35rem; padding: 1.05rem 3.2rem; border-radius: 999px;
       border: 2px solid rgba(255,255,255,0.35); cursor: pointer;
-      background: linear-gradient(135deg, #e676c9, #b388f0 55%, #8a6fe0);
+      background: linear-gradient(135deg, #a8529a, #7a5bc2 55%, #5f49a8);
       color: #fff; font-weight: 800; letter-spacing: 0.015em;
       text-shadow: 0 1px 3px rgba(0,0,0,0.5);
-      box-shadow: 0 10px 28px rgba(179,136,240,0.45), inset 0 1px 0 rgba(255,255,255,0.45);
+      box-shadow: 0 8px 18px rgba(95,73,168,0.3), inset 0 1px 0 rgba(255,255,255,0.3);
       animation: lvaSpinBtnPulse 2.8s ease-in-out infinite;
     }
     .lv-arcade-spin-btn:disabled { cursor: not-allowed; opacity: 0.6; animation: none; }
@@ -355,8 +355,8 @@
     /* A gentle extend-and-dim pulse -- scale stays untouched so it doesn't
        fight the hover translateY above, just the glow spread/softness. */
     @keyframes lvaSpinBtnPulse {
-      0%, 100% { box-shadow: 0 10px 28px rgba(179,136,240,0.45), inset 0 1px 0 rgba(255,255,255,0.45); }
-      50% { box-shadow: 0 10px 44px rgba(179,136,240,0.85), inset 0 1px 0 rgba(255,255,255,0.55); }
+      0%, 100% { box-shadow: 0 8px 18px rgba(95,73,168,0.3), inset 0 1px 0 rgba(255,255,255,0.3); }
+      50% { box-shadow: 0 8px 26px rgba(95,73,168,0.5), inset 0 1px 0 rgba(255,255,255,0.4); }
     }
 
     /* ── Collection tab: Pokemon-box-style grid ──────────────────────────
@@ -501,22 +501,30 @@
     .lv-arcade-shop-empty { text-align: center; padding: 2.2rem 1rem 1rem; color: #a79fc0; }
     .lv-arcade-shop-empty-icon { font-size: 2.3rem; margin-bottom: 0.6rem; }
 
-    /* ── Shop tab -- every rollable character, searchable, Normal/Shiny tabs. ── */
-    .lv-shop-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; max-width: 420px; }
+    /* ── Shop tab -- every rollable character, searchable, Normal/Shiny tabs. ──
+       One bar: tabs on the left, search centered in the bar's own width
+       (grid 1fr/auto/1fr so the search sits in the true middle regardless of
+       how wide the tabs block ends up), nothing on the right to balance it. */
+    .lv-shop-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem; margin-bottom: 1.4rem; }
+    .lv-shop-tabs { display: flex; gap: 0.5rem; }
     .lv-shop-tab {
-      flex: 1; text-align: center; padding: 0.55rem 0.7rem; border-radius: 10px; cursor: pointer;
+      text-align: center; padding: 0.55rem 1.1rem; border-radius: 10px; cursor: pointer; white-space: nowrap;
       background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); font-size: 0.92rem;
       font-family: 'Fredoka', cursive; font-weight: 600; color: #c9bfe0; transition: all 0.15s ease;
     }
     .lv-shop-tab.active { background: rgba(240,192,96,0.16); border-color: var(--gold, #f0c060); color: var(--gold, #f0c060); }
     .lv-shop-tab--shiny.active { background: rgba(127,168,217,0.18); border-color: #7fa8d9; color: #bcd8f5; }
-    .lv-shop-search-row { margin-bottom: 1.2rem; max-width: 420px; }
     .lv-shop-search {
-      width: 100%; padding: 0.65rem 1rem; border-radius: 999px; font-family: 'Fredoka', 'Lato', cursive;
+      grid-column: 2; width: 280px; max-width: 100%; padding: 0.6rem 1rem; border-radius: 999px;
+      font-family: 'Fredoka', 'Lato', cursive;
       background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); color: #f0f0f0; font-size: 0.92rem;
     }
     .lv-shop-search:focus { outline: none; border-color: rgba(240,192,96,0.55); }
     .lv-shop-search::placeholder { color: #8d85a3; }
+    @media (max-width: 560px) {
+      .lv-shop-bar { grid-template-columns: 1fr; justify-items: center; }
+      .lv-shop-search { grid-column: 1; width: 100%; }
+    }
     .lv-shop-grid {
       display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem;
     }
@@ -552,6 +560,36 @@
     .lv-shop-buy-btn:disabled { cursor: default; opacity: 0.55; background: rgba(255,255,255,0.12); color: #a79fc0; }
     .lv-shop-card--shiny .lv-shop-buy-btn:not(:disabled) { background: linear-gradient(135deg, #7fa8d9, #b388f0); color: #fff; }
     .lv-shop-empty { text-align: center; padding: 2rem 1rem; color: #a79fc0; grid-column: 1 / -1; }
+
+    /* Small centered confirm dialog before a shop purchase -- same language
+       as the Admin panel's .mod-confirm-overlay/.mod-confirm-modal (dark
+       card, accent top border, Cancel/Confirm pair), just gold-accented and
+       Fredoka to match the rest of this page instead of admin's Cinzel. */
+    .lv-shop-confirm-overlay:not([hidden]) {
+      position: fixed; inset: 0; z-index: 400;
+      background: rgba(8,6,14,0.72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+    }
+    .lv-shop-confirm-modal {
+      width: 100%; max-width: 360px;
+      background: #14121a; border: 1px solid rgba(255,255,255,0.12); border-top: 3px solid var(--gold, #f0c060);
+      border-radius: 16px; padding: 1.75rem; text-align: center;
+      box-shadow: 0 30px 90px rgba(0,0,0,0.6);
+    }
+    .lv-shop-confirm-title {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.1rem; color: #fff; margin: 0 0 1.5rem; line-height: 1.5;
+    }
+    .lv-shop-confirm-actions { display: flex; justify-content: center; gap: 0.75rem; }
+    .lv-shop-confirm-btn {
+      display: inline-block; font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 0.9rem;
+      padding: 0.55rem 1.4rem; border-radius: 999px; border: 1px solid rgba(255,255,255,0.25); color: #c9bfe0;
+      background: none; cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .lv-shop-confirm-btn:hover { border-color: #fff; color: #fff; }
+    .lv-shop-confirm-btn--buy {
+      border-color: var(--gold, #f0c060); background: linear-gradient(135deg, #f0c060, #dfb24f); color: #3a2a10;
+    }
+    .lv-shop-confirm-btn--buy:hover { background: linear-gradient(135deg, #f6cf7c, #ecc470); color: #3a2a10; }
     .lv-shop-pagination { display: flex; align-items: center; justify-content: center; gap: 0.4rem; margin-top: 1.4rem; flex-wrap: wrap; }
     .lv-shop-page-btn {
       min-width: 34px; height: 34px; padding: 0 0.5rem; border-radius: 8px; cursor: pointer;
@@ -860,12 +898,11 @@
 
             <div class="lv-arcade-panel" id="lva-panel-shop">
               <h3 class="lv-arcade-panel-title">🛒 Shop</h3>
-              <p class="lv-arcade-panel-sub">Buy any character straight into your collection.</p>
-              <div class="lv-shop-tabs">
-                <div class="lv-shop-tab active" data-shop-tab="normal" id="lv-shop-tab-normal">Normal</div>
-                <div class="lv-shop-tab lv-shop-tab--shiny" data-shop-tab="shiny" id="lv-shop-tab-shiny">✨ Shiny</div>
-              </div>
-              <div class="lv-shop-search-row">
+              <div class="lv-shop-bar">
+                <div class="lv-shop-tabs">
+                  <div class="lv-shop-tab active" data-shop-tab="normal" id="lv-shop-tab-normal">💎 Normal</div>
+                  <div class="lv-shop-tab lv-shop-tab--shiny" data-shop-tab="shiny" id="lv-shop-tab-shiny">✨ Shiny</div>
+                </div>
                 <input class="lv-shop-search" id="lv-shop-search" type="text" placeholder="Search characters…" autocomplete="off" />
               </div>
               <div class="lv-shop-grid" id="lv-shop-grid">
@@ -878,6 +915,16 @@
     </section>
   </div>
 </main>
+</div>
+
+<div class="lv-shop-confirm-overlay" id="lv-shop-confirm-overlay" hidden>
+  <div class="lv-shop-confirm-modal">
+    <p class="lv-shop-confirm-title" id="lv-shop-confirm-title">Buy this character?</p>
+    <div class="lv-shop-confirm-actions">
+      <button class="lv-shop-confirm-btn" id="lv-shop-confirm-no" type="button">No</button>
+      <button class="lv-shop-confirm-btn lv-shop-confirm-btn--buy" id="lv-shop-confirm-yes" type="button">Buy</button>
+    </div>
+  </div>
 </div>
 
 <script src="/fanpages/fanpages-nav.js"></script>
@@ -1364,7 +1411,7 @@ function ctcShopCardHtml(c) {
       </div>
       <div class="lv-shop-card-body">
         <div class="lv-shop-card-name" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</div>
-        <button class="lv-shop-buy-btn" data-char-id="${c.id}" type="button" ${owned || busy ? 'disabled' : ''}>${btnLabel}</button>
+        <button class="lv-shop-buy-btn" data-char-id="${c.id}" data-char-name="${escapeHtml(c.name)}" type="button" ${owned || busy ? 'disabled' : ''}>${btnLabel}</button>
       </div>
     </div>
   `;
@@ -1382,7 +1429,7 @@ async function loadShop() {
     if (!data.characters.length) { grid.innerHTML = `<div class="lv-shop-empty">No characters found.</div>`; pager.innerHTML = ''; return; }
     grid.innerHTML = data.characters.map(ctcShopCardHtml).join('');
     grid.querySelectorAll('.lv-shop-buy-btn').forEach(btn => {
-      btn.addEventListener('click', () => buyFromShop(parseInt(btn.dataset.charId, 10)));
+      btn.addEventListener('click', () => openShopConfirm(parseInt(btn.dataset.charId, 10), btn.dataset.charName));
     });
     pager.innerHTML = ctcShopPaginationHtml(data.page, data.total_pages);
     pager.querySelectorAll('.lv-shop-page-btn').forEach(btn => {
@@ -1394,6 +1441,29 @@ async function loadShop() {
     pager.innerHTML = '';
   }
 }
+
+let ctcShopConfirmTarget = null;
+
+function openShopConfirm(characterId, name) {
+  ctcShopConfirmTarget = characterId;
+  const shiny = ctcShopKind === 'shiny';
+  document.getElementById('lv-shop-confirm-title').textContent =
+    `You are about to buy ${name}${shiny ? ' ✨' : ''}. Would you like to confirm?`;
+  document.getElementById('lv-shop-confirm-overlay').hidden = false;
+}
+function closeShopConfirm() {
+  ctcShopConfirmTarget = null;
+  document.getElementById('lv-shop-confirm-overlay').hidden = true;
+}
+document.getElementById('lv-shop-confirm-no').addEventListener('click', closeShopConfirm);
+document.getElementById('lv-shop-confirm-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'lv-shop-confirm-overlay') closeShopConfirm();
+});
+document.getElementById('lv-shop-confirm-yes').addEventListener('click', () => {
+  const characterId = ctcShopConfirmTarget;
+  closeShopConfirm();
+  if (characterId !== null) buyFromShop(characterId);
+});
 
 async function buyFromShop(characterId) {
   if (ctcShopBusyId !== null) return;
