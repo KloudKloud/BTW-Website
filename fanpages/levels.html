@@ -222,8 +222,8 @@
     .lv-arcade-top-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.6rem; align-items: stretch; margin-bottom: 1.6rem; }
 
     .lv-arcade-gem-box {
-      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.3rem;
-      text-align: center; border-color: rgba(102,210,255,0.25);
+      position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.3rem;
+      text-align: center; border-color: rgba(102,210,255,0.25); overflow: visible;
     }
     .lv-arcade-gem-icon { font-size: 2.7rem; filter: drop-shadow(0 0 16px rgba(102,210,255,0.7)); animation: lvaGemFloat 3s ease-in-out infinite; }
     @keyframes lvaGemFloat {
@@ -235,19 +235,51 @@
     .lv-arcade-gem-label { font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: #b9aed4; }
 
     .lv-arcade-collection-box {
-      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.15rem;
-      text-align: center; border-color: rgba(240,192,96,0.25);
+      position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.15rem;
+      text-align: center; border-color: rgba(240,192,96,0.25); overflow: visible;
     }
     .lv-arcade-collection-icon { font-size: 2.1rem; margin-bottom: 0.1rem; filter: drop-shadow(0 0 12px rgba(240,192,96,0.5)); }
     .lv-arcade-collection-stat { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.5rem; font-weight: 700; color: #fff; text-shadow: 0 0 14px rgba(240,192,96,0.45); }
     .lv-arcade-collection-total { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.15rem; font-weight: 600; color: #e4ddf2; margin-top: 0.5rem; }
     .lv-arcade-collection-label { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: #b9aed4; }
 
-    .lv-arcade-lb-box { padding: 1.2rem 1.4rem; }
+    .lv-arcade-lb-box { position: relative; padding: 1.2rem 1.4rem; overflow: visible; }
     .lv-arcade-lb-box .lv-side-box-title { margin-bottom: 0.7rem; }
     .lv-arcade-lb-box .lv-scroll-5 { max-height: 168px; }
 
-    .lv-arcade-menu-box { width: 100%; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+    /* Corner "stamp" medallions -- a dashed-ring badge punched into the
+       top-right corner of each stat box (pfp / current level badge / a
+       static trophy for the leaderboard box), overlapping the box edge like
+       a wax seal. Boxes need overflow:visible (set above) for it to hang
+       off the corner instead of being clipped. */
+    .lv-arcade-stamp {
+      position: absolute; top: -14px; right: -12px; width: 56px; height: 56px; border-radius: 50%;
+      background: linear-gradient(160deg, rgba(24,20,34,0.95), rgba(10,8,16,0.95));
+      border: 3px dashed rgba(255,255,255,0.55);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.5), 0 0 14px rgba(255,255,255,0.08);
+      display: flex; align-items: center; justify-content: center; overflow: hidden;
+      transform: rotate(-11deg); z-index: 3; font-size: 1.5rem;
+    }
+    .lv-arcade-stamp img { width: 100%; height: 100%; object-fit: cover; }
+    .lv-arcade-stamp span { font-size: 0.82rem; font-weight: 700; color: #fff; font-family: 'Fredoka', cursive; }
+    .lv-arcade-stamp--badge { transform: rotate(10deg); border-color: rgba(240,192,96,0.7); }
+    .lv-arcade-stamp--badge img { object-fit: contain; padding: 7px; }
+    .lv-arcade-stamp--trophy { transform: rotate(-9deg); border-color: rgba(240,192,96,0.7); filter: drop-shadow(0 0 6px rgba(240,192,96,0.5)); }
+    .lv-arcade-stamp:empty { display: none; }
+
+    /* Faint corner sparkle on each stat box -- negative z-index so it sits
+       above the box art but below the real content, matching the
+       Search/Characters side-panel decoration convention. */
+    .lv-arcade-box-deco {
+      position: absolute; bottom: -8px; left: -8px; width: 30px; height: 30px; opacity: 0.45;
+      filter: drop-shadow(0 0 6px rgba(240,192,96,0.4)); transform: rotate(-12deg); z-index: 0; pointer-events: none;
+    }
+
+    .lv-arcade-menu-box {
+      position: relative; width: 100%; padding: 0; display: flex; flex-direction: column; overflow: hidden;
+      background-image: linear-gradient(160deg, rgba(10,8,20,0.6), rgba(10,8,20,0.85)), url('/images/home/potential-box-background.png');
+      background-size: cover; background-position: center;
+    }
     .lv-arcade-menu-tabs { display: flex; gap: 0.5rem; padding: 1rem 1rem 0; }
     .lv-arcade-menu-tab {
       flex: 1; text-align: center; padding: 0.75rem 1rem; border-radius: 12px 12px 0 0; cursor: pointer;
@@ -262,7 +294,7 @@
       box-shadow: 0 -4px 16px rgba(240,192,96,0.18);
     }
     .lv-arcade-panel-wrap {
-      flex: 1; padding: 1.6rem 1.6rem 1.8rem; background: rgba(0,0,0,0.2);
+      flex: 1; padding: 1.6rem 1.6rem 1.8rem; background: rgba(8,6,14,0.3);
       border-top: 1px solid rgba(255,255,255,0.08); min-height: 300px;
     }
     .lv-arcade-panel { display: none; animation: lvaPanelIn 0.3s ease; }
@@ -277,27 +309,41 @@
     }
 
     .lv-arcade-spin-stage { display: flex; flex-direction: column; align-items: center; gap: 1.3rem; padding: 0.5rem 0 0.75rem; }
-    .lv-arcade-wheel-wrap { position: relative; width: 170px; height: 170px; }
-    .lv-arcade-wheel {
-      width: 100%; height: 100%; border-radius: 50%; position: relative;
-      background: conic-gradient(from 0deg, #f0c060, #e8698a, #7fa8d9, #6fd4c0, #f0c060);
-      box-shadow: 0 0 0 6px rgba(255,255,255,0.08), 0 0 44px rgba(240,192,96,0.4);
-      animation: lvaWheelSpin 14s linear infinite;
+
+    /* Orbit marquee -- real character ref images drifting past behind the
+       Spin button, like cards looping around the world, instead of the old
+       CSS conic-gradient wheel. Two back-to-back copies of the card list
+       (built in JS) scroll left together via lvaOrbitScroll; translateX by
+       exactly -50% at the loop seam is what makes it read as infinite.
+       The wrap's mask-image is what fades cards in/out at the left/right
+       edges rather than letting them pop in or clip hard. */
+    .lv-arcade-orbit-wrap {
+      position: relative; width: 100%; max-width: 480px; height: 150px; margin: 0 auto;
+      -webkit-mask-image: linear-gradient(90deg, transparent, black 16%, black 84%, transparent);
+      mask-image: linear-gradient(90deg, transparent, black 16%, black 84%, transparent);
     }
-    .lv-arcade-wheel::after {
-      content: ''; position: absolute; inset: 15px; border-radius: 50%; background: #14101d;
-      box-shadow: inset 0 0 22px rgba(0,0,0,0.65);
+    .lv-arcade-orbit-track {
+      display: flex; gap: 1rem; position: absolute; left: 0; top: 0; height: 100%; align-items: center;
+      animation: lvaOrbitScroll 32s linear infinite; will-change: transform;
     }
-    .lv-arcade-wheel-center {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      font-size: 1.8rem; z-index: 2; filter: drop-shadow(0 0 8px rgba(240,192,96,0.6));
+    .lv-arcade-orbit-wrap.lva-orbit-empty { display: none; }
+    @keyframes lvaOrbitScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+    .lv-arcade-orbit-card {
+      flex-shrink: 0; width: 82px; height: 112px; border-radius: 10px; overflow: hidden;
+      border: 2px solid rgba(255,255,255,0.2); box-shadow: 0 8px 18px rgba(0,0,0,0.5);
+      background: #1a1626; animation: lvaOrbitBob 3.6s ease-in-out infinite;
     }
-    .lv-arcade-wheel-pointer {
-      position: absolute; top: -9px; left: 50%; transform: translateX(-50%); z-index: 3;
-      width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent;
-      border-top: 15px solid #fff; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+    .lv-arcade-orbit-card:nth-child(even) { animation-delay: -1.8s; }
+    .lv-arcade-orbit-card img { width: 100%; height: 100%; object-fit: cover; }
+    @keyframes lvaOrbitBob {
+      0%, 100% { transform: translateY(0) rotate(-2deg); }
+      50% { transform: translateY(-8px) rotate(2deg); }
     }
-    @keyframes lvaWheelSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .lv-arcade-orbit-slot {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2;
+      width: 92px; height: 122px; border-radius: 12px; border: 2px dashed rgba(240,192,96,0.55);
+      box-shadow: 0 0 20px rgba(240,192,96,0.25); pointer-events: none;
+    }
     .lv-arcade-spin-btn {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 1rem; padding: 0.8rem 2.2rem; border-radius: 999px;
       border: none; cursor: not-allowed; background: linear-gradient(135deg, #f0c060, #e8698a);
@@ -462,12 +508,16 @@
 
       <div class="lv-arcade-top-row">
         <div class="lv-box lv-arcade-gem-box">
+          <img class="lv-arcade-box-deco" src="/images/home/decoration-2.png" alt="" />
+          <div class="lv-arcade-stamp lv-arcade-stamp--pfp" id="lv-arcade-stamp-pfp"></div>
           <div class="lv-arcade-gem-icon">💎</div>
           <div class="lv-arcade-gem-total lv-arcade-gem-loading" id="lv-arcade-gem-total">—</div>
           <div class="lv-arcade-gem-label">Gems</div>
         </div>
 
         <div class="lv-box lv-arcade-collection-box">
+          <img class="lv-arcade-box-deco" src="/images/home/decoration-1.png" alt="" />
+          <div class="lv-arcade-stamp lv-arcade-stamp--badge" id="lv-arcade-stamp-badge"></div>
           <div class="lv-arcade-collection-icon">🃏</div>
           <div class="lv-arcade-collection-stat lv-arcade-gem-loading" id="lv-arcade-pool-stat">—/—</div>
           <div class="lv-arcade-collection-label">Unique Cards</div>
@@ -476,6 +526,8 @@
         </div>
 
         <div class="lv-box lv-arcade-lb-box">
+          <img class="lv-arcade-box-deco" src="/images/home/decoration-8.png" alt="" />
+          <div class="lv-arcade-stamp lv-arcade-stamp--trophy">🏆</div>
           <h3 class="lv-side-box-title"><img src="/images/home/decoration-1.png" alt="" /> Top Collectors</h3>
           <div id="lv-arcade-lb-list" class="lv-scroll-5"><div class="lv-empty">Loading…</div></div>
         </div>
@@ -499,9 +551,9 @@
               <h3 class="lv-arcade-panel-title">✨ Spin <span class="lv-arcade-badge">Coming Soon</span></h3>
               <p class="lv-arcade-panel-sub">Spend gems for a shot at character cards and other prizes. The wheel's still being built — hang tight!</p>
               <div class="lv-arcade-spin-stage">
-                <div class="lv-arcade-wheel-wrap">
-                  <div class="lv-arcade-wheel-pointer"></div>
-                  <div class="lv-arcade-wheel"><div class="lv-arcade-wheel-center">🎁</div></div>
+                <div class="lv-arcade-orbit-wrap" id="lv-arcade-orbit-wrap">
+                  <div class="lv-arcade-orbit-track" id="lv-arcade-orbit-track"></div>
+                  <div class="lv-arcade-orbit-slot"></div>
                 </div>
                 <button class="lv-arcade-spin-btn" type="button" disabled>Spin to Win!</button>
               </div>
@@ -816,6 +868,31 @@ async function loadArcadeStats() {
   }
 }
 
+// Populates the Spin panel's orbit marquee with real character ref images,
+// reusing /api/arcade/hub's existing random NSFW-filtered sample (built for
+// the old /fanpages/arcade page's character shuffle) instead of adding a
+// second endpoint. The track is the sample list rendered twice back-to-back
+// so the CSS scroll animation (translateX -50%) loops seamlessly.
+async function loadArcadeOrbit() {
+  const wrap = document.getElementById('lv-arcade-orbit-wrap');
+  const track = document.getElementById('lv-arcade-orbit-track');
+  try {
+    const res = await fetch('/api/arcade/hub', { headers: authHeaders() });
+    if (!res.ok) throw new Error('bad response');
+    const data = await res.json();
+    const cards = (data.character_shuffle || []).filter(c => c.image);
+    if (!cards.length) { wrap.classList.add('lva-orbit-empty'); return; }
+    const cardHtml = c => `
+      <div class="lv-arcade-orbit-card">
+        <img src="${escapeHtml(c.image)}" alt="${escapeHtml(c.name)}" loading="lazy" />
+      </div>
+    `;
+    track.innerHTML = cards.map(cardHtml).join('') + cards.map(cardHtml).join('');
+  } catch (e) {
+    wrap.classList.add('lva-orbit-empty');
+  }
+}
+
 function renderHero(u) {
   const name = u.display_name || u.username;
   document.getElementById('lv-hero-name-text').textContent = name;
@@ -830,6 +907,15 @@ function renderHero(u) {
     document.getElementById('lv-hero-title-text').textContent = u.title;
     document.getElementById('lv-hero-title-icon').src = u.title_icon || '';
   }
+
+  // Arcade stat-box corner stamps -- pfp on the Gems box, current level
+  // badge icon (falls back to a plain level number) on the Collection box.
+  document.getElementById('lv-arcade-stamp-pfp').innerHTML = u.avatar
+    ? `<img src="${escapeHtml(u.avatar)}" alt="" />`
+    : `<span>${escapeHtml(name.charAt(0).toUpperCase())}</span>`;
+  document.getElementById('lv-arcade-stamp-badge').innerHTML = u.title_icon
+    ? `<img src="${escapeHtml(u.title_icon)}" alt="" />`
+    : `<span>Lv ${u.level}</span>`;
 
   const into = u.xp_into_level || 0;
   const need = u.xp_for_next_level || 1;
@@ -938,6 +1024,7 @@ if (token) {
   loadLevelHub();
   loadLevelsBanner();
   loadArcadeStats();
+  loadArcadeOrbit();
 }
 </script>
 </body>
