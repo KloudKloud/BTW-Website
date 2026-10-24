@@ -2545,17 +2545,23 @@ app.get('/api/ctc/arcade-stats', requireAuth, async (req, res) => {
 const CTC_BOX_SLOTS = 25;
 const CTC_DEFAULT_BOXES = 6;
 
-// GET /api/ctc/collection — the Collection tab's Pokemon-box-style grid.
+// Shared by GET /api/ctc/collection and the box-swap endpoint below.
 // Any owned (and currently NSFW-visible) card that doesn't have a slot yet
 // gets auto-placed at the lowest free (box_index, slot_index) on the way
 // out, so newly claimed cards always land "in the nearest available slot"
 // without a separate background job. Hidden-by-SFW-Mode cards keep their
 // slot assignment in the DB (just filtered out of the cards query below) so
 // they reappear in the same spot if the viewer toggles SFW Mode back off.
-app.get('/api/ctc/collection', requireAuth, async (req, res) => {
-  const userId = req.user.id;
-  const { nsfwAllowed } = await getViewerNsfwAccess(req);
-
+//
+// Box ordering note: there is no separate "box order" column. A box's
+// position IS its box_index (0-based, shown to the viewer as index+1) --
+// box_index 0 is always "Box 1", box_index 1 is always "Box 2", etc. The
+// box-reorder view doesn't move an index around; it swaps the full contents
+// (every ctc_card_slots row for that user + the ctc_box_titles row) between
+// two box_index values, so "moving Box 3 to the first slot" really means
+// "Box 1 and Box 3 trade their cards and titles." See
+// POST /api/ctc/collection/box/swap.
+async function getCollectionBoxes(userId, nsfwAllowed) {
   const { rows: cards } = await pool.query(
     `SELECT cc.character_id, cc.is_shiny, cc.claim_count, cc.obtained_at,
             mc.name, COALESCE(NULLIF(mc.thumb_image_url, ''), mc.ref_image) AS image
@@ -2620,7 +2626,13 @@ app.get('/api/ctc/collection', requireAuth, async (req, res) => {
     }
   }
 
-  res.json({ boxes, box_slots: CTC_BOX_SLOTS });
+  return { boxes, box_slots: CTC_BOX_SLOTS };
+}
+
+// GET /api/ctc/collection — the Collection tab's Pokemon-box-style grid.
+app.get('/api/ctc/collection', requireAuth, async (req, res) => {
+  const { nsfwAllowed } = await getViewerNsfwAccess(req);
+  res.json(await getCollectionBoxes(req.user.id, nsfwAllowed));
 });
 
 // PUT /api/ctc/collection/box/:index/title — rename one of the viewer's own boxes.
@@ -2685,6 +2697,60 @@ app.post('/api/ctc/collection/move', requireAuth, async (req, res) => {
   } finally {
     client.release();
   }
+});
+
+// POST /api/ctc/collection/box/swap — the box-reorder view's "move a box"
+// (Pokemon-style: drag Box 3 onto Box 1 to swap their positions). There's no
+// separate order column (see getCollectionBoxes' comment above), so a swap
+// is implemented literally: every ctc_card_slots row at box_index A moves to
+// B and vice versa, and the two ctc_box_titles rows trade places with them,
+// so a box's custom name travels with its cards. The A-side cards are
+// parked at a temporary box_index (-2, out of the valid 0-199 range used
+// elsewhere) between the two UPDATEs so the swap can't collide with itself
+// mid-flight, same trick /collection/move uses with (-1,-1) for a single
+// card.
+app.post('/api/ctc/collection/box/swap', requireAuth, async (req, res) => {
+  const userId = req.user.id;
+  const boxA = parseInt(req.body.box_a, 10);
+  const boxB = parseInt(req.body.box_b, 10);
+  if (!Number.isInteger(boxA) || !Number.isInteger(boxB) || boxA < 0 || boxB < 0
+      || boxA > 199 || boxB > 199 || boxA === boxB) {
+    return res.status(400).json({ error: 'Bad swap.' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      'UPDATE ctc_card_slots SET box_index = -2 WHERE user_id = $1 AND box_index = $2', [userId, boxA]
+    );
+    await client.query(
+      'UPDATE ctc_card_slots SET box_index = $1 WHERE user_id = $2 AND box_index = $3', [boxA, userId, boxB]
+    );
+    await client.query(
+      'UPDATE ctc_card_slots SET box_index = $1 WHERE user_id = $2 AND box_index = -2', [boxB, userId]
+    );
+
+    const { rows: titleRows } = await client.query(
+      'SELECT box_index, title FROM ctc_box_titles WHERE user_id = $1 AND box_index = ANY($2::int[])', [userId, [boxA, boxB]]
+    );
+    const titleOf = (idx) => (titleRows.find(r => r.box_index === idx) || {}).title || '';
+    await client.query(
+      `INSERT INTO ctc_box_titles (user_id, box_index, title) VALUES ($1, $2, $3), ($1, $4, $5)
+       ON CONFLICT (user_id, box_index) DO UPDATE SET title = EXCLUDED.title`,
+      [userId, boxA, titleOf(boxB), boxB, titleOf(boxA)]
+    );
+
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('ctc collection box swap error:', e);
+    return res.status(500).json({ error: 'Something went wrong.' });
+  } finally {
+    client.release();
+  }
+
+  const { nsfwAllowed } = await getViewerNsfwAccess(req);
+  res.json(await getCollectionBoxes(userId, nsfwAllowed));
 });
 
 // ── Spin (website front-end for the same ctc.js engine the Discord bot

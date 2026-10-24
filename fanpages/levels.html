@@ -344,9 +344,9 @@
       position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 0.7rem;
       font-family: 'Fredoka', 'Lato', cursive; font-size: 1.35rem; padding: 1.05rem 3.2rem; border-radius: 999px;
       border: 2px solid rgba(255,255,255,0.35); cursor: pointer;
-      background: linear-gradient(135deg, #f0c060, #e8698a 55%, #b388f0);
-      color: #1a1200; font-weight: 800; letter-spacing: 0.015em;
-      text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+      background: linear-gradient(135deg, #f0c060, #7fa8d9 55%, #b388f0);
+      color: #fff; font-weight: 800; letter-spacing: 0.015em;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.5);
       box-shadow: 0 10px 28px rgba(240,192,96,0.4), inset 0 1px 0 rgba(255,255,255,0.45);
       animation: lvaSpinBtnPulse 2.8s ease-in-out infinite;
     }
@@ -384,22 +384,53 @@
       transform: scale(1.18); color: #fff;
       filter: drop-shadow(0 0 9px rgba(240,192,96,0.65));
     }
+    /* Drag a card over one of these to auto-flip a page while a reorder
+       drag is in flight -- a dashed gold ring signals "drop zone", not
+       "navigation button", while that's happening. */
+    .lv-box-nav-arrow.lv-box-nav-arrow--drag-over {
+      color: #fff; transform: scale(1.18);
+      filter: drop-shadow(0 0 9px rgba(240,192,96,0.65));
+    }
     .lv-box-title-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
     /* A single centered cream plate -- "Box 1" in the middle, mirroring the
        Pokemon-box-style title bar look -- rather than a "Box" tag fused to
-       a separately editable field. */
+       a separately editable field. Bigger than the first pass per request;
+       the title itself is click-to-rename (see renderBoxPill()), not an
+       always-editable input, so there's nothing to type into by accident. */
     .lv-box-pill {
-      display: flex; align-items: center; justify-content: center; min-width: 150px;
-      padding: 0.55rem 1.6rem; border-radius: 999px;
+      display: flex; align-items: center; justify-content: center; min-width: 190px;
+      padding: 0.8rem 2.4rem; border-radius: 999px;
       background: linear-gradient(180deg, #f6e2a3, #dfb24f);
       border: 2px solid rgba(255,255,255,0.45);
       box-shadow: 0 6px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.5);
     }
     .lv-box-pill-text {
-      font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 1.1rem; color: #3a2a10;
-      text-shadow: 0 1px 0 rgba(255,255,255,0.3); white-space: nowrap;
+      font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 1.3rem; color: #3a2a10;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.3); white-space: nowrap; cursor: pointer;
+      border-bottom: 1px dashed rgba(58,42,16,0.4);
     }
-    .lv-box-page-lbl { font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; color: #a79fc0; }
+    .lv-box-pill-text:hover { opacity: 0.75; }
+    .lv-box-title-edit-input {
+      font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 1.3rem; color: #3a2a10;
+      background: rgba(255,255,255,0.3); border: none; border-radius: 8px;
+      text-align: center; padding: 0.1rem 0.4rem; width: 140px; max-width: 40vw;
+    }
+    .lv-box-title-edit-input:focus { outline: none; background: rgba(255,255,255,0.5); }
+    /* The 📦 (open the box-reorder view) and 🔀 Reorder (toggle card drag/
+       swap mode) controls -- small pill buttons, not plain chevrons like
+       the prev/next arrows, since these open a mode/view rather than just
+       stepping a page. */
+    .lv-box-util-btn {
+      display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer;
+      background: rgba(20,16,30,0.6); border: 1px solid rgba(240,192,96,0.35); color: #f0f0f0;
+      border-radius: 999px; padding: 0.5rem 0.9rem; font-family: 'Fredoka', 'Lato', cursive;
+      font-size: 0.82rem; font-weight: 700; flex-shrink: 0;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    }
+    .lv-box-util-btn:hover { background: rgba(240,192,96,0.15); border-color: rgba(240,192,96,0.65); transform: translateY(-1px); }
+    .lv-box-reorder-toggle.active {
+      background: linear-gradient(180deg, #f6e2a3, #dfb24f); border-color: rgba(255,255,255,0.5); color: #3a2a10;
+    }
 
     .lv-box-hint:not([hidden]) {
       text-align: center; font-size: 0.82rem; color: var(--gold, #f0c060); margin-bottom: 0.8rem;
@@ -420,9 +451,12 @@
     .lv-box-slot--empty {
       border-style: dashed; border-color: rgba(255,255,255,0.16); cursor: default;
     }
-    .lv-box-slot:not(.lv-box-slot--empty) { cursor: pointer; }
-    .lv-box-slot:not(.lv-box-slot--empty):hover { transform: translateY(-3px); border-color: rgba(240,192,96,0.5); box-shadow: 0 8px 18px rgba(0,0,0,0.4); }
-    .lv-box-slot--empty:hover { border-color: rgba(240,192,96,0.3); cursor: pointer; }
+    /* Cards are only grabbable in Reorder mode (.lv-box-grid--reorder) --
+       outside of it the grid is just a viewer, no draggable attribute, no
+       click handlers, no "this is clickable" cursor. */
+    .lv-box-grid--reorder .lv-box-slot:not(.lv-box-slot--empty) { cursor: pointer; }
+    .lv-box-grid--reorder .lv-box-slot:not(.lv-box-slot--empty):hover { transform: translateY(-3px); border-color: rgba(240,192,96,0.5); box-shadow: 0 8px 18px rgba(0,0,0,0.4); }
+    .lv-box-grid--reorder .lv-box-slot--empty:hover { border-color: rgba(240,192,96,0.3); cursor: pointer; }
     .lv-box-slot--selected { border-color: var(--gold, #f0c060); box-shadow: 0 0 0 3px rgba(240,192,96,0.3), 0 0 18px rgba(240,192,96,0.4); }
     .lv-box-slot img { width: 100%; height: 100%; object-fit: cover; }
     .lv-box-slot-shiny {
@@ -435,7 +469,37 @@
 
     @media (max-width: 560px) {
       .lv-box-grid { gap: 0.5rem; }
+      .lv-box-nav { gap: 0.5rem; }
+      .lv-box-pill { min-width: 140px; padding: 0.65rem 1.4rem; }
+      .lv-box-pill-text, .lv-box-title-edit-input { font-size: 1.05rem; }
+      .lv-box-util-btn { padding: 0.45rem 0.65rem; font-size: 0; }
+      .lv-box-util-btn .lv-box-util-btn-icon { font-size: 1.1rem; }
     }
+
+    /* ── Box-reorder view -- a grid of every box as a draggable tile; drop
+       one onto another to swap their full contents (cards + title), same
+       as moving a box in the Pokemon games. Built/torn down via JS the same
+       way the spin overlay is (see spinOverlayEl()), not a static hidden
+       block in the markup. ── */
+    .lv-boxreorder-card {
+      width: 100%; max-width: 560px; background: #141018; border: 1px solid rgba(127,168,217,0.25);
+      border-radius: 18px; padding: 2rem; box-shadow: 0 30px 90px rgba(0,0,0,0.6); position: relative;
+    }
+    .lv-boxreorder-hint { text-align: center; color: #a79fc0; font-size: 0.86rem; margin: 0 0 1.2rem; }
+    .lv-boxreorder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.9rem; }
+    .lv-boxreorder-tile {
+      cursor: grab; text-align: center; padding: 1rem 0.6rem; border-radius: 14px;
+      background: rgba(255,255,255,0.03); border: 2px solid rgba(255,255,255,0.12);
+      transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+    }
+    .lv-boxreorder-tile:hover { border-color: rgba(240,192,96,0.4); transform: translateY(-2px); }
+    .lv-boxreorder-tile--drag-over { border-color: var(--gold, #f0c060); background: rgba(240,192,96,0.12); }
+    .lv-boxreorder-tile-icon { font-size: 1.8rem; margin-bottom: 0.4rem; }
+    .lv-boxreorder-tile-label {
+      font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 0.92rem; color: #f0f0f0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .lv-boxreorder-tile-count { font-size: 0.72rem; color: #a79fc0; margin-top: 0.2rem; }
 
     .lv-arcade-shop-empty { text-align: center; padding: 2.2rem 1rem 1rem; color: #a79fc0; }
     .lv-arcade-shop-empty-icon { font-size: 2.3rem; margin-bottom: 0.6rem; }
@@ -698,7 +762,7 @@
                 </div>
                 <div class="lv-arcade-spin-btn-wrap">
                   <button class="lv-arcade-spin-btn" id="lv-arcade-spin-btn" type="button">
-                    <span class="lv-arcade-spin-btn-icon">✨</span> <span id="lv-arcade-spin-btn-label">Spin to Win!</span>
+                    <span class="lv-arcade-spin-btn-icon">💎</span> <span id="lv-arcade-spin-btn-label">Spin to Win!</span>
                   </button>
                 </div>
                 <div class="lv-arcade-spin-cost" id="lv-arcade-spin-cost">Costs <strong>300 gems</strong> per spin</div>
@@ -708,17 +772,22 @@
             <div class="lv-arcade-panel" id="lva-panel-collection">
               <h3 class="lv-arcade-panel-title">🃏 Collection</h3>
               <div class="lv-box-nav">
+                <button class="lv-box-util-btn" id="lv-box-reorder-view-btn" type="button" aria-label="Reorder boxes">
+                  <span class="lv-box-util-btn-icon">📦</span>
+                </button>
                 <button class="lv-box-nav-arrow" id="lv-box-prev" type="button" aria-label="Previous box">
                   <svg viewBox="0 0 24 24"><polygon points="15,4 15,20 5,12" /></svg>
                 </button>
                 <div class="lv-box-title-wrap">
-                  <div class="lv-box-pill">
+                  <div class="lv-box-pill" id="lv-box-pill">
                     <span class="lv-box-pill-text" id="lv-box-title-text">Box 1</span>
                   </div>
-                  <span class="lv-box-page-lbl" id="lv-box-page-lbl">1 / 6</span>
                 </div>
                 <button class="lv-box-nav-arrow" id="lv-box-next" type="button" aria-label="Next box">
                   <svg viewBox="0 0 24 24"><polygon points="9,4 9,20 19,12" /></svg>
+                </button>
+                <button class="lv-box-util-btn lv-box-reorder-toggle" id="lv-box-reorder-toggle" type="button" aria-label="Toggle card reorder mode">
+                  <span class="lv-box-util-btn-icon">🔀</span><span class="lv-box-util-btn-label">Reorder</span>
                 </button>
               </div>
               <div class="lv-box-hint-wrap">
@@ -1201,16 +1270,26 @@ async function checkPendingSpin() {
 
 // ── Collection tab: Pokemon-box-style grid ──────────────────────────────
 // Boxes/slot contents come from /api/ctc/collection (server auto-places any
-// newly collected card in the nearest free slot on every load). Reordering
-// is click-to-pick-up / click-to-drop -- picking a card up survives
-// navigating to a different box via the arrows, so it doubles as the
-// "move between boxes" flow -- plus native HTML5 drag for quick same-box
-// reordering; both funnel into moveCardTo().
+// newly collected card in the nearest free slot on every load). There is no
+// separate "display order" column for boxes -- a box's position IS its
+// box_index (0-based; shown as index+1). "Moving" a box in the reorder view
+// swaps the full contents (every ctc_card_slots row + the ctc_box_titles
+// row) between two box_index values server-side -- see
+// /api/ctc/collection/box/swap in server.js. ctcCurrentBox always starts at
+// 0 (plain JS var, nothing persisted) so a reload always opens on box 1.
+//
+// Cards are only grabbable while ctcReorderMode is on (toggled by the
+// "Reorder" button) -- click-to-pick-up/click-to-drop, plus native HTML5
+// drag for same-box reordering, both funnel into moveCardTo(). Picking a
+// card up survives navigating to a different box via the arrows (click OR
+// drag-hover, see wireBoxArrowDragFlip below), so it doubles as the "move
+// between boxes" flow.
 let CTC_BOXES = [];
 let ctcBoxSlotCount = 25;
 let ctcCurrentBox = 0;
 let ctcSelectedCharacterId = null;
 let ctcHasAnyCards = false;
+let ctcReorderMode = false;
 
 async function loadCollection() {
   try {
@@ -1231,15 +1310,15 @@ function renderCollectionBox() {
   const box = CTC_BOXES[ctcCurrentBox];
   if (!box) return;
 
-  document.getElementById('lv-box-title-text').textContent = `Box ${box.index + 1}`;
-  document.getElementById('lv-box-page-lbl').textContent = `${ctcCurrentBox + 1} / ${CTC_BOXES.length}`;
+  renderBoxPill();
 
   const grid = document.getElementById('lv-box-grid');
+  grid.classList.toggle('lv-box-grid--reorder', ctcReorderMode);
   grid.innerHTML = box.slots.map((card, i) => {
     if (!card) return `<div class="lv-box-slot lv-box-slot--empty" data-slot="${i}"></div>`;
     const selected = ctcSelectedCharacterId === card.character_id;
     return `
-      <div class="lv-box-slot${selected ? ' lv-box-slot--selected' : ''}" data-slot="${i}" data-character-id="${card.character_id}" draggable="true" title="${escapeHtml(card.name)}">
+      <div class="lv-box-slot${selected ? ' lv-box-slot--selected' : ''}" data-slot="${i}" data-character-id="${card.character_id}"${ctcReorderMode ? ' draggable="true"' : ''} title="${escapeHtml(card.name)}">
         ${card.is_shiny ? '<span class="lv-box-slot-shiny">✨</span>' : ''}
         <img src="${escapeHtml(card.image)}" alt="${escapeHtml(card.name)}" loading="lazy" />
       </div>
@@ -1247,15 +1326,57 @@ function renderCollectionBox() {
   }).join('');
 
   document.getElementById('lv-box-empty-msg').hidden = ctcHasAnyCards;
-  document.getElementById('lv-box-hint').hidden = ctcSelectedCharacterId === null;
+  document.getElementById('lv-box-hint').hidden = !(ctcReorderMode && ctcSelectedCharacterId !== null);
 
-  grid.querySelectorAll('.lv-box-slot').forEach(el => {
-    el.addEventListener('click', onBoxSlotClick);
-    el.addEventListener('dragstart', onBoxSlotDragStart);
-    el.addEventListener('dragover', e => e.preventDefault());
-    el.addEventListener('drop', onBoxSlotDrop);
-  });
+  if (ctcReorderMode) {
+    grid.querySelectorAll('.lv-box-slot').forEach(el => {
+      el.addEventListener('click', onBoxSlotClick);
+      el.addEventListener('dragstart', onBoxSlotDragStart);
+      el.addEventListener('dragover', e => e.preventDefault());
+      el.addEventListener('drop', onBoxSlotDrop);
+    });
+  }
   syncBgHeight();
+}
+
+// The "Box N" plate: plain text by default, swapped for an inline input on
+// click (see startEditBoxTitle). Rebuilt from scratch each time so the
+// click handler is always wired to whichever element is currently showing.
+function renderBoxPill() {
+  const box = CTC_BOXES[ctcCurrentBox];
+  if (!box) return;
+  const pill = document.getElementById('lv-box-pill');
+  const label = box.title ? escapeHtml(box.title) : `Box ${box.index + 1}`;
+  pill.innerHTML = `<span class="lv-box-pill-text" id="lv-box-title-text" title="Click to rename">${label}</span>`;
+  document.getElementById('lv-box-title-text').addEventListener('click', startEditBoxTitle);
+}
+
+function startEditBoxTitle() {
+  const box = CTC_BOXES[ctcCurrentBox];
+  if (!box) return;
+  const pill = document.getElementById('lv-box-pill');
+  const current = box.title || '';
+  pill.innerHTML = `<input class="lv-box-title-edit-input" id="lv-box-title-edit-input" type="text" maxlength="40" value="${escapeHtml(current)}" placeholder="Box ${box.index + 1}" />`;
+  const input = document.getElementById('lv-box-title-edit-input');
+  input.focus();
+  input.select();
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') input.blur();
+    if (e.key === 'Escape') { input.dataset.cancel = '1'; input.blur(); }
+  });
+  input.addEventListener('blur', async () => {
+    const cancelled = input.dataset.cancel === '1';
+    const newTitle = input.value.trim();
+    if (cancelled || newTitle === current) { renderBoxPill(); return; }
+    try {
+      const res = await fetch(`/api/ctc/collection/box/${box.index}/title`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ title: newTitle }),
+      });
+      if (res.ok) { const data = await res.json(); box.title = data.title; }
+    } catch (e) {}
+    renderBoxPill();
+  });
 }
 
 function onBoxSlotClick(e) {
@@ -1303,15 +1424,124 @@ async function moveCardTo(characterId, slotIndex) {
 document.getElementById('lv-box-prev').addEventListener('click', () => {
   if (!CTC_BOXES.length) return;
   ctcCurrentBox = (ctcCurrentBox - 1 + CTC_BOXES.length) % CTC_BOXES.length;
-  ctcSelectedCharacterId = null;
   renderCollectionBox();
 });
 document.getElementById('lv-box-next').addEventListener('click', () => {
   if (!CTC_BOXES.length) return;
   ctcCurrentBox = (ctcCurrentBox + 1) % CTC_BOXES.length;
+  renderCollectionBox();
+});
+
+document.getElementById('lv-box-reorder-toggle').addEventListener('click', () => {
+  ctcReorderMode = !ctcReorderMode;
+  document.getElementById('lv-box-reorder-toggle').classList.toggle('active', ctcReorderMode);
   ctcSelectedCharacterId = null;
   renderCollectionBox();
 });
+
+// Drag a card over the prev/next arrow (while Reorder mode is on) and, after
+// a short hover delay, flip to that box without ending the drag -- the
+// dragged card's id lives in the native dataTransfer payload, not in the DOM
+// node that started the drag, so re-rendering #lv-box-grid mid-drag doesn't
+// interrupt it. A subsequent drop on a slot in the newly-shown box calls
+// moveCardTo() against the now-current ctcCurrentBox.
+function wireBoxArrowDragFlip(arrowEl, direction) {
+  let timer = null;
+  const clear = () => { clearTimeout(timer); timer = null; arrowEl.classList.remove('lv-box-nav-arrow--drag-over'); };
+  arrowEl.addEventListener('dragenter', e => {
+    e.preventDefault();
+    if (!ctcReorderMode || timer) return;
+    arrowEl.classList.add('lv-box-nav-arrow--drag-over');
+    timer = setTimeout(() => {
+      timer = null;
+      arrowEl.classList.remove('lv-box-nav-arrow--drag-over');
+      if (!CTC_BOXES.length) return;
+      ctcCurrentBox = (ctcCurrentBox + direction + CTC_BOXES.length) % CTC_BOXES.length;
+      renderCollectionBox();
+    }, 550);
+  });
+  arrowEl.addEventListener('dragover', e => e.preventDefault());
+  arrowEl.addEventListener('dragleave', clear);
+  arrowEl.addEventListener('drop', e => { e.preventDefault(); clear(); });
+}
+wireBoxArrowDragFlip(document.getElementById('lv-box-prev'), -1);
+wireBoxArrowDragFlip(document.getElementById('lv-box-next'), 1);
+
+// ── Box-reorder view: swap two boxes' full contents (cards + title) ────
+// Built/torn down via JS, same pattern as the spin overlay (spinOverlayEl).
+function boxReorderOverlayEl() {
+  let el = document.getElementById('lv-boxreorder-overlay');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'lv-boxreorder-overlay';
+    el.className = 'lv-spin-overlay';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function closeBoxReorderView() {
+  const el = document.getElementById('lv-boxreorder-overlay');
+  if (el) el.remove();
+}
+function renderBoxReorderGrid() {
+  const grid = document.getElementById('lv-boxreorder-grid');
+  if (!grid) return;
+  grid.innerHTML = CTC_BOXES.map(b => {
+    const filled = b.slots.filter(Boolean).length;
+    const label = b.title ? escapeHtml(b.title) : `Box ${b.index + 1}`;
+    return `
+      <div class="lv-boxreorder-tile" draggable="true" data-box-index="${b.index}">
+        <div class="lv-boxreorder-tile-icon">📦</div>
+        <div class="lv-boxreorder-tile-label">${label}</div>
+        <div class="lv-boxreorder-tile-count">${filled}/${b.slots.length}</div>
+      </div>
+    `;
+  }).join('');
+  grid.querySelectorAll('.lv-boxreorder-tile').forEach(el => {
+    el.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', el.dataset.boxIndex);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('lv-boxreorder-tile--drag-over'); });
+    el.addEventListener('dragleave', () => el.classList.remove('lv-boxreorder-tile--drag-over'));
+    el.addEventListener('drop', async e => {
+      e.preventDefault();
+      el.classList.remove('lv-boxreorder-tile--drag-over');
+      const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      const toIndex = parseInt(el.dataset.boxIndex, 10);
+      if (!Number.isInteger(fromIndex) || fromIndex === toIndex) return;
+      await swapBoxes(fromIndex, toIndex);
+    });
+  });
+}
+async function swapBoxes(boxA, boxB) {
+  try {
+    const res = await fetch('/api/ctc/collection/box/swap', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ box_a: boxA, box_b: boxB }),
+    });
+    if (!res.ok) throw new Error('swap failed');
+    const data = await res.json();
+    CTC_BOXES = data.boxes || [];
+    ctcHasAnyCards = CTC_BOXES.some(b => b.slots.some(s => s));
+    renderCollectionBox();
+    renderBoxReorderGrid();
+  } catch (e) {}
+}
+function openBoxReorderView() {
+  const overlay = boxReorderOverlayEl();
+  overlay.innerHTML = `
+    <div class="lv-boxreorder-card">
+      <button class="lv-spin-overlay-close" id="lv-boxreorder-close" type="button" aria-label="Close">&#10005;</button>
+      <div class="lv-spin-overlay-title">📦 Reorder Boxes</div>
+      <p class="lv-boxreorder-hint">Drag a box onto another to swap their positions.</p>
+      <div class="lv-boxreorder-grid" id="lv-boxreorder-grid"></div>
+    </div>
+  `;
+  renderBoxReorderGrid();
+  document.getElementById('lv-boxreorder-close').addEventListener('click', closeBoxReorderView);
+}
+document.getElementById('lv-box-reorder-view-btn').addEventListener('click', openBoxReorderView);
 
 function renderHero(u) {
   const name = u.display_name || u.username;
