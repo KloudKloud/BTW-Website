@@ -339,37 +339,25 @@
       0%, 100% { transform: translateY(0) rotate(-2deg); }
       50% { transform: translateY(-8px) rotate(2deg); }
     }
-    /* Wrapper's ::before is a blurred conic-gradient "color wheel" halo
-       spinning behind the button -- kept on a separate ancestor rather than
-       the button's own ::before/::after so it doesn't fight the button's
-       own gradient-shift background-position animation. */
     .lv-arcade-spin-btn-wrap { position: relative; display: inline-flex; }
-    .lv-arcade-spin-btn-wrap::before {
-      content: ''; position: absolute; inset: -16px; border-radius: 999px; z-index: 1;
-      background: conic-gradient(from 0deg, #f0c060, #e8698a, #7fa8d9, #6fd4c0, #b388f0, #f0c060);
-      filter: blur(16px); opacity: 0.8; animation: lvaSpinWheelRotate 5s linear infinite;
-    }
     .lv-arcade-spin-btn {
       position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 0.7rem;
       font-family: 'Fredoka', 'Lato', cursive; font-size: 1.35rem; padding: 1.05rem 3.2rem; border-radius: 999px;
       border: 2px solid rgba(255,255,255,0.35); cursor: pointer;
-      background: linear-gradient(135deg, #f0c060, #e8698a 55%, #b388f0); background-size: 200% 200%;
+      background: linear-gradient(135deg, #f0c060, #e8698a 55%, #b388f0);
       color: #1a1200; font-weight: 800; letter-spacing: 0.015em;
       text-shadow: 0 1px 0 rgba(255,255,255,0.3);
       box-shadow: 0 10px 28px rgba(240,192,96,0.4), inset 0 1px 0 rgba(255,255,255,0.45);
-      animation: lvaSpinBtnGlow 4s ease-in-out infinite, lvaSpinBtnShift 7s ease infinite;
+      animation: lvaSpinBtnPulse 2.8s ease-in-out infinite;
     }
-    .lv-arcade-spin-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+    .lv-arcade-spin-btn:disabled { cursor: not-allowed; opacity: 0.6; animation: none; }
     .lv-arcade-spin-btn:not(:disabled):hover { transform: translateY(-2px); }
     .lv-arcade-spin-btn-icon { display: inline-block; animation: lvaGemFloat 3s ease-in-out infinite; }
-    @keyframes lvaSpinWheelRotate { to { transform: rotate(360deg); } }
-    @keyframes lvaSpinBtnGlow {
+    /* A gentle extend-and-dim pulse -- scale stays untouched so it doesn't
+       fight the hover translateY above, just the glow spread/softness. */
+    @keyframes lvaSpinBtnPulse {
       0%, 100% { box-shadow: 0 10px 28px rgba(240,192,96,0.4), inset 0 1px 0 rgba(255,255,255,0.45); }
-      50% { box-shadow: 0 10px 38px rgba(240,192,96,0.65), inset 0 1px 0 rgba(255,255,255,0.55); }
-    }
-    @keyframes lvaSpinBtnShift {
-      0%, 100% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
+      50% { box-shadow: 0 10px 44px rgba(240,192,96,0.8), inset 0 1px 0 rgba(255,255,255,0.55); }
     }
     .lv-arcade-spin-cost { font-size: 0.82rem; color: #a79fc0; }
     .lv-arcade-spin-cost strong { color: var(--gold, #f0c060); }
@@ -380,44 +368,37 @@
        first after the last). Reordering is click-to-pick-up/click-to-drop
        (works across a box-arrow navigation too) plus native HTML5 drag for
        same-box reordering -- both call the same moveCardTo(). */
-    .lv-box-nav { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-bottom: 1.1rem; }
+    .lv-box-nav { display: flex; align-items: center; justify-content: center; gap: 0.9rem; margin-bottom: 1.1rem; }
+    /* Plain chevrons -- no circular button chrome -- sitting right next to
+       the box plate, not off in their own boxed control. Navigation is
+       arrow-only now; there's nothing left to click-to-type a box number
+       into. */
     .lv-box-nav-arrow {
-      width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0; cursor: pointer; padding: 0;
-      background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.18), rgba(0,0,0,0.15)), linear-gradient(160deg, #39334e, #201c2c);
-      border: 2px solid rgba(240,192,96,0.4); color: var(--gold, #f0c060);
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.12);
-      transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+      flex-shrink: 0; cursor: pointer; padding: 0.3rem; background: none; border: none;
+      color: var(--gold, #f0c060); display: flex; align-items: center; justify-content: center;
+      filter: drop-shadow(0 0 5px rgba(240,192,96,0.35));
+      transition: transform 0.15s ease, color 0.15s ease, filter 0.15s ease;
     }
-    .lv-box-nav-arrow svg { width: 16px; height: 16px; fill: currentColor; }
+    .lv-box-nav-arrow svg { width: 22px; height: 22px; fill: currentColor; }
     .lv-box-nav-arrow:hover {
-      transform: scale(1.1); border-color: rgba(240,192,96,0.75);
-      box-shadow: 0 4px 14px rgba(0,0,0,0.45), 0 0 14px rgba(240,192,96,0.35), inset 0 1px 0 rgba(255,255,255,0.18);
+      transform: scale(1.18); color: #fff;
+      filter: drop-shadow(0 0 9px rgba(240,192,96,0.65));
     }
     .lv-box-title-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
-    /* The "BOX" pill -- a textured tag (BoxBackground3.png) fused to a
-       cream input field, mirroring the Pokemon-box-style title bar look. */
+    /* A single centered cream plate -- "Box 1" in the middle, mirroring the
+       Pokemon-box-style title bar look -- rather than a "Box" tag fused to
+       a separately editable field. */
     .lv-box-pill {
-      display: flex; align-items: stretch; border-radius: 999px; overflow: hidden; min-width: 200px;
+      display: flex; align-items: center; justify-content: center; min-width: 150px;
+      padding: 0.55rem 1.6rem; border-radius: 999px;
       background: linear-gradient(180deg, #f6e2a3, #dfb24f);
       border: 2px solid rgba(255,255,255,0.45);
       box-shadow: 0 6px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.5);
     }
-    .lv-box-pill-tag {
-      display: flex; align-items: center; justify-content: center; padding: 0 1rem;
-      font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 0.92rem; color: #fff;
-      background-image: linear-gradient(160deg, rgba(10,8,20,0.4), rgba(10,8,20,0.62)), url('/images/home/box-background-3.png');
-      background-size: cover; background-position: center;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.7); border-right: 2px solid rgba(255,255,255,0.35);
-      white-space: nowrap;
+    .lv-box-pill-text {
+      font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 1.1rem; color: #3a2a10;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.3); white-space: nowrap;
     }
-    .lv-box-title-input {
-      flex: 1; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.1rem; font-weight: 700; color: #3a2a10;
-      background: transparent; border: none; text-align: center; padding: 0.55rem 1rem; width: 120px;
-      max-width: 50vw;
-    }
-    .lv-box-title-input:focus { outline: none; background: rgba(255,255,255,0.25); }
-    .lv-box-title-input::placeholder { color: rgba(58,42,16,0.55); }
     .lv-box-page-lbl { font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; color: #a79fc0; }
 
     .lv-box-hint:not([hidden]) {
@@ -454,7 +435,6 @@
 
     @media (max-width: 560px) {
       .lv-box-grid { gap: 0.5rem; }
-      .lv-box-title-input { width: 160px; font-size: 1.05rem; }
     }
 
     .lv-arcade-shop-empty { text-align: center; padding: 2.2rem 1rem 1rem; color: #a79fc0; }
@@ -733,8 +713,7 @@
                 </button>
                 <div class="lv-box-title-wrap">
                   <div class="lv-box-pill">
-                    <span class="lv-box-pill-tag">Box</span>
-                    <input class="lv-box-title-input" id="lv-box-title-input" type="text" maxlength="40" placeholder="1" />
+                    <span class="lv-box-pill-text" id="lv-box-title-text">Box 1</span>
                   </div>
                   <span class="lv-box-page-lbl" id="lv-box-page-lbl">1 / 6</span>
                 </div>
@@ -1252,9 +1231,7 @@ function renderCollectionBox() {
   const box = CTC_BOXES[ctcCurrentBox];
   if (!box) return;
 
-  const titleInput = document.getElementById('lv-box-title-input');
-  titleInput.value = box.title || '';
-  titleInput.placeholder = `${box.index + 1}`;
+  document.getElementById('lv-box-title-text').textContent = `Box ${box.index + 1}`;
   document.getElementById('lv-box-page-lbl').textContent = `${ctcCurrentBox + 1} / ${CTC_BOXES.length}`;
 
   const grid = document.getElementById('lv-box-grid');
@@ -1334,22 +1311,6 @@ document.getElementById('lv-box-next').addEventListener('click', () => {
   ctcCurrentBox = (ctcCurrentBox + 1) % CTC_BOXES.length;
   ctcSelectedCharacterId = null;
   renderCollectionBox();
-});
-
-const ctcBoxTitleInput = document.getElementById('lv-box-title-input');
-ctcBoxTitleInput.addEventListener('keydown', e => { if (e.key === 'Enter') ctcBoxTitleInput.blur(); });
-ctcBoxTitleInput.addEventListener('blur', async () => {
-  const idx = ctcCurrentBox;
-  const box = CTC_BOXES[idx];
-  const title = ctcBoxTitleInput.value.trim();
-  if (!box || title === (box.title || '')) return;
-  try {
-    const res = await fetch(`/api/ctc/collection/box/${idx}/title`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ title }),
-    });
-    if (res.ok) { const data = await res.json(); box.title = data.title; }
-  } catch (e) {}
 });
 
 function renderHero(u) {
