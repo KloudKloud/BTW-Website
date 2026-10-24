@@ -762,8 +762,14 @@
     }
     .lv-trading-card-flip.lv-flipped .lv-trading-card-flip-inner { transform: rotateY(180deg); }
     .lv-trading-card-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
-    .lv-trading-card-face--front { position: relative; }
-    .lv-trading-card-face--back { position: absolute; inset: 0; transform: rotateY(180deg); }
+    /* Compound selectors (beats plain .lv-trading-card's own position:relative
+       at equal specificity, regardless of source order) -- without this the
+       back face fell back to position:relative and stacked in normal flow
+       BELOW the front instead of overlaying it, doubling the popup's
+       height and pushing the Flip button (and the back face itself) way
+       down the page. */
+    .lv-trading-card.lv-trading-card-face--front { position: relative; }
+    .lv-trading-card.lv-trading-card-face--back { position: absolute; inset: 0; transform: rotateY(180deg); }
 
     .lv-card-flip-btn {
       display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 1rem;
@@ -799,13 +805,10 @@
     .lv-trading-card--shiny .lv-trading-card-art { border-bottom-color: var(--gold, #f0c060); }
     .lv-trading-card-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-    /* Everything below the art is a grainy black texture (a tiled
-       fractal-noise SVG data-URI over a flat near-black fill) instead of
-       the old looping video background. */
+    /* Solid dark gray/black -- not the back face's grainy texture. */
     .lv-trading-card-info {
       position: relative; z-index: 2; padding: 1.3rem 1.3rem 1.5rem; text-align: center;
-      background-color: #0b0b0b;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+      background-color: #16161a;
     }
     .lv-trading-card-name {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 1.7rem; color: #fff;
