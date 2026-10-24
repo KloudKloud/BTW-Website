@@ -113,6 +113,28 @@ const schemaSql = `
     created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     resolved_at            TIMESTAMPTZ
   );
+
+  -- Where each owned card sits in the website's Pokemon-box-style Collection
+  -- grid (the Discord bot has no concept of this -- site-only UI state).
+  -- Newly claimed cards get auto-placed at the lowest free (box_index,
+  -- slot_index) by the site; box_index/slot_index aren't constrained to the
+  -- "default 6 boxes of 25" the UI starts with, so a collection can grow
+  -- past that without the server needing to know about it.
+  CREATE TABLE IF NOT EXISTS ctc_card_slots (
+    user_id       INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    character_id  INTEGER     NOT NULL REFERENCES moderator_characters(id) ON DELETE CASCADE,
+    box_index     INTEGER     NOT NULL DEFAULT 0,
+    slot_index    INTEGER     NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, character_id)
+  );
+  CREATE INDEX IF NOT EXISTS ctc_card_slots_box_idx ON ctc_card_slots (user_id, box_index, slot_index);
+
+  CREATE TABLE IF NOT EXISTS ctc_box_titles (
+    user_id     INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    box_index   INTEGER     NOT NULL,
+    title       TEXT        NOT NULL DEFAULT '',
+    PRIMARY KEY (user_id, box_index)
+  );
 `;
 
 // Index of the highest chain threshold reached (0-based).

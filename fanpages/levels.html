@@ -318,18 +318,18 @@
        The wrap's mask-image is what fades cards in/out at the left/right
        edges rather than letting them pop in or clip hard. */
     .lv-arcade-orbit-wrap {
-      position: relative; align-self: stretch; width: calc(100% + 3.2rem); margin: 0 -1.6rem; height: 320px;
-      -webkit-mask-image: linear-gradient(90deg, transparent, black 10%, black 90%, transparent);
-      mask-image: linear-gradient(90deg, transparent, black 10%, black 90%, transparent);
+      position: relative; align-self: stretch; width: calc(100% + 3.2rem); margin: 0 -1.6rem; height: 230px;
+      -webkit-mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+      mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
     }
     .lv-arcade-orbit-track {
-      display: flex; gap: 1.6rem; position: absolute; left: 0; top: 0; height: 100%; align-items: center;
-      animation: lvaOrbitScroll 85s linear infinite; will-change: transform;
+      display: flex; gap: 1.25rem; position: absolute; left: 0; top: 0; height: 100%; align-items: center;
+      animation: lvaOrbitScroll 65s linear infinite; will-change: transform;
     }
     .lv-arcade-orbit-wrap.lva-orbit-empty { display: none; }
     @keyframes lvaOrbitScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
     .lv-arcade-orbit-card {
-      flex-shrink: 0; width: 260px; height: 260px; border-radius: 18px; overflow: hidden;
+      flex-shrink: 0; width: 190px; height: 190px; border-radius: 16px; overflow: hidden;
       border: 2px solid rgba(255,255,255,0.2); box-shadow: 0 10px 26px rgba(0,0,0,0.5);
       background: #1a1626; animation: lvaOrbitBob 5s ease-in-out infinite;
     }
@@ -339,24 +339,87 @@
       0%, 100% { transform: translateY(0) rotate(-2deg); }
       50% { transform: translateY(-8px) rotate(2deg); }
     }
-    .lv-arcade-orbit-slot {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2;
-      width: 272px; height: 272px; border-radius: 20px; border: 2px dashed rgba(240,192,96,0.55);
-      box-shadow: 0 0 20px rgba(240,192,96,0.25); pointer-events: none;
-    }
     .lv-arcade-spin-btn {
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1rem; padding: 0.8rem 2.2rem; border-radius: 999px;
-      border: none; cursor: not-allowed; background: linear-gradient(135deg, #f0c060, #e8698a);
-      color: #1a1200; font-weight: 700; box-shadow: 0 8px 20px rgba(240,192,96,0.35); opacity: 0.8;
+      position: relative; z-index: 3; display: inline-flex; align-items: center; gap: 0.6rem;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.1rem; padding: 0.95rem 2.8rem; border-radius: 999px;
+      border: 2px solid rgba(255,255,255,0.3); cursor: not-allowed;
+      background: linear-gradient(135deg, #f0c060, #e8698a 55%, #b388f0); background-size: 200% 200%;
+      color: #1a1200; font-weight: 800; letter-spacing: 0.01em;
+      box-shadow: 0 10px 28px rgba(240,192,96,0.4), inset 0 1px 0 rgba(255,255,255,0.45);
+      animation: lvaSpinBtnGlow 4s ease-in-out infinite, lvaSpinBtnShift 7s ease infinite;
+      opacity: 0.94;
+    }
+    .lv-arcade-spin-btn-icon { display: inline-block; animation: lvaGemFloat 3s ease-in-out infinite; }
+    @keyframes lvaSpinBtnGlow {
+      0%, 100% { box-shadow: 0 10px 28px rgba(240,192,96,0.4), inset 0 1px 0 rgba(255,255,255,0.45); }
+      50% { box-shadow: 0 10px 38px rgba(240,192,96,0.65), inset 0 1px 0 rgba(255,255,255,0.55); }
+    }
+    @keyframes lvaSpinBtnShift {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
     }
 
-    .lv-arcade-collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 0.9rem; margin-bottom: 0.5rem; }
-    .lv-arcade-collection-slot {
-      aspect-ratio: 3 / 4; border-radius: 12px; border: 1px dashed rgba(255,255,255,0.18); background: rgba(255,255,255,0.03);
-      display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: rgba(255,255,255,0.16);
+    /* ── Collection tab: Pokemon-box-style grid ──────────────────────────
+       5x5 (25) slots per box, an editable title, and left/right arrows that
+       cycle through the viewer's boxes (6 by default, wrapping back to the
+       first after the last). Reordering is click-to-pick-up/click-to-drop
+       (works across a box-arrow navigation too) plus native HTML5 drag for
+       same-box reordering -- both call the same moveCardTo(). */
+    .lv-box-nav { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-bottom: 1.1rem; }
+    .lv-box-nav-arrow {
+      width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; cursor: pointer;
+      background: rgba(240,192,96,0.14); border: 1px solid rgba(240,192,96,0.4); color: var(--gold, #f0c060);
+      font-size: 1.2rem; display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s ease, transform 0.15s ease;
     }
+    .lv-box-nav-arrow:hover { background: rgba(240,192,96,0.26); transform: scale(1.08); }
+    .lv-box-title-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.15rem; min-width: 220px; }
+    .lv-box-title-input {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.25rem; font-weight: 700; color: #fff;
+      background: transparent; border: none; border-bottom: 2px dashed rgba(255,255,255,0.22);
+      text-align: center; padding: 0.2rem 0.4rem; width: 220px; max-width: 70vw;
+      transition: border-color 0.15s ease;
+    }
+    .lv-box-title-input:hover, .lv-box-title-input:focus { border-color: rgba(240,192,96,0.6); outline: none; }
+    .lv-box-title-input::placeholder { color: #8d85a3; }
+    .lv-box-page-lbl { font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; color: #a79fc0; }
+
+    .lv-box-hint:not([hidden]) {
+      text-align: center; font-size: 0.82rem; color: var(--gold, #f0c060); margin-bottom: 0.8rem;
+      background: rgba(240,192,96,0.1); border: 1px solid rgba(240,192,96,0.3); border-radius: 999px;
+      padding: 0.4rem 1rem; display: inline-block;
+    }
+    .lv-box-hint-wrap { text-align: center; }
+
+    .lv-box-grid {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.8rem; max-width: 620px; margin: 0 auto;
+    }
+    .lv-box-slot {
+      position: relative; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden;
+      border: 2px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25);
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+    .lv-box-slot--empty {
+      border-style: dashed; border-color: rgba(255,255,255,0.16); cursor: default;
+    }
+    .lv-box-slot:not(.lv-box-slot--empty) { cursor: pointer; }
+    .lv-box-slot:not(.lv-box-slot--empty):hover { transform: translateY(-3px); border-color: rgba(240,192,96,0.5); box-shadow: 0 8px 18px rgba(0,0,0,0.4); }
+    .lv-box-slot--empty:hover { border-color: rgba(240,192,96,0.3); cursor: pointer; }
+    .lv-box-slot--selected { border-color: var(--gold, #f0c060); box-shadow: 0 0 0 3px rgba(240,192,96,0.3), 0 0 18px rgba(240,192,96,0.4); }
+    .lv-box-slot img { width: 100%; height: 100%; object-fit: cover; }
+    .lv-box-slot-shiny {
+      position: absolute; top: 3px; right: 4px; font-size: 0.85rem; z-index: 2;
+      filter: drop-shadow(0 0 4px rgba(255,255,255,0.8));
+    }
+
     .lv-arcade-collection-empty { text-align: center; padding: 1.6rem 1rem 0.5rem; color: #a79fc0; }
     .lv-arcade-collection-empty-icon { font-size: 2.1rem; margin-bottom: 0.6rem; }
+
+    @media (max-width: 560px) {
+      .lv-box-grid { gap: 0.5rem; }
+      .lv-box-title-input { width: 160px; font-size: 1.05rem; }
+    }
 
     .lv-arcade-shop-empty { text-align: center; padding: 2.2rem 1rem 1rem; color: #a79fc0; }
     .lv-arcade-shop-empty-icon { font-size: 2.3rem; margin-bottom: 0.6rem; }
@@ -552,24 +615,26 @@
               <div class="lv-arcade-spin-stage">
                 <div class="lv-arcade-orbit-wrap" id="lv-arcade-orbit-wrap">
                   <div class="lv-arcade-orbit-track" id="lv-arcade-orbit-track"></div>
-                  <div class="lv-arcade-orbit-slot"></div>
                 </div>
-                <button class="lv-arcade-spin-btn" type="button" disabled>Spin to Win!</button>
+                <button class="lv-arcade-spin-btn" type="button" disabled><span class="lv-arcade-spin-btn-icon">✨</span> Spin to Win!</button>
               </div>
             </div>
 
             <div class="lv-arcade-panel" id="lva-panel-collection">
               <h3 class="lv-arcade-panel-title">🃏 Collection</h3>
-              <p class="lv-arcade-panel-sub">Every character card you've won from the Spin shows up here.</p>
-              <div class="lv-arcade-collection-grid">
-                <div class="lv-arcade-collection-slot">?</div>
-                <div class="lv-arcade-collection-slot">?</div>
-                <div class="lv-arcade-collection-slot">?</div>
-                <div class="lv-arcade-collection-slot">?</div>
-                <div class="lv-arcade-collection-slot">?</div>
-                <div class="lv-arcade-collection-slot">?</div>
+              <div class="lv-box-nav">
+                <button class="lv-box-nav-arrow" id="lv-box-prev" type="button" aria-label="Previous box">‹</button>
+                <div class="lv-box-title-wrap">
+                  <input class="lv-box-title-input" id="lv-box-title-input" type="text" maxlength="40" placeholder="Box 1" />
+                  <span class="lv-box-page-lbl" id="lv-box-page-lbl">1 / 6</span>
+                </div>
+                <button class="lv-box-nav-arrow" id="lv-box-next" type="button" aria-label="Next box">›</button>
               </div>
-              <div class="lv-arcade-collection-empty">
+              <div class="lv-box-hint-wrap">
+                <span class="lv-box-hint" id="lv-box-hint" hidden>Tap another slot to move that card here — tap it again to cancel.</span>
+              </div>
+              <div class="lv-box-grid" id="lv-box-grid"></div>
+              <div class="lv-arcade-collection-empty" id="lv-box-empty-msg" hidden>
                 <div class="lv-arcade-collection-empty-icon">🎴</div>
                 No cards collected yet — spin to start your collection!
               </div>
@@ -892,6 +957,138 @@ async function loadArcadeOrbit() {
   }
 }
 
+// ── Collection tab: Pokemon-box-style grid ──────────────────────────────
+// Boxes/slot contents come from /api/ctc/collection (server auto-places any
+// newly collected card in the nearest free slot on every load). Reordering
+// is click-to-pick-up / click-to-drop -- picking a card up survives
+// navigating to a different box via the arrows, so it doubles as the
+// "move between boxes" flow -- plus native HTML5 drag for quick same-box
+// reordering; both funnel into moveCardTo().
+let CTC_BOXES = [];
+let ctcBoxSlotCount = 25;
+let ctcCurrentBox = 0;
+let ctcSelectedCharacterId = null;
+let ctcHasAnyCards = false;
+
+async function loadCollection() {
+  try {
+    const res = await fetch('/api/ctc/collection', { headers: authHeaders() });
+    if (!res.ok) throw new Error('bad response');
+    const data = await res.json();
+    CTC_BOXES = data.boxes || [];
+    ctcBoxSlotCount = data.box_slots || 25;
+    ctcHasAnyCards = CTC_BOXES.some(b => b.slots.some(s => s));
+    if (ctcCurrentBox >= CTC_BOXES.length) ctcCurrentBox = 0;
+    renderCollectionBox();
+  } catch (e) {
+    document.getElementById('lv-box-grid').innerHTML = '<div class="lv-empty">Couldn\'t load your collection.</div>';
+  }
+}
+
+function renderCollectionBox() {
+  const box = CTC_BOXES[ctcCurrentBox];
+  if (!box) return;
+
+  const titleInput = document.getElementById('lv-box-title-input');
+  titleInput.value = box.title || '';
+  titleInput.placeholder = `Box ${box.index + 1}`;
+  document.getElementById('lv-box-page-lbl').textContent = `${ctcCurrentBox + 1} / ${CTC_BOXES.length}`;
+
+  const grid = document.getElementById('lv-box-grid');
+  grid.innerHTML = box.slots.map((card, i) => {
+    if (!card) return `<div class="lv-box-slot lv-box-slot--empty" data-slot="${i}"></div>`;
+    const selected = ctcSelectedCharacterId === card.character_id;
+    return `
+      <div class="lv-box-slot${selected ? ' lv-box-slot--selected' : ''}" data-slot="${i}" data-character-id="${card.character_id}" draggable="true" title="${escapeHtml(card.name)}">
+        ${card.is_shiny ? '<span class="lv-box-slot-shiny">✨</span>' : ''}
+        <img src="${escapeHtml(card.image)}" alt="${escapeHtml(card.name)}" loading="lazy" />
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('lv-box-empty-msg').hidden = ctcHasAnyCards;
+  document.getElementById('lv-box-hint').hidden = ctcSelectedCharacterId === null;
+
+  grid.querySelectorAll('.lv-box-slot').forEach(el => {
+    el.addEventListener('click', onBoxSlotClick);
+    el.addEventListener('dragstart', onBoxSlotDragStart);
+    el.addEventListener('dragover', e => e.preventDefault());
+    el.addEventListener('drop', onBoxSlotDrop);
+  });
+  syncBgHeight();
+}
+
+function onBoxSlotClick(e) {
+  const el = e.currentTarget;
+  const slotIndex = parseInt(el.dataset.slot, 10);
+  const characterId = el.dataset.characterId ? parseInt(el.dataset.characterId, 10) : null;
+
+  if (ctcSelectedCharacterId === null) {
+    if (characterId !== null) { ctcSelectedCharacterId = characterId; renderCollectionBox(); }
+    return;
+  }
+  if (characterId === ctcSelectedCharacterId) { ctcSelectedCharacterId = null; renderCollectionBox(); return; }
+  const pickedUp = ctcSelectedCharacterId;
+  ctcSelectedCharacterId = null;
+  moveCardTo(pickedUp, slotIndex);
+}
+
+function onBoxSlotDragStart(e) {
+  const characterId = e.currentTarget.dataset.characterId;
+  if (!characterId) { e.preventDefault(); return; }
+  e.dataTransfer.setData('text/plain', characterId);
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function onBoxSlotDrop(e) {
+  e.preventDefault();
+  const characterId = parseInt(e.dataTransfer.getData('text/plain'), 10);
+  if (!Number.isInteger(characterId)) return;
+  moveCardTo(characterId, parseInt(e.currentTarget.dataset.slot, 10));
+}
+
+async function moveCardTo(characterId, slotIndex) {
+  try {
+    const res = await fetch('/api/ctc/collection/move', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ character_id: characterId, box_index: ctcCurrentBox, slot_index: slotIndex }),
+    });
+    if (!res.ok) throw new Error('move failed');
+    await loadCollection();
+  } catch (e) {
+    renderCollectionBox();
+  }
+}
+
+document.getElementById('lv-box-prev').addEventListener('click', () => {
+  if (!CTC_BOXES.length) return;
+  ctcCurrentBox = (ctcCurrentBox - 1 + CTC_BOXES.length) % CTC_BOXES.length;
+  ctcSelectedCharacterId = null;
+  renderCollectionBox();
+});
+document.getElementById('lv-box-next').addEventListener('click', () => {
+  if (!CTC_BOXES.length) return;
+  ctcCurrentBox = (ctcCurrentBox + 1) % CTC_BOXES.length;
+  ctcSelectedCharacterId = null;
+  renderCollectionBox();
+});
+
+const ctcBoxTitleInput = document.getElementById('lv-box-title-input');
+ctcBoxTitleInput.addEventListener('keydown', e => { if (e.key === 'Enter') ctcBoxTitleInput.blur(); });
+ctcBoxTitleInput.addEventListener('blur', async () => {
+  const idx = ctcCurrentBox;
+  const box = CTC_BOXES[idx];
+  const title = ctcBoxTitleInput.value.trim();
+  if (!box || title === (box.title || '')) return;
+  try {
+    const res = await fetch(`/api/ctc/collection/box/${idx}/title`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ title }),
+    });
+    if (res.ok) { const data = await res.json(); box.title = data.title; }
+  } catch (e) {}
+});
+
 function renderHero(u) {
   const name = u.display_name || u.username;
   document.getElementById('lv-hero-name-text').textContent = name;
@@ -1024,6 +1221,7 @@ if (token) {
   loadLevelsBanner();
   loadArcadeStats();
   loadArcadeOrbit();
+  loadCollection();
 }
 </script>
 </body>

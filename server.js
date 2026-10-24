@@ -2542,6 +2542,151 @@ app.get('/api/ctc/arcade-stats', requireAuth, async (req, res) => {
   });
 });
 
+const CTC_BOX_SLOTS = 25;
+const CTC_DEFAULT_BOXES = 6;
+
+// GET /api/ctc/collection — the Collection tab's Pokemon-box-style grid.
+// Any owned (and currently NSFW-visible) card that doesn't have a slot yet
+// gets auto-placed at the lowest free (box_index, slot_index) on the way
+// out, so newly claimed cards always land "in the nearest available slot"
+// without a separate background job. Hidden-by-SFW-Mode cards keep their
+// slot assignment in the DB (just filtered out of the cards query below) so
+// they reappear in the same spot if the viewer toggles SFW Mode back off.
+app.get('/api/ctc/collection', requireAuth, async (req, res) => {
+  const userId = req.user.id;
+  const { nsfwAllowed } = await getViewerNsfwAccess(req);
+
+  const { rows: cards } = await pool.query(
+    `SELECT cc.character_id, cc.is_shiny, cc.claim_count, cc.obtained_at,
+            mc.name, COALESCE(NULLIF(mc.thumb_image_url, ''), mc.ref_image) AS image
+     FROM ctc_cards cc JOIN moderator_characters mc ON mc.id = cc.character_id
+     WHERE cc.user_id = $1 AND (mc.ref_rating = 'sfw' OR $2::boolean)
+     ORDER BY cc.obtained_at ASC`,
+    [userId, nsfwAllowed]
+  );
+
+  const { rows: slotRows } = await pool.query(
+    `SELECT character_id, box_index, slot_index FROM ctc_card_slots WHERE user_id = $1`, [userId]
+  );
+  const slotByChar = new Map(slotRows.map(r => [r.character_id, r]));
+  const usedSlots = new Set(slotRows.map(r => `${r.box_index}:${r.slot_index}`));
+
+  let nextBox = 0, nextSlot = 0;
+  const claimNextFreeSlot = () => {
+    while (usedSlots.has(`${nextBox}:${nextSlot}`)) {
+      nextSlot++;
+      if (nextSlot >= CTC_BOX_SLOTS) { nextSlot = 0; nextBox++; }
+    }
+    const pos = { box_index: nextBox, slot_index: nextSlot };
+    usedSlots.add(`${nextBox}:${nextSlot}`);
+    return pos;
+  };
+
+  const toInsert = [];
+  for (const c of cards) {
+    if (!slotByChar.has(c.character_id)) {
+      const pos = claimNextFreeSlot();
+      slotByChar.set(c.character_id, { character_id: c.character_id, ...pos });
+      toInsert.push([userId, c.character_id, pos.box_index, pos.slot_index]);
+    }
+  }
+  if (toInsert.length) {
+    const values = toInsert.map((_, i) => `($${i * 4 + 1},$${i * 4 + 2},$${i * 4 + 3},$${i * 4 + 4})`).join(',');
+    await pool.query(
+      `INSERT INTO ctc_card_slots (user_id, character_id, box_index, slot_index) VALUES ${values}
+       ON CONFLICT (user_id, character_id) DO NOTHING`,
+      toInsert.flat()
+    );
+  }
+
+  const { rows: titleRows } = await pool.query(`SELECT box_index, title FROM ctc_box_titles WHERE user_id = $1`, [userId]);
+  const titleByBox = new Map(titleRows.map(r => [r.box_index, r.title]));
+
+  const highestBox = slotByChar.size ? Math.max(...[...slotByChar.values()].map(s => s.box_index)) : 0;
+  const maxBoxIndex = Math.max(CTC_DEFAULT_BOXES - 1, highestBox);
+
+  const boxes = [];
+  for (let b = 0; b <= maxBoxIndex; b++) {
+    const slots = new Array(CTC_BOX_SLOTS).fill(null);
+    boxes.push({ index: b, title: titleByBox.get(b) || '', slots });
+  }
+  for (const c of cards) {
+    const pos = slotByChar.get(c.character_id);
+    if (pos && boxes[pos.box_index] && pos.slot_index < CTC_BOX_SLOTS) {
+      boxes[pos.box_index].slots[pos.slot_index] = {
+        character_id: c.character_id, name: c.name, image: c.image,
+        is_shiny: c.is_shiny, claim_count: c.claim_count,
+      };
+    }
+  }
+
+  res.json({ boxes, box_slots: CTC_BOX_SLOTS });
+});
+
+// PUT /api/ctc/collection/box/:index/title — rename one of the viewer's own boxes.
+app.put('/api/ctc/collection/box/:index/title', requireAuth, async (req, res) => {
+  const boxIndex = parseInt(req.params.index, 10);
+  if (!Number.isInteger(boxIndex) || boxIndex < 0) return res.status(400).json({ error: 'Bad box index.' });
+  const title = String(req.body.title || '').trim().slice(0, 40);
+  await pool.query(
+    `INSERT INTO ctc_box_titles (user_id, box_index, title) VALUES ($1, $2, $3)
+     ON CONFLICT (user_id, box_index) DO UPDATE SET title = EXCLUDED.title`,
+    [req.user.id, boxIndex, title]
+  );
+  res.json({ box_index: boxIndex, title });
+});
+
+// POST /api/ctc/collection/move — drag a card to a (box_index, slot_index).
+// If another of the viewer's own cards already sits there, the two swap
+// instead of rejecting the move, so reordering never needs an empty slot to
+// land on. The moving card is parked at an out-of-grid position (-1,-1)
+// between the two UPDATEs so the swap can't collide with itself mid-flight.
+app.post('/api/ctc/collection/move', requireAuth, async (req, res) => {
+  const userId = req.user.id;
+  const characterId = parseInt(req.body.character_id, 10);
+  const boxIndex = parseInt(req.body.box_index, 10);
+  const slotIndex = parseInt(req.body.slot_index, 10);
+  if (!Number.isInteger(characterId) || !Number.isInteger(boxIndex) || !Number.isInteger(slotIndex)
+      || boxIndex < 0 || boxIndex > 199 || slotIndex < 0 || slotIndex >= CTC_BOX_SLOTS) {
+    return res.status(400).json({ error: 'Bad move.' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: [mine] } = await client.query(
+      'SELECT box_index, slot_index FROM ctc_card_slots WHERE user_id = $1 AND character_id = $2 FOR UPDATE',
+      [userId, characterId]
+    );
+    if (!mine) { await client.query('ROLLBACK'); return res.status(404).json({ error: "You don't own that card." }); }
+
+    const { rows: [occupant] } = await client.query(
+      'SELECT character_id FROM ctc_card_slots WHERE user_id = $1 AND box_index = $2 AND slot_index = $3 FOR UPDATE',
+      [userId, boxIndex, slotIndex]
+    );
+    if (occupant && occupant.character_id !== characterId) {
+      await client.query(
+        'UPDATE ctc_card_slots SET box_index = -1, slot_index = -1 WHERE user_id = $1 AND character_id = $2', [userId, characterId]
+      );
+      await client.query(
+        'UPDATE ctc_card_slots SET box_index = $1, slot_index = $2 WHERE user_id = $3 AND character_id = $4',
+        [mine.box_index, mine.slot_index, userId, occupant.character_id]
+      );
+    }
+    await client.query(
+      'UPDATE ctc_card_slots SET box_index = $1, slot_index = $2 WHERE user_id = $3 AND character_id = $4',
+      [boxIndex, slotIndex, userId, characterId]
+    );
+    await client.query('COMMIT');
+    res.json({ moved: true });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('ctc collection move error:', e);
+    res.status(500).json({ error: 'Something went wrong.' });
+  } finally {
+    client.release();
+  }
+});
+
 // ── Comments (art) ────────────────────────────────────────────────────────────
 
 app.get('/api/comments', async (req, res) => {
