@@ -813,12 +813,7 @@
     }
 
     /* Non-shiny cards get their own, calmer perimeter glow (purple instead
-       of the shiny tier's gold) plus a couple of soft diagonal streaks
-       drifting across the card so it still reads as "alive" even without
-       the shiny treatment. ::after sits above both the art and info panels
-       (they're z-index 1/2) but stays pointer-events:none so it never
-       swallows clicks meant for the mic button, Flip button, or the back
-       face's links. */
+       of the shiny tier's gold). */
     .lv-trading-card:not(.lv-trading-card--shiny) {
       border-color: rgba(168,120,240,0.5);
       animation: lvTradingCardPurpleGlow 3.2s ease-in-out infinite;
@@ -827,19 +822,44 @@
       0%, 100% { box-shadow: 0 24px 60px rgba(0,0,0,0.55), 0 0 14px rgba(168,120,240,0.3); }
       50% { box-shadow: 0 24px 60px rgba(0,0,0,0.55), 0 0 28px rgba(168,120,240,0.55); }
     }
-    .lv-trading-card:not(.lv-trading-card--shiny)::after {
-      content: ''; position: absolute; inset: 0; z-index: 5; pointer-events: none;
-      background: repeating-linear-gradient(115deg,
-        transparent 0, transparent 38px,
-        rgba(196,150,255,0.22) 38px, rgba(196,150,255,0.22) 44px,
-        transparent 44px, transparent 120px);
-      background-size: 260% 260%;
-      mix-blend-mode: screen;
-      animation: lvTradingCardPurpleStreaks 7s linear infinite;
+    /* Flame-streak sweep: one soft angled beam crosses the card and fades
+       out, then a second beam crosses from a different angle -- never two
+       at once. ::before/::after each own one beam, animated on the SAME
+       7s loop but occupying non-overlapping halves of it (A sweeps across
+       ~0-48%, parked the rest of the loop; B stays parked until ~50%, then
+       sweeps ~50-98%), so they visibly hand off rather than blend together.
+       Purple on normal cards, gold on shiny ones (shiny keeps its own
+       pulsing gold border/glow above, this just adds the same sweeping
+       motion in its color). pointer-events:none so they never block the
+       mic/flip/link clicks underneath. */
+    .lv-trading-card::before,
+    .lv-trading-card::after {
+      content: ''; position: absolute; top: 50%; left: 50%; z-index: 5; pointer-events: none;
+      width: 260%; height: 46px; filter: blur(4px); opacity: 0;
     }
-    @keyframes lvTradingCardPurpleStreaks {
-      0% { background-position: 0% 0%; }
-      100% { background-position: -260% 260%; }
+    .lv-trading-card:not(.lv-trading-card--shiny)::before,
+    .lv-trading-card:not(.lv-trading-card--shiny)::after {
+      background: linear-gradient(90deg, transparent, rgba(196,150,255,0.85), transparent);
+    }
+    .lv-trading-card--shiny::before,
+    .lv-trading-card--shiny::after {
+      background: linear-gradient(90deg, transparent, rgba(246,224,163,0.95), transparent);
+    }
+    .lv-trading-card::before { animation: lvFlameSweepA 7s ease-in-out infinite; }
+    .lv-trading-card::after  { animation: lvFlameSweepB 7s ease-in-out infinite; }
+    @keyframes lvFlameSweepA {
+      0%   { opacity: 0;   transform: translate(-50%, -50%) rotate(18deg) translateX(-140%); }
+      10%  { opacity: 0.9; }
+      40%  { opacity: 0.9; }
+      48%  { opacity: 0;   transform: translate(-50%, -50%) rotate(18deg) translateX(140%); }
+      100% { opacity: 0;   transform: translate(-50%, -50%) rotate(18deg) translateX(140%); }
+    }
+    @keyframes lvFlameSweepB {
+      0%, 50% { opacity: 0; transform: translate(-50%, -50%) rotate(-24deg) translateX(-140%); }
+      60%  { opacity: 0.9; }
+      90%  { opacity: 0.9; }
+      98%  { opacity: 0;   transform: translate(-50%, -50%) rotate(-24deg) translateX(140%); }
+      100% { opacity: 0;   transform: translate(-50%, -50%) rotate(-24deg) translateX(140%); }
     }
     .lv-trading-card-shiny-tag {
       position: absolute; top: 0.8rem; right: 0.8rem; z-index: 3; font-size: 0.78rem; font-weight: 700;
@@ -875,17 +895,17 @@
     }
 
     /* "X Captured" -- bottom-right of both faces, clipped cleanly by the
-       card's own overflow:hidden/border-radius. A little gold trophy-plate
-       box (matching the shiny tag's gold-foil look) rather than the old
-       plain dark pill, with the capture-count emoji up front. */
+       card's own overflow:hidden/border-radius. A smooth purple plate
+       (matching the new flame-streak treatment) rather than the old plain
+       dark pill, with the capture-count emoji up front. */
     .lv-card-collected-badge {
       position: absolute; bottom: 0.8rem; right: 0.8rem; z-index: 6;
       display: flex; align-items: center; gap: 0.3rem;
       font-size: 0.74rem; font-weight: 700; font-family: 'Fredoka', 'Lato', cursive;
-      color: #2a1f08; padding: 0.35rem 0.85rem; border-radius: 999px;
-      background: linear-gradient(135deg, #f6e2a3, #dfb24f);
-      border: 1px solid rgba(255,255,255,0.45);
-      box-shadow: 0 0 12px rgba(240,192,96,0.55), 0 2px 6px rgba(0,0,0,0.35);
+      color: #fff; padding: 0.35rem 0.85rem; border-radius: 999px;
+      background: linear-gradient(135deg, #c9a6ff 0%, #9b6fe0 55%, #7c4fd1 100%);
+      border: 1px solid rgba(255,255,255,0.4);
+      box-shadow: 0 0 12px rgba(168,120,240,0.55), 0 2px 6px rgba(0,0,0,0.35);
     }
     .lv-card-collected-badge-icon { font-size: 0.95em; }
 
