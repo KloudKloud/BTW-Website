@@ -655,12 +655,19 @@
       display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;
       text-shadow: 0 0 12px rgba(240,192,96,0.35);
     }
-    /* The Activity section is the one that absorbs whatever height is left
-       in the box and clips overflow -- this is what gives "show as many
-       recent-activity rows as fit, at least one" for free, no JS height
-       math needed (the list container just shrinks/clips via flexbox). */
+    /* The Activity section fills whatever height its half of the Notes box
+       has and scrolls (themed scrollbar, matching the Followers/Following
+       modal's) instead of clipping -- the 5 latest rows are all there,
+       this just lets a short half still reveal the rest on scroll. */
     .fp-home-side-activity { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-    .fp-activity-list { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 0.65rem; }
+    .fp-activity-list {
+      flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 0.65rem;
+      padding-right: 0.4rem; scrollbar-width: thin; scrollbar-color: rgba(168,112,217,0.45) transparent;
+    }
+    .fp-activity-list::-webkit-scrollbar { width: 7px; }
+    .fp-activity-list::-webkit-scrollbar-track { background: transparent; }
+    .fp-activity-list::-webkit-scrollbar-thumb { background: rgba(168,112,217,0.45); border-radius: 6px; }
+    .fp-activity-list::-webkit-scrollbar-thumb:hover { background: rgba(168,112,217,0.7); }
     /* Each row is its own glowy little card now instead of a plain divider-
        separated line -- bigger, poppier, easier to pick out at a glance. */
     .fp-activity-item {
@@ -806,15 +813,24 @@
     /* Notes has no square image forcing its height, so it needs its own
        floor -- without it the grid's align-items:stretch would otherwise
        be the only thing giving it any height at all. */
-    .fp-notes-box { min-height: 360px; }
+    .fp-notes-box { min-height: 340px; }
+    /* Split in half -- signed Notes on top, Recent Activity on the
+       bottom, each an independently scrollable region instead of one
+       long list. */
+    .fp-notes-half { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .fp-notes-half--notes { padding-bottom: 1rem; }
+    .fp-notes-half--activity { padding-top: 1rem; }
+    .fp-notes-divider { flex-shrink: 0; height: 1px; background: rgba(255,255,255,0.14); }
 
     /* Submissions -- big main thumbnail (latest post) is a real square
        sized to the column's own width (not stretched to fill whatever
        leftover height the box had), three small square thumbnails
        underneath for the next-latest posts. */
     .fp-sub-main { display: block; text-decoration: none; color: inherit; }
+    /* Capped a bit under the column's full width -- a hair shorter than a
+       true full-bleed square, which was making the whole box run long. */
     .fp-sub-main-img-wrap {
-      width: 100%; aspect-ratio: 1; border-radius: 14px; overflow: hidden; position: relative;
+      width: 100%; max-width: 86%; margin: 0 auto; aspect-ratio: 1; border-radius: 14px; overflow: hidden; position: relative;
       border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 10px 28px rgba(0,0,0,0.4);
       background: linear-gradient(135deg, #6b3fa0, #c2547a);
     }
@@ -822,9 +838,12 @@
     .fp-sub-main-info { padding-top: 0.7rem; }
     .fp-sub-main-title { font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 1.1rem; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.7); }
     .fp-sub-main-context { font-size: 0.78rem; color: #999; margin-top: 0.15rem; }
+    /* Same small corner-emoji identifier Search's Posts tab uses (📖
+       chapter, 🎨 gallery art) instead of a text pill, plus 🐾 for
+       characters since Posts itself doesn't cover that kind. */
     .fp-sub-kind-badge {
-      display: inline-block; font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
-      color: #0d0d0d; background: #f0c060; border-radius: 6px; padding: 0.2em 0.6em; margin-bottom: 0.4rem;
+      position: absolute; bottom: 6px; right: 7px; z-index: 2;
+      font-size: 1.35rem; line-height: 1; text-shadow: 0 1px 5px rgba(0,0,0,0.85);
     }
     .fp-sub-mini-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin-top: 1rem; flex-shrink: 0; }
     .fp-sub-mini { display: block; text-decoration: none; color: inherit; }
@@ -833,6 +852,7 @@
       border: 1px solid rgba(255,255,255,0.18); background: linear-gradient(135deg, #6b3fa0, #c2547a);
     }
     .fp-sub-mini-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fp-sub-mini-img-wrap .fp-sub-kind-badge { font-size: 1.05rem; bottom: 4px; right: 5px; }
     .fp-sub-mini-title {
       font-size: 0.74rem; color: #ccc; margin-top: 0.35rem; line-height: 1.3;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -862,7 +882,14 @@
     .fp-notes-submit-btn:hover { background: #a8c6e8; }
     .fp-notes-submit-btn:disabled { opacity: 0.6; cursor: default; }
 
-    .fp-notes-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; }
+    .fp-notes-list {
+      flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem;
+      padding-right: 0.4rem; scrollbar-width: thin; scrollbar-color: rgba(168,112,217,0.45) transparent;
+    }
+    .fp-notes-list::-webkit-scrollbar { width: 7px; }
+    .fp-notes-list::-webkit-scrollbar-track { background: transparent; }
+    .fp-notes-list::-webkit-scrollbar-thumb { background: rgba(168,112,217,0.45); border-radius: 6px; }
+    .fp-notes-list::-webkit-scrollbar-thumb:hover { background: rgba(168,112,217,0.7); }
     .fp-note-item {
       display: flex; gap: 0.75rem; background: rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.08);
       border-radius: 12px; padding: 0.75rem 0.9rem;
@@ -1647,19 +1674,26 @@
     </div>
 
     <div class="fp-notes-box">
-      <p class="fp-home-side-label">
-        Notes
-        <button type="button" class="fp-notes-add-btn" id="fp-notes-add-btn" hidden>+ Leave a Note</button>
-      </p>
-      <div class="fp-notes-compose" id="fp-notes-compose" hidden>
-        <textarea id="fp-notes-input" maxlength="500" placeholder="Leave a nice note…"></textarea>
-        <div class="fp-notes-compose-actions">
-          <button type="button" class="fp-notes-cancel-btn" id="fp-notes-cancel-btn">Cancel</button>
-          <button type="button" class="fp-notes-submit-btn" id="fp-notes-submit-btn">Post Note</button>
+      <div class="fp-notes-half fp-notes-half--notes">
+        <p class="fp-home-side-label">
+          Notes
+          <button type="button" class="fp-notes-add-btn" id="fp-notes-add-btn" hidden>+ Leave a Note</button>
+        </p>
+        <div class="fp-notes-compose" id="fp-notes-compose" hidden>
+          <textarea id="fp-notes-input" maxlength="500" placeholder="Leave a nice note…"></textarea>
+          <div class="fp-notes-compose-actions">
+            <button type="button" class="fp-notes-cancel-btn" id="fp-notes-cancel-btn">Cancel</button>
+            <button type="button" class="fp-notes-submit-btn" id="fp-notes-submit-btn">Post Note</button>
+          </div>
         </div>
+        <div class="fp-notes-list" id="fp-notes-list"><p class="fp-notes-empty">Loading…</p></div>
+        <div class="fp-notes-pager" id="fp-notes-pager"></div>
       </div>
-      <div class="fp-notes-list" id="fp-notes-list"><p class="fp-notes-empty">Loading…</p></div>
-      <div class="fp-notes-pager" id="fp-notes-pager"></div>
+      <div class="fp-notes-divider"></div>
+      <div class="fp-notes-half fp-notes-half--activity">
+        <p class="fp-home-side-label">Recent Activity</p>
+        <div class="fp-activity-list" id="fp-activity-list"><p class="fp-notes-empty">Loading…</p></div>
+      </div>
     </div>
   </div>
 
@@ -4996,7 +5030,10 @@
   });
 
   // ── Submissions box -- big latest post + 3 smaller next-latest ──────────
-  const SUB_KIND_LABEL = { chapter: 'Chapter', character: 'Character', gallery: 'Gallery' };
+  // Same corner-emoji identifiers Search's Posts tab uses (📖 chapter, 🎨
+  // gallery art), plus 🐾 for characters since Posts itself has no
+  // character kind.
+  const SUB_KIND_BADGE = { chapter: '📖', character: '🐾', gallery: '🎨' };
   function subCardHtml(sub) {
     const locked = sub.nsfw_locked;
     const img = locked ? '/images/defaultchar.jpg' : (sub.image_url || '/images/nopicture2.png');
@@ -5016,10 +5053,9 @@
       <a class="fp-sub-main" href="${m.href}">
         <div class="fp-sub-main-img-wrap">
           <img class="fp-sub-main-img${m.locked ? ' fp-spotlight-img--blurred' : ''}" src="${m.img}" alt="" />
-          ${m.locked ? '<span class="fp-spotlight-locked-msg">18+ Must Sign In</span>' : ''}
+          ${m.locked ? '<span class="fp-spotlight-locked-msg">18+ Must Sign In</span>' : `<span class="fp-sub-kind-badge">${SUB_KIND_BADGE[main.kind] || ''}</span>`}
         </div>
         <div class="fp-sub-main-info">
-          <span class="fp-sub-kind-badge">${SUB_KIND_LABEL[main.kind] || main.kind}</span>
           <p class="fp-sub-main-title">${escapeHtml(main.title)}</p>
           ${main.context ? `<p class="fp-sub-main-context">from "${escapeHtml(main.context)}"</p>` : ''}
         </div>
@@ -5031,7 +5067,7 @@
         <a class="fp-sub-mini" href="${s.href}">
           <div class="fp-sub-mini-img-wrap">
             <img class="fp-sub-mini-img${s.locked ? ' fp-spotlight-img--blurred' : ''}" src="${s.img}" alt="" />
-            ${s.locked ? '<span class="fp-spotlight-locked-msg">18+</span>' : ''}
+            ${s.locked ? '<span class="fp-spotlight-locked-msg">18+</span>' : `<span class="fp-sub-kind-badge">${SUB_KIND_BADGE[sub.kind] || ''}</span>`}
           </div>
           <p class="fp-sub-mini-title">${escapeHtml(sub.title)}</p>
         </a>
@@ -5225,6 +5261,7 @@
 
       renderSubmissionsBox(a.recent_submissions || []);
       initNotesBox(a);
+      renderRecentActivity(a.recent_activity, a.display_name);
 
       // Stories -- loadProfile() is async and switchTab(initialTab) below
       // runs synchronously right after it's kicked off (not after it
