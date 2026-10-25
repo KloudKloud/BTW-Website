@@ -1158,6 +1158,22 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     );
   `).catch(e => console.error('user_featured_items migration:', e.message));
 
+  // Profile "notes" -- a lightweight guestbook/signature board on a user's
+  // own Home tab (the Notes box next to Submissions). Any logged-in user can
+  // leave one on someone else's profile; the profile owner can delete any
+  // note left on their own page.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS profile_notes (
+      id               SERIAL      PRIMARY KEY,
+      profile_user_id  INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      author_user_id   INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      message          TEXT        NOT NULL,
+      created_at       TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(e => console.error('profile_notes migration:', e.message));
+  await pool.query(`CREATE INDEX IF NOT EXISTS profile_notes_profile_id_idx ON profile_notes (profile_user_id, created_at DESC);`)
+    .catch(e => console.error('profile_notes index migration:', e.message));
+
   // Widen the kind CHECK to also allow 'story' -- CREATE TABLE IF NOT EXISTS
   // above doesn't touch the constraint on an already-existing table, so this
   // has to be its own explicit migration.
@@ -5722,7 +5738,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
   };
   const storyOrderBy = STORY_SORTS[req.query.sort] || STORY_SORTS.page;
 
-  const [{ rows: sites }, followerCount, followingCount, clubCount, isFollowing, followsViewer, featuredChars, featuredGallery, featuredStoryIds, activity, statsCounts, latestSubmission] = await Promise.all([
+  const [{ rows: sites }, followerCount, followingCount, clubCount, isFollowing, followsViewer, featuredChars, featuredGallery, featuredStoryIds, activity, statsCounts, latestSubmission, recentSubmissions] = await Promise.all([
     pool.query(
       `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.synopsis,
               ms.tags, ms.fandoms, ms.view_count, ms.rating, ms.is_complete,
@@ -5924,6 +5940,27 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
        ORDER BY ts DESC LIMIT 1`,
       [author.id, viewerId]
     ),
+    // Submissions box -- latest 4 posts across chapters/characters/gallery.
+    // Stories post as their latest published CHAPTER (title + the parent
+    // story's cover), same "post the chapter" treatment Search's Posts tab
+    // uses, not the story itself.
+    pool.query(
+      `SELECT * FROM (
+         (SELECT 'chapter' AS kind, mc.id::text AS ref_id, mc.title AS title, ms.site_title AS context,
+                 ms.cover_url AS image_url, COALESCE(ms.story_path, ms.slug) AS story_path, mc.created_at AS ts, false AS is_nsfw
+          FROM moderator_chapters mc JOIN moderator_sites ms ON ms.id = mc.site_id
+          WHERE ms.owner_user_id = $1 AND mc.status = 'published' AND length(trim(mc.body)) > 0
+          ORDER BY mc.created_at DESC LIMIT 4)
+         UNION ALL
+         (SELECT 'character', mc.id::text, mc.name, NULL, mc.ref_image, NULL, mc.created_at, COALESCE(mc.ref_is_nsfw, false)
+          FROM moderator_characters mc WHERE mc.owner_user_id = $1 ORDER BY mc.created_at DESC LIMIT 4)
+         UNION ALL
+         (SELECT 'gallery', mg.id::text, mg.title, NULL, mg.image_url, NULL, mg.created_at, COALESCE(mg.category <> 'sfw', false)
+          FROM moderator_gallery mg WHERE mg.owner_user_id = $1 ORDER BY mg.created_at DESC LIMIT 4)
+       ) combined
+       ORDER BY ts DESC LIMIT 4`,
+      [author.id]
+    ),
   ]);
 
   // A few tagged-character thumbnails per story, for the Stories tab's
@@ -6072,6 +6109,16 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
           image_url: locked ? null : sub.image_url, nsfw_locked: !!locked,
         };
       })(),
+      recent_submissions: recentSubmissions.rows.map(sub => {
+        const locked = sub.is_nsfw && !profileNsfwAllowed;
+        const linkUrl = sub.kind === 'chapter' ? `/${sub.story_path}`
+          : sub.kind === 'character' ? `/${author.username}?char=${sub.ref_id}#characters`
+          : `/gallery-post?id=${sub.ref_id}`;
+        return {
+          kind: sub.kind, title: sub.title, context: sub.context || null, link_url: linkUrl,
+          image_url: locked ? null : sub.image_url, nsfw_locked: !!locked,
+        };
+      }),
       featured_characters: featuredCharacters,
       featured_gallery: featuredGalleryItems,
       featured_stories: featuredStories,
@@ -6123,6 +6170,69 @@ app.get('/api/fanpage-profile/:username/clubs', async (req, res) => {
     [author.id]
   );
   res.json({ clubs: rows.map(r => ({ slug: r.slug, name: r.name, icon_url: r.icon_url || null, badge_url: r.badge_url || null, is_nsfw: r.is_nsfw, role: r.role })) });
+});
+
+// GET /api/fanpage-profile/:username/notes — paginated guestbook "notes"
+// left on a profile's Home tab (the Notes box next to Submissions).
+app.get('/api/fanpage-profile/:username/notes', async (req, res) => {
+  const { rows: [author] } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]);
+  if (!author) return res.status(404).json({ error: 'Not found.' });
+
+  const perPage = 6;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const [{ rows: notes }, { rows: [{ n: total }] }] = await Promise.all([
+    pool.query(
+      `SELECT pn.id, pn.message, pn.created_at, u.username, u.display_name, u.avatar
+       FROM profile_notes pn JOIN users u ON u.id = pn.author_user_id
+       WHERE pn.profile_user_id = $1 ORDER BY pn.created_at DESC LIMIT $2 OFFSET $3`,
+      [author.id, perPage, (page - 1) * perPage]
+    ),
+    pool.query('SELECT COUNT(*)::int AS n FROM profile_notes WHERE profile_user_id = $1', [author.id]),
+  ]);
+  res.json({
+    notes: notes.map(n => ({
+      id: n.id, message: n.message, created_at: n.created_at,
+      username: n.username, display_name: n.display_name || n.username, avatar: n.avatar || null,
+    })),
+    total, page, per_page: perPage, total_pages: Math.max(1, Math.ceil(total / perPage)),
+  });
+});
+
+// POST /api/fanpage-profile/:username/notes — leave a note on someone's
+// profile. Logged-in users only; no self-notes.
+app.post('/api/fanpage-profile/:username/notes', requireAuth, async (req, res) => {
+  const { rows: [author] } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]);
+  if (!author) return res.status(404).json({ error: 'Not found.' });
+  if (author.id === req.user.id) return res.status(400).json({ error: "You can't leave a note on your own profile." });
+
+  const message = String(req.body.message || '').trim().slice(0, 500);
+  if (!message) return res.status(400).json({ error: 'Note cannot be empty.' });
+
+  const { rows: [note] } = await pool.query(
+    `INSERT INTO profile_notes (profile_user_id, author_user_id, message) VALUES ($1, $2, $3)
+     RETURNING id, message, created_at`,
+    [author.id, req.user.id, message]
+  );
+  const { rows: [me] } = await pool.query('SELECT username, display_name, avatar FROM users WHERE id = $1', [req.user.id]);
+  res.json({
+    note: {
+      id: note.id, message: note.message, created_at: note.created_at,
+      username: me.username, display_name: me.display_name || me.username, avatar: me.avatar || null,
+    },
+  });
+});
+
+// DELETE /api/fanpage-profile/:username/notes/:id — profile owner (or the
+// note's own author) can remove a note.
+app.delete('/api/fanpage-profile/:username/notes/:id', requireAuth, async (req, res) => {
+  const { rows: [author] } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]);
+  if (!author) return res.status(404).json({ error: 'Not found.' });
+  const { rowCount } = await pool.query(
+    `DELETE FROM profile_notes WHERE id = $1 AND profile_user_id = $2 AND (profile_user_id = $3 OR author_user_id = $3)`,
+    [req.params.id, author.id, req.user.id]
+  );
+  if (!rowCount) return res.status(403).json({ error: 'Not allowed.' });
+  res.json({ ok: true });
 });
 
 // Shared by the followers/following list modal — each row carries enough to
