@@ -71,6 +71,12 @@ const schemaSql = `
   ALTER TABLE users ADD COLUMN IF NOT EXISTS last_free_spin_at TIMESTAMPTZ;
   ALTER TABLE users ADD COLUMN IF NOT EXISTS respin_tokens INTEGER NOT NULL DEFAULT 0;
 
+  -- A normal and a shiny card for the same character are two separate
+  -- collectibles, not one row that flips a flag -- so (user_id,
+  -- character_id) alone can no longer be unique; is_shiny joins the key.
+  -- New installs get the 3-column key straight from CREATE TABLE; the
+  -- DO block below upgrades an existing table (and ctc_card_slots/
+  -- ctc_trades further down) the first time this runs after the change.
   CREATE TABLE IF NOT EXISTS ctc_cards (
     user_id       INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     character_id  INTEGER     NOT NULL REFERENCES moderator_characters(id) ON DELETE CASCADE,
@@ -80,9 +86,20 @@ const schemaSql = `
     obtained_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     shiny_at      TIMESTAMPTZ,
     trade_locked  BOOLEAN     NOT NULL DEFAULT false,
-    PRIMARY KEY (user_id, character_id)
+    PRIMARY KEY (user_id, character_id, is_shiny)
   );
   CREATE INDEX IF NOT EXISTS ctc_cards_character_idx ON ctc_cards (character_id);
+
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.key_column_usage
+      WHERE table_name = 'ctc_cards' AND constraint_name = 'ctc_cards_pkey' AND column_name = 'is_shiny'
+    ) THEN
+      ALTER TABLE ctc_cards DROP CONSTRAINT ctc_cards_pkey;
+      ALTER TABLE ctc_cards ADD PRIMARY KEY (user_id, character_id, is_shiny);
+    END IF;
+  END $$;
 
   CREATE TABLE IF NOT EXISTS ctc_pending_spins (
     user_id     INTEGER     PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -105,31 +122,55 @@ const schemaSql = `
     PRIMARY KEY (user_id, milestone)
   );
 
+  -- offer_is_shiny/request_is_shiny say WHICH of a character's (now up to
+  -- two) cards is on each side of the trade -- both default false so an
+  -- old row (or an old bot request that doesn't send them yet) means "the
+  -- normal copy", same as before this card had a shiny counterpart.
   CREATE TABLE IF NOT EXISTS ctc_trades (
     id                     SERIAL      PRIMARY KEY,
     from_user_id           INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     to_user_id             INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     offer_character_id     INTEGER     NOT NULL REFERENCES moderator_characters(id) ON DELETE CASCADE,
     request_character_id   INTEGER     NOT NULL REFERENCES moderator_characters(id) ON DELETE CASCADE,
+    offer_is_shiny         BOOLEAN     NOT NULL DEFAULT false,
+    request_is_shiny       BOOLEAN     NOT NULL DEFAULT false,
     status                 TEXT        NOT NULL DEFAULT 'pending',
     created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     resolved_at            TIMESTAMPTZ
   );
+  ALTER TABLE ctc_trades ADD COLUMN IF NOT EXISTS offer_is_shiny BOOLEAN NOT NULL DEFAULT false;
+  ALTER TABLE ctc_trades ADD COLUMN IF NOT EXISTS request_is_shiny BOOLEAN NOT NULL DEFAULT false;
 
   -- Where each owned card sits in the website's Pokemon-box-style Collection
   -- grid (the Discord bot has no concept of this -- site-only UI state).
   -- Newly claimed cards get auto-placed at the lowest free (box_index,
   -- slot_index) by the site; box_index/slot_index aren't constrained to the
   -- "default 6 boxes of 25" the UI starts with, so a collection can grow
-  -- past that without the server needing to know about it.
+  -- past that without the server needing to know about it. is_shiny joins
+  -- the key for the same reason it does on ctc_cards -- a normal and shiny
+  -- copy of one character need their own, independent slot.
   CREATE TABLE IF NOT EXISTS ctc_card_slots (
     user_id       INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     character_id  INTEGER     NOT NULL REFERENCES moderator_characters(id) ON DELETE CASCADE,
+    is_shiny      BOOLEAN     NOT NULL DEFAULT false,
     box_index     INTEGER     NOT NULL DEFAULT 0,
     slot_index    INTEGER     NOT NULL DEFAULT 0,
-    PRIMARY KEY (user_id, character_id)
+    PRIMARY KEY (user_id, character_id, is_shiny)
   );
   CREATE INDEX IF NOT EXISTS ctc_card_slots_box_idx ON ctc_card_slots (user_id, box_index, slot_index);
+
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns WHERE table_name = 'ctc_card_slots' AND column_name = 'is_shiny'
+    ) THEN
+      ALTER TABLE ctc_card_slots ADD COLUMN is_shiny BOOLEAN NOT NULL DEFAULT false;
+      UPDATE ctc_card_slots s SET is_shiny = c.is_shiny
+        FROM ctc_cards c WHERE c.user_id = s.user_id AND c.character_id = s.character_id;
+      ALTER TABLE ctc_card_slots DROP CONSTRAINT ctc_card_slots_pkey;
+      ALTER TABLE ctc_card_slots ADD PRIMARY KEY (user_id, character_id, is_shiny);
+    END IF;
+  END $$;
 
   CREATE TABLE IF NOT EXISTS ctc_box_titles (
     user_id     INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -265,20 +306,26 @@ module.exports = function createCtc(pool, gems, { rng = Math.random } = {}) {
     const { rows: owned } = await client.query(
       'SELECT character_id, is_shiny FROM ctc_cards WHERE user_id = $1 AND character_id = ANY($2::int[])', [userId, ids]
     );
-    const ownedBy = new Map(owned.map((r) => [r.character_id, r.is_shiny]));
+    // A normal and a shiny copy of the same character are two independent
+    // cards now, not one row with a flag -- so "do I own this one" has to
+    // check the SAME tier being rolled, not just "do I own the character
+    // at all" (that used to make a shiny roll on top of an owned normal
+    // read as an "upgrade"; now it's simply a brand new card, same as a
+    // first-ever normal roll would be).
+    const ownedNormal = new Set(owned.filter((r) => !r.is_shiny).map((r) => r.character_id));
+    const ownedShiny = new Set(owned.filter((r) => r.is_shiny).map((r) => r.character_id));
     const { rows: [hunt] } = await client.query('SELECT character_id, chain FROM ctc_hunt WHERE user_id = $1', [userId]);
     return {
       kind: p.kind,
       created_at: p.created_at,
       cards: live.map((c) => {
-        const owns = ownedBy.has(c.character_id);
-        const ownsShiny = ownedBy.get(c.character_id) === true;
+        const ownsShiny = ownedShiny.has(c.character_id);
+        const ownsNormal = ownedNormal.has(c.character_id);
         const ch = aliveById.get(c.character_id);
         return {
           character_id: c.character_id, name: ch.name, shiny: c.shiny,
-          owns, owns_shiny: ownsShiny,
-          dupe: c.shiny ? ownsShiny : owns,       // a shiny on top of an owned normal is an UPGRADE, not a dupe
-          upgrade: c.shiny && owns && !ownsShiny,
+          owns: c.shiny ? ownsShiny : ownsNormal, owns_shiny: ownsShiny,
+          dupe: c.shiny ? ownsShiny : ownsNormal,
           hunt: !!hunt && hunt.character_id === c.character_id,
         };
       }),
@@ -348,39 +395,28 @@ module.exports = function createCtc(pool, gems, { rng = Math.random } = {}) {
       const card = d.cards[index];
 
       const { rows: [ch] } = await client.query('SELECT id, name, owner_user_id FROM moderator_characters WHERE id = $1', [card.character_id]);
-      const { rows: [row] } = await client.query('SELECT is_shiny FROM ctc_cards WHERE user_id = $1 AND character_id = $2', [userId, card.character_id]);
+      // Owning the normal copy no longer blocks or mutates a shiny claim --
+      // they're independent cards now, so this only has to check the SAME
+      // tier being rolled.
+      const { rows: [row] } = await client.query(
+        'SELECT 1 FROM ctc_cards WHERE user_id = $1 AND character_id = $2 AND is_shiny = $3', [userId, card.character_id, card.shiny]
+      );
       const { rows: [hunt] } = await client.query('SELECT character_id, chain FROM ctc_hunt WHERE user_id = $1', [userId]);
 
       let result, refund = 0, newCard = false, creatorPaid = 0;
-      if (card.shiny) {
-        if (row && row.is_shiny) {
-          result = 'shiny_dupe';
-          refund = C.SHINY_DUPE_REFUND;
-          await client.query('UPDATE ctc_cards SET claim_count = claim_count + 1 WHERE user_id = $1 AND character_id = $2', [userId, ch.id]);
-        } else if (row) {
-          result = 'shiny_upgrade';
-          await client.query(
-            'UPDATE ctc_cards SET is_shiny = true, shiny_at = NOW(), claim_count = claim_count + 1 WHERE user_id = $1 AND character_id = $2', [userId, ch.id]
-          );
-          creatorPaid = await payCreator(client, ch.owner_user_id, userId, ch.id);
-        } else {
-          result = 'shiny_new';
-          newCard = true;
-          await client.query(
-            `INSERT INTO ctc_cards (user_id, character_id, is_shiny, shiny_at, obtained_via) VALUES ($1, $2, true, NOW(), $3)`,
-            [userId, ch.id, d.kind === 'free' ? 'free_spin' : 'spin']
-          );
-          creatorPaid = await payCreator(client, ch.owner_user_id, userId, ch.id);
-        }
-      } else if (row) {
-        result = 'dupe';
-        refund = C.DUPE_REFUND;
-        await client.query('UPDATE ctc_cards SET claim_count = claim_count + 1 WHERE user_id = $1 AND character_id = $2', [userId, ch.id]);
+      if (row) {
+        result = card.shiny ? 'shiny_dupe' : 'dupe';
+        refund = card.shiny ? C.SHINY_DUPE_REFUND : C.DUPE_REFUND;
+        await client.query(
+          'UPDATE ctc_cards SET claim_count = claim_count + 1 WHERE user_id = $1 AND character_id = $2 AND is_shiny = $3',
+          [userId, ch.id, card.shiny]
+        );
       } else {
-        result = 'new';
+        result = card.shiny ? 'shiny_new' : 'new';
         newCard = true;
         await client.query(
-          'INSERT INTO ctc_cards (user_id, character_id, obtained_via) VALUES ($1, $2, $3)', [userId, ch.id, d.kind === 'free' ? 'free_spin' : 'spin']
+          `INSERT INTO ctc_cards (user_id, character_id, is_shiny, shiny_at, obtained_via) VALUES ($1, $2, $3, ${card.shiny ? 'NOW()' : 'NULL'}, $4)`,
+          [userId, ch.id, card.shiny, d.kind === 'free' ? 'free_spin' : 'spin']
         );
         creatorPaid = await payCreator(client, ch.owner_user_id, userId, ch.id);
       }
@@ -397,7 +433,7 @@ module.exports = function createCtc(pool, gems, { rng = Math.random } = {}) {
 
       await client.query('DELETE FROM ctc_pending_spins WHERE user_id = $1', [userId]);
       const { rows: [mine] } = await client.query(
-        'SELECT claim_count, is_shiny FROM ctc_cards WHERE user_id = $1 AND character_id = $2', [userId, ch.id]
+        'SELECT claim_count, is_shiny FROM ctc_cards WHERE user_id = $1 AND character_id = $2 AND is_shiny = $3', [userId, ch.id, card.shiny]
       );
       return {
         result, refund, new_card: newCard, creator_paid: creatorPaid,
@@ -412,28 +448,26 @@ module.exports = function createCtc(pool, gems, { rng = Math.random } = {}) {
 
   // ── shop & shiny upgrades ────────────────────────────────────────────────────────────────────────
 
-  // shiny=false buys the normal card outright (DIRECT_BUY_COST); shiny=true buys/upgrades straight to a
-  // shiny card (SHOP_SHINY_BUY_COST) -- if the buyer already owns the normal card it's upgraded in place
-  // rather than inserting a second row for the same character.
+  // shiny=false buys the normal card outright (DIRECT_BUY_COST); shiny=true buys the shiny card
+  // (SHOP_SHINY_BUY_COST) -- the two are independent cards, so owning one never blocks or gets
+  // overwritten by buying the other, only owning that SAME tier already does.
   async function buy(userId, characterId, shiny = false) {
     return withTx(async (client) => {
       const user = await lockUser(client, userId);
       if (!user) return fail('no_user');
       const { rows: [ch] } = await client.query('SELECT id, name, owner_user_id FROM moderator_characters WHERE id = $1', [characterId]);
       if (!ch) return fail('no_character');
-      const { rows: [row] } = await client.query('SELECT is_shiny FROM ctc_cards WHERE user_id = $1 AND character_id = $2', [userId, ch.id]);
-      if (row && (!shiny || row.is_shiny)) return fail(row.is_shiny ? 'already_shiny' : 'already_owned');
+      const { rows: [row] } = await client.query(
+        'SELECT 1 FROM ctc_cards WHERE user_id = $1 AND character_id = $2 AND is_shiny = $3', [userId, ch.id, shiny]
+      );
+      if (row) return fail(shiny ? 'already_shiny' : 'already_owned');
       const cost = shiny ? C.SHOP_SHINY_BUY_COST : C.DIRECT_BUY_COST;
       const bal = await gems.applyChange(client, userId, -cost, 'ctc_buy', ch.id);
       if (bal === null) return fail('insufficient', { cost, gems: user.gems });
-      if (row) {
-        await client.query('UPDATE ctc_cards SET is_shiny = true, shiny_at = NOW() WHERE user_id = $1 AND character_id = $2', [userId, ch.id]);
-      } else {
-        await client.query(
-          `INSERT INTO ctc_cards (user_id, character_id, is_shiny, shiny_at, obtained_via) VALUES ($1, $2, $3, ${shiny ? 'NOW()' : 'NULL'}, 'direct_buy')`,
-          [userId, ch.id, shiny]
-        );
-      }
+      await client.query(
+        `INSERT INTO ctc_cards (user_id, character_id, is_shiny, shiny_at, obtained_via) VALUES ($1, $2, $3, ${shiny ? 'NOW()' : 'NULL'}, 'direct_buy')`,
+        [userId, ch.id, shiny]
+      );
       const creatorPaid = await payCreator(client, ch.owner_user_id, userId, ch.id);
       const milestones = await grantMilestones(client, userId);
       return {
@@ -444,20 +478,29 @@ module.exports = function createCtc(pool, gems, { rng = Math.random } = {}) {
     });
   }
 
+  // The discounted path to a shiny, gated behind already owning the normal
+  // copy (SHOP_SHINY_BUY_COST above is the un-gated direct price for anyone).
+  // Used to UPDATE the owned row in place, turning the normal copy INTO a
+  // shiny and destroying it in the process -- now that the two are separate
+  // cards, this adds a second row instead, so the normal copy stays put.
   async function upgrade(userId, characterId) {
     return withTx(async (client) => {
       const user = await lockUser(client, userId);
       if (!user) return fail('no_user');
-      const { rows: [row] } = await client.query(
+      const { rows: owned } = await client.query(
         'SELECT c.is_shiny, mc.name FROM ctc_cards c JOIN moderator_characters mc ON mc.id = c.character_id WHERE c.user_id = $1 AND c.character_id = $2',
         [userId, characterId]
       );
-      if (!row) return fail('not_owned');
-      if (row.is_shiny) return fail('already_shiny');
+      const normalRow = owned.find((r) => !r.is_shiny);
+      if (!normalRow) return fail('not_owned');
+      if (owned.some((r) => r.is_shiny)) return fail('already_shiny');
       const bal = await gems.applyChange(client, userId, -C.SHINY_UPGRADE_COST, 'ctc_upgrade', characterId);
       if (bal === null) return fail('insufficient', { cost: C.SHINY_UPGRADE_COST, gems: user.gems });
-      await client.query('UPDATE ctc_cards SET is_shiny = true, shiny_at = NOW() WHERE user_id = $1 AND character_id = $2', [userId, characterId]);
-      return { upgraded: true, cost: C.SHINY_UPGRADE_COST, character: { id: characterId, name: row.name }, gems: bal };
+      await client.query(
+        `INSERT INTO ctc_cards (user_id, character_id, is_shiny, shiny_at, obtained_via) VALUES ($1, $2, true, NOW(), 'upgrade')`,
+        [userId, characterId]
+      );
+      return { upgraded: true, cost: C.SHINY_UPGRADE_COST, character: { id: characterId, name: normalRow.name }, gems: bal };
     });
   }
 
@@ -486,33 +529,38 @@ module.exports = function createCtc(pool, gems, { rng = Math.random } = {}) {
   const ageOk = (obtainedAt) => (Date.now() - new Date(obtainedAt).getTime()) >= C.TRADE_MIN_AGE_DAYS * 86400e3;
 
   // Everything that must be true for a trade; checked when it's offered AND again when it's accepted.
-  async function tradeProblem(client, fromId, toId, offerId, requestId) {
+  // offerShiny/requestShiny say WHICH of a (now possibly two) cards for that character is in play.
+  async function tradeProblem(client, fromId, toId, offerId, requestId, offerShiny, requestShiny) {
     if (fromId === toId) return 'self_trade';
-    const getCard = async (uid, cid) => (await client.query(
-      'SELECT obtained_at, trade_locked FROM ctc_cards WHERE user_id = $1 AND character_id = $2', [uid, cid])).rows[0];
-    const offer = await getCard(fromId, offerId);
+    const getCard = async (uid, cid, shiny) => (await client.query(
+      'SELECT obtained_at, trade_locked FROM ctc_cards WHERE user_id = $1 AND character_id = $2 AND is_shiny = $3', [uid, cid, shiny])).rows[0];
+    const offer = await getCard(fromId, offerId, offerShiny);
     if (!offer) return 'offer_not_owned';
-    const request = await getCard(toId, requestId);
+    const request = await getCard(toId, requestId, requestShiny);
     if (!request) return 'request_not_owned';
     if (offer.trade_locked) return 'offer_locked';
     if (request.trade_locked) return 'request_locked';
     if (!ageOk(offer.obtained_at)) return 'offer_too_new';
-    if (await getCard(toId, offerId)) return 'target_has_offer';
-    if (await getCard(fromId, requestId)) return 'you_have_request';
+    if (await getCard(toId, offerId, offerShiny)) return 'target_has_offer';
+    if (await getCard(fromId, requestId, requestShiny)) return 'you_have_request';
     return null;
   }
 
-  async function offerTrade(fromUserId, toUserId, offerCharacterId, requestCharacterId) {
+  // offerShiny/requestShiny default to false (the normal copy) so an older
+  // caller that doesn't know about shinies-as-separate-cards yet still
+  // trades exactly what it used to.
+  async function offerTrade(fromUserId, toUserId, offerCharacterId, requestCharacterId, offerShiny = false, requestShiny = false) {
     return withTx(async (client) => {
       const { rows: [target] } = await client.query('SELECT id FROM users WHERE id = $1', [toUserId]);
       if (!target) return fail('target_not_found');
-      const problem = await tradeProblem(client, fromUserId, toUserId, offerCharacterId, requestCharacterId);
+      const problem = await tradeProblem(client, fromUserId, toUserId, offerCharacterId, requestCharacterId, offerShiny, requestShiny);
       if (problem) return fail(problem);
       // One open offer per person: a new offer replaces the old one.
       await client.query(`UPDATE ctc_trades SET status = 'cancelled', resolved_at = NOW() WHERE from_user_id = $1 AND status = 'pending'`, [fromUserId]);
       const { rows: [t] } = await client.query(
-        `INSERT INTO ctc_trades (from_user_id, to_user_id, offer_character_id, request_character_id) VALUES ($1, $2, $3, $4) RETURNING id, created_at`,
-        [fromUserId, toUserId, offerCharacterId, requestCharacterId]
+        `INSERT INTO ctc_trades (from_user_id, to_user_id, offer_character_id, request_character_id, offer_is_shiny, request_is_shiny)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`,
+        [fromUserId, toUserId, offerCharacterId, requestCharacterId, offerShiny, requestShiny]
       );
       return { trade_id: t.id, expires_minutes: C.TRADE_EXPIRY_MINUTES, created_at: t.created_at };
     });
@@ -535,15 +583,15 @@ module.exports = function createCtc(pool, gems, { rng = Math.random } = {}) {
       }
       // Lock both players in a fixed order so two simultaneous trades can't deadlock.
       for (const id of [t.from_user_id, t.to_user_id].sort((a, b) => a - b)) await lockUser(client, id);
-      const problem = await tradeProblem(client, t.from_user_id, t.to_user_id, t.offer_character_id, t.request_character_id);
+      const problem = await tradeProblem(client, t.from_user_id, t.to_user_id, t.offer_character_id, t.request_character_id, t.offer_is_shiny, t.request_is_shiny);
       if (problem) {
         await client.query(`UPDATE ctc_trades SET status = 'cancelled', resolved_at = NOW() WHERE id = $1`, [tradeId]);
         return { expired: true, message: `This trade can't go through anymore: ${ERRORS[problem]}` };
       }
-      const take = async (uid, cid) => (await client.query(
-        'DELETE FROM ctc_cards WHERE user_id = $1 AND character_id = $2 RETURNING is_shiny, shiny_at', [uid, cid])).rows[0];
-      const offered = await take(t.from_user_id, t.offer_character_id);
-      const requested = await take(t.to_user_id, t.request_character_id);
+      const take = async (uid, cid, shiny) => (await client.query(
+        'DELETE FROM ctc_cards WHERE user_id = $1 AND character_id = $2 AND is_shiny = $3 RETURNING is_shiny, shiny_at', [uid, cid, shiny])).rows[0];
+      const offered = await take(t.from_user_id, t.offer_character_id, t.offer_is_shiny);
+      const requested = await take(t.to_user_id, t.request_character_id, t.request_is_shiny);
       // The card moves with its shiny status; received cards can't be traded on again.
       const give = (uid, cid, c) => client.query(
         `INSERT INTO ctc_cards (user_id, character_id, is_shiny, shiny_at, obtained_via, trade_locked) VALUES ($1, $2, $3, $4, 'trade', true)`,

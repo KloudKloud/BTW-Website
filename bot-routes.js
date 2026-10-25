@@ -239,7 +239,10 @@ module.exports = function mountBotRoutes(app, { pool, gems, ctc, createCharacter
     if (offer === null || request === null || !/^\d{15,25}$/.test(String(b.to_discord_id || ''))) return res.status(400).json({ error: 'Invalid trade.' });
     const { rows: [target] } = await pool.query('SELECT id FROM users WHERE discord_id = $1', [String(b.to_discord_id)]);
     if (!target) return res.status(400).json({ error: 'target_not_found', message: "That player hasn't linked a btwfics.net account." });
-    send(res, await ctc.offerTrade(req.botUser.id, target.id, offer, request));
+    // offer_is_shiny/request_is_shiny are optional -- omitted (as every bot
+    // command sends today) means "the normal copy", same as before shinies
+    // became their own separate card.
+    send(res, await ctc.offerTrade(req.botUser.id, target.id, offer, request, !!b.offer_is_shiny, !!b.request_is_shiny));
   });
   r.post('/ctc/trades/:id/respond', withUser, async (req, res) => {
     const id = toInt(req.params.id);

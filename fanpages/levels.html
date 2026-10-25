@@ -502,6 +502,19 @@
       position: absolute; top: 3px; right: 4px; font-size: 0.85rem; z-index: 2;
       filter: drop-shadow(0 0 4px rgba(255,255,255,0.8));
     }
+    /* A shiny card's whole preview border glows gold in the box grid, same
+       gold as the full card popup's shiny tier -- standing (not just on
+       hover), so it reads as shiny at a glance scanning the grid. Reorder
+       mode's own glow (also gold) and the selected ring already win via
+       source order below, so this only shows through as the plain-view
+       baseline and as reorder mode's un-selected standing glow color. */
+    .lv-box-slot--shiny {
+      border-color: var(--gold, #f0c060);
+      box-shadow: 0 0 0 2px rgba(240,192,96,0.3), 0 0 16px rgba(240,192,96,0.5);
+    }
+    .lv-box-grid:not(.lv-box-grid--reorder) .lv-box-slot--shiny:hover {
+      box-shadow: 0 8px 20px rgba(0,0,0,0.4), 0 0 0 2px rgba(240,192,96,0.45), 0 0 22px rgba(240,192,96,0.65);
+    }
 
     .lv-arcade-collection-empty { text-align: center; padding: 1.6rem 1rem 0.5rem; color: #a79fc0; }
     .lv-arcade-collection-empty-icon { font-size: 2.1rem; margin-bottom: 0.6rem; }
@@ -1659,7 +1672,7 @@ async function pickSpinCard(index) {
 
 const CTC_RESULT_LABEL = {
   new: 'New Card!', dupe: 'Duplicate',
-  shiny_new: '✨ New Shiny Card! ✨', shiny_upgrade: '✨ Upgraded to Shiny! ✨', shiny_dupe: '✨ Shiny Duplicate ✨',
+  shiny_new: '✨ New Shiny Card! ✨', shiny_dupe: '✨ Shiny Duplicate ✨',
 };
 
 // Obtaining a card now opens the exact same popup Collections uses to open
@@ -1678,7 +1691,7 @@ function showSpinResult(data) {
   spinToast(noteBits.length ? `${label} — ${noteBits.join(' · ')}` : label);
   loadArcadeStats();
   loadCollection();
-  openCardDetail(data.character.id);
+  openCardDetail(data.character.id, !!data.is_shiny);
 }
 
 // Changing a *running* CSS animation's duration in place makes the browser
@@ -1935,7 +1948,17 @@ async function checkPendingSpin() {
 let CTC_BOXES = [];
 let ctcBoxSlotCount = 25;
 let ctcCurrentBox = 0;
-let ctcSelectedCharacterId = null;
+// A normal and a shiny card for the same character are two independent
+// cards now, so "which card is selected/being dragged" can't be identified
+// by character_id alone -- ctcCardKey()/ctcParseCardKey() turn the pair
+// into a single string id and back, and ctcSelectedCardKey replaces what
+// used to be ctcSelectedCharacterId.
+const ctcCardKey = (characterId, isShiny) => `${characterId}:${isShiny ? 1 : 0}`;
+const ctcParseCardKey = (key) => {
+  const [characterId, shinyFlag] = String(key).split(':');
+  return { characterId: parseInt(characterId, 10), isShiny: shinyFlag === '1' };
+};
+let ctcSelectedCardKey = null;
 let ctcHasAnyCards = false;
 let ctcReorderMode = false;
 
@@ -1964,9 +1987,10 @@ function renderCollectionBox() {
   grid.classList.toggle('lv-box-grid--reorder', ctcReorderMode);
   grid.innerHTML = box.slots.map((card, i) => {
     if (!card) return `<div class="lv-box-slot lv-box-slot--empty" data-slot="${i}"></div>`;
-    const selected = ctcSelectedCharacterId === card.character_id;
+    const key = ctcCardKey(card.character_id, card.is_shiny);
+    const selected = ctcSelectedCardKey === key;
     return `
-      <div class="lv-box-slot${selected ? ' lv-box-slot--selected' : ''}" data-slot="${i}" data-character-id="${card.character_id}"${ctcReorderMode ? ' draggable="true"' : ''} title="${escapeHtml(card.name)}">
+      <div class="lv-box-slot${card.is_shiny ? ' lv-box-slot--shiny' : ''}${selected ? ' lv-box-slot--selected' : ''}" data-slot="${i}" data-character-id="${card.character_id}" data-shiny="${card.is_shiny ? '1' : '0'}"${ctcReorderMode ? ' draggable="true"' : ''} title="${escapeHtml(card.name)}">
         ${card.is_shiny ? '<span class="lv-box-slot-shiny">✨</span>' : ''}
         <img src="${escapeHtml(card.image)}" alt="${escapeHtml(card.name)}" loading="lazy" />
       </div>
@@ -1974,7 +1998,7 @@ function renderCollectionBox() {
   }).join('');
 
   document.getElementById('lv-box-empty-msg').hidden = ctcHasAnyCards;
-  document.getElementById('lv-box-hint').hidden = !(ctcReorderMode && ctcSelectedCharacterId !== null);
+  document.getElementById('lv-box-hint').hidden = !(ctcReorderMode && ctcSelectedCardKey !== null);
 
   if (ctcReorderMode) {
     grid.querySelectorAll('.lv-box-slot').forEach(el => {
@@ -1987,7 +2011,7 @@ function renderCollectionBox() {
     // Outside Reorder mode, clicking a filled slot opens the real card --
     // big reference art, animated background, owner/links/stats.
     grid.querySelectorAll('.lv-box-slot:not(.lv-box-slot--empty)').forEach(el => {
-      el.addEventListener('click', () => openCardDetail(parseInt(el.dataset.characterId, 10)));
+      el.addEventListener('click', () => openCardDetail(parseInt(el.dataset.characterId, 10), el.dataset.shiny === '1'));
     });
   }
   syncBgHeight();
@@ -2013,14 +2037,14 @@ document.getElementById('lv-box-detail-view').addEventListener('click', (e) => {
   if (e.target.id === 'lv-box-detail-view') closeCardDetail();
 });
 
-async function openCardDetail(characterId) {
+async function openCardDetail(characterId, isShiny = false) {
   if (!Number.isInteger(characterId)) return;
   const detailView = document.getElementById('lv-box-detail-view');
   detailView.hidden = false;
   detailView.innerHTML = `<div class="lv-empty" style="text-align:center; color:#fff;">Loading card…</div>`;
   setOrbitPaused(true);
   try {
-    const res = await fetch(`/api/ctc/card/${characterId}`, { headers: authHeaders() });
+    const res = await fetch(`/api/ctc/card/${characterId}${isShiny ? '?shiny=1' : ''}`, { headers: authHeaders() });
     if (!res.ok) throw new Error('bad response');
     renderCardDetail(await res.json());
   } catch (e) {
@@ -2401,37 +2425,38 @@ function startEditBoxTitle() {
 function onBoxSlotClick(e) {
   const el = e.currentTarget;
   const slotIndex = parseInt(el.dataset.slot, 10);
-  const characterId = el.dataset.characterId ? parseInt(el.dataset.characterId, 10) : null;
+  const key = el.dataset.characterId ? ctcCardKey(parseInt(el.dataset.characterId, 10), el.dataset.shiny === '1') : null;
 
-  if (ctcSelectedCharacterId === null) {
-    if (characterId !== null) { ctcSelectedCharacterId = characterId; renderCollectionBox(); }
+  if (ctcSelectedCardKey === null) {
+    if (key !== null) { ctcSelectedCardKey = key; renderCollectionBox(); }
     return;
   }
-  if (characterId === ctcSelectedCharacterId) { ctcSelectedCharacterId = null; renderCollectionBox(); return; }
-  const pickedUp = ctcSelectedCharacterId;
-  ctcSelectedCharacterId = null;
-  moveCardTo(pickedUp, slotIndex);
+  if (key === ctcSelectedCardKey) { ctcSelectedCardKey = null; renderCollectionBox(); return; }
+  const pickedUp = ctcSelectedCardKey;
+  ctcSelectedCardKey = null;
+  const { characterId, isShiny } = ctcParseCardKey(pickedUp);
+  moveCardTo(characterId, isShiny, slotIndex);
 }
 
 function onBoxSlotDragStart(e) {
   const characterId = e.currentTarget.dataset.characterId;
   if (!characterId) { e.preventDefault(); return; }
-  e.dataTransfer.setData('text/plain', characterId);
+  e.dataTransfer.setData('text/plain', ctcCardKey(parseInt(characterId, 10), e.currentTarget.dataset.shiny === '1'));
   e.dataTransfer.effectAllowed = 'move';
 }
 
 function onBoxSlotDrop(e) {
   e.preventDefault();
-  const characterId = parseInt(e.dataTransfer.getData('text/plain'), 10);
+  const { characterId, isShiny } = ctcParseCardKey(e.dataTransfer.getData('text/plain'));
   if (!Number.isInteger(characterId)) return;
-  moveCardTo(characterId, parseInt(e.currentTarget.dataset.slot, 10));
+  moveCardTo(characterId, isShiny, parseInt(e.currentTarget.dataset.slot, 10));
 }
 
-async function moveCardTo(characterId, slotIndex) {
+async function moveCardTo(characterId, isShiny, slotIndex) {
   try {
     const res = await fetch('/api/ctc/collection/move', {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ character_id: characterId, box_index: ctcCurrentBox, slot_index: slotIndex }),
+      body: JSON.stringify({ character_id: characterId, is_shiny: isShiny, box_index: ctcCurrentBox, slot_index: slotIndex }),
     });
     if (!res.ok) throw new Error('move failed');
     await loadCollection();
@@ -2454,7 +2479,7 @@ document.getElementById('lv-box-next').addEventListener('click', () => {
 document.getElementById('lv-box-reorder-toggle').addEventListener('click', () => {
   ctcReorderMode = !ctcReorderMode;
   document.getElementById('lv-box-reorder-toggle').classList.toggle('active', ctcReorderMode);
-  ctcSelectedCharacterId = null;
+  ctcSelectedCardKey = null;
   renderCollectionBox();
 });
 

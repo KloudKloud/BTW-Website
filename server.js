@@ -2542,8 +2542,12 @@ app.get('/api/ctc/arcade-stats', requireAuth, async (req, res) => {
     [nsfwAllowed]
   );
 
+  // unique_owned is a Pokedex-style "characters caught" count -- owning
+  // both a character's normal AND shiny card still only counts it once,
+  // so this is COUNT(DISTINCT character_id), not COUNT(*) (which would
+  // double-count a character once its shiny became its own separate row).
   const { rows: [{ unique_owned: uniqueOwned, total_collected: totalCollected }] } = await pool.query(
-    `SELECT COUNT(*)::int AS unique_owned, COALESCE(SUM(cc.claim_count), 0)::int AS total_collected
+    `SELECT COUNT(DISTINCT cc.character_id)::int AS unique_owned, COALESCE(SUM(cc.claim_count), 0)::int AS total_collected
      FROM ctc_cards cc JOIN moderator_characters mc ON mc.id = cc.character_id
      WHERE cc.user_id = $1 AND (mc.ref_rating = 'sfw' OR $2::boolean)`,
     [req.user.id, nsfwAllowed]
@@ -2584,6 +2588,12 @@ const CTC_DEFAULT_BOXES = 6;
 // two box_index values, so "moving Box 3 to the first slot" really means
 // "Box 1 and Box 3 trade their cards and titles." See
 // POST /api/ctc/collection/box/swap.
+// A normal and a shiny copy of the same character are two independent
+// cards (see ctc.js's ctc_cards PRIMARY KEY), so every slot lookup below is
+// keyed on (character_id, is_shiny) together, not character_id alone --
+// cardKey() is that composite key as a string, for Map/Set use.
+const cardKey = (characterId, isShiny) => `${characterId}:${isShiny ? 1 : 0}`;
+
 async function getCollectionBoxes(userId, nsfwAllowed) {
   const { rows: cards } = await pool.query(
     `SELECT cc.character_id, cc.is_shiny, cc.claim_count, cc.obtained_at,
@@ -2595,9 +2605,9 @@ async function getCollectionBoxes(userId, nsfwAllowed) {
   );
 
   const { rows: slotRows } = await pool.query(
-    `SELECT character_id, box_index, slot_index FROM ctc_card_slots WHERE user_id = $1`, [userId]
+    `SELECT character_id, is_shiny, box_index, slot_index FROM ctc_card_slots WHERE user_id = $1`, [userId]
   );
-  const slotByChar = new Map(slotRows.map(r => [r.character_id, r]));
+  const slotByKey = new Map(slotRows.map(r => [cardKey(r.character_id, r.is_shiny), r]));
   const usedSlots = new Set(slotRows.map(r => `${r.box_index}:${r.slot_index}`));
 
   let nextBox = 0, nextSlot = 0;
@@ -2613,17 +2623,18 @@ async function getCollectionBoxes(userId, nsfwAllowed) {
 
   const toInsert = [];
   for (const c of cards) {
-    if (!slotByChar.has(c.character_id)) {
+    const key = cardKey(c.character_id, c.is_shiny);
+    if (!slotByKey.has(key)) {
       const pos = claimNextFreeSlot();
-      slotByChar.set(c.character_id, { character_id: c.character_id, ...pos });
-      toInsert.push([userId, c.character_id, pos.box_index, pos.slot_index]);
+      slotByKey.set(key, { character_id: c.character_id, is_shiny: c.is_shiny, ...pos });
+      toInsert.push([userId, c.character_id, c.is_shiny, pos.box_index, pos.slot_index]);
     }
   }
   if (toInsert.length) {
-    const values = toInsert.map((_, i) => `($${i * 4 + 1},$${i * 4 + 2},$${i * 4 + 3},$${i * 4 + 4})`).join(',');
+    const values = toInsert.map((_, i) => `($${i * 5 + 1},$${i * 5 + 2},$${i * 5 + 3},$${i * 5 + 4},$${i * 5 + 5})`).join(',');
     await pool.query(
-      `INSERT INTO ctc_card_slots (user_id, character_id, box_index, slot_index) VALUES ${values}
-       ON CONFLICT (user_id, character_id) DO NOTHING`,
+      `INSERT INTO ctc_card_slots (user_id, character_id, is_shiny, box_index, slot_index) VALUES ${values}
+       ON CONFLICT (user_id, character_id, is_shiny) DO NOTHING`,
       toInsert.flat()
     );
   }
@@ -2631,7 +2642,7 @@ async function getCollectionBoxes(userId, nsfwAllowed) {
   const { rows: titleRows } = await pool.query(`SELECT box_index, title FROM ctc_box_titles WHERE user_id = $1`, [userId]);
   const titleByBox = new Map(titleRows.map(r => [r.box_index, r.title]));
 
-  const highestBox = slotByChar.size ? Math.max(...[...slotByChar.values()].map(s => s.box_index)) : 0;
+  const highestBox = slotByKey.size ? Math.max(...[...slotByKey.values()].map(s => s.box_index)) : 0;
   const maxBoxIndex = Math.max(CTC_DEFAULT_BOXES - 1, highestBox);
 
   const boxes = [];
@@ -2640,7 +2651,7 @@ async function getCollectionBoxes(userId, nsfwAllowed) {
     boxes.push({ index: b, title: titleByBox.get(b) || '', slots });
   }
   for (const c of cards) {
-    const pos = slotByChar.get(c.character_id);
+    const pos = slotByKey.get(cardKey(c.character_id, c.is_shiny));
     if (pos && boxes[pos.box_index] && pos.slot_index < CTC_BOX_SLOTS) {
       boxes[pos.box_index].slots[pos.slot_index] = {
         character_id: c.character_id, name: c.name, image: c.image,
@@ -2668,6 +2679,10 @@ app.get('/api/ctc/collection', requireAuth, async (req, res) => {
 app.get('/api/ctc/card/:characterId', requireAuth, async (req, res) => {
   const characterId = parseInt(req.params.characterId, 10);
   if (!Number.isInteger(characterId)) return res.status(400).json({ error: 'Bad character id.' });
+  // A character can now have two of the viewer's own cards (normal + shiny)
+  // -- ?shiny=1 says which one is being opened; omitted/anything else means
+  // the normal copy.
+  const wantShiny = req.query.shiny === '1' || req.query.shiny === 'true';
 
   const { rows: [ch] } = await pool.query(
     `SELECT mc.id, mc.name, mc.description, mc.ref_image, mc.owner_user_id,
@@ -2681,8 +2696,8 @@ app.get('/api/ctc/card/:characterId', requireAuth, async (req, res) => {
   const chStats = ch.stats || {};
 
   const { rows: [mine] } = await pool.query(
-    'SELECT is_shiny, claim_count, obtained_at FROM ctc_cards WHERE user_id = $1 AND character_id = $2',
-    [req.user.id, characterId]
+    'SELECT is_shiny, claim_count, obtained_at FROM ctc_cards WHERE user_id = $1 AND character_id = $2 AND is_shiny = $3',
+    [req.user.id, characterId, wantShiny]
   );
 
   const { rows: [stats] } = await pool.query(
@@ -2744,6 +2759,7 @@ app.put('/api/ctc/collection/box/:index/title', requireAuth, async (req, res) =>
 app.post('/api/ctc/collection/move', requireAuth, async (req, res) => {
   const userId = req.user.id;
   const characterId = parseInt(req.body.character_id, 10);
+  const isShiny = !!req.body.is_shiny;
   const boxIndex = parseInt(req.body.box_index, 10);
   const slotIndex = parseInt(req.body.slot_index, 10);
   if (!Number.isInteger(characterId) || !Number.isInteger(boxIndex) || !Number.isInteger(slotIndex)
@@ -2754,27 +2770,27 @@ app.post('/api/ctc/collection/move', requireAuth, async (req, res) => {
   try {
     await client.query('BEGIN');
     const { rows: [mine] } = await client.query(
-      'SELECT box_index, slot_index FROM ctc_card_slots WHERE user_id = $1 AND character_id = $2 FOR UPDATE',
-      [userId, characterId]
+      'SELECT box_index, slot_index FROM ctc_card_slots WHERE user_id = $1 AND character_id = $2 AND is_shiny = $3 FOR UPDATE',
+      [userId, characterId, isShiny]
     );
     if (!mine) { await client.query('ROLLBACK'); return res.status(404).json({ error: "You don't own that card." }); }
 
     const { rows: [occupant] } = await client.query(
-      'SELECT character_id FROM ctc_card_slots WHERE user_id = $1 AND box_index = $2 AND slot_index = $3 FOR UPDATE',
+      'SELECT character_id, is_shiny FROM ctc_card_slots WHERE user_id = $1 AND box_index = $2 AND slot_index = $3 FOR UPDATE',
       [userId, boxIndex, slotIndex]
     );
-    if (occupant && occupant.character_id !== characterId) {
+    if (occupant && (occupant.character_id !== characterId || occupant.is_shiny !== isShiny)) {
       await client.query(
-        'UPDATE ctc_card_slots SET box_index = -1, slot_index = -1 WHERE user_id = $1 AND character_id = $2', [userId, characterId]
+        'UPDATE ctc_card_slots SET box_index = -1, slot_index = -1 WHERE user_id = $1 AND character_id = $2 AND is_shiny = $3', [userId, characterId, isShiny]
       );
       await client.query(
-        'UPDATE ctc_card_slots SET box_index = $1, slot_index = $2 WHERE user_id = $3 AND character_id = $4',
-        [mine.box_index, mine.slot_index, userId, occupant.character_id]
+        'UPDATE ctc_card_slots SET box_index = $1, slot_index = $2 WHERE user_id = $3 AND character_id = $4 AND is_shiny = $5',
+        [mine.box_index, mine.slot_index, userId, occupant.character_id, occupant.is_shiny]
       );
     }
     await client.query(
-      'UPDATE ctc_card_slots SET box_index = $1, slot_index = $2 WHERE user_id = $3 AND character_id = $4',
-      [boxIndex, slotIndex, userId, characterId]
+      'UPDATE ctc_card_slots SET box_index = $1, slot_index = $2 WHERE user_id = $3 AND character_id = $4 AND is_shiny = $5',
+      [boxIndex, slotIndex, userId, characterId, isShiny]
     );
     await client.query('COMMIT');
     res.json({ moved: true });
@@ -2905,11 +2921,15 @@ app.get('/api/ctc/shop', requireAuth, async (req, res) => {
     [nsfwAllowed, q]
   );
 
+  // EXISTS subqueries (not a LEFT JOIN ctc_cards) -- a character can now
+  // have two of the viewer's own ctc_cards rows (normal + shiny), and a
+  // plain join would return that character twice on this page, quietly
+  // shrinking how many distinct characters LIMIT 25 actually returns.
   const { rows } = await pool.query(
     `SELECT mc.id, mc.name, COALESCE(NULLIF(mc.thumb_image_url, ''), mc.ref_image) AS image,
-            cc.is_shiny
+            EXISTS(SELECT 1 FROM ctc_cards cc WHERE cc.character_id = mc.id AND cc.user_id = $1 AND cc.is_shiny = false) AS owned,
+            EXISTS(SELECT 1 FROM ctc_cards cc WHERE cc.character_id = mc.id AND cc.user_id = $1 AND cc.is_shiny = true) AS owned_shiny
      FROM moderator_characters mc
-     LEFT JOIN ctc_cards cc ON cc.character_id = mc.id AND cc.user_id = $1
      WHERE mc.ref_image IS NOT NULL AND mc.ref_image <> '' AND mc.ref_image <> '/images/defaultchar.jpg'
        AND (mc.ref_rating = 'sfw' OR $2::boolean)
        AND ($3 = '' OR mc.name ILIKE '%' || $3 || '%')
@@ -2920,7 +2940,7 @@ app.get('/api/ctc/shop', requireAuth, async (req, res) => {
     cost: ctcModule.CONFIG.DIRECT_BUY_COST, shiny_cost: ctcModule.CONFIG.SHOP_SHINY_BUY_COST,
     page, total_pages: Math.max(1, Math.ceil(total / CTC_SHOP_PAGE_SIZE)), total,
     characters: rows.map(r => ({
-      id: r.id, name: r.name, image: r.image, owned: r.is_shiny !== null, owned_shiny: r.is_shiny === true,
+      id: r.id, name: r.name, image: r.image, owned: r.owned, owned_shiny: r.owned_shiny,
     })),
   });
 });
