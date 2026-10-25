@@ -7629,11 +7629,27 @@ function isValidHttpUrl(str) {
 }
 
 // Blanks out anything that isn't a plain http(s) URL instead of rejecting
-// the whole request -- used for single optional link fields (character's
-// official-art-source/voice-claim links) where the rest of the save should
+// the whole request -- used for single optional external-link fields
+// (character's official-art-source link) where the rest of the save should
 // still go through even if this one field was bad.
 function cleanLinkUrl(str) {
   return isValidHttpUrl(str) ? String(str).trim() : '';
+}
+
+// Character voice claims are a hybrid field: the website's own editor only
+// ever writes back a same-origin path from its own /api/moderator/
+// character-voice upload (same shape as ref_image), but the Discord bot's
+// /char build has no upload step and only ever takes a pasted external
+// http(s) link -- so unlike official_art_source_url (plain cleanLinkUrl),
+// this has to accept either shape instead of just one. Using cleanLinkUrl
+// alone here silently stripped every website-uploaded voice claim back to
+// '' on the next save (the 2026-10-18 security sweep moved this field onto
+// cleanLinkUrl without noticing it isn't a plain external-link field).
+function cleanVoiceClaimUrl(str) {
+  const s = String(str || '').trim();
+  if (!s) return '';
+  if (isValidHttpUrl(s)) return s;
+  return /^\/images\/moderators\/[A-Za-z0-9_\-./]+$/.test(s) ? s : '';
 }
 
 // Club post/text-field image slots are only ever supposed to hold a path
@@ -8502,7 +8518,7 @@ app.post('/api/moderator/characters', requireAuth, requireModerator, async (req,
     [req.user.id, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
      JSON.stringify(relationships || []), cleanRating, cleanRating !== 'sfw',
-     is_official_art !== undefined ? !!is_official_art : true, cleanLinkUrl(official_art_source_url), cleanLinkUrl(voice_claim_url),
+     is_official_art !== undefined ? !!is_official_art : true, cleanLinkUrl(official_art_source_url), cleanVoiceClaimUrl(voice_claim_url),
      String(quote || '').trim().slice(0, 150), profileMinOrder]
   );
   const { rows: [{ maxOrder }] } = await pool.query(
@@ -8562,7 +8578,7 @@ async function updateCharacterForUser(userId, characterId, body) {
      sort_order, cleanRating,
      is_official_art !== undefined ? !!is_official_art : null,
      official_art_source_url !== undefined ? cleanLinkUrl(official_art_source_url) : null,
-     existing.id, artChanged, voice_claim_url !== undefined ? cleanLinkUrl(voice_claim_url) : null,
+     existing.id, artChanged, voice_claim_url !== undefined ? cleanVoiceClaimUrl(voice_claim_url) : null,
      quote !== undefined ? String(quote || '').trim().slice(0, 150) : null]
   );
   // Only regenerate when ref_image was actually part of this save -- an
@@ -8878,7 +8894,7 @@ async function createCharacterForUser(userId, { name, ref_image, description, st
     [userId, name.trim(), ref_image || '/images/defaultchar.jpg', description || '',
      JSON.stringify(cleanStats), JSON.stringify(facts || []), JSON.stringify(lore || []),
      JSON.stringify(relationships || []), cleanRating, cleanRating !== 'sfw',
-     is_official_art !== undefined ? !!is_official_art : true, cleanLinkUrl(official_art_source_url), cleanLinkUrl(voice_claim_url),
+     is_official_art !== undefined ? !!is_official_art : true, cleanLinkUrl(official_art_source_url), cleanVoiceClaimUrl(voice_claim_url),
      String(quote || '').trim().slice(0, 150), profileMinOrder]
   );
   const { rows: [actor] } = await pool.query('SELECT username FROM users WHERE id = $1', [userId]);
