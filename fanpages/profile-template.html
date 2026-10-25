@@ -32,12 +32,13 @@
        everything else. */
     .fp-bg-wrap { position: relative; background: #0d0d0d; }
     .fp-bg-img {
-      /* No blur -- same reasoning as the site-wide .mod-page-bg-img fix:
-         a blurred element fades to nothing right at its own edge, which
-         reads as a hazy box wherever that edge lands. Wanted to just see
-         the picture clearly here, custom or default. */
+      /* Blurred now (unlike the site-wide .mod-page-bg-img, which stays
+         sharp because it's pinned to a fixed 100vh and a blur would fade
+         to nothing right at that visible edge) -- this layer's height is
+         JS-measured to the full page (see syncScrollBgHeight), so there's
+         no edge inside the viewport for the blur to fade out against. */
       position: absolute; top: 0; left: 0; right: 0; bottom: auto; width: 100%; height: 100vh;
-      object-fit: cover; z-index: 0; display: none;
+      object-fit: cover; filter: blur(6px); z-index: 0; display: none;
     }
     .fp-bg-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: auto; width: 100%; height: 100vh; background: rgba(10,10,10,0.82); z-index: 0; display: none; }
     /* Characters/Gallery tabs — same "Browse > Posts" wallpaper treatment
@@ -48,7 +49,7 @@
        height is just "however tall its content is"). */
     .fp-bg-img-scroll {
       position: absolute; top: 0; left: 0; right: 0; bottom: auto; width: 100%; height: 100vh;
-      object-fit: cover; filter: blur(4px); z-index: 0; display: none;
+      object-fit: cover; filter: blur(6px); z-index: 0; display: none;
     }
     .fp-bg-overlay-scroll { position: fixed; inset: 0; background: rgba(8,6,10,0.45); z-index: 0; display: none; }
     .fp-bg-wrap > *:not(.fp-bg-img):not(.fp-bg-overlay):not(.fp-bg-img-scroll):not(.fp-bg-overlay-scroll) { position: relative; z-index: 1; }
@@ -2062,10 +2063,11 @@
     if (picker && !picker.contains(e.target)) document.getElementById('fp-theme-popover').hidden = true;
   });
 
+  // Fun Fact is rendered separately now (up to 3, see fun_facts below) --
+  // this list is just the single-value fields left.
   const ABOUT_FIELD_DEFS = [
     ['Pronouns',  'pronouns',    'text'],
     ['Bio',       'account_bio', 'textarea'],
-    ['Fun Fact',  'fun_fact',    'text'],
   ];
 
   function truncate(str, max) {
@@ -5172,7 +5174,7 @@
         document.getElementById('fp-avatar-fallback').textContent = a.display_name.charAt(0).toUpperCase();
       }
 
-      // About box -- Pronouns/Fun Fact render as a side-by-side pill badge
+      // About box -- Pronouns/Fun Facts render as a side-by-side pill badge
       // row (FurAffinity-style), Bio as a quoted paragraph filling the rest
       // of the column.
       const aboutWrap = document.getElementById('fp-about-rows');
@@ -5187,6 +5189,17 @@
         row.querySelector('.fp-about-row-value').textContent = value;
         if (key === 'account_bio') aboutWrap.appendChild(row);
         else badgeRow.appendChild(row);
+      });
+      // Up to 3 Fun Facts now (used to be a single value) -- one pill badge
+      // each, same styling as the Pronouns pill (see the shared
+      // [data-key="fun_fact"] CSS selector).
+      (a.fun_facts || []).forEach(fact => {
+        const row = document.createElement('div');
+        row.className = 'fp-about-row';
+        row.dataset.key = 'fun_fact';
+        row.innerHTML = `<p class="fp-about-row-label">Fun Fact</p><p class="fp-about-row-value"></p>`;
+        row.querySelector('.fp-about-row-value').textContent = fact;
+        badgeRow.appendChild(row);
       });
 
       // Stats box -- Level, then total Stories/Characters/Gallery posted

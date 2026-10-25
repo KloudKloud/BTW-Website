@@ -257,7 +257,16 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS reader_theme_bg_url TEXT NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS featured_submission_kind TEXT NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS featured_submission_ref_id TEXT NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS fun_facts JSONB NOT NULL DEFAULT '[]';
   `).catch(e => console.error('account profile fields migration:', e.message));
+  // One-time backfill: fun_fact used to be a single text field, now it's up
+  // to 3 (fun_facts). Folds the old value in as the first entry and blanks
+  // the old column out so this UPDATE naturally stops matching any row it's
+  // already migrated, instead of re-seeding fun_facts every boot for anyone
+  // who's since cleared it back down to [] on purpose.
+  await pool.query(
+    `UPDATE users SET fun_facts = jsonb_build_array(fun_fact), fun_fact = '' WHERE fun_fact <> ''`
+  ).catch(e => console.error('fun_facts backfill:', e.message));
   // Add newsletter opt-in column if missing (default true for existing users)
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_newsletter BOOLEAN DEFAULT true`).catch(() => {});
   // NSFW viewing mode — everyone agreed to 18+ at signup, so default ON for
@@ -3350,7 +3359,7 @@ app.get('/api/auth/confirm-email', async (req, res) => {
 app.get('/api/auth/profile', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
     `SELECT id, username, display_name, email, avatar, avatar_original_url, email_newsletter, nsfw_enabled, pending_email,
-            pronouns, account_bio, fun_fact, featured_submission_kind, featured_submission_ref_id
+            pronouns, account_bio, fun_facts, featured_submission_kind, featured_submission_ref_id
      FROM users WHERE id = $1`, [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
@@ -5792,7 +5801,7 @@ async function fetchFeaturedSubmission(author, viewerId) {
 app.get('/api/fanpage-profile/:username', async (req, res) => {
   const { rows: [author] } = await pool.query(
     `SELECT id, username, display_name, avatar, avatar_original_url, avatar_position_x, avatar_position_y, avatar_zoom,
-            pronouns, favorite_pokemon, account_bio, fun_fact, account_links, level,
+            pronouns, favorite_pokemon, account_bio, fun_facts, account_links, level,
             account_banner_url, account_banner_position_x, account_banner_position_y, account_banner_zoom,
             club_profile_banner_url, club_profile_banner_position_x, club_profile_banner_position_y, club_profile_banner_zoom,
             profile_theme, profile_theme_bg_url, featured_club_slug,
@@ -6154,7 +6163,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       pronouns: author.pronouns || '',
       favorite_pokemon: author.favorite_pokemon || '',
       account_bio: author.account_bio || '',
-      fun_fact: author.fun_fact || '',
+      fun_facts: author.fun_facts || [],
       account_links: author.account_links || [],
       profile_theme: author.profile_theme || 'default',
       profile_theme_bg_url: author.profile_theme_bg_url || '',
@@ -7004,7 +7013,12 @@ app.put('/api/account/profile', requireAuth, async (req, res) => {
   const pronouns = req.body.pronouns !== undefined ? String(req.body.pronouns).slice(0, 60) : null;
   const favoritePokemon = req.body.favorite_pokemon !== undefined ? String(req.body.favorite_pokemon).slice(0, 60) : null;
   const accountBio = req.body.account_bio !== undefined ? String(req.body.account_bio).slice(0, 1000) : null;
-  const funFact = req.body.fun_fact !== undefined ? String(req.body.fun_fact).slice(0, 300) : null;
+  // Up to 3 fun facts now (used to be a single fun_fact text field) --
+  // blanks/empties filtered out so a stray "+ Add Fun Fact" click that's
+  // left untouched doesn't save as a literal blank pill.
+  const funFacts = Array.isArray(req.body.fun_facts)
+    ? JSON.stringify(req.body.fun_facts.map(f => String(f || '').trim().slice(0, 150)).filter(Boolean).slice(0, 3))
+    : null;
   const links = Array.isArray(req.body.account_links)
     ? JSON.stringify(req.body.account_links
         .filter(l => l && l.url && isValidHttpUrl(String(l.url)))
@@ -7060,14 +7074,14 @@ app.put('/api/account/profile', requireAuth, async (req, res) => {
        pronouns = COALESCE($1, pronouns),
        favorite_pokemon = COALESCE($2, favorite_pokemon),
        account_bio = COALESCE($3, account_bio),
-       fun_fact = COALESCE($4, fun_fact),
+       fun_facts = COALESCE($4, fun_facts),
        account_links = COALESCE($5, account_links),
        display_name = COALESCE($7, display_name),
        featured_club_slug = COALESCE($8, featured_club_slug),
        featured_submission_kind = COALESCE($9, featured_submission_kind),
        featured_submission_ref_id = COALESCE($10, featured_submission_ref_id)
      WHERE id = $6`,
-    [pronouns, favoritePokemon, accountBio, funFact, links, req.user.id, displayName, featuredClubSlug,
+    [pronouns, favoritePokemon, accountBio, funFacts, links, req.user.id, displayName, featuredClubSlug,
      featuredSubmissionKind, featuredSubmissionRefId]
   );
   res.json({ message: 'Profile updated.' });
