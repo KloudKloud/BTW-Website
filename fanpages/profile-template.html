@@ -186,8 +186,6 @@
       background: linear-gradient(160deg, rgba(10,8,14,0.88), rgba(10,8,14,0.78)), url('/images/home/potential-box-background.png');
       background-size: cover; background-position: center;
     }
-    .fp-id-box-spacer { flex: 1; min-width: 1rem; }
-
     .fp-follow-stats-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.4rem; }
     .fp-follow-stat {
       background: none; border: none; cursor: pointer; font-family: inherit; padding: 0;
@@ -198,26 +196,34 @@
     .fp-follow-stat:hover b { color: #f0c060; }
     .fp-follow-stat-sep { color: #555; font-size: 0.8rem; }
 
-    .fp-level-stats { display: flex; align-items: center; gap: 1.5rem; flex-shrink: 0; }
+    /* Level circle + stat tiles disperse across the rest of the box's
+       width instead of huddling in a cramped column at the right edge. */
+    .fp-level-stats { flex: 1; display: flex; align-items: center; justify-content: space-evenly; gap: 1rem; min-width: 0; }
     .fp-level-circle-lg {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      flex-shrink: 0; width: 72px; height: 72px; border-radius: 50%;
+      flex-shrink: 0; width: 90px; height: 90px; border-radius: 50%;
       background: radial-gradient(circle at 35% 30%, #5e32a8, #2a0f52);
-      border: 2px solid rgba(130,80,190,0.6); box-shadow: 0 0 10px rgba(100,60,170,0.45);
+      border: 2px solid rgba(130,80,190,0.6); box-shadow: 0 0 14px rgba(100,60,170,0.5);
       font-family: 'Fredoka', 'Lato', Arial, sans-serif; color: #fff; position: relative;
     }
-    .fp-level-circle-lg b { font-size: 1.6rem; line-height: 1; text-shadow: 0 0 8px rgba(255,255,255,0.4); }
-    .fp-level-circle-lg span { font-size: 0.56rem; text-transform: uppercase; letter-spacing: 0.06em; color: #d8c2f5; margin-top: 0.15rem; }
+    .fp-level-circle-lg b { font-size: 2rem; line-height: 1; text-shadow: 0 0 10px rgba(255,255,255,0.45); }
+    .fp-level-circle-lg span { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; color: #d8c2f5; margin-top: 0.2rem; }
     .fp-level-circle-lg::after {
-      content: ''; position: absolute; top: -7px; right: -7px; width: 18px; height: 18px;
+      content: ''; position: absolute; top: -8px; right: -8px; width: 22px; height: 22px;
       background: url('/images/home/decoration-1.png') center/contain no-repeat;
       filter: drop-shadow(0 0 4px rgba(150,100,200,0.7));
       animation: fpnav-level-sparkle-twinkle 1.8s ease-in-out infinite;
     }
-    .fp-stat-list { display: flex; flex-direction: column; gap: 0.45rem; }
-    .fp-stat-list-item { display: flex; align-items: center; gap: 0.6rem; font-family: 'Fredoka', 'Lato', cursive; }
-    .fp-stat-list-item b { font-size: 1.05rem; color: #f0c060; text-shadow: 0 0 10px rgba(240,192,96,0.35); min-width: 2ch; text-align: right; }
-    .fp-stat-list-item span { font-size: 0.76rem; color: #bbb; text-transform: uppercase; letter-spacing: 0.04em; }
+    .fp-stat-list { flex: 1; display: flex; align-items: center; justify-content: space-evenly; gap: 0.5rem; min-width: 0; }
+    .fp-stat-list-item {
+      display: flex; flex-direction: column; align-items: center; gap: 0.3rem; position: relative;
+      font-family: 'Fredoka', 'Lato', cursive; padding: 0 0.75rem;
+    }
+    .fp-stat-list-item:not(:last-child)::after {
+      content: ''; position: absolute; right: 0; top: 8%; bottom: 8%; width: 1px; background: rgba(255,255,255,0.12);
+    }
+    .fp-stat-list-item b { font-size: 2.1rem; line-height: 1; color: #f0c060; text-shadow: 0 0 14px rgba(240,192,96,0.4); }
+    .fp-stat-list-item span { font-size: 0.74rem; color: #bbb; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.1rem; }
 
     .fp-pfp-box-info { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
     .fp-avatar-wrap { position: relative; width: 128px; height: 128px; flex-shrink: 0; }
@@ -356,16 +362,17 @@
       white-space: nowrap; flex-shrink: 0;
     }
 
-    /* ── Followers / Following list modal (Wattpad-style) ── */
-    .fp-follow-modal-overlay {
-      position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
-      display: flex; align-items: flex-start; justify-content: center; padding: 4vh 1rem;
+    /* ── Followers / Following / Clubs modal -- reuses the shared
+       .char-editor-overlay/.char-editor-modal shell (same one the club
+       page's "Members" popup uses), just with a Fredoka title override
+       (its base font is Cinzel) and a themed scrollbar on the list. ── */
+    #fp-follow-modal-overlay .char-editor-title,
+    #fp-follow-modal-overlay .mod-btn {
+      font-family: 'Fredoka', 'Lato', cursive;
     }
-    .fp-follow-modal {
-      background: #171717; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
-      width: 100%; max-width: 480px; max-height: 88vh; display: flex; flex-direction: column;
-      box-shadow: 0 24px 70px rgba(0,0,0,0.6);
-    }
+    #fp-follow-modal-overlay .char-editor-title { text-align: center; }
+    /* .fp-follow-modal-header/-title/-close are still used by the Newspaper
+       compose modal below -- left alone. */
     .fp-follow-modal-header {
       position: relative; padding: 1.4rem 1.5rem; text-align: center;
       border-bottom: 1px solid rgba(255,255,255,0.1); flex-shrink: 0;
@@ -376,9 +383,16 @@
       background: none; border: none; color: #999; font-size: 1.15rem; cursor: pointer;
     }
     .fp-follow-modal-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
-    .fp-follow-list { overflow-y: auto; padding: 0.5rem; }
+    .fp-follow-list {
+      max-height: 55vh; overflow-y: auto; padding-right: 0.5rem;
+      scrollbar-width: thin; scrollbar-color: rgba(168,112,217,0.45) transparent;
+    }
+    .fp-follow-list::-webkit-scrollbar { width: 7px; }
+    .fp-follow-list::-webkit-scrollbar-track { background: transparent; }
+    .fp-follow-list::-webkit-scrollbar-thumb { background: rgba(168,112,217,0.45); border-radius: 6px; }
+    .fp-follow-list::-webkit-scrollbar-thumb:hover { background: rgba(168,112,217,0.7); }
     .fp-follow-row {
-      display: flex; align-items: center; gap: 0.85rem; padding: 0.7rem 0.75rem; border-radius: 10px;
+      display: flex; align-items: center; gap: 0.85rem; padding: 0.55rem 0.4rem; border-radius: 8px;
     }
     .fp-follow-row:hover { background: rgba(255,255,255,0.05); }
     .fp-follow-avatar, .fp-follow-avatar-fallback {
@@ -699,9 +713,12 @@
       padding: 1.75rem 2rem;
       background: linear-gradient(160deg, rgba(10,8,14,0.86), rgba(10,8,14,0.76)), url('/images/home/potential-box-background.png');
       background-size: cover; background-position: center;
-      display: flex; gap: 2rem; min-height: 340px;
+      display: flex; gap: 2rem;
     }
-    .fp-about-fields { position: relative; z-index: 1; flex: 0 0 42%; min-width: 0; display: flex; flex-direction: column; }
+    /* Bio side is 2/3 of the box -- the Featured Submission column (1/3)
+       is a fixed square, so its height is what sets the box's overall
+       height instead of the fields column being forced to stretch tall. */
+    .fp-about-fields { position: relative; z-index: 1; flex: 0 0 calc(66.6% - 1rem); min-width: 0; display: flex; flex-direction: column; }
     .fp-about-box-deco { position: absolute; z-index: 2; pointer-events: none; object-fit: contain; opacity: 0.9; top: -10px; right: -8px; width: 40px; height: 40px; }
     .fp-about-badge-row { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.1rem; }
     .fp-about-row { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
@@ -722,7 +739,7 @@
       border-left: 2px solid rgba(240,192,96,0.35); padding-left: 1rem;
     }
     .fp-about-row[data-key="account_bio"] .fp-about-row-value {
-      font-style: italic; color: #d8d4e0; overflow-y: auto;
+      font-style: italic; color: #d8d4e0; overflow-y: auto; font-size: 1.15rem; line-height: 1.75;
     }
     .fp-about-row-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #f0c060; flex-shrink: 0; }
     .fp-about-row-value { font-size: 0.92rem; color: #ddd; line-height: 1.65; white-space: pre-line; }
@@ -744,9 +761,12 @@
       background: rgba(0,0,0,0.45); border-radius: 10px; padding: 0.6rem 1rem;
       margin-bottom: 1rem;
     }
-    .fp-spotlight-item { display: flex; flex-direction: column; flex: 1; min-height: 0; text-decoration: none; color: inherit; text-align: center; }
+    .fp-spotlight-item { display: flex; flex-direction: column; text-decoration: none; color: inherit; text-align: center; }
+    /* A real square now, sized to the column's width instead of stretching
+       to fill whatever height the Bio side happens to need -- that's what
+       was turning this into a tall rectangle instead of a square. */
     .fp-featured-sub-col .fp-spotlight-img-wrap {
-      width: 100%; max-width: none; flex: 1; min-height: 0; margin: 0 0 1rem; aspect-ratio: auto;
+      width: 100%; max-width: none; aspect-ratio: 1; margin: 0 0 1rem;
       border-radius: 14px; overflow: hidden;
       border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 10px 32px rgba(0,0,0,0.45);
       background: linear-gradient(135deg, #6b3fa0, #c2547a);
@@ -778,18 +798,23 @@
     }
     .fp-submissions-box, .fp-notes-box {
       position: relative; overflow: hidden; border-radius: 18px; border: 1px solid rgba(255,255,255,0.14);
-      padding: 1.5rem 1.75rem; min-height: 420px; display: flex; flex-direction: column;
+      padding: 1.5rem 1.75rem; display: flex; flex-direction: column;
       background: linear-gradient(160deg, rgba(10,8,14,0.86), rgba(10,8,14,0.76)), url('/images/home/potential-box-background.png');
       background-size: cover; background-position: center;
       box-shadow: 0 10px 30px rgba(0,0,0,0.4);
     }
+    /* Notes has no square image forcing its height, so it needs its own
+       floor -- without it the grid's align-items:stretch would otherwise
+       be the only thing giving it any height at all. */
+    .fp-notes-box { min-height: 360px; }
 
-    /* Submissions -- big main thumbnail (latest post), three small
-       thumbnails underneath for the next-latest posts. */
-    #fp-sub-main-wrap { flex: 1; min-height: 0; display: flex; }
-    .fp-sub-main { display: flex; flex-direction: column; flex: 1; min-height: 0; text-decoration: none; color: inherit; }
+    /* Submissions -- big main thumbnail (latest post) is a real square
+       sized to the column's own width (not stretched to fill whatever
+       leftover height the box had), three small square thumbnails
+       underneath for the next-latest posts. */
+    .fp-sub-main { display: block; text-decoration: none; color: inherit; }
     .fp-sub-main-img-wrap {
-      flex: 1; min-height: 0; border-radius: 14px; overflow: hidden; position: relative;
+      width: 100%; aspect-ratio: 1; border-radius: 14px; overflow: hidden; position: relative;
       border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 10px 28px rgba(0,0,0,0.4);
       background: linear-gradient(135deg, #6b3fa0, #c2547a);
     }
@@ -1417,11 +1442,9 @@
       .fp-name-row { justify-content: center; }
       .fp-name-edit-box { align-items: center; }
       .fp-follow-stats-row { justify-content: center; }
-      .fp-id-box-spacer { display: none; }
-      .fp-level-stats { justify-content: center; }
-      .fp-stat-list { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 0.6rem 1rem; }
-      .fp-stat-list-item { flex-direction: column; gap: 0.2rem; }
-      .fp-stat-list-item b { text-align: center; }
+      .fp-level-stats { flex: none; flex-wrap: wrap; justify-content: center; }
+      .fp-stat-list { flex: none; flex-wrap: wrap; justify-content: center; gap: 0.6rem 1rem; }
+      .fp-stat-list-item:not(:last-child)::after { display: none; }
       .fp-action-btn { font-size: 0.9rem; padding: 0 1.2rem; height: 42px; }
       .fp-name { font-size: 1.7rem; }
 
@@ -1464,10 +1487,11 @@
       .fp-about-box-inner { padding: 1.1rem 1.25rem; flex-direction: column; min-height: 0; }
       .fp-about-fields { flex: none; }
       .fp-about-row[data-key="account_bio"] { flex: none; max-height: 220px; }
-      .fp-featured-sub-col { border-left: none; border-top: 1px solid rgba(255,255,255,0.14); padding-left: 0; padding-top: 1.1rem; min-height: 280px; }
+      .fp-featured-sub-col { border-left: none; border-top: 1px solid rgba(255,255,255,0.14); padding-left: 0; padding-top: 1.1rem; }
 
       .fp-bottom-row { grid-template-columns: 1fr; padding: 0 1rem; gap: 1.25rem; }
-      .fp-submissions-box, .fp-notes-box { padding: 1.1rem 1.25rem; min-height: 340px; }
+      .fp-submissions-box, .fp-notes-box { padding: 1.1rem 1.25rem; }
+      .fp-notes-box { min-height: 300px; }
     }
 
     @media (max-width: 480px) {
@@ -1580,8 +1604,6 @@
           <button type="button" class="fp-follow-stat" id="fp-stat-clubs-btn"><b id="fp-stat-clubs">0</b> Clubs</button>
         </div>
       </div>
-
-      <div class="fp-id-box-spacer"></div>
 
       <div class="fp-level-stats">
         <div class="fp-level-circle-lg"><b id="fp-stat-level">1</b><span>Level</span></div>
@@ -1725,13 +1747,16 @@
 
 </div> <!-- /.fp-bg-wrap -->
 
-<div class="fp-follow-modal-overlay" id="fp-follow-modal-overlay" hidden>
-  <div class="fp-follow-modal">
-    <div class="fp-follow-modal-header">
-      <p class="fp-follow-modal-title" id="fp-follow-modal-title">Followers</p>
-      <button type="button" class="fp-follow-modal-close" id="fp-follow-modal-close" aria-label="Close">✕</button>
-    </div>
+<!-- Followers/Following/Clubs list -- same char-editor modal shell as the
+     club's "Members" popup (centered, Fredoka title with a live count,
+     bottom Close button) instead of the old header-bar + X-close card. -->
+<div class="char-editor-overlay" id="fp-follow-modal-overlay" hidden>
+  <div class="char-editor-modal" style="max-width: 480px;">
+    <h2 class="char-editor-title" id="fp-follow-modal-title">Followers</h2>
     <div class="fp-follow-list" id="fp-follow-list"><p class="fp-follow-loading">Loading…</p></div>
+    <div class="char-editor-actions" style="margin-top:1.25rem;">
+      <button class="mod-btn mod-btn--cancel" id="fp-follow-modal-close" type="button">Close</button>
+    </div>
   </div>
 </div>
 
@@ -3586,13 +3611,15 @@
   }
 
   async function openFollowModal(kind) {
-    fpFollowModalTitle.textContent = kind === 'followers' ? 'Followers' : 'Following';
+    const label = kind === 'followers' ? 'Followers' : 'Following';
+    fpFollowModalTitle.textContent = label;
     fpFollowList.innerHTML = '<p class="fp-follow-loading">Loading…</p>';
     fpFollowModalOverlay.hidden = false;
     try {
       const res = await fetch(`/api/fanpage-profile/${USERNAME}/${kind}`, { headers: authHeaders() });
       const data = await res.json();
       const users = data.users || [];
+      fpFollowModalTitle.textContent = `${label} (${users.length})`;
       if (!users.length) {
         fpFollowList.innerHTML = `<p class="fp-follow-empty">No ${kind === 'followers' ? 'followers' : 'following'} yet.</p>`;
         return;
@@ -3666,6 +3693,7 @@
       const res = await fetch(`/api/fanpage-profile/${USERNAME}/clubs`, { headers: authHeaders() });
       const data = await res.json();
       const clubs = data.clubs || [];
+      fpFollowModalTitle.textContent = `Clubs (${clubs.length})`;
       if (!clubs.length) {
         fpFollowList.innerHTML = '<p class="fp-follow-empty">Not in any clubs yet.</p>';
         return;
