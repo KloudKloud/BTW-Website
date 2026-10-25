@@ -738,9 +738,13 @@
        see the delegated click handler in closeCardDetail's caller -- and a
        small X sits at the popup's own top-right corner, just outside the
        card, so the card's own size/position is never touched by it. ── */
+    /* No backdrop-filter here on purpose -- blurring the still-animating
+       orbit carousel + Collection grid behind this every frame it's open
+       was the main source of the "popups lag the whole page" slowdown.
+       A darker solid scrim reads almost identically without that cost. */
     #lv-box-detail-view:not([hidden]) {
       position: fixed; inset: 0; z-index: 500;
-      background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      background: rgba(5,4,9,0.86);
       display: flex; align-items: center; justify-content: center;
       padding: 2.5rem 1.5rem; overflow-y: auto;
     }
@@ -1521,12 +1525,14 @@ function spinOverlayEl() {
     el.id = 'lv-spin-overlay';
     el.className = 'lv-spin-overlay';
     document.body.appendChild(el);
+    setOrbitPaused(true);
   }
   return el;
 }
 function closeSpinOverlay() {
   const el = document.getElementById('lv-spin-overlay');
   if (el) el.remove();
+  setOrbitPaused(false);
 }
 
 const CTC_SPIN_KIND_LABEL = { free: 'Free Spin!', respin: 'Free Respin', paid: '-300 Gems', premium: 'Premium Spin' };
@@ -1629,6 +1635,18 @@ function setOrbitSpeed(durationSec) {
   track.style.animationDelay = `-${progress * durationSec}s`;
 }
 
+// The orbit carousel is a wide, image-heavy strip that keeps animating
+// (transform) even while it's fully hidden behind a full-screen popup --
+// browsers don't reliably skip compositing work just because something is
+// occluded, so every popup on this page (Spin pick/reveal, card detail,
+// box reorder) was paying to keep it moving for no visible benefit. Pausing
+// it while any of those are open (and resuming on close) was most of the
+// "opening a popup lags the whole page" slowdown.
+function setOrbitPaused(paused) {
+  const track = document.getElementById('lv-arcade-orbit-track');
+  if (track) track.style.animationPlayState = paused ? 'paused' : 'running';
+}
+
 async function startSpin() {
   if (ctcSpinBusy) return;
   ctcSpinBusy = true;
@@ -1653,6 +1671,11 @@ async function startSpin() {
     spinToast("Couldn't spin right now — try again.");
   } finally {
     setOrbitSpeed(65);
+    // setOrbitSpeed() writes the animation shorthand, which resets
+    // animation-play-state back to 'running' -- re-pause it if the pick
+    // overlay ended up open (showSpinPickOverlay already paused it once,
+    // but this runs after and would otherwise undo that).
+    if (document.getElementById('lv-spin-overlay')) setOrbitPaused(true);
     btn.disabled = false;
     label.textContent = prevLabel;
     ctcSpinBusy = false;
@@ -1912,6 +1935,7 @@ function closeCardDetail() {
   detailView.hidden = true;
   detailView.innerHTML = '';
   fpCloseVoiceBar();
+  setOrbitPaused(false);
 }
 
 // Clicking the dimmed backdrop (not the popup box itself) closes the
@@ -1925,6 +1949,7 @@ async function openCardDetail(characterId) {
   const detailView = document.getElementById('lv-box-detail-view');
   detailView.hidden = false;
   detailView.innerHTML = `<div class="lv-empty" style="text-align:center; color:#fff;">Loading card…</div>`;
+  setOrbitPaused(true);
   try {
     const res = await fetch(`/api/ctc/card/${characterId}`, { headers: authHeaders() });
     if (!res.ok) throw new Error('bad response');
@@ -2399,12 +2424,14 @@ function boxReorderOverlayEl() {
     el.id = 'lv-boxreorder-overlay';
     el.className = 'lv-spin-overlay';
     document.body.appendChild(el);
+    setOrbitPaused(true);
   }
   return el;
 }
 function closeBoxReorderView() {
   const el = document.getElementById('lv-boxreorder-overlay');
   if (el) el.remove();
+  setOrbitPaused(false);
 }
 function renderBoxReorderGrid() {
   const grid = document.getElementById('lv-boxreorder-grid');
