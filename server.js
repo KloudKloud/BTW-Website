@@ -12251,13 +12251,19 @@ app.put('/api/clubs/:slug/pages/:pageSlug/text-fields', requireAuth, async (req,
   const ctx = await requireClubPageAdmin(req, res);
   if (!ctx) return;
   const fieldsIn = Array.isArray(req.body.fields) ? req.body.fields.slice(0, 4) : [];
+  // Index 0 (Body Text) is always kept even when blank -- these fields are
+  // position-addressed (no stable id), so dropping index 0 here would shift
+  // every Additional Section after it down by one, out from under whatever
+  // cover/side image a still-in-flight upload just attached to it. A blank
+  // Additional Section (index 1+) with no title/body/image still gets
+  // trimmed, same as before.
   const fields = fieldsIn.map(f => ({
     title: String((f && f.title) || '').trim().slice(0, 80),
     body: String((f && f.body) || '').trim().slice(0, 5000),
     collapsed: !!(f && f.collapsed),
     ...sanitizeTextFieldImageSlot(f, 'cover'),
     ...sanitizeTextFieldImageSlot(f, 'side'),
-  })).filter(f => f.title || f.body || f.cover_image_url || f.side_image_url || f.cover_slideshow.length || f.side_slideshow.length);
+  })).filter((f, i) => i === 0 || f.title || f.body || f.cover_image_url || f.side_image_url || f.cover_slideshow.length || f.side_slideshow.length);
   await pool.query('UPDATE club_pages SET text_fields = $1 WHERE id = $2', [JSON.stringify(fields), ctx.page.id]);
   res.json({ text_fields: fields });
 });
