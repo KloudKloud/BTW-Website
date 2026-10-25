@@ -1151,11 +1151,6 @@
                   No cards collected yet — spin to start your collection!
                 </div>
               </div>
-
-              <!-- Opening a card swaps the grid above out for this -- same
-                   footprint, same panel, no page navigation. See
-                   openCardDetail()/closeCardDetail(). -->
-              <div id="lv-box-detail-view" hidden></div>
             </div>
 
             <div class="lv-arcade-panel" id="lva-panel-shop">
@@ -1173,6 +1168,13 @@
               <div class="lv-shop-pagination" id="lv-shop-pagination"></div>
             </div>
           </div>
+
+          <!-- Lives outside the tab panels (not just #lva-panel-collection)
+               so it renders regardless of which Arcade tab is active --
+               claiming a card from Spin opens this without switching the
+               visible tab out from under the viewer. See
+               openCardDetail()/closeCardDetail(). -->
+          <div id="lv-box-detail-view" hidden></div>
       </div>
     </section>
   </div>
@@ -1428,11 +1430,6 @@ async function loadLevelHub() {
   }
 }
 
-// Shared by the tab buttons below and by the post-spin reveal (which needs
-// to land on the Collection panel itself -- #lv-box-detail-view lives inside
-// #lva-panel-collection, and a non-active .lv-arcade-panel is display:none,
-// so opening the card detail popup while the Spin panel is still active
-// renders it into a hidden ancestor and it never becomes visible).
 function switchArcadeTab(name) {
   document.querySelectorAll('.lv-arcade-menu-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.lv-arcade-panel').forEach(p => p.classList.toggle('active', p.id === `lva-panel-${name}`));
@@ -1606,10 +1603,6 @@ function showSpinResult(data) {
   spinToast(noteBits.length ? `${label} — ${noteBits.join(' · ')}` : label);
   loadArcadeStats();
   loadCollection();
-  // #lv-box-detail-view lives inside the Collection panel, which is
-  // display:none while the Spin tab is active -- switch panels first or the
-  // popup renders invisibly.
-  switchArcadeTab('collection');
   openCardDetail(data.character.id);
 }
 
