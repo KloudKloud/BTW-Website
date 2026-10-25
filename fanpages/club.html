@@ -212,6 +212,12 @@
        renderFromUrl() whenever a postId or pageSlug is active, or the
        Social tab is -- only Hub keeps the original scrolling behavior. */
     body.cl-page-bg-static #cl-page-bg-wrap { position: fixed; height: 100vh !important; }
+    /* Additional pages/Social/post-detail get a much heavier blur than Home's
+       light one above -- Home's background sits behind real focal content
+       (banner/pfp) so it stays mostly sharp, but these pages have nothing
+       competing with it, so a custom upload here should read as a soft,
+       out-of-focus backdrop instead of a second banner-strength image. */
+    body.cl-page-bg-static #cl-page-bg-img { filter: brightness(0.85) blur(24px); }
 
     /* ── Banner + pfp (the only header content left for now) ── */
     .cl-banner-wrap { position: relative; width: 100%; height: 310px; background: #161616; overflow: hidden; }
@@ -5675,18 +5681,17 @@ function paintThemeBackground(themeId, bgUrl) {
   syncClubBgHeight();
 }
 // A custom page (General/Gallery/Promotion) with no explicit theme of its
-// own (theme === 'default') now shows the CLUB's own theme instead of
-// jumping straight to the generic site background -- without this,
-// navigating Home -> any additional page looked like the whole club's
-// background had been reset, even though nothing about the club's actual
-// theme changed (bug report: "background switches from the home hub's
-// background to the default website's background"). Only an explicit
-// per-page 'custom' theme ever overrides the club's.
+// own (theme === 'default') always gets a flat black background -- it must
+// NOT fall back to the club's own Home theme/background. An earlier version
+// of this did inherit the club's theme (to avoid a "background resets when
+// leaving Home" look), but that meant the black swatch didn't actually
+// paint black whenever the club itself had a custom Home background —
+// clicking Default/black on an additional page need to truly show black,
+// not whatever image Home happens to be using. Only an explicit per-page
+// 'custom' theme (its own upload) ever shows an image here.
 function applyPageTheme(page) {
   if (page && page.theme === 'custom' && page.theme_bg_url) {
     paintThemeBackground('custom', page.theme_bg_url);
-  } else if (currentClub) {
-    paintThemeBackground(currentClub.theme, currentClub.theme_bg_url);
   } else {
     paintThemeBackground('default', '');
   }
