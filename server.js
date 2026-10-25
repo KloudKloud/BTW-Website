@@ -1688,7 +1688,7 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
   `).catch(e => console.error('club_pages type migration:', e.message));
 
   // General Page template — cover image/slideshow (same static/slideshow
-  // toggle as the club Home page) plus up to three named text sections
+  // toggle as the club Home page) plus up to 10 named text sections
   // (text_fields: [{title, body}, ...]).
   await pool.query(`
     ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS cover_mode TEXT NOT NULL DEFAULT 'static';
@@ -1797,7 +1797,7 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS banner_position_y INTEGER NOT NULL DEFAULT 50;
   `).catch(e => console.error('club_pages banner migration:', e.message));
 
-  // Posts became full mini-pages (title + Cover Media + up to three Text
+  // Posts became full mini-pages (title + Cover Media + up to 10 Text
   // Sections, same shape as a club_pages General page, plus an optional
   // poll) instead of a single free-text body with a flat image stack.
   // page_id (per-page Social scoping) is dropped in the same pass — every
@@ -11586,10 +11586,10 @@ function sanitizeClubPostImageSlot(raw) {
 }
 
 // index 0 is always the mandatory Body Text box (empty title, see the
-// create-club-post.html Save handler) plus up to 3 further optional Text
-// Fields the poster added themselves -- 4 total.
+// create-club-post.html Save handler) plus up to 10 further optional Text
+// Fields the poster added themselves -- 11 total.
 function buildClubPostTextFields(raw) {
-  const fieldsIn = Array.isArray(raw) ? raw.slice(0, 4) : [];
+  const fieldsIn = Array.isArray(raw) ? raw.slice(0, 11) : [];
   return fieldsIn.map(f => ({
     title: String((f && f.title) || '').trim().slice(0, 80),
     body: String((f && f.body) || '').trim().slice(0, 5000),
@@ -12242,15 +12242,15 @@ function sanitizeTextFieldImageSlot(f, prefix) {
 }
 // PUT /api/clubs/:slug/pages/:pageSlug/text-fields — index 0 is always the
 // mandatory Body Text box (empty title, see club.html's populatePageEditor/
-// saveEditPageTitle), plus up to 3 further named "Additional Sections":
+// saveEditPageTitle), plus up to 10 further named "Additional Sections":
 // { fields: [{title, body, cover_mode, cover_image_url, cover_slideshow,
-// side_mode, side_image_url, side_slideshow}, ...] } -- 4 total. Cover/Side
+// side_mode, side_image_url, side_slideshow}, ...] } -- 11 total. Cover/Side
 // are optional images per field -- Cover renders full-width above the
 // section, Side floats narrow/tall to its right.
 app.put('/api/clubs/:slug/pages/:pageSlug/text-fields', requireAuth, async (req, res) => {
   const ctx = await requireClubPageAdmin(req, res);
   if (!ctx) return;
-  const fieldsIn = Array.isArray(req.body.fields) ? req.body.fields.slice(0, 4) : [];
+  const fieldsIn = Array.isArray(req.body.fields) ? req.body.fields.slice(0, 11) : [];
   // Index 0 (Body Text) is always kept even when blank -- these fields are
   // position-addressed (no stable id), so dropping index 0 here would shift
   // every Additional Section after it down by one, out from under whatever
