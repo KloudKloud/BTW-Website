@@ -180,6 +180,10 @@
        Page-Views stat list on the right. Replaces the old two-box
        pfp-box/stats-box split. ── */
     .fp-top-row { display: block; }
+    /* Characters/Gallery/Stories/Newspapers start right under the tab bar --
+       the pfp+level+stat box is a Home-only thing. */
+    body.fp-tab-no-idbox .fp-top-row { display: none; }
+    body.fp-tab-no-idbox .fp-header { padding-top: 1.25rem; }
     .fp-id-box {
       display: flex; align-items: center; gap: 1.75rem; border-radius: 18px;
       border: 2px solid rgba(240,192,96,0.3); min-height: 150px; box-shadow: 0 10px 30px rgba(0,0,0,0.4);
@@ -274,25 +278,6 @@
       font-family: inherit; font-size: 1rem; font-weight: 700; box-sizing: border-box;
       padding: 0.75rem 1.7rem; border-radius: 24px; white-space: nowrap;
     }
-    .fp-action-btn--edit {
-      background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #f0f0f0;
-      display: inline-flex; align-items: center; justify-content: center; gap: 0.55rem;
-      font-size: 1.02rem; padding: 0 1.8rem; height: 48px; line-height: 1;
-      /* Fixed height instead of vertical padding — some of these buttons carry
-         longer/taller emoji icons (🗂️ 🖼️ 📚) than Edit Profile's ⚙️, and letting
-         the button's height be driven by content let those glyphs' natural
-         line-box metrics stretch it taller than Edit Profile even with
-         identical classes. A fixed height + flex-centering makes every
-         fp-action-btn--edit variant pixel-identical regardless of icon. */
-    }
-    .fp-action-btn--edit:hover { border-color: #7fa8d9; color: #7fa8d9; }
-    .fp-action-btn--newpost {
-      border-color: rgba(127,168,217,0.6); color: #7fa8d9;
-      box-shadow: 0 0 16px rgba(127,168,217,0.4);
-    }
-    .fp-action-btn--newpost:hover { border-color: #7fa8d9; color: #a8c6e8; box-shadow: 0 0 22px rgba(127,168,217,0.6); }
-    .fp-action-btn--newpost .fp-action-btn--edit-gear { font-size: 1.2rem; font-weight: 700; }
-    .fp-action-btn--edit-gear { font-size: 1.1rem; line-height: 1; }
     .fp-action-btn--follow { background: #f0f0f0; color: #0d0d0d; }
     .fp-action-btn--follow:hover { background: #cfcfcf; }
     .fp-action-btn--following {
@@ -434,12 +419,27 @@
        centered. Divided by vertical lines between tabs instead of gaps. ── */
     .fp-tabs-row {
       position: absolute; left: 2rem; top: -30px; z-index: 10;
+      display: flex; align-items: center; gap: 0.9rem;
+    }
+    .fp-tabs {
       display: flex; align-items: stretch;
       border-radius: 14px; border: 2px solid rgba(240,192,96,0.3); overflow: hidden;
       background: linear-gradient(160deg, rgba(10,8,14,0.94), rgba(10,8,14,0.88));
       box-shadow: 0 10px 28px rgba(0,0,0,0.5);
     }
-    .fp-tabs { display: flex; align-items: stretch; }
+    /* Owner-only edit shortcut beside the tab bar -- same golden-pill recipe
+       as .fp-char-back-btn (Characters tab's Back button) so it reads as
+       the site's one consistent "gold action pill" look. */
+    .fp-tabrow-edit-btn {
+      display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; cursor: pointer;
+      background: linear-gradient(160deg, rgba(38,30,16,0.85), rgba(20,16,10,0.85));
+      border: 1px solid rgba(240,192,96,0.6); color: #f7d68a; border-radius: 30px;
+      padding: 0.7em 1.5em; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.95rem; font-weight: 700;
+      white-space: nowrap; box-shadow: 0 0 8px rgba(240,192,96,0.22);
+      transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .fp-tabrow-edit-btn:hover { border-color: #f0c060; color: #fff; box-shadow: 0 0 16px rgba(240,192,96,0.4); transform: translateY(-1px); }
+    .fp-tabrow-edit-btn-icon { font-size: 1.05rem; line-height: 1; }
     .fp-tab {
       background: none; border: none; border-right: 2px solid rgba(240,192,96,0.22); cursor: pointer; color: #bbb;
       font-family: 'Fredoka', 'Lato', cursive; font-size: 0.92rem; font-weight: 700;
@@ -1478,13 +1478,15 @@
 
       /* The floating tab bar runs full width at the header's left edge
          instead of sizing to its own content. */
-      .fp-tabs-row { left: 1.1rem; right: 1.1rem; top: -24px; }
+      .fp-tabs-row { left: 1.1rem; right: 1.1rem; top: -24px; flex-wrap: wrap; row-gap: 0.5rem; }
       .fp-tabs { width: 100%; }
       .fp-tab {
         flex: 1 1 0; min-width: 0; text-align: center; white-space: nowrap;
         overflow: hidden; text-overflow: ellipsis;
         font-size: 0.7rem; padding: 0.7rem 0.1rem;
       }
+      .fp-tabrow-edit-btn { font-size: 0.8rem; padding: 0.55em 1.1em; }
+      body.fp-tab-no-idbox .fp-header { padding-top: 1rem; }
       .fp-header-action { top: 0.6rem; right: 0.6rem; }
       .fp-header-action .fp-action-btn { font-size: 0.78rem; padding: 0 1rem; height: 36px; }
 
@@ -1601,9 +1603,16 @@
       <button class="fp-tab" id="fp-tab-stories" type="button">Stories</button>
       <button class="fp-tab" id="fp-tab-newspaper" type="button">Newspapers</button>
     </div>
+    <!-- Owner-only edit shortcut -- label/icon/target swap per active tab,
+         see renderActions(). Hidden entirely for a visitor viewing someone
+         else's profile (Follow/Message live on the banner instead). -->
+    <a class="fp-tabrow-edit-btn" id="fp-tabrow-edit-btn" href="#" hidden>
+      <span class="fp-tabrow-edit-btn-icon" id="fp-tabrow-edit-icon">⚙️</span>
+      <span id="fp-tabrow-edit-label">Edit Profile</span>
+    </a>
   </div>
 
-  <div class="fp-top-row">
+  <div class="fp-top-row" id="fp-top-row">
     <div class="fp-id-box">
       <div class="fp-avatar-wrap">
         <div class="fp-avatar" id="fp-avatar-img" style="display:none;"></div>
@@ -2088,6 +2097,7 @@
     // link) lands back on the same tab instead of always falling back to
     // Home — this is what's read on load below.
     history.replaceState(null, '', tab === 'home' ? location.pathname + location.search : `#${tab}`);
+    document.body.classList.toggle('fp-tab-no-idbox', tab !== 'home');
     if (currentAuthor && currentAuthor.is_self) renderActions(currentAuthor, false);
     // Banner edit pencil + theme wheel are a Home-tab-only shortcut — on
     // every other tab they'd float over content that isn't the banner/about
@@ -3870,46 +3880,50 @@
     }
   }
 
-  // ── Header action button (sits on the banner itself now) ────────────────
+  // ── Header action button ─────────────────────────────────────────────
+  // Owner's own edit shortcut now lives beside the tab bar (fp-tabrow-edit-btn)
+  // instead of on the banner — label/icon/target swap per active tab. The
+  // banner's fp-header-actions is only used for a visitor's Follow/Message.
   function renderActions(author, isFollowing) {
     const wrap = document.getElementById('fp-header-actions');
     wrap.innerHTML = '';
+    const tabBtn = document.getElementById('fp-tabrow-edit-btn');
+    const tabIcon = document.getElementById('fp-tabrow-edit-icon');
+    const tabLabel = document.getElementById('fp-tabrow-edit-label');
 
     if (author.is_self) {
+      tabBtn.hidden = false;
+      tabBtn.onclick = null;
       // Home shows the usual "Edit Profile" — every other tab links straight
       // to that tab's spot in the Editor Hub instead. Newspaper is the one
       // exception: there's nothing to "edit" there, so it opens the compose
       // modal directly instead of linking anywhere.
       if (activeTabName === 'newspaper') {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'fp-action-btn fp-action-btn--edit fp-action-btn--newpost';
-        btn.innerHTML = '<span class="fp-action-btn--edit-gear">+</span> New Post';
-        btn.addEventListener('click', () => openNewspaperComposer(null));
-        wrap.appendChild(btn);
+        tabIcon.textContent = '+';
+        tabLabel.textContent = 'New Post';
+        tabBtn.href = '#';
+        tabBtn.onclick = (e) => { e.preventDefault(); openNewspaperComposer(null); };
         return;
       }
       const HUB_CONFIG = {
-        characters: { icon: '🗂️', label: 'Character Editor', href: window.fpUrl('/editor#characters') },
-        gallery:    { icon: '🖼️', label: 'Gallery Editor',    href: window.fpUrl('/editor#gallery') },
-        stories:    { icon: '📚', label: 'Stories Editor',    href: window.fpUrl('/editor#stories') },
+        characters: { icon: '🗂️', label: 'Edit Characters', href: window.fpUrl('/editor#characters') },
+        gallery:    { icon: '🖼️', label: 'Edit Gallery',    href: window.fpUrl('/editor#gallery') },
+        stories:    { icon: '📚', label: 'Edit Stories',    href: window.fpUrl('/editor#stories') },
       };
       const hub = HUB_CONFIG[activeTabName];
       if (hub) {
-        const a = document.createElement('a');
-        a.className = 'fp-action-btn fp-action-btn--edit';
-        a.href = hub.href;
-        a.innerHTML = `<span class="fp-action-btn--edit-gear">${hub.icon}</span> ${hub.label}`;
-        wrap.appendChild(a);
+        tabIcon.textContent = hub.icon;
+        tabLabel.textContent = hub.label;
+        tabBtn.href = hub.href;
         return;
       }
-      const a = document.createElement('a');
-      a.className = 'fp-action-btn fp-action-btn--edit';
-      a.href = window.fpUrl('/edit-profile');
-      a.innerHTML = '<span class="fp-action-btn--edit-gear">⚙️</span> Edit Profile';
-      wrap.appendChild(a);
+      tabIcon.textContent = '⚙️';
+      tabLabel.textContent = 'Edit Profile';
+      tabBtn.href = window.fpUrl('/edit-profile');
       return;
     }
+
+    tabBtn.hidden = true;
 
     // Guests keep seeing a normal-looking Follow button rather than a
     // different "Log In to Follow" link -- clicking it just opens the
@@ -4024,7 +4038,7 @@
 
   // Banner/avatar-only now -- pronouns/fun fact/bio/display name/featured
   // submission all moved to the dedicated Edit Profile page (see the
-  // fp-action-btn--edit link in renderActions below), which mimics the
+  // fp-tabrow-edit-btn link in renderActions below), which mimics the
   // Story/Character/Gallery editors' own look instead of this inline
   // plain-input "old UI". This mode still exists purely for the live,
   // WYSIWYG banner/avatar crop-in-place flow, triggered by the hover
