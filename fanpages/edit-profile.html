@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Edit Profile ✦ BTW</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css?v=20260804a" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&display=swap" />
+  <style>
+    /* Same "page-bg needs a transparent body" fix as create.html/the Story
+       Editor -- an opaque body background here would paint over the fixed
+       z-index:-1 .page-bg layer underneath it regardless of what that layer
+       contains. */
+    body { background: transparent; }
+
+    /* Same forced box-background-3 wallpaper as the Story Editor and
+       create.html, with the blur turned off for the same reason as there --
+       a blurred element fades to nothing right at its own edge, which reads
+       as a hazy box wherever that edge lands. */
+    .page-bg img { filter: none; transform: none; }
+    .page-bg-overlay { background: rgba(10,8,14,0.72); }
+
+    /* ── Sticky top bar -- identical pattern to create.html's .cs-topbar. ── */
+    #fanpages-topbar-root { display: none; }
+    .cs-topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 150; height: 68px; box-sizing: border-box;
+      display: flex; align-items: center; justify-content: space-between;
+      background: #161616; border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding: 0 1.5rem;
+    }
+    .cs-topbar-left { display: flex; align-items: center; gap: 1rem; min-width: 0; }
+    .cs-topbar-back {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      color: #aaa; font-size: 0.92rem; font-weight: 700; text-decoration: none; padding: 0.3rem; flex-shrink: 0;
+    }
+    .cs-topbar-back svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .cs-topbar-back:hover { color: #fff; }
+    .cs-topbar-titles { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+    .cs-topbar-eyebrow { font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #999; }
+    .cs-topbar-title {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.08rem; font-weight: 700; color: #f0f0f0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .cs-topbar-actions { display: flex; align-items: center; gap: 0.85rem; flex-shrink: 0; }
+    .cs-topbar-cancel {
+      color: #ccc; font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 600; text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.25); border-radius: 22px; padding: 0.6em 1.4em;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .cs-topbar-cancel:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+    .cs-topbar-continue {
+      background: #1fb6a8; color: #fff; border: none;
+      font-family: 'Inter', sans-serif; font-size: 0.94rem; font-weight: 700;
+      padding: 0.65em 1.7em; border-radius: 22px; cursor: pointer;
+      box-shadow: 0 0 16px rgba(31,182,168,0.55); transition: background 0.15s, box-shadow 0.15s;
+    }
+    .cs-topbar-continue:hover { background: #1a9d91; box-shadow: 0 0 22px rgba(31,182,168,0.75); }
+    .cs-topbar-continue:disabled { opacity: 0.6; cursor: default; box-shadow: none; }
+
+    .cs-layout { max-width: 820px; margin: 0 auto; padding: calc(68px + 2.5rem) 2rem 5rem; }
+
+    .cs-error, .cs-success {
+      border-radius: 10px; font-size: 0.9rem; padding: 0.85rem 1.1rem; margin-bottom: 1.75rem;
+    }
+    .cs-error { background: rgba(217,122,114,0.12); border: 1px solid rgba(217,122,114,0.4); color: #d97a72; }
+    .cs-success { background: rgba(90,180,110,0.12); border: 1px solid rgba(90,180,110,0.4); color: #8fe0ac; }
+
+    .cs-panel {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px;
+      padding: 2rem 2.25rem; margin-bottom: 2rem;
+    }
+    .cs-panel .cs-field-block:last-child { margin-bottom: 0; }
+
+    .cs-field-block { margin-bottom: 2.25rem; }
+    .cs-field-row { display: flex; gap: 1.5rem; }
+    .cs-field-row .cs-field-block { flex: 1; min-width: 0; }
+    .cs-field-title-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.7rem; position: relative; }
+    .cs-field-title {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.3rem; font-weight: 700; color: #f0f0f0;
+    }
+    .cs-field-hint { font-family: 'Inter', sans-serif; font-size: 0.82rem; color: #999; }
+    .cs-input-lg, .cs-textarea-lg {
+      width: 100%; box-sizing: border-box; background: #17171a; border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 12px; color: #f0f0f0; font-family: 'Baloo 2', 'Inter', sans-serif; font-weight: 600; font-size: 1.02rem;
+      padding: 0.9rem 1.1rem; transition: border-color 0.15s;
+    }
+    .cs-input-lg:focus, .cs-textarea-lg:focus { outline: none; border-color: #7fa8d9; }
+    .cs-textarea-lg { resize: vertical; line-height: 1.7; }
+    .cs-textarea-lg#ep-bio-input { min-height: 280px; }
+    .cs-char-count { font-family: 'Inter', sans-serif; font-size: 0.76rem; color: #999; text-align: right; margin: 0.35rem 0 0; }
+
+    /* Same tip-icon popover as create.html's Notes/Rating/etc. hints. */
+    .wiki-tags-tip-icon {
+      background: none; border: none; color: #999; cursor: pointer; font-size: 0.9rem; padding: 0; line-height: 1;
+    }
+    .wiki-tags-tip-icon:hover { color: #f0c060; }
+    .wiki-tags-tip-popover {
+      position: absolute; top: 100%; left: 0; margin-top: 0.5rem; z-index: 20; width: 320px;
+      background: #141018; border: 1px solid rgba(255,255,255,0.14); border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.55); padding: 0.9rem 1.05rem;
+      font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #ccc; line-height: 1.55;
+    }
+    .wiki-tags-tip-popover p { margin: 0 0 0.5rem; }
+    .wiki-tags-tip-popover p:last-child { margin-bottom: 0; }
+
+    .cs-divider {
+      border: none; height: 1px; margin: 0 0 2rem;
+      background: linear-gradient(to right, transparent, rgba(240,192,96,0.5) 50%, transparent);
+    }
+
+    /* ── Featured Submission -- "currently featured" preview + a smart
+         browse/search system across the user's own Characters/Stories/
+         Gallery so they can actually locate and pin one. ── */
+    .ep-sub-current {
+      display: flex; align-items: center; gap: 1rem; background: rgba(240,192,96,0.07);
+      border: 1px solid rgba(240,192,96,0.3); border-radius: 14px; padding: 0.9rem 1.1rem; margin-bottom: 1.5rem;
+    }
+    .ep-sub-current-img {
+      width: 56px; height: 56px; border-radius: 10px; object-fit: cover; flex-shrink: 0; background: #0f0f12;
+    }
+    .ep-sub-current-info { flex: 1; min-width: 0; }
+    .ep-sub-current-kind {
+      font-family: 'Inter', sans-serif; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #f0c060; margin: 0 0 0.2rem;
+    }
+    .ep-sub-current-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; color: #f0f0f0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ep-sub-current-sub { font-family: 'Inter', sans-serif; font-size: 0.78rem; color: #999; margin: 0.15rem 0 0; }
+    .ep-sub-clear-btn {
+      background: none; border: 1px solid rgba(255,255,255,0.2); border-radius: 18px; color: #ccc;
+      font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; padding: 0.45em 1em; cursor: pointer;
+      flex-shrink: 0; transition: border-color 0.15s, color 0.15s;
+    }
+    .ep-sub-clear-btn:hover { border-color: #d97a72; color: #d97a72; }
+
+    .ep-sub-tabs { display: flex; gap: 0.3rem; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 1rem; }
+    .ep-sub-tab {
+      background: none; border: none; color: #999; font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 700;
+      padding: 0.6em 1em; cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s;
+    }
+    .ep-sub-tab:hover { color: #ccc; }
+    .ep-sub-tab.active { color: #f0c060; border-bottom-color: #f0c060; }
+
+    .ep-sub-search {
+      width: 100%; box-sizing: border-box; background: #17171a; border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 10px; color: #f0f0f0; font-family: 'Inter', sans-serif; font-size: 0.92rem;
+      padding: 0.7rem 1rem; margin-bottom: 1rem;
+    }
+    .ep-sub-search:focus { outline: none; border-color: #7fa8d9; }
+
+    .ep-sub-results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; max-height: 360px; overflow-y: auto; padding-right: 0.25rem; }
+    .ep-sub-empty { color: #999; font-size: 0.88rem; line-height: 1.6; text-align: center; padding: 1.5rem 0; grid-column: 1 / -1; }
+
+    @media (max-width: 720px) {
+      .cs-layout { padding: calc(68px + 2rem) 1.25rem 4rem; }
+      .cs-field-row { flex-direction: column; gap: 0; }
+      .cs-topbar-eyebrow { display: none; }
+      .cs-topbar-back { display: none; }
+      .cs-topbar { padding: 0 0.9rem; }
+      .cs-topbar-title { font-size: 0.92rem; }
+      .cs-topbar-actions { gap: 0.5rem; }
+      .cs-topbar-cancel, .cs-topbar-continue { font-size: 0.78rem; padding: 0.55em 1em; }
+      .ep-sub-results { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="page-bg">
+  <img src="/images/home/box-background-3.png" alt="" />
+  <div class="page-bg-overlay"></div>
+</div>
+
+<script src="/fanpages/fanpages-nav.js"></script>
+
+<div class="cs-topbar">
+  <div class="cs-topbar-left">
+    <a class="cs-topbar-back" id="cs-topbar-back" href="/fanpages" title="Back">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      Back
+    </a>
+    <div class="cs-topbar-titles">
+      <span class="cs-topbar-eyebrow">Your Fanpage Profile</span>
+      <span class="cs-topbar-title">Edit Profile</span>
+    </div>
+  </div>
+  <div class="cs-topbar-actions">
+    <a class="cs-topbar-cancel" id="cs-cancel-link" href="/fanpages">Cancel</a>
+    <button class="cs-topbar-continue" id="ep-save-btn" type="button">Save Changes</button>
+  </div>
+</div>
+
+<div class="cs-layout">
+  <p class="cs-error" id="ep-error" hidden></p>
+  <p class="cs-success" id="ep-success" hidden>Saved!</p>
+
+  <div class="cs-panel">
+    <div class="cs-field-row">
+      <div class="cs-field-block">
+        <div class="cs-field-title-row">
+          <span class="cs-field-title">Pronouns</span>
+        </div>
+        <input class="cs-input-lg" id="ep-pronouns-input" maxlength="60" placeholder="e.g. She/Her" />
+      </div>
+      <div class="cs-field-block">
+        <div class="cs-field-title-row">
+          <span class="cs-field-title">Fun Fact</span>
+        </div>
+        <input class="cs-input-lg" id="ep-funfact-input" maxlength="300" placeholder="Something fun about you!" />
+      </div>
+    </div>
+
+    <div class="cs-field-block">
+      <div class="cs-field-title-row">
+        <span class="cs-field-title">Bio</span>
+        <button class="wiki-tags-tip-icon" id="bio-tip-icon" type="button" aria-label="Bio help">💡</button>
+        <div class="wiki-tags-tip-popover" id="bio-tip-popover" hidden>
+          <p>Tell visitors a little about yourself! Use *text* for italics, **text** for bold.</p>
+        </div>
+      </div>
+      <textarea class="cs-textarea-lg" id="ep-bio-input" maxlength="1000" placeholder="Write a little about yourself…"></textarea>
+      <p class="cs-char-count" id="ep-bio-count">0/1000</p>
+    </div>
+  </div>
+
+  <div class="cs-panel">
+    <div class="cs-field-title-row">
+      <span class="cs-field-title">Featured Submission</span>
+      <span class="cs-field-hint">Shown on your Home tab -- defaults to your latest post until you pin one.</span>
+    </div>
+
+    <div class="ep-sub-current" id="ep-sub-current" hidden>
+      <img class="ep-sub-current-img" id="ep-sub-current-img" src="" alt="" />
+      <div class="ep-sub-current-info">
+        <p class="ep-sub-current-kind" id="ep-sub-current-kind">Character</p>
+        <p class="ep-sub-current-title" id="ep-sub-current-title"></p>
+        <p class="ep-sub-current-sub" id="ep-sub-current-sub">Currently featured</p>
+      </div>
+      <button type="button" class="ep-sub-clear-btn" id="ep-sub-clear-btn">Unpin</button>
+    </div>
+
+    <div class="ep-sub-tabs" id="ep-sub-tabs">
+      <button type="button" class="ep-sub-tab active" data-kind="character">Characters</button>
+      <button type="button" class="ep-sub-tab" data-kind="story">Stories</button>
+      <button type="button" class="ep-sub-tab" data-kind="gallery">Gallery</button>
+    </div>
+    <input type="text" class="ep-sub-search" id="ep-sub-search" placeholder="Search your characters…" autocomplete="off" />
+    <div class="ep-sub-results" id="ep-sub-results"><p class="ep-sub-empty">Loading…</p></div>
+  </div>
+
+</div>
+
+<script>
+const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+if (!token) {
+  window.location.href = window.fpUrl('/login?from=' + encodeURIComponent(window.location.pathname));
+}
+const authHeaders = () => ({ Authorization: `Bearer ${token}` });
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+let myUsername = '';
+let pendingFeaturedSubmission = undefined; // undefined = untouched, null = clear, {kind, ref_id} = pick
+let currentFeatured = null;
+
+// ── Back/Cancel -- straight to the viewer's own profile once we know their
+// username; falls back to the referrer, then the Fanpage Hub. ─────────────
+function wireBackLinks() {
+  const target = myUsername ? window.fpUrl(`/${myUsername}`) : (
+    document.referrer && document.referrer.startsWith(window.location.origin) ? document.referrer : window.fpUrl('/')
+  );
+  document.getElementById('cs-topbar-back').href = target;
+  document.getElementById('cs-cancel-link').href = target;
+}
+
+// ── Tip popover (Bio hint) -- same open/close-on-outside-click pattern as
+// the Story Editor's own. ──────────────────────────────────────────────────
+(() => {
+  const icon = document.getElementById('bio-tip-icon');
+  const pop = document.getElementById('bio-tip-popover');
+  icon.addEventListener('click', (e) => { e.stopPropagation(); pop.hidden = !pop.hidden; });
+  document.addEventListener('click', (e) => {
+    if (!pop.hidden && !pop.contains(e.target) && e.target !== icon) pop.hidden = true;
+  });
+})();
+
+document.getElementById('ep-bio-input').addEventListener('input', (e) => {
+  document.getElementById('ep-bio-count').textContent = `${e.target.value.length}/1000`;
+});
+
+// ── Featured Submission picker -- browses the viewer's own Characters/
+// Stories/Gallery via the same /api/featured-search endpoint the Featured
+// Characters/Gallery/Stories editors already use, just scope=mine only and
+// single-select instead of a max-3 multi-select. ──────────────────────────
+const SUB_KIND_LABEL = { character: 'Character', story: 'Story', gallery: 'Gallery Post' };
+const SUB_KIND_PLACEHOLDER = { character: 'Search your characters…', story: 'Search your stories…', gallery: 'Search your gallery…' };
+let activeSubKind = 'character';
+let subSearchDebounce = null;
+
+function renderCurrentFeatured() {
+  const box = document.getElementById('ep-sub-current');
+  if (!currentFeatured) { box.hidden = true; return; }
+  box.hidden = false;
+  document.getElementById('ep-sub-current-kind').textContent = SUB_KIND_LABEL[currentFeatured.kind] || currentFeatured.kind;
+  document.getElementById('ep-sub-current-title').textContent = currentFeatured.title || 'Untitled';
+  document.getElementById('ep-sub-current-img').src = currentFeatured.image_url || '/images/gallery/kloudsaphbedroom_1.png';
+}
+
+async function runSubSearch(q) {
+  const list = document.getElementById('ep-sub-results');
+  list.innerHTML = '<p class="ep-sub-empty">Loading…</p>';
+  try {
+    const res = await fetch(`/api/featured-search?kind=${activeSubKind}&scope=mine&q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+    const data = await res.json();
+    const results = (data.results || []).filter(r => r.mine);
+    if (!results.length) {
+      list.innerHTML = `<p class="ep-sub-empty">${q ? 'No matches found.' : `Nothing posted under ${SUB_KIND_LABEL[activeSubKind]} yet.`}</p>`;
+      return;
+    }
+    list.innerHTML = '';
+    results.forEach(r => {
+      const selected = currentFeatured && currentFeatured.kind === activeSubKind && String(currentFeatured.ref_id) === String(r.ref_id);
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'char-link-picker-item--big' + (selected ? ' selected' : '');
+      item.innerHTML = `
+        <img src="${r.image_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="" />
+        <span><span class="char-link-picker-item-name">${escapeHtml(r.title)}</span></span>
+        <span class="char-link-picker-item-check">✓</span>
+      `;
+      item.addEventListener('click', () => {
+        currentFeatured = { kind: activeSubKind, ref_id: r.ref_id, title: r.title, image_url: r.image_url };
+        pendingFeaturedSubmission = { kind: activeSubKind, ref_id: r.ref_id };
+        renderCurrentFeatured();
+        runSubSearch(document.getElementById('ep-sub-search').value.trim());
+      });
+      list.appendChild(item);
+    });
+  } catch {
+    list.innerHTML = '<p class="ep-sub-empty">Couldn\'t load right now.</p>';
+  }
+}
+
+document.querySelectorAll('.ep-sub-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeSubKind = btn.dataset.kind;
+    document.querySelectorAll('.ep-sub-tab').forEach(b => b.classList.toggle('active', b === btn));
+    const search = document.getElementById('ep-sub-search');
+    search.placeholder = SUB_KIND_PLACEHOLDER[activeSubKind];
+    search.value = '';
+    runSubSearch('');
+  });
+});
+document.getElementById('ep-sub-search').addEventListener('input', (e) => {
+  clearTimeout(subSearchDebounce);
+  subSearchDebounce = setTimeout(() => runSubSearch(e.target.value.trim()), 250);
+});
+document.getElementById('ep-sub-clear-btn').addEventListener('click', () => {
+  currentFeatured = null;
+  pendingFeaturedSubmission = null;
+  renderCurrentFeatured();
+  runSubSearch(document.getElementById('ep-sub-search').value.trim());
+});
+
+// ── Save ─────────────────────────────────────────────────────────────────
+document.getElementById('ep-save-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('ep-save-btn');
+  const errEl = document.getElementById('ep-error');
+  const okEl = document.getElementById('ep-success');
+  errEl.hidden = true;
+  okEl.hidden = true;
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const body = {
+    pronouns: document.getElementById('ep-pronouns-input').value,
+    fun_fact: document.getElementById('ep-funfact-input').value,
+    account_bio: document.getElementById('ep-bio-input').value,
+  };
+  if (pendingFeaturedSubmission !== undefined) body.featured_submission = pendingFeaturedSubmission;
+
+  try {
+    const res = await fetch('/api/account/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error();
+    okEl.hidden = false;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch {
+    errEl.textContent = 'Something went wrong saving your profile. Please try again.';
+    errEl.hidden = false;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  btn.disabled = false;
+  btn.textContent = 'Save Changes';
+});
+
+// ── Boot ─────────────────────────────────────────────────────────────────
+(async () => {
+  try {
+    const res = await fetch('/api/auth/profile', { headers: authHeaders() });
+    if (!res.ok) throw new Error();
+    const { user } = await res.json();
+    myUsername = user.username;
+    wireBackLinks();
+
+    document.getElementById('ep-pronouns-input').value = user.pronouns || '';
+    document.getElementById('ep-funfact-input').value = user.fun_fact || '';
+    document.getElementById('ep-bio-input').value = user.account_bio || '';
+    document.getElementById('ep-bio-count').textContent = `${(user.account_bio || '').length}/1000`;
+
+    currentFeatured = user.featured_submission || null;
+    renderCurrentFeatured();
+  } catch {
+    wireBackLinks();
+  }
+  runSubSearch('');
+})();
+</script>
+</body>
+</html>

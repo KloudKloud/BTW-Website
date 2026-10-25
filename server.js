@@ -255,6 +255,8 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_theme_bg_url TEXT NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS reader_theme TEXT NOT NULL DEFAULT 'dark';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS reader_theme_bg_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS featured_submission_kind TEXT NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS featured_submission_ref_id TEXT NOT NULL DEFAULT '';
   `).catch(e => console.error('account profile fields migration:', e.message));
   // Add newsletter opt-in column if missing (default true for existing users)
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_newsletter BOOLEAN DEFAULT true`).catch(() => {});
@@ -3347,11 +3349,32 @@ app.get('/api/auth/confirm-email', async (req, res) => {
 
 app.get('/api/auth/profile', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
-    'SELECT id, username, display_name, email, avatar, avatar_original_url, email_newsletter, nsfw_enabled, pending_email FROM users WHERE id = $1', [req.user.id]
+    `SELECT id, username, display_name, email, avatar, avatar_original_url, email_newsletter, nsfw_enabled, pending_email,
+            pronouns, account_bio, fun_fact, featured_submission_kind, featured_submission_ref_id
+     FROM users WHERE id = $1`, [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
   const { pending_email, ...rest } = user;
-  res.json({ user: { ...rest, email: decryptEmail(user.email), email_change_pending: !!pending_email } });
+
+  // Denormalized display info (title/image) for whatever's currently pinned
+  // as the single Featured Submission, so the Edit Profile page can show a
+  // "currently featured" preview without a second round trip — the picker
+  // itself still drives selection off /api/featured-search.
+  let featuredSubmission = null;
+  if (user.featured_submission_kind && user.featured_submission_ref_id) {
+    const kind = user.featured_submission_kind;
+    const refId = user.featured_submission_ref_id;
+    const table = kind === 'character' ? 'moderator_characters' : kind === 'gallery' ? 'moderator_gallery' : 'moderator_sites';
+    const titleCol = kind === 'character' ? 'name' : kind === 'story' ? 'site_title' : 'title';
+    const imageCol = kind === 'story' ? 'cover_url' : kind === 'character' ? 'ref_image' : 'image_url';
+    const { rows: [row] } = await pool.query(
+      `SELECT ${titleCol} AS title, ${imageCol} AS image_url FROM ${table} WHERE id = $1 AND owner_user_id = $2`,
+      [refId, req.user.id]
+    );
+    if (row) featuredSubmission = { kind, ref_id: refId, title: row.title, image_url: row.image_url || '' };
+  }
+
+  res.json({ user: { ...rest, email: decryptEmail(user.email), email_change_pending: !!pending_email, featured_submission: featuredSubmission } });
 });
 
 // ── Protected spicy image delivery ────────────────────────────────────────────
@@ -5721,6 +5744,50 @@ async function fetchDefaultStoryCards(ownerId, limit) {
   return fetchStoryCardsById(rows.map(r => r.id));
 }
 
+// Featured Submission -- the single character/story/gallery post pinned to
+// the Home tab's "Featured Submission" slot via the Edit Profile page. Falls
+// back to the live "latest post across all three kinds" query whenever
+// nothing's pinned yet, or the pinned item was since deleted.
+async function fetchFeaturedSubmission(author, viewerId) {
+  if (author.featured_submission_kind && author.featured_submission_ref_id) {
+    const kind = author.featured_submission_kind;
+    const refId = author.featured_submission_ref_id;
+    const pinnedQuery = kind === 'story'
+      ? `SELECT 'story' AS kind, ms.id::text AS ref_id, ms.site_title AS title, ms.cover_url AS image_url,
+                ms.story_path AS story_path, ms.created_at AS ts, false AS is_nsfw
+         FROM moderator_sites ms WHERE ms.id = $1 AND ms.owner_user_id = $2`
+      : kind === 'character'
+      ? `SELECT 'character' AS kind, mc.id::text AS ref_id, mc.name AS title, mc.ref_image AS image_url,
+                NULL AS story_path, mc.created_at AS ts, COALESCE(mc.ref_is_nsfw, false) AS is_nsfw
+         FROM moderator_characters mc WHERE mc.id = $1 AND mc.owner_user_id = $2`
+      : `SELECT 'gallery' AS kind, mg.id::text AS ref_id, mg.title AS title, mg.image_url AS image_url,
+                NULL AS story_path, mg.created_at AS ts, COALESCE(mg.category <> 'sfw', false) AS is_nsfw
+         FROM moderator_gallery mg WHERE mg.id = $1 AND mg.owner_user_id = $2`;
+    const { rows } = await pool.query(pinnedQuery, [refId, author.id]);
+    if (rows.length) return { rows };
+  }
+  return pool.query(
+    `SELECT * FROM (
+       (SELECT 'story' AS kind, ms.id::text AS ref_id, ms.site_title AS title, ms.cover_url AS image_url,
+               ms.story_path AS story_path, ms.created_at AS ts, false AS is_nsfw
+        FROM moderator_sites ms
+        WHERE ms.owner_user_id = $1
+          AND ($2::int = $1 OR EXISTS (
+            SELECT 1 FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+          ))
+        ORDER BY ms.created_at DESC LIMIT 1)
+       UNION ALL
+       (SELECT 'character', mc.id::text, mc.name, mc.ref_image, NULL, mc.created_at, COALESCE(mc.ref_is_nsfw, false)
+        FROM moderator_characters mc WHERE mc.owner_user_id = $1 ORDER BY mc.created_at DESC LIMIT 1)
+       UNION ALL
+       (SELECT 'gallery', mg.id::text, mg.title, mg.image_url, NULL, mg.created_at, COALESCE(mg.category <> 'sfw', false)
+        FROM moderator_gallery mg WHERE mg.owner_user_id = $1 ORDER BY mg.created_at DESC LIMIT 1)
+     ) combined
+     ORDER BY ts DESC LIMIT 1`,
+    [author.id, viewerId]
+  );
+}
+
 // ── Author profile — /fanpages/:username, Twitter-style header + their stories ──
 app.get('/api/fanpage-profile/:username', async (req, res) => {
   const { rows: [author] } = await pool.query(
@@ -5728,7 +5795,8 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
             pronouns, favorite_pokemon, account_bio, fun_fact, account_links, level,
             account_banner_url, account_banner_position_x, account_banner_position_y, account_banner_zoom,
             club_profile_banner_url, club_profile_banner_position_x, club_profile_banner_position_y, club_profile_banner_zoom,
-            profile_theme, profile_theme_bg_url, featured_club_slug
+            profile_theme, profile_theme_bg_url, featured_club_slug,
+            featured_submission_kind, featured_submission_ref_id
      FROM users WHERE username = $1`,
     [req.params.username.toLowerCase()]
   );
@@ -5937,29 +6005,9 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
          + (SELECT COALESCE(SUM(view_count), 0)::int FROM moderator_gallery WHERE owner_user_id = $1) AS total_views`,
       [author.id]
     ),
-    // Featured Submission -- the single latest post across all three kinds
-    // (a permanent pin is a later pass). Draft-only stories are excluded
-    // for non-owners, same visibility rule as the Stories tab itself.
-    pool.query(
-      `SELECT * FROM (
-         (SELECT 'story' AS kind, ms.id::text AS ref_id, ms.site_title AS title, ms.cover_url AS image_url,
-                 ms.story_path AS story_path, ms.created_at AS ts, false AS is_nsfw
-          FROM moderator_sites ms
-          WHERE ms.owner_user_id = $1
-            AND ($2::int = $1 OR EXISTS (
-              SELECT 1 FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
-            ))
-          ORDER BY ms.created_at DESC LIMIT 1)
-         UNION ALL
-         (SELECT 'character', mc.id::text, mc.name, mc.ref_image, NULL, mc.created_at, COALESCE(mc.ref_is_nsfw, false)
-          FROM moderator_characters mc WHERE mc.owner_user_id = $1 ORDER BY mc.created_at DESC LIMIT 1)
-         UNION ALL
-         (SELECT 'gallery', mg.id::text, mg.title, mg.image_url, NULL, mg.created_at, COALESCE(mg.category <> 'sfw', false)
-          FROM moderator_gallery mg WHERE mg.owner_user_id = $1 ORDER BY mg.created_at DESC LIMIT 1)
-       ) combined
-       ORDER BY ts DESC LIMIT 1`,
-      [author.id, viewerId]
-    ),
+    // Featured Submission -- prefers whatever's pinned via the Edit Profile
+    // page, falling back to the single latest post across all three kinds.
+    fetchFeaturedSubmission(author, viewerId),
     // Submissions box -- latest 4 posts across chapters/characters/gallery.
     // Stories post as their latest published CHAPTER (title + the parent
     // story's cover), same "post the chapter" treatment Search's Posts tab
@@ -6984,6 +7032,29 @@ app.put('/api/account/profile', requireAuth, async (req, res) => {
     }
   }
 
+  // Featured Submission -- the single character/story/gallery post pinned
+  // to the Home tab's "Featured Submission" slot (see GET
+  // /api/fanpage-profile/:username's latest_submission). Re-validated
+  // against real ownership here (the trust boundary), same pattern as
+  // featured_club_slug above -- an explicit null/missing ref_id clears the
+  // pin back to the live "latest post" fallback.
+  let featuredSubmissionKind = null;
+  let featuredSubmissionRefId = null;
+  if (req.body.featured_submission !== undefined) {
+    const fs = req.body.featured_submission;
+    const kind = fs && ['character', 'gallery', 'story'].includes(fs.kind) ? fs.kind : null;
+    const refId = fs && fs.ref_id != null ? String(fs.ref_id).trim() : '';
+    if (kind && refId) {
+      const table = kind === 'character' ? 'moderator_characters' : kind === 'gallery' ? 'moderator_gallery' : 'moderator_sites';
+      const { rows } = await pool.query(`SELECT 1 FROM ${table} WHERE id = $1 AND owner_user_id = $2`, [refId, req.user.id]);
+      featuredSubmissionKind = rows.length ? kind : '';
+      featuredSubmissionRefId = rows.length ? refId : '';
+    } else {
+      featuredSubmissionKind = '';
+      featuredSubmissionRefId = '';
+    }
+  }
+
   await pool.query(
     `UPDATE users SET
        pronouns = COALESCE($1, pronouns),
@@ -6992,9 +7063,12 @@ app.put('/api/account/profile', requireAuth, async (req, res) => {
        fun_fact = COALESCE($4, fun_fact),
        account_links = COALESCE($5, account_links),
        display_name = COALESCE($7, display_name),
-       featured_club_slug = COALESCE($8, featured_club_slug)
+       featured_club_slug = COALESCE($8, featured_club_slug),
+       featured_submission_kind = COALESCE($9, featured_submission_kind),
+       featured_submission_ref_id = COALESCE($10, featured_submission_ref_id)
      WHERE id = $6`,
-    [pronouns, favoritePokemon, accountBio, funFact, links, req.user.id, displayName, featuredClubSlug]
+    [pronouns, favoritePokemon, accountBio, funFact, links, req.user.id, displayName, featuredClubSlug,
+     featuredSubmissionKind, featuredSubmissionRefId]
   );
   res.json({ message: 'Profile updated.' });
 });

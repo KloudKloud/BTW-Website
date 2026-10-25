@@ -39,7 +39,7 @@
       position: absolute; top: 0; left: 0; right: 0; bottom: auto; width: 100%; height: 100vh;
       object-fit: cover; z-index: 0; display: none;
     }
-    .fp-bg-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: auto; width: 100%; height: 100vh; background: rgba(10,10,10,0.72); z-index: 0; display: none; }
+    .fp-bg-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: auto; width: 100%; height: 100vh; background: rgba(10,10,10,0.82); z-index: 0; display: none; }
     /* Characters/Gallery tabs — same "Browse > Posts" wallpaper treatment
        as the Fanpage Hub's Characters browse page: PotentialBoxBackground,
        lightly blurred, scrolling *with* the page instead of staying
@@ -1541,10 +1541,9 @@
 <div id="fanpages-topbar-root"></div>
 
 <div class="fp-edit-bar" id="fp-edit-bar" hidden>
-  <span class="fp-edit-bar-label">Currently editing your profile</span>
+  <span class="fp-edit-bar-label">Editing your banner &amp; profile picture</span>
   <div class="fp-edit-bar-actions">
-    <button type="button" id="fp-edit-save" class="fp-edit-btn fp-edit-btn--save">Save Changes</button>
-    <button type="button" id="fp-edit-cancel" class="fp-edit-btn fp-edit-btn--cancel">Cancel</button>
+    <button type="button" id="fp-edit-save" class="fp-edit-btn fp-edit-btn--save">Done</button>
   </div>
 </div>
 
@@ -3902,12 +3901,11 @@
         wrap.appendChild(a);
         return;
       }
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'fp-action-btn fp-action-btn--edit';
-      btn.innerHTML = '<span class="fp-action-btn--edit-gear">⚙️</span> Edit Profile';
-      btn.addEventListener('click', enterEditMode);
-      wrap.appendChild(btn);
+      const a = document.createElement('a');
+      a.className = 'fp-action-btn fp-action-btn--edit';
+      a.href = window.fpUrl('/edit-profile');
+      a.innerHTML = '<span class="fp-action-btn--edit-gear">⚙️</span> Edit Profile';
+      wrap.appendChild(a);
       return;
     }
 
@@ -4022,6 +4020,13 @@
     return !currentAuthor || !currentAuthor.banner_url;
   }
 
+  // Banner/avatar-only now -- pronouns/fun fact/bio/display name/featured
+  // submission all moved to the dedicated Edit Profile page (see the
+  // fp-action-btn--edit link in renderActions below), which mimics the
+  // Story/Character/Gallery editors' own look instead of this inline
+  // plain-input "old UI". This mode still exists purely for the live,
+  // WYSIWYG banner/avatar crop-in-place flow, triggered by the hover
+  // pencil on the banner itself.
   function enterEditMode() {
     if (!currentAuthor) return;
     editMode = true;
@@ -4032,14 +4037,8 @@
     document.getElementById('fp-avatar-camera-btn').hidden = false;
     document.getElementById('fp-avatar-hint').hidden = false;
 
-    document.getElementById('fp-name').hidden = true;
-    document.getElementById('fp-name-edit-box').hidden = false;
-    document.getElementById('fp-name-edit-input').value = currentAuthor.display_name || '';
-
     document.getElementById('fp-banner-recrop-btn').hidden = isDefaultBanner();
     document.getElementById('fp-avatar-recrop-btn').hidden = !currentAuthor.avatar;
-
-    renderAboutEditor();
   }
 
   function exitEditMode() {
@@ -4195,49 +4194,11 @@
     } catch {}
   }
 
-  document.getElementById('fp-edit-cancel').addEventListener('click', exitEditMode);
-
-  document.getElementById('fp-edit-save').addEventListener('click', async () => {
-    const saveBtn = document.getElementById('fp-edit-save');
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving…';
-    try {
-      const fields = {};
-      ABOUT_FIELD_DEFS.forEach(([, key]) => {
-        const el = document.getElementById(`fp-edit-${key}`);
-        if (el) fields[key] = el.value;
-      });
-      const nameVal = document.getElementById('fp-name-edit-input').value.trim();
-      if (nameVal) fields.display_name = nameVal;
-
-      await fetch('/api/account/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify(fields),
-      });
-    } catch {}
-    saveBtn.disabled = false;
-    saveBtn.textContent = 'Save';
-    exitEditMode();
-  });
-
-  function renderAboutEditor() {
-    const wrap = document.getElementById('fp-about-rows');
-    wrap.innerHTML = '';
-    ABOUT_FIELD_DEFS.forEach(([label, key, type]) => {
-      const row = document.createElement('div');
-      row.className = 'fp-about-row';
-      row.dataset.key = key;
-      const value = currentAuthor[key] || '';
-      row.innerHTML = `
-        <p class="fp-about-row-label">${label}</p>
-        ${type === 'textarea'
-          ? `<textarea id="fp-edit-${key}" rows="4">${value}</textarea>`
-          : `<input id="fp-edit-${key}" type="text" value="${value.replace(/"/g, '&quot;')}" />`}
-      `;
-      wrap.appendChild(row);
-    });
-  }
+  // Banner/avatar crops already save themselves immediately on upload (see
+  // uploadBanner/uploadAvatar above) -- "Done" just closes out this visual
+  // edit mode now that there's no separate about-field/name payload to
+  // flush first.
+  document.getElementById('fp-edit-save').addEventListener('click', exitEditMode);
 
   function renderLinksEditor() {
     document.getElementById('fp-links-list').hidden = true;
