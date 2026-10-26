@@ -287,37 +287,43 @@
       text-align: center; font-size: 0.7rem; line-height: 1.4; color: #999;
     }
 
-    /* Sits on the banner itself, top-right -- out of the tab bar's way. */
-    .fp-header-action {
-      position: absolute; top: 1.25rem; right: 1.75rem; z-index: 6;
-      display: flex; align-items: center; gap: 0.6rem;
-    }
+    /* Used to sit on the banner itself, top-right -- now lives inline in
+       .fp-tabs-row instead (the --tabrow modifier below), the exact spot
+       the owner's own Edit Profile/theme/accent controls occupy, since a
+       visitor never sees both groups at once. */
+    .fp-header-action { display: flex; align-items: center; gap: 0.6rem; }
+    .fp-header-action--tabrow { position: static; }
     .fp-action-btn {
       display: inline-block; text-decoration: none; border: none; cursor: pointer;
-      font-family: inherit; font-size: 1rem; font-weight: 700; box-sizing: border-box;
-      padding: 0.75rem 1.7rem; border-radius: 24px; white-space: nowrap;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.95rem; font-weight: 700; box-sizing: border-box;
+      padding: 0.7em 1.5em; border-radius: 30px; white-space: nowrap;
     }
     .fp-action-btn--follow { background: #f0f0f0; color: #0d0d0d; }
     .fp-action-btn--follow:hover { background: #cfcfcf; }
+    /* Was a flat teal regardless of the profile -- now the profile owner's
+       own chosen accent color, so "you're following this person" visually
+       matches whatever theme they picked for their page instead of a fixed
+       site color. */
     .fp-action-btn--following {
-      background: #1fb6a8; color: #fff; border: none;
+      background: var(--fp-accent); color: #0d0d0d; border: none;
       display: inline-flex; align-items: center; gap: 0.45rem;
     }
-    .fp-action-btn--following:hover { background: #d97a72; }
+    .fp-action-btn--following:hover { background: #d97a72; color: #fff; }
     .fp-action-btn--following .fp-follow-check { font-weight: 700; }
     .fp-action-btn--login { background: #7fa8d9; color: #0a0a0a; }
     .fp-profile-msg-btn {
       flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-      width: 48px; height: 48px; border-radius: 50%;
-      background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #f0f0f0;
-      transition: border-color 0.15s, color 0.15s;
+      width: 50px; height: 50px; border-radius: 50%;
+      background: transparent; border: 1px solid rgba(var(--fp-accent-rgb),0.6); color: #f0f0f0;
+      box-shadow: 0 0 8px rgba(var(--fp-accent-rgb),0.22);
+      transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
     }
-    .fp-profile-msg-btn:hover { border-color: #7fa8d9; color: #7fa8d9; }
+    .fp-profile-msg-btn:hover { border-color: var(--fp-accent); color: var(--fp-accent); box-shadow: 0 0 16px rgba(var(--fp-accent-rgb),0.4); }
     .fp-profile-msg-btn svg { width: 22px; height: 22px; }
 
     .fp-more-menu-wrap { position: relative; flex-shrink: 0; }
     .fp-more-menu-btn {
-      width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
       background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #f0f0f0;
       font-size: 1.1rem; letter-spacing: 0.05em; cursor: pointer; font-family: inherit;
       transition: border-color 0.15s, color 0.15s;
@@ -765,9 +771,23 @@
       flex-direction: column; gap: 0.4rem; flex: 1; min-height: 0;
       border-left: 2px solid rgba(var(--fp-accent-rgb),0.35); padding-left: 1rem;
     }
+    /* Used to force font-style:italic on the whole bio regardless of what
+       was actually typed -- now normal by default, and the editor's own
+       markdown hint (single-star for italics, double-star for bold, via
+       richText()) is what actually produces em/strong. Bold picks up the
+       accent color so it reads as a deliberate highlight, not just heavier
+       text. A themed scrollbar (matching the Notes list's) appears only if
+       the text actually runs long enough to need one -- the box itself
+       doesn't grow past the Featured Submission thumbnail next to it. */
     .fp-about-row[data-key="account_bio"] .fp-about-row-value {
-      font-style: italic; color: #d8d4e0; overflow-y: auto; font-size: 1rem; line-height: 1.65;
+      color: #d8d4e0; overflow-y: auto; font-size: 1rem; line-height: 1.65;
+      scrollbar-width: thin; scrollbar-color: rgba(168,112,217,0.45) transparent;
     }
+    .fp-about-row[data-key="account_bio"] .fp-about-row-value::-webkit-scrollbar { width: 7px; }
+    .fp-about-row[data-key="account_bio"] .fp-about-row-value::-webkit-scrollbar-track { background: transparent; }
+    .fp-about-row[data-key="account_bio"] .fp-about-row-value::-webkit-scrollbar-thumb { background: rgba(168,112,217,0.45); border-radius: 6px; }
+    .fp-about-row[data-key="account_bio"] .fp-about-row-value::-webkit-scrollbar-thumb:hover { background: rgba(168,112,217,0.7); }
+    .fp-about-row[data-key="account_bio"] .fp-about-row-value strong { color: var(--fp-accent); font-weight: 700; }
     .fp-about-row-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fp-accent); flex-shrink: 0; }
     .fp-about-row-value { font-size: 0.92rem; color: #ddd; line-height: 1.65; white-space: pre-line; }
     .fp-about-row input, .fp-about-row textarea {
@@ -798,10 +818,12 @@
     .fp-spotlight-item { display: flex; flex-direction: column; text-decoration: none; color: inherit; text-align: center; }
     /* A real square now, sized to the column's width instead of stretching
        to fill whatever height the Bio side happens to need -- that's what
-       was turning this into a tall rectangle instead of a square. Bumped
-       back up (230px -> 320px) per request for a bigger thumbnail. */
+       was turning this into a tall rectangle instead of a square. Been
+       230px -> 320px -> 270px chasing the right size -- this square is what
+       the whole About box's height follows, so toning it down a bit is
+       what tames the box back down again. */
     .fp-featured-sub-col .fp-spotlight-img-wrap {
-      width: 100%; max-width: 320px; margin: 0 auto 1rem; aspect-ratio: 1;
+      width: 100%; max-width: 270px; margin: 0 auto 1rem; aspect-ratio: 1;
       border-radius: 14px; overflow: hidden;
       border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 10px 32px rgba(0,0,0,0.45);
       background: linear-gradient(135deg, #6b3fa0, #c2547a);
@@ -1622,8 +1644,8 @@
       }
       .fp-tabrow-edit-btn { font-size: 0.8rem; padding: 0.55em 1.1em; }
       body.fp-tab-no-idbox .fp-header { padding-top: 1rem; }
-      .fp-header-action { top: 0.6rem; right: 0.6rem; }
-      .fp-header-action .fp-action-btn { font-size: 0.78rem; padding: 0 1rem; height: 36px; }
+      .fp-header-action .fp-action-btn { font-size: 0.8rem; padding: 0.55em 1.1em; }
+      .fp-profile-msg-btn, .fp-more-menu-btn { width: 42px; height: 42px; }
 
       .fp-tab-view { padding: 1.25rem 1rem; }
       .fp-gallery-page-row { padding: 0 1rem; }
@@ -1707,10 +1729,6 @@
 <div class="fp-banner-wrap" id="fp-banner-wrap">
   <div id="fp-banner-img"></div>
 
-  <!-- Edit Profile / Follow / Message / More -- out of the tab bar's way,
-       sitting on the banner itself instead. -->
-  <div class="fp-header-action" id="fp-header-actions"></div>
-
   <button type="button" class="fp-banner-edit-pencil" id="fp-banner-edit-pencil" hidden title="Edit banner image">✏️</button>
 
   <div class="fp-banner-camera-wrap" id="fp-banner-camera-wrap" hidden>
@@ -1732,15 +1750,20 @@
   <div class="fp-tabs-row">
     <div class="fp-tabs">
       <button class="fp-tab active" id="fp-tab-home" type="button">Home</button>
-      <button class="fp-tab" id="fp-tab-characters" type="button">Characters</button>
       <button class="fp-tab" id="fp-tab-gallery" type="button">Gallery</button>
       <button class="fp-tab" id="fp-tab-stories" type="button">Stories</button>
+      <button class="fp-tab" id="fp-tab-characters" type="button">Characters</button>
       <button class="fp-tab" id="fp-tab-newspaper" type="button">Newspapers</button>
     </div>
+    <!-- Visitor-only Follow/Message/More -- was floating on the banner
+         itself; moved into this row, in the exact spot the owner's own
+         Edit Profile/theme/accent controls sit, since the two groups are
+         mutually exclusive (see renderActions()). -->
+    <div class="fp-header-action fp-header-action--tabrow" id="fp-header-actions"></div>
     <!-- Owner-only edit shortcut -- label/icon/target swap per active tab,
          see renderActions(). Hidden entirely for a visitor viewing someone
-         else's profile (Follow/Message live on the banner instead). Comes
-         first in the row now, with the theme/accent pickers after it. -->
+         else's profile. Comes first in the row now, with the theme/accent
+         pickers after it. -->
     <a class="fp-tabrow-edit-btn" id="fp-tabrow-edit-btn" href="#" hidden>
       <span class="fp-tabrow-edit-btn-icon" id="fp-tabrow-edit-icon">⚙️</span>
       <span id="fp-tabrow-edit-label">Edit Profile</span>
@@ -4168,9 +4191,9 @@
   }
 
   // ── Header action button ─────────────────────────────────────────────
-  // Owner's own edit shortcut now lives beside the tab bar (fp-tabrow-edit-btn)
-  // instead of on the banner — label/icon/target swap per active tab. The
-  // banner's fp-header-actions is only used for a visitor's Follow/Message.
+  // Both the owner's own edit shortcut (fp-tabrow-edit-btn) and a visitor's
+  // Follow/Message/More (fp-header-actions) live inline in the tab row now,
+  // in the same spot -- mutually exclusive, so only one group ever shows.
   function renderActions(author, isFollowing) {
     const wrap = document.getElementById('fp-header-actions');
     wrap.innerHTML = '';
@@ -5603,7 +5626,14 @@
         row.className = 'fp-about-row';
         row.dataset.key = key;
         row.innerHTML = `<p class="fp-about-row-label">${label}</p><p class="fp-about-row-value"></p>`;
-        row.querySelector('.fp-about-row-value').textContent = value;
+        // Bio is the one field that honors the *italic*/**bold** markdown
+        // the editor's own hint text promises -- it was never actually
+        // wired up before (this was plain textContent), with a CSS
+        // font-style:italic forcing the whole thing to look "styled" by
+        // default regardless of what the user typed. Pronouns stays plain
+        // text, no reason to parse markdown out of a short pill value.
+        if (key === 'account_bio') row.querySelector('.fp-about-row-value').innerHTML = richText(value);
+        else row.querySelector('.fp-about-row-value').textContent = value;
         if (key === 'account_bio') aboutWrap.appendChild(row);
         else badgeRow.appendChild(row);
       });
