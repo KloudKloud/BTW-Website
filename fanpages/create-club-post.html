@@ -108,6 +108,27 @@
     }
     .cl-tf-img-row .cl-tf-imgbox { margin: 0; flex: 0 0 auto; }
     .cl-edit-imgbox img, .cl-edit-imgbox video { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
+    /* Empty state -- a dashed "Add Image" tile (same recipe as
+       .cl-edit-slideshow-add) instead of the flat gray nopicture2.png
+       placeholder image, so an unset Cover/Side slot reads as "click here
+       to add one" rather than "this image failed to load". */
+    .cl-tf-imgbox--empty { background: transparent; border: 2px dashed rgba(255,255,255,0.25); }
+    .cl-tf-imgbox--empty:hover { border-color: rgba(127,168,217,0.6); }
+    .cl-tf-imgbox--empty .cl-tf-preview, .cl-tf-imgbox--empty .cl-edit-imgbox-overlay { display: none; }
+    .cl-tf-img-add-ph {
+      display: none; flex-direction: column; align-items: center; justify-content: center; gap: 0.3rem;
+      color: #888; font-family: 'Inter', sans-serif; font-size: 0.78rem; font-weight: 700; pointer-events: none;
+    }
+    .cl-tf-imgbox--empty .cl-tf-img-add-ph { display: flex; }
+    .cl-tf-imgbox--empty:hover .cl-tf-img-add-ph { color: #7fa8d9; }
+    /* "Link Video" as a small square tile beside the image box instead of a
+       wide button underneath it. */
+    .cl-youtube-insert-btn--sqtile {
+      width: 72px; height: 72px; flex: 0 0 auto; border-radius: 10px; padding: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem;
+      font-size: 0.68rem; letter-spacing: 0.01em;
+    }
+    .cl-youtube-insert-btn--sqtile .cl-img-add-tile-icon { font-size: 1.2rem; font-weight: 400; color: inherit; }
     .cl-edit-imgbox-overlay {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       background: rgba(0,0,0,0.45); color: #fff; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600;
@@ -147,10 +168,16 @@
       display: flex; align-items: center; justify-content: center;
     }
     .cl-edit-slideshow-remove:hover { background: rgba(217,122,114,0.85); }
+    /* Shared "Add Image" dashed-tile look -- this slideshow "+" tile and a
+       single Cover/Side image slot's empty state (.cl-tf-imgbox--empty)
+       both use it, so every "nothing here yet, click to add" image spot in
+       the editor reads as one consistent shape. */
+    .cl-img-add-tile-icon { font-size: 1.5rem; font-weight: 400; line-height: 1; display: block; }
     .cl-edit-slideshow-add {
-      width: 190px; aspect-ratio: 16 / 9; border-radius: 8px; cursor: pointer;
-      background: transparent; border: 1px dashed rgba(255,255,255,0.3); color: #999;
-      display: flex; align-items: center; justify-content: center; font-size: 1.4rem;
+      width: 190px; aspect-ratio: 16 / 9; border-radius: 10px; cursor: pointer;
+      background: transparent; border: 2px dashed rgba(255,255,255,0.25); color: #888;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.3rem;
+      font-family: 'Inter', sans-serif; font-size: 0.78rem; font-weight: 700;
       transition: border-color 0.15s, color 0.15s;
     }
     .cl-edit-slideshow-add:hover { border-color: rgba(127,168,217,0.6); color: #7fa8d9; }
@@ -191,6 +218,26 @@
        underneath it -- without this the two ran together and the Link
        Video button read as if it belonged to Side Image too. */
     .cl-tf-img-slot + .cl-tf-img-slot { margin-top: 1.75rem; }
+    /* "Remove Section?" confirm -- same cozy box-background-art + Fredoka
+       decoration recipe as the site's 18+/sign-in gates and club.html's own
+       .cl-mod-confirm-card (ported here since this file doesn't share that
+       one), red/danger accent since removing a section is destructive.
+       Reuses .fpnav-modal-overlay/-card (loaded via fanpages-nav.css)
+       rather than redefining that base. */
+    .cl-rmsec-confirm-card {
+      background: linear-gradient(160deg, rgba(10,8,14,0.88), rgba(10,8,14,0.82)), url('/images/home/box-background-3.png');
+      background-size: cover; background-position: center;
+      border-top: 3px solid #c2547a;
+    }
+    .cl-rmsec-confirm-icon { font-size: 1.8rem; margin-bottom: 0.3rem; }
+    .cl-rmsec-confirm-title {
+      font-family: 'Fredoka', 'Lato', cursive !important;
+      display: flex; align-items: center; justify-content: center; gap: 0.45rem; color: #f0f0f0;
+    }
+    .cl-rmsec-confirm-text { font-family: 'Fredoka', 'Lato', cursive; }
+    .cl-rmsec-confirm-card .fpnav-modal-cta { font-family: 'Fredoka', 'Lato', cursive; }
+    .cl-rmsec-confirm-yes-btn { background: linear-gradient(135deg, #e8849e, #c2547a); color: #1a1408; }
+    .cl-rmsec-confirm-yes-btn:hover { background: linear-gradient(135deg, #f0a0b5, #e8849e); }
     /* "Link Video" popup -- Fredoka per the site's bubbly-heading
        convention (see CLAUDE.md), matching crop-modal.js's overlay pattern
        but its own self-contained markup, per this codebase's duplication-
@@ -402,6 +449,16 @@
   </div>
 </main>
 
+<div class="fpnav-modal-overlay" id="cl-rmsec-confirm-overlay" hidden>
+  <div class="fpnav-modal-card cl-rmsec-confirm-card">
+    <div class="cl-rmsec-confirm-icon">🗑️</div>
+    <p class="fpnav-modal-title cl-rmsec-confirm-title">Remove this section?</p>
+    <p class="fpnav-modal-text cl-rmsec-confirm-text">This section's title, text, and images will be removed. This can't be undone once you save.</p>
+    <button type="button" class="fpnav-modal-cta fpnav-modal-cta--secondary" id="cl-rmsec-confirm-cancel" style="margin-bottom:0.6rem;">Cancel</button>
+    <button type="button" class="fpnav-modal-cta cl-rmsec-confirm-yes-btn" id="cl-rmsec-confirm-yes">Remove Section</button>
+  </div>
+</div>
+
 <div class="cl-yt-modal-overlay" id="cl-yt-modal-overlay" hidden>
   <div class="cl-yt-modal-box">
     <p class="cl-yt-modal-title">▶ Link Video</p>
@@ -565,6 +622,28 @@
     const id = extractYoutubeId(url);
     return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : '';
   }
+  // Same decorative gate look as the site's 18+/sign-in gates (see
+  // .cl-rmsec-confirm-card) -- just a plain confirm/cancel, no promote-vs-
+  // demote branching like club.html's showModConfirm, so it's simpler to
+  // keep as its own small helper here rather than port that whole thing.
+  function showRemoveSectionConfirm(onConfirm) {
+    const overlay = document.getElementById('cl-rmsec-confirm-overlay');
+    const yesBtn = document.getElementById('cl-rmsec-confirm-yes');
+    const cancelBtn = document.getElementById('cl-rmsec-confirm-cancel');
+    overlay.hidden = false;
+    function cleanup() {
+      overlay.hidden = true;
+      yesBtn.removeEventListener('click', onYes);
+      cancelBtn.removeEventListener('click', onCancel);
+      overlay.removeEventListener('click', onOverlay);
+    }
+    function onYes() { cleanup(); onConfirm(); }
+    function onCancel() { cleanup(); }
+    function onOverlay(e) { if (e.target === overlay) cleanup(); }
+    yesBtn.addEventListener('click', onYes);
+    cancelBtn.addEventListener('click', onCancel);
+    overlay.addEventListener('click', onOverlay);
+  }
   // Shows the "Link Video" popup and resolves to the canonical
   // saved URL on success, or null if cancelled. Forces a real YouTube link:
   // an unrecognized paste shows an inline error and the popup stays open
@@ -716,7 +795,7 @@
     addBtn.className = 'cl-edit-slideshow-add';
     addBtn.type = 'button';
     addBtn.title = 'Add Image';
-    addBtn.textContent = '+';
+    addBtn.innerHTML = '<span class="cl-img-add-tile-icon">+</span>Add Image';
     addBtn.addEventListener('click', () => document.getElementById('cp-cover-slideshow-file-input').click());
     stack.appendChild(addBtn);
   }
@@ -821,15 +900,16 @@
         </div>
         <div class="cl-tf-static" ${mode === 'slideshow' ? 'hidden' : ''}>
           <div class="cl-tf-img-row">
-            <div class="cl-edit-imgbox cl-tf-imgbox" style="aspect-ratio:${aspect}; width:${maxWidth}px; max-width:${maxWidth}px;">
-              <img class="cl-tf-preview" src="${previewSrc || '/images/nopicture2.png'}" alt="" />
+            <div class="cl-edit-imgbox cl-tf-imgbox${imageUrl ? '' : ' cl-tf-imgbox--empty'}" style="aspect-ratio:${aspect}; width:${maxWidth}px; max-width:${maxWidth}px;">
+              <img class="cl-tf-preview" ${previewSrc ? `src="${previewSrc}"` : ''} alt="" />
+              <div class="cl-tf-img-add-ph"><span class="cl-img-add-tile-icon">+</span>Add Image</div>
               <div class="cl-edit-imgbox-overlay">📷 Change Image</div>
               <button type="button" class="fp-recrop-btn cl-tf-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;" ${imageUrl ? '' : 'hidden'}>✏️ Recrop</button>
             </div>
+            ${allowYoutube ? '<button type="button" class="cl-youtube-insert-btn cl-youtube-insert-btn--sqtile cl-tf-youtube-btn"><span class="cl-img-add-tile-icon">▶</span>Link Video</button>' : ''}
             <button type="button" class="cl-splash-rules-link cl-tf-remove-img-btn" ${imageUrl ? '' : 'hidden'}>✕ No ${allowYoutube ? 'Media' : 'Image'}</button>
           </div>
           <input type="file" class="cl-tf-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-          ${allowYoutube ? '<button type="button" class="cl-youtube-insert-btn cl-youtube-insert-btn--compact cl-tf-youtube-btn" style="margin-top:0.6rem;">▶ Link Video</button>' : ''}
         </div>
         <div class="cl-tf-slideshow" ${mode === 'static' ? 'hidden' : ''}>
           <div class="cl-edit-slideshow-stack cl-tf-slideshow-stack"></div>
@@ -879,7 +959,12 @@
     });
 
     function setPreviewEl(url) {
-      previewEl.src = (allowYoutube && isYouTubeUrl(url)) ? youtubeThumbUrl(url) : (url || '/images/nopicture2.png');
+      if (url) {
+        previewEl.src = (allowYoutube && isYouTubeUrl(url)) ? youtubeThumbUrl(url) : url;
+      } else {
+        previewEl.removeAttribute('src');
+      }
+      imgboxEl.classList.toggle('cl-tf-imgbox--empty', !url);
     }
     imgboxEl.addEventListener('click', (e) => {
       if (e.target.closest('.cl-tf-recrop-btn')) return;
@@ -948,7 +1033,7 @@
       addBtn.className = 'cl-edit-slideshow-add';
       addBtn.type = 'button';
       addBtn.title = 'Add Image';
-      addBtn.textContent = '+';
+      addBtn.innerHTML = '<span class="cl-img-add-tile-icon">+</span>Add Image';
       addBtn.addEventListener('click', () => ssFileInput.click());
       ssStack.appendChild(addBtn);
     }
@@ -1019,9 +1104,11 @@
     wireTextFieldImageSlot(row, i, 'cover', 16 / 9);
     wireTextFieldImageSlot(row, i, 'side', 3 / 4);
     row.querySelector('.cl-page-text-field-remove').addEventListener('click', () => {
-      postTextFields.splice(i, 1);
-      cpDirty = true;
-      renderPageTextFields();
+      showRemoveSectionConfirm(() => {
+        postTextFields.splice(i, 1);
+        cpDirty = true;
+        renderPageTextFields();
+      });
     });
     // Save collapses the row into a compact summary (reorder-by-drag still
     // works on it via the handle); Edit/clicking the collapsed summary

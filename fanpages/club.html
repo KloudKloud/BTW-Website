@@ -1868,6 +1868,28 @@
       display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.9rem; margin-bottom: 1rem;
     }
     .cl-tf-img-row .cl-tf-imgbox { margin: 0; flex: 0 0 auto; }
+    /* Empty state -- a dashed "Add Image" tile (same recipe as
+       .cl-edit-slideshow-add) instead of the flat gray nopicture2.png
+       placeholder image, so an unset Cover/Side slot reads as "click here
+       to add one" rather than "this image failed to load". */
+    .cl-tf-imgbox--empty { background: transparent; border: 2px dashed rgba(255,255,255,0.25); }
+    .cl-tf-imgbox--empty:hover { border-color: rgba(127,168,217,0.6); }
+    .cl-tf-imgbox--empty .cl-tf-preview, .cl-tf-imgbox--empty .cl-edit-imgbox-overlay { display: none; }
+    .cl-tf-img-add-ph {
+      display: none; flex-direction: column; align-items: center; justify-content: center; gap: 0.3rem;
+      color: #888; font-family: 'Inter', sans-serif; font-size: 0.78rem; font-weight: 700; pointer-events: none;
+    }
+    .cl-tf-imgbox--empty .cl-tf-img-add-ph { display: flex; }
+    .cl-tf-imgbox--empty:hover .cl-tf-img-add-ph { color: #7fa8d9; }
+    /* "Link Video" as a small square tile beside the image box instead of a
+       wide button underneath it -- same dashed-free pill colors as the
+       compact variant, just reshaped to sit in .cl-tf-img-row. */
+    .cl-youtube-insert-btn--sqtile {
+      width: 72px; height: 72px; flex: 0 0 auto; border-radius: 10px; padding: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem;
+      font-size: 0.68rem; letter-spacing: 0.01em;
+    }
+    .cl-youtube-insert-btn--sqtile .cl-img-add-tile-icon { font-size: 1.2rem; font-weight: 400; color: inherit; }
     .cl-edit-imgbox-overlay {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       background: rgba(0,0,0,0.45); color: #fff; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600;
@@ -1916,10 +1938,17 @@
       display: flex; align-items: center; justify-content: center;
     }
     .cl-edit-slideshow-remove:hover { background: rgba(217,122,114,0.85); }
+    /* Shared "Add Image" dashed-tile look -- this slideshow "+" tile and a
+       single Cover/Side image slot's empty state (.cl-tf-imgbox--empty,
+       see below) both use it, so every "nothing here yet, click to add"
+       image spot in the editor reads as one consistent shape instead of a
+       bare "+" on one and a flat gray placeholder image on the other. */
+    .cl-img-add-tile-icon { font-size: 1.5rem; font-weight: 400; line-height: 1; display: block; }
     .cl-edit-slideshow-add {
-      width: 190px; aspect-ratio: 16 / 9; border-radius: 8px; cursor: pointer;
-      background: transparent; border: 1px dashed rgba(255,255,255,0.3); color: #999;
-      display: flex; align-items: center; justify-content: center; font-size: 1.4rem;
+      width: 190px; aspect-ratio: 16 / 9; border-radius: 10px; cursor: pointer;
+      background: transparent; border: 2px dashed rgba(255,255,255,0.25); color: #888;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.3rem;
+      font-family: 'Inter', sans-serif; font-size: 0.78rem; font-weight: 700;
       transition: border-color 0.15s, color 0.15s;
     }
     .cl-edit-slideshow-add:hover { border-color: rgba(127,168,217,0.6); color: #7fa8d9; }
@@ -6754,7 +6783,7 @@ function renderEditSlideshow() {
   addBtn.className = 'cl-edit-slideshow-add';
   addBtn.type = 'button';
   addBtn.title = 'Add Image';
-  addBtn.textContent = '+';
+  addBtn.innerHTML = '<span class="cl-img-add-tile-icon">+</span>Add Image';
   addBtn.addEventListener('click', () => document.getElementById('cl-edit-slideshow-file-input').click());
   stack.appendChild(addBtn);
 }
@@ -7050,6 +7079,11 @@ async function savePageCoverImage(blob) {
     document.getElementById('cl-page-cover-recrop-btn').hidden = false;
     document.getElementById('cl-page-cover-recrop-btn').dataset.coverUrl = data.cover_image_url;
     document.getElementById('cl-page-cover-remove-btn').hidden = !data.cover_image_url;
+    // Same QOL as Home's own Cover Media (see saveCoverImage/
+    // addCoverImageToSlideshow above) -- a freshly-set Cover Media is
+    // auto-added to the Slideshow pool too, so switching over to Slideshow
+    // later isn't starting from a blank stack.
+    uploadPageSlideshowMedia(blob);
   }
 }
 document.getElementById('cl-page-cover-youtube-btn').addEventListener('click', async (e) => {
@@ -7111,7 +7145,7 @@ function renderEditPageSlideshow() {
   addBtn.className = 'cl-edit-slideshow-add';
   addBtn.type = 'button';
   addBtn.title = 'Add Image';
-  addBtn.textContent = '+';
+  addBtn.innerHTML = '<span class="cl-img-add-tile-icon">+</span>Add Image';
   addBtn.addEventListener('click', () => document.getElementById('cl-page-slideshow-file-input').click());
   stack.appendChild(addBtn);
 }
@@ -7211,15 +7245,16 @@ function textFieldImageSlotHtml(field, prefix, aspect, label, maxWidth) {
       </div>
       <div class="cl-tf-static" ${mode === 'slideshow' ? 'hidden' : ''}>
         <div class="cl-tf-img-row">
-          <div class="cl-edit-imgbox cl-tf-imgbox" style="aspect-ratio:${aspect}; width:${maxWidth}px; max-width:${maxWidth}px;">
-            <img class="cl-tf-preview" src="${previewSrc || '/images/nopicture2.png'}" alt="" />
+          <div class="cl-edit-imgbox cl-tf-imgbox${imageUrl ? '' : ' cl-tf-imgbox--empty'}" style="aspect-ratio:${aspect}; width:${maxWidth}px; max-width:${maxWidth}px;">
+            <img class="cl-tf-preview" ${previewSrc ? `src="${previewSrc}"` : ''} alt="" />
+            <div class="cl-tf-img-add-ph"><span class="cl-img-add-tile-icon">+</span>Add Image</div>
             <div class="cl-edit-imgbox-overlay">📷 Change Image</div>
             <button type="button" class="fp-recrop-btn cl-tf-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;" ${imageUrl ? '' : 'hidden'}>✏️ Recrop</button>
           </div>
+          ${allowYoutube ? '<button type="button" class="cl-youtube-insert-btn cl-youtube-insert-btn--sqtile cl-tf-youtube-btn"><span class="cl-img-add-tile-icon">▶</span>Link Video</button>' : ''}
           <button type="button" class="cl-splash-rules-link cl-tf-remove-img-btn" ${imageUrl ? '' : 'hidden'}>✕ No ${allowYoutube ? 'Media' : 'Image'}</button>
         </div>
         <input type="file" class="cl-tf-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-        ${allowYoutube ? '<button type="button" class="cl-youtube-insert-btn cl-youtube-insert-btn--compact cl-tf-youtube-btn" style="margin-top:0.6rem;">▶ Link Video</button>' : ''}
       </div>
       <div class="cl-tf-slideshow" ${mode === 'static' ? 'hidden' : ''}>
         <div class="cl-edit-slideshow-stack cl-tf-slideshow-stack"></div>
@@ -7283,7 +7318,12 @@ function wireTextFieldImageSlot(row, i, prefix, aspect) {
     if (currentPageSlug === editActivePageSlug) loadCustomPage(editActivePageSlug);
   });
   function setPreviewEl(url) {
-    previewEl.src = (allowYoutube && isYouTubeUrl(url)) ? youtubeThumbUrl(url) : (url || '/images/nopicture2.png');
+    if (url) {
+      previewEl.src = (allowYoutube && isYouTubeUrl(url)) ? youtubeThumbUrl(url) : url;
+    } else {
+      previewEl.removeAttribute('src');
+    }
+    imgboxEl.classList.toggle('cl-tf-imgbox--empty', !url);
   }
 
   slot.querySelectorAll('.cl-tf-mode-toggle .cl-edit-mode-btn').forEach(btn => {
@@ -7389,7 +7429,7 @@ function wireTextFieldImageSlot(row, i, prefix, aspect) {
     addBtn.className = 'cl-edit-slideshow-add';
     addBtn.type = 'button';
     addBtn.title = 'Add Image';
-    addBtn.textContent = '+';
+    addBtn.innerHTML = '<span class="cl-img-add-tile-icon">+</span>Add Image';
     addBtn.addEventListener('click', () => ssFileInput.click());
     ssStack.appendChild(addBtn);
   }
@@ -7473,9 +7513,19 @@ function pageTextFieldRowEl(field, i) {
   wireTextFieldImageSlot(row, i, 'cover', 16 / 9);
   wireTextFieldImageSlot(row, i, 'side', 3 / 4);
   row.querySelector('.cl-page-text-field-remove').addEventListener('click', () => {
-    editPageTextFields.splice(i, 1);
-    editDirty = true;
-    renderPageTextFields();
+    showModConfirm({
+      icon: '🗑️',
+      title: 'Remove this section?',
+      text: "This section's title, text, and images will be removed. This can't be undone once you save.",
+      confirmLabel: 'Remove Section',
+      danger: true,
+      onConfirm: () => {
+        editPageTextFields.splice(i, 1);
+        editDirty = true;
+        renderPageTextFields();
+        return true;
+      },
+    });
   });
   // Save is a local "I'm done with this for now" fold -- but unlike before,
   // it now also persists immediately (not just whatever already auto-saved
