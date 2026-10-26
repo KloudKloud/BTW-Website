@@ -58,14 +58,15 @@
     }
 
     /* Comic-strip link boxes — flat black, bold border, halftone dot
-       texture, a bottom-right label, and a dominant, color-coded glow
-       around the perimeter (brightens further on hover, doubling as the
-       "this is clickable" affordance). --comic-glow stays a moderate-alpha
-       version of each panel's color (used for the label's faint halo and
-       the hover radial overlay); --comic-glow-strong is a punchier,
-       higher-alpha version just for the perimeter box-shadow, so the glow
-       reads as "this panel's color" at a glance without blowing out the
-       label text too. Fixed 10% basis each (no grow/shrink) so
+       texture, a center-right label, and a dramatic neon-sign glow around
+       the perimeter (brightens further on hover, doubling as the "this is
+       clickable" affordance). --comic-neon is each panel's full-brightness
+       neon color, used for the border itself and stacked as 4 layered
+       box-shadows (tight bright core out to a soft wide halo) the way a
+       real neon tube reads -- a single soft shadow never looks "neon",
+       it's the layering that sells it. --comic-glow stays the older
+       moderate-alpha version for the label's faint halo and the hover
+       radial overlay. Fixed 10% basis each (no grow/shrink) so
        Gallery+Stories and Characters+Clubs land on exactly 1/5 of the row
        apiece. */
     .fp-comic-box {
@@ -80,8 +81,13 @@
       background-image:
         radial-gradient(rgba(255,255,255,0.09) 1.1px, transparent 1.1px);
       background-size: 13px 13px;
-      border: 2px solid rgba(255,255,255,0.75);
-      box-shadow: 0 0 34px 7px var(--comic-glow-strong, rgba(255,255,255,0.5)), inset 0 0 32px 8px var(--comic-glow-strong, rgba(255,255,255,0.3));
+      border: 2px solid var(--comic-neon, rgba(255,255,255,0.85));
+      box-shadow:
+        0 0 6px 1px var(--comic-neon, #fff),
+        0 0 16px 3px var(--comic-neon, #fff),
+        0 0 36px 8px var(--comic-neon, #fff),
+        0 0 60px 14px var(--comic-neon-dim, rgba(255,255,255,0.4)),
+        inset 0 0 22px 4px var(--comic-neon-dim, rgba(255,255,255,0.25));
       transition: box-shadow 0.22s, transform 0.18s, background-color 0.22s;
     }
     .fp-comic-box::after {
@@ -98,25 +104,33 @@
     .fp-comic-box-scrim { position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(0,0,0,0.3), rgba(0,0,0,0.6)); }
     .fp-comic-box:hover { transform: translateY(-2px); background-color: #120f16; }
     .fp-comic-box:hover::after { opacity: 1; }
-    .fp-comic-box:hover { box-shadow: 0 0 50px 12px var(--comic-glow-strong, rgba(255,255,255,0.8)), inset 0 0 48px 12px var(--comic-glow-strong, rgba(255,255,255,0.45)); }
-    .fp-comic-box--gallery { --comic-glow: rgba(224,110,255,0.55); --comic-glow-strong: rgba(224,110,255,0.95); }
-    .fp-comic-box--stories { --comic-glow: rgba(240,192,96,0.55); --comic-glow-strong: rgba(240,192,96,0.95); }
-    .fp-comic-box--characters { --comic-glow: rgba(96,224,160,0.55); --comic-glow-strong: rgba(96,224,160,0.95); }
-    .fp-comic-box--clubs { --comic-glow: rgba(96,180,255,0.55); --comic-glow-strong: rgba(96,180,255,0.95); }
+    .fp-comic-box:hover {
+      box-shadow:
+        0 0 8px 2px var(--comic-neon, #fff),
+        0 0 22px 5px var(--comic-neon, #fff),
+        0 0 48px 12px var(--comic-neon, #fff),
+        0 0 80px 20px var(--comic-neon-dim, rgba(255,255,255,0.6)),
+        inset 0 0 36px 8px var(--comic-neon-dim, rgba(255,255,255,0.4));
+    }
+    /* True neon tones -- Gallery purple, Stories red, Characters green,
+       Clubs blue, each with a dimmer translucent twin for the outermost
+       shadow layer and the inset glow (a 100%-alpha color that far out
+       would just read as a flat color fill, not a soft halo). */
+    .fp-comic-box--gallery { --comic-glow: rgba(200,70,255,0.55); --comic-neon: #c846ff; --comic-neon-dim: rgba(200,70,255,0.55); }
+    .fp-comic-box--stories { --comic-glow: rgba(255,45,85,0.55); --comic-neon: #ff2d55; --comic-neon-dim: rgba(255,45,85,0.55); }
+    .fp-comic-box--characters { --comic-glow: rgba(57,255,20,0.55); --comic-neon: #39ff14; --comic-neon-dim: rgba(57,255,20,0.55); }
+    .fp-comic-box--clubs { --comic-glow: rgba(0,195,255,0.55); --comic-neon: #00c3ff; --comic-neon-dim: rgba(0,195,255,0.55); }
 
-    /* Label sits bottom-right on every panel, flush against the right edge,
-       running vertically bottom-to-top (comic-book spine style) instead of
-       flat horizontal text -- bold condensed display font, a crisp black
-       outline instead of a boxed background, and just a faint hint of the
-       panel's own glow color instead of a heavy halo. rotate(180deg) flips
-       the vertical-rl column so it reads upward; since the element is
-       anchored by right/bottom (not top/left), the rotation (around its
-       own center) keeps that corner anchor intact instead of needing a
-       translate like a centered label would. */
+    /* Label runs vertically bottom-to-top (comic-book spine style) same as
+       before, but now anchored vertically centered against the right edge
+       instead of pinned to the bottom corner -- top:50% + translateY(-50%)
+       does the centering, then rotate(180deg) (around the label's own
+       center, so it doesn't fight the translate) flips the vertical-rl
+       column so it still reads upward. */
     .fp-comic-label {
-      position: absolute; right: 0.15rem; bottom: 0.5rem; z-index: 2;
+      position: absolute; top: 50%; right: 0.15rem; z-index: 2;
       max-height: calc(100% - 1.2rem); overflow: hidden;
-      writing-mode: vertical-rl; transform: rotate(180deg);
+      writing-mode: vertical-rl; transform: translateY(-50%) rotate(180deg);
       font-family: 'Bangers', 'Fredoka', cursive; font-weight: 400; text-transform: uppercase;
       font-size: clamp(0.82rem, 1.5vw, 1.4rem); letter-spacing: 0.08em;
       color: #fff; -webkit-text-stroke: 0.6px #000;
@@ -139,7 +153,7 @@
       .fp-hero-row { height: auto; flex-wrap: wrap; }
       .fp-hero-banner-mid { flex: 1 1 100%; order: 1; height: 220px; }
       .fp-comic-box { flex: 1 1 25%; order: 2; height: 130px; }
-      .fp-comic-label { font-size: 0.78rem; letter-spacing: 0.03em; right: 0.1rem; bottom: 0.35rem; }
+      .fp-comic-label { font-size: 0.78rem; letter-spacing: 0.03em; right: 0.1rem; }
     }
 
     /* ── Video-area — split into two stacked sections, each with its own
