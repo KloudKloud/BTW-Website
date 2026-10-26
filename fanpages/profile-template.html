@@ -914,13 +914,13 @@
        leftover height the box had), three small square thumbnails
        underneath for the next-latest posts. */
     .fp-sub-main { display: block; text-decoration: none; color: inherit; }
-    /* Went 86%→68%→54% taming this box down smaller, but now that
-       Submissions' own height is what the row is sized off of (see
-       syncBottomRowHeight()) instead of being stretched to match a taller
-       Recent Newspaper/Activity column, a bigger thumbnail is what actually
-       fills that space back out rather than just leaving the box short. */
+    /* Been bounced around a bit (86%→68%→54%→78%→60%) chasing the right
+       size now that Submissions' own height is what the row is sized off
+       of (see syncBottomRowHeight()) -- bigger makes the box bigger, which
+       in turn stretches Recent Newspaper/Activity to match, so this one
+       number tunes all three boxes' overall size at once. */
     .fp-sub-main-img-wrap {
-      width: 100%; max-width: 78%; margin: 0 auto; aspect-ratio: 1; border-radius: 14px; overflow: hidden; position: relative;
+      width: 100%; max-width: 60%; margin: 0 auto; aspect-ratio: 1; border-radius: 14px; overflow: hidden; position: relative;
       border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 10px 28px rgba(0,0,0,0.4);
       background: linear-gradient(135deg, #6b3fa0, #c2547a);
     }
@@ -1343,6 +1343,22 @@
       display: flex; align-items: center; gap: 0.4rem; margin-top: 1rem; padding-top: 0.9rem;
       border-top: 1px solid rgba(255,255,255,0.06); color: #999; font-size: 0.82rem;
     }
+    /* "Recent Newspaper" home preview card -- the box it sits in is capped
+       to Submissions' height (syncBottomRowHeight()), so this card has to
+       actually fit inside whatever's left after the header/Recent Activity
+       half, not just grow to however long the post happens to be. Clamp the
+       excerpt to 3 lines with a CSS ellipsis (on top of the existing plain-
+       text truncate() cutoff, which alone could still wrap into more lines
+       than the box has room for) and cap it to a single, smaller media
+       thumbnail instead of up to 3 full-size ones. The full Newspaper tab's
+       own cards (same .fp-newspaper-card base class) are untouched. */
+    .fp-newspaper-card--compact { padding: 1rem 1.1rem; }
+    .fp-newspaper-card--compact .fp-newspaper-excerpt {
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .fp-newspaper-card--compact .fp-newspaper-media-row { margin-top: 0.7rem; }
+    .fp-newspaper-card--compact .fp-newspaper-media-thumb { width: 64px; height: 64px; }
+    .fp-newspaper-card--compact .fp-newspaper-footer { margin-top: 0.7rem; padding-top: 0.6rem; }
 
     .fp-newspaper-list { display: flex; flex-direction: column; gap: 1.25rem; }
 
@@ -4794,21 +4810,26 @@
     return items;
   }
 
-  function newspaperCardEl(post) {
+  // compact: the Home tab's "Recent Newspaper" preview card -- shorter
+  // plain-text truncation, fewer/smaller attachment thumbnails, plus the
+  // CSS line-clamp in .fp-newspaper-card--compact as the real backstop
+  // (see that rule's comment). The full Newspaper tab's list calls this the
+  // same way it always has (compact left off).
+  function newspaperCardEl(post, compact) {
     const card = document.createElement('a');
-    card.className = 'fp-newspaper-card';
+    card.className = 'fp-newspaper-card' + (compact ? ' fp-newspaper-card--compact' : '');
     card.href = window.fpUrl(`/${USERNAME}?news=${post.id}#newspaper`);
     card.addEventListener('click', (e) => {
       e.preventDefault();
       switchTab('newspaper');
       openNewspaperPost(post.id);
     });
-    const excerpt = truncate((post.body || '').replace(/\[([^\]]+)\]<[^>]+>/g, '$1'), 260);
+    const excerpt = truncate((post.body || '').replace(/\[([^\]]+)\]<[^>]+>/g, '$1'), compact ? 140 : 260);
     card.innerHTML = `
       ${newspaperAuthorHeader(post)}
       ${post.title ? `<p class="fp-newspaper-title">${escapeHtml(post.title)}<img class="fp-newspaper-title-deco" src="/images/home/decoration-2.png" alt="" /></p>` : ''}
       <div class="fp-newspaper-excerpt">${richText(excerpt)}</div>
-      <div class="fp-newspaper-media-row">${newspaperMediaHtml((post.attachments || []).slice(0, 3), 'fp-newspaper-media-thumb')}</div>
+      <div class="fp-newspaper-media-row">${newspaperMediaHtml((post.attachments || []).slice(0, compact ? 1 : 3), 'fp-newspaper-media-thumb')}</div>
       <div class="fp-newspaper-footer">💬 ${post.comment_count} comment${post.comment_count === 1 ? '' : 's'}</div>
     `;
     return card;
@@ -4836,7 +4857,7 @@
         return;
       }
       wrap.innerHTML = '';
-      wrap.appendChild(newspaperCardEl(posts[0]));
+      wrap.appendChild(newspaperCardEl(posts[0], true));
       // Same reasoning as loadFollowingPreview just above -- this resolves
       // after the Home tab's initial syncScrollBgHeight() call and the
       // post's own attachment thumbnail can grow the page once it loads.
