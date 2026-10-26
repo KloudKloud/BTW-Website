@@ -701,27 +701,21 @@
        page (matching the site's usual reading width), not the wide home
        layout. Swapped in over #cl-home-view. ── */
     .cl-post-detail { max-width: 800px; }
-    /* Transparent pill with a blue border -- used when opening a
-       promotional-page post or a gallery-page image. */
+    /* Same blue-glow pill recipe as #cl-gallery-detail-view .art-view-back
+       (the Gallery page's own Back button) -- a filled tint instead of a
+       flat transparent border, so it reads as the same "gold/blue action
+       pill" family as the rest of the site's back buttons. */
     .cl-post-back-btn {
       display: inline-flex; align-items: center; gap: 0.5rem;
-      background: transparent;
+      background: rgba(127,168,217,0.1);
       border: 1px solid rgba(127,168,217,0.6); color: #cfe0f5;
       border-radius: 30px; padding: 0.85em 1.6em; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 700;
       cursor: pointer; white-space: nowrap; margin: 0 0 1.35rem;
       box-shadow: 0 0 8px rgba(127,168,217,0.22);
-      transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s, color 0.15s;
+      transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s, color 0.15s, background 0.15s;
     }
     .cl-post-back-btn svg { width: 22px; height: 22px; flex-shrink: 0; }
-    .cl-post-back-btn:hover { border-color: #7fa8d9; color: #fff; box-shadow: 0 0 16px rgba(127,168,217,0.4); transform: translateY(-1px); }
-    .cl-post-detail-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.1rem; }
-    .cl-post-detail-avatar, .cl-post-detail-avatar-fallback { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-    .cl-post-detail-avatar-fallback {
-      display: flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700;
-    }
-    .cl-post-detail-author-name { font-weight: 700; color: #ddd; font-size: 0.95rem; }
-    .cl-post-detail-meta-text { font-size: 0.82rem; color: #888; }
+    .cl-post-back-btn:hover { border-color: #7fa8d9; color: #fff; background: rgba(127,168,217,0.18); box-shadow: 0 0 16px rgba(127,168,217,0.4); transform: translateY(-1px); }
     .cl-post-detail-title {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 1.7rem; font-weight: 700; color: #f0f0f0;
       margin: 0 0 1.5rem;
@@ -1002,6 +996,12 @@
        needs it since plain background-color already wins on its own. */
     body.cl-gallery-focus #cl-page-bg-wrap { background: #000; }
     body.cl-gallery-focus #cl-page-bg-img { background-image: none !important; }
+    /* Same solid-black-behind-content idea as cl-gallery-focus above, but
+       for a Social post's own detail view -- opening a post should never
+       carry over the Home/Social feed's theme/banner art, only the plain
+       feed itself keeps that background. */
+    body.cl-post-open #cl-page-bg-wrap { background: #000; }
+    body.cl-post-open #cl-page-bg-img { background-image: none !important; }
 
     /* Promotion Page template — vertical card list ("much like posts") and
        the chapter-reading-style detail view. */
@@ -2445,14 +2445,6 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
           Back
         </button>
-
-        <div class="cl-post-detail-header">
-          <div id="cl-post-detail-avatar-slot"></div>
-          <div>
-            <span class="cl-post-detail-author-name" id="cl-post-detail-author"></span>
-            <div class="cl-post-detail-meta-text" id="cl-post-detail-time"></div>
-          </div>
-        </div>
 
         <h1 class="cl-post-detail-title" id="cl-post-detail-title"></h1>
 
@@ -4286,6 +4278,22 @@ async function loadAdminPosts() {
 
 let socialPostsCache = null;
 let socialSort = 'new';
+// Shared cleanup after any successful post delete, regardless of which UI
+// it was triggered from (card-row "•••" menu, or the detail view's own
+// delete icon) -- the server's GET /posts for the plain Social feed never
+// excludes is_admin_post rows (see server.js), so a Club News/admin post
+// shows up in BOTH the Social feed and the dedicated Admin Posts list at
+// once. Only refreshing whichever single list the delete happened to be
+// triggered from left the post lingering in the *other* one until a full
+// page reload. Always invalidate the Social cache and, if that tab is the
+// one currently on screen, refetch it immediately so the row actually
+// disappears instead of waiting for the next tab switch to notice the
+// cache was cleared.
+function onPostDeleted(post) {
+  socialPostsCache = null;
+  if (post.is_admin_post) loadAdminPosts();
+  if (!document.getElementById('cl-social-tab-content').hidden) loadSocialPosts();
+}
 async function loadSocialPosts() {
   const list = document.getElementById('cl-social-posts-list');
   try {
@@ -4551,8 +4559,7 @@ function clPostMenu(post) {
       try {
         const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${post.id}`, { method: 'DELETE', headers: authHeaders() });
         if (res.ok) {
-          if (post.is_admin_post) loadAdminPosts();
-          else { socialPostsCache = null; loadSocialPosts(); }
+          onPostDeleted(post);
           if (currentClub) {
             currentClub.post_count = Math.max(0, (currentClub.post_count || 0) - 1);
             const el = document.getElementById('cl-side-post-count');
@@ -4795,14 +4802,8 @@ function ccMoveTo(slotId) {
 let currentPostDetail = null;
 function renderPostDetail(post) {
   currentPostDetail = post;
-  const a = post.author;
   document.title = `${post.title || 'Post'} ✦ ${currentClub ? currentClub.name : 'Club'} ✦ BTW`;
 
-  document.getElementById('cl-post-detail-avatar-slot').innerHTML = a.avatar
-    ? `<img class="cl-post-detail-avatar" src="${a.avatar}" alt="" />`
-    : `<span class="cl-post-detail-avatar-fallback">${escapeHtml(a.display_name.charAt(0).toUpperCase())}</span>`;
-  document.getElementById('cl-post-detail-author').textContent = a.username;
-  document.getElementById('cl-post-detail-time').textContent = timeAgo(post.created_at);
   document.getElementById('cl-post-detail-title').textContent = post.title || '';
   document.getElementById('cl-post-detail-title').classList.toggle('cl-post-detail-title--promo', !!post.promotion_page_slug);
   updatePostMetaUI(post);
@@ -4971,8 +4972,7 @@ document.getElementById('cl-post-report-btn').addEventListener('click', async (e
   try {
     const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${currentPostDetail.id}`, { method: 'DELETE', headers: authHeaders() });
     if (!res.ok) return;
-    if (currentPostDetail.is_admin_post) loadAdminPosts();
-    else socialPostsCache = null;
+    onPostDeleted(currentPostDetail);
     if (currentClub) {
       currentClub.post_count = Math.max(0, (currentClub.post_count || 0) - 1);
       const el = document.getElementById('cl-side-post-count');
@@ -5012,6 +5012,19 @@ let cpvSlideshowActiveLayer = 'a';
 let cpvSlideshowLoadToken = 0;
 // Same preload-before-fade fix as the Home cover slideshow -- see
 // showSlideshowImage()'s comment for why.
+// Clears both crossfade layers and cancels any in-flight preload -- called
+// at the start of every fresh post/page render (see renderCoverMediaBlock)
+// so a new post never inherits the previous one's still-loading image.
+function cpvResetSlideshowLayers() {
+  ++cpvSlideshowLoadToken;
+  const ytEl = document.getElementById('cl-page-view-slideshow-yt');
+  const imgA = document.getElementById('cl-page-view-slideshow-img-a');
+  const imgB = document.getElementById('cl-page-view-slideshow-img-b');
+  imgA.src = ''; imgA.classList.remove('cl-active');
+  imgB.src = ''; imgB.classList.remove('cl-active');
+  ytEl.innerHTML = ''; ytEl.classList.remove('cl-active');
+  cpvSlideshowActiveLayer = 'a';
+}
 function cpvShowSlideshowImage(url) {
   const ytEl = document.getElementById('cl-page-view-slideshow-yt');
   const imgA = document.getElementById('cl-page-view-slideshow-img-a');
@@ -5336,6 +5349,18 @@ function renderCoverMediaBlock(mode, imageUrl, slideshowList, randomize) {
   if (cpvSlideshowTimer) { clearInterval(cpvSlideshowTimer); cpvSlideshowTimer = null; }
   cpvSlideshowImages = [];
   slideshowWrap.hidden = true;
+  // Wipe both crossfade layers synchronously before anything else -- this
+  // runs on every fresh post/page render, and cpvShowSlideshowImage() below
+  // deliberately *keeps the old image visible* while the new one preloads
+  // (that's what makes same-post slide-to-slide transitions smooth). Without
+  // this reset, that same behavior bleeds the PREVIOUS post's leftover image
+  // into a newly-opened post for however long its own image takes to load --
+  // backing out of one post and quickly opening another with a different
+  // image would flash the old one first. Clearing src/active here means the
+  // new post's preload fades in from blank instead of from stale art, and
+  // bumping the token also cancels any in-flight preload that hadn't
+  // resolved yet for the post being left.
+  cpvResetSlideshowLayers();
   if (mode === 'slideshow' && (slideshowList || []).length) {
     cpvSlideshowImages = slideshowList.map(s => (typeof s === 'string' ? s : s.image_url));
     cpvSlideshowIdx = randomize === false ? 0 : Math.floor(Math.random() * cpvSlideshowImages.length);
