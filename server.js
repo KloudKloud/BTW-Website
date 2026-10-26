@@ -249,6 +249,7 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_position_x INTEGER NOT NULL DEFAULT 50;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_position_y INTEGER NOT NULL DEFAULT 50;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_original_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS accent_color TEXT NOT NULL DEFAULT 'gold';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_theme TEXT NOT NULL DEFAULT 'default';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_theme_bg_url TEXT NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_theme TEXT NOT NULL DEFAULT 'default';
@@ -5835,7 +5836,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
             pronouns, favorite_pokemon, account_bio, fun_facts, account_links, level,
             account_banner_url, account_banner_position_x, account_banner_position_y, account_banner_zoom,
             club_profile_banner_url, club_profile_banner_position_x, club_profile_banner_position_y, club_profile_banner_zoom,
-            profile_theme, profile_theme_bg_url, featured_club_slug,
+            profile_theme, profile_theme_bg_url, accent_color, featured_club_slug,
             featured_submission_kind, featured_submission_ref_id
      FROM users WHERE username = $1`,
     [req.params.username.toLowerCase()]
@@ -6197,6 +6198,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       fun_facts: author.fun_facts || [],
       account_links: author.account_links || [],
       profile_theme: author.profile_theme || 'default',
+      accent_color: author.accent_color || 'gold',
       profile_theme_bg_url: author.profile_theme_bg_url || '',
       level: author.level || 1,
       stats: {
@@ -7116,6 +7118,18 @@ app.put('/api/account/profile', requireAuth, async (req, res) => {
      featuredSubmissionKind, featuredSubmissionRefId]
   );
   res.json({ message: 'Profile updated.' });
+});
+
+// Profile accent color — re-colors the gold titles/outlines/glows across a
+// user's whole Fanpage profile (every tab, not just Home). Allow-listed
+// server-side (the real trust boundary) against the same palette the
+// frontend's ACCENT_THEMES offers, so a bad/unknown key can't get stored
+// and silently fall back to no CSS var match on render.
+const ACCENT_COLOR_KEYS = ['gold', 'red', 'orange', 'green', 'yellow', 'purple', 'blue', 'pink', 'teal'];
+app.put('/api/account/accent-color', requireAuth, async (req, res) => {
+  const accent = ACCENT_COLOR_KEYS.includes(req.body.accent_color) ? req.body.accent_color : 'gold';
+  await pool.query('UPDATE users SET accent_color = $1 WHERE id = $2', [accent, req.user.id]);
+  res.json({ accent_color: accent });
 });
 
 // Profile page theme — same default/custom-blurred-background pattern as a

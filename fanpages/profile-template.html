@@ -14,6 +14,13 @@
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* Accent color -- every gold title/outline/glow on this page is built
+       off these three custom properties instead of a literal hex, so
+       picking a different accent (the 🖍️ button beside Edit Profile)
+       re-colors the whole page at once. Gold is the default until a
+       profile's own accent_color loads in and overrides it (see
+       applyAccentTheme()). */
+    :root { --fp-accent: #f0c060; --fp-accent-light: #f7d68a; --fp-accent-rgb: 240,192,96; }
     /* overflow-anchor: none -- without this, the browser's scroll anchoring
        fights our deep-link scroll-to-character logic below: if anything
        reflows above the viewport a moment after we scroll, the browser
@@ -59,23 +66,26 @@
     .fp-bg-overlay-scroll { position: fixed; inset: 0; background: rgba(8,6,10,0.45); z-index: 0; display: none; }
     .fp-bg-wrap > *:not(.fp-bg-img):not(.fp-bg-overlay):not(.fp-bg-img-scroll):not(.fp-bg-overlay-scroll) { position: relative; z-index: 1; }
 
+    /* Now an inline flex item in .fp-tabs-row, right beside the Edit
+       Profile pill, instead of a small floating circle that only faded in
+       on hover -- both the background and accent pickers use this. */
     .fp-theme-picker { position: relative; }
-    /* Floats top-right of the whole below-the-banner content area (see
-       .fp-main-area below) and only fades in while hovering anywhere in
-       that area — never over the banner, which has its own pencil. */
-    .fp-theme-picker--floating {
-      position: absolute; top: 1.1rem; right: 1.1rem; z-index: 20;
-      opacity: 0; pointer-events: none; transition: opacity 0.18s;
-    }
     .fp-main-area { position: relative; }
-    .fp-main-area:hover .fp-theme-picker--floating { opacity: 1; pointer-events: auto; }
-    body.fp-editing .fp-theme-picker--floating { display: none !important; }
+    body.fp-editing .fp-theme-picker { display: none !important; }
     .fp-theme-btn {
       background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #f0f0f0;
       cursor: pointer; font-size: 1.1rem;
       width: 44px; height: 44px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
     }
+    /* Bigger + matched to the Edit Profile pill's own height so the two
+       read as one consistent action row instead of a tiny icon dwarfed by
+       a big pill next to it. */
+    .fp-theme-btn--big {
+      width: 50px; height: 50px; font-size: 1.4rem;
+      border: 1px solid rgba(var(--fp-accent-rgb),0.6); box-shadow: 0 0 8px rgba(var(--fp-accent-rgb),0.22);
+    }
+    .fp-theme-btn--big:hover { border-color: var(--fp-accent); box-shadow: 0 0 16px rgba(var(--fp-accent-rgb),0.4); }
     .fp-theme-btn:hover { border-color: #f0f0f0; background: rgba(255,255,255,0.08); }
     .fp-theme-popover {
       position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
@@ -83,7 +93,11 @@
       box-shadow: 0 12px 32px rgba(0,0,0,0.5); padding: 1rem; width: 220px;
     }
     .fp-theme-popover-label { font-size: 0.75rem; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; }
-    .fp-theme-grid { display: flex; gap: 0.75rem; }
+    .fp-theme-grid { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+    /* The accent grid has 9 swatches (vs. the background picker's 2) --
+       needs real room to wrap into rows instead of the background picker's
+       narrow single-row popover. */
+    .fp-theme-popover--wide { width: 256px; }
     .fp-theme-swatch {
       width: 48px; height: 48px; border-radius: 50%; cursor: pointer;
       border: 2px solid transparent; padding: 0; overflow: hidden;
@@ -191,7 +205,7 @@
     body.fp-tab-no-idbox .fp-header { padding-top: 1.25rem; }
     .fp-id-box {
       display: flex; align-items: center; gap: 1.75rem; border-radius: 18px;
-      border: 2px solid rgba(240,192,96,0.3); min-height: 150px; box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      border: 2px solid rgba(var(--fp-accent-rgb),0.3); min-height: 150px; box-shadow: 0 10px 30px rgba(0,0,0,0.4);
       padding: 1.5rem 2rem;
       background: linear-gradient(160deg, rgba(10,8,14,0.88), rgba(10,8,14,0.78)), url('/images/home/potential-box-background.png');
       background-size: cover; background-position: center;
@@ -202,8 +216,8 @@
       display: flex; align-items: baseline; gap: 0.3rem; color: #ccc; font-size: 0.85rem; transition: color 0.15s;
     }
     .fp-follow-stat b { color: #fff; font-size: 0.95rem; transition: color 0.15s; }
-    .fp-follow-stat:hover { color: #f0c060; }
-    .fp-follow-stat:hover b { color: #f0c060; }
+    .fp-follow-stat:hover { color: var(--fp-accent); }
+    .fp-follow-stat:hover b { color: var(--fp-accent); }
     .fp-follow-stat-sep { color: #555; font-size: 0.8rem; }
 
     /* Level circle + stat tiles disperse across the rest of the box's
@@ -232,7 +246,7 @@
     .fp-stat-list-item:not(:last-child)::after {
       content: ''; position: absolute; right: 0; top: 8%; bottom: 8%; width: 1px; background: rgba(255,255,255,0.12);
     }
-    .fp-stat-list-item b { font-size: 2.1rem; line-height: 1; color: #f0c060; text-shadow: 0 0 14px rgba(240,192,96,0.4); }
+    .fp-stat-list-item b { font-size: 2.1rem; line-height: 1; color: var(--fp-accent); text-shadow: 0 0 14px rgba(var(--fp-accent-rgb),0.4); }
     .fp-stat-list-item span { font-size: 0.74rem; color: #bbb; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.1rem; }
 
     .fp-pfp-box-info { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
@@ -401,7 +415,7 @@
     .fp-follow-sub { color: #888; font-size: 0.78rem; margin-top: 0.1rem; }
     .fp-club-role-badge {
       flex-shrink: 0; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-      color: #f0c060; background: rgba(240,192,96,0.12); border: 1px solid rgba(240,192,96,0.3);
+      color: var(--fp-accent); background: rgba(var(--fp-accent-rgb),0.12); border: 1px solid rgba(var(--fp-accent-rgb),0.3);
       border-radius: 10px; padding: 0.1em 0.5em;
     }
     .fp-follow-btn {
@@ -428,7 +442,7 @@
     }
     .fp-tabs {
       display: flex; align-items: stretch;
-      border-radius: 14px; border: 2px solid rgba(240,192,96,0.3); overflow: hidden;
+      border-radius: 14px; border: 2px solid rgba(var(--fp-accent-rgb),0.3); overflow: hidden;
       background: linear-gradient(160deg, rgba(10,8,14,0.94), rgba(10,8,14,0.88));
       box-shadow: 0 10px 28px rgba(0,0,0,0.5);
     }
@@ -438,22 +452,22 @@
     .fp-tabrow-edit-btn {
       display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; cursor: pointer;
       background: linear-gradient(160deg, rgba(38,30,16,0.85), rgba(20,16,10,0.85));
-      border: 1px solid rgba(240,192,96,0.6); color: #f7d68a; border-radius: 30px;
+      border: 1px solid rgba(var(--fp-accent-rgb),0.6); color: var(--fp-accent-light); border-radius: 30px;
       padding: 0.7em 1.5em; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.95rem; font-weight: 700;
-      white-space: nowrap; box-shadow: 0 0 8px rgba(240,192,96,0.22);
+      white-space: nowrap; box-shadow: 0 0 8px rgba(var(--fp-accent-rgb),0.22);
       transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s, color 0.15s;
     }
-    .fp-tabrow-edit-btn:hover { border-color: #f0c060; color: #fff; box-shadow: 0 0 16px rgba(240,192,96,0.4); transform: translateY(-1px); }
+    .fp-tabrow-edit-btn:hover { border-color: var(--fp-accent); color: #fff; box-shadow: 0 0 16px rgba(var(--fp-accent-rgb),0.4); transform: translateY(-1px); }
     .fp-tabrow-edit-btn-icon { font-size: 1.05rem; line-height: 1; }
     .fp-tab {
-      background: none; border: none; border-right: 2px solid rgba(240,192,96,0.22); cursor: pointer; color: #bbb;
+      background: none; border: none; border-right: 2px solid rgba(var(--fp-accent-rgb),0.22); cursor: pointer; color: #bbb;
       font-family: 'Fredoka', 'Lato', cursive; font-size: 0.92rem; font-weight: 700;
       text-transform: uppercase; letter-spacing: 0.03em;
       padding: 0.9rem 1.3rem; position: relative; transition: color 0.15s, background 0.15s;
     }
     .fp-tabs .fp-tab:last-child { border-right: none; }
     .fp-tab:hover { color: #fff; background: rgba(127,168,217,0.12); }
-    .fp-tab.active { color: #f0c060; background: rgba(240,192,96,0.14); }
+    .fp-tab.active { color: var(--fp-accent); background: rgba(var(--fp-accent-rgb),0.14); }
 
     .fp-tab-view { max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto; padding: 2rem; }
     /* Gallery reuses the story-context .mod-gallery-main layout, which
@@ -505,8 +519,8 @@
       border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; color: #f0f0f0;
       font-family: inherit; font-size: 0.85rem; font-weight: 600; padding: 0.5rem 1rem;
     }
-    .fp-sort-btn:hover { border-color: rgba(240,192,96,0.5); }
-    .fp-sort-caret { font-size: 0.7rem; color: #f0c060; }
+    .fp-sort-btn:hover { border-color: rgba(var(--fp-accent-rgb),0.5); }
+    .fp-sort-caret { font-size: 0.7rem; color: var(--fp-accent); }
     .fp-sort-menu {
       position: absolute; z-index: 20; top: calc(100% + 0.4rem); right: 0; min-width: 170px;
       background: linear-gradient(160deg, rgba(10,8,14,0.92), rgba(10,8,14,0.86)), url('/images/home/box-background-2.png');
@@ -518,7 +532,7 @@
       color: #ddd; font-family: inherit; font-size: 0.85rem; font-weight: 600; padding: 0.55rem 0.7rem; border-radius: 8px;
     }
     .fp-sort-menu-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
-    .fp-sort-menu-item.active { color: #f0c060; }
+    .fp-sort-menu-item.active { color: var(--fp-accent); }
     /* "All Newspapers" back link — bigger, green glow so it reads clearly
        as the way out of the full-post view. */
     #fp-newspaper-detail-wrap .art-view-back {
@@ -549,7 +563,7 @@
       background: #161616; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
       overflow: hidden; transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
     }
-    .fp-char-card:hover { transform: translateY(-3px); box-shadow: 0 10px 22px rgba(0,0,0,0.45); border-color: rgba(240,192,96,0.4); }
+    .fp-char-card:hover { transform: translateY(-3px); box-shadow: 0 10px 22px rgba(0,0,0,0.45); border-color: rgba(var(--fp-accent-rgb),0.4); }
     .fp-char-card-img-wrap { position: relative; width: 100%; aspect-ratio: 1 / 1; background: #1e1e1e; overflow: hidden; }
     .fp-char-card-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .fp-char-card-locked { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); font-size: 1.6rem; }
@@ -585,7 +599,7 @@
       padding: 0.28em 0.6em; font-size: 0.78rem; font-weight: 700; color: #fff; cursor: pointer;
       line-height: 1; transition: color 0.15s, border-color 0.15s, transform 0.1s;
     }
-    .fp-char-like-btn:hover { border-color: rgba(240,192,96,0.6); transform: scale(1.05); }
+    .fp-char-like-btn:hover { border-color: rgba(var(--fp-accent-rgb),0.6); transform: scale(1.05); }
     .fp-char-like-btn.liked { color: #f0708a; }
     .fp-char-like-btn .fp-char-like-icon { font-size: 0.9rem; }
 
@@ -604,13 +618,13 @@
       position: absolute; top: 2rem; left: 2rem; z-index: 3;
       display: inline-flex; align-items: center; gap: 0.5rem;
       background: linear-gradient(160deg, rgba(38,30,16,0.85), rgba(20,16,10,0.85));
-      border: 1px solid rgba(240,192,96,0.6); color: #f7d68a;
+      border: 1px solid rgba(var(--fp-accent-rgb),0.6); color: var(--fp-accent-light);
       border-radius: 30px; padding: 0.85em 1.6em; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 700;
-      cursor: pointer; white-space: nowrap; box-shadow: 0 0 8px rgba(240,192,96,0.22);
+      cursor: pointer; white-space: nowrap; box-shadow: 0 0 8px rgba(var(--fp-accent-rgb),0.22);
       transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
     }
     .fp-char-back-btn svg { width: 22px; height: 22px; flex-shrink: 0; }
-    .fp-char-back-btn:hover { border-color: #f0c060; color: #fff; box-shadow: 0 0 16px rgba(240,192,96,0.4); transform: translateY(-1px); }
+    .fp-char-back-btn:hover { border-color: var(--fp-accent); color: #fff; box-shadow: 0 0 16px rgba(var(--fp-accent-rgb),0.4); transform: translateY(-1px); }
 
     @media (max-width: 720px) {
       /* Same fix as the Fanpage Hub's Characters page (fanpages/
@@ -657,9 +671,9 @@
     .fp-home-side-section { position: relative; z-index: 1; }
     .fp-home-side-divider { position: relative; z-index: 1; height: 1px; background: rgba(255,255,255,0.14); margin: 1.35rem 0; flex-shrink: 0; }
     .fp-home-side-label {
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 600; color: #f0c060;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 600; color: var(--fp-accent);
       display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;
-      text-shadow: 0 0 12px rgba(240,192,96,0.35);
+      text-shadow: 0 0 12px rgba(var(--fp-accent-rgb),0.35);
     }
     /* The Activity section fills whatever height its half of the Notes box
        has and scrolls (themed scrollbar, matching the Followers/Following
@@ -678,15 +692,15 @@
        separated line -- bigger, poppier, easier to pick out at a glance. */
     .fp-activity-item {
       display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; color: #ddd; line-height: 1.4; text-decoration: none;
-      padding: 0.65rem 0.75rem; border-radius: 12px; border: 1px solid rgba(240,192,96,0.22);
-      background: linear-gradient(160deg, rgba(240,192,96,0.1), rgba(127,168,217,0.05));
-      box-shadow: 0 0 10px rgba(240,192,96,0.12);
+      padding: 0.65rem 0.75rem; border-radius: 12px; border: 1px solid rgba(var(--fp-accent-rgb),0.22);
+      background: linear-gradient(160deg, rgba(var(--fp-accent-rgb),0.1), rgba(127,168,217,0.05));
+      box-shadow: 0 0 10px rgba(var(--fp-accent-rgb),0.12);
       transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
     }
     a.fp-activity-item:hover {
-      border-color: rgba(240,192,96,0.55); box-shadow: 0 0 20px rgba(240,192,96,0.35); transform: translateY(-1px);
+      border-color: rgba(var(--fp-accent-rgb),0.55); box-shadow: 0 0 20px rgba(var(--fp-accent-rgb),0.35); transform: translateY(-1px);
     }
-    a.fp-activity-item:hover .fp-activity-item-body { color: #f0c060; }
+    a.fp-activity-item:hover .fp-activity-item-body { color: var(--fp-accent); }
     .fp-activity-item-avatar, .fp-activity-item-avatar-fallback { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
     .fp-activity-item-avatar-fallback {
       display: flex; align-items: center; justify-content: center;
@@ -707,7 +721,7 @@
       background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.78rem;
     }
     .fp-following-preview-name { font-size: 0.85rem; font-weight: 600; color: #ddd; }
-    .fp-following-preview-row:hover .fp-following-preview-name { color: #f0c060; }
+    .fp-following-preview-row:hover .fp-following-preview-name { color: var(--fp-accent); }
     .fp-following-see-more {
       background: none; border: none; padding: 0; font-family: inherit; cursor: pointer;
       font-size: 0.82rem; color: #7fa8d9; text-align: left;
@@ -740,7 +754,7 @@
        side, instead of a stacked label/value line. */
     .fp-about-row[data-key="pronouns"], .fp-about-row[data-key="fun_fact"] {
       display: inline-flex; align-items: center; gap: 0.5rem; margin: 0;
-      background: rgba(240,192,96,0.08); border: 1px solid rgba(240,192,96,0.25);
+      background: rgba(var(--fp-accent-rgb),0.08); border: 1px solid rgba(var(--fp-accent-rgb),0.25);
       border-radius: 24px; padding: 0.45rem 1rem 0.45rem 0.85rem;
     }
     .fp-about-row[data-key="pronouns"] .fp-about-row-label,
@@ -749,12 +763,12 @@
        the fields column instead of a plain labeled line. */
     .fp-about-row[data-key="account_bio"] {
       flex-direction: column; gap: 0.4rem; flex: 1; min-height: 0;
-      border-left: 2px solid rgba(240,192,96,0.35); padding-left: 1rem;
+      border-left: 2px solid rgba(var(--fp-accent-rgb),0.35); padding-left: 1rem;
     }
     .fp-about-row[data-key="account_bio"] .fp-about-row-value {
       font-style: italic; color: #d8d4e0; overflow-y: auto; font-size: 1.15rem; line-height: 1.75;
     }
-    .fp-about-row-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #f0c060; flex-shrink: 0; }
+    .fp-about-row-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fp-accent); flex-shrink: 0; }
     .fp-about-row-value { font-size: 0.92rem; color: #ddd; line-height: 1.65; white-space: pre-line; }
     .fp-about-row input, .fp-about-row textarea {
       width: 100%; background: #1e1e1e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
@@ -911,7 +925,7 @@
     /* Notes -- a FA-style "sign my page" guestbook. */
     .fp-home-side-label .fp-notes-add-btn {
       font-family: 'Lato', Arial, sans-serif; font-size: 0.78rem; font-weight: 700; text-transform: none;
-      letter-spacing: normal; text-shadow: none; color: #0d0d0d; background: #f0c060; border: none;
+      letter-spacing: normal; text-shadow: none; color: #0d0d0d; background: var(--fp-accent); border: none;
       border-radius: 20px; padding: 0.4em 1em; cursor: pointer;
     }
     .fp-home-side-label .fp-notes-add-btn:hover { background: #f5d080; }
@@ -1001,7 +1015,7 @@
        distinctly so a draft never reads as a real published story. */
     .fp-story-teaser-draft-badge {
       position: absolute; top: 0.6rem; left: 0.6rem; z-index: 3;
-      background: rgba(240,192,96,0.92); color: #0d0d0d; font-family: 'Inter', sans-serif;
+      background: rgba(var(--fp-accent-rgb),0.92); color: #0d0d0d; font-family: 'Inter', sans-serif;
       font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
       border-radius: 6px; padding: 0.2em 0.55em;
     }
@@ -1100,8 +1114,8 @@
        their own max-width/centering, just natural block flow. */
     .fp-featured-title {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 1.6rem; font-weight: 600;
-      color: #f0c060; text-align: left; margin-bottom: 1.25rem;
-      text-shadow: 0 0 14px rgba(240,192,96,0.4);
+      color: var(--fp-accent); text-align: left; margin-bottom: 1.25rem;
+      text-shadow: 0 0 14px rgba(var(--fp-accent-rgb),0.4);
     }
     .fp-featured-title-deco { width: 22px; height: 22px; object-fit: contain; vertical-align: -4px; margin-left: 0.35rem; }
     .fp-featured-empty { color: #999; font-size: 0.88rem; }
@@ -1124,7 +1138,7 @@
       border: 1px solid rgba(255,255,255,0.22); border-radius: 14px;
       box-shadow: 0 1px 8px rgba(0,0,0,0.25); transition: border-color 0.15s, box-shadow 0.15s;
     }
-    .fp-bcard:hover { border-color: rgba(240,192,96,0.5); box-shadow: 0 1px 8px rgba(0,0,0,0.25), 0 0 22px rgba(240,192,96,0.18); }
+    .fp-bcard:hover { border-color: rgba(var(--fp-accent-rgb),0.5); box-shadow: 0 1px 8px rgba(0,0,0,0.25), 0 0 22px rgba(var(--fp-accent-rgb),0.18); }
     /* Wraps the cover+body pair when a card is NSFW-locked, so the blur/
        grayscale filter (.fp-nsfwcard-blur) and the full-card lock overlay
        can both apply without disturbing .fp-bcard's own flex layout --
@@ -1148,7 +1162,7 @@
        this card's older fixed Rating+Ongoing badge pair. */
     .fp-bcard-tags-row { display: flex; margin-bottom: 0.5rem; min-width: 0; }
     .fp-bcard-tags-scroll .fp-tag-pill--rating-general { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
-    .fp-bcard-tags-scroll .fp-tag-pill--rating-teen { background: rgba(240,192,96,0.18); color: #f5cf7c; border-color: rgba(240,192,96,0.5); }
+    .fp-bcard-tags-scroll .fp-tag-pill--rating-teen { background: rgba(var(--fp-accent-rgb),0.18); color: var(--fp-accent-light); border-color: rgba(var(--fp-accent-rgb),0.5); }
     .fp-bcard-tags-scroll .fp-tag-pill--rating-mature { background: rgba(224,80,74,0.2); color: #ff8079; border-color: rgba(224,80,74,0.55); }
     .fp-tag-pill--status-ongoing { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
     .fp-tag-pill--status-complete { background: rgba(127,168,217,0.2); color: #a8c6e8; border-color: rgba(127,168,217,0.5); }
@@ -1167,7 +1181,7 @@
     .fp-bcard-tags-arrow {
       display: none; position: absolute; top: 0; bottom: 0; width: 1.8rem;
       align-items: center; justify-content: center; border: none; cursor: pointer; padding: 0;
-      color: #f0c060; font-size: 1.1rem; font-weight: 800;
+      color: var(--fp-accent); font-size: 1.1rem; font-weight: 800;
     }
     .fp-bcard-tags-arrow--right { right: 0; background: linear-gradient(to right, transparent, rgba(10,8,14,0.92) 45%); }
     .fp-bcard-tags-arrow--left { left: 0; background: linear-gradient(to left, transparent, rgba(10,8,14,0.92) 45%); }
@@ -1185,7 +1199,7 @@
     .fp-bcard-tags-scroll-wrap.fp-bcard-tags-has-overflow .fp-bcard-tags-scrollbar { display: block; }
     .fp-bcard-tags-scrollbar-thumb {
       position: absolute; top: 50%; left: 0; height: 6px; min-width: 16%; border-radius: 4px; transform: translateY(-50%);
-      background: linear-gradient(90deg, #f0c060, #e0504a); cursor: grab; touch-action: none;
+      background: linear-gradient(90deg, var(--fp-accent), #e0504a); cursor: grab; touch-action: none;
       transition: height 0.15s;
     }
     .fp-bcard-tags-scrollbar:hover .fp-bcard-tags-scrollbar-thumb { height: 9px; }
@@ -1209,11 +1223,11 @@
     .fp-bcard-statpanel { display: flex; gap: 0.35rem; flex-shrink: 0; }
     .fp-bcard-stat {
       display: flex; align-items: center; gap: 0.28rem; white-space: nowrap; padding: 0.22rem 0.6rem;
-      background: linear-gradient(160deg, rgba(240,192,96,0.12), rgba(127,168,217,0.08));
-      border: 1px solid rgba(240,192,96,0.28); border-radius: 9px;
+      background: linear-gradient(160deg, rgba(var(--fp-accent-rgb),0.12), rgba(127,168,217,0.08));
+      border: 1px solid rgba(var(--fp-accent-rgb),0.28); border-radius: 9px;
       font-size: 0.82rem; color: #ccc;
     }
-    .fp-bcard-stat-val { font-weight: 800; color: #f0c060; text-shadow: 0 0 6px rgba(240,192,96,0.4); }
+    .fp-bcard-stat-val { font-weight: 800; color: var(--fp-accent); text-shadow: 0 0 6px rgba(var(--fp-accent-rgb),0.4); }
     .fp-bcard-deco--tr { position: absolute; z-index: 2; pointer-events: none; object-fit: contain; opacity: 0.9; top: -10px; right: -8px; width: 32px; height: 32px; }
     /* Fixed 3-column grid (max 3 featured items) so a full row of three
        actually spreads to fill the available width instead of clumping
@@ -1421,7 +1435,7 @@
     }
     .fp-disclaimer-box strong { color: #ccc; font-weight: 700; }
     .fp-disclaimer-box a { color: #7fa8d9; text-decoration: underline; }
-    .fp-disclaimer-box .fp-disclaimer-highlight { color: #f0c060; }
+    .fp-disclaimer-box .fp-disclaimer-highlight { color: var(--fp-accent); }
     .fp-disclaimer-box p { margin-bottom: 0.75rem; }
     .fp-disclaimer-sig { display: block; margin-top: 0.75rem; color: #ccc; }
 
@@ -1587,7 +1601,7 @@
       .fp-featured-card-title { font-size: 0.95rem; margin-top: 0.4rem; }
       .fp-newspaper-home-header { flex-wrap: wrap; gap: 0.75rem; }
 
-      .fp-theme-picker--floating { top: 0.6rem; right: 0.6rem; }
+      .fp-theme-btn--big { width: 42px; height: 42px; font-size: 1.15rem; }
       .fp-banner-edit-pencil { bottom: 0.6rem; right: 0.6rem; width: 38px; height: 38px; }
 
       .fp-about-box { padding: 1.25rem 1rem 0; }
@@ -1664,18 +1678,8 @@
   <button type="button" class="fp-recrop-btn fp-banner-recrop-btn" id="fp-banner-recrop-btn" hidden>✏️ Recrop</button>
 </div>
 
-<!-- Everything below the banner — the theme-wheel shortcut is anchored to
-     this wrapper and only fades in while hovering somewhere in here, never
-     over the banner itself (which has its own pencil shortcut instead). -->
+<!-- Everything below the banner. -->
 <div class="fp-main-area" id="fp-main-area">
-
-  <div class="fp-theme-picker fp-theme-picker--floating" id="fp-theme-picker-wrap" hidden>
-    <button type="button" class="fp-theme-btn" id="fp-theme-btn" title="Change profile background">🎨</button>
-    <div class="fp-theme-popover" id="fp-theme-popover" hidden>
-      <p class="fp-theme-popover-label">Profile Background</p>
-      <div class="fp-theme-grid" id="fp-theme-grid"></div>
-    </div>
-  </div>
 
 <div class="fp-header">
   <!-- Tabs float half over the banner's bottom edge, half over the page
@@ -1688,6 +1692,26 @@
       <button class="fp-tab" id="fp-tab-gallery" type="button">Gallery</button>
       <button class="fp-tab" id="fp-tab-stories" type="button">Stories</button>
       <button class="fp-tab" id="fp-tab-newspaper" type="button">Newspapers</button>
+    </div>
+    <!-- Background theme + accent color pickers -- bigger, inline buttons
+         right beside the Edit Profile shortcut instead of a small floating
+         circle in the corner. Background stays Home-tab-only (it only ever
+         shows there anyway); Accent Color shows on every tab since it
+         re-colors titles/outlines site-wide for this profile, not just
+         Home. -->
+    <div class="fp-theme-picker" id="fp-theme-picker-wrap" hidden>
+      <button type="button" class="fp-theme-btn fp-theme-btn--big" id="fp-theme-btn" title="Change profile background">🎨</button>
+      <div class="fp-theme-popover" id="fp-theme-popover" hidden>
+        <p class="fp-theme-popover-label">Profile Background</p>
+        <div class="fp-theme-grid" id="fp-theme-grid"></div>
+      </div>
+    </div>
+    <div class="fp-theme-picker" id="fp-accent-picker-wrap" hidden>
+      <button type="button" class="fp-theme-btn fp-theme-btn--big" id="fp-accent-btn" title="Change accent color">🖍️</button>
+      <div class="fp-theme-popover fp-theme-popover--wide" id="fp-accent-popover" hidden>
+        <p class="fp-theme-popover-label">Accent Color</p>
+        <div class="fp-theme-grid" id="fp-accent-grid"></div>
+      </div>
     </div>
     <!-- Owner-only edit shortcut -- label/icon/target swap per active tab,
          see renderActions(). Hidden entirely for a visitor viewing someone
@@ -2219,10 +2243,66 @@
     e.stopPropagation();
     document.getElementById('fp-theme-popover').hidden = !document.getElementById('fp-theme-popover').hidden;
   });
-  document.addEventListener('click', (e) => {
-    const picker = document.querySelector('.fp-theme-picker');
-    if (picker && !picker.contains(e.target)) document.getElementById('fp-theme-popover').hidden = true;
+  document.getElementById('fp-accent-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('fp-accent-popover').hidden = !document.getElementById('fp-accent-popover').hidden;
   });
+  // Two separate .fp-theme-picker wraps now (background + accent) -- each
+  // popover only closes on a click outside its OWN wrap, not just the
+  // first one on the page.
+  document.addEventListener('click', (e) => {
+    const bgPicker = document.getElementById('fp-theme-picker-wrap');
+    if (bgPicker && !bgPicker.contains(e.target)) document.getElementById('fp-theme-popover').hidden = true;
+    const accentPicker = document.getElementById('fp-accent-picker-wrap');
+    if (accentPicker && !accentPicker.contains(e.target)) document.getElementById('fp-accent-popover').hidden = true;
+  });
+
+  // ── Accent color -- re-colors every gold title/outline/glow on this
+  // profile (every tab, not just Home) via a handful of CSS custom
+  // properties set on :root. Gold is the default/first choice; a handful of
+  // other hand-picked {accent, light} pairs round out the palette. ────────
+  const ACCENT_THEMES = {
+    gold:   { label: 'Gold',   accent: '#f0c060', light: '#f7d68a', rgb: '240,192,96' },
+    red:    { label: 'Red',    accent: '#e0605a', light: '#f29a93', rgb: '224,96,90' },
+    orange: { label: 'Orange', accent: '#e8954a', light: '#f3bd8c', rgb: '232,149,74' },
+    green:  { label: 'Green',  accent: '#5ec98a', light: '#9fe8bb', rgb: '94,201,138' },
+    yellow: { label: 'Yellow', accent: '#e8d860', light: '#f4ea9e', rgb: '232,216,96' },
+    purple: { label: 'Purple', accent: '#a87fd9', light: '#cbb3ec', rgb: '168,127,217' },
+    blue:   { label: 'Blue',   accent: '#7fa8d9', light: '#b3cdec', rgb: '127,168,217' },
+    pink:   { label: 'Pink',   accent: '#e07fb0', light: '#f2b8d4', rgb: '224,127,176' },
+    teal:   { label: 'Teal',   accent: '#4fc9c0', light: '#9ee8e1', rgb: '79,201,192' },
+  };
+  function applyAccentTheme(accentId) {
+    const theme = ACCENT_THEMES[accentId] || ACCENT_THEMES.gold;
+    const root = document.documentElement.style;
+    root.setProperty('--fp-accent', theme.accent);
+    root.setProperty('--fp-accent-light', theme.light);
+    root.setProperty('--fp-accent-rgb', theme.rgb);
+    document.querySelectorAll('.fp-accent-swatch').forEach(el => el.classList.toggle('active', el.dataset.accent === accentId));
+  }
+  function buildAccentGrid() {
+    const grid = document.getElementById('fp-accent-grid');
+    grid.innerHTML = '';
+    Object.entries(ACCENT_THEMES).forEach(([key, theme]) => {
+      const btn = document.createElement('button');
+      btn.className = 'fp-theme-swatch fp-accent-swatch';
+      btn.type = 'button';
+      btn.title = theme.label;
+      btn.dataset.accent = key;
+      btn.innerHTML = `<span style="background:${theme.accent};"></span>`;
+      btn.addEventListener('click', () => selectAccentColor(key));
+      grid.appendChild(btn);
+    });
+  }
+  async function selectAccentColor(accentId) {
+    applyAccentTheme(accentId);
+    const res = await fetch('/api/account/accent-color', {
+      method: 'PUT',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accent_color: accentId }),
+    });
+    if (res.ok && currentAuthor) currentAuthor.accent_color = accentId;
+  }
 
   // Fun Fact is rendered separately now (up to 3, see fun_facts below) --
   // this list is just the single-value fields left.
@@ -2645,7 +2725,7 @@
     const content = document.createElement('div');
     content.style.cssText = 'flex:1; min-width:0;';
     const heading = document.createElement('span');
-    heading.style.cssText = 'color:#f0c060; font-weight:700; text-shadow:0 0 12px rgba(240,192,96,0.6);';
+    heading.style.cssText = 'color:var(--fp-accent); font-weight:700; text-shadow:0 0 12px rgba(var(--fp-accent-rgb),0.6);';
     heading.textContent = 'Official Ref';
     content.appendChild(heading);
     const line = document.createElement('div');
@@ -2966,7 +3046,7 @@
           // to that character via the same ?char=ID#characters deep link
           // used everywhere else on the profile.
           const nameLink = document.createElement('a');
-          nameLink.style.cssText = 'color:#f0c060; font-weight:700; text-decoration:none; text-shadow:0 0 12px rgba(240,192,96,0.6);';
+          nameLink.style.cssText = 'color:var(--fp-accent); font-weight:700; text-decoration:none; text-shadow:0 0 12px rgba(var(--fp-accent-rgb),0.6);';
           nameLink.textContent = rel.name;
           relLine.appendChild(nameLink);
 
@@ -2989,7 +3069,7 @@
           }
         } else {
           const nameSpan = document.createElement('span');
-          nameSpan.style.cssText = 'color:#f0c060; font-weight:700;';
+          nameSpan.style.cssText = 'color:var(--fp-accent); font-weight:700;';
           nameSpan.textContent = rel.name;
           relLine.appendChild(nameSpan);
         }
@@ -3019,7 +3099,7 @@
       a.href = themeSong.trim();
       a.target = '_blank';
       a.rel = 'noopener noreferrer nofollow ugc';
-      a.style.color = '#f0c060';
+      a.style.color = 'var(--fp-accent)';
       a.textContent = 'Theme Song';
       wireSpotifyAppLink(a);
       themeContent.appendChild(a);
@@ -3041,7 +3121,7 @@
     const storiesContent = document.createElement('div');
     storiesContent.style.cssText = 'flex:1; min-width:0;';
     const storiesHeading = document.createElement('span');
-    storiesHeading.style.cssText = 'color:#f0c060; font-weight:700; text-shadow:0 0 12px rgba(240,192,96,0.6);';
+    storiesHeading.style.cssText = 'color:var(--fp-accent); font-weight:700; text-shadow:0 0 12px rgba(var(--fp-accent-rgb),0.6);';
     storiesHeading.textContent = 'Stories';
     storiesContent.appendChild(storiesHeading);
     const storiesWrap = document.createElement('div');
@@ -3101,7 +3181,7 @@
       quoteBullet.textContent = '✦';
       quoteFact.appendChild(quoteBullet);
       const quoteContent = document.createElement('span');
-      quoteContent.innerHTML = `<span style="color:#f0c060; font-weight:700;">Quote:</span> <em>"${richText(char.quote)}"</em>`;
+      quoteContent.innerHTML = `<span style="color:var(--fp-accent); font-weight:700;">Quote:</span> <em>"${richText(char.quote)}"</em>`;
       quoteFact.appendChild(quoteContent);
       factsBox.appendChild(quoteFact);
     }
@@ -5411,6 +5491,10 @@
       // (?char=/gallery=/news=, or #tab) landed us on before this resolved.
       document.getElementById('fp-banner-edit-pencil').hidden = !a.is_self || activeTabName !== 'home';
       document.getElementById('fp-theme-picker-wrap').hidden = !a.is_self || activeTabName !== 'home';
+      // Accent color isn't Home-tab-only -- it re-colors every tab, so it
+      // stays visible to the owner regardless of which one is active.
+      document.getElementById('fp-accent-picker-wrap').hidden = !a.is_self;
+      applyAccentTheme(a.accent_color || 'gold');
 
       if (a.avatar) {
         const img = document.getElementById('fp-avatar-img');
@@ -5521,6 +5605,7 @@
   }
 
   buildThemeGrid();
+  buildAccentGrid();
   loadProfile();
 
   const initialTab = ['characters', 'gallery', 'stories', 'newspaper'].includes(location.hash.slice(1)) ? location.hash.slice(1) : null;
