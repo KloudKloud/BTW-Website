@@ -75,12 +75,18 @@
     .lv-levelbar-picker { position: relative; flex-shrink: 0; }
     .lv-levelbar-picker-btn {
       background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #f0f0f0;
-      cursor: pointer; font-size: 0.85rem; width: 26px; height: 26px; border-radius: 50%;
+      cursor: pointer; font-size: 1.15rem; width: 38px; height: 38px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center; padding: 0;
     }
     .lv-levelbar-picker-btn:hover { border-color: #f0c060; background: rgba(0,0,0,0.5); }
+    /* Moved to a direct child of <body> and positioned with fixed viewport
+       coordinates the moment it opens (see positionLevelBarPopover in the
+       script below) -- same escape-the-ancestor's-overflow/stacking-context
+       trick used for the suggest dropdowns in create.html/edit.html. Left as
+       a descendant of .lv-hero it'd get silently clipped: the hero box uses
+       `overflow:hidden` to round its own corners around the background art. */
     .lv-levelbar-popover {
-      position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 60;
+      position: fixed; z-index: 9999;
       background: #161616; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
       box-shadow: 0 12px 32px rgba(0,0,0,0.5); padding: 0.85rem; width: 190px;
     }
@@ -2680,14 +2686,47 @@ async function selectLevelBarColor(key) {
   }
 }
 buildLevelBarGrid();
+// The popover starts out nested inside .lv-hero (which clips with
+// overflow:hidden for its own rounded-corner background art) -- move it to
+// be a direct child of <body> the first time it opens, then position it
+// with fixed viewport coordinates anchored to the pencil button, same
+// pattern as positionSuggestDropdown() in create.html/edit.html.
+function positionLevelBarPopover() {
+  const btn = document.getElementById('lv-levelbar-picker-btn');
+  const pop = document.getElementById('lv-levelbar-popover');
+  const rect = btn.getBoundingClientRect();
+  const popWidth = pop.offsetWidth || 190;
+  let left = rect.left + rect.width / 2 - popWidth / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - popWidth - 8));
+  pop.style.top = `${rect.bottom + 8}px`;
+  pop.style.left = `${left}px`;
+}
 document.getElementById('lv-levelbar-picker-btn').addEventListener('click', (e) => {
   e.stopPropagation();
-  markActiveLevelBarSwatch();
-  document.getElementById('lv-levelbar-popover').hidden = !document.getElementById('lv-levelbar-popover').hidden;
+  const pop = document.getElementById('lv-levelbar-popover');
+  if (pop.parentElement !== document.body) document.body.appendChild(pop);
+  const opening = pop.hidden;
+  if (opening) {
+    markActiveLevelBarSwatch();
+    pop.hidden = false;
+    positionLevelBarPopover();
+  } else {
+    pop.hidden = true;
+  }
 });
 document.addEventListener('click', (e) => {
-  const wrap = document.getElementById('lv-levelbar-picker-wrap');
-  if (wrap && !wrap.contains(e.target)) document.getElementById('lv-levelbar-popover').hidden = true;
+  const btn = document.getElementById('lv-levelbar-picker-btn');
+  const pop = document.getElementById('lv-levelbar-popover');
+  if (pop.hidden) return;
+  if (!pop.contains(e.target) && e.target !== btn) pop.hidden = true;
+});
+window.addEventListener('scroll', () => {
+  const pop = document.getElementById('lv-levelbar-popover');
+  if (!pop.hidden) positionLevelBarPopover();
+}, true);
+window.addEventListener('resize', () => {
+  const pop = document.getElementById('lv-levelbar-popover');
+  if (!pop.hidden) positionLevelBarPopover();
 });
 
 function renderHero(u) {
