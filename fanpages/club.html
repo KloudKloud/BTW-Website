@@ -6023,12 +6023,16 @@ document.getElementById('cl-theme-btn').addEventListener('click', (e) => {
 });
 document.getElementById('cl-theme-menu').addEventListener('click', (e) => e.stopPropagation());
 document.addEventListener('click', () => { document.getElementById('cl-theme-menu').hidden = true; });
-document.getElementById('cl-theme-bg-file-input').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
+// Same crop-preview step the Page Background picker already uses
+// (openCropModal, see cl-page-view-theme-bg-file-input below) -- this one
+// used to just upload the raw file straight off disk with no chance to
+// frame it, the only "theme" background on the page still missing that
+// step. 16/9 for the same reason noted on the Page Background version:
+// a full-bleed cover-fit backdrop has no one "correct" ratio, this just
+// matches the other wide-landscape crops this file already uses.
+async function uploadClubThemeBg(blob) {
   const fd = new FormData();
-  fd.append('image', file);
+  fd.append('image', blob, 'theme-bg.jpg');
   const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/theme-bg`, {
     method: 'PUT', headers: authHeaders(), body: fd,
   });
@@ -6037,6 +6041,16 @@ document.getElementById('cl-theme-bg-file-input').addEventListener('change', asy
     currentClub = data.club;
     applyClubTheme(currentClub.theme, currentClub.theme_bg_url);
   }
+}
+document.getElementById('cl-theme-bg-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  openCropModal({
+    title: 'Crop Club Background', imageSrc: URL.createObjectURL(file), aspectRatio: 16 / 9, round: false,
+    hint: 'Drag to position, scroll or pinch to zoom — this is how the background will sit behind your club.',
+    onSave: uploadClubThemeBg,
+  });
 });
 
 // ── Same theme popover, scoped to whichever General page is currently
