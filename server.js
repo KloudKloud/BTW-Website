@@ -7139,7 +7139,7 @@ app.put('/api/account/accent-color', requireAuth, async (req, res) => {
 // listed against the same keys fanpages-nav.css defines `lb-theme-<key>`
 // overrides for, so an unknown key just falls back to 'default' (the
 // original purple/black-sweep look) instead of storing garbage.
-const LEVEL_BAR_COLOR_KEYS = ['default', 'pink', 'red', 'blue', 'green'];
+const LEVEL_BAR_COLOR_KEYS = ['default', 'pink', 'red', 'blue', 'green', 'gold', 'teal', 'sunset', 'galaxy', 'rainbow'];
 app.put('/api/account/level-bar-color', requireAuth, async (req, res) => {
   const color = LEVEL_BAR_COLOR_KEYS.includes(req.body.level_bar_color) ? req.body.level_bar_color : 'default';
   await pool.query('UPDATE users SET level_bar_color = $1 WHERE id = $2', [color, req.user.id]);

@@ -1134,7 +1134,7 @@ window.fpUpdateNavAvatar = function (avatarUrl) {
 // hero) to whichever preset the user picked with the Levels page's pen-color
 // picker. Global so the Levels page can call it immediately after saving a
 // new pick, without waiting on a reload to re-run /api/auth/me. ───────────
-const LEVEL_BAR_THEME_KEYS = ['pink', 'red', 'blue', 'green'];
+const LEVEL_BAR_THEME_KEYS = ['pink', 'red', 'blue', 'green', 'gold', 'teal', 'sunset', 'galaxy', 'rainbow'];
 window.fpnavApplyLevelBarTheme = function (key) {
   LEVEL_BAR_THEME_KEYS.forEach(k => document.body.classList.remove(`lb-theme-${k}`));
   if (LEVEL_BAR_THEME_KEYS.includes(key)) document.body.classList.add(`lb-theme-${key}`);
