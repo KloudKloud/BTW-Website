@@ -16,7 +16,7 @@
       background: #171717; border: 1px solid rgba(255,255,255,0.12); border-radius: 16px;
       padding: 1.5rem; width: 100%; max-width: 640px; box-shadow: 0 24px 70px rgba(0,0,0,0.6);
     }
-    .crop-modal-title { font-family: 'Cinzel', Georgia, serif; font-size: 1.15rem; font-weight: 700; color: #f0f0f0; margin: 0 0 1rem; }
+    .crop-modal-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.15rem; font-weight: 700; color: #f0f0f0; margin: 0 0 1rem; }
     .crop-modal-img-wrap {
       position: relative; width: 100%; max-height: 60vh; background: #0a0a0a; border-radius: 10px;
       overflow: hidden; touch-action: none; margin: 0 auto;
