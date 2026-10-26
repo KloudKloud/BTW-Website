@@ -154,7 +154,7 @@
       transition: border-color 0.15s, color 0.15s;
     }
     .cl-edit-slideshow-add:hover { border-color: rgba(127,168,217,0.6); color: #7fa8d9; }
-    /* "Add YT Video" tile -- sits right before the "+" add tile in
+    /* "Link Video" tile -- sits right before the "+" add tile in
        the slideshow stack (same size/shape, distinct red accent) so it
        reads as a second, parallel way to add a slide. */
     .cl-edit-slideshow-add--youtube {
@@ -186,7 +186,12 @@
        "this huge thing" crammed into the field's much narrower column. */
     .slideshow-randomize-row--split { justify-content: space-between; }
     .slideshow-randomize-row-controls { display: flex; align-items: center; gap: 0.5rem; }
-    /* "Add YT Video" popup -- Fredoka per the site's bubbly-heading
+    /* Breathing room between an Additional Field's Cover slot (whose own
+       Link Video button sits at its bottom) and the Side Image slot right
+       underneath it -- without this the two ran together and the Link
+       Video button read as if it belonged to Side Image too. */
+    .cl-tf-img-slot + .cl-tf-img-slot { margin-top: 1.75rem; }
+    /* "Link Video" popup -- Fredoka per the site's bubbly-heading
        convention (see CLAUDE.md), matching crop-modal.js's overlay pattern
        but its own self-contained markup, per this codebase's duplication-
        over-shared-components convention. */
@@ -224,21 +229,13 @@
     .cl-page-text-field-row:not(.cl-page-text-field-row--collapsed) .cl-page-text-field-head { margin-bottom: 0.85rem; }
     .cl-page-text-field-handle { color: #777; font-size: 1rem; cursor: grab; flex-shrink: 0; }
     .cl-page-text-field-num { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #888; flex-shrink: 0; }
-    .cl-page-text-field-remove {
-      background: #d97a72; border: 1px solid #d97a72; color: #fff;
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.88rem; font-weight: 700; cursor: pointer;
-      padding: 0.55rem 1.05rem; border-radius: 10px; transition: background 0.15s, border-color 0.15s;
-    }
-    .cl-page-text-field-remove:hover { background: #c96358; border-color: #c96358; }
     /* space-between, not a hugging gap -- Save belongs at the far right edge
-       of the field's own box, not clustered next to Remove Section. */
+       of the field's own box, not clustered next to Remove Section. Remove/
+       Save themselves are now the site's plain .mod-btn/.mod-btn--danger
+       outline pills (see fanpages.css) instead of their own bespoke solid-
+       fill buttons, matching every other delete/save pair on the site
+       (Cancel+Delete Post in this same editor's topbar, etc.). */
     .cl-page-text-field-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 0.5rem; }
-    .cl-page-text-field-save {
-      background: #7fa8d9; border: 1px solid #7fa8d9; color: #fff;
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.88rem; font-weight: 700; cursor: pointer;
-      padding: 0.55rem 1.05rem; border-radius: 10px; transition: background 0.15s, border-color 0.15s;
-    }
-    .cl-page-text-field-save:hover { background: #93b8e2; border-color: #93b8e2; }
     /* Collapsed "draft" state — Save Section tucks the row down to a
        compact summary line (title + edit button), clicking anywhere on
        that line reopens it. The full form underneath stays in the DOM,
@@ -320,7 +317,7 @@
         </div>
         <input type="file" id="cp-cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
         <div class="cl-cover-actions-row">
-          <button type="button" class="cl-youtube-insert-btn cl-youtube-insert-btn--compact" id="cp-cover-youtube-btn">▶ Add YT Video</button>
+          <button type="button" class="cl-youtube-insert-btn cl-youtube-insert-btn--compact" id="cp-cover-youtube-btn">▶ Link Video</button>
           <button type="button" class="cl-splash-rules-link" id="cp-cover-remove-btn" hidden>✕ No Media</button>
         </div>
       </div>
@@ -407,7 +404,7 @@
 
 <div class="cl-yt-modal-overlay" id="cl-yt-modal-overlay" hidden>
   <div class="cl-yt-modal-box">
-    <p class="cl-yt-modal-title">▶ Add YT Video</p>
+    <p class="cl-yt-modal-title">▶ Link Video</p>
     <input type="text" class="mod-input cl-yt-modal-input" id="cl-yt-modal-input" placeholder="Paste a YouTube link…" autocomplete="off" />
     <p class="cl-yt-modal-error" id="cl-yt-modal-error" hidden>That doesn't look like a YouTube link — double-check it and try again.</p>
     <div class="cl-yt-modal-actions">
@@ -568,7 +565,7 @@
     const id = extractYoutubeId(url);
     return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : '';
   }
-  // Shows the "Add YT Video" popup and resolves to the canonical
+  // Shows the "Link Video" popup and resolves to the canonical
   // saved URL on success, or null if cancelled. Forces a real YouTube link:
   // an unrecognized paste shows an inline error and the popup stays open
   // (both here, client-side, AND re-checked server-side -- the real trust
@@ -704,7 +701,7 @@
     const ytBtn = document.createElement('button');
     ytBtn.className = 'cl-edit-slideshow-add cl-edit-slideshow-add--youtube';
     ytBtn.type = 'button';
-    ytBtn.title = 'Add YT Video';
+    ytBtn.title = 'Link Video';
     ytBtn.innerHTML = '<span class="cl-yt-icon">▶</span>YouTube';
     ytBtn.addEventListener('click', async () => {
       const url = await promptYoutubeLink();
@@ -806,7 +803,7 @@
   let textFieldDragIdx = null;
   const TF_IMG_HINT = 'Optional. Every text field can have a main body image and side image.';
   function textFieldImageSlotHtml(field, prefix, aspect, label, maxWidth) {
-    // Only the Cover slot (not Side) gets the "Add YT Video" option.
+    // Only the Cover slot (not Side) gets the "Link Video" option.
     const allowYoutube = prefix === 'cover';
     const mode = field[`${prefix}_mode`] === 'slideshow' ? 'slideshow' : 'static';
     const imageUrl = field[`${prefix}_image_url`] || '';
@@ -832,13 +829,13 @@
             <button type="button" class="cl-splash-rules-link cl-tf-remove-img-btn" ${imageUrl ? '' : 'hidden'}>✕ No ${allowYoutube ? 'Media' : 'Image'}</button>
           </div>
           <input type="file" class="cl-tf-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-          ${allowYoutube ? '<button type="button" class="cl-youtube-insert-btn cl-youtube-insert-btn--compact cl-tf-youtube-btn" style="margin-top:0.6rem;">▶ Add YT Video</button>' : ''}
+          ${allowYoutube ? '<button type="button" class="cl-youtube-insert-btn cl-youtube-insert-btn--compact cl-tf-youtube-btn" style="margin-top:0.6rem;">▶ Link Video</button>' : ''}
         </div>
         <div class="cl-tf-slideshow" ${mode === 'static' ? 'hidden' : ''}>
           <div class="cl-edit-slideshow-stack cl-tf-slideshow-stack"></div>
           <input type="file" class="cl-tf-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
           <div class="slideshow-randomize-row${allowYoutube ? ' slideshow-randomize-row--split' : ''}">
-            ${allowYoutube ? '<button type="button" class="cl-youtube-insert-btn cl-youtube-insert-btn--compact cl-tf-slideshow-youtube-btn">▶ Add YT Video</button>' : ''}
+            ${allowYoutube ? '<button type="button" class="cl-youtube-insert-btn cl-youtube-insert-btn--compact cl-tf-slideshow-youtube-btn">▶ Link Video</button>' : ''}
             <div class="slideshow-randomize-row-controls">
               <label class="slideshow-randomize-label">Randomize</label>
               <label class="slideshow-randomize-switch">
@@ -1008,8 +1005,8 @@
         ${textFieldImageSlotHtml(field, 'cover', '16 / 9', 'Cover Media', 320)}
         ${textFieldImageSlotHtml(field, 'side', '3 / 4', 'Side Image', 180)}
         <div class="cl-page-text-field-actions">
-          <button type="button" class="cl-page-text-field-remove">🗑️ Remove Section</button>
-          <button type="button" class="cl-page-text-field-save">💾 Save</button>
+          <button type="button" class="cl-page-text-field-remove mod-btn mod-btn--danger">🗑️ Remove Section</button>
+          <button type="button" class="cl-page-text-field-save mod-btn">💾 Save</button>
         </div>
       </div>
     `;
