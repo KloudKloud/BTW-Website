@@ -45,151 +45,81 @@
     .fp-main { max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto; padding: 2.5rem 2rem 5rem; }
     @media (max-width: 720px) { .fp-main { padding: 1.5rem 0.4rem 3rem; } }
 
-    /* ── Hero banner — full-bleed strip right under the topbar. Looping
-       TopBackground video fills the whole viewport width; the Bulletin
-       (our existing billboard) sits centered on top with Donations /
-       Feedback labels flanking it, per the MSPaint layout. ── */
-    .fp-hero-banner { position: relative; width: 100%; overflow: hidden; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    /* ── Hero row — five boxes across the top. Two comic-strip boxes on the
+       left (Gallery/Stories, together 1/4 width), a borderless full video
+       banner in the middle (1/2 width), two more comic-strip boxes on the
+       right (Characters/Clubs, together 1/4 width). Replaces the old
+       Donations/Feedback side-panel layout entirely. ── */
+    .fp-hero-row { position: relative; width: 100%; display: flex; align-items: stretch; border-bottom: 1px solid rgba(255,255,255,0.08); }
+
+    /* Comic-strip link boxes — flat black, bold border, halftone dot
+       texture, a vertical label running up one edge, and a colored glow
+       on hover that doubles as the "this is clickable" affordance. */
+    .fp-comic-box {
+      position: relative; flex: 1 1 0; min-width: 0; overflow: hidden;
+      display: block; text-decoration: none; cursor: pointer;
+      background: #0a0a0a;
+      background-image:
+        radial-gradient(rgba(255,255,255,0.09) 1.1px, transparent 1.1px);
+      background-size: 13px 13px;
+      border: 2px solid rgba(255,255,255,0.75);
+      transition: box-shadow 0.22s, transform 0.18s, background-color 0.22s;
+    }
+    .fp-comic-box::after {
+      content: ''; position: absolute; inset: 0; opacity: 0; transition: opacity 0.22s;
+      background: radial-gradient(ellipse at center, var(--comic-glow, rgba(255,255,255,0.35)) 0%, transparent 72%);
+    }
+    .fp-comic-box:hover { transform: translateY(-2px); background-color: #120f16; }
+    .fp-comic-box:hover::after { opacity: 1; }
+    .fp-comic-box:hover { box-shadow: 0 0 22px 2px var(--comic-glow, rgba(255,255,255,0.45)), inset 0 0 30px var(--comic-glow, rgba(255,255,255,0.25)); }
+    .fp-comic-box--gallery { --comic-glow: rgba(224,110,255,0.55); }
+    .fp-comic-box--stories { --comic-glow: rgba(240,192,96,0.55); }
+    .fp-comic-box--characters { --comic-glow: rgba(96,224,160,0.55); }
+    .fp-comic-box--clubs { --comic-glow: rgba(96,180,255,0.55); }
+
+    .fp-comic-label {
+      position: absolute; top: 50%; z-index: 2;
+      writing-mode: vertical-rl; transform: translateY(-50%) rotate(180deg);
+      font-family: 'Bangers', 'Fredoka', cursive; font-weight: 400;
+      font-size: clamp(1.1rem, 2.1vw, 2.1rem); letter-spacing: 0.14em;
+      color: #fff; -webkit-text-stroke: 1px #000;
+      text-shadow: 3px 0 0 #000, -3px 0 0 #000, 0 3px 0 #000, 0 -3px 0 #000, 0 0 14px var(--comic-glow, rgba(255,255,255,0.5));
+      transition: text-shadow 0.22s;
+      pointer-events: none;
+    }
+    .fp-comic-label--edge-start { left: 0.55rem; }
+    .fp-comic-label--edge-end { right: 0.55rem; }
+
+    /* Middle banner — no boxed background of its own, just the looping
+       video full-bleed across this half, with the bulletin centered on
+       top of it. */
+    .fp-hero-banner-mid { position: relative; flex: 2 1 0; min-width: 0; overflow: hidden; }
     .fp-hero-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
     .fp-hero-scrim {
       position: absolute; inset: 0; z-index: 1;
       background: linear-gradient(180deg, rgba(8,6,14,0.45), rgba(8,6,14,0.35) 45%, rgba(8,6,14,0.65));
     }
     .fp-hero-inner {
-      position: relative; z-index: 2; width: 100%; box-sizing: border-box;
-      padding: 1.5rem calc(clamp(210px, 17vw, 270px) + 1.5rem);
-      display: flex; justify-content: center;
-      /* This element's side padding is just empty space reserved for the
-         Donations/Feedback side panels underneath -- but at full width and
-         the same z-index as those panels, sitting later in the DOM, it was
-         silently swallowing clicks meant for their buttons (Ko-fi/PayPal)
-         across that padding strip. Nothing in here needs to catch pointer
-         events except the actual bulletin content. */
-      pointer-events: none;
+      position: relative; z-index: 2; width: 100%; height: 100%; box-sizing: border-box;
+      padding: 1.5rem 1.25rem;
+      display: flex; align-items: center; justify-content: center;
     }
-    @media (max-width: 1150px) { .fp-hero-inner { padding: 1.5rem 1.25rem; } }
-
-    /* The bulletin keeps its own comfortable max-width, centered in the
-       banner, with side padding roughly matching the side panels' width so
-       it never overlaps them on narrower screens. pointer-events: auto
-       re-enables clicks/scroll here since the parent .fp-hero-inner turns
-       them off across its own full-width padding strip (see above). */
-    .fp-hero-bulletin { width: 100%; min-width: 0; max-width: 900px; margin: 0 auto; pointer-events: auto; }
-
-    /* Donations/Feedback — now full-height side panels, flush to the true
-       left/right edges of the banner (top to bottom, nav bar to border),
-       instead of grid columns sharing the bulletin's row. */
-    .fp-hero-side {
-      position: absolute; top: 0; bottom: 0; z-index: 2;
-      width: clamp(210px, 17vw, 270px); box-sizing: border-box;
-    }
-    .fp-hero-side--left { left: 0; }
-    .fp-hero-side--right { right: 0; }
-    @media (max-width: 1150px) {
-      .fp-hero-side { position: static; width: 100%; }
-      .fp-hero-banner { display: flex; flex-direction: column; }
-      .fp-hero-side--left { order: 1; }
-      .fp-hero-inner { order: 2; }
-      .fp-hero-side--right { order: 3; }
-    }
-    .fp-hero-box {
-      position: relative; width: 100%; height: 100%; box-sizing: border-box;
-      display: flex; flex-direction: column; padding: 1rem 0.9rem;
-      background-image: linear-gradient(160deg, rgba(10,8,20,0.4), rgba(10,8,20,0.6)), url('/images/home/box-background-3.png');
-      background-size: cover;
-    }
-    /* Only the edge facing the bulletin gets a divider line -- the other
-       three sides are just the background art bleeding to the banner's
-       own edges, no boxed-in border/shadow. */
-    .fp-hero-side--left .fp-hero-box { background-position: 15% 25%; border-right: 1px solid rgba(255,255,255,0.35); }
-    .fp-hero-side--right .fp-hero-box { background-position: 85% 60%; border-left: 1px solid rgba(255,255,255,0.35); }
-    @media (max-width: 1150px) {
-      .fp-hero-box { height: auto; min-height: 280px; }
-      .fp-hero-side--left .fp-hero-box, .fp-hero-side--right .fp-hero-box { border: none; }
-    }
-
-    .fp-hero-box-title { display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex: none; }
-    .fp-hero-label {
-      font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 1.6rem; color: #fff;
-      text-shadow: 0 2px 10px rgba(0,0,0,0.8);
-    }
-    .fp-hero-box-deco { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
-    .fp-hero-box-rule { flex: none; height: 1px; margin: 0.85rem 0 1rem; background: linear-gradient(to right, rgba(255,255,255,0.75), rgba(255,255,255,0)); }
+    .fp-hero-bulletin { width: 100%; min-width: 0; max-width: 900px; margin: 0 auto; }
     .fp-hero-bulletin .fp-billboard { margin-bottom: 0; }
 
-    /* ── Donations box — live donor feed (same /api/donations feed
-       btwfanfic.net's homepage uses) as a scrollable stack of cards,
-       nicer Ko-fi/PayPal buttons pinned underneath. ── */
-    .fp-hero-donors { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 0.55rem; padding-right: 0.25rem; margin-bottom: 1rem; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.3) transparent; }
-    .fp-hero-donors::-webkit-scrollbar { width: 5px; }
-    .fp-hero-donors::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 4px; }
-    .fp-hero-donor-card {
-      display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
-      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
-      padding: 0.55rem 0.8rem; flex: none;
+    @media (max-width: 1150px) {
+      .fp-comic-label { font-size: clamp(0.95rem, 1.7vw, 1.6rem); }
     }
-    .fp-hero-donor-name { display: flex; align-items: center; gap: 0.4rem; font-size: 0.88rem; font-weight: 600; color: #a8d8ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-    .fp-hero-donor-amount { font-size: 0.88rem; font-weight: 700; color: #f0c060; flex-shrink: 0; }
-    .fp-hero-donors-empty { color: rgba(255,255,255,0.55); font-size: 0.85rem; text-align: center; padding: 1.5rem 0; }
-    .fp-hero-donate-btns { flex: none; display: flex; gap: 0.6rem; }
-    .fp-hero-donate-btn {
-      flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 0.35rem;
-      text-decoration: none; font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 0.8rem;
-      color: #fff; padding: 0.4rem 0.5rem; border-radius: 20px; letter-spacing: 0.01em;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.35);
-      transition: transform 0.15s, box-shadow 0.15s;
-    }
-    .fp-hero-donate-btn:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(0,0,0,0.45); }
-    .fp-hero-donate-btn--kofi { background: linear-gradient(135deg, #29abe0, #1a7fae); }
-    .fp-hero-donate-btn--paypal { background: linear-gradient(135deg, #2a9fd6, #0b3d91); }
-
-    /* True phone widths: Feedback moves into the hamburger drawer's Settings
-       submenu on mobile (see fanpages-nav.js), so it's dropped from the hero
-       entirely here -- no more squeezing a 210px-floor side box into a phone
-       viewport. Bulletin is all that's left in the hero. Donations gets
-       re-parented by JS (placeDonationsForViewport) out of the hero and
-       down into #fp-mobile-donations-slot, underneath Recommended
-       Followers -- hidden here at its original spot so there's no flash of
-       it in the wrong place before that JS runs. */
+    /* Phone widths: stack the banner full-width on top, with the four
+       comic boxes as an equal-width row underneath it instead of five
+       cramped slivers squeezed into one row. */
     @media (max-width: 720px) {
-      .fp-hero-banner { flex-direction: column; }
-      /* Equal top/bottom padding -- previously 0 on the bottom, which left
-         the billboard hugging the very bottom edge of the video/scrim
-         instead of sitting centered in it. */
+      .fp-hero-row { flex-wrap: wrap; }
+      .fp-hero-banner-mid { flex: 1 1 100%; order: 1; min-height: 220px; }
+      .fp-comic-box { flex: 1 1 25%; order: 2; min-height: 150px; }
       .fp-hero-inner { padding: 1.25rem 1rem; }
-      .fp-hero-side--left, .fp-hero-side--right { display: none; }
-      #fp-mobile-donations-slot .fp-hero-side--left {
-        display: block; position: static; width: 100%; margin-top: 2rem;
-      }
-      /* Transparent, not boxed -- no background art/border/shadow, just the
-         content floating on the page like everything else below it. */
-      #fp-mobile-donations-slot .fp-hero-box {
-        width: 100%; min-height: 0; padding: 0;
-        background: none; border: none; box-shadow: none;
-      }
-      .fp-hero-label { font-size: 1.15rem; }
-      .fp-hero-box-deco { width: 20px; height: 20px; }
-      .fp-hero-donors { max-height: 160px; }
-      .fp-hero-donate-btns { gap: 0.5rem; }
+      .fp-comic-label { font-size: 1rem; letter-spacing: 0.08em; }
     }
-
-    /* ── Feedback box — two blurb lines + a big game-UI style CTA button
-       pinned to the bottom regardless of text length. ── */
-    .fp-hero-feedback-text { flex: 1 1 auto; display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem; }
-    .fp-hero-feedback-line { display: flex; align-items: flex-start; gap: 0.5rem; color: #f0eaff; font-size: 0.92rem; line-height: 1.55; }
-    .fp-hero-feedback-line img { width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; margin-top: 0.15rem; }
-    .fp-hero-feedback-btn {
-      flex: none; display: block; text-align: center; text-decoration: none;
-      font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 1.15rem; letter-spacing: 0.03em;
-      color: #fff; padding: 0.8rem 1rem; border-radius: 14px;
-      background: linear-gradient(135deg, #29abe0, #0b3d91);
-      border-bottom: 4px solid rgba(0,0,0,0.35);
-      text-shadow: 0 2px 0 rgba(0,0,0,0.35);
-      box-shadow: 0 8px 20px rgba(0,0,0,0.45);
-      transition: transform 0.12s, border-bottom-width 0.12s;
-    }
-    .fp-hero-feedback-btn:hover { transform: translateY(-2px); }
-    .fp-hero-feedback-btn:active { transform: translateY(1px); border-bottom-width: 2px; }
 
     /* ── Video-area — split into two stacked sections, each with its own
        looping video, so object-fit:cover never has to zoom in hard to
@@ -730,60 +660,43 @@
 
 <div id="fanpages-topbar-root"></div>
 
-<!-- ══ Hero banner — full-bleed, TopBackground video, Bulletin centered with
-     Donations/Feedback labels flanking it (wave 1 of the homepage remodel;
-     these labels are placeholders until their own sections get built) ══ -->
-<section class="fp-hero-banner">
-  <video class="fp-hero-video" autoplay muted loop playsinline>
-    <source src="/images/home/top-background.webm" type="video/webm" />
-  </video>
-  <div class="fp-hero-scrim"></div>
+<!-- ══ Hero row — five boxes: Gallery/Stories comic strips (left quarter),
+     the video banner (middle half), Characters/Clubs comic strips (right
+     quarter). Each comic box is a plain link to its destination page. ══ -->
+<section class="fp-hero-row">
+  <a class="fp-comic-box fp-comic-box--gallery" href="/fanpages/search?view=submissions&browse=1">
+    <span class="fp-comic-label fp-comic-label--edge-start">Gallery</span>
+  </a>
+  <a class="fp-comic-box fp-comic-box--stories" href="/fanpages/search?sort=updated&browse=1">
+    <span class="fp-comic-label fp-comic-label--edge-end">Stories</span>
+  </a>
 
-  <div class="fp-hero-side fp-hero-side--left">
-    <div class="fp-hero-box">
-      <div class="fp-hero-box-title">
-        <h2 class="fp-hero-label">Donations</h2>
-        <img class="fp-hero-box-deco" src="/images/home/decoration-2.png" alt="" />
-      </div>
-      <div class="fp-hero-box-rule"></div>
-      <div class="fp-hero-donors" id="fp-hero-donors">
-        <p class="fp-hero-donors-empty" id="fp-hero-donors-empty">Loading supporters…</p>
-      </div>
-      <div class="fp-hero-donate-btns">
-        <a class="fp-hero-donate-btn fp-hero-donate-btn--kofi" href="https://ko-fi.com/veekitpaws" target="_blank" rel="noopener">☕ Ko-fi</a>
-        <a class="fp-hero-donate-btn fp-hero-donate-btn--paypal" href="https://www.paypal.com/donate?business=mewtwosmew%40gmail.com&currency_code=USD" target="_blank" rel="noopener">💳 PayPal</a>
+  <div class="fp-hero-banner-mid">
+    <video class="fp-hero-video" autoplay muted loop playsinline>
+      <source src="/images/home/top-background.webm" type="video/webm" />
+    </video>
+    <div class="fp-hero-scrim"></div>
+    <div class="fp-hero-inner">
+      <div class="fp-hero-bulletin">
+        <section class="fp-billboard" id="fp-billboard">
+          <div class="fp-billboard-track" id="fp-billboard-track"></div>
+          <div class="fp-billboard-empty" id="fp-billboard-empty" style="display:none;">
+            <p>✨ Something fun is coming to this spot soon!</p>
+          </div>
+          <button class="fp-billboard-arrow fp-billboard-arrow--prev" id="fp-billboard-prev" type="button" aria-label="Previous slide" style="display:none;">‹</button>
+          <button class="fp-billboard-arrow fp-billboard-arrow--next" id="fp-billboard-next" type="button" aria-label="Next slide" style="display:none;">›</button>
+          <div class="fp-billboard-dots" id="fp-billboard-dots"><div class="fp-billboard-dots-track" id="fp-billboard-dots-track"></div></div>
+        </section>
       </div>
     </div>
   </div>
 
-  <div class="fp-hero-inner">
-    <div class="fp-hero-bulletin">
-      <section class="fp-billboard" id="fp-billboard">
-        <div class="fp-billboard-track" id="fp-billboard-track"></div>
-        <div class="fp-billboard-empty" id="fp-billboard-empty" style="display:none;">
-          <p>✨ Something fun is coming to this spot soon!</p>
-        </div>
-        <button class="fp-billboard-arrow fp-billboard-arrow--prev" id="fp-billboard-prev" type="button" aria-label="Previous slide" style="display:none;">‹</button>
-        <button class="fp-billboard-arrow fp-billboard-arrow--next" id="fp-billboard-next" type="button" aria-label="Next slide" style="display:none;">›</button>
-        <div class="fp-billboard-dots" id="fp-billboard-dots"><div class="fp-billboard-dots-track" id="fp-billboard-dots-track"></div></div>
-      </section>
-    </div>
-  </div>
-
-  <div class="fp-hero-side fp-hero-side--right">
-    <div class="fp-hero-box">
-      <div class="fp-hero-box-title">
-        <h2 class="fp-hero-label">Feedback</h2>
-        <img class="fp-hero-box-deco" src="/images/home/decoration-2.png" alt="" />
-      </div>
-      <div class="fp-hero-box-rule"></div>
-      <div class="fp-hero-feedback-text">
-        <p class="fp-hero-feedback-line"><img src="/images/home/decoration-2.png" alt="" />Your feedback helps this website grow, flourish, and keeps this 'vee happy.</p>
-        <p class="fp-hero-feedback-line"><img src="/images/home/decoration-2.png" alt="" />Wanna reach out? Click below and share your thoughts.</p>
-      </div>
-      <a class="fp-hero-feedback-btn" href="/fanpages/notifications#inbox/new/veekitpaws" id="fp-hero-feedback-btn">💬 Feedback</a>
-    </div>
-  </div>
+  <a class="fp-comic-box fp-comic-box--characters" href="/fanpages/characters">
+    <span class="fp-comic-label fp-comic-label--edge-start">Characters</span>
+  </a>
+  <a class="fp-comic-box fp-comic-box--clubs" href="/fanpages/social">
+    <span class="fp-comic-label fp-comic-label--edge-end">Clubs</span>
+  </a>
 </section>
 
 <!-- ══ Video area — MainBackground behind the spotlight cards + Recent
@@ -882,13 +795,6 @@
       </div>
     </section>
 
-    <!-- Mobile-only landing spot for the Donations box -- on phones the
-         real .fp-hero-side--left node gets re-parented in here by JS
-         (see placeDonationsForViewport below) so it sits at the very
-         bottom of the page, underneath Recommended Followers, instead of
-         flanking the bulletin. Empty/unused on desktop. -->
-    <div class="fp-mobile-donations-slot" id="fp-mobile-donations-slot"></div>
-
     <div class="fp-disclaimer">
       <div class="fp-disclaimer-box">
         <p>
@@ -972,34 +878,6 @@
     } else {
       lazyVideos.forEach(loadLazyVideo);
     }
-  })();
-
-  // ── Donations box re-parenting — on phones it physically moves out of the
-  // hero banner and down into #fp-mobile-donations-slot (underneath
-  // Recommended Followers) instead of just being reordered via CSS, since
-  // that slot lives in a completely different section of the DOM. Runs on
-  // load and on resize/rotate so it lands back beside the bulletin if the
-  // viewport grows past the mobile breakpoint again.
-  (function () {
-    const donationsBox = document.querySelector('.fp-hero-side--left');
-    const mobileSlot = document.getElementById('fp-mobile-donations-slot');
-    const heroBanner = document.querySelector('.fp-hero-banner');
-    const heroInner = document.querySelector('.fp-hero-inner');
-    if (!donationsBox || !mobileSlot || !heroBanner || !heroInner) return;
-    function placeDonationsForViewport() {
-      const isMobile = window.innerWidth <= 720;
-      if (isMobile && donationsBox.parentElement !== mobileSlot) {
-        mobileSlot.appendChild(donationsBox);
-      } else if (!isMobile && donationsBox.parentElement !== heroBanner) {
-        heroBanner.insertBefore(donationsBox, heroInner);
-      }
-    }
-    placeDonationsForViewport();
-    let resizeTimer = null;
-    window.addEventListener('resize', () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(placeDonationsForViewport, 150);
-    });
   })();
 
   // ── Billboard — slides come from the DB now (managed via Hub Image Builder) ──
@@ -1275,37 +1153,6 @@
   function isSafeLinkUrl(url) {
     try { return ['http:', 'https:'].includes(new URL(String(url), location.origin).protocol); }
     catch { return false; }
-  }
-
-  // ── Donations box in the hero banner — same /api/donations feed
-  // btwfanfic.net's homepage uses, rendered as a scrollable stack of
-  // donor cards (name + amount) instead of a bare list. ──
-  async function loadHeroDonors() {
-    const feed = document.getElementById('fp-hero-donors');
-    const empty = document.getElementById('fp-hero-donors-empty');
-    try {
-      const res = await fetch('/api/donations');
-      const data = await res.json();
-      const list = data.donations || [];
-      if (!list.length) {
-        empty.textContent = 'No donations yet — be the first! 🌟';
-        return;
-      }
-      empty.remove();
-      list.forEach(d => {
-        const sym = d.currency === 'USD' ? '$' : d.currency + ' ';
-        const src = d.source === 'kofi' ? '☕' : '💳';
-        const row = document.createElement('div');
-        row.className = 'fp-hero-donor-card';
-        row.innerHTML = `
-          <span class="fp-hero-donor-name">${src} ${escapeHtml(d.donor_name)}</span>
-          <span class="fp-hero-donor-amount">${sym}${parseFloat(d.amount).toFixed(2)}</span>
-        `;
-        feed.appendChild(row);
-      });
-    } catch {
-      empty.textContent = 'No donations yet — be the first! 🌟';
-    }
   }
 
   // No custom cover? Fake one out of a blurred, zoomed-in crop of the
@@ -2026,7 +1873,6 @@
   (async () => {
     loadRecommended();
     loadRecommendedFollowers();
-    loadHeroDonors();
     loadCharacterSpotlight();
     loadGallerySpotlight();
     loadStorySpotlight();
