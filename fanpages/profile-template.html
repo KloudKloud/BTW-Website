@@ -854,21 +854,21 @@
     .fp-notes-col-divider { flex-shrink: 0; width: 1px; background: rgba(255,255,255,0.14); align-self: stretch; }
     .fp-notes-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
-    .fp-notes-followers-row { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+    .fp-notes-followers-row { display: flex; flex-wrap: wrap; gap: 0.85rem; }
     .fp-notes-follower {
-      display: flex; flex-direction: column; align-items: center; gap: 0.3rem; width: 56px;
+      display: flex; flex-direction: column; align-items: center; gap: 0.35rem; width: 68px;
       text-decoration: none; text-align: center;
     }
     .fp-notes-follower img, .fp-notes-follower .fp-notes-follower-fallback {
-      width: 42px; height: 42px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+      width: 54px; height: 54px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
       border: 1px solid rgba(255,255,255,0.18);
     }
     .fp-notes-follower .fp-notes-follower-fallback {
-      display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; font-size: 0.95rem;
+      display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; font-size: 1.1rem;
       background: linear-gradient(135deg, #7fa8d9, #d97a72);
     }
     .fp-notes-follower span {
-      font-size: 0.68rem; color: #ccc; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 0.72rem; color: #ccc; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .fp-notes-follower:hover span { color: #7fa8d9; }
 
@@ -916,16 +916,19 @@
     }
     .fp-home-side-label .fp-notes-add-btn:hover { background: #f5d080; }
     /* Composing shows a square-cropped cut of your own pfp next to the box
-       (FA/Neopets-style "you're signing this" cue) -- row layout, avatar
-       pinned to the top-left of the textarea instead of vertically centered
-       so it still reads right once the textarea grows taller. */
-    .fp-notes-compose { margin-bottom: 1rem; display: flex; gap: 0.7rem; align-items: flex-start; }
+       (FA/Neopets-style "you're signing this" cue) -- same avatar size/gap/
+       horizontal padding as .fp-note-item below it, so your own pfp lines
+       up in the exact same column as everyone else's once the note posts,
+       instead of sitting at its own slightly-different size/offset. Top-
+       aligned, not vertically centered, so it still reads right once the
+       textarea grows taller. */
+    .fp-notes-compose { margin-bottom: 1rem; padding: 0 0.1rem; display: flex; gap: 0.75rem; align-items: flex-start; }
     .fp-notes-compose-avatar, .fp-notes-compose-avatar-fallback {
-      width: 44px; height: 44px; border-radius: 8px; flex-shrink: 0; object-fit: cover;
+      width: 38px; height: 38px; border-radius: 8px; flex-shrink: 0; object-fit: cover;
       border: 1px solid rgba(255,255,255,0.18);
     }
     .fp-notes-compose-avatar-fallback {
-      display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; font-size: 1rem;
+      display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; font-size: 0.9rem;
       background: linear-gradient(135deg, #7fa8d9, #d97a72);
     }
     .fp-notes-compose-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.5rem; }
@@ -1789,22 +1792,26 @@
   <div class="fp-notes-standalone-wrap">
     <div class="fp-notes-standalone-box">
       <!-- Left ~2/3: a little stack of info panels instead of more Notes --
-           Featured Club, Recent Followers, Links. Each one is built/chosen
-           from the Edit Profile page; this is just the display side. -->
+           Featured Club, Links, Recent Followers (bottom). Each one is
+           built/chosen from the Edit Profile page; this is just the
+           display side. -->
       <div class="fp-notes-info-col">
         <div class="fp-notes-info-section">
           <p class="fp-home-side-label">Featured Club</p>
           <div id="fp-notes-featured-club"><p class="fp-side-club-empty">Loading…</p></div>
         </div>
         <div class="fp-notes-info-divider"></div>
-        <div class="fp-notes-info-section">
-          <p class="fp-home-side-label">Recent Followers</p>
-          <div class="fp-notes-followers-row" id="fp-notes-followers"><p class="fp-side-club-empty">Loading…</p></div>
-        </div>
-        <div class="fp-notes-info-divider"></div>
         <div class="fp-notes-info-section fp-notes-info-section--links">
           <p class="fp-home-side-label">Links</p>
           <ul class="fp-links-list" id="fp-notes-links"><li><p class="fp-side-club-empty">Loading…</p></li></ul>
+        </div>
+        <div class="fp-notes-info-divider"></div>
+        <div class="fp-notes-info-section">
+          <p class="fp-home-side-label">
+            Recent Followers
+            <button type="button" class="fp-notes-add-btn" id="fp-notes-followers-showall-btn">Show All</button>
+          </p>
+          <div class="fp-notes-followers-row" id="fp-notes-followers"><p class="fp-side-club-empty">Loading…</p></div>
         </div>
       </div>
       <div class="fp-notes-col-divider"></div>
@@ -3821,6 +3828,7 @@
 
   document.getElementById('fp-stat-following-btn').addEventListener('click', () => openFollowModal('following'));
   document.getElementById('fp-stat-followers-btn').addEventListener('click', () => openFollowModal('followers'));
+  document.getElementById('fp-notes-followers-showall-btn').addEventListener('click', () => openFollowModal('followers'));
   document.getElementById('fp-stat-clubs-btn').addEventListener('click', () => openClubsModal());
 
   document.getElementById('fp-follow-modal-close').addEventListener('click', () => { fpFollowModalOverlay.hidden = true; });
@@ -5242,7 +5250,7 @@
     try {
       const res = await fetch(`/api/fanpage-profile/${USERNAME}/followers`, { headers: authHeaders() });
       const data = await res.json();
-      const followers = (data.users || []).slice(0, 8);
+      const followers = (data.users || []).slice(0, 6);
       if (!followers.length) {
         wrap.innerHTML = '<p class="fp-side-club-empty">No followers yet.</p>';
         return;
