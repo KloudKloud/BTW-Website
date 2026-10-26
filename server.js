@@ -3374,11 +3374,27 @@ app.get('/api/auth/confirm-email', async (req, res) => {
 app.get('/api/auth/profile', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
     `SELECT id, username, display_name, email, avatar, avatar_original_url, email_newsletter, nsfw_enabled, pending_email,
-            pronouns, account_bio, fun_facts, featured_submission_kind, featured_submission_ref_id
+            pronouns, account_bio, fun_facts, account_links, featured_club_slug,
+            featured_submission_kind, featured_submission_ref_id
      FROM users WHERE id = $1`, [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
   const { pending_email, ...rest } = user;
+
+  // Denormalized name/badge for whichever club is currently featured, same
+  // "Edit Profile needs a preview without a second round trip" reasoning as
+  // featuredSubmission below -- re-checked against live membership so a
+  // club the user has since left doesn't show a stale selection.
+  let featuredClub = null;
+  if (user.featured_club_slug) {
+    const { rows: [club] } = await pool.query(
+      `SELECT c.slug, c.name, c.icon_url, c.badge_url FROM clubs c
+       JOIN club_members cm ON cm.club_id = c.id AND cm.user_id = $1
+       WHERE c.slug = $2`,
+      [req.user.id, user.featured_club_slug]
+    );
+    if (club) featuredClub = club;
+  }
 
   // Denormalized display info (title/image) for whatever's currently pinned
   // as the single Featured Submission, so the Edit Profile page can show a
@@ -3398,7 +3414,7 @@ app.get('/api/auth/profile', requireAuth, async (req, res) => {
     if (row) featuredSubmission = { kind, ref_id: refId, title: row.title, image_url: row.image_url || '' };
   }
 
-  res.json({ user: { ...rest, email: decryptEmail(user.email), email_change_pending: !!pending_email, featured_submission: featuredSubmission } });
+  res.json({ user: { ...rest, email: decryptEmail(user.email), email_change_pending: !!pending_email, featured_submission: featuredSubmission, featured_club: featuredClub } });
 });
 
 // ── Protected spicy image delivery ────────────────────────────────────────────
@@ -6291,11 +6307,11 @@ app.get('/api/fanpage-profile/:username/notes', async (req, res) => {
 });
 
 // POST /api/fanpage-profile/:username/notes — leave a note on someone's
-// profile. Logged-in users only; no self-notes.
+// profile. Logged-in users only -- self-notes are allowed (the owner can
+// sign their own guestbook same as anyone else).
 app.post('/api/fanpage-profile/:username/notes', requireAuth, async (req, res) => {
   const { rows: [author] } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]);
   if (!author) return res.status(404).json({ error: 'Not found.' });
-  if (author.id === req.user.id) return res.status(400).json({ error: "You can't leave a note on your own profile." });
 
   const message = String(req.body.message || '').trim().slice(0, 500);
   if (!message) return res.status(400).json({ error: 'Note cannot be empty.' });

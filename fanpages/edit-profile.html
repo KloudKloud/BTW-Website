@@ -163,6 +163,47 @@
       align-content: start; gap: 0.75rem; height: 360px; overflow-y: auto; padding-right: 0.25rem; }
     .ep-sub-empty { color: #999; font-size: 0.88rem; line-height: 1.6; text-align: center; padding: 1.5rem 0; grid-column: 1 / -1; }
 
+    /* ── Featured Club -- single-pick from clubs the viewer is actually a
+         member of (re-validated server-side too). ── */
+    .ep-club-selected {
+      display: flex; align-items: center; gap: 0.75rem; padding: 0.8rem 1rem;
+      background: #17171a; border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; max-width: 360px;
+    }
+    .ep-club-selected img { width: 36px; height: 36px; object-fit: contain; border-radius: 7px; flex-shrink: 0; }
+    .ep-club-selected span { flex: 1; color: #f0f0f0; font-weight: 700; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ep-club-remove {
+      background: none; border: 1px solid rgba(255,255,255,0.2); border-radius: 18px; color: #ccc;
+      font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 600; padding: 0.45em 1em; cursor: pointer;
+      flex-shrink: 0; transition: border-color 0.15s, color 0.15s;
+    }
+    .ep-club-remove:hover { border-color: #d97a72; color: #d97a72; }
+    .ep-club-search-wrap { position: relative; max-width: 360px; }
+    .ep-club-search { margin-bottom: 0; }
+    .ep-club-dropdown {
+      position: fixed; z-index: 3000; background: #141018; border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 10px; box-shadow: 0 16px 40px rgba(0,0,0,0.55); max-height: 260px; overflow-y: auto;
+    }
+    .ep-club-option {
+      display: flex; align-items: center; gap: 0.6rem; width: 100%; background: none; border: none; text-align: left;
+      color: #ddd; font-family: 'Inter', sans-serif; font-size: 0.88rem; padding: 0.6rem 0.7rem; cursor: pointer;
+    }
+    .ep-club-option:hover { background: rgba(127,168,217,0.12); color: #7fa8d9; }
+    .ep-club-option img { width: 26px; height: 26px; object-fit: contain; border-radius: 5px; flex-shrink: 0; }
+    .ep-club-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ep-club-empty { color: #999; font-size: 0.85rem; padding: 0.7rem 0.8rem; margin: 0; }
+
+    /* ── Links -- label + URL rows, same "+ Add" pattern as Fun Facts. ── */
+    .ep-link-row { display: flex; gap: 0.6rem; margin-bottom: 0.6rem; }
+    .ep-link-row input { flex: 1; min-width: 0; }
+    .ep-link-row input[data-field="url"] { flex: 1.6; }
+    .ep-link-row input.ep-link-input--invalid { border-color: #d97a72; box-shadow: 0 0 0 1px rgba(217,122,114,0.4); }
+    .ep-link-remove {
+      background: none; border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: #d97a72;
+      cursor: pointer; flex-shrink: 0; width: 42px; font-size: 0.95rem;
+    }
+    .ep-link-remove:hover { border-color: #d97a72; }
+    .ep-links-error { color: #d97a72; font-size: 0.8rem; margin: 0.5rem 0 0; }
+
     @media (max-width: 720px) {
       .cs-layout { padding: calc(68px + 2rem) 1.25rem 4rem; }
       .cs-field-row { flex-direction: column; gap: 0; }
@@ -259,6 +300,24 @@
     </div>
     <input type="text" class="ep-sub-search" id="ep-sub-search" placeholder="Search your characters…" autocomplete="off" />
     <div class="ep-sub-results" id="ep-sub-results"><p class="ep-sub-empty">Loading…</p></div>
+  </div>
+
+  <div class="cs-panel">
+    <div class="cs-field-title-row">
+      <span class="cs-field-title">Featured Club</span>
+      <span class="cs-field-hint">Shown on your Home tab -- pick from clubs you're already in.</span>
+    </div>
+    <div id="ep-club-editor"></div>
+  </div>
+
+  <div class="cs-panel">
+    <div class="cs-field-title-row">
+      <span class="cs-field-title">Links</span>
+      <span class="cs-field-hint">Up to 10. Shown on your Home tab -- visitors get the usual "Leaving BTWFics" warning before following one.</span>
+    </div>
+    <div id="ep-links-list"></div>
+    <button type="button" class="mod-btn mod-btn--small" id="ep-link-add-btn">+ Add Link</button>
+    <p class="ep-links-error" id="ep-links-error" hidden></p>
   </div>
 
 </div>
@@ -404,6 +463,121 @@ document.getElementById('ep-sub-clear-btn').addEventListener('click', () => {
   runSubSearch(document.getElementById('ep-sub-search').value.trim());
 });
 
+// ── Featured Club -- single-pick, limited to clubs the viewer is actually
+// in; fetched once and filtered client-side as they type. ──────────────────
+let editFeaturedClub = null;
+let myClubsCache = null;
+async function loadMyClubs() {
+  if (myClubsCache) return myClubsCache;
+  try {
+    const res = await fetch(`/api/fanpage-profile/${encodeURIComponent(myUsername)}/clubs`, { headers: authHeaders() });
+    const data = await res.json();
+    myClubsCache = data.clubs || [];
+  } catch { myClubsCache = []; }
+  return myClubsCache;
+}
+
+function renderClubEditor() {
+  const wrap = document.getElementById('ep-club-editor');
+  wrap.innerHTML = '';
+  document.getElementById('ep-club-dropdown')?.remove();
+
+  if (editFeaturedClub) {
+    const card = document.createElement('div');
+    card.className = 'ep-club-selected';
+    card.innerHTML = `
+      <img src="${editFeaturedClub.badge_url || editFeaturedClub.icon_url || '/images/nopicture2.png'}" alt="" />
+      <span>${escapeHtml(editFeaturedClub.name)}</span>
+      <button type="button" class="ep-club-remove">Remove</button>
+    `;
+    card.querySelector('.ep-club-remove').addEventListener('click', () => {
+      editFeaturedClub = null;
+      renderClubEditor();
+    });
+    wrap.appendChild(card);
+    return;
+  }
+
+  const searchWrap = document.createElement('div');
+  searchWrap.className = 'ep-club-search-wrap';
+  searchWrap.innerHTML = `<input type="text" class="ep-sub-search ep-club-search" placeholder="Search a club you're in…" autocomplete="off" />`;
+  wrap.appendChild(searchWrap);
+  const input = searchWrap.querySelector('input');
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'ep-club-dropdown';
+  dropdown.id = 'ep-club-dropdown';
+  dropdown.hidden = true;
+  document.body.appendChild(dropdown);
+
+  function positionDropdown() {
+    const rect = input.getBoundingClientRect();
+    dropdown.style.top = `${rect.bottom + 4}px`;
+    dropdown.style.left = `${rect.left}px`;
+    dropdown.style.width = `${rect.width}px`;
+  }
+
+  async function paintDropdown(q) {
+    const clubs = await loadMyClubs();
+    const query = q.trim().toLowerCase();
+    const matches = query ? clubs.filter(c => c.name.toLowerCase().includes(query)) : clubs;
+    positionDropdown();
+    dropdown.hidden = false;
+    if (!matches.length) {
+      dropdown.innerHTML = `<p class="ep-club-empty">${clubs.length ? 'No matches.' : "You're not in any clubs yet."}</p>`;
+      return;
+    }
+    dropdown.innerHTML = '';
+    matches.forEach(c => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'ep-club-option';
+      item.innerHTML = `<img src="${c.badge_url || c.icon_url || '/images/nopicture2.png'}" alt="" /><span>${escapeHtml(c.name)}</span>`;
+      // mousedown, not click -- fires before the input's blur hides the
+      // dropdown, otherwise blur wins the race and the click never lands.
+      item.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        editFeaturedClub = { slug: c.slug, name: c.name, badge_url: c.badge_url || c.icon_url || '' };
+        renderClubEditor();
+      });
+      dropdown.appendChild(item);
+    });
+  }
+
+  input.addEventListener('focus', () => paintDropdown(input.value));
+  input.addEventListener('input', () => paintDropdown(input.value));
+  input.addEventListener('blur', () => { dropdown.hidden = true; });
+  window.addEventListener('scroll', () => { if (!dropdown.hidden) positionDropdown(); }, true);
+  window.addEventListener('resize', () => { if (!dropdown.hidden) positionDropdown(); });
+}
+
+// ── Links -- label + URL rows, same "+ Add" shape as Fun Facts above. ──────
+let editLinks = [];
+function renderLinksEditor() {
+  const wrap = document.getElementById('ep-links-list');
+  wrap.innerHTML = '';
+  editLinks.forEach((l, i) => {
+    const row = document.createElement('div');
+    row.className = 'ep-link-row';
+    row.innerHTML = `
+      <input class="cs-input-lg" type="text" maxlength="40" placeholder="Label (e.g. Twitter)" value="${escapeHtml(l.label || '')}" data-i="${i}" data-field="label" />
+      <input class="cs-input-lg" type="text" maxlength="300" placeholder="https://…" value="${escapeHtml(l.url || '')}" data-i="${i}" data-field="url" />
+      <button type="button" class="ep-link-remove" title="Remove link">✕</button>
+    `;
+    row.querySelector('[data-field="label"]').addEventListener('input', (e) => { editLinks[i].label = e.target.value; });
+    row.querySelector('[data-field="url"]').addEventListener('input', (e) => { editLinks[i].url = e.target.value; });
+    row.querySelector('.ep-link-remove').addEventListener('click', () => { editLinks.splice(i, 1); renderLinksEditor(); });
+    wrap.appendChild(row);
+  });
+  document.getElementById('ep-link-add-btn').classList.toggle('ep-funfact-add-btn-hidden', editLinks.length >= 10);
+}
+document.getElementById('ep-link-add-btn').addEventListener('click', () => {
+  if (editLinks.length >= 10) return;
+  editLinks.push({ label: '', url: '' });
+  renderLinksEditor();
+  document.querySelectorAll('#ep-links-list input[data-field="label"]')[editLinks.length - 1].focus();
+});
+
 // ── Save ─────────────────────────────────────────────────────────────────
 document.getElementById('ep-save-btn').addEventListener('click', async () => {
   const btn = document.getElementById('ep-save-btn');
@@ -414,10 +588,35 @@ document.getElementById('ep-save-btn').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = 'Saving…';
 
+  // Client-side pass just for a friendlier inline error -- the server
+  // re-validates with the real isValidHttpUrl check regardless.
+  const linksErrEl = document.getElementById('ep-links-error');
+  linksErrEl.hidden = true;
+  document.querySelectorAll('.ep-link-input--invalid').forEach(el => el.classList.remove('ep-link-input--invalid'));
+  const cleanLinks = editLinks.map(l => ({ label: (l.label || '').trim(), url: (l.url || '').trim() })).filter(l => l.url);
+  let hasInvalidLink = false;
+  document.querySelectorAll('#ep-links-list .ep-link-row').forEach((row, i) => {
+    const urlVal = (editLinks[i].url || '').trim();
+    if (urlVal && !/^https?:\/\/.+/i.test(urlVal)) {
+      row.querySelector('[data-field="url"]').classList.add('ep-link-input--invalid');
+      hasInvalidLink = true;
+    }
+  });
+  if (hasInvalidLink) {
+    linksErrEl.textContent = 'Links need to start with http:// or https://.';
+    linksErrEl.hidden = false;
+    btn.disabled = false;
+    btn.textContent = 'Save Changes';
+    window.scrollTo({ top: document.getElementById('ep-links-list').getBoundingClientRect().top + window.scrollY - 100, behavior: 'smooth' });
+    return;
+  }
+
   const body = {
     pronouns: document.getElementById('ep-pronouns-input').value,
     fun_facts: funFacts,
     account_bio: document.getElementById('ep-bio-input').value,
+    account_links: cleanLinks,
+    featured_club_slug: editFeaturedClub ? editFeaturedClub.slug : '',
   };
   if (pendingFeaturedSubmission !== undefined) body.featured_submission = pendingFeaturedSubmission;
 
@@ -456,9 +655,16 @@ document.getElementById('ep-save-btn').addEventListener('click', async () => {
 
     currentFeatured = user.featured_submission || null;
     renderCurrentFeatured();
+
+    editFeaturedClub = user.featured_club || null;
+    renderClubEditor();
+    editLinks = (user.account_links || []).map(l => ({ label: l.label || '', url: l.url || '' }));
+    renderLinksEditor();
   } catch {
     wireBackLinks();
     renderFunFacts();
+    renderClubEditor();
+    renderLinksEditor();
   }
   runSubSearch('');
 })();

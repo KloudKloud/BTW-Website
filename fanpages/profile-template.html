@@ -40,6 +40,11 @@
       position: absolute; top: 0; left: 0; right: 0; bottom: auto; width: 100%; height: 100vh;
       object-fit: cover; filter: blur(6px); z-index: 0; display: none;
     }
+    /* A custom uploaded background gets a touch more blur than the default
+       art -- real photos tend to have busier/sharper detail than the site's
+       own background art, so the same 6px that works for the default reads
+       as less softened on a custom upload. */
+    .fp-bg-img.fp-bg-img--custom { filter: blur(9px); }
     .fp-bg-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: auto; width: 100%; height: 100vh; background: rgba(10,10,10,0.82); z-index: 0; display: none; }
     /* Characters/Gallery tabs — same "Browse > Posts" wallpaper treatment
        as the Fanpage Hub's Characters browse page: PotentialBoxBackground,
@@ -833,8 +838,39 @@
     .fp-notes-standalone-wrap { max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto 2rem; padding: 0 2rem; }
     /* A real height, not just a floor -- .fp-notes-list's flex:1/min-height:0
        (below) needs a bounded parent to turn into an internally-scrolling
-       region instead of letting the box grow to fit every note on the page. */
-    .fp-notes-standalone-box { height: 420px; }
+       region instead of letting the box grow to fit every note on the page.
+       Taller than before now that the box also carries the Featured Club/
+       Recent Followers/Links column -- those three panels need real room,
+       not just the guestbook. */
+    .fp-notes-standalone-box { height: 560px; flex-direction: row; gap: 1.75rem; }
+
+    /* Left column -- Featured Club / Recent Followers / Links, stacked.
+       Roughly 2/3 of the box's width, the Notes column takes the rest. */
+    .fp-notes-info-col { flex: 2; min-width: 0; display: flex; flex-direction: column; }
+    .fp-notes-info-section { flex-shrink: 0; }
+    .fp-notes-info-section--links { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .fp-notes-info-section--links .fp-links-list { flex: 1; min-height: 0; overflow-y: auto; padding-right: 0.3rem; }
+    .fp-notes-info-divider { flex-shrink: 0; height: 1px; background: rgba(255,255,255,0.14); margin: 1.1rem 0; }
+    .fp-notes-col-divider { flex-shrink: 0; width: 1px; background: rgba(255,255,255,0.14); align-self: stretch; }
+    .fp-notes-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+    .fp-notes-followers-row { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+    .fp-notes-follower {
+      display: flex; flex-direction: column; align-items: center; gap: 0.3rem; width: 56px;
+      text-decoration: none; text-align: center;
+    }
+    .fp-notes-follower img, .fp-notes-follower .fp-notes-follower-fallback {
+      width: 42px; height: 42px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+      border: 1px solid rgba(255,255,255,0.18);
+    }
+    .fp-notes-follower .fp-notes-follower-fallback {
+      display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; font-size: 0.95rem;
+      background: linear-gradient(135deg, #7fa8d9, #d97a72);
+    }
+    .fp-notes-follower span {
+      font-size: 0.68rem; color: #ccc; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .fp-notes-follower:hover span { color: #7fa8d9; }
 
     /* Submissions -- big main thumbnail (latest post) is a real square
        sized to the column's own width (not stretched to fill whatever
@@ -879,13 +915,28 @@
       border-radius: 20px; padding: 0.4em 1em; cursor: pointer;
     }
     .fp-home-side-label .fp-notes-add-btn:hover { background: #f5d080; }
-    .fp-notes-compose { margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.6rem; }
+    /* Composing shows a square-cropped cut of your own pfp next to the box
+       (FA/Neopets-style "you're signing this" cue) -- row layout, avatar
+       pinned to the top-left of the textarea instead of vertically centered
+       so it still reads right once the textarea grows taller. */
+    .fp-notes-compose { margin-bottom: 1rem; display: flex; gap: 0.7rem; align-items: flex-start; }
+    .fp-notes-compose-avatar, .fp-notes-compose-avatar-fallback {
+      width: 44px; height: 44px; border-radius: 8px; flex-shrink: 0; object-fit: cover;
+      border: 1px solid rgba(255,255,255,0.18);
+    }
+    .fp-notes-compose-avatar-fallback {
+      display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; font-size: 1rem;
+      background: linear-gradient(135deg, #7fa8d9, #d97a72);
+    }
+    .fp-notes-compose-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.5rem; }
     .fp-notes-compose textarea {
       width: 100%; min-height: 70px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15);
       border-radius: 10px; color: #f0f0f0; font-family: inherit; font-size: 0.88rem; padding: 0.7rem 0.85rem; resize: vertical;
+      box-sizing: border-box;
     }
     .fp-notes-compose textarea:focus { outline: none; border-color: #7fa8d9; }
-    .fp-notes-compose-actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
+    .fp-notes-compose-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.6rem; }
+    .fp-notes-compose-count { font-size: 0.72rem; color: #888; margin-right: auto; }
     .fp-notes-cancel-btn, .fp-notes-submit-btn {
       border: none; cursor: pointer; font-family: inherit; font-size: 0.82rem; font-weight: 700;
       border-radius: 18px; padding: 0.5em 1.1em;
@@ -897,17 +948,23 @@
     .fp-notes-submit-btn:disabled { opacity: 0.6; cursor: default; }
 
     .fp-notes-list {
-      flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem;
+      flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column;
       padding-right: 0.4rem; scrollbar-width: thin; scrollbar-color: rgba(168,112,217,0.45) transparent;
     }
     .fp-notes-list::-webkit-scrollbar { width: 7px; }
     .fp-notes-list::-webkit-scrollbar-track { background: transparent; }
     .fp-notes-list::-webkit-scrollbar-thumb { background: rgba(168,112,217,0.45); border-radius: 6px; }
     .fp-notes-list::-webkit-scrollbar-thumb:hover { background: rgba(168,112,217,0.7); }
+    /* Transparent "shoutbox" style -- no box fill of their own, each entry
+       just sits against the box's own background art and is separated from
+       the next by a hairline divider instead of its own bordered card. New
+       notes land at the top of the list (loadNotes() re-renders top-down),
+       pushing the rest straight down with nothing shifting around oddly. */
     .fp-note-item {
-      display: flex; gap: 0.75rem; background: rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 12px; padding: 0.75rem 0.9rem;
+      display: flex; gap: 0.75rem; padding: 0.85rem 0.1rem;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
     }
+    .fp-note-item:last-child { border-bottom: none; }
     .fp-note-avatar, .fp-note-avatar-fallback {
       width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; object-fit: cover;
     }
@@ -916,11 +973,12 @@
       background: linear-gradient(135deg, #7fa8d9, #d97a72);
     }
     .fp-note-body { min-width: 0; flex: 1; }
-    .fp-note-head { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+    .fp-note-head { display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; }
     .fp-note-author { font-weight: 700; font-size: 0.86rem; color: #fff; text-decoration: none; }
     .fp-note-author:hover { color: #7fa8d9; }
-    .fp-note-time { font-size: 0.72rem; color: #888; }
-    .fp-note-msg { font-size: 0.86rem; color: #ddd; line-height: 1.5; white-space: pre-line; margin-top: 0.2rem; }
+    .fp-note-handle { font-size: 0.76rem; color: #7fa8d9; }
+    .fp-note-time { font-size: 0.72rem; color: #888; margin-left: auto; flex-shrink: 0; }
+    .fp-note-msg { font-size: 0.86rem; color: #ddd; line-height: 1.5; white-space: pre-line; margin-top: 0.25rem; }
     .fp-notes-empty { text-align: center; color: #888; font-size: 0.86rem; padding: 2rem 1rem; }
 
     .fp-notes-pager { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 1rem; flex-shrink: 0; }
@@ -1536,7 +1594,14 @@
       .fp-submissions-box, .fp-notes-box, .fp-notes-standalone-box { padding: 1.1rem 1.25rem; }
       .fp-notes-box { min-height: 300px; }
       .fp-notes-standalone-wrap { padding: 0 1rem; }
-      .fp-notes-standalone-box { height: 360px; }
+      /* Side-by-side 2/3+1/3 columns don't fit a narrow screen -- stack
+         Info/Notes instead, each with its own floor instead of sharing one
+         fixed box height. */
+      .fp-notes-standalone-box { height: auto; flex-direction: column; gap: 1.25rem; }
+      .fp-notes-info-col { flex: none; }
+      .fp-notes-info-section--links .fp-links-list { max-height: 180px; }
+      .fp-notes-col-divider { width: auto; height: 1px; align-self: stretch; }
+      .fp-notes-col { flex: none; height: 420px; }
     }
 
     @media (max-width: 480px) {
@@ -1723,19 +1788,47 @@
        passes later. -->
   <div class="fp-notes-standalone-wrap">
     <div class="fp-notes-standalone-box">
-      <p class="fp-home-side-label">
-        Notes
-        <button type="button" class="fp-notes-add-btn" id="fp-notes-add-btn" hidden>+ Leave a Note</button>
-      </p>
-      <div class="fp-notes-compose" id="fp-notes-compose" hidden>
-        <textarea id="fp-notes-input" maxlength="500" placeholder="Leave a nice note…"></textarea>
-        <div class="fp-notes-compose-actions">
-          <button type="button" class="fp-notes-cancel-btn" id="fp-notes-cancel-btn">Cancel</button>
-          <button type="button" class="fp-notes-submit-btn" id="fp-notes-submit-btn">Post Note</button>
+      <!-- Left ~2/3: a little stack of info panels instead of more Notes --
+           Featured Club, Recent Followers, Links. Each one is built/chosen
+           from the Edit Profile page; this is just the display side. -->
+      <div class="fp-notes-info-col">
+        <div class="fp-notes-info-section">
+          <p class="fp-home-side-label">Featured Club</p>
+          <div id="fp-notes-featured-club"><p class="fp-side-club-empty">Loading…</p></div>
+        </div>
+        <div class="fp-notes-info-divider"></div>
+        <div class="fp-notes-info-section">
+          <p class="fp-home-side-label">Recent Followers</p>
+          <div class="fp-notes-followers-row" id="fp-notes-followers"><p class="fp-side-club-empty">Loading…</p></div>
+        </div>
+        <div class="fp-notes-info-divider"></div>
+        <div class="fp-notes-info-section fp-notes-info-section--links">
+          <p class="fp-home-side-label">Links</p>
+          <ul class="fp-links-list" id="fp-notes-links"><li><p class="fp-side-club-empty">Loading…</p></li></ul>
         </div>
       </div>
-      <div class="fp-notes-list" id="fp-notes-list"><p class="fp-notes-empty">Loading…</p></div>
-      <div class="fp-notes-pager" id="fp-notes-pager"></div>
+      <div class="fp-notes-col-divider"></div>
+      <!-- Right ~1/3: the guestbook itself. -->
+      <div class="fp-notes-col">
+        <p class="fp-home-side-label">
+          Notes
+          <button type="button" class="fp-notes-add-btn" id="fp-notes-add-btn" hidden>+ Leave a Note</button>
+        </p>
+        <div class="fp-notes-compose" id="fp-notes-compose" hidden>
+          <img class="fp-notes-compose-avatar" id="fp-notes-compose-avatar" alt="" hidden />
+          <span class="fp-notes-compose-avatar-fallback" id="fp-notes-compose-avatar-fallback" hidden></span>
+          <div class="fp-notes-compose-main">
+            <textarea id="fp-notes-input" maxlength="500" placeholder="Leave a nice note…"></textarea>
+            <div class="fp-notes-compose-actions">
+              <span class="fp-notes-compose-count" id="fp-notes-compose-count">0/500</span>
+              <button type="button" class="fp-notes-cancel-btn" id="fp-notes-cancel-btn">Cancel</button>
+              <button type="button" class="fp-notes-submit-btn" id="fp-notes-submit-btn">Post Note</button>
+            </div>
+          </div>
+        </div>
+        <div class="fp-notes-list" id="fp-notes-list"><p class="fp-notes-empty">Loading…</p></div>
+        <div class="fp-notes-pager" id="fp-notes-pager"></div>
+      </div>
     </div>
   </div>
 
@@ -1989,6 +2082,7 @@
     const bgImg = document.getElementById('fp-bg-img');
     const bgOverlay = document.getElementById('fp-bg-overlay');
     bgImg.src = (themeId === 'custom' && bgUrl) ? bgUrl : FP_DEFAULT_HOME_BG;
+    bgImg.classList.toggle('fp-bg-img--custom', themeId === 'custom' && !!bgUrl);
     bgImg.style.display = 'block';
     bgOverlay.style.display = 'block';
     document.querySelectorAll('.fp-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
@@ -2081,19 +2175,34 @@
   themeBgFileInput.id = 'fp-theme-bg-file-input';
   themeBgFileInput.hidden = true;
   document.body.appendChild(themeBgFileInput);
-  themeBgFileInput.addEventListener('change', async (e) => {
+  themeBgFileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    applyProfileTheme('custom', URL.createObjectURL(file)); // instant preview
-    const fd = new FormData();
-    fd.append('image', file);
-    const res = await fetch('/api/account/theme-bg', { method: 'PUT', headers: authHeaders(), body: fd });
-    if (res.ok) {
-      const data = await res.json();
-      currentAuthor.profile_theme = 'custom';
-      currentAuthor.profile_theme_bg_url = data.theme_bg_url;
-      applyProfileTheme('custom', data.theme_bg_url);
-    }
+    // Same shared Discord-style crop modal as the banner/avatar -- the
+    // background otherwise just got slapped on uncropped at whatever
+    // orientation the source photo happened to be, with no way to pick
+    // which part of it actually ends up behind the page content. Wide
+    // aspect since this fills the whole page width; it'll crop further
+    // per-viewport via object-fit:cover same as before, this just lets the
+    // user choose the general framing up front instead of leaving it to
+    // chance.
+    openCropModal({
+      title: 'Crop Background Image', imageSrc: URL.createObjectURL(file), aspectRatio: 16 / 9, round: false,
+      hint: 'Drag to move, scroll or pinch to zoom. This becomes your profile’s background.',
+      onSave: async (blob) => {
+        applyProfileTheme('custom', URL.createObjectURL(blob)); // instant preview
+        const fd = new FormData();
+        fd.append('image', blob, 'theme-bg.jpg');
+        const res = await fetch('/api/account/theme-bg', { method: 'PUT', headers: authHeaders(), body: fd });
+        if (res.ok) {
+          const data = await res.json();
+          currentAuthor.profile_theme = 'custom';
+          currentAuthor.profile_theme_bg_url = data.theme_bg_url;
+          applyProfileTheme('custom', data.theme_bg_url);
+        }
+      },
+    });
+    e.target.value = '';
   });
 
   document.getElementById('fp-theme-btn').addEventListener('click', (e) => {
@@ -5084,15 +5193,74 @@
     }).join('');
   }
 
-  // ── Notes box -- a guestbook/signature board on another user's profile ──
+  // ── Notes box -- a guestbook/signature board on another user's profile,
+  // plus the Featured Club / Recent Followers / Links info panels that now
+  // share the same box (left 2/3) with the guestbook itself (right 1/3). ──
   let notesPage = 1;
   let notesAuthor = null;
   function initNotesBox(a) {
     notesAuthor = a;
     notesPage = 1;
     const addBtn = document.getElementById('fp-notes-add-btn');
-    addBtn.hidden = !token || a.is_self;
+    addBtn.hidden = !token;
     loadNotes(1);
+    renderNotesFeaturedClub(a);
+    renderNotesLinks(a);
+    loadNotesFollowers(a);
+  }
+
+  function renderNotesFeaturedClub(a) {
+    const wrap = document.getElementById('fp-notes-featured-club');
+    const club = a.featured_club;
+    wrap.innerHTML = club
+      ? `<a class="fp-side-club-card" href="${window.fpUrl('/club?slug=' + club.slug)}">
+           <img src="${club.badge_url || '/images/nopicture2.png'}" alt="" />
+           <span>${escapeHtml(club.name)}</span>
+         </a>`
+      : `<p class="fp-side-club-empty">${a.is_self ? 'Pick a club to feature from Edit Profile.' : 'No club featured yet.'}</p>`;
+  }
+
+  function renderNotesLinks(a) {
+    const list = document.getElementById('fp-notes-links');
+    const links = a.account_links || [];
+    if (!links.length) {
+      list.innerHTML = `<li><p class="fp-side-club-empty">${a.is_self ? 'Add links from Edit Profile.' : 'No links yet.'}</p></li>`;
+      return;
+    }
+    // target="_blank" is what the site's shared "You're Leaving BTWFics"
+    // interstitial (fanpages-nav.js) keys off of -- no extra wiring needed
+    // here for the offsite warning to kick in on click.
+    list.innerHTML = links.map(l => `
+      <li>
+        <a class="fp-link-item" href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.label || l.url)}</a>
+      </li>
+    `).join('');
+  }
+
+  async function loadNotesFollowers(a) {
+    const wrap = document.getElementById('fp-notes-followers');
+    try {
+      const res = await fetch(`/api/fanpage-profile/${USERNAME}/followers`, { headers: authHeaders() });
+      const data = await res.json();
+      const followers = (data.users || []).slice(0, 8);
+      if (!followers.length) {
+        wrap.innerHTML = '<p class="fp-side-club-empty">No followers yet.</p>';
+        return;
+      }
+      wrap.innerHTML = followers.map(f => {
+        const avatar = f.avatar
+          ? `<img src="${f.avatar}" alt="" />`
+          : `<span class="fp-notes-follower-fallback">${escapeHtml((f.display_name || f.username).charAt(0).toUpperCase())}</span>`;
+        return `
+          <a class="fp-notes-follower" href="${window.fpUrl('/' + f.username)}" title="${escapeHtml(f.display_name)}">
+            ${avatar}
+            <span>${escapeHtml(f.display_name)}</span>
+          </a>
+        `;
+      }).join('');
+    } catch {
+      wrap.innerHTML = '<p class="fp-side-club-empty">Couldn\'t load followers right now.</p>';
+    }
   }
 
   async function loadNotes(page) {
@@ -5137,6 +5305,7 @@
         <div class="fp-note-body">
           <div class="fp-note-head">
             <a class="fp-note-author" href="${window.fpUrl('/' + n.username)}">${escapeHtml(n.display_name)}</a>
+            <a class="fp-note-handle" href="${window.fpUrl('/' + n.username)}">~${escapeHtml(n.username)}</a>
             <span class="fp-note-time">${timeAgo(n.created_at)}</span>
           </div>
           <p class="fp-note-msg">${escapeHtml(n.message)}</p>
@@ -5145,13 +5314,38 @@
     `;
   }
 
+  // Square-cropped cut of the viewer's own pfp next to the compose box --
+  // same avatar URL the topbar already has cached in btw_user, just forced
+  // square via object-fit:cover on a border-radius:8px box instead of the
+  // round avatar used everywhere else on this page.
+  function fillComposeAvatar() {
+    let me = null;
+    try { me = JSON.parse(localStorage.getItem('btw_user') || sessionStorage.getItem('btw_user') || 'null'); } catch {}
+    const img = document.getElementById('fp-notes-compose-avatar');
+    const fallback = document.getElementById('fp-notes-compose-avatar-fallback');
+    if (me && me.avatar) {
+      img.src = me.avatar;
+      img.hidden = false;
+      fallback.hidden = true;
+    } else {
+      fallback.textContent = ((me && (me.display_name || me.username)) || '?').charAt(0).toUpperCase();
+      fallback.hidden = false;
+      img.hidden = true;
+    }
+  }
+
   document.getElementById('fp-notes-add-btn').addEventListener('click', () => {
     document.getElementById('fp-notes-compose').hidden = false;
+    fillComposeAvatar();
     document.getElementById('fp-notes-input').focus();
+  });
+  document.getElementById('fp-notes-input').addEventListener('input', (e) => {
+    document.getElementById('fp-notes-compose-count').textContent = `${e.target.value.length}/500`;
   });
   document.getElementById('fp-notes-cancel-btn').addEventListener('click', () => {
     document.getElementById('fp-notes-compose').hidden = true;
     document.getElementById('fp-notes-input').value = '';
+    document.getElementById('fp-notes-compose-count').textContent = '0/500';
   });
   document.getElementById('fp-notes-submit-btn').addEventListener('click', async () => {
     const input = document.getElementById('fp-notes-input');
@@ -5167,6 +5361,7 @@
       });
       if (res.ok) {
         input.value = '';
+        document.getElementById('fp-notes-compose-count').textContent = '0/500';
         document.getElementById('fp-notes-compose').hidden = true;
         loadNotes(1);
       }
