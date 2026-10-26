@@ -2877,7 +2877,7 @@
             <button class="cl-edit-template-card" id="cl-edit-template-promotion" type="button" data-type="promotion">
               <span class="cl-edit-template-icon">⭐</span>
               <span>
-                <span class="cl-edit-template-name">Promotion Page</span>
+                <span class="cl-edit-template-name">Post Page</span>
                 <span class="cl-edit-template-desc">Includes neat rows of clickable posts, useful for if you want to store an archive of stories, items, or something relevant to your club — e.g. a writing group with several in-canon fics and one-shots wanting a repository for their universe's stories.</span>
               </span>
             </button>
@@ -4754,11 +4754,26 @@ document.getElementById('cl-home-tab-social').addEventListener('click', () => na
 // shared Cover Media/Text Section functions a page's own Hub content uses
 // (pageContentMoveTo/renderCoverMediaBlock/renderTextFieldSections) rather
 // than its own separate image-carousel+flat-body system. ─────────────────
+// Request-token guard -- this fetch fires fresh on every single post open
+// (unlike the Gallery detail view, which flips between images already
+// sitting in a pre-loaded array with no network round-trip at all, which
+// is why THAT feels instant). Spam-clicking between posts (Social feed,
+// Promotion/Post page rows) fires overlapping requests with no guarantee
+// they resolve in the order they were sent -- without this, a slow
+// response for a post you've since clicked away from can land AFTER a
+// newer one and silently overwrite it: wrong title/images "bleeding" in
+// over whatever you're actually looking at, or the view you navigated
+// away from popping back open a beat later. Only the response matching
+// the most recently started request is ever applied.
+let postDetailLoadReqId = 0;
 async function loadAndShowPost(postId) {
+  const reqId = ++postDetailLoadReqId;
   try {
     const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts/${postId}`, { headers: authHeaders() });
+    if (reqId !== postDetailLoadReqId) return;
     if (!res.ok) return;
     const data = await res.json();
+    if (reqId !== postDetailLoadReqId) return;
     pageContentMoveTo('cl-post-detail-content-slot');
     renderPostDetail(data.post);
     document.getElementById('cl-post-detail-view').hidden = false;
@@ -5118,7 +5133,15 @@ function fieldSlideshowEl(images, aspect, extraClass, randomize) {
   startAutoplay();
   return wrap;
 }
+// Same request-token guard as loadAndShowPost/ccLoadComments -- switching
+// pages quickly (e.g. bouncing between a Promotion page and another one)
+// fires a fresh fetch each time with no ordering guarantee; without this,
+// a slow response for a page you've already clicked away from can land
+// after the one you're now looking at and stomp its title/content/list
+// back to the wrong page's data.
+let loadCustomPageReqId = 0;
 async function loadCustomPage(pageSlug, tab) {
+  const reqId = ++loadCustomPageReqId;
   const titleEl = document.getElementById('cl-custom-page-title');
   const bodyEl = document.getElementById('cl-custom-page-body');
   const galleryEmptyEl = document.getElementById('cl-page-view-gallery-empty');
@@ -5154,8 +5177,10 @@ async function loadCustomPage(pageSlug, tab) {
   currentPageData = null;
   try {
     const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(pageSlug)}`);
+    if (reqId !== loadCustomPageReqId) return;
     if (!res.ok) { titleEl.textContent = 'Page not found'; return; }
     const data = await res.json();
+    if (reqId !== loadCustomPageReqId) return;
     const page = data.page;
     currentPageData = page;
     document.title = `${page.title} ✦ ${currentClub ? currentClub.name : 'Club'} ✦ BTW`;
@@ -5194,6 +5219,7 @@ async function loadCustomPage(pageSlug, tab) {
       try {
         const galRes = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(pageSlug)}/gallery`, { headers: authHeaders() });
         const galData = await galRes.json();
+        if (reqId !== loadCustomPageReqId) return;
         images = galData.images || [];
       } catch {}
       pageGalleryImages = images;
@@ -5234,6 +5260,7 @@ async function loadCustomPage(pageSlug, tab) {
       try {
         const promoRes = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/posts?page=${encodeURIComponent(pageSlug)}`, { headers: authHeaders() });
         const promoData = await promoRes.json();
+        if (reqId !== loadCustomPageReqId) return;
         posts = promoData.posts || [];
       } catch {}
       if (!posts.length) {
@@ -5265,6 +5292,7 @@ async function loadCustomPage(pageSlug, tab) {
       try {
         const ssRes = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(pageSlug)}/slideshow`);
         const ssData = await ssRes.json();
+        if (reqId !== loadCustomPageReqId) return;
         renderCoverMediaBlock('slideshow', null, ssData.images || [], page.cover_randomize !== false);
       } catch {}
     } else {
@@ -5732,17 +5760,29 @@ async function ccDeleteComment(id) {
 // reportContent(targetType, targetId) is defined globally in fanpages-nav.js
 // (shared by every flag button site-wide) — no local copy needed here.
 
+// Same request-token guard as loadAndShowPost, and for the same reason --
+// this is the ONE shared #cc-list node every detail view (post, gallery
+// image, custom page) relocates and reuses, so a stale response from a
+// section you've since left/switched away from (including rapid-fire
+// Gallery prev/next, which calls this directly without going through
+// loadAndShowPost at all) would otherwise render the wrong post/image's
+// comments into whatever's currently on screen.
+let ccLoadReqId = 0;
 async function ccLoadComments() {
   const list = document.getElementById('cc-list');
   if (!list) return;
+  const reqId = ++ccLoadReqId;
+  const reqType = ccTargetType, reqTargetId = ccTargetId;
   try {
-    const res = await fetch(`/api/content-comments?target_type=${ccTargetType}&target_id=${ccTargetId}`, { headers: authHeaders() });
+    const res = await fetch(`/api/content-comments?target_type=${reqType}&target_id=${reqTargetId}`, { headers: authHeaders() });
+    if (reqId !== ccLoadReqId) return;
     const data = await res.json();
+    if (reqId !== ccLoadReqId) return;
     const comments = data.comments || [];
     list.innerHTML = '';
     if (!comments.length) { list.innerHTML = '<p class="cc-empty">No comments yet — be the first!</p>'; return; }
     comments.forEach(c => list.appendChild(ccCommentEl(c, false)));
-  } catch { list.innerHTML = '<p class="cc-empty">Couldn\'t load comments right now.</p>'; }
+  } catch { if (reqId === ccLoadReqId) list.innerHTML = '<p class="cc-empty">Couldn\'t load comments right now.</p>'; }
 }
 
 function ccInitSection(targetType, targetId) {
@@ -7831,19 +7871,20 @@ function editPromoPostRowEl(post) {
   // The row itself only becomes draggable while the mouse is down on the
   // handle icon -- otherwise the whole row being draggable fought with
   // the click-to-edit behavior above and showed a "grab" hand everywhere.
+  // Live swap (see the list's own dragover listener below) + one PUT on
+  // dragend -- same SortableJS-style recipe as the Gallery page editor's
+  // tile grid, not the old drop-on-a-specific-row approach (which only
+  // ever fired on a direct drop and missed most of the list, reading as
+  // "super buggy" -- rows refusing to reorder or snapping to the wrong spot).
   const handle = row.querySelector('.cl-edit-card-row-handle');
   handle.addEventListener('mousedown', () => { row.draggable = true; });
   row.addEventListener('mouseup', () => { row.draggable = false; });
   row.addEventListener('dragstart', () => { promoPostDragId = post.id; row.classList.add('dragging'); });
-  row.addEventListener('dragend', () => { row.classList.remove('dragging'); row.draggable = false; });
-  row.addEventListener('dragover', (e) => e.preventDefault());
-  row.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    if (promoPostDragId == null || promoPostDragId === post.id) return;
+  row.addEventListener('dragend', async () => {
+    row.classList.remove('dragging');
+    row.draggable = false;
+    promoPostDragId = null;
     const list = document.getElementById('cl-promo-cards-list');
-    const dragEl = list.querySelector(`.cl-edit-card-row[data-id="${CSS.escape(String(promoPostDragId))}"]`);
-    if (!dragEl) return;
-    list.insertBefore(dragEl, row);
     const ids = [...list.querySelectorAll('.cl-edit-card-row')].map(el => el.dataset.id);
     await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(editActivePageSlug)}/promotion-posts/reorder`, {
       method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ order: ids }),
@@ -7851,8 +7892,44 @@ function editPromoPostRowEl(post) {
     editPromoPostsCache = ids.map(id => editPromoPostsCache.find(p2 => String(p2.id) === id)).filter(Boolean);
     if (currentPageSlug === editActivePageSlug) loadCustomPage(editActivePageSlug);
   });
+  row.addEventListener('drop', (e) => e.preventDefault());
   return row;
 }
+// Live swap as soon as the dragged row crosses the HALFWAY point of its
+// own edge in the direction of travel -- one listener on the LIST itself
+// (not per-row, which would pile up duplicate listeners across re-renders
+// and is also what produced the old buggy single-row-drop behavior).
+// Vertical-only version of the same elementFromPoint/nearest-distance +
+// dragged-tile's-own-edge logic the Gallery editor's grid uses; see that
+// listener's comments for why both of those matter.
+document.getElementById('cl-promo-cards-list').addEventListener('dragover', (e) => {
+  e.preventDefault();
+  if (promoPostDragId == null) return;
+  const list = document.getElementById('cl-promo-cards-list');
+  const dragEl = list.querySelector(`.cl-edit-card-row[data-id="${CSS.escape(String(promoPostDragId))}"]`);
+  if (!dragEl) return;
+  let target = document.elementFromPoint(e.clientX, e.clientY)?.closest('.cl-edit-card-row');
+  if (!target || target.parentElement !== list) {
+    let best = null, bestDist = Infinity;
+    list.querySelectorAll('.cl-edit-card-row').forEach(el => {
+      if (el === dragEl) return;
+      const r = el.getBoundingClientRect();
+      const dist = Math.abs(e.clientY - (r.top + r.height / 2));
+      if (dist < bestDist) { bestDist = dist; best = el; }
+    });
+    target = best;
+  }
+  if (!target || target === dragEl) return;
+  const dragRect = dragEl.getBoundingClientRect();
+  const targetComesAfter = !!(dragEl.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING);
+  if (targetComesAfter) {
+    if (e.clientY > dragRect.bottom && target.nextElementSibling !== dragEl) {
+      list.insertBefore(dragEl, target.nextElementSibling);
+    }
+  } else if (e.clientY < dragRect.top && target.previousElementSibling !== dragEl) {
+    list.insertBefore(dragEl, target);
+  }
+});
 
 function openPromoPostEditor(post) {
   window.location.href = window.fpUrl(`/create-club-post?club=${encodeURIComponent(slug)}&id=${post.id}`);
