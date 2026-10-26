@@ -790,16 +790,18 @@
        a full-width flex row, so the pill stretched the whole column's
        width). Dropped it; the label now sits plain like every other
        section header on this page. */
-    .fp-featured-sub-col .fp-home-side-label { margin-bottom: 1rem; }
+    /* Centered now instead of left-aligned -- there's no "+ " action button
+       sharing this label row (unlike Notes/Newspaper, which is why the base
+       .fp-home-side-label rule is a space-between row), so centering reads
+       better over a centered image+title below it. */
+    .fp-featured-sub-col .fp-home-side-label { margin-bottom: 1rem; justify-content: center; }
     .fp-spotlight-item { display: flex; flex-direction: column; text-decoration: none; color: inherit; text-align: center; }
     /* A real square now, sized to the column's width instead of stretching
        to fill whatever height the Bio side happens to need -- that's what
-       was turning this into a tall rectangle instead of a square. Capped
-       under the column's full width (was 100%/none) so the whole About box
-       reads smaller overall -- the Bio column's height follows this
-       square's, so shrinking it tames down the whole box at once. */
+       was turning this into a tall rectangle instead of a square. Bumped
+       back up (230px -> 320px) per request for a bigger thumbnail. */
     .fp-featured-sub-col .fp-spotlight-img-wrap {
-      width: 100%; max-width: 230px; margin: 0 auto 1rem; aspect-ratio: 1;
+      width: 100%; max-width: 320px; margin: 0 auto 1rem; aspect-ratio: 1;
       border-radius: 14px; overflow: hidden;
       border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 10px 32px rgba(0,0,0,0.45);
       background: linear-gradient(135deg, #6b3fa0, #c2547a);
@@ -827,10 +829,18 @@
     }
 
     /* ── Bottom row: Submissions (left) + Recent Newspaper/Recent Activity
-       (right), two big side-by-side boxes under the About box. ── */
+       (right), two big side-by-side boxes under the About box. Submissions'
+       own natural (content-driven) height is what dictates the row's height
+       now -- align-items was "stretch" (both boxes forced to match
+       whichever was naturally taller), which let a tall Recent Newspaper/
+       Activity column stretch Submissions into a box with a bunch of empty
+       space under its own content. Now it's "start" (each box just sits at
+       its own natural height) and syncBottomRowHeight() (see the JS) pins
+       .fp-notes-box's height to match .fp-submissions-box's after render,
+       truncating/scrolling Newspaper+Activity to fit instead. ── */
     .fp-bottom-row {
       max-width: clamp(1400px, 73vw, 1800px); margin: 1.5rem auto 2rem;
-      padding: 0 2rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1.75rem; align-items: stretch;
+      padding: 0 2rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1.75rem; align-items: start;
     }
     .fp-submissions-box, .fp-notes-box, .fp-notes-standalone-box {
       position: relative; overflow: hidden; border-radius: 18px; border: 1px solid rgba(255,255,255,0.14);
@@ -842,16 +852,16 @@
     /* Submissions + Recent Newspaper/Activity boxes get a bit less padding
        than the Notes box below them -- tamed down smaller/tighter overall. */
     .fp-submissions-box, .fp-notes-box { padding: 1.1rem 1.35rem; }
-    /* Neither has a square image forcing its height, so they need their own
-       floor -- without it the grid's align-items:stretch would otherwise
-       be the only thing giving .fp-notes-box any height at all. Lowered
-       from 340px as part of taming these boxes down smaller. */
+    /* Fallback floor only -- syncBottomRowHeight() overrides this with an
+       explicit px height matching Submissions as soon as it can run. */
     .fp-notes-box { min-height: 210px; }
     /* Split in half -- Recent Newspaper on top, Recent Activity on the
        bottom, each an independently scrollable region instead of one
-       long list. */
+       long list. Newspaper's half now scrolls too (it didn't need to
+       before, when the box just grew to fit its one card) since the box's
+       height is capped to Submissions' now and the card may not always fit. */
     .fp-notes-half { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-    .fp-notes-half--notes { padding-bottom: 0.75rem; }
+    .fp-notes-half--notes { padding-bottom: 0.75rem; overflow-y: auto; }
     .fp-notes-half--activity { padding-top: 0.75rem; }
     .fp-notes-divider { flex-shrink: 0; height: 1px; background: rgba(255,255,255,0.14); }
     /* Guestbook Notes board -- a full-width standalone box under the
@@ -904,13 +914,13 @@
        leftover height the box had), three small square thumbnails
        underneath for the next-latest posts. */
     .fp-sub-main { display: block; text-decoration: none; color: inherit; }
-    /* Capped a bit under the column's full width -- a hair shorter than a
-       true full-bleed square, which was making the whole box run long.
-       Pulled in further (86%→68%→54%) as part of taming this box down
-       smaller overall -- the thumbnail is what sets the whole box's
-       height. */
+    /* Went 86%→68%→54% taming this box down smaller, but now that
+       Submissions' own height is what the row is sized off of (see
+       syncBottomRowHeight()) instead of being stretched to match a taller
+       Recent Newspaper/Activity column, a bigger thumbnail is what actually
+       fills that space back out rather than just leaving the box short. */
     .fp-sub-main-img-wrap {
-      width: 100%; max-width: 54%; margin: 0 auto; aspect-ratio: 1; border-radius: 14px; overflow: hidden; position: relative;
+      width: 100%; max-width: 78%; margin: 0 auto; aspect-ratio: 1; border-radius: 14px; overflow: hidden; position: relative;
       border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 10px 28px rgba(0,0,0,0.4);
       background: linear-gradient(135deg, #6b3fa0, #c2547a);
     }
@@ -936,7 +946,7 @@
     .fp-sub-mini-img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .fp-sub-mini-img-wrap .fp-sub-kind-badge { font-size: 1.05rem; bottom: 4px; right: 5px; }
     .fp-sub-mini-title {
-      font-size: 0.74rem; color: #ccc; margin-top: 0.35rem; line-height: 1.3;
+      font-size: 0.74rem; color: var(--fp-accent-light); margin-top: 0.35rem; line-height: 1.3;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
 
@@ -5310,6 +5320,30 @@
     }).join('');
   }
 
+  // Pins .fp-notes-box's height to whatever .fp-submissions-box naturally
+  // rendered at, so Submissions dictates the row instead of a tall Recent
+  // Newspaper/Activity column stretching Submissions into a box with empty
+  // space under its own content (see the .fp-bottom-row comment in the
+  // <style> block). Only applies once the two boxes are actually
+  // side-by-side (see .fp-bottom-row's own max-width:760px breakpoint) --
+  // stacked on mobile, Notes needs its own natural height instead of being
+  // capped to Submissions'.
+  function syncBottomRowHeight() {
+    const subBox = document.querySelector('.fp-submissions-box');
+    const notesBox = document.querySelector('.fp-notes-box');
+    if (!subBox || !notesBox) return;
+    if (window.matchMedia('(max-width: 760px)').matches) {
+      notesBox.style.height = '';
+      return;
+    }
+    notesBox.style.height = `${subBox.offsetHeight}px`;
+  }
+  let bottomRowResizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(bottomRowResizeTimer);
+    bottomRowResizeTimer = setTimeout(syncBottomRowHeight, 150);
+  });
+
   // ── Notes box -- a guestbook/signature board on another user's profile,
   // plus the Featured Club / Recent Followers / Links info panels that now
   // share the same box (left 2/3) with the guestbook itself (right 1/3). ──
@@ -5599,6 +5633,9 @@
       initNotesBox(a);
       renderRecentActivity(a.recent_activity, a.display_name);
       loadNewspaperHome();
+      // Submissions' own height now dictates the row -- see the
+      // syncBottomRowHeight() comment near its definition.
+      syncBottomRowHeight();
 
       // Stories -- loadProfile() is async and switchTab(initialTab) below
       // runs synchronously right after it's kicked off (not after it
