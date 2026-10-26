@@ -1070,6 +1070,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         levelBadge.onclick = () => { location.href = fpUrl('/levels'); };
         fpnavSetLevelBadge(u.level, u.xp_into_level || 0, u.xp_for_next_level || 1);
       }
+      window.fpnavApplyLevelBarTheme(u.level_bar_color);
 
       // An XP-granting action on the *previous* page (e.g. publishing a
       // chapter, which always redirects away afterward) couldn't show its
@@ -1126,6 +1127,17 @@ window.fpUpdateNavAvatar = function (avatarUrl) {
   if (mobilePfpIcon) mobilePfpIcon.innerHTML = avatarHtml;
   const drawerProfileIcon = document.getElementById('fpnav-drawer-profile-icon');
   if (drawerProfileIcon) drawerProfileIcon.innerHTML = avatarHtml;
+};
+
+// ── Level bar color theme — swaps the top-nav level circle/bar (and, via
+// the same `lb-theme-<key>` body class, the matching bar in the Levels page
+// hero) to whichever preset the user picked with the Levels page's pen-color
+// picker. Global so the Levels page can call it immediately after saving a
+// new pick, without waiting on a reload to re-run /api/auth/me. ───────────
+const LEVEL_BAR_THEME_KEYS = ['pink', 'red', 'blue', 'green'];
+window.fpnavApplyLevelBarTheme = function (key) {
+  LEVEL_BAR_THEME_KEYS.forEach(k => document.body.classList.remove(`lb-theme-${k}`));
+  if (LEVEL_BAR_THEME_KEYS.includes(key)) document.body.classList.add(`lb-theme-${key}`);
 };
 
 // ── Level badge fill — shared by the one-shot /api/auth/me load above and

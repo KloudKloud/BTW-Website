@@ -61,8 +61,37 @@
       text-shadow: 0 0 18px rgba(127,168,217,0.55), 0 1px 3px rgba(0,0,0,0.5);
     }
     .lv-hero-title img { width: 22px; height: 22px; filter: drop-shadow(0 0 4px rgba(240,192,96,0.5)); }
-    .lv-hero-xpbar-wrap { margin-top: 1rem; max-width: 420px; }
+    .lv-hero-xpbar-wrap { margin-top: 1rem; max-width: 460px; }
     .lv-hero-xp-label { font-size: 0.8rem; color: #c9bfe0; margin-bottom: 0.3rem; display: flex; justify-content: space-between; }
+    .lv-hero-xp-row { display: flex; align-items: center; gap: 0.6rem; }
+    .lv-hero-xp-row .lv-hero-xp-track { flex: 1; }
+
+    /* ── Level bar color picker — pen icon to the right of the XP bar.
+       Presets only recolor the top-nav level bar/circle + this hero bar
+       (via a `lb-theme-<key>` class on <body>, see fanpages-nav.css/js);
+       they don't touch anything else on this page. Same popover pattern
+       as the profile page's accent-color picker, scaled down to fit next
+       to a 12px-tall bar instead of a big avatar/banner action row. */
+    .lv-levelbar-picker { position: relative; flex-shrink: 0; }
+    .lv-levelbar-picker-btn {
+      background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #f0f0f0;
+      cursor: pointer; font-size: 0.85rem; width: 26px; height: 26px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; padding: 0;
+    }
+    .lv-levelbar-picker-btn:hover { border-color: #f0c060; background: rgba(0,0,0,0.5); }
+    .lv-levelbar-popover {
+      position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 60;
+      background: #161616; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.5); padding: 0.85rem; width: 190px;
+    }
+    .lv-levelbar-popover-label { font-size: 0.72rem; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.65rem; }
+    .lv-levelbar-grid { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+    .lv-levelbar-swatch {
+      width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+      border: 2px solid transparent; padding: 0; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+    .lv-levelbar-swatch span { display: block; width: 100%; height: 100%; }
+    .lv-levelbar-swatch.active { border-color: #7fa8d9; }
     .lv-hero-xp-track {
       height: 12px; border-radius: 8px; background: rgba(0,0,0,0.4);
       border: 1px solid rgba(255,255,255,0.1); overflow: hidden; position: relative;
@@ -1096,7 +1125,16 @@
             <span id="lv-hero-xp-into"></span>
             <span id="lv-hero-xp-need"></span>
           </div>
-          <div class="lv-hero-xp-track"><div class="lv-hero-xp-fill" id="lv-hero-xp-fill" style="width:0%"></div></div>
+          <div class="lv-hero-xp-row">
+            <div class="lv-hero-xp-track"><div class="lv-hero-xp-fill" id="lv-hero-xp-fill" style="width:0%"></div></div>
+            <div class="lv-levelbar-picker" id="lv-levelbar-picker-wrap">
+              <button type="button" class="lv-levelbar-picker-btn" id="lv-levelbar-picker-btn" title="Change level bar color">🖍️</button>
+              <div class="lv-levelbar-popover" id="lv-levelbar-popover" hidden>
+                <p class="lv-levelbar-popover-label">Level Bar Color</p>
+                <div class="lv-levelbar-grid" id="lv-levelbar-grid"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="lv-hero-level-badge">
@@ -2588,6 +2626,69 @@ function openBoxReorderView() {
   document.getElementById('lv-boxreorder-close').addEventListener('click', closeBoxReorderView);
 }
 document.getElementById('lv-box-reorder-view-btn').addEventListener('click', openBoxReorderView);
+
+// ── Level bar color picker — swatch colors mirror the `lb-theme-<key>`
+// gradients in fanpages-nav.css exactly (kept in sync by hand, same as
+// ACCENT_THEMES/profile-template.html does for its own picker). 'default'
+// isn't server-validated against a swatch key — it just means "no class",
+// which fpnavApplyLevelBarTheme already handles by clearing every lb-theme-*
+// class, so it doesn't need an entry in this map beyond its swatch preview.
+const LEVEL_BAR_THEMES = {
+  default: { label: 'Default (Purple)', swatch: 'linear-gradient(135deg, #5e32a8, #2a0f52)' },
+  pink:    { label: 'Pink',             swatch: 'linear-gradient(135deg, #a8327a, #4a0f32)' },
+  red:     { label: 'Red',              swatch: 'linear-gradient(135deg, #a83232, #4a0f0f)' },
+  blue:    { label: 'Blue',             swatch: 'linear-gradient(135deg, #32569f, #0f1f4a)' },
+  green:   { label: 'Green',            swatch: 'linear-gradient(135deg, #2f9f73, #0f4a32)' },
+};
+function currentLevelBarTheme() {
+  const match = [...document.body.classList].find(c => c.startsWith('lb-theme-'));
+  return match ? match.replace('lb-theme-', '') : 'default';
+}
+function buildLevelBarGrid() {
+  const grid = document.getElementById('lv-levelbar-grid');
+  grid.innerHTML = '';
+  Object.entries(LEVEL_BAR_THEMES).forEach(([key, theme]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'lv-levelbar-swatch';
+    btn.title = theme.label;
+    btn.dataset.lbColor = key;
+    btn.innerHTML = `<span style="background:${theme.swatch};"></span>`;
+    btn.addEventListener('click', () => selectLevelBarColor(key));
+    grid.appendChild(btn);
+  });
+  markActiveLevelBarSwatch();
+}
+function markActiveLevelBarSwatch() {
+  const active = currentLevelBarTheme();
+  document.querySelectorAll('.lv-levelbar-swatch').forEach(el => el.classList.toggle('active', el.dataset.lbColor === active));
+}
+async function selectLevelBarColor(key) {
+  window.fpnavApplyLevelBarTheme(key);
+  markActiveLevelBarSwatch();
+  const res = await fetch('/api/account/level-bar-color', {
+    method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ level_bar_color: key }),
+  });
+  if (res.ok) {
+    try {
+      const store = localStorage.getItem('btw_token') ? localStorage : sessionStorage;
+      const cachedRaw = store.getItem('btw_user');
+      const cached = cachedRaw ? JSON.parse(cachedRaw) : {};
+      store.setItem('btw_user', JSON.stringify(Object.assign({}, cached, { level_bar_color: key })));
+    } catch {}
+  }
+}
+buildLevelBarGrid();
+document.getElementById('lv-levelbar-picker-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  markActiveLevelBarSwatch();
+  document.getElementById('lv-levelbar-popover').hidden = !document.getElementById('lv-levelbar-popover').hidden;
+});
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('lv-levelbar-picker-wrap');
+  if (wrap && !wrap.contains(e.target)) document.getElementById('lv-levelbar-popover').hidden = true;
+});
 
 function renderHero(u) {
   const name = u.display_name || u.username;

@@ -250,6 +250,7 @@ async function initDb() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_position_y INTEGER NOT NULL DEFAULT 50;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_original_url TEXT NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS accent_color TEXT NOT NULL DEFAULT 'gold';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS level_bar_color TEXT NOT NULL DEFAULT 'default';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_theme TEXT NOT NULL DEFAULT 'default';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_theme_bg_url TEXT NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_theme TEXT NOT NULL DEFAULT 'default';
@@ -2335,7 +2336,8 @@ app.post('/api/auth/login', authRateLimiter, async (req, res) => {
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
     `SELECT id, username, display_name, avatar, avatar_position_x, avatar_position_y, email_hash,
-            notif_theme, notif_theme_bg_url, reader_theme, reader_theme_bg_url, nsfw_enabled, xp, level, gems
+            notif_theme, notif_theme_bg_url, reader_theme, reader_theme_bg_url, nsfw_enabled, xp, level, gems,
+            level_bar_color
      FROM users WHERE id = $1`, [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });
@@ -2351,7 +2353,7 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
     reader_theme: user.reader_theme || 'dark', reader_theme_bg_url: user.reader_theme_bg_url || '',
     xp: user.xp, level: user.level, xp_into_level: user.xp - cumulativeXpForLevel(user.level),
     xp_for_next_level: xpToNextLevel(user.level), milestone_badge: milestone ? milestone.badge : null,
-    gems: user.gems,
+    gems: user.gems, level_bar_color: user.level_bar_color || 'default',
   } });
 });
 
@@ -7130,6 +7132,18 @@ app.put('/api/account/accent-color', requireAuth, async (req, res) => {
   const accent = ACCENT_COLOR_KEYS.includes(req.body.accent_color) ? req.body.accent_color : 'gold';
   await pool.query('UPDATE users SET accent_color = $1 WHERE id = $2', [accent, req.user.id]);
   res.json({ accent_color: accent });
+});
+
+// Level bar color — recolors the top-nav level/XP bar + circle (and the
+// matching bar on the Levels page hero) site-wide for this user. Allow-
+// listed against the same keys fanpages-nav.css defines `lb-theme-<key>`
+// overrides for, so an unknown key just falls back to 'default' (the
+// original purple/black-sweep look) instead of storing garbage.
+const LEVEL_BAR_COLOR_KEYS = ['default', 'pink', 'red', 'blue', 'green'];
+app.put('/api/account/level-bar-color', requireAuth, async (req, res) => {
+  const color = LEVEL_BAR_COLOR_KEYS.includes(req.body.level_bar_color) ? req.body.level_bar_color : 'default';
+  await pool.query('UPDATE users SET level_bar_color = $1 WHERE id = $2', [color, req.user.id]);
+  res.json({ level_bar_color: color });
 });
 
 // Profile page theme — same default/custom-blurred-background pattern as a
