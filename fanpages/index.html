@@ -60,10 +60,10 @@
     /* Comic-strip link boxes — flat black, bold border, halftone dot
        texture, a vertical label running up one edge, and a colored glow
        on hover that doubles as the "this is clickable" affordance. Fixed
-       12.5% basis each (no grow/shrink) so Gallery+Stories and
-       Characters+Clubs land on exactly 1/4 of the row apiece. */
+       10% basis each (no grow/shrink) so Gallery+Stories and
+       Characters+Clubs land on exactly 1/5 of the row apiece. */
     .fp-comic-box {
-      position: relative; flex: 0 0 12.5%; min-width: 0; height: 100%; overflow: hidden;
+      position: relative; flex: 0 0 10%; min-width: 0; height: 100%; overflow: hidden;
       display: block; text-decoration: none; cursor: pointer;
       background: #0a0a0a;
       background-image:
@@ -76,6 +76,14 @@
       content: ''; position: absolute; inset: 0; opacity: 0; transition: opacity 0.22s;
       background: radial-gradient(ellipse at center, var(--comic-glow, rgba(255,255,255,0.35)) 0%, transparent 72%);
     }
+    /* Admin-picked image for this slot (see Admin > Bulletin > Hero Row
+       Images) — only present once a crop has actually been saved for that
+       box; otherwise the box just keeps its flat black/halftone look.
+       Sized/positioned in JS via the same coverBgSize()/background-position
+       math the billboard slides use. A dark scrim keeps the vertical label
+       readable over busier art. */
+    .fp-comic-box-bg { position: absolute; inset: 0; z-index: 0; background-repeat: no-repeat; }
+    .fp-comic-box-scrim { position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(0,0,0,0.3), rgba(0,0,0,0.6)); }
     .fp-comic-box:hover { transform: translateY(-2px); background-color: #120f16; }
     .fp-comic-box:hover::after { opacity: 1; }
     .fp-comic-box:hover { box-shadow: 0 0 22px 2px var(--comic-glow, rgba(255,255,255,0.45)), inset 0 0 30px var(--comic-glow, rgba(255,255,255,0.25)); }
@@ -100,9 +108,9 @@
     /* Middle banner — the billboard slideshow itself IS the banner, filling
        this slot's entire width and height edge-to-edge (Stories' right
        border to Characters' left border). No video, no extra background
-       layer behind it -- fixed 50% basis, exactly double the 12.5%+12.5%
-       comic-box pair on each side. */
-    .fp-hero-banner-mid { position: relative; flex: 0 0 50%; min-width: 0; height: 100%; overflow: hidden; }
+       layer behind it -- fixed 60% basis (3/5), matching the 10%+10%
+       comic-box pair (1/5 each) on either side. */
+    .fp-hero-banner-mid { position: relative; flex: 0 0 60%; min-width: 0; height: 100%; overflow: hidden; }
 
     @media (max-width: 1150px) {
       .fp-comic-label { font-size: clamp(0.95rem, 1.7vw, 1.6rem); }
@@ -670,10 +678,10 @@
      no video/background behind it), Characters/Clubs comic strips (right
      quarter). Each comic box is a plain link to its destination page. ══ -->
 <section class="fp-hero-row">
-  <a class="fp-comic-box fp-comic-box--gallery" href="/fanpages/search?view=submissions&browse=1">
+  <a class="fp-comic-box fp-comic-box--gallery" href="/fanpages/search?view=submissions&browse=1" data-hero-slot="gallery">
     <span class="fp-comic-label fp-comic-label--edge-start">Gallery</span>
   </a>
-  <a class="fp-comic-box fp-comic-box--stories" href="/fanpages/search?sort=updated&browse=1">
+  <a class="fp-comic-box fp-comic-box--stories" href="/fanpages/search?sort=updated&browse=1" data-hero-slot="stories">
     <span class="fp-comic-label fp-comic-label--edge-end">Stories</span>
   </a>
 
@@ -689,10 +697,10 @@
     </section>
   </div>
 
-  <a class="fp-comic-box fp-comic-box--characters" href="/fanpages/characters">
+  <a class="fp-comic-box fp-comic-box--characters" href="/fanpages/characters" data-hero-slot="characters">
     <span class="fp-comic-label fp-comic-label--edge-start">Characters</span>
   </a>
-  <a class="fp-comic-box fp-comic-box--clubs" href="/fanpages/social">
+  <a class="fp-comic-box fp-comic-box--clubs" href="/fanpages/social" data-hero-slot="clubs">
     <span class="fp-comic-label fp-comic-label--edge-end">Clubs</span>
   </a>
 </section>
@@ -948,6 +956,43 @@
     const renderedW = dims.w * scale, renderedH = dims.h * scale;
     const factor = (zoomPercent || 100) / 100;
     return { w: (renderedW / (boxW || 1)) * 100 * factor, h: (renderedH / (boxH || 1)) * 100 * factor };
+  }
+
+  // ── Hero row comic-box images — admin-picked, per-slot (Gallery/Stories/
+  // Characters/Clubs) background art set via Admin > Bulletin > Hero Row
+  // Images, with the same drag/zoom crop as the billboard. A slot with no
+  // image_url just keeps its default flat black/halftone look -- this only
+  // inserts the bg+scrim layers for slots that actually have one.
+  async function loadHeroComicBoxes() {
+    let boxes;
+    try {
+      const res = await fetch('/api/hero-comic-boxes');
+      boxes = (await res.json()).boxes || [];
+    } catch { return; }
+
+    const withImage = boxes.filter(b => b.image_url);
+    if (!withImage.length) return;
+    await Promise.all(withImage.map(b => loadImageDims(b.image_url)));
+
+    withImage.forEach(b => {
+      const el = document.querySelector(`.fp-comic-box[data-hero-slot="${b.slot}"]`);
+      if (!el) return;
+      const dims = billboardImgDims[b.image_url];
+      const boxW = el.clientWidth || 1, boxH = el.clientHeight || 1;
+      const size = coverBgSize(dims, boxW, boxH, b.zoom);
+
+      const bg = document.createElement('div');
+      bg.className = 'fp-comic-box-bg';
+      bg.style.backgroundImage = `url('${b.image_url}')`;
+      bg.style.backgroundSize = `${size.w}% ${size.h}%`;
+      bg.style.backgroundPosition = `${b.position_x}% ${b.position_y}%`;
+
+      const scrim = document.createElement('div');
+      scrim.className = 'fp-comic-box-scrim';
+
+      el.prepend(scrim);
+      el.prepend(bg);
+    });
   }
 
   async function renderBillboard(slides) {
@@ -1871,6 +1916,7 @@
   (async () => {
     loadRecommended();
     loadRecommendedFollowers();
+    loadHeroComicBoxes();
     loadCharacterSpotlight();
     loadGallerySpotlight();
     loadStorySpotlight();
