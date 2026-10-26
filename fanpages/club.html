@@ -1886,8 +1886,13 @@
        which sits inside the slideshow stack itself, right next to the "+"
        Add Image tile), matching the Add Image empty-state's own dashed
        look (.cl-tf-imgbox--empty/.cl-edit-slideshow-add) instead of a
-       solid-filled pill, so the two read as one matched pair. */
-    .cl-youtube-insert-btn--sqtile {
+       solid-filled pill, so the two read as one matched pair. Chained with
+       the base class (.cl-youtube-insert-btn.cl-youtube-insert-btn--sqtile,
+       not just .cl-youtube-insert-btn--sqtile alone) so this always beats
+       the base rule's conflicting border/padding regardless of which one
+       the cascade happens to declare last -- a single-class modifier tied
+       with the base on specificity silently lost to it once before. */
+    .cl-youtube-insert-btn.cl-youtube-insert-btn--sqtile {
       width: 72px; height: 72px; flex: 0 0 auto; border-radius: 10px; padding: 0;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem;
       font-size: 0.68rem; letter-spacing: 0.01em;
@@ -2621,8 +2626,9 @@
             </div>
 
             <div id="cl-edit-cover-static">
-              <div class="cl-edit-imgbox" id="cl-edit-cover-wrap" style="aspect-ratio: 16 / 9;">
-                <img id="cl-edit-cover-preview" alt="" />
+              <div class="cl-edit-imgbox cl-tf-imgbox cl-tf-imgbox--empty" id="cl-edit-cover-wrap" style="aspect-ratio: 16 / 9;">
+                <img class="cl-tf-preview" id="cl-edit-cover-preview" alt="" />
+                <div class="cl-tf-img-add-ph"><span class="cl-img-add-tile-icon">+</span>Add Image</div>
                 <div class="cl-edit-imgbox-overlay">📷 Change Cover Media</div>
                 <button type="button" class="fp-recrop-btn" id="cl-edit-cover-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
               </div>
@@ -2773,8 +2779,9 @@
               </div>
 
               <div id="cl-page-cover-static">
-                <div class="cl-edit-imgbox" id="cl-page-cover-wrap" style="aspect-ratio: 16 / 9;">
-                  <img id="cl-page-cover-preview" alt="" />
+                <div class="cl-edit-imgbox cl-tf-imgbox cl-tf-imgbox--empty" id="cl-page-cover-wrap" style="aspect-ratio: 16 / 9;">
+                  <img class="cl-tf-preview" id="cl-page-cover-preview" alt="" />
+                  <div class="cl-tf-img-add-ph"><span class="cl-img-add-tile-icon">+</span>Add Image</div>
                   <div class="cl-edit-imgbox-overlay">📷 Change Cover Media</div>
                   <button type="button" class="fp-recrop-btn" id="cl-page-cover-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
                 </div>
@@ -6568,7 +6575,6 @@ function populateHomeEditor(club) {
   document.getElementById('cl-edit-nsfw-toggle').checked = !!club.is_nsfw;
   setEditCoverMode(club.cover_mode || 'static', true);
   setClubCoverPreviewEl(club.cover_image_url || '');
-  document.getElementById('cl-edit-cover-recrop-btn').style.display = isYouTubeUrl(club.cover_image_url) ? 'none' : 'block';
   document.getElementById('cl-edit-slideshow-randomize').checked = club.cover_randomize !== false;
   loadEditSlideshow();
   loadEditCards();
@@ -6707,7 +6713,14 @@ document.getElementById('cl-edit-slideshow-randomize').addEventListener('change'
 });
 
 function setClubCoverPreviewEl(url) {
-  document.getElementById('cl-edit-cover-preview').src = isYouTubeUrl(url) ? youtubeThumbUrl(url) : (url || '/images/nopicture2.png');
+  const img = document.getElementById('cl-edit-cover-preview');
+  if (url) img.src = isYouTubeUrl(url) ? youtubeThumbUrl(url) : url;
+  else img.removeAttribute('src');
+  document.getElementById('cl-edit-cover-wrap').classList.toggle('cl-tf-imgbox--empty', !url);
+  // Centralized here (not left to each call site) so an empty cover never
+  // shows a floating "Recrop" button over its dashed "Add Image" tile --
+  // a YouTube link can't be recropped either, only a real uploaded image.
+  document.getElementById('cl-edit-cover-recrop-btn').style.display = (url && !isYouTubeUrl(url)) ? 'block' : 'none';
 }
 document.getElementById('cl-edit-cover-wrap').addEventListener('click', (e) => {
   if (e.target.closest('#cl-edit-cover-recrop-btn')) return;
@@ -6735,7 +6748,6 @@ document.getElementById('cl-edit-cover-youtube-btn').addEventListener('click', a
   if (res.ok) {
     const data = await res.json();
     setClubCoverPreviewEl(data.cover_image_url);
-    document.getElementById('cl-edit-cover-recrop-btn').style.display = 'none';
     if (currentClub) { currentClub.cover_image_url = data.cover_image_url; renderClubCover(currentClub); }
   }
 });
@@ -6746,7 +6758,6 @@ async function saveCoverImage(blob) {
   if (res.ok) {
     const data = await res.json();
     setClubCoverPreviewEl(data.cover_image_url);
-    document.getElementById('cl-edit-cover-recrop-btn').style.display = 'block';
     if (currentClub) { currentClub.cover_image_url = data.cover_image_url; renderClubCover(currentClub); }
     // QOL: a freshly-set Cover Media is auto-added to the Slideshow tab's
     // image pool too, so switching over to Slideshow later isn't starting
@@ -7010,9 +7021,6 @@ async function populatePageEditor(pageSlug) {
     const full = data.page;
     setEditPageCoverMode(full.cover_mode || 'static', true);
     setPageCoverPreviewEl(full.cover_image_url || '');
-    document.getElementById('cl-page-cover-recrop-btn').hidden = isYouTubeUrl(full.cover_image_url);
-    document.getElementById('cl-page-cover-recrop-btn').dataset.coverUrl = full.cover_image_url || '';
-    document.getElementById('cl-page-cover-remove-btn').hidden = !full.cover_image_url;
     document.getElementById('cl-page-slideshow-randomize').checked = full.cover_randomize !== false;
     // Index 0 is always the mandatory Body Text box (empty title, no
     // images) -- same reserved-slot shape create-club-post.html's post
@@ -7063,7 +7071,18 @@ document.getElementById('cl-page-slideshow-randomize').addEventListener('change'
 });
 
 function setPageCoverPreviewEl(url) {
-  document.getElementById('cl-page-cover-preview').src = isYouTubeUrl(url) ? youtubeThumbUrl(url) : (url || '/images/nopicture2.png');
+  const img = document.getElementById('cl-page-cover-preview');
+  if (url) img.src = isYouTubeUrl(url) ? youtubeThumbUrl(url) : url;
+  else img.removeAttribute('src');
+  document.getElementById('cl-page-cover-wrap').classList.toggle('cl-tf-imgbox--empty', !url);
+  // Centralized here (not left to each call site, where the "remove cover"
+  // path used to leave Recrop VISIBLE on a now-empty dashed tile -- the
+  // opposite of what it should do) so a real uploaded image is the only
+  // state that ever shows a floating "Recrop" button over the cover.
+  const recropBtn = document.getElementById('cl-page-cover-recrop-btn');
+  recropBtn.hidden = !(url && !isYouTubeUrl(url));
+  recropBtn.dataset.coverUrl = url || '';
+  document.getElementById('cl-page-cover-remove-btn').hidden = !url;
 }
 document.getElementById('cl-page-cover-wrap').addEventListener('click', (e) => {
   if (e.target.closest('#cl-page-cover-recrop-btn')) return;
@@ -7098,9 +7117,6 @@ async function savePageCoverImage(blob) {
   if (res.ok) {
     const data = await res.json();
     setPageCoverPreviewEl(data.cover_image_url);
-    document.getElementById('cl-page-cover-recrop-btn').hidden = false;
-    document.getElementById('cl-page-cover-recrop-btn').dataset.coverUrl = data.cover_image_url;
-    document.getElementById('cl-page-cover-remove-btn').hidden = !data.cover_image_url;
     // Same QOL as Home's own Cover Media (see saveCoverImage/
     // addCoverImageToSlideshow above) -- a freshly-set Cover Media is
     // auto-added to the Slideshow pool too, so switching over to Slideshow
@@ -7120,9 +7136,6 @@ document.getElementById('cl-page-cover-youtube-btn').addEventListener('click', a
   if (res.ok) {
     const data = await res.json();
     setPageCoverPreviewEl(data.cover_image_url);
-    document.getElementById('cl-page-cover-recrop-btn').hidden = true;
-    document.getElementById('cl-page-cover-recrop-btn').dataset.coverUrl = data.cover_image_url;
-    document.getElementById('cl-page-cover-remove-btn').hidden = !data.cover_image_url;
   }
 });
 document.getElementById('cl-page-cover-remove-btn').addEventListener('click', async (e) => {
@@ -7132,9 +7145,6 @@ document.getElementById('cl-page-cover-remove-btn').addEventListener('click', as
     method: 'DELETE', headers: authHeaders(),
   });
   setPageCoverPreviewEl('');
-  document.getElementById('cl-page-cover-recrop-btn').hidden = false;
-  document.getElementById('cl-page-cover-recrop-btn').dataset.coverUrl = '';
-  document.getElementById('cl-page-cover-remove-btn').hidden = true;
 });
 // Page slideshow — same add/remove/reorder recipe as Home's, scoped by slug.
 async function loadEditPageSlideshow(pageSlug) {

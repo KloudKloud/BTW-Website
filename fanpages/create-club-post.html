@@ -125,8 +125,11 @@
        (Single mode) -- matches the Add Image empty-state's own dashed
        look (.cl-tf-imgbox--empty) instead of a solid-filled pill. Slideshow
        mode uses .cl-edit-slideshow-add--youtube instead, sitting inside the
-       stack itself next to the "+" Add Image tile. */
-    .cl-youtube-insert-btn--sqtile {
+       stack itself next to the "+" Add Image tile. Chained with the base
+       class (not just .cl-youtube-insert-btn--sqtile alone) so this always
+       beats the base rule's conflicting border/padding regardless of
+       cascade order -- see club.html's identical fix for why. */
+    .cl-youtube-insert-btn.cl-youtube-insert-btn--sqtile {
       width: 72px; height: 72px; flex: 0 0 auto; border-radius: 10px; padding: 0;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem;
       font-size: 0.68rem; letter-spacing: 0.01em;
@@ -354,8 +357,9 @@
         <button class="cl-edit-mode-btn" id="cp-cover-mode-slideshow" type="button">Slideshow</button>
       </div>
       <div id="cp-cover-static">
-        <div class="cl-edit-imgbox" id="cp-cover-wrap" style="aspect-ratio: 16 / 9;">
-          <img id="cp-cover-preview" src="/images/nopicture2.png" alt="" />
+        <div class="cl-edit-imgbox cl-tf-imgbox cl-tf-imgbox--empty" id="cp-cover-wrap" style="aspect-ratio: 16 / 9;">
+          <img class="cl-tf-preview" id="cp-cover-preview" alt="" />
+          <div class="cl-tf-img-add-ph"><span class="cl-img-add-tile-icon">+</span>Add Image</div>
           <div class="cl-edit-imgbox-overlay">📷 Change Cover Media</div>
           <button type="button" class="fp-recrop-btn" id="cp-cover-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;" hidden>✏️ Recrop</button>
         </div>
@@ -714,7 +718,10 @@
     document.getElementById('cp-cover-file-input').click();
   });
   function setCoverPreviewEl(url) {
-    document.getElementById('cp-cover-preview').src = isYouTubeUrl(url) ? youtubeThumbUrl(url) : (url || '/images/nopicture2.png');
+    const img = document.getElementById('cp-cover-preview');
+    if (url) img.src = isYouTubeUrl(url) ? youtubeThumbUrl(url) : url;
+    else img.removeAttribute('src');
+    document.getElementById('cp-cover-wrap').classList.toggle('cl-tf-imgbox--empty', !url);
   }
   document.getElementById('cp-cover-file-input').addEventListener('change', (e) => {
     const file = e.target.files[0];
