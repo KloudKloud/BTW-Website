@@ -121,12 +121,16 @@
     }
     .cl-tf-imgbox--empty .cl-tf-img-add-ph { display: flex; }
     .cl-tf-imgbox--empty:hover .cl-tf-img-add-ph { color: #7fa8d9; }
-    /* "Link Video" as a small square tile beside the image box instead of a
-       wide button underneath it. */
+    /* "Link Video" as a small square DASHED tile beside the image box
+       (Single mode) -- matches the Add Image empty-state's own dashed
+       look (.cl-tf-imgbox--empty) instead of a solid-filled pill. Slideshow
+       mode uses .cl-edit-slideshow-add--youtube instead, sitting inside the
+       stack itself next to the "+" Add Image tile. */
     .cl-youtube-insert-btn--sqtile {
       width: 72px; height: 72px; flex: 0 0 auto; border-radius: 10px; padding: 0;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem;
       font-size: 0.68rem; letter-spacing: 0.01em;
+      background: transparent; border: 2px dashed rgba(224,90,82,0.4);
     }
     .cl-youtube-insert-btn--sqtile .cl-img-add-tile-icon { font-size: 1.2rem; font-weight: 400; color: inherit; }
     .cl-edit-imgbox-overlay {
@@ -199,16 +203,15 @@
       transition: border-color 0.15s, color 0.15s;
     }
     .cl-youtube-insert-btn:hover { border-color: #e05a52; color: #ff7a70; }
-    /* An Additional Field's Cover slideshow puts the compact YT button and
-       Randomize on the same row, split to either end, instead of the full-
-       size tile the top-level Media slideshow uses -- that tile reads as
-       "this huge thing" crammed into the field's much narrower column. */
-    .slideshow-randomize-row--split { justify-content: space-between; }
+    /* An Additional Field's Cover slideshow puts "Link Video" inside the
+       image stack itself now, right next to the "+" Add Image tile (see
+       .cl-edit-slideshow-add--youtube), same as the top-level Cover's own
+       slideshow -- Randomize is the only thing left in this row,
+       right-aligned via the base .slideshow-randomize-row's own
+       justify-content:flex-end (fanpages.css). */
     .slideshow-randomize-row-controls { display: flex; align-items: center; gap: 0.5rem; }
-    /* Breathing room between an Additional Field's Cover slot (whose own
-       Link Video button sits at its bottom) and the Side Image slot right
-       underneath it -- without this the two ran together and the Link
-       Video button read as if it belonged to Side Image too. */
+    /* Breathing room between an Additional Field's Cover slot and the Side
+       Image slot right underneath it -- without this the two ran together. */
     .cl-tf-img-slot + .cl-tf-img-slot { margin-top: 1.75rem; }
     /* "Remove Section?" confirm -- same cozy box-background-art + Fredoka
        decoration recipe as the site's 18+/sign-in gates and club.html's own
@@ -773,7 +776,7 @@
     ytBtn.className = 'cl-edit-slideshow-add cl-edit-slideshow-add--youtube';
     ytBtn.type = 'button';
     ytBtn.title = 'Link Video';
-    ytBtn.innerHTML = '<span class="cl-yt-icon">▶</span>YouTube';
+    ytBtn.innerHTML = '<span class="cl-yt-icon">▶</span>Link Video';
     ytBtn.addEventListener('click', async () => {
       const url = await promptYoutubeLink();
       if (!url) return;
@@ -906,8 +909,7 @@
         <div class="cl-tf-slideshow" ${mode === 'static' ? 'hidden' : ''}>
           <div class="cl-edit-slideshow-stack cl-tf-slideshow-stack"></div>
           <input type="file" class="cl-tf-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-          <div class="slideshow-randomize-row${allowYoutube ? ' slideshow-randomize-row--split' : ''}">
-            ${allowYoutube ? '<button type="button" class="cl-youtube-insert-btn cl-youtube-insert-btn--sqtile cl-tf-slideshow-youtube-btn"><span class="cl-img-add-tile-icon">▶</span>Link Video</button>' : ''}
+          <div class="slideshow-randomize-row">
             <div class="slideshow-randomize-row-controls">
               <label class="slideshow-randomize-label">Randomize</label>
               <label class="slideshow-randomize-switch">
@@ -1021,6 +1023,24 @@
         });
         ssStack.appendChild(item);
       });
+      // "Link Video" sits right before the "+" Add Image tile, same
+      // dashed-tile shape as the top-level Cover's own renderCoverSlideshow().
+      if (allowYoutube) {
+        const ytBtn = document.createElement('button');
+        ytBtn.className = 'cl-edit-slideshow-add cl-edit-slideshow-add--youtube';
+        ytBtn.type = 'button';
+        ytBtn.title = 'Link Video';
+        ytBtn.innerHTML = '<span class="cl-yt-icon">▶</span>Link Video';
+        ytBtn.addEventListener('click', async () => {
+          const url = await promptYoutubeLink();
+          if (!url) return;
+          if (!postTextFields[i][`${prefix}_slideshow`]) postTextFields[i][`${prefix}_slideshow`] = [];
+          postTextFields[i][`${prefix}_slideshow`].push({ image_url: url });
+          cpDirty = true;
+          renderStack();
+        });
+        ssStack.appendChild(ytBtn);
+      }
       const addBtn = document.createElement('button');
       addBtn.className = 'cl-edit-slideshow-add';
       addBtn.type = 'button';
@@ -1030,17 +1050,6 @@
       ssStack.appendChild(addBtn);
     }
     renderStack();
-    const ssYoutubeBtn = slot.querySelector('.cl-tf-slideshow-youtube-btn');
-    if (ssYoutubeBtn) {
-      ssYoutubeBtn.addEventListener('click', async () => {
-        const url = await promptYoutubeLink();
-        if (!url) return;
-        if (!postTextFields[i][`${prefix}_slideshow`]) postTextFields[i][`${prefix}_slideshow`] = [];
-        postTextFields[i][`${prefix}_slideshow`].push({ image_url: url });
-        cpDirty = true;
-        renderStack();
-      });
-    }
     ssFileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       e.target.value = '';
