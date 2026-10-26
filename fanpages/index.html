@@ -58,23 +58,19 @@
     }
 
     /* Comic-strip link boxes — flat black, bold border, halftone dot
-       texture, a center-right label, and a dramatic neon-sign glow around
-       the perimeter (brightens further on hover, doubling as the "this is
-       clickable" affordance). --comic-neon is each panel's full-brightness
-       neon color, used for the border itself and stacked as 4 layered
-       box-shadows (tight bright core out to a soft wide halo) the way a
-       real neon tube reads -- a single soft shadow never looks "neon",
-       it's the layering that sells it. --comic-glow stays the older
-       moderate-alpha version for the label's faint halo and the hover
-       radial overlay. Fixed 10% basis each (no grow/shrink) so
-       Gallery+Stories and Characters+Clubs land on exactly 1/5 of the row
-       apiece. */
+       texture, a center-right label, and a little traveling spark that
+       circles the perimeter (instead of a static glow) to give each panel
+       a subtle animated life. --comic-neon is each panel's full-brightness
+       neon color, used for the border and the spark itself. Fixed 10%
+       basis each (no grow/shrink) so Gallery+Stories and Characters+Clubs
+       land on exactly 1/5 of the row apiece. */
     .fp-comic-box {
-      /* overflow stays visible -- overflow:hidden here would clip this
-         element's own outer box-shadow (the perimeter glow) along with
-         whatever it was meant to clip. Nothing inside actually needs
-         clipping: the bg/scrim children are inset:0 (exactly bounded to
-         the box already) and the halftone background-image just tiles. */
+      /* overflow stays visible -- overflow:hidden would clip the spark
+         (::before, below) wherever it travels past the box's own edge,
+         and clip this element's own box-shadow too. Nothing inside
+         actually needs clipping: the bg/scrim children are inset:0
+         (exactly bounded already) and the halftone background-image just
+         tiles. */
       position: relative; flex: 0 0 10%; min-width: 0; height: 100%;
       display: block; text-decoration: none; cursor: pointer;
       background: #0a0a0a;
@@ -82,17 +78,36 @@
         radial-gradient(rgba(255,255,255,0.09) 1.1px, transparent 1.1px);
       background-size: 13px 13px;
       border: 2px solid var(--comic-neon, rgba(255,255,255,0.85));
-      box-shadow:
-        0 0 6px 1px var(--comic-neon, #fff),
-        0 0 16px 3px var(--comic-neon, #fff),
-        0 0 36px 8px var(--comic-neon, #fff),
-        0 0 60px 14px var(--comic-neon-dim, rgba(255,255,255,0.4)),
-        inset 0 0 22px 4px var(--comic-neon-dim, rgba(255,255,255,0.25));
-      transition: box-shadow 0.22s, transform 0.18s, background-color 0.22s;
+      transition: transform 0.18s, background-color 0.22s;
     }
     .fp-comic-box::after {
       content: ''; position: absolute; inset: 0; opacity: 0; transition: opacity 0.22s;
       background: radial-gradient(ellipse at center, var(--comic-glow, rgba(255,255,255,0.35)) 0%, transparent 72%);
+    }
+    /* The traveling spark -- a small glowing dot riding offset-path: inset
+       around the box's own border rectangle, looping forever. Combines two
+       independent animations: fp-spark-travel moves it around the
+       perimeter at a steady pace, fp-spark-flicker is a much faster
+       opacity/scale wobble layered on top for the "flickering fire" feel
+       rather than a smoothly gliding dot. Each panel's animation-delay is
+       offset so the four sparks aren't moving in lockstep. */
+    .fp-comic-box::before {
+      content: ''; position: absolute; top: 0; left: 0; z-index: 3;
+      width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border-radius: 50%;
+      background: radial-gradient(circle, #fff 0%, var(--comic-neon, #fff) 55%, transparent 100%);
+      box-shadow: 0 0 8px 2px var(--comic-neon, #fff), 0 0 18px 6px var(--comic-neon-dim, rgba(255,255,255,0.5));
+      offset-path: inset(0 round 2px);
+      offset-distance: 0%;
+      pointer-events: none;
+      animation: fp-spark-travel 7s linear infinite, fp-spark-flicker 0.45s ease-in-out infinite;
+    }
+    .fp-comic-box--stories::before { animation-delay: -1.75s, 0s; }
+    .fp-comic-box--characters::before { animation-delay: -3.5s, 0s; }
+    .fp-comic-box--clubs::before { animation-delay: -5.25s, 0s; }
+    @keyframes fp-spark-travel { to { offset-distance: 100%; } }
+    @keyframes fp-spark-flicker {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.55; transform: scale(0.8); }
     }
     /* Admin-picked image for this slot (see Admin > Bulletin > Hero Row
        Images) — only present once a crop has actually been saved for that
@@ -104,13 +119,9 @@
     .fp-comic-box-scrim { position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(0,0,0,0.3), rgba(0,0,0,0.6)); }
     .fp-comic-box:hover { transform: translateY(-2px); background-color: #120f16; }
     .fp-comic-box:hover::after { opacity: 1; }
-    .fp-comic-box:hover {
-      box-shadow:
-        0 0 8px 2px var(--comic-neon, #fff),
-        0 0 22px 5px var(--comic-neon, #fff),
-        0 0 48px 12px var(--comic-neon, #fff),
-        0 0 80px 20px var(--comic-neon-dim, rgba(255,255,255,0.6)),
-        inset 0 0 36px 8px var(--comic-neon-dim, rgba(255,255,255,0.4));
+    .fp-comic-box:hover::before {
+      width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px;
+      box-shadow: 0 0 12px 3px var(--comic-neon, #fff), 0 0 26px 9px var(--comic-neon-dim, rgba(255,255,255,0.6));
     }
     /* True neon tones -- Gallery purple, Stories red, Characters green,
        Clubs blue, each with a dimmer translucent twin for the outermost
@@ -166,7 +177,7 @@
       max-height: calc(100% - 1rem); overflow: hidden;
       writing-mode: vertical-rl; transform: translateY(-50%) rotate(180deg) scaleY(1.15);
       font-family: 'Bangers', 'Fredoka', cursive; font-weight: 400; text-transform: uppercase;
-      font-size: clamp(1.3rem, 2.4vw, 2.1rem); letter-spacing: 0.05em;
+      font-size: clamp(1.3rem, 2.4vw, 2.1rem); letter-spacing: 0.38em;
       color: #fff; -webkit-text-stroke: 0.5px #000;
       text-shadow: 1.5px 0 0 #000, -1.5px 0 0 #000, 0 1.5px 0 #000, 0 -1.5px 0 #000, 0 0 5px var(--comic-glow, rgba(255,255,255,0.35));
       transition: text-shadow 0.22s;
@@ -187,7 +198,7 @@
       .fp-hero-row { height: auto; flex-wrap: wrap; }
       .fp-hero-banner-mid { flex: 1 1 100%; order: 1; height: 220px; }
       .fp-comic-box { flex: 1 1 25%; order: 2; height: 130px; }
-      .fp-comic-label { font-size: 1.05rem; letter-spacing: 0.03em; right: 0.1rem; }
+      .fp-comic-label { font-size: 1.05rem; letter-spacing: 0.15em; right: 0.1rem; }
     }
 
     /* ── Video-area — split into two stacked sections, each with its own
