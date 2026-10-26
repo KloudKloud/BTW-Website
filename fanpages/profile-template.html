@@ -20,7 +20,7 @@
        re-colors the whole page at once. Gold is the default until a
        profile's own accent_color loads in and overrides it (see
        applyAccentTheme()). */
-    :root { --fp-accent: #f0c060; --fp-accent-light: #f7d68a; --fp-accent-rgb: 240,192,96; }
+    :root { --fp-accent: #f0c060; --fp-accent-light: #f7d68a; --fp-accent-light2: #f5cf7c; --fp-accent-rgb: 240,192,96; }
     /* overflow-anchor: none -- without this, the browser's scroll anchoring
        fights our deep-link scroll-to-character logic below: if anything
        reflows above the viewport a moment after we scroll, the browser
@@ -1162,7 +1162,7 @@
        this card's older fixed Rating+Ongoing badge pair. */
     .fp-bcard-tags-row { display: flex; margin-bottom: 0.5rem; min-width: 0; }
     .fp-bcard-tags-scroll .fp-tag-pill--rating-general { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
-    .fp-bcard-tags-scroll .fp-tag-pill--rating-teen { background: rgba(var(--fp-accent-rgb),0.18); color: var(--fp-accent-light); border-color: rgba(var(--fp-accent-rgb),0.5); }
+    .fp-bcard-tags-scroll .fp-tag-pill--rating-teen { background: rgba(var(--fp-accent-rgb),0.18); color: var(--fp-accent-light2); border-color: rgba(var(--fp-accent-rgb),0.5); }
     .fp-bcard-tags-scroll .fp-tag-pill--rating-mature { background: rgba(224,80,74,0.2); color: #ff8079; border-color: rgba(224,80,74,0.55); }
     .fp-tag-pill--status-ongoing { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
     .fp-tag-pill--status-complete { background: rgba(127,168,217,0.2); color: #a8c6e8; border-color: rgba(127,168,217,0.5); }
@@ -2259,24 +2259,32 @@
 
   // ── Accent color -- re-colors every gold title/outline/glow on this
   // profile (every tab, not just Home) via a handful of CSS custom
-  // properties set on :root. Gold is the default/first choice; a handful of
-  // other hand-picked {accent, light} pairs round out the palette. ────────
+  // properties set on :root. Gold is the default/first choice, and is
+  // deliberately the EXACT original hardcoded colors this site always used
+  // (#f0c060/#f7d68a/#f5cf7c) -- not a new "gold" invented for this picker,
+  // so picking Gold (or never touching this button at all) looks pixel-
+  // identical to before this feature existed. light2 only exists because
+  // one single spot (the Mature rating tag pill) used a third, very-slightly
+  // different gold shade (#f5cf7c) than everywhere else (#f7d68a) -- kept
+  // that distinction for Gold specifically; every other color just reuses
+  // its own `light` for both since there's no "original" shade to match. ──
   const ACCENT_THEMES = {
-    gold:   { label: 'Gold',   accent: '#f0c060', light: '#f7d68a', rgb: '240,192,96' },
-    red:    { label: 'Red',    accent: '#e0605a', light: '#f29a93', rgb: '224,96,90' },
-    orange: { label: 'Orange', accent: '#e8954a', light: '#f3bd8c', rgb: '232,149,74' },
-    green:  { label: 'Green',  accent: '#5ec98a', light: '#9fe8bb', rgb: '94,201,138' },
-    yellow: { label: 'Yellow', accent: '#e8d860', light: '#f4ea9e', rgb: '232,216,96' },
-    purple: { label: 'Purple', accent: '#a87fd9', light: '#cbb3ec', rgb: '168,127,217' },
-    blue:   { label: 'Blue',   accent: '#7fa8d9', light: '#b3cdec', rgb: '127,168,217' },
-    pink:   { label: 'Pink',   accent: '#e07fb0', light: '#f2b8d4', rgb: '224,127,176' },
-    teal:   { label: 'Teal',   accent: '#4fc9c0', light: '#9ee8e1', rgb: '79,201,192' },
+    gold:   { label: 'Gold',   accent: '#f0c060', light: '#f7d68a', light2: '#f5cf7c', rgb: '240,192,96' },
+    red:    { label: 'Red',    accent: '#e0605a', light: '#f29a93', light2: '#f29a93', rgb: '224,96,90' },
+    orange: { label: 'Orange', accent: '#e8954a', light: '#f3bd8c', light2: '#f3bd8c', rgb: '232,149,74' },
+    green:  { label: 'Green',  accent: '#5ec98a', light: '#9fe8bb', light2: '#9fe8bb', rgb: '94,201,138' },
+    yellow: { label: 'Yellow', accent: '#e8d860', light: '#f4ea9e', light2: '#f4ea9e', rgb: '232,216,96' },
+    purple: { label: 'Purple', accent: '#a87fd9', light: '#cbb3ec', light2: '#cbb3ec', rgb: '168,127,217' },
+    blue:   { label: 'Blue',   accent: '#7fa8d9', light: '#b3cdec', light2: '#b3cdec', rgb: '127,168,217' },
+    pink:   { label: 'Pink',   accent: '#e07fb0', light: '#f2b8d4', light2: '#f2b8d4', rgb: '224,127,176' },
+    teal:   { label: 'Teal',   accent: '#4fc9c0', light: '#9ee8e1', light2: '#9ee8e1', rgb: '79,201,192' },
   };
   function applyAccentTheme(accentId) {
     const theme = ACCENT_THEMES[accentId] || ACCENT_THEMES.gold;
     const root = document.documentElement.style;
     root.setProperty('--fp-accent', theme.accent);
     root.setProperty('--fp-accent-light', theme.light);
+    root.setProperty('--fp-accent-light2', theme.light2);
     root.setProperty('--fp-accent-rgb', theme.rgb);
     document.querySelectorAll('.fp-accent-swatch').forEach(el => el.classList.toggle('active', el.dataset.accent === accentId));
   }
