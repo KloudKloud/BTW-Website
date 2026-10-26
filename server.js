@@ -1652,6 +1652,21 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     );
   `).catch(e => console.error('club_pages migration:', e.message));
 
+  // Section Titles — non-clickable dividers an admin can drop in between
+  // real club_pages rows in the Pages list/sidebar (e.g. splitting 7 pages
+  // into "Misc" + "Fanart" groups). Not a page itself, just a label; shares
+  // the same sort_order index-space as club_pages (the reorder endpoint
+  // writes both tables from one combined array) so the two interleave.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS club_page_sections (
+      id           SERIAL      PRIMARY KEY,
+      club_id      INTEGER     NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      title        TEXT        NOT NULL DEFAULT '',
+      sort_order   INTEGER     NOT NULL DEFAULT 0,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `).catch(e => console.error('club_page_sections migration:', e.message));
+
   // Club editor: the built-in "Home" page's Cover Image (static or
   // slideshow) and Welcome Title (separate from the club's name — defaults
   // to "Welcome To: <name>" client-side when empty, but is overridable).
@@ -12058,16 +12073,68 @@ app.delete('/api/clubs/:slug/rules/:ruleId', requireAuth, async (req, res) => {
   res.json({ message: 'Rule deleted.' });
 });
 
-// GET /api/clubs/:slug/pages — sidebar "More Pages" list (slug + title
-// only; Home isn't in here, it's the built-in default page).
+// GET /api/clubs/:slug/pages — sidebar "Pages" list (slug + title only;
+// Home isn't in here, it's the built-in default page). Section Title
+// dividers come back interleaved in the same array (type: 'section',
+// slug: 'section:<id>') since they share club_pages' sort_order
+// index-space — the client just renders them as a non-clickable header.
 app.get('/api/clubs/:slug/pages', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const { rows } = await pool.query(
-    'SELECT slug, title, type FROM club_pages WHERE club_id = $1 ORDER BY sort_order, created_at',
+    `SELECT slug, title, type, sort_order FROM club_pages WHERE club_id = $1
+     UNION ALL
+     SELECT 'section:' || id, title, 'section', sort_order FROM club_page_sections WHERE club_id = $1
+     ORDER BY sort_order, slug`,
     [club.id]
   );
   res.json({ pages: rows });
+});
+
+// POST /api/clubs/:slug/page-sections — a Section Title divider, dropped
+// in between pages in the Edit Club builder's Pages column. Shares the
+// same combined sort_order space as club_pages (see migration note above).
+app.post('/api/clubs/:slug/page-sections', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const title = String(req.body.title || '').trim().slice(0, 60);
+  if (!title) return res.status(400).json({ error: 'A section title is required.' });
+  const { rows: [{ maxOrder }] } = await pool.query(
+    `SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM (
+       SELECT sort_order FROM club_pages WHERE club_id = $1
+       UNION ALL
+       SELECT sort_order FROM club_page_sections WHERE club_id = $1
+     ) t`, [ctx.club.id]
+  );
+  const { rows: [section] } = await pool.query(
+    `INSERT INTO club_page_sections (club_id, title, sort_order) VALUES ($1, $2, $3)
+     RETURNING id, title`,
+    [ctx.club.id, title, maxOrder + 1]
+  );
+  res.json({ section });
+});
+
+// PUT /api/clubs/:slug/page-sections/:id — rename a Section Title.
+app.put('/api/clubs/:slug/page-sections/:id', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  const title = String(req.body.title || '').trim().slice(0, 60);
+  if (!title) return res.status(400).json({ error: 'A section title is required.' });
+  const { rows: [section] } = await pool.query(
+    'UPDATE club_page_sections SET title = $1 WHERE club_id = $2 AND id = $3 RETURNING id, title',
+    [title, ctx.club.id, req.params.id]
+  );
+  if (!section) return res.status(404).json({ error: 'Section not found.' });
+  res.json({ section });
+});
+
+// DELETE /api/clubs/:slug/page-sections/:id — removes just the divider;
+// the pages that were under it stay, just ungrouped.
+app.delete('/api/clubs/:slug/page-sections/:id', requireAuth, async (req, res) => {
+  const ctx = await requireClubAdmin(req, res);
+  if (!ctx) return;
+  await pool.query('DELETE FROM club_page_sections WHERE club_id = $1 AND id = $2', [ctx.club.id, req.params.id]);
+  res.json({ message: 'Deleted.' });
 });
 
 // GET /api/clubs/:slug/pages/:pageSlug — a single custom page's content.
@@ -12106,7 +12173,11 @@ app.post('/api/clubs/:slug/pages', requireAuth, async (req, res) => {
   }
 
   const { rows: [{ maxOrder }] } = await pool.query(
-    'SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM club_pages WHERE club_id = $1', [ctx.club.id]
+    `SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM (
+       SELECT sort_order FROM club_pages WHERE club_id = $1
+       UNION ALL
+       SELECT sort_order FROM club_page_sections WHERE club_id = $1
+     ) t`, [ctx.club.id]
   );
   const { rows: [page] } = await pool.query(
     `INSERT INTO club_pages (club_id, slug, title, type, sort_order) VALUES ($1, $2, $3, $4, $5)
@@ -12116,11 +12187,13 @@ app.post('/api/clubs/:slug/pages', requireAuth, async (req, res) => {
   res.json({ page });
 });
 
-// PUT /api/clubs/:slug/pages/reorder — { order: [slug, ...] }. Registered
-// before /:pageSlug below (same route-ordering gotcha as the other
-// reorder endpoints in this file). Home isn't a club_pages row at all, so
-// there's nothing to enforce here — the client just never lets Home be
-// dragged out of first place.
+// PUT /api/clubs/:slug/pages/reorder — { order: [slug|'section:<id>', ...] }.
+// Registered before /:pageSlug below (same route-ordering gotcha as the
+// other reorder endpoints in this file). Home isn't a club_pages row at
+// all, so there's nothing to enforce here — the client just never lets
+// Home be dragged out of first place. Section Title entries are
+// 'section:<id>' and write to club_page_sections instead, sharing the
+// same index-space so pages/sections interleave correctly on read.
 app.put('/api/clubs/:slug/pages/reorder', requireAuth, async (req, res) => {
   const ctx = await requireClubAdmin(req, res);
   if (!ctx) return;
@@ -12130,7 +12203,12 @@ app.put('/api/clubs/:slug/pages/reorder', requireAuth, async (req, res) => {
   try {
     await client.query('BEGIN');
     for (let i = 0; i < order.length; i++) {
-      await client.query('UPDATE club_pages SET sort_order = $1 WHERE club_id = $2 AND slug = $3', [i, ctx.club.id, order[i]]);
+      const entry = String(order[i]);
+      if (entry.startsWith('section:')) {
+        await client.query('UPDATE club_page_sections SET sort_order = $1 WHERE club_id = $2 AND id = $3', [i, ctx.club.id, entry.slice('section:'.length)]);
+      } else {
+        await client.query('UPDATE club_pages SET sort_order = $1 WHERE club_id = $2 AND slug = $3', [i, ctx.club.id, entry]);
+      }
     }
     await client.query('COMMIT');
   } catch (err) {

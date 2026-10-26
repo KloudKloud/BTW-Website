@@ -1223,9 +1223,16 @@
     .cl-side-rule-desc { display: none; font-size: 0.82rem; color: #999; line-height: 1.65; padding: 0 0 0.85rem 1.65em; }
     .cl-side-rule-item.cl-open .cl-side-rule-desc { display: block; }
 
-    /* ── More Pages — Home first (always), then whatever custom pages the
-       club has made, capped with a Show More like Moderators below. ── */
+    /* ── Pages — Home first (always), then whatever custom pages the
+       club has made, capped with a Show More like Moderators below.
+       Section Title dividers group pages visually -- non-clickable, just
+       a small gold uppercase label above whichever pages follow it. ── */
     .cl-side-pages-list { display: flex; flex-direction: column; }
+    .cl-side-page-section {
+      margin: 0.7em 0 0.25em; padding: 0; font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase; color: #f0c060;
+    }
+    .cl-side-pages-list > .cl-side-page-section:first-child { margin-top: 0; }
     .cl-side-page-row {
       display: block; padding: 0.55em 0.65em; margin: 0 -0.65em; border-radius: 8px;
       color: #ccc; text-decoration: none; font-size: 0.9rem; font-weight: 600;
@@ -1609,6 +1616,13 @@
     }
     .cl-edit-pages-create-btn:hover:not(:disabled) { border-color: rgba(240,192,96,0.5); color: #f0c060; }
     .cl-edit-pages-create-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .cl-edit-pages-section-btn {
+      width: 100%; box-sizing: border-box; padding: 0.55em 0.7em; border-radius: 8px; cursor: pointer;
+      background: transparent; border: 1px dashed rgba(255,255,255,0.25); color: #aaa;
+      font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600;
+      transition: border-color 0.15s, color 0.15s; margin-top: 0.4rem;
+    }
+    .cl-edit-pages-section-btn:hover { border-color: rgba(240,192,96,0.5); color: #f0c060; }
     .cl-edit-pages-rule { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1rem 0; }
     .cl-edit-pages-list { display: flex; flex-direction: column; gap: 0.2rem; }
     .cl-edit-pages-item {
@@ -1621,6 +1635,25 @@
     .cl-edit-pages-item[draggable="true"] { cursor: grab; }
     .cl-edit-pages-item.dragging { opacity: 0.35; }
     .cl-edit-pages-item-icon { margin-right: 0.4rem; }
+    /* Section Title divider rows in the Edit Club Pages column -- not a
+       page, just a draggable label other pages can be dropped beneath.
+       Distinct look (uppercase, no hover-highlight like a real page item)
+       so it reads as a grouping header, not a clickable row. */
+    .cl-edit-pages-section {
+      display: flex; align-items: center; justify-content: space-between; gap: 0.4rem;
+      padding: 0.5em 0.3em 0.25em; margin-top: 0.3rem; cursor: grab;
+      border-top: 1px solid rgba(240,192,96,0.25);
+    }
+    .cl-edit-pages-section.dragging { opacity: 0.35; }
+    .cl-edit-pages-section-label {
+      font-family: 'Inter', sans-serif; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #f0c060; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .cl-edit-pages-section-del {
+      background: none; border: none; color: #777; cursor: pointer; font-size: 0.85rem; flex-shrink: 0; padding: 0.1rem 0.3rem;
+      transition: color 0.15s;
+    }
+    .cl-edit-pages-section-del:hover { color: #d97a72; }
     /* General Page template's up-to-three text sections — draggable to
        reorder, same "grip handle + drop target" recipe as the slideshow/
        featured-card rows elsewhere in this editor. */
@@ -2462,14 +2495,14 @@
 
       <hr class="cl-side-rule2" />
 
-      <p class="cl-side-section-title">More Pages</p>
-      <button class="cl-side-add-page-btn" id="cl-side-add-page-btn" type="button" style="display:none;">+ Page</button>
-      <div class="cl-side-pages-list" id="cl-side-pages-list"><p class="cl-side-empty">Loading…</p></div>
+      <p class="cl-side-section-title">Rules</p>
+      <div class="cl-side-rules-list" id="cl-side-rules-list"><p class="cl-side-empty">Loading…</p></div>
 
       <hr class="cl-side-rule2" />
 
-      <p class="cl-side-section-title">Rules</p>
-      <div class="cl-side-rules-list" id="cl-side-rules-list"><p class="cl-side-empty">Loading…</p></div>
+      <p class="cl-side-section-title">Pages</p>
+      <button class="cl-side-add-page-btn" id="cl-side-add-page-btn" type="button" style="display:none;">+ Page</button>
+      <div class="cl-side-pages-list" id="cl-side-pages-list"><p class="cl-side-empty">Loading…</p></div>
 
       <hr class="cl-side-rule2" />
 
@@ -2825,11 +2858,28 @@
       <div class="cl-edit-pages-col">
         <p class="cl-edit-pages-title">Pages</p>
         <button class="cl-edit-pages-create-btn" id="cl-edit-pages-create-btn" type="button">+ Create Page</button>
+        <button class="cl-edit-pages-section-btn" id="cl-edit-pages-section-btn" type="button">+ Section Title</button>
         <hr class="cl-edit-pages-rule" />
         <div class="cl-edit-pages-list" id="cl-edit-pages-list">
           <button class="cl-edit-pages-item active" id="cl-edit-pages-home-item" type="button"><span class="cl-side-page-home-star" title="The Home page can't be deleted">★</span>Home</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- "+ Section Title" popup — just a title input, used both to create a
+     new divider and (re-opened from a section row later) to rename one. -->
+<div class="mod-confirm-overlay" id="cl-section-modal-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title" id="cl-section-modal-title">New Section Title</p>
+    <div class="mod-field">
+      <label for="cl-section-modal-input">Title</label>
+      <input class="mod-input" id="cl-section-modal-input" maxlength="60" placeholder="e.g. Fanart" />
+    </div>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="cl-section-modal-cancel" type="button">Cancel</button>
+      <button class="mod-btn" id="cl-section-modal-save" type="button">Create</button>
     </div>
   </div>
 </div>
@@ -3729,10 +3779,20 @@ document.getElementById('cl-side-showmore-btn').addEventListener('click', () => 
   btn.textContent = expanded ? 'Show less' : 'Show more';
 });
 
-// ── More Pages — Home is always first and isn't a real club_pages row
-// (it's the built-in Hub/Social view); clicking it just clears page/tab/
-// post entirely. Capped at 7 total (including Home) with a Show More. ────
+// ── Pages — Home is always first and isn't a real club_pages row (it's
+// the built-in Hub/Social view); clicking it just clears page/tab/post
+// entirely. Capped at 7 total (including Home) with a Show More. Section
+// Title dividers (type: 'section') are non-clickable group headers that
+// ride along interleaved in the same array -- they don't count against
+// the cap themselves, but an empty one (all its pages pushed past the
+// cap) is trimmed from the visible slice rather than shown dangling. ────
 const CL_PAGES_CAP = 7;
+function pageSectionRow(title) {
+  const p = document.createElement('p');
+  p.className = 'cl-side-page-section';
+  p.textContent = title;
+  return p;
+}
 function pageLinkRow(label, pageSlug, isHome, isSocial) {
   const a = document.createElement('a');
   a.className = 'cl-side-page-row';
@@ -3775,17 +3835,34 @@ function renderClubPagesList(pages) {
   list.appendChild(pageLinkRow('Social', null, false, true));
   list.appendChild(document.createElement('hr')).className = 'cl-side-pages-divider';
 
-  const shown = pages.slice(0, CL_PAGES_CAP - 2);
-  const rest = pages.slice(CL_PAGES_CAP - 2);
-  shown.forEach(p => list.appendChild(pageLinkRow(p.title, p.slug)));
+  const maxPages = CL_PAGES_CAP - 2;
+  const shown = [];
+  const rest = [];
+  let shownCount = 0;
+  pages.forEach(p => {
+    if (p.type === 'section') { shown.push(p); return; }
+    if (shownCount < maxPages) { shown.push(p); shownCount++; }
+    else rest.push(p);
+  });
+  // Trim any section header left with no page after it in the shown slice
+  // (all its pages landed past the cap) -- walks backward so a run of
+  // several empty trailing sections all get pushed into `rest` together.
+  for (let i = shown.length - 1; i >= 0; i--) {
+    if (shown[i].type !== 'section') break;
+    rest.unshift(shown.splice(i, 1)[0]);
+  }
 
-  if (rest.length) {
+  const rowFor = (p) => p.type === 'section' ? pageSectionRow(p.title) : pageLinkRow(p.title, p.slug);
+  shown.forEach(p => list.appendChild(rowFor(p)));
+
+  const restPageCount = rest.filter(p => p.type !== 'section').length;
+  if (restPageCount) {
     const showAllBtn = document.createElement('button');
     showAllBtn.className = 'cl-side-showmore-btn';
     showAllBtn.type = 'button';
-    showAllBtn.textContent = `Show More Pages (${rest.length})`;
+    showAllBtn.textContent = `Show More Pages (${restPageCount})`;
     showAllBtn.addEventListener('click', () => {
-      rest.forEach(p => list.insertBefore(pageLinkRow(p.title, p.slug), showAllBtn));
+      rest.forEach(p => list.insertBefore(rowFor(p), showAllBtn));
       showAllBtn.remove();
       const params = new URLSearchParams(location.search);
       highlightSidebarPages(params.get('page'), params.get('tab') || 'hub');
@@ -6181,7 +6258,11 @@ async function loadEditPages() {
     renderEditPagesList();
   } catch {}
 }
-let pageDragSlug = null;
+// Drag key is a page's slug for a real page, or 'section:<id>' for a
+// Section Title divider -- both club_pages and club_page_sections share
+// the same sort_order index-space server-side (see server.js), so they
+// can be freely interleaved and dragged past each other here.
+let pageDragKey = null;
 function renderEditPagesList() {
   const list = document.getElementById('cl-edit-pages-list');
   list.innerHTML = '';
@@ -6191,12 +6272,12 @@ function renderEditPagesList() {
   homeBtn.innerHTML = `<span class="cl-edit-pages-home-heart" title="The Home page can't be deleted">♥</span>Home`;
   homeBtn.addEventListener('click', () => switchEditView('home', null));
   // Home is never draggable itself, but is a valid drop target — dropping
-  // a page onto it always inserts right AFTER Home, never before.
+  // a page or section onto it always inserts right AFTER Home, never before.
   homeBtn.addEventListener('dragover', (e) => e.preventDefault());
   homeBtn.addEventListener('drop', async (e) => {
     e.preventDefault();
-    if (pageDragSlug == null) return;
-    const dragEl = list.querySelector(`.cl-edit-pages-item[data-page-slug="${CSS.escape(pageDragSlug)}"]`);
+    if (pageDragKey == null) return;
+    const dragEl = list.querySelector(`[data-drag-key="${CSS.escape(pageDragKey)}"]`);
     if (!dragEl) return;
     homeBtn.insertAdjacentElement('afterend', dragEl);
     await saveEditPagesOrder();
@@ -6204,20 +6285,50 @@ function renderEditPagesList() {
   list.appendChild(homeBtn);
 
   editPagesCache.forEach(p => {
+    if (p.type === 'section') {
+      const row = document.createElement('div');
+      row.className = 'cl-edit-pages-section';
+      row.dataset.dragKey = p.slug; // 'section:<id>'
+      row.draggable = true;
+      row.innerHTML = `<span class="cl-edit-pages-section-label">${escapeHtml(p.title)}</span><button type="button" class="cl-edit-pages-section-del" title="Delete section">✕</button>`;
+      row.addEventListener('dragstart', () => { pageDragKey = p.slug; row.classList.add('dragging'); });
+      row.addEventListener('dragend', () => row.classList.remove('dragging'));
+      row.addEventListener('dragover', (e) => e.preventDefault());
+      row.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        if (pageDragKey == null || pageDragKey === p.slug) return;
+        const dragEl = list.querySelector(`[data-drag-key="${CSS.escape(pageDragKey)}"]`);
+        if (!dragEl) return;
+        list.insertBefore(dragEl, row);
+        await saveEditPagesOrder();
+      });
+      row.querySelector('.cl-edit-pages-section-del').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = p.slug.slice('section:'.length);
+        await fetch(`${API}/clubs/${encodeURIComponent(slug)}/page-sections/${encodeURIComponent(id)}`, {
+          method: 'DELETE', headers: authHeaders(),
+        });
+        loadEditPages();
+        loadClubPages();
+      });
+      list.appendChild(row);
+      return;
+    }
     const btn = document.createElement('button');
     btn.className = 'cl-edit-pages-item';
     btn.type = 'button';
     btn.dataset.pageSlug = p.slug;
+    btn.dataset.dragKey = p.slug;
     btn.draggable = true;
     btn.innerHTML = `<span class="cl-edit-pages-item-icon">${EDIT_PAGE_ICONS[p.type] || '🎗️'}</span>${escapeHtml(p.title)}`;
     btn.addEventListener('click', () => switchEditView('page', p.slug));
-    btn.addEventListener('dragstart', () => { pageDragSlug = p.slug; btn.classList.add('dragging'); });
+    btn.addEventListener('dragstart', () => { pageDragKey = p.slug; btn.classList.add('dragging'); });
     btn.addEventListener('dragend', () => btn.classList.remove('dragging'));
     btn.addEventListener('dragover', (e) => e.preventDefault());
     btn.addEventListener('drop', async (e) => {
       e.preventDefault();
-      if (pageDragSlug == null || pageDragSlug === p.slug) return;
-      const dragEl = list.querySelector(`.cl-edit-pages-item[data-page-slug="${CSS.escape(pageDragSlug)}"]`);
+      if (pageDragKey == null || pageDragKey === p.slug) return;
+      const dragEl = list.querySelector(`[data-drag-key="${CSS.escape(pageDragKey)}"]`);
       if (!dragEl) return;
       list.insertBefore(dragEl, btn);
       await saveEditPagesOrder();
@@ -6228,10 +6339,10 @@ function renderEditPagesList() {
 }
 async function saveEditPagesOrder() {
   const list = document.getElementById('cl-edit-pages-list');
-  const slugs = [...list.querySelectorAll('.cl-edit-pages-item[data-page-slug]')].map(el => el.dataset.pageSlug);
-  editPagesCache = slugs.map(s => editPagesCache.find(p => p.slug === s)).filter(Boolean);
+  const keys = [...list.querySelectorAll('[data-drag-key]')].map(el => el.dataset.dragKey);
+  editPagesCache = keys.map(k => editPagesCache.find(p => p.slug === k)).filter(Boolean);
   await fetch(`${API}/clubs/${encodeURIComponent(slug)}/pages/reorder`, {
-    method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ order: slugs }),
+    method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ order: keys }),
   });
   loadClubPages();
 }
@@ -6242,6 +6353,27 @@ function highlightEditPagesList() {
     btn.classList.toggle('active', active);
   });
 }
+
+// ── "+ Section Title" popup — create only for now (rows get a delete
+// button; renaming can reuse this same modal later if asked for). ───────
+document.getElementById('cl-edit-pages-section-btn').addEventListener('click', () => {
+  document.getElementById('cl-section-modal-input').value = '';
+  document.getElementById('cl-section-modal-overlay').hidden = false;
+  document.getElementById('cl-section-modal-input').focus();
+});
+document.getElementById('cl-section-modal-cancel').addEventListener('click', () => {
+  document.getElementById('cl-section-modal-overlay').hidden = true;
+});
+document.getElementById('cl-section-modal-save').addEventListener('click', async () => {
+  const title = document.getElementById('cl-section-modal-input').value.trim();
+  if (!title) return;
+  await fetch(`${API}/clubs/${encodeURIComponent(slug)}/page-sections`, {
+    method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ title }),
+  });
+  document.getElementById('cl-section-modal-overlay').hidden = true;
+  loadEditPages();
+  loadClubPages();
+});
 
 // ── Home editor: Cover Media, Welcome Message, Featured Cards ────────────
 function populateHomeEditor(club) {
