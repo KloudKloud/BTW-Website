@@ -798,30 +798,43 @@
     }
     .fp-featured-sub-col .fp-spotlight-name { font-size: 1.2rem; flex-shrink: 0; }
 
-    /* ── Bottom row: Submissions (left) + Notes guestbook (right), two big
-       side-by-side boxes under the About box. ── */
+    /* ── Bottom row: Submissions (left) + Recent Newspaper/Recent Activity
+       (right), two big side-by-side boxes under the About box. ── */
     .fp-bottom-row {
       max-width: clamp(1400px, 73vw, 1800px); margin: 1.5rem auto 2rem;
       padding: 0 2rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1.75rem; align-items: stretch;
     }
-    .fp-submissions-box, .fp-notes-box {
+    .fp-submissions-box, .fp-notes-box, .fp-notes-standalone-box {
       position: relative; overflow: hidden; border-radius: 18px; border: 1px solid rgba(255,255,255,0.14);
       padding: 1.5rem 1.75rem; display: flex; flex-direction: column;
       background: linear-gradient(160deg, rgba(10,8,14,0.86), rgba(10,8,14,0.76)), url('/images/home/potential-box-background.png');
       background-size: cover; background-position: center;
       box-shadow: 0 10px 30px rgba(0,0,0,0.4);
     }
-    /* Notes has no square image forcing its height, so it needs its own
+    /* Neither has a square image forcing its height, so they need their own
        floor -- without it the grid's align-items:stretch would otherwise
-       be the only thing giving it any height at all. */
+       be the only thing giving .fp-notes-box any height at all. */
     .fp-notes-box { min-height: 340px; }
-    /* Split in half -- signed Notes on top, Recent Activity on the
+    /* Split in half -- Recent Newspaper on top, Recent Activity on the
        bottom, each an independently scrollable region instead of one
        long list. */
     .fp-notes-half { flex: 1; min-height: 0; display: flex; flex-direction: column; }
     .fp-notes-half--notes { padding-bottom: 1rem; }
     .fp-notes-half--activity { padding-top: 1rem; }
     .fp-notes-divider { flex-shrink: 0; height: 1px; background: rgba(255,255,255,0.14); }
+    /* Guestbook Notes board -- a full-width standalone box under the
+       bottom row now (see the HTML comment above it), same background
+       recipe as Submissions/Recent Newspaper. Same two-layer width pattern
+       as .fp-about-box/.fp-about-box-inner (outer wrap sets the max-width/
+       side padding every other section on this tab shares, inner box is
+       the actual styled panel) so its edges line up with everything above
+       it. A fixed floor (bigger than the half-box version above) gives the
+       signed notes more room to breathe before the list itself scrolls. */
+    .fp-notes-standalone-wrap { max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto 2rem; padding: 0 2rem; }
+    /* A real height, not just a floor -- .fp-notes-list's flex:1/min-height:0
+       (below) needs a bounded parent to turn into an internally-scrolling
+       region instead of letting the box grow to fit every note on the page. */
+    .fp-notes-standalone-box { height: 420px; }
 
     /* Submissions -- big main thumbnail (latest post) is a real square
        sized to the column's own width (not stretched to fill whatever
@@ -1520,8 +1533,10 @@
       .fp-featured-sub-col { border-left: none; border-top: 1px solid rgba(255,255,255,0.14); padding-left: 0; padding-top: 1.1rem; }
 
       .fp-bottom-row { grid-template-columns: 1fr; padding: 0 1rem; gap: 1.25rem; }
-      .fp-submissions-box, .fp-notes-box { padding: 1.1rem 1.25rem; }
+      .fp-submissions-box, .fp-notes-box, .fp-notes-standalone-box { padding: 1.1rem 1.25rem; }
       .fp-notes-box { min-height: 300px; }
+      .fp-notes-standalone-wrap { padding: 0 1rem; }
+      .fp-notes-standalone-box { height: 360px; }
     }
 
     @media (max-width: 480px) {
@@ -1673,8 +1688,10 @@
     </div>
   </div>
 
-  <!-- Two big boxes side by side -- latest Submissions (left) and a
-       guestbook-style Notes board (right). -->
+  <!-- Two big boxes side by side -- latest Submissions (left) and Recent
+       Newspaper + Recent Activity, split in half (right). The guestbook-
+       style Notes board that used to live in the top half moved down into
+       its own standalone box below (.fp-notes-standalone-box) -- see there. -->
   <div class="fp-bottom-row">
     <div class="fp-submissions-box">
       <p class="fp-home-side-label">Submissions</p>
@@ -1685,24 +1702,40 @@
     <div class="fp-notes-box">
       <div class="fp-notes-half fp-notes-half--notes">
         <p class="fp-home-side-label">
-          Notes
-          <button type="button" class="fp-notes-add-btn" id="fp-notes-add-btn" hidden>+ Leave a Note</button>
+          Recent Newspaper
+          <button type="button" class="fp-notes-add-btn" id="fp-newspaper-home-showall-btn">Show All</button>
         </p>
-        <div class="fp-notes-compose" id="fp-notes-compose" hidden>
-          <textarea id="fp-notes-input" maxlength="500" placeholder="Leave a nice note…"></textarea>
-          <div class="fp-notes-compose-actions">
-            <button type="button" class="fp-notes-cancel-btn" id="fp-notes-cancel-btn">Cancel</button>
-            <button type="button" class="fp-notes-submit-btn" id="fp-notes-submit-btn">Post Note</button>
-          </div>
-        </div>
-        <div class="fp-notes-list" id="fp-notes-list"><p class="fp-notes-empty">Loading…</p></div>
-        <div class="fp-notes-pager" id="fp-notes-pager"></div>
+        <div id="fp-newspaper-home"><p class="fp-featured-empty">Loading…</p></div>
       </div>
       <div class="fp-notes-divider"></div>
       <div class="fp-notes-half fp-notes-half--activity">
         <p class="fp-home-side-label">Recent Activity</p>
         <div class="fp-activity-list" id="fp-activity-list"><p class="fp-notes-empty">Loading…</p></div>
       </div>
+    </div>
+  </div>
+
+  <!-- Guestbook-style Notes board -- moved down here from the bottom row's
+       right box (see the comment above) so that spot could become Recent
+       Newspaper instead. Same box-background-art treatment as Submissions/
+       Recent Newspaper+Activity above, just full-width and standalone. This
+       is still a first-draft placement/size -- may get more detail/layout
+       passes later. -->
+  <div class="fp-notes-standalone-wrap">
+    <div class="fp-notes-standalone-box">
+      <p class="fp-home-side-label">
+        Notes
+        <button type="button" class="fp-notes-add-btn" id="fp-notes-add-btn" hidden>+ Leave a Note</button>
+      </p>
+      <div class="fp-notes-compose" id="fp-notes-compose" hidden>
+        <textarea id="fp-notes-input" maxlength="500" placeholder="Leave a nice note…"></textarea>
+        <div class="fp-notes-compose-actions">
+          <button type="button" class="fp-notes-cancel-btn" id="fp-notes-cancel-btn">Cancel</button>
+          <button type="button" class="fp-notes-submit-btn" id="fp-notes-submit-btn">Post Note</button>
+        </div>
+      </div>
+      <div class="fp-notes-list" id="fp-notes-list"><p class="fp-notes-empty">Loading…</p></div>
+      <div class="fp-notes-pager" id="fp-notes-pager"></div>
     </div>
   </div>
 
@@ -2086,6 +2119,7 @@
   // ── Tabs ──────────────────────────────────────────────────────────────
   const TAB_NAMES = ['home', 'characters', 'gallery', 'stories', 'newspaper'];
   TAB_NAMES.forEach(t => document.getElementById(`fp-tab-${t}`).addEventListener('click', () => switchTab(t)));
+  document.getElementById('fp-newspaper-home-showall-btn').addEventListener('click', () => switchTab('newspaper'));
 
   function switchTab(tab) {
     activeTabName = tab;
@@ -4553,13 +4587,11 @@
   }
 
   async function loadNewspaperHome() {
-    // The Home tab's "Latest Newspaper" preview section was removed in the
-    // profile redesign -- this is still called from the compose/delete
-    // flows below, so it just no-ops once that container's gone.
+    // Re-added as "Recent Newspaper" (the Notes box's old top half, which
+    // moved down into its own standalone box -- see .fp-notes-standalone-box)
+    // -- still guarded so it no-ops if that container ever goes away again.
     const wrap = document.getElementById('fp-newspaper-home');
     if (!wrap) return;
-    const newBtn = document.getElementById('fp-newspaper-new-btn-home');
-    newBtn.hidden = !(currentAuthor && currentAuthor.is_self);
     try {
       const posts = await fetchNewspaperPosts();
       if (!posts.length) {
@@ -5250,6 +5282,7 @@
       renderSubmissionsBox(a.recent_submissions || []);
       initNotesBox(a);
       renderRecentActivity(a.recent_activity, a.display_name);
+      loadNewspaperHome();
 
       // Stories -- loadProfile() is async and switchTab(initialTab) below
       // runs synchronously right after it's kicked off (not after it
