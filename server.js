@@ -999,6 +999,24 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     INSERT INTO notif_page_banner (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
   `).catch(e => console.error('notif_page_banner migration:', e.message));
 
+  // Fanpages hub hero row comic-strip boxes (Gallery/Stories/Characters/Clubs)
+  // — four named singleton slots, each an optional admin-picked image with
+  // its own drag/zoom crop (same position_x/position_y/zoom shape as the
+  // billboard and notifications banner above). image_url stays NULL until an
+  // admin picks one; the hero row just keeps its flat black/halftone look
+  // for any slot that's never been set.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS hero_comic_box_images (
+      slot       TEXT    PRIMARY KEY,
+      image_url  TEXT,
+      position_x INTEGER NOT NULL DEFAULT 50,
+      position_y INTEGER NOT NULL DEFAULT 50,
+      zoom       INTEGER NOT NULL DEFAULT 100
+    );
+    INSERT INTO hero_comic_box_images (slot) VALUES ('gallery'), ('stories'), ('characters'), ('clubs')
+    ON CONFLICT (slot) DO NOTHING;
+  `).catch(e => console.error('hero_comic_box_images migration:', e.message));
+
   // Backfill the default welcome notification for every user who doesn't
   // have one yet (covers both existing accounts on first deploy and any
   // account created before this migration ran on a given restart).
@@ -5013,6 +5031,56 @@ app.put('/api/admin/notifications-banner', requireAuth, requireAdmin, uploadModI
     [imageUrl, positionX, positionY, zoom]
   );
   res.json({ banner });
+});
+
+// ── Fanpages hub hero row comic-strip box images (admin-adjustable crop) ───
+const HERO_COMIC_BOX_SLOTS = ['gallery', 'stories', 'characters', 'clubs'];
+
+app.get('/api/hero-comic-boxes', async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM hero_comic_box_images');
+  res.json({ boxes: rows });
+});
+
+app.put('/api/admin/hero-comic-boxes/:slot', requireAuth, requireAdmin, uploadModImage.single('image'), async (req, res) => {
+  const { slot } = req.params;
+  if (!HERO_COMIC_BOX_SLOTS.includes(slot)) return res.status(400).json({ error: 'Unknown slot.' });
+
+  const { rows: [existing] } = await pool.query('SELECT * FROM hero_comic_box_images WHERE slot = $1', [slot]);
+  const positionX = clampPosition(req.body.position_x);
+  const positionY = clampPosition(req.body.position_y);
+  const zoom = clampZoom(req.body.zoom, 100);
+
+  let imageUrl = existing.image_url;
+  if (req.file) {
+    imageUrl = `/images/moderators/${req.file.filename}`;
+    if (existing.image_url && existing.image_url.startsWith('/images/moderators/')) {
+      const oldPath = path.join('/var/www/btw', existing.image_url);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+  }
+
+  const { rows: [box] } = await pool.query(
+    'UPDATE hero_comic_box_images SET image_url = $1, position_x = $2, position_y = $3, zoom = $4 WHERE slot = $5 RETURNING *',
+    [imageUrl, positionX, positionY, zoom, slot]
+  );
+  res.json({ box });
+});
+
+app.delete('/api/admin/hero-comic-boxes/:slot/image', requireAuth, requireAdmin, async (req, res) => {
+  const { slot } = req.params;
+  if (!HERO_COMIC_BOX_SLOTS.includes(slot)) return res.status(400).json({ error: 'Unknown slot.' });
+
+  const { rows: [existing] } = await pool.query('SELECT * FROM hero_comic_box_images WHERE slot = $1', [slot]);
+  if (existing && existing.image_url && existing.image_url.startsWith('/images/moderators/')) {
+    const oldPath = path.join('/var/www/btw', existing.image_url);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+
+  const { rows: [box] } = await pool.query(
+    "UPDATE hero_comic_box_images SET image_url = NULL, position_x = 50, position_y = 50, zoom = 100 WHERE slot = $1 RETURNING *",
+    [slot]
+  );
+  res.json({ box });
 });
 
 // POST /api/moderator/site/create — the Create Story onboarding flow.

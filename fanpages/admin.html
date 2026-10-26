@@ -15,7 +15,7 @@
        just its own image positioning for BtwCropper's pan/zoom contract
        (see btw-cropper.js) via the wrap's own ID instead of touching the
        shared rule. */
-    #hb-editor-img-wrap img, #lvb-editor-img-wrap img {
+    #hb-editor-img-wrap img, #lvb-editor-img-wrap img, #hr-editor-img-wrap img {
       width: auto; height: auto; max-width: none; object-fit: none;
       position: absolute; top: 0; left: 0; transform-origin: 0 0;
     }
@@ -132,6 +132,17 @@
        live page actually renders, not a generic widescreen guess. */
     .lvb-card-img-wrap { position: relative; width: 100%; aspect-ratio: 1.79 / 1; overflow: hidden; background: #1a1a1a; }
     .lvb-card-img-wrap .hb-preview-bg { background-repeat: no-repeat; }
+    /* Hero Row Images grid tiles -- tall/narrow like the live comic-strip
+       box instead of the wide 21:9/1.79:1 ratios the other two carousels
+       use. */
+    .hr-card-img-wrap { position: relative; width: 100%; aspect-ratio: 1 / 2.2; overflow: hidden; background: #1a1a1a; }
+    .hr-card-img-wrap .hb-preview-bg { background-repeat: no-repeat; }
+    .hr-card-placeholder {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      color: #666; font-size: 0.8rem; font-style: italic; text-align: center; padding: 1rem;
+      background-image: radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px);
+      background-size: 10px 10px;
+    }
     .hb-sliders-caption { text-align: center; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #999; margin-bottom: 0.5rem; }
     /* Bubbly Fredoka to match Character/Gallery/Story/Club Spotlight and
        Recent Submissions on the live hub, instead of the generic
@@ -335,6 +346,11 @@
     </button>
 
     <div class="hb-grid" id="hb-grid"></div>
+
+    <h2 class="adm-section-title" style="margin-top: 3rem;"><img src="/images/home/decoration-8.png" alt="" /> Hero Row Images</h2>
+    <p class="hb-sub">Pick a background image for each of the four comic-strip boxes on the Fanpages hub (Gallery, Stories, Characters, Clubs), with its own drag/zoom crop. A slot left empty just keeps its default flat black/halftone look live.</p>
+
+    <div class="hb-grid" id="hr-grid"></div>
   </div>
 
   <!-- ══ Levels Banner ══════════════════════════════════════════════ -->
@@ -578,6 +594,33 @@
   </div>
 </div>
 
+<!-- Hero Row Image editor modal — same crop editor as the Bulletin's, but
+     for the four singleton Gallery/Stories/Characters/Clubs comic-box slots:
+     one image + position/zoom each, no caption/credit/link/NSFW/VIP/
+     animation. "Remove Image" clears the slot back to its default black
+     look instead of deleting a row (these four always exist). -->
+<div class="char-editor-overlay" id="hr-editor-overlay" hidden>
+  <div class="char-editor-modal">
+    <h2 class="char-editor-title" id="hr-editor-title">Hero Box Image</h2>
+
+    <div class="char-editor-ref-wrap" id="hr-editor-img-wrap" style="max-width: 220px; aspect-ratio: 1 / 3; cursor: default;">
+      <img id="hr-editor-crop-img" alt="" style="display:none;" draggable="false" />
+      <div class="char-editor-ref-placeholder" id="hr-editor-img-placeholder">Click to upload an image</div>
+    </div>
+    <input type="file" id="hr-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+    <button type="button" class="mod-btn mod-btn--small" id="hr-editor-change-img-btn" style="display:none; margin: 0.6rem auto 1rem;">📷 Change Image</button>
+    <p class="char-editor-facts-hint" style="text-align:center;">Drag to move, scroll or pinch to zoom. This crop box is a close match for the tall comic-strip box on the live page, so what you see here is close to what shows up there.</p>
+
+    <p class="mod-panel-msg" id="hr-editor-msg"></p>
+
+    <div class="char-editor-actions">
+      <button class="mod-btn mod-btn--danger" id="hr-editor-clear" type="button" style="display:none;">Remove Image</button>
+      <button class="mod-btn" id="hr-editor-cancel" type="button">Cancel</button>
+      <button class="mod-btn" id="hr-editor-save" type="button" disabled>Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Levels Banner slide editor modal — same crop editor as the Bulletin's,
      minus caption/credit/NSFW/VIP/animation (the Levels banner is just a
      plain link carousel). -->
@@ -663,6 +706,7 @@ function switchAdmTab(tab) {
   // own. Redo the sizing once the panel is actually visible and has real
   // dimensions to measure.
   if (tab === 'bulletin' && typeof refreshGridBgSizes === 'function') setTimeout(refreshGridBgSizes, 0);
+  if (tab === 'bulletin' && typeof refreshHrGridBgSizes === 'function') setTimeout(refreshHrGridBgSizes, 0);
   if (tab === 'levels' && typeof refreshLvbGridBgSizes === 'function') setTimeout(refreshLvbGridBgSizes, 0);
 }
 ADM_TABS.forEach(t => document.getElementById(`adm-tab-${t}`).addEventListener('click', () => switchAdmTab(t)));
@@ -871,6 +915,23 @@ function refreshGridBgSizes() {
   });
 }
 
+function refreshHrGridBgSizes() {
+  const grid = document.getElementById('hr-grid');
+  if (!grid) return;
+  const cards = grid.querySelectorAll('.hb-card');
+  cards.forEach((card, i) => {
+    const box = heroBoxes.find(b => b.slot === HR_SLOTS[i].slot);
+    const dims = box && box.image_url && imgDimsCache[box.image_url];
+    if (!box || !dims) return;
+    const bg = card.querySelector('.hb-preview-bg');
+    const boxW = bg.clientWidth, boxH = bg.clientHeight;
+    if (!boxW || !boxH) return;
+    const size = coverBgSize(dims, boxW, boxH, box.zoom);
+    bg.style.backgroundSize = `${size.w}% ${size.h}%`;
+    bg.style.backgroundPosition = `${box.position_x}% ${box.position_y}%`;
+  });
+}
+
 async function loadSlides() {
   const res = await fetch('/api/hub-billboard', { headers: authHeaders() });
   const data = await res.json();
@@ -1043,6 +1104,209 @@ document.getElementById('hb-editor-delete').addEventListener('click', async () =
   } finally {
     deleteBtn.disabled = false;
     deleteBtn.textContent = 'Delete';
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Hero Row Images (Gallery/Stories/Characters/Clubs comic-strip boxes) —
+   four fixed singleton slots rather than an add/remove list, so this reuses
+   loadImageDims()/coverBgSize() from the Bulletin section above but keeps
+   its own hr-prefixed cropper state/functions (mirrors hbCropper*) since
+   each slot only ever has one crop, no start/end animation frames.
+   ═══════════════════════════════════════════════════════════════════════ */
+const HR_SLOTS = [
+  { slot: 'gallery', label: 'Gallery' },
+  { slot: 'stories', label: 'Stories' },
+  { slot: 'characters', label: 'Characters' },
+  { slot: 'clubs', label: 'Clubs' },
+];
+let heroBoxes = [];
+let hrEditingSlot = null;
+let hrSelectedFile = null;
+let hrPos = { x: 50, y: 50, zoom: 100 };
+let hrCurrentImageUrl = null;
+let hrCropper = null;
+let hrSuppressCropSave = false;
+
+function hrCropperToPosition(cropper) {
+  const pos = cropper.getPositionFraction();
+  return {
+    x: Math.round(pos.x * 100),
+    y: Math.round(pos.y * 100),
+    zoom: Math.max(100, Math.min(400, Math.round((cropper.getZoom() / cropper.getMinZoom()) * 100))),
+  };
+}
+function hrApplyPositionToCropper(cropper, pos) {
+  cropper.setZoom(cropper.getMinZoom() * ((pos.zoom || 100) / 100));
+  cropper.setPositionFraction({ x: (pos.x || 50) / 100, y: (pos.y || 50) / 100 });
+}
+function hrSaveCropperToPosition() {
+  if (!hrCropper || hrSuppressCropSave) return;
+  hrPos = hrCropperToPosition(hrCropper);
+}
+function hrInitCropper(imageSrc) {
+  const img = document.getElementById('hr-editor-crop-img');
+  const wrap = document.getElementById('hr-editor-img-wrap');
+  if (hrCropper) { hrCropper.destroy(); hrCropper = null; }
+  img.removeAttribute('src');
+  img.style.display = 'block';
+  document.getElementById('hr-editor-img-placeholder').style.display = 'none';
+  document.getElementById('hr-editor-change-img-btn').style.display = 'block';
+  img.onload = () => {
+    requestAnimationFrame(() => {
+      hrCropper = new BtwCropper(img, wrap, { onChange: hrSaveCropperToPosition });
+      hrSuppressCropSave = true;
+      hrApplyPositionToCropper(hrCropper, hrPos);
+      hrSuppressCropSave = false;
+    });
+  };
+  img.src = imageSrc;
+}
+
+async function loadHeroBoxes() {
+  const res = await fetch('/api/hero-comic-boxes', { headers: authHeaders() });
+  const data = await res.json();
+  heroBoxes = data.boxes || [];
+  renderHrGrid();
+}
+
+function renderHrGrid() {
+  const grid = document.getElementById('hr-grid');
+  grid.innerHTML = '';
+  HR_SLOTS.forEach(({ slot, label }) => {
+    const box = heroBoxes.find(b => b.slot === slot) || { slot, image_url: null, position_x: 50, position_y: 50, zoom: 100 };
+    const card = document.createElement('div');
+    card.className = 'hb-card';
+    card.innerHTML = `
+      <div class="hb-card-img-wrap hr-card-img-wrap">
+        <div class="hb-preview-bg"></div>
+        ${!box.image_url ? '<p class="hr-card-placeholder">No image set — default black look</p>' : ''}
+      </div>
+      <div class="hb-card-body">
+        <p class="hb-card-caption">${label}</p>
+        <div class="hb-card-actions">
+          <button class="mod-btn mod-btn--small" type="button">${box.image_url ? 'Edit' : 'Add Image'}</button>
+        </div>
+      </div>
+    `;
+    card.querySelector('.hb-card-actions button').addEventListener('click', () => openHrEditor(box, label));
+    grid.appendChild(card);
+
+    if (box.image_url) {
+      loadImageDims(box.image_url).then(dims => {
+        const bg = card.querySelector('.hb-preview-bg');
+        const boxW = bg.clientWidth, boxH = bg.clientHeight;
+        const size = coverBgSize(dims, boxW, boxH, box.zoom);
+        bg.style.backgroundImage = `url(${box.image_url})`;
+        bg.style.backgroundSize = `${size.w}% ${size.h}%`;
+        bg.style.backgroundPosition = `${box.position_x}% ${box.position_y}%`;
+      });
+    }
+  });
+}
+
+async function openHrEditor(box, label) {
+  hrEditingSlot = box.slot;
+  hrSelectedFile = null;
+
+  document.getElementById('hr-editor-title').textContent = `${label} Box Image`;
+  document.getElementById('hr-editor-clear').style.display = box.image_url ? '' : 'none';
+
+  const placeholder = document.getElementById('hr-editor-img-placeholder');
+  if (box.image_url) {
+    hrCurrentImageUrl = box.image_url;
+    placeholder.style.display = 'none';
+    hrPos = { x: box.position_x, y: box.position_y, zoom: box.zoom || 100 };
+    hrInitCropper(box.image_url);
+  } else {
+    hrCurrentImageUrl = null;
+    placeholder.style.display = 'block';
+    document.getElementById('hr-editor-crop-img').style.display = 'none';
+    document.getElementById('hr-editor-change-img-btn').style.display = 'none';
+    if (hrCropper) { hrCropper.destroy(); hrCropper = null; }
+    hrPos = { x: 50, y: 50, zoom: 100 };
+  }
+
+  document.getElementById('hr-editor-msg').textContent = '';
+  hrUpdateSaveButtonState();
+  document.getElementById('hr-editor-overlay').hidden = false;
+}
+function closeHrEditor() {
+  document.getElementById('hr-editor-overlay').hidden = true;
+}
+document.getElementById('hr-editor-cancel').addEventListener('click', closeHrEditor);
+
+function hrUpdateSaveButtonState() {
+  document.getElementById('hr-editor-save').disabled = !hrSelectedFile && !hrCurrentImageUrl;
+}
+
+document.getElementById('hr-editor-img-placeholder').addEventListener('click', () => {
+  document.getElementById('hr-editor-file-input').click();
+});
+document.getElementById('hr-editor-change-img-btn').addEventListener('click', () => {
+  document.getElementById('hr-editor-file-input').click();
+});
+document.getElementById('hr-editor-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  hrSelectedFile = file;
+  const objectUrl = URL.createObjectURL(file);
+  hrCurrentImageUrl = objectUrl;
+  document.getElementById('hr-editor-img-placeholder').style.display = 'none';
+  hrPos = { x: 50, y: 50, zoom: 100 };
+  hrInitCropper(objectUrl);
+  hrUpdateSaveButtonState();
+});
+
+document.getElementById('hr-editor-save').addEventListener('click', async () => {
+  const msgEl = document.getElementById('hr-editor-msg');
+  msgEl.textContent = '';
+  if (!hrCurrentImageUrl) {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Please upload an image.';
+    return;
+  }
+  hrSaveCropperToPosition();
+
+  const fd = new FormData();
+  if (hrSelectedFile) fd.append('image', hrSelectedFile);
+  fd.append('position_x', hrPos.x);
+  fd.append('position_y', hrPos.y);
+  fd.append('zoom', hrPos.zoom);
+
+  const saveBtn = document.getElementById('hr-editor-save');
+  saveBtn.disabled = true;
+  try {
+    const res = await fetch(`/api/admin/hero-comic-boxes/${hrEditingSlot}`, {
+      method: 'PUT', headers: authHeaders(), body: fd,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to save.');
+    closeHrEditor();
+    await loadHeroBoxes();
+  } catch (err) {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = err.message;
+    saveBtn.disabled = false;
+  }
+});
+
+document.getElementById('hr-editor-clear').addEventListener('click', async () => {
+  if (!hrEditingSlot) return;
+  const msgEl = document.getElementById('hr-editor-msg');
+  msgEl.textContent = '';
+  const btn = document.getElementById('hr-editor-clear');
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/api/admin/hero-comic-boxes/${hrEditingSlot}/image`, { method: 'DELETE', headers: authHeaders() });
+    if (!res.ok) throw new Error('Failed to remove image.');
+    closeHrEditor();
+    await loadHeroBoxes();
+  } catch (err) {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = err.message;
+  } finally {
+    btn.disabled = false;
   }
 });
 
@@ -1729,6 +1993,7 @@ document.getElementById('lvb-editor-delete').addEventListener('click', async () 
     switchAdmTab(location.hash.slice(1));
 
     await loadSlides();
+    await loadHeroBoxes();
     await loadLevelsBannerSlides();
     const summary = await loadCatalogSummary();
     dictData = summary;
