@@ -300,16 +300,19 @@
     }
     .fp-action-btn--follow { background: #f0f0f0; color: #0d0d0d; }
     .fp-action-btn--follow:hover { background: #cfcfcf; }
-    /* Was a flat teal regardless of the profile -- now the profile owner's
-       own chosen accent color, so "you're following this person" visually
-       matches whatever theme they picked for their page instead of a fixed
-       site color. */
+    /* Was a flat solid fill (teal, then accent) -- now matches the
+       message/more buttons' own "transparent + accent-glow border" look
+       instead of being the one solid-color pill in the row, with plain
+       white text/check instead of dark-on-accent. Explicit height to line
+       up exactly with the 50px message/more circles next to it. */
     .fp-action-btn--following {
-      background: var(--fp-accent); color: #0d0d0d; border: none;
-      display: inline-flex; align-items: center; gap: 0.45rem;
+      background: transparent; color: #f0f0f0; border: 1px solid rgba(var(--fp-accent-rgb),0.6);
+      box-shadow: 0 0 8px rgba(var(--fp-accent-rgb),0.22);
+      display: inline-flex; align-items: center; gap: 0.45rem; height: 50px;
+      transition: border-color 0.15s, box-shadow 0.15s, color 0.15s;
     }
-    .fp-action-btn--following:hover { background: #d97a72; color: #fff; }
-    .fp-action-btn--following .fp-follow-check { font-weight: 700; }
+    .fp-action-btn--following:hover { border-color: #d97a72; color: #d97a72; box-shadow: 0 0 16px rgba(217,122,114,0.4); }
+    .fp-action-btn--following .fp-follow-check { font-weight: 700; color: #f0f0f0; }
     .fp-action-btn--login { background: #7fa8d9; color: #0a0a0a; }
     .fp-profile-msg-btn {
       flex-shrink: 0; display: flex; align-items: center; justify-content: center;
@@ -322,13 +325,17 @@
     .fp-profile-msg-btn svg { width: 22px; height: 22px; }
 
     .fp-more-menu-wrap { position: relative; flex-shrink: 0; }
+    /* Was a plain white-bordered circle, the one piece of this row that
+       didn't carry the accent at all -- now matches the message button's
+       same border/glow treatment. */
     .fp-more-menu-btn {
       width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-      background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #f0f0f0;
+      background: transparent; border: 1px solid rgba(var(--fp-accent-rgb),0.6); color: #f0f0f0;
+      box-shadow: 0 0 8px rgba(var(--fp-accent-rgb),0.22);
       font-size: 1.1rem; letter-spacing: 0.05em; cursor: pointer; font-family: inherit;
-      transition: border-color 0.15s, color 0.15s;
+      transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
     }
-    .fp-more-menu-btn:hover { border-color: #7fa8d9; color: #7fa8d9; }
+    .fp-more-menu-btn:hover { border-color: #7fa8d9; color: #7fa8d9; box-shadow: 0 0 16px rgba(127,168,217,0.4); }
     .fp-more-menu-dropdown {
       position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; min-width: 160px;
       background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
@@ -4250,18 +4257,7 @@
       return;
     }
 
-    // Deep-links straight into a DM with this person -- no follow required
-    // either direction (see /api/dm/start), notifications.html's
-    // #inbox/new/<username> hash handler picks this up and opens the
-    // composer immediately, same as picking someone from "+ New Chat".
-    const msgBtn = document.createElement('a');
-    msgBtn.className = 'fp-profile-msg-btn';
-    msgBtn.href = window.fpUrl(`/notifications#inbox/new/${encodeURIComponent(USERNAME)}`);
-    msgBtn.title = 'Message';
-    msgBtn.setAttribute('aria-label', 'Message');
-    msgBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5l9 6.5 9-6.5"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg>';
-    wrap.appendChild(msgBtn);
-
+    // Follow comes first in the row now, then Message, then "•••".
     const btn = document.createElement('button');
     btn.type = 'button';
     let following = isFollowing;
@@ -4281,6 +4277,19 @@
       btn.disabled = false;
     });
     wrap.appendChild(btn);
+
+    // Deep-links straight into a DM with this person -- no follow required
+    // either direction (see /api/dm/start), notifications.html's
+    // #inbox/new/<username> hash handler picks this up and opens the
+    // composer immediately, same as picking someone from "+ New Chat".
+    const msgBtn = document.createElement('a');
+    msgBtn.className = 'fp-profile-msg-btn';
+    msgBtn.href = window.fpUrl(`/notifications#inbox/new/${encodeURIComponent(USERNAME)}`);
+    msgBtn.title = 'Message';
+    msgBtn.setAttribute('aria-label', 'Message');
+    msgBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5l9 6.5 9-6.5"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg>';
+    wrap.appendChild(msgBtn);
+
     wrap.appendChild(buildMoreMenu(author));
   }
 
