@@ -48,23 +48,35 @@
     .adm-hero img { width: 26px; height: 26px; filter: drop-shadow(0 0 4px rgba(240,192,96,0.5)); }
     .adm-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.9rem; color: #f0f0f0; margin: 0; }
 
-    /* Tab bar — hash-routed, all three panels live in this one page.
-       Pill style with box-background art fill + gold border/glow for
-       "you are here," same as the active-nav-item convention elsewhere
-       (the fill is art now, not a flat color, so active can't just swap
-       a background color). */
-    .adm-tabs { display: flex; gap: 0.6rem; margin-bottom: 2.2rem; flex-wrap: wrap; }
-    .adm-tab {
-      background-image: linear-gradient(160deg, rgba(6,6,16,0.6), rgba(6,6,16,0.82)), url('/images/home/box-background-2.png');
-      background-size: cover; background-position: center;
-      border: 1px solid rgba(255,255,255,0.12); cursor: pointer; color: #c9bfe0;
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.92rem; font-weight: 600;
-      padding: 0.6rem 1.3rem; border-radius: 20px; transition: all 0.15s ease;
+    /* Tab bar — hash-routed, all four panels live in this one page. Stolen
+       straight from the profile page's own Home/Characters/Gallery tab bar
+       (.fp-tabs/.fp-tab in fanpages/profile-template.html): one bordered,
+       divided bar instead of separate pill buttons, active tab marked by
+       accent-tinted text/background rather than a swapped art fill. Gold
+       here is the literal same rgb triplet (240,192,96) the profile tabs
+       default to, so it's not just "the same look," it's the same color. */
+    .adm-tabs {
+      display: flex; align-items: stretch; width: fit-content;
+      border-radius: 14px; border: 2px solid rgba(240,192,96,0.3); overflow: hidden;
+      background: linear-gradient(160deg, rgba(10,8,14,0.94), rgba(10,8,14,0.88));
+      box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+      margin-bottom: 2.2rem;
     }
-    .adm-tab:hover { color: #f0f0f0; border-color: rgba(255,255,255,0.25); }
-    .adm-tab.active { color: var(--gold); border-color: var(--gold); box-shadow: 0 0 14px rgba(240,192,96,0.32); }
+    .adm-tab {
+      background: none; border: none; border-right: 2px solid rgba(240,192,96,0.22); cursor: pointer; color: #bbb;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.92rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.03em;
+      padding: 0.9rem 1.3rem; position: relative; transition: color 0.15s, background 0.15s;
+    }
+    .adm-tabs .adm-tab:last-child { border-right: none; }
+    .adm-tab:hover { color: #fff; background: rgba(240,192,96,0.12); }
+    .adm-tab.active { color: var(--gold); background: rgba(240,192,96,0.14); }
     .adm-panel { display: none; }
     .adm-panel.active { display: block; }
+    @media (max-width: 640px) {
+      .adm-tabs { width: 100%; overflow-x: auto; }
+      .adm-tab { white-space: nowrap; }
+    }
 
     /* Section heading helper -- Fredoka + decoration sprite, same pattern
        as Levels'/Browse's section titles. */
@@ -107,7 +119,13 @@
       overflow: hidden; transition: box-shadow 0.15s ease, border-color 0.15s ease;
     }
     .hb-card:hover { border-color: rgba(240,192,96,0.45); box-shadow: 0 0 16px rgba(240,192,96,0.15); }
-    .hb-card-img-wrap { position: relative; width: 100%; aspect-ratio: 21 / 9; overflow: hidden; background: #1a1a1a; }
+    /* 62:25 is the live hero banner's own measured aspect ratio -- in the
+       hero row's clamp(305px,25vw,425px) height formula's linear middle
+       range (roughly 1220-1700px viewport widths), both the banner's 62%
+       width and its height scale with the viewport, holding this ratio
+       steady. Matches the hero banner on fanpages/index.html exactly, so
+       what's cropped here is what actually renders there. */
+    .hb-card-img-wrap { position: relative; width: 100%; aspect-ratio: 62 / 25; overflow: hidden; background: #1a1a1a; }
     .hb-card-badge {
       position: absolute; top: 8px; right: 8px; z-index: 2;
       font-size: 0.66rem; font-weight: 700; letter-spacing: 0.06em;
@@ -128,14 +146,15 @@
        (774x433 at full width, threaded between 1/4 down the Leaderboard box
        and 1/4 up from the bottom of the Recent Activity box on
        /fanpages/levels) -- the crop editor and card preview use this
-       instead of the Bulletin's 21:9 so what's shown here matches what the
+       instead of the Bulletin's 62:25 so what's shown here matches what the
        live page actually renders, not a generic widescreen guess. */
     .lvb-card-img-wrap { position: relative; width: 100%; aspect-ratio: 1.79 / 1; overflow: hidden; background: #1a1a1a; }
     .lvb-card-img-wrap .hb-preview-bg { background-repeat: no-repeat; }
     /* Hero Row Images grid tiles -- tall/narrow like the live comic-strip
-       box instead of the wide 21:9/1.79:1 ratios the other two carousels
-       use. */
-    .hr-card-img-wrap { position: relative; width: 100%; aspect-ratio: 1 / 2.2; overflow: hidden; background: #1a1a1a; }
+       box (9.5% of the hub's width, clamp(305px,25vw,425px) tall -- in the
+       clamp's linear middle range that's exactly a 9.5:25 ratio, same math
+       as the Bulletin banner's 62:25) instead of a generic guess. */
+    .hr-card-img-wrap { position: relative; width: 100%; aspect-ratio: 9.5 / 25; overflow: hidden; background: #1a1a1a; }
     .hr-card-img-wrap .hb-preview-bg { background-repeat: no-repeat; }
     .hr-card-placeholder {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -516,7 +535,7 @@
   <div class="char-editor-modal">
     <h2 class="char-editor-title" id="hb-editor-title">Add New Slide</h2>
 
-    <div class="char-editor-ref-wrap" id="hb-editor-img-wrap" style="max-width: 520px; aspect-ratio: 21 / 9; cursor: default;">
+    <div class="char-editor-ref-wrap" id="hb-editor-img-wrap" style="max-width: 520px; aspect-ratio: 62 / 25; cursor: default;">
       <img id="hb-editor-crop-img" alt="" style="display:none;" draggable="false" />
       <div class="char-editor-ref-placeholder" id="hb-editor-img-placeholder">Click to upload an image</div>
     </div>
@@ -541,11 +560,11 @@
     </div>
 
     <div id="hb-end-frame-field" style="display:none;">
-      <p class="hb-sliders-caption">Animation Preview</p>
-      <div class="char-editor-ref-wrap" id="hb-anim-preview-wrap" style="max-width: 520px; aspect-ratio: 21 / 9; cursor: default;">
+      <p class="hb-sliders-caption">Animation Preview — loops automatically</p>
+      <div class="char-editor-ref-wrap" id="hb-anim-preview-wrap" style="max-width: 520px; aspect-ratio: 62 / 25; cursor: default;">
         <div id="hb-anim-preview-bg" class="hb-preview-bg"></div>
       </div>
-      <button class="mod-btn mod-btn--small" id="hb-preview-btn" type="button" style="display:block; margin: 0.75rem auto 1rem;">▶ Preview Animation (3s)</button>
+      <p class="char-editor-facts-hint" style="text-align:center;">Plays on loop here (back and forth) so you can judge the motion without clicking anything — live, it runs once per slide's full 15 seconds on screen, in just the one direction.</p>
     </div>
 
     <div class="mod-field">
@@ -603,7 +622,7 @@
   <div class="char-editor-modal">
     <h2 class="char-editor-title" id="hr-editor-title">Hero Box Image</h2>
 
-    <div class="char-editor-ref-wrap" id="hr-editor-img-wrap" style="max-width: 220px; aspect-ratio: 1 / 3; cursor: default;">
+    <div class="char-editor-ref-wrap" id="hr-editor-img-wrap" style="max-width: 220px; aspect-ratio: 9.5 / 25; cursor: default;">
       <img id="hr-editor-crop-img" alt="" style="display:none;" draggable="false" />
       <div class="char-editor-ref-placeholder" id="hr-editor-img-placeholder">Click to upload an image</div>
     </div>
@@ -739,7 +758,11 @@ function coverBgSize(dims, boxW, boxH, zoomPercent) {
   return { w: (renderedW / (boxW || 1)) * 100 * factor, h: (renderedH / (boxH || 1)) * 100 * factor };
 }
 
-const HB_ASPECT = 21 / 9;
+// 62/25 — the live hero banner's own measured aspect ratio (see the
+// .hb-card-img-wrap comment above); kept as a named constant so the
+// animation-preview math below reads clearly, even though the crop editor's
+// own aspect-ratio is set directly in its inline style.
+const HB_ASPECT = 62 / 25;
 let hbCropper = null;
 let hbActiveFrame = 'start';
 
@@ -766,6 +789,7 @@ function hbSaveCropperToFrame() {
   const pos = hbCropperToPosition(hbCropper);
   if (hbActiveFrame === 'start') { slidePos.x = pos.x; slidePos.y = pos.y; slidePos.zoom = pos.zoom; }
   else { slidePos.endX = pos.x; slidePos.endY = pos.y; slidePos.endZoom = pos.zoom; }
+  hbScheduleAnimPreview();
 }
 function hbApplyFrameToCropper() {
   if (!hbCropper) return;
@@ -808,6 +832,7 @@ function hbInitCropper(imageSrc) {
       hbCropper = new BtwCropper(img, wrap, { onChange: hbSaveCropperToFrame });
       hbApplyFrameToCropper();
       hbUpdateLockState();
+      hbScheduleAnimPreview();
     });
   };
   img.src = imageSrc;
@@ -817,6 +842,7 @@ function updateAnimationFieldVisibility() {
   const type = slidePos.animationType;
   document.getElementById('hb-end-frame-field').style.display = type === 'none' ? 'none' : 'block';
   document.getElementById('hb-frame-toggle').style.display = type === 'none' ? 'none' : 'flex';
+  hbScheduleAnimPreview();
 }
 document.querySelectorAll('input[name="hb-animation-type"]').forEach(radio => {
   radio.addEventListener('change', () => {
@@ -826,35 +852,51 @@ document.querySelectorAll('input[name="hb-animation-type"]').forEach(radio => {
   });
 });
 
-function applyAnimPreviewStart() {
-  const bg = document.getElementById('hb-anim-preview-bg');
-  bg.style.transition = 'none';
-  if (!currentImageDims) return;
-  const boxW = bg.clientWidth, boxH = bg.clientHeight;
-  const size = coverBgSize(currentImageDims, boxW, boxH, slidePos.zoom);
-  bg.style.backgroundImage = `url(${currentImageUrl})`;
-  bg.style.backgroundSize = `${size.w}% ${size.h}%`;
-  bg.style.backgroundPosition = `${slidePos.x}% ${slidePos.y}%`;
+// Animation preview — rebuilt automatically (debounced) whenever the crop,
+// frame, or animation type changes, instead of needing a manual "Preview"
+// click. Uses a dynamically generated @keyframes rule (not a JS-triggered
+// CSS transition) run as `infinite alternate`, so it's a genuinely
+// continuous loop you can watch for as long as you like rather than a
+// one-shot 3-second peek. Same 15000ms/linear timing as the live billboard
+// (see BILLBOARD_INTERVAL_MS in fanpages/index.html) so the pacing matches,
+// even though the live version only ever plays forward once per slide while
+// this loops back and forth for easier judging.
+let hbPreviewStyleEl = null;
+let hbPreviewDebounceTimer = null;
+function hbScheduleAnimPreview() {
+  clearTimeout(hbPreviewDebounceTimer);
+  hbPreviewDebounceTimer = setTimeout(hbRebuildAnimPreview, 120);
 }
-document.getElementById('hb-preview-btn').addEventListener('click', () => {
-  hbSaveCropperToFrame();
+function hbRebuildAnimPreview() {
   const bg = document.getElementById('hb-anim-preview-bg');
-  applyAnimPreviewStart();
-  void bg.offsetWidth;
+  if (!bg) return;
+  if (!hbPreviewStyleEl) {
+    hbPreviewStyleEl = document.createElement('style');
+    document.head.appendChild(hbPreviewStyleEl);
+  }
+  bg.style.animation = 'none';
   const type = slidePos.animationType;
-  if (type === 'none' || !currentImageDims) return;
+  if (type === 'none' || !currentImageDims || !currentImageUrl) {
+    hbPreviewStyleEl.textContent = '';
+    bg.style.backgroundImage = '';
+    return;
+  }
   const boxW = bg.clientWidth, boxH = bg.clientHeight;
-  bg.style.transition = 'background-position 3s linear, background-size 3s linear';
-  requestAnimationFrame(() => {
-    if (type === 'pan_v') bg.style.backgroundPosition = `${slidePos.x}% ${slidePos.endY}%`;
-    else if (type === 'pan_h') bg.style.backgroundPosition = `${slidePos.endX}% ${slidePos.y}%`;
-    else if (type === 'zoom') {
-      const endSize = coverBgSize(currentImageDims, boxW, boxH, slidePos.endZoom);
-      bg.style.backgroundSize = `${endSize.w}% ${endSize.h}%`;
-      bg.style.backgroundPosition = `${slidePos.endX}% ${slidePos.endY}%`;
-    }
-  });
-});
+  if (!boxW || !boxH) return;
+  const startSize = coverBgSize(currentImageDims, boxW, boxH, slidePos.zoom);
+  const endSize = type === 'zoom' ? coverBgSize(currentImageDims, boxW, boxH, slidePos.endZoom) : startSize;
+  const endX = (type === 'pan_h' || type === 'zoom') ? slidePos.endX : slidePos.x;
+  const endY = (type === 'pan_v' || type === 'zoom') ? slidePos.endY : slidePos.y;
+  bg.style.backgroundImage = `url(${currentImageUrl})`;
+  hbPreviewStyleEl.textContent = `@keyframes hb-anim-preview-kf {
+    from { background-position: ${slidePos.x}% ${slidePos.y}%; background-size: ${startSize.w}% ${startSize.h}%; }
+    to   { background-position: ${endX}% ${endY}%; background-size: ${endSize.w}% ${endSize.h}%; }
+  }`;
+  bg.style.backgroundPosition = `${slidePos.x}% ${slidePos.y}%`;
+  bg.style.backgroundSize = `${startSize.w}% ${startSize.h}%`;
+  void bg.offsetWidth;
+  bg.style.animation = 'hb-anim-preview-kf 15000ms linear infinite alternate';
+}
 
 async function renderGrid() {
   const grid = document.getElementById('hb-grid');
