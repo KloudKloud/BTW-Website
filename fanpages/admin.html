@@ -109,10 +109,97 @@
     #adm-panel-stats .stats-user-list::-webkit-scrollbar { width: 8px; }
     #adm-panel-stats .stats-user-list::-webkit-scrollbar-thumb { background: rgba(240,192,96,0.4); border-radius: 8px; }
 
-    .hb-frame-toggle { display: flex; justify-content: center; gap: 0.6rem; margin: 0 0 0.6rem; }
-    .hb-frame-tab { opacity: 0.55; }
-    .hb-frame-tab.active { opacity: 1; background: #7fa8d9; color: #0a0a0a; }
+    /* Start/End Frame mini-toggle -- same bordered/divided segmented-control
+       recipe as the Admin page's own top tab bar and the profile page's
+       Home/Characters/Gallery tabs, instead of the old opacity-dimmed
+       mod-btn pair. */
+    .hb-frame-toggle {
+      display: flex; align-items: stretch; width: fit-content; margin: 0 auto 0.6rem;
+      border-radius: 12px; border: 2px solid rgba(31,182,168,0.35); overflow: hidden;
+    }
+    .hb-frame-tab {
+      background: none; border: none; border-right: 2px solid rgba(31,182,168,0.25); cursor: pointer; color: #bbb;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.85rem; font-weight: 700;
+      padding: 0.55rem 1.1rem; transition: color 0.15s, background 0.15s;
+    }
+    .hb-frame-toggle .hb-frame-tab:last-child { border-right: none; }
+    .hb-frame-tab:hover { color: #fff; background: rgba(31,182,168,0.12); }
+    .hb-frame-tab.active { color: #4fd8c9; background: rgba(31,182,168,0.16); }
     .hb-sub { color: #999; font-size: 0.92rem; margin-bottom: 2rem; max-width: 640px; line-height: 1.7; }
+
+    /* Bulletin slide builder — a real inline screen (swapped in for the
+       grid view, #hb-list-view <-> #hb-builder-view) instead of a small
+       popup overlay, reusing the sticky-topbar-actions + Fredoka-everywhere
+       + box-background-art recipe from the dedicated +Gallery Post/
+       +Character builder pages (fanpages/create-gallery.html etc). */
+    .hb-builder-topbar {
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      margin-bottom: 1.75rem; padding-bottom: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .hb-builder-topbar-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.3rem; font-weight: 700; color: #f0f0f0; }
+    .hb-builder-topbar-actions { display: flex; align-items: center; gap: 1rem; }
+    .hb-builder-btn {
+      font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; border-radius: 26px; cursor: pointer; border: none;
+      transition: background 0.15s, box-shadow 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .hb-builder-btn--cancel {
+      background: none; color: #ccc; border: 1px solid rgba(255,255,255,0.25);
+      font-size: 1.02rem; padding: 0.8em 1.8em;
+    }
+    .hb-builder-btn--cancel:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+    .hb-builder-btn--save {
+      background: #1fb6a8; color: #fff; font-size: 1.06rem; padding: 0.85em 2.2em;
+      box-shadow: 0 0 16px rgba(31,182,168,0.55);
+    }
+    .hb-builder-btn--save:hover { background: #1a9d91; box-shadow: 0 0 22px rgba(31,182,168,0.75); }
+    .hb-builder-btn--save:disabled { opacity: 0.5; cursor: default; box-shadow: none; }
+    .hb-builder-btn--delete {
+      background: #c94a4a; color: #fff; font-size: 1.02rem; padding: 0.8em 1.8em;
+      box-shadow: 0 0 14px rgba(201,74,74,0.45);
+    }
+    .hb-builder-btn--delete:hover { background: #b13d3d; box-shadow: 0 0 20px rgba(201,74,74,0.65); }
+    .hb-builder-btn--ghost {
+      display: block; background: rgba(255,255,255,0.06); color: #cfe0f5; border: 1px solid rgba(255,255,255,0.2);
+      font-size: 0.85rem; padding: 0.55em 1.2em;
+    }
+    .hb-builder-btn--ghost:hover { background: rgba(255,255,255,0.12); }
+    /* Same card-background-art treatment as .cg-page .char-editor-modal
+       (create-gallery.html) -- scoped to this builder, not the shared
+       .char-editor-modal rule, which other popups still use flat. */
+    .hb-builder-card {
+      max-width: 640px; margin: 0 auto; max-height: none; overflow-y: visible;
+      background-image: linear-gradient(160deg, rgba(10,8,14,0.55), rgba(10,8,14,0.42)), url('/images/home/box-background-2.png');
+      background-size: cover, cover; background-position: center, center; background-repeat: no-repeat, no-repeat;
+    }
+    .hb-builder-card .mod-field label,
+    .hb-builder-card .char-editor-ref-placeholder,
+    .hb-builder-card .char-editor-facts-hint,
+    .hb-builder-card .hb-sliders-caption,
+    .hb-builder-card .mod-input {
+      font-family: 'Fredoka', 'Lato', cursive;
+    }
+    .hb-builder-card .mod-field label { font-size: 1.02rem; font-weight: 700; color: #f0f0f0; text-shadow: 0 1px 4px rgba(0,0,0,0.7); }
+    .hb-builder-card .mod-input { background: rgba(8,6,12,0.65); border-color: rgba(255,255,255,0.22); }
+    .hb-builder-card .mod-input:focus { border-color: #1fb6a8; box-shadow: 0 0 0 3px rgba(31,182,168,0.18); }
+    /* Tiny Start/End badges pinned to the preview box's corners -- whichever
+       one is "live" right now gets highlighted in sync with the looping
+       animation (toggled in JS on each animationiteration), so it's obvious
+       at a glance which crop you're looking at mid-loop instead of just a
+       vague blend. */
+    .hb-anim-preview-shell { position: relative; max-width: 560px; margin: 0 auto; }
+    .hb-anim-preview-tag {
+      position: absolute; top: 0.5rem; z-index: 2;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 0.25em 0.75em; border-radius: 20px; color: #fff; background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.25); opacity: 0.4; transition: opacity 0.2s, background 0.2s, border-color 0.2s;
+    }
+    .hb-anim-preview-tag--start { left: 0.5rem; }
+    .hb-anim-preview-tag--end { right: 0.5rem; }
+    .hb-anim-preview-tag.active { opacity: 1; background: rgba(31,182,168,0.75); border-color: rgba(255,255,255,0.45); }
+    @media (max-width: 640px) {
+      .hb-builder-topbar-title { display: none; }
+      .hb-builder-btn--cancel, .hb-builder-btn--save, .hb-builder-btn--delete { font-size: 0.82rem; padding: 0.6em 1.2em; }
+    }
     .hb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1.25rem; margin-top: 1.25rem; }
     .hb-card {
       background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
@@ -357,19 +444,105 @@
 
   <!-- ══ Bulletin (Hub Image Builder) ══════════════════════════════════ -->
   <div class="adm-panel" id="adm-panel-bulletin">
-    <h2 class="adm-section-title"><img src="/images/home/decoration-1.png" alt="" /> Hub Image Builder</h2>
-    <p class="hb-sub">Manage the promo slides that cycle on the Fanpages hub billboard. Add, edit, or remove slides here and they show up in the rotation instantly — no deploy needed.</p>
+    <!-- List view — grids for both carousels. Swapped out for #hb-builder-view
+         (below) instead of a popup overlay whenever a slide is being added or
+         edited, same "card grid + in-page detail view" swap already used for
+         Characters/Gallery elsewhere on the site. -->
+    <div id="hb-list-view">
+      <h2 class="adm-section-title"><img src="/images/home/decoration-1.png" alt="" /> Hub Image Builder</h2>
+      <p class="hb-sub">Manage the promo slides that cycle on the Fanpages hub billboard. Add, edit, or remove slides here and they show up in the rotation instantly — no deploy needed.</p>
 
-    <button class="chars-create-btn" id="hb-add-btn" type="button" style="max-width: 260px;">
-      <span class="chars-create-btn-icon">➕</span> Add New Slide
-    </button>
+      <button class="chars-create-btn" id="hb-add-btn" type="button" style="max-width: 260px;">
+        <span class="chars-create-btn-icon">➕</span> Add New Slide
+      </button>
 
-    <div class="hb-grid" id="hb-grid"></div>
+      <div class="hb-grid" id="hb-grid"></div>
 
-    <h2 class="adm-section-title" style="margin-top: 3rem;"><img src="/images/home/decoration-8.png" alt="" /> Hero Row Images</h2>
-    <p class="hb-sub">Pick a background image for each of the four comic-strip boxes on the Fanpages hub (Gallery, Stories, Characters, Clubs), with its own drag/zoom crop. A slot left empty just keeps its default flat black/halftone look live.</p>
+      <h2 class="adm-section-title" style="margin-top: 3rem;"><img src="/images/home/decoration-8.png" alt="" /> Hero Row Images</h2>
+      <p class="hb-sub">Pick a background image for each of the four comic-strip boxes on the Fanpages hub (Gallery, Stories, Characters, Clubs), with its own drag/zoom crop. A slot left empty just keeps its default flat black/halftone look live.</p>
 
-    <div class="hb-grid" id="hr-grid"></div>
+      <div class="hb-grid" id="hr-grid"></div>
+    </div>
+
+    <!-- Builder view — a real inline screen instead of a popup overlay (see
+         the hb-builder-* CSS above), same sticky-topbar-actions +
+         Fredoka-everywhere + box-background-art recipe the dedicated
+         +Gallery Post/+Character builder pages use. -->
+    <div class="hb-builder" id="hb-builder-view" hidden>
+      <div class="hb-builder-topbar">
+        <button class="hb-builder-btn hb-builder-btn--delete" id="hb-editor-delete" type="button" style="display:none;">Delete</button>
+        <span class="hb-builder-topbar-title" id="hb-editor-title">Add New Slide</span>
+        <div class="hb-builder-topbar-actions">
+          <button class="hb-builder-btn hb-builder-btn--cancel" id="hb-editor-cancel" type="button">Cancel</button>
+          <button class="hb-builder-btn hb-builder-btn--save" id="hb-editor-save" type="button" disabled>Create</button>
+        </div>
+      </div>
+
+      <div class="hb-builder-card char-editor-modal">
+        <div class="char-editor-ref-wrap" id="hb-editor-img-wrap" style="max-width: 560px; aspect-ratio: 62 / 25; cursor: default;">
+          <img id="hb-editor-crop-img" alt="" style="display:none;" draggable="false" />
+          <div class="char-editor-ref-placeholder" id="hb-editor-img-placeholder">Click to upload an image</div>
+        </div>
+        <input type="file" id="hb-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+        <button type="button" class="hb-builder-btn hb-builder-btn--ghost" id="hb-editor-change-img-btn" style="display:none; margin: 0.6rem auto 1rem;">📷 Change Image</button>
+
+        <div class="hb-frame-toggle" id="hb-frame-toggle" style="display:none;">
+          <button type="button" class="hb-frame-tab active" id="hb-frame-tab-start" data-frame="start">Start Frame</button>
+          <button type="button" class="hb-frame-tab" id="hb-frame-tab-end" data-frame="end">End Frame</button>
+        </div>
+        <p class="char-editor-facts-hint" id="hb-crop-hint" style="text-align:center;">Drag to move, scroll or pinch to zoom, drag the corners to resize the crop box.</p>
+
+        <div class="mod-field">
+          <label>Animation</label>
+          <div class="gallery-cat-row" id="hb-animation-row">
+            <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="none" checked /><span>None</span></label>
+            <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="pan_v" /><span>Pan ↕</span></label>
+            <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="pan_h" /><span>Pan ↔</span></label>
+            <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="zoom" /><span>Zoom</span></label>
+          </div>
+          <p class="char-editor-facts-hint">Slowly eases from the Start Frame to the End Frame over the slide's full 15 seconds on screen. Picking an animation locks the Start Frame crop exactly where it was — use the Start Frame/End Frame tabs above to switch which one you're adjusting.</p>
+        </div>
+
+        <div id="hb-end-frame-field" style="display:none;">
+          <p class="hb-sliders-caption">Animation Preview — loops automatically</p>
+          <div class="hb-anim-preview-shell">
+            <div class="char-editor-ref-wrap" id="hb-anim-preview-wrap" style="max-width: 560px; aspect-ratio: 62 / 25; cursor: default;">
+              <div id="hb-anim-preview-bg" class="hb-preview-bg"></div>
+            </div>
+            <span class="hb-anim-preview-tag hb-anim-preview-tag--start" id="hb-anim-preview-tag-start">Start</span>
+            <span class="hb-anim-preview-tag hb-anim-preview-tag--end" id="hb-anim-preview-tag-end">End</span>
+          </div>
+          <p class="char-editor-facts-hint" style="text-align:center;">Sped up here (3s each way) so the motion's easy to see — live, it runs once per slide's full 15 seconds on screen, in just the one direction.</p>
+        </div>
+
+        <div class="mod-field">
+          <label for="hb-caption">Caption <span style="font-weight:400;color:#888;">(optional)</span></label>
+          <input class="mod-input" id="hb-caption" maxlength="80" placeholder="Don't forget to read BTW!" />
+        </div>
+        <div class="mod-field">
+          <label for="hb-credit">Credit <span style="font-weight:400;color:#888;">(optional)</span></label>
+          <input class="mod-input" id="hb-credit" maxlength="60" placeholder="- VeekitPaws" />
+        </div>
+        <div class="mod-field">
+          <label for="hb-link">Link <span style="font-weight:400;color:#888;">(optional — makes the slide clickable)</span></label>
+          <input class="mod-input" id="hb-link" maxlength="300" placeholder="https:// or /path" />
+        </div>
+        <div class="mod-field">
+          <label class="profile-checkbox-label">
+            <input type="checkbox" id="hb-nsfw" />
+            <span>Mark this slide as NSFW <span style="font-weight:400;color:#888;">— only shown to logged-in users who have NSFW content enabled</span></span>
+          </label>
+        </div>
+        <div class="mod-field">
+          <label class="profile-checkbox-label">
+            <input type="checkbox" id="hb-vip" />
+            <span>Mark this slide as VIP <span style="font-weight:400;color:#888;">— guaranteed to fill roughly every 4th slot in the rotation, on top of being eligible for the normal shuffle everywhere else too</span></span>
+          </label>
+        </div>
+
+        <p class="mod-panel-msg" id="hb-editor-msg"></p>
+      </div>
+    </div>
   </div>
 
   <!-- ══ Levels Banner ══════════════════════════════════════════════ -->
@@ -526,78 +699,6 @@
     <p class="mod-panel-msg" id="adm-pending-merge-msg"></p>
     <div class="char-editor-actions">
       <button class="mod-btn" id="adm-pending-merge-btn" type="button">Merge</button>
-    </div>
-  </div>
-</div>
-
-<!-- Slide editor modal -->
-<div class="char-editor-overlay" id="hb-editor-overlay" hidden>
-  <div class="char-editor-modal">
-    <h2 class="char-editor-title" id="hb-editor-title">Add New Slide</h2>
-
-    <div class="char-editor-ref-wrap" id="hb-editor-img-wrap" style="max-width: 520px; aspect-ratio: 62 / 25; cursor: default;">
-      <img id="hb-editor-crop-img" alt="" style="display:none;" draggable="false" />
-      <div class="char-editor-ref-placeholder" id="hb-editor-img-placeholder">Click to upload an image</div>
-    </div>
-    <input type="file" id="hb-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-    <button type="button" class="mod-btn mod-btn--small" id="hb-editor-change-img-btn" style="display:none; margin: 0.6rem auto 1rem;">📷 Change Image</button>
-
-    <div class="hb-frame-toggle" id="hb-frame-toggle" style="display:none;">
-      <button type="button" class="mod-btn mod-btn--small hb-frame-tab active" id="hb-frame-tab-start" data-frame="start">Start Frame</button>
-      <button type="button" class="mod-btn mod-btn--small hb-frame-tab" id="hb-frame-tab-end" data-frame="end">End Frame</button>
-    </div>
-    <p class="char-editor-facts-hint" id="hb-crop-hint" style="text-align:center;">Drag to move, scroll or pinch to zoom, drag the corners to resize the crop box.</p>
-
-    <div class="mod-field">
-      <label>Animation</label>
-      <div class="gallery-cat-row" id="hb-animation-row">
-        <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="none" checked /><span>None</span></label>
-        <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="pan_v" /><span>Pan ↕</span></label>
-        <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="pan_h" /><span>Pan ↔</span></label>
-        <label class="gallery-cat-option"><input type="radio" name="hb-animation-type" value="zoom" /><span>Zoom</span></label>
-      </div>
-      <p class="char-editor-facts-hint">Slowly eases from the Start Frame to the End Frame over the slide's full 15 seconds on screen. Picking an animation locks the Start Frame crop exactly where it was — use the Start Frame/End Frame tabs above to switch which one you're adjusting.</p>
-    </div>
-
-    <div id="hb-end-frame-field" style="display:none;">
-      <p class="hb-sliders-caption">Animation Preview — loops automatically</p>
-      <div class="char-editor-ref-wrap" id="hb-anim-preview-wrap" style="max-width: 520px; aspect-ratio: 62 / 25; cursor: default;">
-        <div id="hb-anim-preview-bg" class="hb-preview-bg"></div>
-      </div>
-      <p class="char-editor-facts-hint" style="text-align:center;">Plays on loop here (back and forth) so you can judge the motion without clicking anything — live, it runs once per slide's full 15 seconds on screen, in just the one direction.</p>
-    </div>
-
-    <div class="mod-field">
-      <label for="hb-caption">Caption <span style="font-weight:400;color:#888;">(optional)</span></label>
-      <input class="mod-input" id="hb-caption" maxlength="80" placeholder="Don't forget to read BTW!" />
-    </div>
-    <div class="mod-field">
-      <label for="hb-credit">Credit <span style="font-weight:400;color:#888;">(optional)</span></label>
-      <input class="mod-input" id="hb-credit" maxlength="60" placeholder="- VeekitPaws" />
-    </div>
-    <div class="mod-field">
-      <label for="hb-link">Link <span style="font-weight:400;color:#888;">(optional — makes the slide clickable)</span></label>
-      <input class="mod-input" id="hb-link" maxlength="300" placeholder="https:// or /path" />
-    </div>
-    <div class="mod-field">
-      <label class="profile-checkbox-label">
-        <input type="checkbox" id="hb-nsfw" />
-        <span>Mark this slide as NSFW <span style="font-weight:400;color:#888;">— only shown to logged-in users who have NSFW content enabled</span></span>
-      </label>
-    </div>
-    <div class="mod-field">
-      <label class="profile-checkbox-label">
-        <input type="checkbox" id="hb-vip" />
-        <span>Mark this slide as VIP <span style="font-weight:400;color:#888;">— guaranteed to fill roughly every 4th slot in the rotation, on top of being eligible for the normal shuffle everywhere else too</span></span>
-      </label>
-    </div>
-
-    <p class="mod-panel-msg" id="hb-editor-msg"></p>
-
-    <div class="char-editor-actions">
-      <button class="mod-btn mod-btn--danger" id="hb-editor-delete" type="button" style="display:none;">Delete</button>
-      <button class="mod-btn" id="hb-editor-cancel" type="button">Cancel</button>
-      <button class="mod-btn" id="hb-editor-save" type="button" disabled>Create</button>
     </div>
   </div>
 </div>
@@ -857,15 +958,29 @@ document.querySelectorAll('input[name="hb-animation-type"]').forEach(radio => {
 // click. Uses a dynamically generated @keyframes rule (not a JS-triggered
 // CSS transition) run as `infinite alternate`, so it's a genuinely
 // continuous loop you can watch for as long as you like rather than a
-// one-shot 3-second peek. Same 15000ms/linear timing as the live billboard
-// (see BILLBOARD_INTERVAL_MS in fanpages/index.html) so the pacing matches,
-// even though the live version only ever plays forward once per slide while
-// this loops back and forth for easier judging.
+// one-shot peek. Sped way up from the live billboard's own 15000ms/linear
+// pacing (see BILLBOARD_INTERVAL_MS in fanpages/index.html) to a snappy
+// 3000ms/ease-in-out each way -- waiting a full 15s to see whether a subtle
+// pan/zoom is even moving made this read as "broken" more than "slow", so
+// legibility here wins over exactly matching the live timing. The Start/
+// End tags pinned to the preview's corners highlight in sync via the
+// `animationiteration` event, so which crop you're looking at mid-loop is
+// never ambiguous.
 let hbPreviewStyleEl = null;
 let hbPreviewDebounceTimer = null;
 function hbScheduleAnimPreview() {
   clearTimeout(hbPreviewDebounceTimer);
   hbPreviewDebounceTimer = setTimeout(hbRebuildAnimPreview, 120);
+}
+let hbAnimPreviewIterCount = 0;
+function hbAnimPreviewIteration() {
+  // `infinite alternate` starts playing forward (Start->End) -- the first
+  // completed iteration landed on End, the next lands back on Start, and so
+  // on, so a simple odd/even counter tracks which end it's currently on.
+  hbAnimPreviewIterCount++;
+  const atEnd = hbAnimPreviewIterCount % 2 === 1;
+  document.getElementById('hb-anim-preview-tag-start').classList.toggle('active', !atEnd);
+  document.getElementById('hb-anim-preview-tag-end').classList.toggle('active', atEnd);
 }
 function hbRebuildAnimPreview() {
   const bg = document.getElementById('hb-anim-preview-bg');
@@ -876,9 +991,13 @@ function hbRebuildAnimPreview() {
   }
   bg.style.animation = 'none';
   const type = slidePos.animationType;
+  const startTag = document.getElementById('hb-anim-preview-tag-start');
+  const endTag = document.getElementById('hb-anim-preview-tag-end');
   if (type === 'none' || !currentImageDims || !currentImageUrl) {
     hbPreviewStyleEl.textContent = '';
     bg.style.backgroundImage = '';
+    startTag.classList.remove('active');
+    endTag.classList.remove('active');
     return;
   }
   const boxW = bg.clientWidth, boxH = bg.clientHeight;
@@ -894,9 +1013,13 @@ function hbRebuildAnimPreview() {
   }`;
   bg.style.backgroundPosition = `${slidePos.x}% ${slidePos.y}%`;
   bg.style.backgroundSize = `${startSize.w}% ${startSize.h}%`;
+  startTag.classList.add('active');
+  endTag.classList.remove('active');
+  hbAnimPreviewIterCount = 0;
   void bg.offsetWidth;
-  bg.style.animation = 'hb-anim-preview-kf 15000ms linear infinite alternate';
+  bg.style.animation = 'hb-anim-preview-kf 3000ms ease-in-out infinite alternate';
 }
+document.getElementById('hb-anim-preview-bg').addEventListener('animationiteration', hbAnimPreviewIteration);
 
 async function renderGrid() {
   const grid = document.getElementById('hb-grid');
@@ -1023,10 +1146,13 @@ async function openEditor(slide) {
   document.getElementById('hb-editor-msg').textContent = '';
   updateSaveButtonState();
 
-  document.getElementById('hb-editor-overlay').hidden = false;
+  document.getElementById('hb-list-view').hidden = true;
+  document.getElementById('hb-builder-view').hidden = false;
+  window.scrollTo({ top: 0, behavior: 'instant' });
 }
 function closeEditor() {
-  document.getElementById('hb-editor-overlay').hidden = true;
+  document.getElementById('hb-builder-view').hidden = true;
+  document.getElementById('hb-list-view').hidden = false;
 }
 document.getElementById('hb-add-btn').addEventListener('click', () => openEditor(null));
 document.getElementById('hb-editor-cancel').addEventListener('click', closeEditor);
