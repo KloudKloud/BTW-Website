@@ -13,8 +13,21 @@
       color: #f0f0f0;
       font-family: 'Lato', Arial, sans-serif;
       min-height: 100vh;
+      /* Everything below the hero row sits on this -- the hero row itself
+         paints its own opaque background (billboard + comic boxes) so this
+         never shows through it, it only shows from the hero's bottom edge
+         down. background-attachment:fixed means it doesn't need the JS
+         "measure scrollHeight" trick the Posts/Characters browse pages use
+         for a scrolling background -- here it's meant to look pinned behind
+         the content instead, like the Levels page's own backdrop. */
+      background-image: linear-gradient(180deg, rgba(8,6,10,0.35), rgba(8,6,10,0.6)), url('/images/home/box-background-2.png');
+      background-size: auto, cover;
+      background-position: center, center top;
+      background-attachment: scroll, fixed;
+      background-repeat: repeat, no-repeat;
     }
     a { color: inherit; }
+    h1, h2, h3, .fp-font-display { font-family: 'Fredoka', 'Lato', cursive; }
 
     /* ── Hero row — five boxes across the top, exact fractions of the full
        page width: Gallery+Stories together = 19%, the banner = 62% (edge-
@@ -261,6 +274,176 @@
       .fp-billboard-slide-scrim { padding: 1.5rem 1.25rem 1.1rem; }
     }
 
+    /* ══════════════════════════════════════════════════════════════════
+       Spotlight section — two outer boxes (Gallery+Stories left,
+       Characters+Clubs right), each containing two inner spotlight
+       panels side by side. Below that, a full-width Recent Submissions
+       box. Decorative box styling matches the Levels page's `.lv-box`
+       (box-background-2 art + dark scrim + soft border/shadow), which is
+       this project's established "nice decorative box" look. ══════════ */
+    .fp-main { max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto; padding: 2.5rem 2rem 5rem; }
+    @media (max-width: 720px) { .fp-main { padding: 1.5rem 0.75rem 3rem; } }
+
+    .fp-section-title {
+      font-size: 1.4rem; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.1rem;
+      color: #cfe0f5; text-shadow: 0 2px 6px rgba(0,0,0,0.55), 0 0 6px rgba(127,168,217,0.4);
+    }
+    .fp-section-title img { width: 20px; height: 20px; }
+    .fp-title-deco { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
+    .fp-row-empty { color: #999; font-size: 0.92rem; text-align: center; padding: 1rem 0; }
+
+    /* ── Outer boxes ── */
+    .fp-outer-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2.5rem; }
+    .fp-outer-box {
+      border-radius: 18px; padding: 1.5rem;
+      background-image: linear-gradient(160deg, rgba(6,6,16,0.6), rgba(6,6,16,0.8)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(255,255,255,0.12);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+    .fp-outer-box.fp-outer-box--b { background-position: 70% 30%; }
+
+    /* ── Inner spotlight panels — two per outer box, side by side. A
+       lighter translucent panel on top of the outer box's own art so each
+       reads as its own nested card (matches the reference sketch's
+       colored-border boxes) without fighting the outer box for the same
+       background image. ── */
+    .fp-inner-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; align-items: stretch; }
+    .fp-inner-box {
+      position: relative; overflow: hidden;
+      background: linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015));
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 14px; padding: 1.25rem 1.1rem;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    .fp-inner-box-title {
+      font-size: 1.05rem; font-weight: 600; margin-bottom: 0.85rem;
+      display: flex; align-items: center; justify-content: center; gap: 0.4rem; text-align: center;
+      color: #cfe0f5; text-shadow: 0 2px 6px rgba(0,0,0,0.55), 0 0 6px rgba(127,168,217,0.4);
+    }
+    .fp-inner-box-title img { width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; }
+
+    /* ── Character / Gallery / Story / Club spotlight — cycles one item
+       at a time inside its inner box. ── */
+    .fp-spotlight-display { position: relative; min-height: 210px; transition: opacity 0.7s ease, transform 0.7s ease; }
+    .fp-spotlight-item { display: block; text-decoration: none; color: inherit; text-align: center; }
+    .fp-spotlight-img-wrap {
+      width: 100%; aspect-ratio: 1; border-radius: 12px; overflow: hidden;
+      margin-bottom: 0.75rem; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 8px 22px rgba(0,0,0,0.4);
+      background: linear-gradient(135deg, #6b3fa0, #c2547a);
+    }
+    .fp-spotlight-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fp-spotlight-img-wrap--locked { position: relative; }
+    .fp-spotlight-img--blurred { filter: blur(9px) brightness(0.6); transform: scale(1.08); }
+    .fp-spotlight-locked-msg {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      text-align: center; padding: 0 1rem; font-size: 0.7rem; font-weight: 700; color: #fff;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+    }
+    .fp-spotlight-name {
+      font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 1.1rem; color: #fff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.7); line-height: 1.25;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+    }
+    .fp-spotlight-from { font-size: 0.78rem; color: #fff; margin-top: 0.2rem; }
+    .fp-spotlight-from-link { color: #7fa8d9; text-shadow: 0 0 6px rgba(127,168,217,0.55); }
+    .fp-spotlight-from-link:hover { color: #a8c6ec; text-decoration: underline; }
+    .fp-spotlight-loading, .fp-spotlight-empty { color: rgba(255,255,255,0.45); font-size: 0.85rem; text-align: center; padding: 2.5rem 0; }
+
+    /* ── Recent Submissions — full-width box, 6 tiles per row, 12 total
+       (2 rows), fixed covers at the uploader's chosen crop like the
+       Browse/Search pages, not a variable justified wall. ── */
+    .rs-box {
+      position: relative; overflow: hidden;
+      background-image: linear-gradient(160deg, rgba(6,6,16,0.6), rgba(6,6,16,0.8)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 18px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+    .rs-box-header, .rs-box-body { position: relative; }
+    .rs-box-header {
+      background: rgba(0,0,0,0.55); border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding: 1.1rem 1.5rem;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .rs-box-title {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.2rem; font-weight: 700; color: #cfe0f5;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.55), 0 0 6px rgba(127,168,217,0.4);
+    }
+    .rs-box-header .fp-title-deco { width: 24px; height: 24px; object-fit: contain; }
+    .rs-box-see-more {
+      margin-left: auto; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.85rem; font-weight: 700;
+      color: #7fa8d9; text-decoration: none; text-shadow: 0 0 10px rgba(127,168,217,0.6);
+      transition: color 0.15s, text-shadow 0.15s;
+    }
+    .rs-box-see-more:hover { color: #a8c9ec; text-shadow: 0 0 14px rgba(127,168,217,0.85); }
+    .rs-box-body { padding: 1.5rem; }
+    .rs-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.9rem; }
+    .rs-card {
+      position: relative; display: block; text-decoration: none; color: inherit;
+      border-radius: 8px; overflow: hidden; background: #1a1a1a;
+      border: 1px solid rgba(255,255,255,0.08); transition: transform 0.15s, box-shadow 0.15s;
+      aspect-ratio: 6 / 7;
+    }
+    .rs-card:hover { transform: translateY(-4px); box-shadow: 0 10px 26px rgba(0,0,0,0.45); z-index: 3; }
+    .rs-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .rs-card-badge {
+      position: absolute; bottom: 6px; right: 7px; z-index: 2;
+      font-size: 1.35rem; line-height: 1; text-shadow: 0 1px 5px rgba(0,0,0,0.85);
+    }
+    .rs-card .fp-spotlight-locked-msg--card { z-index: 2; font-size: 0.64rem; padding: 0 0.5rem; }
+    .rs-tile { display: flex; flex-direction: column; min-width: 0; }
+    .rs-card-caption { padding: 0.4rem 0.05rem 0; min-width: 0; text-align: center; }
+    .rs-card-caption-title {
+      display: block; font-size: 0.8rem; font-weight: 700; color: #fff; text-decoration: none;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+    .rs-card-caption-title:hover { color: #fff; text-shadow: 0 0 6px rgba(255,255,255,0.25), 0 1px 3px rgba(0,0,0,0.4); text-decoration: underline; }
+    .rs-card-caption-author { display: block; font-size: 0.72rem; color: #999; margin-top: 0.1rem; }
+    .rs-card-caption-author a { color: #ccc; text-decoration: none; font-weight: 600; }
+    .rs-card-caption-author a:hover { color: #7fa8d9; text-decoration: underline; }
+
+    /* Generated story-cover fallback (no uploaded chapter image, no story
+       cover either) -- blurred author avatar + lettered title, same look
+       used across the site's story-card family. */
+    .fp-card-cover--generated {
+      position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); width: 100%; height: 100%;
+    }
+    .fp-card-cover-bg {
+      position: absolute; inset: -25%; background-size: cover; background-position: center;
+      filter: blur(12px) saturate(1.3) brightness(0.6); transform: scale(1.15);
+    }
+    .fp-card-cover-title {
+      position: relative; z-index: 1; color: #fff; text-align: center; padding: 0 0.6rem;
+      font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 0.82rem; line-height: 1.3;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.85);
+    }
+
+    @media (max-width: 980px) {
+      .fp-outer-row { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 720px) {
+      .fp-outer-row { gap: 1rem; margin-bottom: 1.75rem; }
+      .fp-outer-box { padding: 1rem; }
+      .fp-inner-row { gap: 0.6rem; }
+      .fp-inner-box { padding: 0.8rem 0.65rem; }
+      .fp-inner-box-title { font-size: 0.88rem; margin-bottom: 0.55rem; }
+      .fp-inner-box-title img { width: 15px; height: 15px; }
+      .fp-spotlight-display { min-height: 0; }
+      .fp-spotlight-img-wrap { aspect-ratio: 5 / 4; margin-bottom: 0.4rem; border-radius: 10px; }
+      .fp-spotlight-name { font-size: 0.82rem; }
+      .fp-spotlight-from { font-size: 0.68rem; }
+      .rs-box-header { padding: 0.9rem 1rem; }
+      .rs-box-body { padding: 1rem; }
+      .rs-grid { grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+      .rs-card-caption-title { font-size: 0.7rem; }
+      .rs-card-caption-author { font-size: 0.62rem; }
+      .rs-card-badge { font-size: 1.1rem; }
+    }
+
   </style>
 </head>
 <body>
@@ -298,6 +481,59 @@
     <span class="fp-comic-label">Clubs</span>
   </a>
 </section>
+
+<div class="fp-main">
+
+  <section class="fp-outer-row">
+    <div class="fp-outer-box fp-outer-box--a">
+      <div class="fp-inner-row">
+        <div class="fp-inner-box">
+          <h2 class="fp-inner-box-title">Spotlighted Gallery <img src="/images/home/decoration-1.png" alt="" /></h2>
+          <div class="fp-spotlight-display" id="fp-gallery-spotlight">
+            <p class="fp-spotlight-loading">Loading…</p>
+          </div>
+        </div>
+        <div class="fp-inner-box">
+          <h2 class="fp-inner-box-title">Spotlighted Stories <img src="/images/home/decoration-1.png" alt="" /></h2>
+          <div class="fp-spotlight-display" id="fp-story-spotlight">
+            <p class="fp-spotlight-loading">Loading…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fp-outer-box fp-outer-box--b">
+      <div class="fp-inner-row">
+        <div class="fp-inner-box">
+          <h2 class="fp-inner-box-title">Spotlighted Characters <img src="/images/home/decoration-1.png" alt="" /></h2>
+          <div class="fp-spotlight-display" id="fp-char-spotlight">
+            <p class="fp-spotlight-loading">Loading…</p>
+          </div>
+        </div>
+        <div class="fp-inner-box">
+          <h2 class="fp-inner-box-title">Spotlighted Clubs <img src="/images/home/decoration-1.png" alt="" /></h2>
+          <div class="fp-spotlight-display" id="fp-club-spotlight">
+            <p class="fp-spotlight-loading">Loading…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="rs-box">
+    <div class="rs-box-header">
+      <h2 class="rs-box-title">Recent Submissions</h2>
+      <img class="fp-title-deco" src="/images/home/decoration-2.png" alt="" />
+      <a class="rs-box-see-more" href="/fanpages/search?view=submissions&browse=1">See More</a>
+    </div>
+    <div class="rs-box-body">
+      <div class="rs-grid" id="fp-recent-submissions">
+        <p class="fp-row-empty">Loading…</p>
+      </div>
+    </div>
+  </section>
+
+</div>
 
 <script src="/fanpages/fanpages-nav.js"></script>
 <script>
@@ -612,6 +848,368 @@
   }
 
   loadHeroComicBoxes();
+</script>
+<script>
+  const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+  const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
+
+  // No custom cover? Fake one out of a blurred, zoomed-in crop of the
+  // author's own avatar with the story title lettered over it, instead of
+  // showing the same static stock image on every uncovered chapter.
+  function buildCoverEl(site) {
+    const wrap = document.createElement('div');
+    wrap.className = 'fp-card-cover--generated';
+    const bg = document.createElement('div');
+    bg.className = 'fp-card-cover-bg';
+    if (site.author_avatar) bg.style.backgroundImage = `url(${site.author_avatar})`;
+    wrap.appendChild(bg);
+    const title = document.createElement('span');
+    title.className = 'fp-card-cover-title';
+    title.textContent = site.site_title || 'Untitled Story';
+    wrap.appendChild(title);
+    return wrap;
+  }
+
+  // ── Character / Gallery / Story / Club spotlight — up to a 100-item
+  // random batch, cycling one at a time. Right before the batch runs out, a
+  // fresh random batch is quietly fetched in the background (via fetchBatch)
+  // and swapped in once the current one finishes — a true independent
+  // reshuffle each time, so previously-shown entries are free to come right
+  // back around, not a shuffle-without-repeat of one fixed set. ───────────
+  function startSpotlightCycle(initialItems, fetchBatch, displayEl, renderFn, intervalMs) {
+    if (!initialItems.length) {
+      displayEl.innerHTML = '<p class="fp-spotlight-empty">Nothing to show off yet!</p>';
+      return;
+    }
+    let items = initialItems;
+    let idx = 0;
+    let prefetch = null;
+
+    function show(first) {
+      if (!first) {
+        displayEl.style.opacity = '0';
+        displayEl.style.transform = 'translateY(6px)';
+      }
+      setTimeout(() => {
+        displayEl.innerHTML = '';
+        displayEl.appendChild(renderFn(items[idx]));
+        displayEl.style.opacity = '1';
+        displayEl.style.transform = 'translateY(0)';
+      }, first ? 0 : 700);
+    }
+    show(true);
+
+    setInterval(() => {
+      if (idx >= items.length - 2 && !prefetch) {
+        prefetch = fetchBatch().catch(() => null);
+      }
+      if (idx >= items.length - 1) {
+        const p = prefetch;
+        prefetch = null;
+        Promise.resolve(p).then(fresh => {
+          if (fresh && fresh.length) items = fresh;
+          idx = 0;
+          show(false);
+        });
+      } else {
+        idx++;
+        show(false);
+      }
+    }, intervalMs);
+  }
+
+  // creditPrefix/creditName/creditHref build a "from X" / "by X" line where
+  // X is its own gold... clickable link — a nested <a> inside the card's own
+  // <a> isn't valid HTML, so it's a click-through span instead, same pattern
+  // as the story cards' author-name link. The card itself still goes to
+  // mainHref (the characters/gallery page); the credit goes to the story
+  // home (or the owner's profile, if standalone) instead.
+  function spotlightItem(imgUrl, posX, posY, name, mainHref, creditPrefix, creditName, creditHref, nsfwLocked) {
+    const a = document.createElement('a');
+    a.className = 'fp-spotlight-item';
+    a.href = mainHref;
+    if (nsfwLocked) {
+      const lockMsg = token ? 'NSFW content must be enabled in Account Settings' : 'Only logged-in users can see this content';
+      a.innerHTML = `
+        <div class="fp-spotlight-img-wrap fp-spotlight-img-wrap--locked">
+          <img class="fp-spotlight-img fp-spotlight-img--blurred" src="/images/defaultchar.jpg" alt="" />
+          <span class="fp-spotlight-locked-msg">${escapeHtml(lockMsg)}</span>
+        </div>
+        <p class="fp-spotlight-name">${escapeHtml(name)}</p>
+        <p class="fp-spotlight-from">${creditPrefix} <span class="fp-spotlight-from-link">${escapeHtml(creditName)}</span></p>
+      `;
+    } else {
+      a.innerHTML = `
+        <div class="fp-spotlight-img-wrap"><img class="fp-spotlight-img" src="${imgUrl}" alt="" style="object-position:${posX}% ${posY}%;" /></div>
+        <p class="fp-spotlight-name">${escapeHtml(name)}</p>
+        <p class="fp-spotlight-from">${creditPrefix} <span class="fp-spotlight-from-link">${escapeHtml(creditName)}</span></p>
+      `;
+    }
+    a.querySelector('.fp-spotlight-from-link').addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      window.location.href = creditHref;
+    });
+    return a;
+  }
+
+  async function fetchCharacterSpotlightBatch() {
+    const res = await fetch('/api/spotlight/characters?limit=100', { headers: authHeaders() });
+    const data = await res.json();
+    return (data.characters || []).filter(c => c.image || c.nsfw_locked);
+  }
+  function renderCharacterSpotlightItem(c) {
+    return spotlightItem(
+      c.image, c.position_x, c.position_y, c.name,
+      window.fpUrl(`/${c.owner_username}?char=${c.id}&from=home#characters`),
+      'from', c.owner_display_name,
+      window.fpUrl(`/${c.owner_username}`),
+      c.nsfw_locked
+    );
+  }
+  async function loadCharacterSpotlight() {
+    const el = document.getElementById('fp-char-spotlight');
+    try {
+      const chars = await fetchCharacterSpotlightBatch();
+      startSpotlightCycle(chars, fetchCharacterSpotlightBatch, el, renderCharacterSpotlightItem, 20000);
+    } catch {
+      el.innerHTML = '<p class="fp-spotlight-empty">Couldn\'t load characters right now.</p>';
+    }
+  }
+
+  async function fetchGallerySpotlightBatch() {
+    const res = await fetch('/api/spotlight/gallery?limit=100', { headers: authHeaders() });
+    const data = await res.json();
+    return data.gallery || [];
+  }
+  function renderGallerySpotlightItem(g) {
+    return spotlightItem(
+      g.image, g.position_x, g.position_y, g.title || 'Untitled',
+      window.fpUrl(`/gallery-post?id=${g.id}`),
+      'from', g.owner_display_name,
+      window.fpUrl(`/${g.owner_username}`)
+    );
+  }
+  async function loadGallerySpotlight() {
+    const el = document.getElementById('fp-gallery-spotlight');
+    try {
+      const items = await fetchGallerySpotlightBatch();
+      startSpotlightCycle(items, fetchGallerySpotlightBatch, el, renderGallerySpotlightItem, 20000);
+    } catch {
+      el.innerHTML = '<p class="fp-spotlight-empty">Couldn\'t load gallery art right now.</p>';
+    }
+  }
+
+  function storySpotlightItem(s) {
+    const a = document.createElement('a');
+    a.className = 'fp-spotlight-item';
+    a.href = window.fpUrl(`/${s.story_path}`);
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'fp-spotlight-img-wrap';
+    if (s.cover_url) {
+      const img = document.createElement('img');
+      img.className = 'fp-spotlight-img';
+      img.src = s.cover_url;
+      img.alt = '';
+      imgWrap.appendChild(img);
+    } else {
+      imgWrap.style.position = 'relative';
+      const bg = document.createElement('div');
+      bg.style.cssText = 'position:absolute;inset:-25%;background-size:cover;background-position:center;filter:blur(12px) saturate(1.3) brightness(0.6);transform:scale(1.15);';
+      if (s.author_avatar) bg.style.backgroundImage = `url(${s.author_avatar})`;
+      imgWrap.appendChild(bg);
+      const title = document.createElement('span');
+      title.style.cssText = 'position:relative;z-index:1;display:flex;align-items:center;justify-content:center;height:100%;text-align:center;padding:0 0.6rem;color:#fff;font-family:Fredoka,Lato,cursive;font-weight:700;font-size:0.9rem;line-height:1.3;text-shadow:0 2px 10px rgba(0,0,0,0.85);';
+      title.textContent = s.site_title || 'Untitled Story';
+      imgWrap.appendChild(title);
+    }
+    const name = document.createElement('p');
+    name.className = 'fp-spotlight-name';
+    name.textContent = s.site_title || 'Untitled Story';
+    const from = document.createElement('p');
+    from.className = 'fp-spotlight-from';
+    from.innerHTML = `by <span class="fp-spotlight-from-link">${escapeHtml(s.author)}</span>`;
+    from.querySelector('.fp-spotlight-from-link').addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      window.location.href = window.fpUrl(`/${s.author_username}`);
+    });
+    a.appendChild(imgWrap);
+    a.appendChild(name);
+    a.appendChild(from);
+    return a;
+  }
+
+  async function fetchStorySpotlightBatch() {
+    const res = await fetch('/api/spotlight/stories?limit=100', { headers: authHeaders() });
+    const data = await res.json();
+    return data.stories || [];
+  }
+  async function loadStorySpotlight() {
+    const el = document.getElementById('fp-story-spotlight');
+    try {
+      const stories = await fetchStorySpotlightBatch();
+      startSpotlightCycle(stories, fetchStorySpotlightBatch, el, storySpotlightItem, 37000);
+    } catch {
+      el.innerHTML = '<p class="fp-spotlight-empty">Couldn\'t load stories right now.</p>';
+    }
+  }
+
+  function clubSpotlightItem(c) {
+    const a = document.createElement('a');
+    a.className = 'fp-spotlight-item';
+    a.href = window.fpUrl(`/club?slug=${encodeURIComponent(c.slug)}`);
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'fp-spotlight-img-wrap';
+    if (c.icon_url) {
+      const img = document.createElement('img');
+      img.className = 'fp-spotlight-img';
+      img.src = c.icon_url;
+      img.alt = '';
+      imgWrap.appendChild(img);
+    } else {
+      const letter = document.createElement('span');
+      letter.style.cssText = 'position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:#fff;font-family:Fredoka,Lato,cursive;font-weight:700;font-size:2.4rem;text-shadow:0 2px 10px rgba(0,0,0,0.6);';
+      letter.textContent = (c.name || '?').charAt(0).toUpperCase();
+      imgWrap.appendChild(letter);
+    }
+    const name = document.createElement('p');
+    name.className = 'fp-spotlight-name';
+    name.textContent = c.name || 'Unnamed Club';
+    const from = document.createElement('p');
+    from.className = 'fp-spotlight-from';
+    from.textContent = `${c.member_count} member${c.member_count === 1 ? '' : 's'}`;
+    a.appendChild(imgWrap);
+    a.appendChild(name);
+    a.appendChild(from);
+    return a;
+  }
+
+  async function fetchClubSpotlightBatch() {
+    const res = await fetch('/api/spotlight/clubs?limit=100');
+    const data = await res.json();
+    return data.clubs || [];
+  }
+  async function loadClubSpotlight() {
+    const el = document.getElementById('fp-club-spotlight');
+    try {
+      const clubs = await fetchClubSpotlightBatch();
+      startSpotlightCycle(clubs, fetchClubSpotlightBatch, el, clubSpotlightItem, 37000);
+    } catch {
+      el.innerHTML = '<p class="fp-spotlight-empty">Couldn\'t load clubs right now.</p>';
+    }
+  }
+
+  // ── Recent Submissions — newest chapters/art/characters across every
+  // fanpage, mixed FurAffinity-style, 12 at a time (6 per row x 2 rows). ──
+  function rsCaptionHtml(href, title, authorUsername, author) {
+    return `
+      <div class="rs-card-caption">
+        <a class="rs-card-caption-title" href="${href}">${escapeHtml(title)}</a>
+        <span class="rs-card-caption-author">by ${authorUsername ? `<a href="${window.fpUrl(`/${encodeURIComponent(authorUsername)}`)}">${escapeHtml(author || authorUsername)}</a>` : escapeHtml(author || 'Unknown')}</span>
+      </div>
+    `;
+  }
+
+  function rsArtCard(it) {
+    const tile = document.createElement('div');
+    tile.className = 'rs-tile';
+    const a = document.createElement('a');
+    a.className = 'rs-card';
+    a.href = window.fpUrl(`/gallery-post?id=${it.id}`);
+    const posX = it.position_x != null ? it.position_x : 50;
+    const posY = it.position_y != null ? it.position_y : 50;
+    a.innerHTML = `
+      <img src="${it.image}" alt="" style="object-position:${posX}% ${posY}%;" />
+      <span class="rs-card-badge">🎨</span>
+    `;
+    tile.appendChild(a);
+    tile.insertAdjacentHTML('beforeend', rsCaptionHtml(a.href, it.title || 'Untitled', it.author_username, it.author));
+    return tile;
+  }
+
+  function rsPortraitCard(it, icon, tipTitle, href) {
+    const tile = document.createElement('div');
+    tile.className = 'rs-tile';
+    const a = document.createElement('a');
+    a.className = 'rs-card';
+    a.href = href;
+    const imgSrc = it.image || '/images/defaultchar.jpg';
+    const posX = it.position_x != null ? it.position_x : 50;
+    const posY = it.position_y != null ? it.position_y : 50;
+    if (it.nsfw_locked) {
+      const lockMsg = token ? 'NSFW content must be enabled in Account Settings' : 'Only logged-in users can see this content';
+      a.innerHTML = `
+        <img class="fp-spotlight-img--blurred" src="/images/defaultchar.jpg" alt="" />
+        <span class="rs-card-badge">${icon}</span>
+        <span class="fp-spotlight-locked-msg fp-spotlight-locked-msg--card">${escapeHtml(lockMsg)}</span>
+      `;
+    } else {
+      a.innerHTML = `
+        <img src="${imgSrc}" alt="" style="object-position:${posX}% ${posY}%;" />
+        <span class="rs-card-badge">${icon}</span>
+      `;
+    }
+    tile.appendChild(a);
+    tile.insertAdjacentHTML('beforeend', rsCaptionHtml(href, tipTitle, it.author_username, it.author));
+    return tile;
+  }
+
+  // A chapter card's "image" is really the story's own cover — when there
+  // isn't one, it should fall back to the same generated purple/rose book
+  // cover Story Spotlight uses, not the generic no-character silhouette
+  // rsPortraitCard falls back to for character/art posts.
+  function rsChapterCard(it) {
+    const tile = document.createElement('div');
+    tile.className = 'rs-tile';
+    const a = document.createElement('a');
+    a.className = 'rs-card';
+    a.href = window.fpUrl(`/${it.story_path}/reader?ch=${it.id}`);
+    const posX = it.position_x != null ? it.position_x : 50;
+    const posY = it.position_y != null ? it.position_y : 50;
+    if (it.image) {
+      a.innerHTML = `
+        <img src="${it.image}" alt="" style="object-position:${posX}% ${posY}%;" />
+        <span class="rs-card-badge">📖</span>
+      `;
+    } else {
+      a.innerHTML = `<span class="rs-card-badge">📖</span>`;
+      a.prepend(buildCoverEl({ site_title: it.site_title, author_avatar: it.author_avatar }));
+    }
+    tile.appendChild(a);
+    tile.insertAdjacentHTML('beforeend', rsCaptionHtml(a.href, it.title || 'Untitled Chapter', it.author_username, it.author));
+    return tile;
+  }
+
+  function activityCard(it) {
+    if (it.type === 'art') return rsArtCard(it);
+    if (it.type === 'chapter') return rsChapterCard(it);
+    if (it.type === 'character') {
+      const href = window.fpUrl(`/${it.author_username}?char=${it.id}#characters`);
+      return rsPortraitCard(it, '🧍', it.title || 'Unnamed', href);
+    }
+    return document.createElement('span');
+  }
+
+  async function loadActivityFeed() {
+    const wrap = document.getElementById('fp-recent-submissions');
+    try {
+      const res = await fetch('/api/activity-feed?limit=12', { headers: authHeaders() });
+      const data = await res.json();
+      const items = data.items || [];
+      if (!items.length) { wrap.innerHTML = '<p class="fp-row-empty">No recent activity yet — check back soon!</p>'; return; }
+      wrap.innerHTML = '';
+      items.forEach(it => wrap.appendChild(activityCard(it)));
+    } catch {
+      wrap.innerHTML = '<p class="fp-row-empty">Couldn\'t load recent activity right now.</p>';
+    }
+  }
+
+  loadCharacterSpotlight();
+  loadGallerySpotlight();
+  loadStorySpotlight();
+  loadClubSpotlight();
+  loadActivityFeed();
 </script>
 
 </body>
