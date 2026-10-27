@@ -5692,6 +5692,16 @@ app.get('/api/recommended-followers', async (req, res) => {
   }
   const limit = Math.min(parseInt(req.query.limit, 10) || 5, 100);
   const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+  // Opt-in weighted-random order for the homepage's one-shot "Recommended
+  // Followers" row (?random=1) -- same scoring, but sampled without
+  // replacement weighted by score (Efraimidis-Spirakis: power(random(),
+  // 1/weight) DESC) instead of a flat score-then-id sort, so the row isn't
+  // the identical top-N every single load. The default deterministic
+  // score/id order stays untouched since the "See More" modal pages through
+  // this same endpoint with offset/limit and depends on a stable,
+  // non-overlapping sequence across requests -- random order would reshuffle
+  // under it mid-page.
+  const randomOrder = req.query.random === '1';
 
   // A real ranking instead of a coin flip: follower count (established
   // presence) weighted heaviest, story count (there's something to
@@ -5723,7 +5733,7 @@ app.get('/api/recommended-followers', async (req, res) => {
       AND NOT EXISTS (
         SELECT 1 FROM user_follows f WHERE f.follower_id = $1 AND f.followed_id = u.id
       )
-    ORDER BY (u.username = 'veekitpaws') DESC, s.score DESC, u.id ASC
+    ORDER BY (u.username = 'veekitpaws') DESC, ${randomOrder ? 'power(random(), 1.0 / GREATEST(s.score, 1)) DESC' : 's.score DESC, u.id ASC'}
     LIMIT $2 OFFSET $3
   `, [userId, limit, offset]);
 
