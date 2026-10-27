@@ -13,18 +13,6 @@
       color: #f0f0f0;
       font-family: 'Lato', Arial, sans-serif;
       min-height: 100vh;
-      /* Everything below the hero row sits on this -- the hero row itself
-         paints its own opaque background (billboard + comic boxes) so this
-         never shows through it, it only shows from the hero's bottom edge
-         down. background-attachment:fixed means it doesn't need the JS
-         "measure scrollHeight" trick the Posts/Characters browse pages use
-         for a scrolling background -- here it's meant to look pinned behind
-         the content instead, like the Levels page's own backdrop. */
-      background-image: linear-gradient(180deg, rgba(8,6,10,0.35), rgba(8,6,10,0.6)), url('/images/home/box-background-2.png');
-      background-size: auto, cover;
-      background-position: center, center top;
-      background-attachment: scroll, fixed;
-      background-repeat: repeat, no-repeat;
     }
     a { color: inherit; }
     h1, h2, h3, .fp-font-display { font-family: 'Fredoka', 'Lato', cursive; }
@@ -281,7 +269,19 @@
        box. Decorative box styling matches the Levels page's `.lv-box`
        (box-background-2 art + dark scrim + soft border/shadow), which is
        this project's established "nice decorative box" look. ══════════ */
-    .fp-main { max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto; padding: 2.5rem 2rem 5rem; }
+    /* Blurred page backdrop behind the Spotlight + Recent Submissions
+       sections -- a dedicated ::before layer (not a plain background-image
+       on .fp-main itself) so the blur filter never touches the real
+       content sitting on top of it. position:fixed so it reads as pinned
+       behind the page, same visual intent the old box-background-2
+       fixed-attachment backdrop had. */
+    .fp-main { position: relative; max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto; padding: 2.5rem 2rem 5rem; }
+    .fp-main::before {
+      content: ''; position: fixed; inset: 0; z-index: -1;
+      background-image: linear-gradient(180deg, rgba(8,6,10,0.45), rgba(8,6,10,0.68)), url('/images/home/potential-box-background.png');
+      background-size: cover; background-position: center top; background-repeat: no-repeat;
+      filter: blur(5px); transform: scale(1.03);
+    }
     @media (max-width: 720px) { .fp-main { padding: 1.5rem 0.75rem 3rem; } }
 
     .fp-section-title {
@@ -303,18 +303,18 @@
     }
     .fp-outer-box.fp-outer-box--b { background-position: 70% 30%; }
 
-    /* ── Inner spotlight panels — two per outer box, side by side. A
-       lighter translucent panel on top of the outer box's own art so each
-       reads as its own nested card (matches the reference sketch's
-       colored-border boxes) without fighting the outer box for the same
-       background image. ── */
-    .fp-inner-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; align-items: stretch; }
+    /* ── Inner spotlight panels — two per outer box, side by side with no
+       individual boxed chrome of their own (per-item background/border/
+       shadow removed) -- same "just sit directly in the shared box, no
+       nested card" treatment the Levels hero uses for its avatar/info/
+       level-badge trio. A thin vertical divider is the only separator
+       between the pair. ── */
+    .fp-inner-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; align-items: stretch; }
     .fp-inner-box {
-      position: relative; overflow: hidden;
-      background: linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015));
-      border: 1px solid rgba(255,255,255,0.16);
-      border-radius: 14px; padding: 1.25rem 1.1rem;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+      position: relative; padding: 0.5rem 1.6rem;
+    }
+    .fp-inner-box + .fp-inner-box {
+      border-left: 1px solid rgba(255,255,255,0.14);
     }
     .fp-inner-box-title {
       font-size: 1.05rem; font-weight: 600; margin-bottom: 0.85rem;
@@ -350,36 +350,49 @@
     .fp-spotlight-from-link:hover { color: #a8c6ec; text-decoration: underline; }
     .fp-spotlight-loading, .fp-spotlight-empty { color: rgba(255,255,255,0.45); font-size: 0.85rem; text-align: center; padding: 2.5rem 0; }
 
-    /* ── Recent Submissions — full-width box, 6 tiles per row, 12 total
-       (2 rows), fixed covers at the uploader's chosen crop like the
-       Browse/Search pages, not a variable justified wall. ── */
+    /* ── Recent Submissions — a left "mini-stats" panel (~1/4 width, title
+       + a couple of quick at-a-glance counts) and the 12-item grid taking
+       the remaining ~3/4, side by side in one box -- replaces the old
+       plain dark header bar sitting on top of a full-width grid. ── */
     .rs-box {
-      position: relative; overflow: hidden;
+      position: relative; overflow: hidden; display: flex; align-items: stretch;
       background-image: linear-gradient(160deg, rgba(6,6,16,0.6), rgba(6,6,16,0.8)), url('/images/home/box-background-2.png');
       background-size: cover; background-position: center;
       border: 1px solid rgba(255,255,255,0.12);
       border-radius: 18px;
       box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
     }
-    .rs-box-header, .rs-box-body { position: relative; }
-    .rs-box-header {
-      background: rgba(0,0,0,0.55); border-bottom: 1px solid rgba(255,255,255,0.1);
-      padding: 1.1rem 1.5rem;
-      display: flex; align-items: center; gap: 0.5rem;
+    .rs-stats-panel {
+      position: relative; flex: 0 0 25%; max-width: 280px;
+      padding: 1.6rem 1.5rem; display: flex; flex-direction: column; gap: 1.1rem;
+      border-right: 1px solid rgba(255,255,255,0.12);
+      background: rgba(0,0,0,0.3);
     }
     .rs-box-title {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 1.2rem; font-weight: 700; color: #cfe0f5;
       text-shadow: 0 2px 6px rgba(0,0,0,0.55), 0 0 6px rgba(127,168,217,0.4);
+      display: flex; align-items: center; gap: 0.5rem;
     }
-    .rs-box-header .fp-title-deco { width: 24px; height: 24px; object-fit: contain; }
+    .rs-box-title .fp-title-deco { width: 24px; height: 24px; object-fit: contain; }
+    .rs-mini-stats { display: flex; flex-direction: column; gap: 0.7rem; }
+    .rs-mini-stat {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem;
+      padding-bottom: 0.65rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .rs-mini-stat:last-child { border-bottom: none; padding-bottom: 0; }
+    .rs-mini-stat-num {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.5rem; font-weight: 700; color: #fff;
+      text-shadow: 0 0 14px rgba(255,255,255,0.4);
+    }
+    .rs-mini-stat-lbl { font-size: 0.78rem; color: #c9bfe0; text-align: right; }
     .rs-box-see-more {
-      margin-left: auto; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.85rem; font-weight: 700;
+      margin-top: auto; align-self: flex-start; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.88rem; font-weight: 700;
       color: #7fa8d9; text-decoration: none; text-shadow: 0 0 10px rgba(127,168,217,0.6);
       transition: color 0.15s, text-shadow 0.15s;
     }
     .rs-box-see-more:hover { color: #a8c9ec; text-shadow: 0 0 14px rgba(127,168,217,0.85); }
-    .rs-box-body { padding: 1.5rem; }
-    .rs-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.9rem; }
+    .rs-box-body { position: relative; flex: 1; min-width: 0; padding: 1.6rem; }
+    .rs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.9rem; }
     .rs-card {
       position: relative; display: block; text-decoration: none; color: inherit;
       border-radius: 8px; overflow: hidden; background: #1a1a1a;
@@ -436,7 +449,12 @@
       .fp-spotlight-img-wrap { aspect-ratio: 5 / 4; margin-bottom: 0.4rem; border-radius: 10px; }
       .fp-spotlight-name { font-size: 0.82rem; }
       .fp-spotlight-from { font-size: 0.68rem; }
-      .rs-box-header { padding: 0.9rem 1rem; }
+      .rs-box { flex-direction: column; }
+      .rs-stats-panel { flex: none; max-width: none; flex-direction: row; align-items: center; flex-wrap: wrap; padding: 0.9rem 1rem; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.12); }
+      .rs-mini-stats { flex-direction: row; flex: 1 1 auto; gap: 1.2rem; }
+      .rs-mini-stat { flex-direction: column-reverse; align-items: flex-start; border-bottom: none; padding-bottom: 0; gap: 0.1rem; }
+      .rs-mini-stat-lbl { text-align: left; }
+      .rs-box-see-more { margin-top: 0; }
       .rs-box-body { padding: 1rem; }
       .rs-grid { grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
       .rs-card-caption-title { font-size: 0.7rem; }
@@ -521,10 +539,13 @@
   </section>
 
   <section class="rs-box">
-    <div class="rs-box-header">
-      <h2 class="rs-box-title">Recent Submissions</h2>
-      <img class="fp-title-deco" src="/images/home/decoration-2.png" alt="" />
-      <a class="rs-box-see-more" href="/fanpages/search?view=submissions&browse=1">See More</a>
+    <div class="rs-stats-panel">
+      <h2 class="rs-box-title">Recent Submissions <img class="fp-title-deco" src="/images/home/decoration-2.png" alt="" /></h2>
+      <div class="rs-mini-stats" id="rs-mini-stats">
+        <div class="rs-mini-stat"><span class="rs-mini-stat-num" id="rs-stat-today">—</span><span class="rs-mini-stat-lbl">Posted Today</span></div>
+        <div class="rs-mini-stat"><span class="rs-mini-stat-num" id="rs-stat-week">—</span><span class="rs-mini-stat-lbl">This Week</span></div>
+      </div>
+      <a class="rs-box-see-more" href="/fanpages/search?view=submissions&browse=1">See More →</a>
     </div>
     <div class="rs-box-body">
       <div class="rs-grid" id="fp-recent-submissions">
@@ -1191,6 +1212,23 @@
     return document.createElement('span');
   }
 
+  // Mini-stats panel counts are derived from this same 12-item window
+  // (not a separate DB query) -- a lightweight at-a-glance number, not a
+  // precise site-wide total.
+  function renderRsMiniStats(items) {
+    const now = Date.now();
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+    let today = 0, week = 0;
+    items.forEach(it => {
+      const t = new Date(it.created_at).getTime();
+      if (t >= todayStart.getTime()) today++;
+      if (t >= weekAgo) week++;
+    });
+    document.getElementById('rs-stat-today').textContent = today;
+    document.getElementById('rs-stat-week').textContent = week;
+  }
+
   async function loadActivityFeed() {
     const wrap = document.getElementById('fp-recent-submissions');
     try {
@@ -1200,6 +1238,7 @@
       if (!items.length) { wrap.innerHTML = '<p class="fp-row-empty">No recent activity yet — check back soon!</p>'; return; }
       wrap.innerHTML = '';
       items.forEach(it => wrap.appendChild(activityCard(it)));
+      renderRsMiniStats(items);
     } catch {
       wrap.innerHTML = '<p class="fp-row-empty">Couldn\'t load recent activity right now.</p>';
     }
