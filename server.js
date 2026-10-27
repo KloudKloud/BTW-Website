@@ -1013,7 +1013,7 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
       position_y INTEGER NOT NULL DEFAULT 50,
       zoom       INTEGER NOT NULL DEFAULT 100
     );
-    INSERT INTO hero_comic_box_images (slot) VALUES ('gallery'), ('stories'), ('characters'), ('clubs'), ('spotlights'), ('recent-submissions'), ('arcade')
+    INSERT INTO hero_comic_box_images (slot) VALUES ('gallery'), ('stories'), ('characters'), ('clubs'), ('spotlights'), ('recent-submissions'), ('arcade'), ('news-posts'), ('donations')
     ON CONFLICT (slot) DO NOTHING;
   `).catch(e => console.error('hero_comic_box_images migration:', e.message));
 
@@ -5034,7 +5034,7 @@ app.put('/api/admin/notifications-banner', requireAuth, requireAdmin, uploadModI
 });
 
 // ── Fanpages hub hero row comic-strip box images (admin-adjustable crop) ───
-const HERO_COMIC_BOX_SLOTS = ['gallery', 'stories', 'characters', 'clubs', 'spotlights', 'recent-submissions', 'arcade'];
+const HERO_COMIC_BOX_SLOTS = ['gallery', 'stories', 'characters', 'clubs', 'spotlights', 'recent-submissions', 'arcade', 'news-posts', 'donations'];
 
 app.get('/api/hero-comic-boxes', async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM hero_comic_box_images');

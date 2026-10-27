@@ -549,9 +549,12 @@
     }
     .fp-arcade-main-label p { margin-top: 0.4rem; font-size: 0.92rem; color: #ddd3ec; max-width: 32ch; }
 
-    .fp-arcade-side { flex: 1 1 50%; position: relative; height: 100%; }
+    /* The two side boxes are a vertically-centered pair (centered on the
+       main banner's midline, since the row is symmetric around it) with a
+       tight gap, instead of each being pinned to an opposite edge. */
+    .fp-arcade-side { flex: 1 1 50%; display: flex; flex-direction: column; justify-content: center; gap: 0.9rem; height: 100%; }
     .fp-arcade-side-box {
-      position: absolute; left: 0; right: 0; display: flex; flex-direction: column; justify-content: center;
+      position: relative; overflow: hidden; flex: 0 0 40%; display: flex; flex-direction: column; justify-content: center;
       padding: 1.6rem 1.8rem; border-radius: 18px; text-decoration: none; color: inherit;
       border: 1px solid rgba(255,255,255,0.12);
       background-image: linear-gradient(160deg, rgba(10,8,20,0.6), rgba(10,8,20,0.85)), url('/images/home/box-background-3.png');
@@ -559,14 +562,25 @@
       box-shadow: 0 10px 30px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    .fp-arcade-side-box:hover { transform: translateY(-2px); box-shadow: 0 14px 36px rgba(0,0,0,0.5), 0 0 16px rgba(240,192,96,0.3); }
-    .fp-arcade-side-box--top { top: 0; height: 40%; }
-    .fp-arcade-side-box--bottom { bottom: 0; height: 40%; }
+    .fp-arcade-side-box > h3, .fp-arcade-side-box > p { position: relative; z-index: 2; }
     .fp-arcade-side-box h3 {
       font-size: 1.4rem; display: flex; align-items: center; gap: 0.5rem;
       color: #cfe0f5; text-shadow: 0 2px 6px rgba(0,0,0,0.55), 0 0 6px rgba(127,168,217,0.4);
     }
     .fp-arcade-side-box p { margin-top: 0.5rem; font-size: 0.95rem; color: #c9bfe0; max-width: 34ch; }
+
+    /* Neon pink / purple / blue glow around the perimeter of all three
+       Arcade-row boxes (Arcade, News Posts, Donations), slow-pulsing like
+       the glow frames on the boxes above. */
+    @keyframes fp-arcade-neon-pulse {
+      0%, 100% { box-shadow: 0 0 8px 1px rgba(255,80,200,0.45), 0 0 20px 3px rgba(150,90,255,0.35), 0 0 36px 6px rgba(0,195,255,0.18), 0 10px 30px rgba(0,0,0,0.4); }
+      50% { box-shadow: 0 0 12px 2px rgba(255,80,200,0.7), 0 0 28px 5px rgba(150,90,255,0.55), 0 0 48px 10px rgba(0,195,255,0.3), 0 10px 30px rgba(0,0,0,0.4); }
+    }
+    .fp-arcade-main, .fp-arcade-side-box {
+      border-color: rgba(200,120,255,0.7);
+      animation: fp-arcade-neon-pulse 4.5s ease-in-out infinite;
+    }
+    .fp-arcade-side-box:hover { transform: translateY(-2px); }
 
     /* ══════════════════════════════════════════════════════════════════
        Recommended Followers — a horizontal scroller, 5 cards visible at a
@@ -639,7 +653,8 @@
       .rs-side-panel::after { border-radius: 0; }
       .fp-arcade-row { flex-direction: column; height: auto; }
       .fp-arcade-main { flex: 0 0 220px; height: 220px; min-height: 220px; align-self: auto; }
-      .fp-arcade-side { flex: 0 0 220px; height: 220px; }
+      .fp-arcade-side { flex: 0 0 auto; height: auto; }
+      .fp-arcade-side-box { flex: 0 0 auto; min-height: 150px; }
       .fp-rf-card { flex: 0 0 calc((100% - 2 * 1rem) / 3); }
     }
     @media (max-width: 720px) {
@@ -771,13 +786,13 @@
       </div>
     </a>
     <div class="fp-arcade-side">
-      <a class="fp-arcade-side-box fp-arcade-side-box--top" href="/fanpages/levels#spin">
-        <h3>🎰 Spin For Characters <img class="fp-title-deco" src="/images/home/decoration-1.png" alt="" /></h3>
-        <p>Try your luck on the wheel and grow your collection.</p>
+      <a class="fp-arcade-side-box fp-arcade-side-box--top" href="/fanpages/news" data-hero-slot="news-posts">
+        <h3>📰 News Posts <img class="fp-title-deco" src="/images/home/decoration-1.png" alt="" /></h3>
+        <p>Check out our latest events, patch notes, and news from the devs!</p>
       </a>
-      <a class="fp-arcade-side-box fp-arcade-side-box--bottom" href="/fanpages/levels#leaderboard">
-        <h3>🏆 Leaderboard</h3>
-        <p>See who's topping the charts this week.</p>
+      <a class="fp-arcade-side-box fp-arcade-side-box--bottom" href="/fanpages/donations" data-hero-slot="donations">
+        <h3>💖 Donations <img class="fp-title-deco" src="/images/home/decoration-8.png" alt="" /></h3>
+        <p>If you'd like to support this website and help us grow, we accept donations!</p>
       </a>
     </div>
   </section>
@@ -881,7 +896,7 @@
   // need to darken the art much). A slot with no image_url just keeps its
   // default flat look -- this only inserts the bg+scrim layers for slots
   // that actually have one.
-  const DECO_PANEL_SLOTS = ['spotlights', 'recent-submissions', 'arcade'];
+  const DECO_PANEL_SLOTS = ['spotlights', 'recent-submissions', 'arcade', 'news-posts', 'donations'];
   async function loadHeroComicBoxes() {
     let boxes;
     try {

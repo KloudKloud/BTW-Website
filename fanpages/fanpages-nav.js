@@ -577,6 +577,8 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         <div class="fpnav-dropdown-wrap">
           <button class="fpnav-link fpnav-trigger-link" id="fpnav-community-btn" type="button">Community <span class="fpnav-caret">▾</span></button>
           <div class="fpnav-dropdown" id="fpnav-community-dropdown" hidden>
+            <a href="${fpUrl('/news')}">News Posts</a>
+            <div class="fpnav-dropdown-divider"></div>
             <a href="${fpUrl('/donations')}">Donations</a>
             <a href="${fpUrl('/discord')}">Discord</a>
             <a href="${fpUrl('/tos')}">TOS</a>
@@ -677,6 +679,8 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
           <div class="fpnav-drawer-accordion">
             <button class="fpnav-drawer-toggle" data-drawer-target="community" type="button">Community <span class="fpnav-caret">&#9662;</span></button>
             <div class="fpnav-drawer-submenu" id="fpnav-drawer-sub-community" hidden>
+              <a href="${fpUrl('/news')}">News Posts</a>
+              <div class="fpnav-dropdown-divider"></div>
               <a href="${fpUrl('/donations')}">Donations</a>
               <a href="${fpUrl('/discord')}">Discord</a>
               <a href="${fpUrl('/tos')}">TOS</a>
