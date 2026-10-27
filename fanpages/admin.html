@@ -1282,14 +1282,19 @@ document.getElementById('hb-editor-delete').addEventListener('click', async () =
    its own hr-prefixed cropper state/functions (mirrors hbCropper*) since
    each slot only ever has one crop, no start/end animation frames.
    ═══════════════════════════════════════════════════════════════════════ */
+// ratio (width/height) overrides the shared .hr-card-img-wrap 9.5:25 comic-
+// strip aspect for slots that don't actually render that shape live --
+// measured off the real rendered boxes on the hub (spotlights/recent-
+// submissions: ~334x484 and ~334x469 at desktop widths; arcade: ~655x416)
+// so the crop preview here actually matches what the slot looks like live.
 const HR_SLOTS = [
   { slot: 'gallery', label: 'Gallery' },
   { slot: 'stories', label: 'Stories' },
   { slot: 'characters', label: 'Characters' },
   { slot: 'clubs', label: 'Clubs' },
-  { slot: 'spotlights', label: 'Spotlights Panel' },
-  { slot: 'recent-submissions', label: 'Recent Submissions Panel' },
-  { slot: 'arcade', label: 'Arcade Promo' },
+  { slot: 'spotlights', label: 'Spotlights Panel', ratio: 334 / 484 },
+  { slot: 'recent-submissions', label: 'Recent Submissions Panel', ratio: 334 / 469 },
+  { slot: 'arcade', label: 'Arcade Promo', ratio: 655 / 416 },
 ];
 let heroBoxes = [];
 let hrEditingSlot = null;
@@ -1344,12 +1349,12 @@ async function loadHeroBoxes() {
 function renderHrGrid() {
   const grid = document.getElementById('hr-grid');
   grid.innerHTML = '';
-  HR_SLOTS.forEach(({ slot, label }) => {
+  HR_SLOTS.forEach(({ slot, label, ratio }) => {
     const box = heroBoxes.find(b => b.slot === slot) || { slot, image_url: null, position_x: 50, position_y: 50, zoom: 100 };
     const card = document.createElement('div');
     card.className = 'hb-card';
     card.innerHTML = `
-      <div class="hb-card-img-wrap hr-card-img-wrap">
+      <div class="hb-card-img-wrap hr-card-img-wrap"${ratio ? ` style="aspect-ratio:${ratio};"` : ''}>
         <div class="hb-preview-bg"></div>
         ${!box.image_url ? `<p class="hr-card-placeholder">${slot === 'arcade' ? 'No override set — keeps the current Arcade art' : 'No image set — default black look'}</p>` : ''}
       </div>
@@ -1360,7 +1365,7 @@ function renderHrGrid() {
         </div>
       </div>
     `;
-    card.querySelector('.hb-card-actions button').addEventListener('click', () => openHrEditor(box, label));
+    card.querySelector('.hb-card-actions button').addEventListener('click', () => openHrEditor(box, label, ratio));
     grid.appendChild(card);
 
     if (box.image_url) {
@@ -1376,12 +1381,16 @@ function renderHrGrid() {
   });
 }
 
-async function openHrEditor(box, label) {
+async function openHrEditor(box, label, ratio) {
   hrEditingSlot = box.slot;
   hrSelectedFile = null;
 
   document.getElementById('hr-editor-title').textContent = `${label} Box Image`;
   document.getElementById('hr-editor-clear').style.display = box.image_url ? '' : 'none';
+  // Comic-strip slots keep the default 9.5:25 crop box; the three
+  // non-comic-box slots (Spotlights/Recent Submissions/Arcade) override it
+  // with their own actually-measured live aspect so the crop here matches.
+  document.getElementById('hr-editor-img-wrap').style.aspectRatio = ratio ? String(ratio) : '9.5 / 25';
 
   const placeholder = document.getElementById('hr-editor-img-placeholder');
   if (box.image_url) {
