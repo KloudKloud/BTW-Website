@@ -1013,7 +1013,7 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
       position_y INTEGER NOT NULL DEFAULT 50,
       zoom       INTEGER NOT NULL DEFAULT 100
     );
-    INSERT INTO hero_comic_box_images (slot) VALUES ('gallery'), ('stories'), ('characters'), ('clubs'), ('spotlights'), ('recent-submissions')
+    INSERT INTO hero_comic_box_images (slot) VALUES ('gallery'), ('stories'), ('characters'), ('clubs'), ('spotlights'), ('recent-submissions'), ('arcade')
     ON CONFLICT (slot) DO NOTHING;
   `).catch(e => console.error('hero_comic_box_images migration:', e.message));
 
@@ -5034,7 +5034,7 @@ app.put('/api/admin/notifications-banner', requireAuth, requireAdmin, uploadModI
 });
 
 // ── Fanpages hub hero row comic-strip box images (admin-adjustable crop) ───
-const HERO_COMIC_BOX_SLOTS = ['gallery', 'stories', 'characters', 'clubs', 'spotlights', 'recent-submissions'];
+const HERO_COMIC_BOX_SLOTS = ['gallery', 'stories', 'characters', 'clubs', 'spotlights', 'recent-submissions', 'arcade'];
 
 app.get('/api/hero-comic-boxes', async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM hero_comic_box_images');
@@ -10396,7 +10396,7 @@ app.get('/api/spotlight/characters', async (req, res) => {
   const { nsfwAllowed } = await getViewerNsfwAccess(req);
   const { rows } = await pool.query(
     `SELECT mc.id, mc.name, mc.ref_image, mc.thumb_image_url, mc.ref_position_x, mc.ref_position_y, mc.ref_is_nsfw,
-            ms.story_path, ms.slug, ms.site_title, u.username AS owner_username, u.display_name AS owner_display_name
+            ms.story_path, ms.slug, ms.site_title, u.username AS owner_username, u.display_name AS owner_display_name, u.avatar AS owner_avatar
      FROM moderator_characters mc
      LEFT JOIN LATERAL (
        SELECT site_id FROM character_story_links WHERE character_id = mc.id ORDER BY site_id LIMIT 1
@@ -10421,6 +10421,7 @@ app.get('/api/spotlight/characters', async (req, res) => {
         position_x: r.ref_position_x, position_y: r.ref_position_y,
         story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
         owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
+        owner_avatar: r.owner_avatar || null,
       };
     }),
   });
@@ -10435,7 +10436,7 @@ app.get('/api/spotlight/gallery', async (req, res) => {
   const categories = nsfwAllowed ? GALLERY_CATEGORIES : ['sfw'];
   const { rows } = await pool.query(
     `SELECT mg.id, mg.image_url, mg.thumb_image_url, mg.title, mg.position_x, mg.position_y,
-            ms.story_path, ms.slug, ms.site_title, u.username AS owner_username, u.display_name AS owner_display_name
+            ms.story_path, ms.slug, ms.site_title, u.username AS owner_username, u.display_name AS owner_display_name, u.avatar AS owner_avatar
      FROM moderator_gallery mg
      LEFT JOIN LATERAL (
        SELECT site_id FROM gallery_story_links WHERE gallery_id = mg.id ORDER BY site_id LIMIT 1
@@ -10454,6 +10455,7 @@ app.get('/api/spotlight/gallery', async (req, res) => {
       position_x: r.position_x, position_y: r.position_y,
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
       owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
+      owner_avatar: r.owner_avatar || null,
     })),
   });
 });
