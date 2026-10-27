@@ -292,30 +292,54 @@
     .fp-title-deco { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
     .fp-row-empty { color: #999; font-size: 0.92rem; text-align: center; padding: 1rem 0; }
 
-    /* ── Outer boxes ── */
-    .fp-outer-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2.5rem; }
-    .fp-outer-box {
-      border-radius: 18px; padding: 1.5rem;
-      background-image: linear-gradient(160deg, rgba(6,6,16,0.6), rgba(6,6,16,0.8)), url('/images/home/box-background-2.png');
-      background-size: cover; background-position: center;
+    /* ── Spotlight box — a single box now instead of two: a left strip
+       (~1/4 width, admin-picked image via Admin > Bulletin > Hero Row
+       Images, "spotlights" slot) with a vertical "Spotlights" label running
+       up its border like the hero comic-strip boxes, and the remaining 3/4
+       as a 2x2 grid holding all four spotlights (Gallery/Stories/
+       Characters/Clubs) with a thin divider between each. Both the strip
+       and the grid get a slow pulsing inset-glow border (.fp-glow-frame)
+       for a bit of subtle "alive" sparkle without going full neon. ── */
+    .fp-spotlight-box {
+      display: flex; align-items: stretch; border-radius: 18px; overflow: hidden; margin-bottom: 2.5rem;
       border: 1px solid rgba(255,255,255,0.12);
       box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+      background: #14101c;
     }
-    .fp-outer-box.fp-outer-box--b { background-position: 70% 30%; }
+    @keyframes fp-glow-pulse {
+      0%, 100% { box-shadow: inset 0 0 0 1px rgba(240,192,96,0.3), inset 0 0 16px rgba(240,192,96,0.1); }
+      50% { box-shadow: inset 0 0 0 1px rgba(240,192,96,0.6), inset 0 0 28px rgba(240,192,96,0.26); }
+    }
+    .fp-glow-frame { position: relative; }
+    .fp-glow-frame::after {
+      content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+      animation: fp-glow-pulse 4.5s ease-in-out infinite;
+    }
+    .fp-spotlight-strip {
+      flex: 0 0 25%; position: relative; overflow: hidden;
+      border-right: 1px solid rgba(255,255,255,0.14);
+      background: linear-gradient(160deg, #241c30, #1a1420);
+    }
+    /* Lighter scrim than the hero comic boxes use -- just enough for the
+       label to stay readable, not a heavy darken-the-art treatment. */
+    .fp-deco-panel-bg { position: absolute; inset: 0; z-index: 0; background-repeat: no-repeat; }
+    .fp-deco-panel-scrim { position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(10,8,16,0.1), rgba(10,8,16,0.4)); }
+    .fp-spotlight-strip-label {
+      position: absolute; top: 50%; left: 50%; z-index: 2;
+      writing-mode: vertical-rl; transform: translate(-50%, -50%) rotate(180deg);
+      font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; text-transform: uppercase;
+      font-size: clamp(1.2rem, 1.8vw, 1.8rem); letter-spacing: 0.35em;
+      color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.75), 0 0 14px rgba(240,192,96,0.5);
+      pointer-events: none;
+    }
 
-    /* ── Inner spotlight panels — two per outer box, side by side with no
-       individual boxed chrome of their own (per-item background/border/
-       shadow removed) -- same "just sit directly in the shared box, no
-       nested card" treatment the Levels hero uses for its avatar/info/
-       level-badge trio. A thin vertical divider is the only separator
-       between the pair. ── */
-    .fp-inner-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; align-items: stretch; }
-    .fp-inner-box {
-      position: relative; padding: 0.5rem 1.6rem;
+    .fp-spotlight-grid {
+      flex: 1 1 75%; min-width: 0; position: relative;
+      display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
     }
-    .fp-inner-box + .fp-inner-box {
-      border-left: 1px solid rgba(255,255,255,0.14);
-    }
+    .fp-spot-cell { position: relative; padding: 1.3rem 1.6rem; }
+    .fp-spot-cell:nth-child(odd) { border-right: 1px solid rgba(255,255,255,0.14); }
+    .fp-spot-cell:nth-child(-n+2) { border-bottom: 1px solid rgba(255,255,255,0.14); }
     .fp-inner-box-title {
       font-size: 1.05rem; font-weight: 600; margin-bottom: 0.85rem;
       display: flex; align-items: center; justify-content: center; gap: 0.4rem; text-align: center;
@@ -350,23 +374,22 @@
     .fp-spotlight-from-link:hover { color: #a8c6ec; text-decoration: underline; }
     .fp-spotlight-loading, .fp-spotlight-empty { color: rgba(255,255,255,0.45); font-size: 0.85rem; text-align: center; padding: 2.5rem 0; }
 
-    /* ── Recent Submissions — a left "mini-stats" panel (~1/4 width, title
-       + a couple of quick at-a-glance counts) and the 12-item grid taking
-       the remaining ~3/4, side by side in one box -- replaces the old
-       plain dark header bar sitting on top of a full-width grid. ── */
+    /* ── Recent Submissions — a header bar (title + See More) on top, then
+       a row with the 10-item grid (5 per row, 2 rows, scaled-down thumbs)
+       taking the first ~3/4 and a second admin-picked decorative image
+       panel (same "recent-submissions" hero-row slot mechanism and glow
+       frame the Spotlights strip uses) in the last ~1/4. ── */
     .rs-box {
-      position: relative; overflow: hidden; display: flex; align-items: stretch;
+      position: relative; overflow: hidden; display: flex; flex-direction: column;
       background-image: linear-gradient(160deg, rgba(6,6,16,0.6), rgba(6,6,16,0.8)), url('/images/home/box-background-2.png');
       background-size: cover; background-position: center;
       border: 1px solid rgba(255,255,255,0.12);
       border-radius: 18px;
       box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
     }
-    .rs-stats-panel {
-      position: relative; flex: 0 0 25%; max-width: 280px;
-      padding: 1.6rem 1.5rem; display: flex; flex-direction: column; gap: 1.1rem;
-      border-right: 1px solid rgba(255,255,255,0.12);
-      background: rgba(0,0,0,0.3);
+    .rs-box-topbar {
+      position: relative; display: flex; align-items: center; gap: 0.5rem;
+      padding: 1.1rem 1.5rem; background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(255,255,255,0.12);
     }
     .rs-box-title {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 1.2rem; font-weight: 700; color: #cfe0f5;
@@ -374,47 +397,44 @@
       display: flex; align-items: center; gap: 0.5rem;
     }
     .rs-box-title .fp-title-deco { width: 24px; height: 24px; object-fit: contain; }
-    .rs-mini-stats { display: flex; flex-direction: column; gap: 0.7rem; }
-    .rs-mini-stat {
-      display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem;
-      padding-bottom: 0.65rem; border-bottom: 1px solid rgba(255,255,255,0.08);
-    }
-    .rs-mini-stat:last-child { border-bottom: none; padding-bottom: 0; }
-    .rs-mini-stat-num {
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.5rem; font-weight: 700; color: #fff;
-      text-shadow: 0 0 14px rgba(255,255,255,0.4);
-    }
-    .rs-mini-stat-lbl { font-size: 0.78rem; color: #c9bfe0; text-align: right; }
     .rs-box-see-more {
-      margin-top: auto; align-self: flex-start; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.88rem; font-weight: 700;
+      margin-left: auto; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.88rem; font-weight: 700;
       color: #7fa8d9; text-decoration: none; text-shadow: 0 0 10px rgba(127,168,217,0.6);
       transition: color 0.15s, text-shadow 0.15s;
     }
     .rs-box-see-more:hover { color: #a8c9ec; text-shadow: 0 0 14px rgba(127,168,217,0.85); }
-    .rs-box-body { position: relative; flex: 1; min-width: 0; padding: 1.6rem; }
-    .rs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.9rem; }
+    .rs-box-main { position: relative; display: flex; align-items: stretch; flex: 1; }
+    .rs-box-body { position: relative; flex: 0 0 75%; min-width: 0; padding: 1.3rem 1.5rem; }
+    .rs-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.65rem; }
+    .rs-side-panel {
+      flex: 0 0 25%; position: relative; overflow: hidden;
+      border-left: 1px solid rgba(255,255,255,0.14);
+      background: linear-gradient(160deg, #241c30, #1a1420);
+    }
+    .rs-side-panel::after { border-radius: 0 0 18px 0; }
+    .fp-spotlight-strip::after { border-radius: 18px 0 0 18px; }
     .rs-card {
       position: relative; display: block; text-decoration: none; color: inherit;
-      border-radius: 8px; overflow: hidden; background: #1a1a1a;
+      border-radius: 7px; overflow: hidden; background: #1a1a1a;
       border: 1px solid rgba(255,255,255,0.08); transition: transform 0.15s, box-shadow 0.15s;
       aspect-ratio: 6 / 7;
     }
     .rs-card:hover { transform: translateY(-4px); box-shadow: 0 10px 26px rgba(0,0,0,0.45); z-index: 3; }
     .rs-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .rs-card-badge {
-      position: absolute; bottom: 6px; right: 7px; z-index: 2;
-      font-size: 1.35rem; line-height: 1; text-shadow: 0 1px 5px rgba(0,0,0,0.85);
+      position: absolute; bottom: 5px; right: 6px; z-index: 2;
+      font-size: 1.1rem; line-height: 1; text-shadow: 0 1px 5px rgba(0,0,0,0.85);
     }
-    .rs-card .fp-spotlight-locked-msg--card { z-index: 2; font-size: 0.64rem; padding: 0 0.5rem; }
+    .rs-card .fp-spotlight-locked-msg--card { z-index: 2; font-size: 0.6rem; padding: 0 0.4rem; }
     .rs-tile { display: flex; flex-direction: column; min-width: 0; }
-    .rs-card-caption { padding: 0.4rem 0.05rem 0; min-width: 0; text-align: center; }
+    .rs-card-caption { padding: 0.35rem 0.05rem 0; min-width: 0; text-align: center; }
     .rs-card-caption-title {
-      display: block; font-size: 0.8rem; font-weight: 700; color: #fff; text-decoration: none;
+      display: block; font-size: 0.72rem; font-weight: 700; color: #fff; text-decoration: none;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       text-shadow: 0 1px 3px rgba(0,0,0,0.4);
     }
     .rs-card-caption-title:hover { color: #fff; text-shadow: 0 0 6px rgba(255,255,255,0.25), 0 1px 3px rgba(0,0,0,0.4); text-decoration: underline; }
-    .rs-card-caption-author { display: block; font-size: 0.72rem; color: #999; margin-top: 0.1rem; }
+    .rs-card-caption-author { display: block; font-size: 0.64rem; color: #999; margin-top: 0.1rem; }
     .rs-card-caption-author a { color: #ccc; text-decoration: none; font-weight: 600; }
     .rs-card-caption-author a:hover { color: #7fa8d9; text-decoration: underline; }
 
@@ -545,34 +565,33 @@
     .fp-rf-arrow--next { right: -1.2rem; }
 
     @media (max-width: 980px) {
-      .fp-outer-row { grid-template-columns: 1fr; }
+      .fp-spotlight-box { flex-direction: column; }
+      .fp-spotlight-strip { flex: 0 0 110px; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.14); }
+      .fp-spotlight-strip-label { writing-mode: horizontal-tb; transform: translate(-50%, -50%); letter-spacing: 0.3em; }
+      .fp-spotlight-strip::after, .fp-spotlight-grid::after { border-radius: 0; }
+      .rs-box-main { flex-direction: column; }
+      .rs-box-body { flex: 1 1 auto; }
+      .rs-side-panel { flex: 0 0 100px; border-left: none; border-top: 1px solid rgba(255,255,255,0.14); }
+      .rs-side-panel::after { border-radius: 0; }
       .fp-arcade-row { flex-direction: column; height: auto; }
       .fp-arcade-main { flex: 0 0 220px; min-height: 220px; }
       .fp-arcade-side { flex: 0 0 220px; height: 220px; }
       .fp-rf-card { flex: 0 0 calc((100% - 2 * 1rem) / 3); }
     }
     @media (max-width: 720px) {
-      .fp-outer-row { gap: 1rem; margin-bottom: 1.75rem; }
-      .fp-outer-box { padding: 1rem; }
-      .fp-inner-row { gap: 0.6rem; }
-      .fp-inner-box { padding: 0.8rem 0.65rem; }
+      .fp-spot-cell { padding: 0.8rem 0.65rem; }
       .fp-inner-box-title { font-size: 0.88rem; margin-bottom: 0.55rem; }
       .fp-inner-box-title img { width: 15px; height: 15px; }
       .fp-spotlight-display { min-height: 0; }
       .fp-spotlight-img-wrap { aspect-ratio: 5 / 4; margin-bottom: 0.4rem; border-radius: 10px; }
       .fp-spotlight-name { font-size: 0.82rem; }
       .fp-spotlight-from { font-size: 0.68rem; }
-      .rs-box { flex-direction: column; }
-      .rs-stats-panel { flex: none; max-width: none; flex-direction: row; align-items: center; flex-wrap: wrap; padding: 0.9rem 1rem; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.12); }
-      .rs-mini-stats { flex-direction: row; flex: 1 1 auto; gap: 1.2rem; }
-      .rs-mini-stat { flex-direction: column-reverse; align-items: flex-start; border-bottom: none; padding-bottom: 0; gap: 0.1rem; }
-      .rs-mini-stat-lbl { text-align: left; }
-      .rs-box-see-more { margin-top: 0; }
+      .rs-box-topbar { padding: 0.9rem 1rem; }
       .rs-box-body { padding: 1rem; }
       .rs-grid { grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
-      .rs-card-caption-title { font-size: 0.7rem; }
-      .rs-card-caption-author { font-size: 0.62rem; }
-      .rs-card-badge { font-size: 1.1rem; }
+      .rs-card-caption-title { font-size: 0.68rem; }
+      .rs-card-caption-author { font-size: 0.6rem; }
+      .rs-card-badge { font-size: 1rem; }
       .fp-arcade-main-label { padding: 1.1rem 1.2rem; }
       .fp-arcade-main-label h2 { font-size: 1.25rem; }
       .fp-arcade-side-box { padding: 0.9rem 1rem; }
@@ -625,55 +644,50 @@
 
 <div class="fp-main">
 
-  <section class="fp-outer-row">
-    <div class="fp-outer-box fp-outer-box--a">
-      <div class="fp-inner-row">
-        <div class="fp-inner-box">
-          <h2 class="fp-inner-box-title">Spotlighted Gallery <img src="/images/home/decoration-1.png" alt="" /></h2>
-          <div class="fp-spotlight-display" id="fp-gallery-spotlight">
-            <p class="fp-spotlight-loading">Loading…</p>
-          </div>
-        </div>
-        <div class="fp-inner-box">
-          <h2 class="fp-inner-box-title">Spotlighted Stories <img src="/images/home/decoration-1.png" alt="" /></h2>
-          <div class="fp-spotlight-display" id="fp-story-spotlight">
-            <p class="fp-spotlight-loading">Loading…</p>
-          </div>
+  <section class="fp-spotlight-box">
+    <div class="fp-spotlight-strip fp-glow-frame" data-hero-slot="spotlights">
+      <span class="fp-spotlight-strip-label">Spotlights</span>
+    </div>
+    <div class="fp-spotlight-grid fp-glow-frame">
+      <div class="fp-spot-cell">
+        <h2 class="fp-inner-box-title">Spotlighted Gallery <img src="/images/home/decoration-1.png" alt="" /></h2>
+        <div class="fp-spotlight-display" id="fp-gallery-spotlight">
+          <p class="fp-spotlight-loading">Loading…</p>
         </div>
       </div>
-    </div>
-
-    <div class="fp-outer-box fp-outer-box--b">
-      <div class="fp-inner-row">
-        <div class="fp-inner-box">
-          <h2 class="fp-inner-box-title">Spotlighted Characters <img src="/images/home/decoration-1.png" alt="" /></h2>
-          <div class="fp-spotlight-display" id="fp-char-spotlight">
-            <p class="fp-spotlight-loading">Loading…</p>
-          </div>
+      <div class="fp-spot-cell">
+        <h2 class="fp-inner-box-title">Spotlighted Stories <img src="/images/home/decoration-1.png" alt="" /></h2>
+        <div class="fp-spotlight-display" id="fp-story-spotlight">
+          <p class="fp-spotlight-loading">Loading…</p>
         </div>
-        <div class="fp-inner-box">
-          <h2 class="fp-inner-box-title">Spotlighted Clubs <img src="/images/home/decoration-1.png" alt="" /></h2>
-          <div class="fp-spotlight-display" id="fp-club-spotlight">
-            <p class="fp-spotlight-loading">Loading…</p>
-          </div>
+      </div>
+      <div class="fp-spot-cell">
+        <h2 class="fp-inner-box-title">Spotlighted Characters <img src="/images/home/decoration-1.png" alt="" /></h2>
+        <div class="fp-spotlight-display" id="fp-char-spotlight">
+          <p class="fp-spotlight-loading">Loading…</p>
+        </div>
+      </div>
+      <div class="fp-spot-cell">
+        <h2 class="fp-inner-box-title">Spotlighted Clubs <img src="/images/home/decoration-1.png" alt="" /></h2>
+        <div class="fp-spotlight-display" id="fp-club-spotlight">
+          <p class="fp-spotlight-loading">Loading…</p>
         </div>
       </div>
     </div>
   </section>
 
   <section class="rs-box">
-    <div class="rs-stats-panel">
+    <div class="rs-box-topbar">
       <h2 class="rs-box-title">Recent Submissions <img class="fp-title-deco" src="/images/home/decoration-2.png" alt="" /></h2>
-      <div class="rs-mini-stats" id="rs-mini-stats">
-        <div class="rs-mini-stat"><span class="rs-mini-stat-num" id="rs-stat-today">—</span><span class="rs-mini-stat-lbl">Posted Today</span></div>
-        <div class="rs-mini-stat"><span class="rs-mini-stat-num" id="rs-stat-week">—</span><span class="rs-mini-stat-lbl">This Week</span></div>
-      </div>
       <a class="rs-box-see-more" href="/fanpages/search?view=submissions&browse=1">See More →</a>
     </div>
-    <div class="rs-box-body">
-      <div class="rs-grid" id="fp-recent-submissions">
-        <p class="fp-row-empty">Loading…</p>
+    <div class="rs-box-main">
+      <div class="rs-box-body">
+        <div class="rs-grid" id="fp-recent-submissions">
+          <p class="fp-row-empty">Loading…</p>
+        </div>
       </div>
+      <div class="rs-side-panel fp-glow-frame" data-hero-slot="recent-submissions"></div>
     </div>
   </section>
 
@@ -787,11 +801,17 @@
     return { w: (renderedW / (boxW || 1)) * 100 * factor, h: (renderedH / (boxH || 1)) * 100 * factor };
   }
 
-  // ── Hero row comic-box images — admin-picked, per-slot (Gallery/Stories/
-  // Characters/Clubs) background art set via Admin > Bulletin > Hero Row
-  // Images, with the same drag/zoom crop as the billboard. A slot with no
-  // image_url just keeps its default flat black/halftone look -- this only
-  // inserts the bg+scrim layers for slots that actually have one.
+  // ── Hero row comic-box images — admin-picked, per-slot background art
+  // set via Admin > Bulletin > Hero Row Images, with the same drag/zoom
+  // crop as the billboard. Covers the four comic-strip boxes (Gallery/
+  // Stories/Characters/Clubs) plus the Spotlights strip and Recent
+  // Submissions side panel -- same slot mechanism, just a plain attribute
+  // selector now instead of being scoped to .fp-comic-box, and those two
+  // decorative panels get a lighter scrim (no label to keep readable, no
+  // need to darken the art much). A slot with no image_url just keeps its
+  // default flat look -- this only inserts the bg+scrim layers for slots
+  // that actually have one.
+  const DECO_PANEL_SLOTS = ['spotlights', 'recent-submissions'];
   async function loadHeroComicBoxes() {
     let boxes;
     try {
@@ -804,20 +824,21 @@
     await Promise.all(withImage.map(b => loadImageDims(b.image_url)));
 
     withImage.forEach(b => {
-      const el = document.querySelector(`.fp-comic-box[data-hero-slot="${b.slot}"]`);
+      const el = document.querySelector(`[data-hero-slot="${b.slot}"]`);
       if (!el) return;
       const dims = billboardImgDims[b.image_url];
       const boxW = el.clientWidth || 1, boxH = el.clientHeight || 1;
       const size = coverBgSize(dims, boxW, boxH, b.zoom);
+      const isPanel = DECO_PANEL_SLOTS.includes(b.slot);
 
       const bg = document.createElement('div');
-      bg.className = 'fp-comic-box-bg';
+      bg.className = isPanel ? 'fp-deco-panel-bg' : 'fp-comic-box-bg';
       bg.style.backgroundImage = `url('${b.image_url}')`;
       bg.style.backgroundSize = `${size.w}% ${size.h}%`;
       bg.style.backgroundPosition = `${b.position_x}% ${b.position_y}%`;
 
       const scrim = document.createElement('div');
-      scrim.className = 'fp-comic-box-scrim';
+      scrim.className = isPanel ? 'fp-deco-panel-scrim' : 'fp-comic-box-scrim';
 
       el.prepend(scrim);
       el.prepend(bg);
@@ -1367,33 +1388,15 @@
     return document.createElement('span');
   }
 
-  // Mini-stats panel counts are derived from this same 12-item window
-  // (not a separate DB query) -- a lightweight at-a-glance number, not a
-  // precise site-wide total.
-  function renderRsMiniStats(items) {
-    const now = Date.now();
-    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-    const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
-    let today = 0, week = 0;
-    items.forEach(it => {
-      const t = new Date(it.created_at).getTime();
-      if (t >= todayStart.getTime()) today++;
-      if (t >= weekAgo) week++;
-    });
-    document.getElementById('rs-stat-today').textContent = today;
-    document.getElementById('rs-stat-week').textContent = week;
-  }
-
   async function loadActivityFeed() {
     const wrap = document.getElementById('fp-recent-submissions');
     try {
-      const res = await fetch('/api/activity-feed?limit=12', { headers: authHeaders() });
+      const res = await fetch('/api/activity-feed?limit=10', { headers: authHeaders() });
       const data = await res.json();
       const items = data.items || [];
       if (!items.length) { wrap.innerHTML = '<p class="fp-row-empty">No recent activity yet — check back soon!</p>'; return; }
       wrap.innerHTML = '';
       items.forEach(it => wrap.appendChild(activityCard(it)));
-      renderRsMiniStats(items);
     } catch {
       wrap.innerHTML = '<p class="fp-row-empty">Couldn\'t load recent activity right now.</p>';
     }
