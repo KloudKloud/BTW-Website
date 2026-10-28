@@ -31,16 +31,19 @@
     opts = opts || {};
     const self = this;
     let natW = 0, natH = 0, vpW = 0, vpH = 0;
-    let scale = 1, minScale = 1, maxScale = 1;
+    let scale = 1, minScale = 1, maxScale = 1, floorScale = 1;
     let tx = 0, ty = 0;
     let zoomInput = null;
     let ready = false;
     let destroyed = false;
 
     function clamp() {
+      // When zoomed out far enough that the image is smaller than the
+      // viewport on an axis, it can slide freely inside the viewport (empty
+      // space around it) instead of being pinned to cover it.
       const w = natW * scale, h = natH * scale;
-      const minX = Math.min(0, vpW - w), maxX = 0;
-      const minY = Math.min(0, vpH - h), maxY = 0;
+      const minX = Math.min(0, vpW - w), maxX = Math.max(0, vpW - w);
+      const minY = Math.min(0, vpH - h), maxY = Math.max(0, vpH - h);
       tx = Math.max(minX, Math.min(maxX, tx));
       ty = Math.max(minY, Math.min(maxY, ty));
     }
@@ -67,13 +70,16 @@
       if (!vpW || !vpH || !natW || !natH) return;
       minScale = Math.max(vpW / natW, vpH / natH);
       maxScale = opts.zoomable === false ? minScale : minScale * 4;
+      // opts.minZoomFactor (<1) lets a caller zoom OUT past "cover"; getMinZoom()
+      // still reports the cover scale so a saved zoom % stays relative to it.
+      floorScale = opts.zoomable === false ? minScale : minScale * (opts.minZoomFactor || 1);
       scale = minScale;
       tx = (vpW - natW * scale) / 2;
       ty = (vpH - natH * scale) / 2;
       if (zoomInput) {
-        zoomInput.min = String(minScale);
+        zoomInput.min = String(floorScale);
         zoomInput.max = String(maxScale);
-        zoomInput.step = String((maxScale - minScale) / 200 || 0.001);
+        zoomInput.step = String((maxScale - floorScale) / 200 || 0.001);
         zoomInput.value = String(scale);
       }
       ready = true;
@@ -85,7 +91,7 @@
     // the spot under the cursor/pinch-midpoint stays put instead of the
     // whole image jumping.
     function zoomTo(newScale, anchorX, anchorY) {
-      newScale = Math.max(minScale, Math.min(maxScale, newScale));
+      newScale = Math.max(floorScale, Math.min(maxScale, newScale));
       if (anchorX === undefined) anchorX = vpW / 2;
       if (anchorY === undefined) anchorY = vpH / 2;
       const imgX = (anchorX - tx) / scale;
@@ -182,27 +188,28 @@
     this.setZoomInput = function (input) {
       zoomInput = input;
       if (ready) {
-        zoomInput.min = String(minScale);
+        zoomInput.min = String(floorScale);
         zoomInput.max = String(maxScale);
-        zoomInput.step = String((maxScale - minScale) / 200 || 0.001);
+        zoomInput.step = String((maxScale - floorScale) / 200 || 0.001);
         zoomInput.value = String(scale);
       }
       zoomInput.addEventListener('input', onZoomInput);
     };
     this.getPositionFraction = function () {
       const w = natW * scale, h = natH * scale;
-      const maxX = w - vpW, maxY = h - vpH;
+      // Same convention as CSS background-position %: offset = p * (viewport - image).
+      const dX = vpW - w, dY = vpH - h;
       return {
-        x: maxX > 0.5 ? (-tx) / maxX : 0.5,
-        y: maxY > 0.5 ? (-ty) / maxY : 0.5,
+        x: Math.abs(dX) > 0.5 ? tx / dX : 0.5,
+        y: Math.abs(dY) > 0.5 ? ty / dY : 0.5,
       };
     };
     this.setPositionFraction = function (p) {
       if (!ready || !p) return;
       const w = natW * scale, h = natH * scale;
-      const maxX = w - vpW, maxY = h - vpH;
-      tx = maxX > 0.5 ? -(p.x * maxX) : (vpW - w) / 2;
-      ty = maxY > 0.5 ? -(p.y * maxY) : (vpH - h) / 2;
+      const dX = vpW - w, dY = vpH - h;
+      tx = Math.abs(dX) > 0.5 ? p.x * dX : dX / 2;
+      ty = Math.abs(dY) > 0.5 ? p.y * dY : dY / 2;
       apply(false);
     };
     this.getZoom = function () { return scale; };

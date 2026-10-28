@@ -744,7 +744,7 @@
     </div>
     <input type="file" id="hr-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
     <button type="button" class="mod-btn mod-btn--small" id="hr-editor-change-img-btn" style="display:none; margin: 0.6rem auto 1rem;">📷 Change Image</button>
-    <p class="char-editor-facts-hint" style="text-align:center;">Drag to move, scroll or pinch to zoom. This crop box is a close match for the tall comic-strip box on the live page, so what you see here is close to what shows up there.</p>
+    <p class="char-editor-facts-hint" style="text-align:center;">Drag to move, scroll or pinch to zoom — you can zoom all the way out to fit the whole picture, and any empty space shows the box's normal black look, just like the live page. This crop box matches the live box's shape.</p>
 
     <p class="mod-panel-msg" id="hr-editor-msg"></p>
 
@@ -1371,7 +1371,7 @@ function hrCropperToPosition(cropper) {
   return {
     x: Math.round(pos.x * 100),
     y: Math.round(pos.y * 100),
-    zoom: Math.max(100, Math.min(400, Math.round((cropper.getZoom() / cropper.getMinZoom()) * 100))),
+    zoom: Math.max(10, Math.min(400, Math.round((cropper.getZoom() / cropper.getMinZoom()) * 100))),
   };
 }
 function hrApplyPositionToCropper(cropper, pos) {
@@ -1392,7 +1392,7 @@ function hrInitCropper(imageSrc) {
   document.getElementById('hr-editor-change-img-btn').style.display = 'block';
   img.onload = () => {
     requestAnimationFrame(() => {
-      hrCropper = new BtwCropper(img, wrap, { onChange: hrSaveCropperToPosition });
+      hrCropper = new BtwCropper(img, wrap, { onChange: hrSaveCropperToPosition, minZoomFactor: 0.2 });
       hrSuppressCropSave = true;
       hrApplyPositionToCropper(hrCropper, hrPos);
       hrSuppressCropSave = false;
@@ -1416,7 +1416,7 @@ function renderHrGrid() {
     const card = document.createElement('div');
     card.className = 'hb-card';
     card.innerHTML = `
-      <div class="hb-card-img-wrap hr-card-img-wrap"${ratio ? ` style="aspect-ratio:${ratio};"` : ''}>
+      <div class="hb-card-img-wrap hr-card-img-wrap" style="aspect-ratio:${ratio || 9.5 / 25}; width:min(100%, ${Math.round((ratio || 9.5 / 25) * 260)}px); margin:0 auto;">
         <div class="hb-preview-bg"></div>
         ${!box.image_url ? `<p class="hr-card-placeholder">${slot === 'arcade' ? 'No override set — keeps the current Arcade art' : 'No image set — default black look'}</p>` : ''}
       </div>
@@ -1452,7 +1452,11 @@ async function openHrEditor(box, label, ratio) {
   // Comic-strip slots keep the default 9.5:25 crop box; the three
   // non-comic-box slots (Spotlights/Recent Submissions/Arcade) override it
   // with their own actually-measured live aspect so the crop here matches.
-  document.getElementById('hr-editor-img-wrap').style.aspectRatio = ratio ? String(ratio) : '9.5 / 25';
+  const hrR = ratio || 9.5 / 25;
+  const hrWrap = document.getElementById('hr-editor-img-wrap');
+  hrWrap.style.aspectRatio = String(hrR);
+  // Keep the crop box modest: ~340px tall at most (or 420px wide for the wide slots).
+  hrWrap.style.maxWidth = Math.min(420, Math.round(hrR * 340)) + 'px';
 
   const placeholder = document.getElementById('hr-editor-img-placeholder');
   if (box.image_url) {

@@ -5235,7 +5235,10 @@ app.put('/api/admin/hero-comic-boxes/:slot', requireAuth, requireAdmin, uploadMo
   const { rows: [existing] } = await pool.query('SELECT * FROM hero_comic_box_images WHERE slot = $1', [slot]);
   const positionX = clampPosition(req.body.position_x);
   const positionY = clampPosition(req.body.position_y);
-  const zoom = clampZoom(req.body.zoom, 100);
+  // Hero boxes may be zoomed OUT past "cover" (down to 10%), unlike the other
+  // crop slots which stay 100-400.
+  const zoomN = parseInt(req.body.zoom, 10);
+  const zoom = Number.isFinite(zoomN) && zoomN >= 10 && zoomN <= 400 ? zoomN : 100;
 
   let imageUrl = existing.image_url;
   if (req.file) {
