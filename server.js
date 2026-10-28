@@ -2582,6 +2582,23 @@ app.get('/api/level-hub', requireAuth, async (req, res) => {
      WHERE xp > 0 ORDER BY xp DESC LIMIT 10`
   );
 
+  // Pad both boards out to 10 rows with real members at 0 XP so the
+  // Leaderboard box is always the same height as Recent Activity, even in a
+  // quiet week. Ordered by all-time XP so the filler is stable, not random.
+  const LB_ROWS = 10;
+  async function padLeaderboard(rows, xpKey) {
+    if (rows.length >= LB_ROWS) return rows;
+    const { rows: fill } = await pool.query(
+      `SELECT id, username, display_name, avatar, level FROM users
+       WHERE verified = true AND id <> ALL($1::int[])
+       ORDER BY xp DESC, id ASC LIMIT $2`,
+      [rows.map(r => r.id), LB_ROWS - rows.length]
+    );
+    return rows.concat(fill.map(f => ({ ...f, [xpKey]: 0 })));
+  }
+  const weeklyPadded = await padLeaderboard(weeklyRows, 'weekly_xp');
+  const globalPadded = await padLeaderboard(globalRows, 'xp');
+
   res.json({
     user: {
       id: user.id, username: user.username, display_name: user.display_name, avatar: user.avatar || null,
@@ -2593,10 +2610,10 @@ app.get('/api/level-hub', requireAuth, async (req, res) => {
     },
     badges,
     recent_activity,
-    leaderboard_weekly: weeklyRows.map(r => ({
+    leaderboard_weekly: weeklyPadded.map(r => ({
       id: r.id, username: r.username, display_name: r.display_name, avatar: r.avatar || null, level: r.level, xp: r.weekly_xp,
     })),
-    leaderboard_global: globalRows.map(r => ({
+    leaderboard_global: globalPadded.map(r => ({
       id: r.id, username: r.username, display_name: r.display_name, avatar: r.avatar || null, level: r.level, xp: r.xp,
     })),
   });

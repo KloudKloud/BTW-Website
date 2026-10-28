@@ -233,8 +233,14 @@
     .lv-banner-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.4); border: 1px solid rgba(0,0,0,0.3); cursor: pointer; }
     .lv-banner-dot.active { background: var(--gold, #f0c060); }
 
-    .lv-banner-side { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 1.2rem; }
-    .lv-banner-side .lv-box { padding: 1rem 1.1rem; }
+    .lv-banner-side { width: 300px; flex-shrink: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr 1fr; gap: 1.2rem; }
+    .lv-banner-side .lv-box { padding: 1rem 1.1rem; display: flex; flex-direction: column; min-height: 0; min-width: 0; box-sizing: border-box; }
+    /* Both lists share one fixed height so the Leaderboard and Recent
+       Activity boxes are always identical in size (the grid rows equalize
+       the boxes; the Leaderboard's tab row is absorbed by Activity's list
+       growing to fill). The banner then stretches to match their combined height. */
+    .lv-banner-side .lv-scroll-5 { height: 215px; max-height: none; }
+    .lv-banner-side #lv-activity-box { flex: 1 1 0; height: 0; min-height: 215px; }
     .lv-side-box-title {
       font-size: 1rem; font-family: 'Fredoka', cursive; display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.7rem;
     }
@@ -324,18 +330,21 @@
       background-image: linear-gradient(160deg, rgba(10,8,20,0.6), rgba(10,8,20,0.85)), url('/images/home/potential-box-background.png');
       background-size: cover; background-position: center;
     }
-    .lv-arcade-menu-tabs { display: flex; gap: 0.8rem; padding: 1.6rem 1.6rem 0; }
+    /* Underline tabs: flat labels whose active state is a gold bar that sits
+       directly ON the panel's top divider line (margin-bottom:-1px overlaps
+       it), so the tabs and the line read as one control. */
+    .lv-arcade-menu-tabs { display: flex; gap: 0.3rem; padding: 0.4rem 1.6rem 0; }
     .lv-arcade-menu-tab {
-      flex: 1; text-align: center; padding: 1rem 1.2rem; border-radius: 14px 14px 0 0; cursor: pointer;
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.08rem; font-weight: 600; color: #c9bfe0;
-      background: rgba(0,0,0,0.26); border: 1px solid rgba(255,255,255,0.1); border-bottom: none;
-      transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+      position: relative; z-index: 1; margin-bottom: -1px; flex: 1; text-align: center; padding: 1rem 1.2rem 0.95rem; cursor: pointer;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.12rem; font-weight: 600; color: #a79fc0;
+      background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 12px 12px 0 0;
+      transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, text-shadow 0.18s ease;
       display: flex; align-items: center; justify-content: center; gap: 0.5rem; user-select: none;
     }
-    .lv-arcade-menu-tab:hover { color: #fff; background: rgba(240,192,96,0.14); transform: translateY(-2px); }
+    .lv-arcade-menu-tab:hover { color: #fff; background: rgba(255,255,255,0.05); border-bottom-color: rgba(255,255,255,0.3); }
     .lv-arcade-menu-tab.active {
-      background: rgba(240,192,96,0.2); border-color: rgba(240,192,96,0.55); color: var(--gold, #f0c060);
-      box-shadow: 0 -4px 16px rgba(240,192,96,0.18);
+      color: var(--gold, #f0c060); border-bottom-color: var(--gold, #f0c060); text-shadow: 0 0 14px rgba(240,192,96,0.5);
+      background: linear-gradient(to top, rgba(240,192,96,0.16), rgba(240,192,96,0));
     }
     .lv-arcade-panel-wrap {
       flex: 1; padding: 1.6rem 1.6rem 1.8rem; background: rgba(8,6,14,0.3);
@@ -1241,7 +1250,7 @@
 
           <div class="lv-arcade-panel-wrap">
             <div class="lv-arcade-panel active" id="lva-panel-spin">
-              <h3 class="lv-arcade-panel-title">✨ Spin <span class="lv-arcade-badge">Beta</span></h3>
+              <h3 class="lv-arcade-panel-title">✨ Spin</h3>
               <div class="lv-arcade-spin-stage">
                 <div class="lv-arcade-orbit-wrap" id="lv-arcade-orbit-wrap">
                   <div class="lv-arcade-orbit-track" id="lv-arcade-orbit-track"></div>
@@ -2835,21 +2844,16 @@ document.getElementById('lv-lb-tab-global').addEventListener('click', () => rend
 function syncBannerHeight() {
   const row = document.querySelector('.lv-banner-row');
   const main = document.getElementById('lv-banner-main');
-  const boxes = document.querySelectorAll('.lv-banner-side .lv-box');
-  if (!main || !row) return;
-  if (boxes.length < 2 || window.innerWidth <= 860) {
+  const side = document.querySelector('.lv-banner-side');
+  if (!main || !row || !side) return;
+  if (window.innerWidth <= 860) {
     main.style.marginTop = '';
     main.style.height = '';
-    if (typeof lvApplyBannerCrop === 'function') lvApplyBannerCrop();
-    return;
+  } else {
+    // Banner is exactly as tall as the Leaderboard + Recent Activity boxes combined.
+    main.style.marginTop = '0';
+    main.style.height = `${side.getBoundingClientRect().height}px`;
   }
-  const rowTop = row.getBoundingClientRect().top;
-  const r1 = boxes[0].getBoundingClientRect();
-  const r2 = boxes[1].getBoundingClientRect();
-  const top = (r1.top - rowTop) + r1.height / 4;
-  const bottom = (r2.top - rowTop) + r2.height * (3 / 4);
-  main.style.marginTop = `${top}px`;
-  main.style.height = `${Math.max(80, bottom - top)}px`;
   if (typeof lvApplyBannerCrop === 'function') lvApplyBannerCrop();
 }
 
