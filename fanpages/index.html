@@ -8,6 +8,12 @@
   <meta name="darkreader-lock" />
   <title>Home ✦ Between Two Worlds</title>
   <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <!-- Fonts: fanpages-nav.css pulls these in via @import, which the browser only discovers after
+       downloading that CSS (CSS -> font CSS -> font files, three serial hops). Requesting the same
+       stylesheet straight from the head starts it in parallel, so headings stop flashing a fallback font. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Cinzel:wght@400;600;700&family=Fredoka:wght@500;600;700&display=swap" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -940,21 +946,62 @@
   // default flat look -- this only inserts the bg+scrim layers for slots
   // that actually have one.
   const DECO_PANEL_SLOTS = ['spotlights', 'recent-submissions', 'arcade', 'news-posts', 'donations'];
+  //
+  // Reload speed: the last response (plus each image's measured size) is kept in
+  // localStorage and painted synchronously on the next visit, instead of waiting
+  // on the fetch + per-image dimension probes before anything shows up. The fresh
+  // response then only re-applies if it actually differs from what's on screen.
+  const HOME_CACHE_KEY = (() => {
+    const t = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+    return t ? t.slice(-16) : 'guest';
+  })();
+  function homeCacheGet(name) {
+    try {
+      const o = JSON.parse(localStorage.getItem('btw_home_cache_' + name));
+      return o && o.k === HOME_CACHE_KEY ? o.v : null;
+    } catch { return null; }
+  }
+  function homeCacheSet(name, value) {
+    try { localStorage.setItem('btw_home_cache_' + name, JSON.stringify({ k: HOME_CACHE_KEY, v: value })); } catch {}
+  }
+  function dimsFor(urls) {
+    const out = {};
+    urls.forEach(u => { if (billboardImgDims[u]) out[u] = billboardImgDims[u]; });
+    return out;
+  }
+
   async function loadHeroComicBoxes() {
+    let shown = null;
+    const cached = homeCacheGet('hero');
+    if (cached && Array.isArray(cached.boxes)) {
+      Object.assign(billboardImgDims, cached.dims || {});
+      shown = JSON.stringify(cached.boxes);
+      applyHeroBoxes(cached.boxes);
+    }
+
     let boxes;
     try {
       const res = await fetch('/api/hero-comic-boxes');
       boxes = (await res.json()).boxes || [];
     } catch { return; }
 
-    const withImage = boxes.filter(b => b.image_url);
-    if (!withImage.length) return;
-    await Promise.all(withImage.map(b => loadImageDims(b.image_url)));
+    const urls = boxes.filter(b => b.image_url).map(b => b.image_url);
+    await Promise.all(urls.map(loadImageDims));
+    homeCacheSet('hero', { boxes, dims: dimsFor(urls) });
+    if (JSON.stringify(boxes) !== shown) applyHeroBoxes(boxes);
+  }
 
-    withImage.forEach(b => {
+  function applyHeroBoxes(boxes) {
+    // Drop anything a previous (cached) pass added so a changed response replaces it cleanly.
+    document.querySelectorAll('.fp-comic-box-bg, .fp-comic-box-scrim, .fp-deco-panel-bg, .fp-deco-panel-scrim').forEach(n => n.remove());
+    const arcadeDefault = document.querySelector('.fp-arcade-main-bg');
+    if (arcadeDefault) arcadeDefault.style.display = '';
+
+    boxes.filter(b => b.image_url).forEach(b => {
       const el = document.querySelector(`[data-hero-slot="${b.slot}"]`);
       if (!el) return;
       const dims = billboardImgDims[b.image_url];
+      if (!dims) return;
       const isPanel = DECO_PANEL_SLOTS.includes(b.slot);
 
       // The Arcade box ships with its own hardcoded default <img> (an
@@ -1184,10 +1231,31 @@
   // the only thing on the page that still needs a token.
   {
     const billboardToken = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+    // Same cache-then-refresh idea as the hero boxes: paint last visit's slides
+    // right away; the fresh response only re-renders (restarting the rotation)
+    // if the slide set actually changed.
+    const cachedBb = homeCacheGet('billboard');
+    const hadCache = !!(cachedBb && cachedBb.slides && cachedBb.slides.length);
+    if (hadCache) {
+      Object.assign(billboardImgDims, cachedBb.dims || {});
+      // renderBillboard needs escapeHtml/isSafeLinkUrl from a later <script>, so wait for the
+      // whole document to be parsed (DOMContentLoaded still fires well before the network does).
+      const cachedOrder = buildBillboardOrder(cachedBb.slides);
+      const paintCached = () => renderBillboard(cachedOrder);
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', paintCached);
+      else paintCached();
+    }
     fetch('/api/hub-billboard', { headers: billboardToken ? { Authorization: `Bearer ${billboardToken}` } : {} })
       .then(r => r.ok ? r.json() : { slides: [] })
-      .then(data => renderBillboard(buildBillboardOrder(data.slides || [])))
-      .catch(() => renderBillboard([]));
+      .then(async data => {
+        const slides = data.slides || [];
+        const urls = slides.map(s => s.image_url);
+        await Promise.all(urls.map(loadImageDims));
+        homeCacheSet('billboard', { slides, dims: dimsFor(urls) });
+        if (hadCache && JSON.stringify(slides) === JSON.stringify(cachedBb.slides)) return;
+        renderBillboard(buildBillboardOrder(slides));
+      })
+      .catch(() => { if (!hadCache) renderBillboard([]); });
   }
 </script>
 <script>
@@ -1317,6 +1385,26 @@
     return a;
   }
 
+  // Cache-then-refresh for the spotlights: a trimmed batch from the last visit
+  // is shuffled and shown immediately (so it isn't the same first item every
+  // reload), while a fresh batch is fetched in the background to replace the
+  // cache for next time. No cache yet -> behaves exactly as before.
+  async function loadSpotlightCached(name, el, fetchBatch, renderFn, intervalMs, errMsg) {
+    const cached = homeCacheGet('spot_' + name);
+    if (Array.isArray(cached) && cached.length) {
+      startSpotlightCycle(shuffleInPlace(cached.slice()), fetchBatch, el, renderFn, intervalMs);
+      fetchBatch().then(items => { if (items.length) homeCacheSet('spot_' + name, items.slice(0, 30)); }).catch(() => {});
+      return;
+    }
+    try {
+      const items = await fetchBatch();
+      homeCacheSet('spot_' + name, items.slice(0, 30));
+      startSpotlightCycle(items, fetchBatch, el, renderFn, intervalMs);
+    } catch {
+      el.innerHTML = `<p class="fp-spotlight-empty">${errMsg}</p>`;
+    }
+  }
+
   async function fetchCharacterSpotlightBatch() {
     const res = await fetch('/api/spotlight/characters?limit=100', { headers: authHeaders() });
     const data = await res.json();
@@ -1333,12 +1421,7 @@
   }
   async function loadCharacterSpotlight() {
     const el = document.getElementById('fp-char-spotlight');
-    try {
-      const chars = await fetchCharacterSpotlightBatch();
-      startSpotlightCycle(chars, fetchCharacterSpotlightBatch, el, renderCharacterSpotlightItem, 20000);
-    } catch {
-      el.innerHTML = '<p class="fp-spotlight-empty">Couldn\'t load characters right now.</p>';
-    }
+    await loadSpotlightCached('characters', el, fetchCharacterSpotlightBatch, renderCharacterSpotlightItem, 20000, 'Couldn\'t load characters right now.');
   }
 
   async function fetchGallerySpotlightBatch() {
@@ -1357,12 +1440,7 @@
   }
   async function loadGallerySpotlight() {
     const el = document.getElementById('fp-gallery-spotlight');
-    try {
-      const items = await fetchGallerySpotlightBatch();
-      startSpotlightCycle(items, fetchGallerySpotlightBatch, el, renderGallerySpotlightItem, 20000);
-    } catch {
-      el.innerHTML = '<p class="fp-spotlight-empty">Couldn\'t load gallery art right now.</p>';
-    }
+    await loadSpotlightCached('gallery', el, fetchGallerySpotlightBatch, renderGallerySpotlightItem, 20000, 'Couldn\'t load gallery art right now.');
   }
 
   function storySpotlightItem(s) {
@@ -1416,12 +1494,7 @@
   }
   async function loadStorySpotlight() {
     const el = document.getElementById('fp-story-spotlight');
-    try {
-      const stories = await fetchStorySpotlightBatch();
-      startSpotlightCycle(stories, fetchStorySpotlightBatch, el, storySpotlightItem, 37000);
-    } catch {
-      el.innerHTML = '<p class="fp-spotlight-empty">Couldn\'t load stories right now.</p>';
-    }
+    await loadSpotlightCached('stories', el, fetchStorySpotlightBatch, storySpotlightItem, 37000, 'Couldn\'t load stories right now.');
   }
 
   function clubSpotlightItem(c) {
@@ -1464,12 +1537,7 @@
   }
   async function loadClubSpotlight() {
     const el = document.getElementById('fp-club-spotlight');
-    try {
-      const clubs = await fetchClubSpotlightBatch();
-      startSpotlightCycle(clubs, fetchClubSpotlightBatch, el, clubSpotlightItem, 37000);
-    } catch {
-      el.innerHTML = '<p class="fp-spotlight-empty">Couldn\'t load clubs right now.</p>';
-    }
+    await loadSpotlightCached('clubs', el, fetchClubSpotlightBatch, clubSpotlightItem, 37000, 'Couldn\'t load clubs right now.');
   }
 
   // ── Recent Submissions — newest chapters/art/characters across every
@@ -1565,15 +1633,26 @@
 
   async function loadActivityFeed() {
     const wrap = document.getElementById('fp-recent-submissions');
+    // Cache-then-refresh: paint last visit's 12 cards at once, and only
+    // rebuild them if the fresh response is actually different.
+    let shown = null;
+    const cached = homeCacheGet('activity');
+    if (Array.isArray(cached) && cached.length) {
+      shown = JSON.stringify(cached);
+      wrap.innerHTML = '';
+      cached.forEach(it => wrap.appendChild(activityCard(it)));
+    }
     try {
       const res = await fetch('/api/activity-feed?limit=12', { headers: authHeaders() });
       const data = await res.json();
       const items = data.items || [];
+      homeCacheSet('activity', items);
+      if (JSON.stringify(items) === shown) return;
       if (!items.length) { wrap.innerHTML = '<p class="fp-row-empty">No recent activity yet — check back soon!</p>'; return; }
       wrap.innerHTML = '';
       items.forEach(it => wrap.appendChild(activityCard(it)));
     } catch {
-      wrap.innerHTML = '<p class="fp-row-empty">Couldn\'t load recent activity right now.</p>';
+      if (shown === null) wrap.innerHTML = '<p class="fp-row-empty">Couldn\'t load recent activity right now.</p>';
     }
   }
 
