@@ -185,36 +185,33 @@
        comic-box pair (19% each) on either side. */
     .fp-hero-banner-mid { position: relative; flex: 1 1 0; min-width: 0; height: 100%; overflow: hidden; }
 
-    /* Neon traces the perimeter of the ENTIRE hero row (all four comic
-       panels + the banner as one big rectangle): a blue border, a matching
-       inner glow, and one spark riding the outer edge. Hovering a comic
-       panel recolors the whole thing to that panel's neon via :has(). */
-    .fp-hero-row { --neon: #00c3ff; --neon-glow: rgba(0,195,255,0.32); --neon-dim: rgba(0,195,255,0.3); }
-    .fp-hero-row:has(.fp-comic-box--gallery:hover) { --neon: #c846ff; --neon-glow: rgba(200,70,255,0.36); --neon-dim: rgba(200,70,255,0.34); }
-    .fp-hero-row:has(.fp-comic-box--stories:hover) { --neon: #ff2d55; --neon-glow: rgba(255,45,85,0.36); --neon-dim: rgba(255,45,85,0.34); }
-    .fp-hero-row:has(.fp-comic-box--characters:hover) { --neon: #39ff14; --neon-glow: rgba(57,255,20,0.32); --neon-dim: rgba(57,255,20,0.3); }
-    .fp-hero-row:has(.fp-comic-box--clubs:hover) { --neon: #00c3ff; --neon-glow: rgba(0,195,255,0.36); --neon-dim: rgba(0,195,255,0.34); }
-    .fp-hero-row::after {
-      content: ''; position: absolute; inset: 0; z-index: 6; pointer-events: none;
+    /* Neon glow sits on the main banner only (soft border + inner glow, no
+       moving spark). Hovering a comic panel recolors the banner's glow to
+       that panel's neon via :has() on the row AND lights up the hovered
+       panel itself in the same color (see the :hover::after rule below). */
+    .fp-hero-row { --neon: #00c3ff; --neon-glow: rgba(0,195,255,0.32); }
+    .fp-hero-row:has(.fp-comic-box--gallery:hover) { --neon: #c846ff; --neon-glow: rgba(200,70,255,0.36); }
+    .fp-hero-row:has(.fp-comic-box--stories:hover) { --neon: #ff2d55; --neon-glow: rgba(255,45,85,0.36); }
+    .fp-hero-row:has(.fp-comic-box--characters:hover) { --neon: #39ff14; --neon-glow: rgba(57,255,20,0.32); }
+    .fp-hero-row:has(.fp-comic-box--clubs:hover) { --neon: #00c3ff; --neon-glow: rgba(0,195,255,0.36); }
+    .fp-hero-banner-mid::after {
+      content: ''; position: absolute; inset: 0; z-index: 4; pointer-events: none;
       box-shadow: inset 0 0 0 1px var(--neon), inset 0 0 34px 0 var(--neon-glow);
       transition: box-shadow 0.35s ease;
     }
-    .fp-hero-row::before {
-      content: ''; position: absolute; top: 0; left: 0; z-index: 7; pointer-events: none;
-      width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border-radius: 50%;
-      background: radial-gradient(circle, #fff 0%, var(--neon) 55%, transparent 100%);
-      box-shadow: 0 0 5px 0 var(--neon), 0 0 12px 3px var(--neon-dim);
-      offset-path: inset(1px round 2px); offset-distance: 0%;
-      animation: fp-spark-travel 16s linear infinite, fp-spark-flicker 0.45s ease-in-out infinite;
-    }
 
-    /* Comic panels: no glow or traveling spark, just a thin 1px black line
+    /* Comic panels: no resting glow or traveling spark, just a thin 1px black line
        where two panels meet (Stories' left, Clubs' left). */
     .fp-hero-row .fp-comic-box { border: 0; }
     .fp-hero-row .fp-comic-box--stories,
     .fp-hero-row .fp-comic-box--clubs { border-left: 1px solid #000; }
     .fp-hero-row .fp-comic-box::before,
     .fp-hero-row .fp-comic-box::after { display: none; }
+    /* The hovered panel itself glows in its own neon color. */
+    .fp-hero-row .fp-comic-box:hover::after {
+      display: block; opacity: 1; background: none; z-index: 6; pointer-events: none;
+      box-shadow: inset 0 0 0 1px var(--comic-neon), inset 0 0 34px 2px var(--comic-glow);
+    }
 
     /* Phone widths: stack the banner full-width on top, with the four
        comic boxes as an equal-width row underneath it instead of five
