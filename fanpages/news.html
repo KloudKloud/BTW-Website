@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>News Posts ✦ BTW</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <style>
+    .nw-bg {
+      position: fixed; inset: -24px; z-index: 0; pointer-events: none;
+      background: url('/images/discordblurred.png') center / cover no-repeat;
+      filter: blur(5px);
+    }
+    .nw-bg-scrim { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: linear-gradient(180deg, rgba(8,8,18,0.35), rgba(8,8,18,0.6)); }
+    .nw-wrap { position: relative; z-index: 1; max-width: 880px; margin: 0 auto; padding: 2.2rem 1.25rem 4rem; }
+    .nw-head { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+    .nw-title {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 2.2rem; font-weight: 700; color: #cfe0f5; margin: 0;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.6), 0 0 14px rgba(127,168,217,0.45);
+      display: flex; align-items: center; gap: 0.6rem;
+    }
+    .nw-title img { width: 30px; height: 30px; object-fit: contain; }
+    .nw-spacer { flex: 1; }
+    .nw-btn {
+      font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 0.95rem; cursor: pointer;
+      padding: 0.5rem 1.15rem; border-radius: 999px; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem;
+      color: #f0c060; background: rgba(20,16,30,0.75); border: 1px solid rgba(240,192,96,0.6);
+      box-shadow: 0 0 8px rgba(240,192,96,0.22); transition: background 0.15s, box-shadow 0.15s;
+    }
+    .nw-btn:hover { background: rgba(240,192,96,0.14); box-shadow: 0 0 12px rgba(240,192,96,0.35); }
+    .nw-btn--blue { color: #cfe0f5; border-color: rgba(127,168,217,0.7); box-shadow: 0 0 8px rgba(127,168,217,0.25); }
+    .nw-btn--blue:hover { background: rgba(127,168,217,0.16); box-shadow: 0 0 12px rgba(127,168,217,0.4); }
+    .nw-btn--danger { color: #ff9a9a; border-color: rgba(255,120,120,0.6); box-shadow: none; }
+    .nw-btn--danger:hover { background: rgba(255,120,120,0.14); box-shadow: none; }
+
+    .nw-filters { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.4rem; }
+    .nw-chip {
+      font-family: 'Fredoka', 'Lato', cursive; font-weight: 500; font-size: 0.88rem; cursor: pointer;
+      padding: 0.35rem 0.95rem; border-radius: 999px; color: #ccd6e6;
+      background: rgba(20,16,30,0.6); border: 1px solid rgba(255,255,255,0.18);
+    }
+    .nw-chip:hover { color: #fff; border-color: rgba(127,168,217,0.6); }
+    .nw-chip.active { color: #cfe0f5; border-color: rgba(127,168,217,0.95); background: rgba(127,168,217,0.18); box-shadow: 0 0 10px rgba(127,168,217,0.35); }
+
+    .nw-card {
+      display: flex; gap: 1.1rem; margin-bottom: 1.1rem; cursor: pointer; position: relative; overflow: hidden;
+      background-image: linear-gradient(160deg, rgba(6,6,16,0.62), rgba(6,6,16,0.82)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(255,255,255,0.14); border-radius: 16px; padding: 1rem;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.4); transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .nw-card:hover { transform: translateY(-3px); border-color: rgba(127,168,217,0.6); box-shadow: 0 12px 32px rgba(0,0,0,0.5), 0 0 16px rgba(127,168,217,0.25); }
+    .nw-card-cover { flex: 0 0 200px; height: 126px; border-radius: 10px; object-fit: cover; background: linear-gradient(135deg, #3a2f5a, #1e3050); }
+    .nw-card-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 0.4rem; }
+    .nw-card-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.4rem; font-weight: 600; margin: 0; color: #cfe0f5; text-shadow: 0 0 12px rgba(127,168,217,0.45), 0 1px 3px rgba(0,0,0,0.5); }
+    .nw-card-summary { color: #d3d3dc; font-size: 0.95rem; line-height: 1.5; margin: 0; }
+    .nw-meta { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; font-size: 0.82rem; color: #9aa4b8; }
+    .nw-tag { font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 0.76rem; padding: 0.12rem 0.6rem; border-radius: 999px; border: 1px solid; }
+    .nw-tag--patch-notes { color: #8fe0a8; border-color: rgba(143,224,168,0.55); background: rgba(143,224,168,0.1); }
+    .nw-tag--weekly-blog { color: #8fbfff; border-color: rgba(143,191,255,0.55); background: rgba(143,191,255,0.1); }
+    .nw-tag--event { color: #ffb07a; border-color: rgba(255,176,122,0.55); background: rgba(255,176,122,0.1); }
+    .nw-tag--announcement { color: #f0c060; border-color: rgba(240,192,96,0.55); background: rgba(240,192,96,0.1); }
+    .nw-tag--draft { color: #ff9a9a; border-color: rgba(255,154,154,0.55); background: rgba(255,154,154,0.1); }
+    .nw-tag--pin { color: #f0c060; border-color: rgba(240,192,96,0.55); }
+    .nw-empty { text-align: center; color: #aab; padding: 3rem 0; }
+
+    .nw-article {
+      position: relative; background-image: linear-gradient(160deg, rgba(6,6,16,0.7), rgba(6,6,16,0.86)), url('/images/home/box-background-2.png');
+      background-size: cover; border: 1px solid rgba(255,255,255,0.14); border-radius: 18px; overflow: hidden;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.45);
+    }
+    .nw-article-cover { width: 100%; max-height: 340px; object-fit: cover; display: block; }
+    .nw-article-inner { padding: 1.6rem 2rem 2rem; }
+    .nw-article h1 { font-family: 'Fredoka', 'Lato', cursive; font-size: 2.1rem; color: #cfe0f5; margin: 0.5rem 0 0.4rem; text-shadow: 0 0 14px rgba(127,168,217,0.45); }
+    .nw-article-actions { display: flex; gap: 0.6rem; margin-top: 1.4rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); }
+    .nw-prose { color: #e2e4ec; line-height: 1.7; font-size: 1.02rem; margin-top: 1.2rem; }
+    .nw-prose h2 { font-family: 'Fredoka', 'Lato', cursive; color: #f0c060; font-size: 1.45rem; margin: 1.6rem 0 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid rgba(240,192,96,0.25); }
+    .nw-prose h3 { font-family: 'Fredoka', 'Lato', cursive; color: #cfe0f5; font-size: 1.15rem; margin: 1.2rem 0 0.3rem; }
+    .nw-prose p { margin: 0.7rem 0; }
+    .nw-prose a { color: #7fa8d9; }
+    .nw-prose hr { border: none; border-top: 1px solid rgba(255,255,255,0.15); margin: 1.4rem 0; }
+    .nw-prose ul { list-style: none; padding: 0; margin: 0.5rem 0; }
+    .nw-prose li { display: flex; gap: 0.6rem; align-items: baseline; padding: 0.22rem 0; }
+    .nw-prose li .nw-bullet { flex: 0 0 auto; font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 0.7rem; padding: 0.05rem 0.5rem; border-radius: 999px; border: 1px solid; min-width: 3.6em; text-align: center; }
+    .nw-bullet--add { color: #8fe0a8; border-color: rgba(143,224,168,0.55); background: rgba(143,224,168,0.1); }
+    .nw-bullet--chg { color: #8fbfff; border-color: rgba(143,191,255,0.55); background: rgba(143,191,255,0.1); }
+    .nw-bullet--fix { color: #ffc77a; border-color: rgba(255,199,122,0.55); background: rgba(255,199,122,0.1); }
+    .nw-bullet--dot { color: #9aa4b8; border: none !important; min-width: 0 !important; padding: 0 !important; }
+
+    .nw-form { background: rgba(14,12,24,0.88); border: 1px solid rgba(255,255,255,0.16); border-radius: 18px; padding: 1.6rem 1.8rem; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+    .nw-form h2 { font-family: 'Fredoka', 'Lato', cursive; color: #cfe0f5; margin: 0 0 1rem; }
+    .nw-field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 1rem; }
+    .nw-field label { font-family: 'Fredoka', 'Lato', cursive; font-weight: 500; color: #cfe0f5; font-size: 0.95rem; }
+    .nw-field small { color: #8b93a6; }
+    .nw-field input[type=text], .nw-field select, .nw-field textarea {
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: #f0f0f0;
+      padding: 0.6rem 0.8rem; font: inherit; font-size: 0.97rem;
+    }
+    .nw-field textarea { min-height: 340px; resize: vertical; font-family: Consolas, 'Courier New', monospace; font-size: 0.92rem; line-height: 1.55; }
+    .nw-field input:focus, .nw-field select:focus, .nw-field textarea:focus { outline: none; border-color: rgba(127,168,217,0.9); box-shadow: 0 0 8px rgba(127,168,217,0.35); }
+    .nw-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .nw-row > .nw-field { flex: 1 1 200px; }
+    .nw-check { display: flex; align-items: center; gap: 0.5rem; color: #ddd; margin-bottom: 0.6rem; }
+    .nw-actions { display: flex; gap: 0.7rem; flex-wrap: wrap; margin-top: 1.2rem; }
+    .nw-cover-preview { max-width: 260px; border-radius: 10px; margin-top: 0.4rem; }
+    .nw-template-btn { align-self: flex-start; }
+    .nw-error { color: #ff9a9a; margin-top: 0.6rem; }
+    @media (max-width: 640px) {
+      .nw-card { flex-direction: column; }
+      .nw-card-cover { flex-basis: auto; width: 100%; height: 160px; }
+      .nw-article-inner { padding: 1.2rem 1.1rem 1.5rem; }
+      .nw-title { font-size: 1.7rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="nw-bg"></div>
+<div class="nw-bg-scrim"></div>
+
+<div class="fp-content-z">
+<div id="fanpages-topbar-root"></div>
+<script src="/fanpages/fanpages-nav.js"></script>
+
+<div class="nw-wrap">
+  <!-- LIST -->
+  <div id="nw-list-view">
+    <div class="nw-head">
+      <h1 class="nw-title">News Posts <img src="/images/home/decoration-1.png" alt="" /></h1>
+      <div class="nw-spacer"></div>
+      <button class="nw-btn" id="nw-new-btn" hidden>✎ New Post</button>
+    </div>
+    <div class="nw-filters" id="nw-filters"></div>
+    <div id="nw-list"><p class="nw-empty">Loading…</p></div>
+  </div>
+
+  <!-- READER -->
+  <div id="nw-post-view" hidden></div>
+
+  <!-- EDITOR (admin) -->
+  <div id="nw-edit-view" hidden>
+    <form class="nw-form" id="nw-form">
+      <h2 id="nw-form-heading">New Post</h2>
+      <div class="nw-field"><label for="nw-f-title">Title</label><input type="text" id="nw-f-title" maxlength="200" placeholder="Patch Notes — Week of Oct 27" required /></div>
+      <div class="nw-row">
+        <div class="nw-field"><label for="nw-f-category">Type</label>
+          <select id="nw-f-category">
+            <option value="patch-notes">Patch Notes</option>
+            <option value="weekly-blog">Weekly Blog</option>
+            <option value="event">Event</option>
+            <option value="announcement">Announcement</option>
+          </select></div>
+        <div class="nw-field"><label for="nw-f-version">Version / label <small>(optional)</small></label><input type="text" id="nw-f-version" maxlength="40" placeholder="v1.4" /></div>
+      </div>
+      <div class="nw-field"><label for="nw-f-summary">Short summary <small>(shown on the list card)</small></label><input type="text" id="nw-f-summary" maxlength="400" /></div>
+      <div class="nw-field"><label for="nw-f-cover">Cover image <small>(optional)</small></label>
+        <input type="file" id="nw-f-cover" accept="image/png,image/jpeg,image/webp,image/gif" />
+        <img class="nw-cover-preview" id="nw-cover-preview" hidden alt="" />
+        <label class="nw-check" id="nw-remove-cover-wrap" hidden><input type="checkbox" id="nw-f-remove-cover" /> Remove current cover</label>
+      </div>
+      <div class="nw-field">
+        <label for="nw-f-body">Body</label>
+        <button type="button" class="nw-btn nw-btn--blue nw-template-btn" id="nw-template-btn">Insert patch-notes template</button>
+        <textarea id="nw-f-body" placeholder="Write the post here…"></textarea>
+        <small>Formatting: <code>## Heading</code>, <code>### Subheading</code>, <code>+ Added</code>, <code>~ Changed</code>, <code>! Fixed</code>, <code>- plain bullet</code>, <code>---</code> divider, <code>**bold**</code>, <code>[text](https://link)</code>. Blank line = new paragraph.</small>
+      </div>
+      <label class="nw-check"><input type="checkbox" id="nw-f-pinned" /> Pin to top</label>
+      <label class="nw-check"><input type="checkbox" id="nw-f-published" /> Published (uncheck to save as a draft only admins can see)</label>
+      <div class="nw-error" id="nw-form-error"></div>
+      <div class="nw-actions">
+        <button type="submit" class="nw-btn" id="nw-save-btn">Save</button>
+        <button type="button" class="nw-btn nw-btn--blue" id="nw-preview-btn">Preview</button>
+        <button type="button" class="nw-btn nw-btn--blue" id="nw-cancel-btn">Cancel</button>
+      </div>
+    </form>
+    <div id="nw-preview-area" hidden></div>
+  </div>
+</div>
+</div>
+
+<script>
+const API = '/api';
+const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+const authHeaders = () => token ? { Authorization: 'Bearer ' + token } : {};
+const CATS = { 'patch-notes': 'Patch Notes', 'weekly-blog': 'Weekly Blog', 'event': 'Event', 'announcement': 'Announcement' };
+let isAdmin = false, activeCat = '', editingId = null;
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtDate = d => d ? new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+
+// Tiny, escape-first markup renderer: everything is HTML-escaped before any
+// markup is applied, links are restricted to http(s).
+function inline(s) {
+  return esc(s)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+function renderBody(text) {
+  const lines = String(text || '').replace(/\r/g, '').split('\n');
+  let html = '', para = [], list = [];
+  const flushPara = () => { if (para.length) { html += '<p>' + para.map(inline).join('<br>') + '</p>'; para = []; } };
+  const flushList = () => { if (list.length) { html += '<ul>' + list.join('') + '</ul>'; list = []; } };
+  const li = (cls, label, t) => `<li><span class="nw-bullet ${cls}">${label}</span><span>${inline(t)}</span></li>`;
+  for (const raw of lines) {
+    const l = raw.trimEnd();
+    let m;
+    if (!l.trim()) { flushPara(); flushList(); continue; }
+    if ((m = l.match(/^### (.+)/))) { flushPara(); flushList(); html += '<h3>' + inline(m[1]) + '</h3>'; }
+    else if ((m = l.match(/^## (.+)/))) { flushPara(); flushList(); html += '<h2>' + inline(m[1]) + '</h2>'; }
+    else if (/^---+$/.test(l.trim())) { flushPara(); flushList(); html += '<hr>'; }
+    else if ((m = l.match(/^\+ (.+)/))) { flushPara(); list.push(li('nw-bullet--add', 'Added', m[1])); }
+    else if ((m = l.match(/^~ (.+)/))) { flushPara(); list.push(li('nw-bullet--chg', 'Changed', m[1])); }
+    else if ((m = l.match(/^! (.+)/))) { flushPara(); list.push(li('nw-bullet--fix', 'Fixed', m[1])); }
+    else if ((m = l.match(/^- (.+)/))) { flushPara(); list.push(li('nw-bullet--dot', '•', m[1])); }
+    else { flushList(); para.push(l); }
+  }
+  flushPara(); flushList();
+  return html;
+}
+
+function articleHtml(p) {
+  const draft = p.is_published ? '' : '<span class="nw-tag nw-tag--draft">Draft</span>';
+  return `<article class="nw-article">
+    ${p.cover_url ? `<img class="nw-article-cover" src="${esc(p.cover_url)}" alt="" />` : ''}
+    <div class="nw-article-inner">
+      <div class="nw-meta">
+        <span class="nw-tag nw-tag--${esc(p.category)}">${esc(CATS[p.category] || p.category)}</span>
+        ${p.version_label ? `<span class="nw-tag nw-tag--announcement">${esc(p.version_label)}</span>` : ''}
+        ${draft}
+        <span>${esc(fmtDate(p.published_at || p.created_at))}</span>
+        ${p.author_name ? `<span>· by ${esc(p.author_name)}</span>` : ''}
+      </div>
+      <h1>${esc(p.title)}</h1>
+      <div class="nw-prose">${renderBody(p.body)}</div>
+    </div>
+  </article>`;
+}
+
+function show(view) {
+  $('nw-list-view').hidden = view !== 'list';
+  $('nw-post-view').hidden = view !== 'post';
+  $('nw-edit-view').hidden = view !== 'edit';
+  window.scrollTo(0, 0);
+}
+
+function renderFilters() {
+  const items = [['', 'All'], ...Object.entries(CATS)];
+  $('nw-filters').innerHTML = items.map(([k, v]) => `<button class="nw-chip${k === activeCat ? ' active' : ''}" data-cat="${k}">${v}</button>`).join('');
+}
+$('nw-filters').addEventListener('click', e => {
+  const b = e.target.closest('.nw-chip'); if (!b) return;
+  activeCat = b.dataset.cat; renderFilters(); loadList();
+});
+
+async function loadList() {
+  $('nw-list').innerHTML = '<p class="nw-empty">Loading…</p>';
+  try {
+    const q = new URLSearchParams({ limit: 50 });
+    if (activeCat) q.set('category', activeCat);
+    q.set('all', '1'); // server only honors this for admins
+    const res = await fetch(`${API}/news?${q}`, { headers: authHeaders() });
+    const data = await res.json();
+    isAdmin = !!data.is_admin;
+    $('nw-new-btn').hidden = !isAdmin;
+    if (!data.posts.length) { $('nw-list').innerHTML = '<p class="nw-empty">No posts yet — check back soon!</p>'; return; }
+    $('nw-list').innerHTML = data.posts.map(p => `
+      <div class="nw-card" data-id="${p.id}">
+        ${p.cover_url ? `<img class="nw-card-cover" src="${esc(p.cover_url)}" alt="" loading="lazy" />` : '<div class="nw-card-cover"></div>'}
+        <div class="nw-card-body">
+          <div class="nw-meta">
+            <span class="nw-tag nw-tag--${esc(p.category)}">${esc(CATS[p.category] || p.category)}</span>
+            ${p.version_label ? `<span class="nw-tag nw-tag--announcement">${esc(p.version_label)}</span>` : ''}
+            ${p.is_pinned ? '<span class="nw-tag nw-tag--pin">📌 Pinned</span>' : ''}
+            ${p.is_published ? '' : '<span class="nw-tag nw-tag--draft">Draft</span>'}
+            <span>${esc(fmtDate(p.published_at || p.created_at))}</span>
+          </div>
+          <h2 class="nw-card-title">${esc(p.title)}</h2>
+          <p class="nw-card-summary">${esc(p.summary)}</p>
+        </div>
+      </div>`).join('');
+  } catch { $('nw-list').innerHTML = '<p class="nw-empty">Couldn’t load posts. Please try again.</p>'; }
+}
+$('nw-list').addEventListener('click', e => {
+  const c = e.target.closest('.nw-card'); if (c) openPost(c.dataset.id, true);
+});
+
+async function openPost(id, push) {
+  show('post');
+  $('nw-post-view').innerHTML = '<p class="nw-empty">Loading…</p>';
+  if (push) history.pushState({}, '', `?post=${id}`);
+  const res = await fetch(`${API}/news/${id}`, { headers: authHeaders() });
+  if (!res.ok) { $('nw-post-view').innerHTML = '<p class="nw-empty">That post doesn’t exist.</p><p style="text-align:center"><button class="nw-btn" data-back>Back</button></p>'; return; }
+  const { post, is_admin } = await res.json();
+  isAdmin = is_admin;
+  $('nw-post-view').innerHTML = `
+    <div style="margin-bottom:1rem"><button class="nw-btn" data-back><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg> Back</button></div>
+    ${articleHtml(post)}
+    ${isAdmin ? `<div class="nw-article-actions"><button class="nw-btn nw-btn--blue" data-edit="${post.id}">Edit</button><button class="nw-btn nw-btn--danger" data-del="${post.id}">Delete</button></div>` : ''}`;
+  window._currentPost = post;
+}
+$('nw-post-view').addEventListener('click', async e => {
+  if (e.target.closest('[data-back]')) { history.pushState({}, '', location.pathname); show('list'); loadList(); return; }
+  const ed = e.target.closest('[data-edit]');
+  if (ed) { openEditor(window._currentPost); return; }
+  const del = e.target.closest('[data-del]');
+  if (del && confirm('Delete this post permanently?')) {
+    await fetch(`${API}/admin/news/${del.dataset.del}`, { method: 'DELETE', headers: authHeaders() });
+    history.pushState({}, '', location.pathname); show('list'); loadList();
+  }
+});
+
+const TEMPLATE = `## Highlights
+A quick one-paragraph overview of what's new this week.
+
+## New
++ Added a thing
++ Added another thing
+
+## Changes
+~ Tweaked how something works
+
+## Bug Fixes
+! Fixed something that was broken
+
+---
+Thanks for reading — see you next week!`;
+
+function openEditor(p) {
+  editingId = p ? p.id : null;
+  $('nw-form-heading').textContent = p ? 'Edit Post' : 'New Post';
+  $('nw-f-title').value = p ? p.title : '';
+  $('nw-f-category').value = p ? p.category : 'patch-notes';
+  $('nw-f-version').value = p ? p.version_label : '';
+  $('nw-f-summary').value = p ? p.summary : '';
+  $('nw-f-body').value = p ? p.body : '';
+  $('nw-f-pinned').checked = p ? p.is_pinned : false;
+  $('nw-f-published').checked = p ? p.is_published : true;
+  $('nw-f-cover').value = '';
+  $('nw-f-remove-cover').checked = false;
+  $('nw-remove-cover-wrap').hidden = !(p && p.cover_url);
+  $('nw-cover-preview').hidden = !(p && p.cover_url);
+  if (p && p.cover_url) $('nw-cover-preview').src = p.cover_url;
+  $('nw-form-error').textContent = '';
+  $('nw-preview-area').hidden = true;
+  show('edit');
+}
+$('nw-new-btn').addEventListener('click', () => openEditor(null));
+$('nw-cancel-btn').addEventListener('click', () => {
+  if (editingId) openPost(editingId, false); else { show('list'); }
+});
+$('nw-template-btn').addEventListener('click', () => {
+  const t = $('nw-f-body');
+  if (t.value.trim() && !confirm('Replace the current body with the template?')) return;
+  t.value = TEMPLATE;
+});
+$('nw-f-cover').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) { $('nw-cover-preview').src = URL.createObjectURL(f); $('nw-cover-preview').hidden = false; }
+});
+$('nw-preview-btn').addEventListener('click', () => {
+  const area = $('nw-preview-area');
+  area.hidden = false;
+  area.style.marginTop = '1.2rem';
+  area.innerHTML = articleHtml({
+    title: $('nw-f-title').value || 'Untitled', category: $('nw-f-category').value, version_label: $('nw-f-version').value,
+    body: $('nw-f-body').value, is_published: $('nw-f-published').checked,
+    cover_url: $('nw-cover-preview').hidden ? '' : $('nw-cover-preview').src, published_at: new Date().toISOString(),
+  });
+  area.scrollIntoView({ behavior: 'smooth' });
+});
+$('nw-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('nw-form-error').textContent = '';
+  const fd = new FormData();
+  fd.append('title', $('nw-f-title').value);
+  fd.append('category', $('nw-f-category').value);
+  fd.append('version_label', $('nw-f-version').value);
+  fd.append('summary', $('nw-f-summary').value);
+  fd.append('body', $('nw-f-body').value);
+  fd.append('is_pinned', $('nw-f-pinned').checked);
+  fd.append('is_published', $('nw-f-published').checked);
+  fd.append('remove_cover', $('nw-f-remove-cover').checked);
+  const file = $('nw-f-cover').files[0];
+  if (file) fd.append('cover', file);
+  $('nw-save-btn').disabled = true;
+  try {
+    const res = await fetch(editingId ? `${API}/admin/news/${editingId}` : `${API}/admin/news`, {
+      method: editingId ? 'PUT' : 'POST', headers: authHeaders(), body: fd,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Save failed.');
+    openPost(data.post.id, true);
+  } catch (err) { $('nw-form-error').textContent = err.message; }
+  $('nw-save-btn').disabled = false;
+});
+
+window.addEventListener('popstate', route);
+function route() {
+  const id = new URLSearchParams(location.search).get('post');
+  if (id) openPost(id, false); else { show('list'); loadList(); }
+}
+renderFilters();
+route();
+</script>
+</body>
+</html>

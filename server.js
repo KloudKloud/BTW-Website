@@ -855,6 +855,25 @@ async function initDb() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
   `).catch(e => console.error('tos_blobs migration:', e.message));
+  // News Posts — admin-authored patch notes / weekly blogs / events. Body is
+  // plain text with a tiny markup subset (rendered + escaped client-side).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS news_posts (
+      id            SERIAL      PRIMARY KEY,
+      title         TEXT        NOT NULL,
+      category      TEXT        NOT NULL DEFAULT 'patch-notes',
+      version_label TEXT        NOT NULL DEFAULT '',
+      summary       TEXT        NOT NULL DEFAULT '',
+      body          TEXT        NOT NULL DEFAULT '',
+      cover_url     TEXT,
+      is_published  BOOLEAN     NOT NULL DEFAULT FALSE,
+      is_pinned     BOOLEAN     NOT NULL DEFAULT FALSE,
+      author_id     INTEGER,
+      published_at  TIMESTAMPTZ,
+      created_at    TIMESTAMPTZ DEFAULT NOW(),
+      updated_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(e => console.error('news_posts migration:', e.message));
   await pool.query(`
     INSERT INTO tos_blobs (name, content)
     SELECT 'Story Creation TOS (legacy)', $1
@@ -4803,6 +4822,85 @@ app.get('/api/hub-billboard', async (req, res) => {
     isAdmin = !!(u && u.email_hash === process.env.ADMIN_EMAIL_HASH);
   }
   res.json({ slides: (nsfwAllowed || isAdmin) ? rows : rows.filter(s => !s.is_nsfw) });
+});
+
+// ── News Posts (patch notes / weekly blogs / events) ────────────────────────
+const NEWS_CATEGORIES = ['patch-notes', 'weekly-blog', 'event', 'announcement'];
+async function newsViewerIsAdmin(req) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) return false;
+  try {
+    const id = jwt.verify(auth.slice(7), process.env.JWT_SECRET).id;
+    const { rows: [u] } = await pool.query('SELECT email_hash FROM users WHERE id = $1', [id]);
+    return !!(u && u.email_hash === process.env.ADMIN_EMAIL_HASH);
+  } catch { return false; }
+}
+const NEWS_COLS = `n.id, n.title, n.category, n.version_label, n.summary, n.cover_url, n.is_published,
+  n.is_pinned, n.published_at, n.created_at, n.updated_at`;
+
+app.get('/api/news', async (req, res) => {
+  const isAdmin = await newsViewerIsAdmin(req);
+  const showAll = isAdmin && req.query.all === '1';
+  const params = [];
+  const where = [];
+  if (!showAll) where.push('n.is_published = TRUE');
+  if (NEWS_CATEGORIES.includes(req.query.category)) { params.push(req.query.category); where.push(`n.category = $${params.length}`); }
+  const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
+  const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+  const { rows } = await pool.query(
+    `SELECT ${NEWS_COLS} FROM news_posts n ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+     ORDER BY n.is_pinned DESC, COALESCE(n.published_at, n.created_at) DESC, n.id DESC
+     LIMIT ${limit} OFFSET ${offset}`, params);
+  res.json({ posts: rows, is_admin: isAdmin });
+});
+app.get('/api/news/:id', async (req, res) => {
+  const isAdmin = await newsViewerIsAdmin(req);
+  const { rows: [post] } = await pool.query(
+    `SELECT n.*, u.username AS author_name FROM news_posts n LEFT JOIN users u ON u.id = n.author_id WHERE n.id = $1`, [parseInt(req.params.id, 10) || 0]);
+  if (!post || (!post.is_published && !isAdmin)) return res.status(404).json({ error: 'Not found.' });
+  res.json({ post, is_admin: isAdmin });
+});
+function newsFields(req) {
+  const b = req.body;
+  return {
+    title: String(b.title || '').trim().slice(0, 200),
+    category: NEWS_CATEGORIES.includes(b.category) ? b.category : 'patch-notes',
+    version: String(b.version_label || '').trim().slice(0, 40),
+    summary: String(b.summary || '').trim().slice(0, 400),
+    body: String(b.body || '').slice(0, 60000),
+    published: b.is_published === 'true' || b.is_published === '1',
+    pinned: b.is_pinned === 'true' || b.is_pinned === '1',
+  };
+}
+app.post('/api/admin/news', requireAuth, requireAdmin, uploadModImage.single('cover'), async (req, res) => {
+  const f = newsFields(req);
+  if (!f.title) return res.status(400).json({ error: 'A title is required.' });
+  const cover = req.file ? `/images/moderators/${req.file.filename}` : null;
+  const { rows: [post] } = await pool.query(
+    `INSERT INTO news_posts (title, category, version_label, summary, body, cover_url, is_published, is_pinned, author_id, published_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, CASE WHEN $7 THEN NOW() ELSE NULL END) RETURNING *`,
+    [f.title, f.category, f.version, f.summary, f.body, cover, f.published, f.pinned, req.user.id]);
+  res.json({ post });
+});
+app.put('/api/admin/news/:id', requireAuth, requireAdmin, uploadModImage.single('cover'), async (req, res) => {
+  const f = newsFields(req);
+  if (!f.title) return res.status(400).json({ error: 'A title is required.' });
+  const removeCover = req.body.remove_cover === 'true' || req.body.remove_cover === '1';
+  const cover = req.file ? `/images/moderators/${req.file.filename}` : null;
+  const { rows: [post] } = await pool.query(
+    `UPDATE news_posts SET title=$1, category=$2, version_label=$3, summary=$4, body=$5,
+       cover_url = CASE WHEN $6::text IS NOT NULL THEN $6 WHEN $7 THEN NULL ELSE cover_url END,
+       is_published=$8, is_pinned=$9,
+       published_at = CASE WHEN $8 AND published_at IS NULL THEN NOW() ELSE published_at END,
+       updated_at=NOW()
+     WHERE id=$10 RETURNING *`,
+    [f.title, f.category, f.version, f.summary, f.body, cover, removeCover, f.published, f.pinned, parseInt(req.params.id, 10) || 0]);
+  if (!post) return res.status(404).json({ error: 'Not found.' });
+  res.json({ post });
+});
+app.delete('/api/admin/news/:id', requireAuth, requireAdmin, async (req, res) => {
+  await pool.query('DELETE FROM news_posts WHERE id = $1', [parseInt(req.params.id, 10) || 0]);
+  res.json({ message: 'Deleted.' });
 });
 
 // ── TOS Blobs — simple named-text storage, admin only ──────────────────────
