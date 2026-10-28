@@ -531,7 +531,7 @@ if (localStorage.getItem('btw_show_welcome') === '1') {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
       </button>
 
-      <a class="fpnav-brand" href="${FP_BASE || '/'}"><img class="fpnav-brand-logo" src="/images/fanpagelogo.png" alt="Fanpages" width="52" height="44" /></a>
+      <a class="fpnav-brand" href="${FP_BASE || '/'}"><img class="fpnav-brand-logo" src="/images/unu-logo.png" alt="Fanpages" width="34" height="50" /></a>
 
       <div class="fpnav-dropdown-wrap fpnav-left-dropdown-wrap">
         <button class="fpnav-link fpnav-trigger-link${[fpUrl('/search'), fpUrl('/fandoms')].includes(here) ? ' active' : ''}" id="fpnav-browse-btn" type="button">Browse <span class="fpnav-caret">▾</span></button>
