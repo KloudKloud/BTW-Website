@@ -4794,14 +4794,11 @@ async function requireModerator(req, res, next) {
 // see every slide regardless of their own personal NSFW toggle, otherwise a
 // freshly-created NSFW slide would vanish from their own grid the moment
 // SFW Mode happens to be on, looking exactly like the save silently failed.
-// That admin bypass is opt-in via ?manage=1 (sent only by the Admin pages);
-// the public hub never sends it, so an admin's own SFW Mode is respected
-// there instead of NSFW slides flashing through the live billboard.
 app.get('/api/hub-billboard', async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM hub_billboard_slides ORDER BY sort_order, id');
   const { viewerId, nsfwAllowed } = await getViewerNsfwAccess(req);
   let isAdmin = false;
-  if (viewerId && req.query.manage === '1') {
+  if (viewerId) {
     const { rows: [u] } = await pool.query('SELECT email_hash FROM users WHERE id = $1', [viewerId]);
     isAdmin = !!(u && u.email_hash === process.env.ADMIN_EMAIL_HASH);
   }
