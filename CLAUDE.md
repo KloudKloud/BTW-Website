@@ -376,7 +376,7 @@ rather than trying to get one single insertion order to satisfy both.
   deploy cycle.
 - Admin → Bulletin → Hero Row Images crop editor/tiles use the same 603:1012
   ratio for the four comic slots (other slots keep their own measured ratios:
-  Spotlights 334/484, Recent Submissions 267/495, Arcade 655/416, News Posts and
+  Spotlights 334/484, Recent Submissions 320/531, Arcade 655/416, News Posts and
   Donations 655/277). Recommended art for a comic panel: 603x1012 (or 1206x2024).
 - `fanpages/btw-cropper.js` accepts an opt-in `minZoomFactor` (<1) so a cropper can
   zoom OUT past "cover"; only the hero editor uses it (0.2). Server accepts hero
