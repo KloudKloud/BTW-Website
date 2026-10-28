@@ -237,6 +237,8 @@
        live page actually renders, not a generic widescreen guess. */
     .lvb-card-img-wrap { position: relative; width: 100%; aspect-ratio: 1.79 / 1; overflow: hidden; background: #1a1a1a; }
     .lvb-card-img-wrap .hb-preview-bg { background-repeat: no-repeat; }
+    .nwb-card-img-wrap { position: relative; width: 100%; aspect-ratio: 3.2 / 1; overflow: hidden; background: #1a1a1a; }
+    .nwb-card-img-wrap .hb-preview-bg { background-repeat: no-repeat; }
     /* Hero Row Images grid tiles -- tall/narrow like the live comic-strip
        box (9.5% of the hub's width, clamp(305px,25vw,425px) tall -- in the
        clamp's linear middle range that's exactly a 9.5:25 ratio, same math
@@ -360,6 +362,7 @@
     <button class="adm-tab active" id="adm-tab-stats" type="button" data-tab="stats">Stats</button>
     <button class="adm-tab" id="adm-tab-bulletin" type="button" data-tab="bulletin">Bulletin</button>
     <button class="adm-tab" id="adm-tab-levels" type="button" data-tab="levels">Levels Banner</button>
+    <button class="adm-tab" id="adm-tab-news" type="button" data-tab="news">News Banner</button>
     <button class="adm-tab" id="adm-tab-dictionary" type="button" data-tab="dictionary">Tag Dictionary</button>
   </div>
 
@@ -555,6 +558,18 @@
     </button>
 
     <div class="hb-grid" id="lvb-grid"></div>
+  </div>
+
+  <!-- ══ News Banner ══════════════════════════════════════════════ -->
+  <div class="adm-panel" id="adm-panel-news">
+    <h2 class="adm-section-title"><img src="/images/home/decoration-1.png" alt="" /> News Page Banner</h2>
+    <p class="hb-sub">Manage the images that cycle in the banner across the top of the News Posts page. Add, crop, or remove slides here — no deploy needed. The crop box below matches the live banner's own aspect ratio, so what you see here is what shows up on the page. Slides cycle in the order added; set a link to make a slide clickable.</p>
+
+    <button class="chars-create-btn" id="nwb-add-btn" type="button" style="max-width: 260px;">
+      <span class="chars-create-btn-icon">➕</span> Add New Slide
+    </button>
+
+    <div class="hb-grid" id="nwb-grid"></div>
   </div>
 
   <!-- ══ Tag Dictionary ══════════════════════════════════════════════ -->
@@ -782,6 +797,47 @@
   </div>
 </div>
 
+<!-- News Banner slide editor modal — same crop editor as the Bulletin's,
+     minus caption/credit/NSFW/VIP/animation (the Levels banner is just a
+     plain link carousel). -->
+<div class="char-editor-overlay" id="nwb-editor-overlay" hidden>
+  <div class="char-editor-modal">
+    <h2 class="char-editor-title" id="nwb-editor-title">Add New Slide</h2>
+
+    <div class="char-editor-ref-wrap" id="nwb-editor-img-wrap" style="max-width: 640px; aspect-ratio: 3.2 / 1; cursor: default;">
+      <img id="nwb-editor-crop-img" alt="" style="display:none;" draggable="false" />
+      <div class="char-editor-ref-placeholder" id="nwb-editor-img-placeholder">Click to upload an image</div>
+    </div>
+    <input type="file" id="nwb-editor-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+    <button type="button" class="mod-btn mod-btn--small" id="nwb-editor-change-img-btn" style="display:none; margin: 0.6rem auto 1rem;">📷 Change Image</button>
+    <p class="char-editor-facts-hint">Drag to move, scroll or pinch to zoom. This crop box is the News page banner's own aspect ratio, so the preview here matches what goes live.</p>
+
+    <div class="mod-field">
+      <label for="nwb-link">Link <span style="font-weight:400;color:#888;">(optional — makes the slide clickable)</span></label>
+      <input class="mod-input" id="nwb-link" maxlength="300" placeholder="https:// or /path" />
+    </div>
+
+    <p class="mod-panel-msg" id="nwb-editor-msg"></p>
+
+    <div class="char-editor-actions">
+      <button class="mod-btn mod-btn--danger" id="nwb-editor-delete" type="button" style="display:none;">Delete</button>
+      <button class="mod-btn" id="nwb-editor-cancel" type="button">Cancel</button>
+      <button class="mod-btn" id="nwb-editor-save" type="button" disabled>Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="mod-confirm-overlay" id="nwb-delete-confirm-overlay" hidden>
+  <div class="mod-confirm-modal">
+    <p class="mod-confirm-title">Delete this slide?</p>
+    <p class="mod-confirm-text">This can't be undone.</p>
+    <div class="mod-confirm-actions">
+      <button class="mod-btn" id="nwb-delete-confirm-cancel" type="button">Cancel</button>
+      <button class="mod-btn mod-btn--danger" id="nwb-delete-confirm-yes" type="button">Delete</button>
+    </div>
+  </div>
+</div>
+
 
 </div><!-- /.adm-content-z -->
 
@@ -807,7 +863,7 @@ function escapeHtml(s) {
 }
 
 // ── Tabs ─────────────────────────────────────────────────────────────────
-const ADM_TABS = ['stats', 'bulletin', 'levels', 'dictionary'];
+const ADM_TABS = ['stats', 'bulletin', 'levels', 'news', 'dictionary'];
 function switchAdmTab(tab) {
   if (!ADM_TABS.includes(tab)) tab = 'stats';
   ADM_TABS.forEach(t => {
@@ -828,6 +884,7 @@ function switchAdmTab(tab) {
   if (tab === 'bulletin' && typeof refreshGridBgSizes === 'function') setTimeout(refreshGridBgSizes, 0);
   if (tab === 'bulletin' && typeof refreshHrGridBgSizes === 'function') setTimeout(refreshHrGridBgSizes, 0);
   if (tab === 'levels' && typeof refreshLvbGridBgSizes === 'function') setTimeout(refreshLvbGridBgSizes, 0);
+  if (tab === 'news' && typeof refreshNwbGridBgSizes === 'function') setTimeout(refreshNwbGridBgSizes, 0);
 }
 ADM_TABS.forEach(t => document.getElementById(`adm-tab-${t}`).addEventListener('click', () => switchAdmTab(t)));
 window.addEventListener('hashchange', () => switchAdmTab(location.hash.slice(1)));
@@ -2163,6 +2220,253 @@ document.getElementById('lvb-editor-delete').addEventListener('click', async () 
 });
 
 /* ═══════════════════════════════════════════════════════════════════════
+   News Banner — same drag/zoom crop editor + card-grid-with-modal pattern
+   as the Bulletin (Hub Image Builder) above, minus caption/credit/NSFW/VIP/
+   animation (the Levels banner is a plain link carousel). The crop box's
+   aspect ratio (1.79:1) is the live banner's own measured desktop render
+   size, not a generic guess, so the preview here matches what goes live.
+   Reuses the Bulletin's loadImageDims()/coverBgSize()/imgDimsCache helpers
+   defined earlier in this script, and the shared BtwCropper component.
+   ═══════════════════════════════════════════════════════════════════════ */
+let newsBannerSlides = [];
+let nwbCropper = null;
+let nwbEditingId = null;
+let nwbSelectedFile = null;
+let nwbPos = { x: 50, y: 50, zoom: 100 };
+let nwbCurrentImageUrl = null;
+
+function nwbCropperToPosition(cropper) {
+  const pos = cropper.getPositionFraction();
+  return {
+    x: Math.round(pos.x * 100),
+    y: Math.round(pos.y * 100),
+    zoom: Math.max(100, Math.min(400, Math.round((cropper.getZoom() / cropper.getMinZoom()) * 100))),
+  };
+}
+function nwbApplyPositionToCropper(cropper, pos) {
+  cropper.setZoom(cropper.getMinZoom() * ((pos.zoom || 100) / 100));
+  cropper.setPositionFraction({ x: (pos.x || 50) / 100, y: (pos.y || 50) / 100 });
+}
+function nwbSaveCropperToPosition() {
+  if (!nwbCropper) return;
+  nwbPos = nwbCropperToPosition(nwbCropper);
+}
+function nwbInitCropper(imageSrc, initialPos) {
+  const img = document.getElementById('nwb-editor-crop-img');
+  const wrap = document.getElementById('nwb-editor-img-wrap');
+  if (nwbCropper) { nwbCropper.destroy(); nwbCropper = null; }
+  img.removeAttribute('src');
+  img.style.display = 'block';
+  document.getElementById('nwb-editor-img-placeholder').style.display = 'none';
+  document.getElementById('nwb-editor-change-img-btn').style.display = 'block';
+  img.onload = () => {
+    requestAnimationFrame(() => {
+      nwbCropper = new BtwCropper(img, wrap, { onChange: nwbSaveCropperToPosition });
+      nwbApplyPositionToCropper(nwbCropper, initialPos);
+    });
+  };
+  img.src = imageSrc;
+}
+
+async function loadNewsBannerSlides() {
+  const res = await fetch('/api/news/banner-slides', { headers: authHeaders() });
+  const data = await res.json().catch(() => ({}));
+  newsBannerSlides = data.slides || [];
+  renderNewsBannerGrid();
+}
+
+function renderNewsBannerGrid() {
+  const grid = document.getElementById('nwb-grid');
+  if (!newsBannerSlides.length) {
+    grid.innerHTML = '<p class="hb-empty-state">No slides yet — add one to start the banner cycling!</p>';
+    return;
+  }
+  grid.innerHTML = '';
+  newsBannerSlides.forEach(slide => {
+    const card = document.createElement('div');
+    card.className = 'hb-card';
+    card.innerHTML = `
+      <div class="nwb-card-img-wrap"><div class="hb-preview-bg"></div></div>
+      <div class="hb-card-body">
+        ${slide.link ? `<p class="hb-card-credit">Links to: ${escapeHtml(slide.link)}</p>` : '<p class="hb-card-empty-text">No link</p>'}
+        <div class="hb-card-actions">
+          <button class="mod-btn mod-btn--small" type="button">Edit</button>
+        </div>
+      </div>
+    `;
+    card.querySelector('.hb-card-actions button').addEventListener('click', () => openNewsBannerEditor(slide));
+    grid.appendChild(card);
+
+    loadImageDims(slide.image_url).then(dims => {
+      const bg = card.querySelector('.hb-preview-bg');
+      const boxW = bg.clientWidth, boxH = bg.clientHeight;
+      const size = coverBgSize(dims, boxW, boxH, slide.zoom);
+      bg.style.backgroundImage = `url(${slide.image_url})`;
+      bg.style.backgroundSize = `${size.w}% ${size.h}%`;
+      bg.style.backgroundPosition = `${slide.position_x}% ${slide.position_y}%`;
+    });
+  });
+}
+
+// Same fix as refreshGridBgSizes() above -- loadNewsBannerSlides() runs at
+// boot while the Levels panel is still display:none, which bakes in a bogus
+// 0%/0% background-size that a plain re-render won't correct.
+function refreshNwbGridBgSizes() {
+  const grid = document.getElementById('nwb-grid');
+  const cards = grid.querySelectorAll('.hb-card');
+  cards.forEach((card, i) => {
+    const slide = newsBannerSlides[i];
+    const dims = slide && imgDimsCache[slide.image_url];
+    if (!slide || !dims) return;
+    const bg = card.querySelector('.hb-preview-bg');
+    const boxW = bg.clientWidth, boxH = bg.clientHeight;
+    if (!boxW || !boxH) return;
+    const size = coverBgSize(dims, boxW, boxH, slide.zoom);
+    bg.style.backgroundSize = `${size.w}% ${size.h}%`;
+    bg.style.backgroundPosition = `${slide.position_x}% ${slide.position_y}%`;
+  });
+}
+
+function nwbUpdateSaveButtonState() {
+  const hasImage = !!nwbSelectedFile || !!nwbEditingId;
+  document.getElementById('nwb-editor-save').disabled = !hasImage;
+}
+
+async function openNewsBannerEditor(slide) {
+  nwbEditingId = slide ? slide.id : null;
+  nwbSelectedFile = null;
+
+  document.getElementById('nwb-editor-title').textContent = slide ? 'Edit Slide' : 'Add New Slide';
+  document.getElementById('nwb-editor-delete').style.display = slide ? '' : 'none';
+  document.getElementById('nwb-editor-save').textContent = slide ? 'Save and Close' : 'Create';
+
+  const placeholder = document.getElementById('nwb-editor-img-placeholder');
+  if (slide) {
+    nwbCurrentImageUrl = slide.image_url;
+    placeholder.style.display = 'none';
+    nwbPos = { x: slide.position_x, y: slide.position_y, zoom: slide.zoom || 100 };
+    nwbInitCropper(slide.image_url, nwbPos);
+  } else {
+    nwbCurrentImageUrl = null;
+    placeholder.style.display = 'block';
+    document.getElementById('nwb-editor-crop-img').style.display = 'none';
+    document.getElementById('nwb-editor-change-img-btn').style.display = 'none';
+    if (nwbCropper) { nwbCropper.destroy(); nwbCropper = null; }
+    nwbPos = { x: 50, y: 50, zoom: 100 };
+  }
+
+  document.getElementById('nwb-link').value = slide ? (slide.link || '') : '';
+  document.getElementById('nwb-editor-msg').textContent = '';
+  nwbUpdateSaveButtonState();
+
+  document.getElementById('nwb-editor-overlay').hidden = false;
+}
+function closeNewsBannerEditor() {
+  document.getElementById('nwb-editor-overlay').hidden = true;
+}
+document.getElementById('nwb-add-btn').addEventListener('click', () => openNewsBannerEditor(null));
+document.getElementById('nwb-editor-cancel').addEventListener('click', closeNewsBannerEditor);
+
+document.getElementById('nwb-editor-img-placeholder').addEventListener('click', () => {
+  document.getElementById('nwb-editor-file-input').click();
+});
+document.getElementById('nwb-editor-change-img-btn').addEventListener('click', () => {
+  document.getElementById('nwb-editor-file-input').click();
+});
+document.getElementById('nwb-editor-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  nwbSelectedFile = file;
+  const objectUrl = URL.createObjectURL(file);
+  nwbCurrentImageUrl = objectUrl;
+  document.getElementById('nwb-editor-img-placeholder').style.display = 'none';
+  nwbPos = { x: 50, y: 50, zoom: 100 };
+  nwbInitCropper(objectUrl, nwbPos);
+  nwbUpdateSaveButtonState();
+});
+
+document.getElementById('nwb-editor-save').addEventListener('click', async () => {
+  const msgEl = document.getElementById('nwb-editor-msg');
+  msgEl.textContent = '';
+
+  if (!nwbEditingId && !nwbSelectedFile) {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Please upload an image.';
+    return;
+  }
+  nwbSaveCropperToPosition();
+
+  const fd = new FormData();
+  if (nwbSelectedFile) fd.append('image', nwbSelectedFile);
+  fd.append('position_x', nwbPos.x);
+  fd.append('position_y', nwbPos.y);
+  fd.append('zoom', nwbPos.zoom);
+  fd.append('link', document.getElementById('nwb-link').value.trim());
+
+  const saveBtn = document.getElementById('nwb-editor-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = nwbEditingId ? 'Saving…' : 'Creating…';
+  try {
+    const url = nwbEditingId ? `/api/admin/news-banner/${nwbEditingId}` : '/api/admin/news-banner';
+    const method = nwbEditingId ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: authHeaders(), body: fd });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+      msgEl.textContent = data.error || 'Something went wrong. Please try again.';
+      return;
+    }
+    closeNewsBannerEditor();
+    await loadNewsBannerSlides();
+  } catch {
+    msgEl.className = 'mod-panel-msg mod-panel-msg--error';
+    msgEl.textContent = 'Network error. Please try again.';
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = nwbEditingId ? 'Save and Close' : 'Create';
+  }
+});
+
+function nwbConfirmDelete() {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('nwb-delete-confirm-overlay');
+    const yesBtn = document.getElementById('nwb-delete-confirm-yes');
+    const cancelBtn = document.getElementById('nwb-delete-confirm-cancel');
+    overlay.hidden = false;
+    const cleanup = (result) => {
+      overlay.hidden = true;
+      yesBtn.removeEventListener('click', onYes);
+      cancelBtn.removeEventListener('click', onCancel);
+      resolve(result);
+    };
+    const onYes = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    yesBtn.addEventListener('click', onYes);
+    cancelBtn.addEventListener('click', onCancel);
+  });
+}
+
+document.getElementById('nwb-editor-delete').addEventListener('click', async () => {
+  if (!nwbEditingId) return;
+  if (!await nwbConfirmDelete()) return;
+
+  const deleteBtn = document.getElementById('nwb-editor-delete');
+  deleteBtn.disabled = true;
+  deleteBtn.textContent = 'Deleting…';
+  try {
+    await fetch(`/api/admin/news-banner/${nwbEditingId}`, { method: 'DELETE', headers: authHeaders() });
+    closeNewsBannerEditor();
+    await loadNewsBannerSlides();
+  } catch {
+    document.getElementById('nwb-editor-msg').className = 'mod-panel-msg mod-panel-msg--error';
+    document.getElementById('nwb-editor-msg').textContent = 'Failed to delete. Please try again.';
+  } finally {
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = 'Delete';
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
    Boot — one shared admin gate for the whole page.
    ═══════════════════════════════════════════════════════════════════════ */
 (async () => {
@@ -2180,6 +2484,7 @@ document.getElementById('lvb-editor-delete').addEventListener('click', async () 
     await loadSlides();
     await loadHeroBoxes();
     await loadLevelsBannerSlides();
+    await loadNewsBannerSlides();
     const summary = await loadCatalogSummary();
     dictData = summary;
     renderDictionary('');

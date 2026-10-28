@@ -874,6 +874,20 @@ async function initDb() {
       updated_at    TIMESTAMPTZ DEFAULT NOW()
     );
   `).catch(e => console.error('news_posts migration:', e.message));
+  // News page banner — admin-managed slideshow across the top of /fanpages/news,
+  // same crop-position model as levels_banner_slides.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS news_banner_slides (
+      id         SERIAL      PRIMARY KEY,
+      image_url  TEXT        NOT NULL,
+      link       TEXT        NOT NULL DEFAULT '',
+      position_x INTEGER     NOT NULL DEFAULT 50,
+      position_y INTEGER     NOT NULL DEFAULT 50,
+      zoom       INTEGER     NOT NULL DEFAULT 100,
+      sort_order INTEGER     NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(e => console.error('news_banner_slides migration:', e.message));
   await pool.query(`
     INSERT INTO tos_blobs (name, content)
     SELECT 'Story Creation TOS (legacy)', $1
@@ -4853,6 +4867,53 @@ app.get('/api/news', async (req, res) => {
      LIMIT ${limit} OFFSET ${offset}`, params);
   res.json({ posts: rows, is_admin: isAdmin });
 });
+// ── News page banner slideshow (registered before /api/news/:id so
+// "banner-slides" isn't swallowed as an id) ─────────────────────────────────
+app.get('/api/news/banner-slides', async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM news_banner_slides ORDER BY sort_order, id');
+  res.json({ slides: rows });
+});
+app.post('/api/admin/news-banner', requireAuth, requireAdmin, uploadModImage.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Image is required.' });
+  const imageUrl = `/images/moderators/${req.file.filename}`;
+  const { rows: [{ maxOrder }] } = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM news_banner_slides');
+  const { rows: [slide] } = await pool.query(
+    'INSERT INTO news_banner_slides (image_url, position_x, position_y, zoom, link, sort_order) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+    [imageUrl, clampPosition(req.body.position_x), clampPosition(req.body.position_y), clampZoom(req.body.zoom, 100), cleanLinkUrl(req.body.link), maxOrder + 1]
+  );
+  res.json({ slide });
+});
+app.put('/api/admin/news-banner/:id', requireAuth, requireAdmin, uploadModImage.single('image'), async (req, res) => {
+  const { rows: [existing] } = await pool.query('SELECT * FROM news_banner_slides WHERE id = $1', [parseInt(req.params.id, 10) || 0]);
+  if (!existing) return res.status(404).json({ error: 'Not found.' });
+  const positionX = req.body.position_x !== undefined ? clampPosition(req.body.position_x) : existing.position_x;
+  const positionY = req.body.position_y !== undefined ? clampPosition(req.body.position_y) : existing.position_y;
+  const zoom = req.body.zoom !== undefined ? clampZoom(req.body.zoom, existing.zoom) : existing.zoom;
+  const link = req.body.link !== undefined ? cleanLinkUrl(req.body.link) : existing.link;
+  let imageUrl = existing.image_url;
+  if (req.file) {
+    imageUrl = `/images/moderators/${req.file.filename}`;
+    if (existing.image_url.startsWith('/images/moderators/')) {
+      const oldPath = path.join('/var/www/btw', existing.image_url);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+  }
+  const { rows: [slide] } = await pool.query(
+    'UPDATE news_banner_slides SET image_url = $1, position_x = $2, position_y = $3, zoom = $4, link = $5 WHERE id = $6 RETURNING *',
+    [imageUrl, positionX, positionY, zoom, link, existing.id]
+  );
+  res.json({ slide });
+});
+app.delete('/api/admin/news-banner/:id', requireAuth, requireAdmin, async (req, res) => {
+  const { rows: [slide] } = await pool.query('SELECT * FROM news_banner_slides WHERE id = $1', [parseInt(req.params.id, 10) || 0]);
+  if (!slide) return res.status(404).json({ error: 'Not found.' });
+  if (slide.image_url.startsWith('/images/moderators/')) {
+    const filePath = path.join('/var/www/btw', slide.image_url);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
+  await pool.query('DELETE FROM news_banner_slides WHERE id = $1', [slide.id]);
+  res.json({ message: 'Deleted.' });
+});
 app.get('/api/news/:id', async (req, res) => {
   const isAdmin = await newsViewerIsAdmin(req);
   const { rows: [post] } = await pool.query(
@@ -4860,6 +4921,12 @@ app.get('/api/news/:id', async (req, res) => {
   if (!post || (!post.is_published && !isAdmin)) return res.status(404).json({ error: 'Not found.' });
   res.json({ post, is_admin: isAdmin });
 });
+// Card thumbnail chosen by the builder (first image block): only our own
+// uploads or absolute http(s) URLs are accepted.
+function newsCoverFromBody(req) {
+  const u = typeof req.body.cover_url === 'string' ? req.body.cover_url.trim().slice(0, 500) : '';
+  return /^(\/images\/|https?:\/\/)/i.test(u) ? u : null;
+}
 function newsFields(req) {
   const b = req.body;
   return {
@@ -4880,7 +4947,7 @@ app.post('/api/admin/news/image', requireAuth, requireAdmin, uploadModImage.sing
 app.post('/api/admin/news', requireAuth, requireAdmin, uploadModImage.single('cover'), async (req, res) => {
   const f = newsFields(req);
   if (!f.title) return res.status(400).json({ error: 'A title is required.' });
-  const cover = req.file ? `/images/moderators/${req.file.filename}` : null;
+  const cover = req.file ? `/images/moderators/${req.file.filename}` : newsCoverFromBody(req);
   const { rows: [post] } = await pool.query(
     `INSERT INTO news_posts (title, category, version_label, summary, body, cover_url, is_published, is_pinned, author_id, published_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, CASE WHEN $7 THEN NOW() ELSE NULL END) RETURNING *`,
@@ -4890,8 +4957,8 @@ app.post('/api/admin/news', requireAuth, requireAdmin, uploadModImage.single('co
 app.put('/api/admin/news/:id', requireAuth, requireAdmin, uploadModImage.single('cover'), async (req, res) => {
   const f = newsFields(req);
   if (!f.title) return res.status(400).json({ error: 'A title is required.' });
-  const removeCover = req.body.remove_cover === 'true' || req.body.remove_cover === '1';
-  const cover = req.file ? `/images/moderators/${req.file.filename}` : null;
+  const removeCover = req.body.remove_cover === 'true' || req.body.remove_cover === '1' || req.body.cover_url === '';
+  const cover = req.file ? `/images/moderators/${req.file.filename}` : newsCoverFromBody(req);
   const { rows: [post] } = await pool.query(
     `UPDATE news_posts SET title=$1, category=$2, version_label=$3, summary=$4, body=$5,
        cover_url = CASE WHEN $6::text IS NOT NULL THEN $6 WHEN $7 THEN NULL ELSE cover_url END,

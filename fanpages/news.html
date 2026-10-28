@@ -11,8 +11,9 @@
   <style>
     html, body { background: #0e141b; min-height: 100vh; }
     [hidden] { display: none !important; }
-    .nw-wrap { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 2rem 1.25rem 4rem; display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 1.75rem; align-items: start; }
-    .nw-wrap--edit { max-width: 1280px; grid-template-columns: minmax(0, 1fr); }
+    .nw-wrap { position: relative; z-index: 1; padding: 1.5rem 1.75rem 4rem 0; display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 1.75rem; align-items: start; }
+    .nw-wrap--edit { padding-left: 1.75rem; grid-template-columns: minmax(0, 1fr); max-width: 1320px; margin: 0 auto; }
+    .nw-main { min-width: 0; }
 
     .nw-btn {
       font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 0.95rem; cursor: pointer;
@@ -29,8 +30,8 @@
     .nw-btn--sm { font-size: 0.8rem; padding: 0.3rem 0.75rem; }
 
     /* ── Sidebar: Latest Newsletters ── */
-    .nw-side { position: sticky; top: 1.25rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.1rem 0.9rem 1rem; }
-    .nw-side h2 { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.25rem; color: #cfe0f5; margin: 0 0 0.8rem 0.4rem; text-shadow: 0 0 12px rgba(127,168,217,0.4); display: flex; align-items: center; gap: 0.45rem; }
+    .nw-side { position: sticky; top: 1.25rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-left: none; border-radius: 0 12px 12px 0; padding: 1.1rem 0.9rem 1rem 1.1rem; }
+    .nw-side h2 { cursor: pointer; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.25rem; color: #cfe0f5; margin: 0 0 0.8rem 0.4rem; text-shadow: 0 0 12px rgba(127,168,217,0.4); display: flex; align-items: center; gap: 0.45rem; }
     .nw-side h2 img { width: 20px; height: 20px; object-fit: contain; }
     .nw-new-btn { width: 100%; justify-content: center; margin-bottom: 0.9rem; }
     .nw-list { display: flex; flex-direction: column; gap: 2px; max-height: calc(100vh - 14rem); overflow-y: auto; }
@@ -41,6 +42,31 @@
     .nw-item-date { font-size: 0.75rem; color: #7d8ba0; margin-top: 0.12rem; }
     .nw-draft { font-family: 'Fredoka', 'Lato', cursive; font-size: 0.68rem; font-weight: 600; color: #ff9a9a; border: 1px solid rgba(255,154,154,0.55); border-radius: 999px; padding: 0 0.45rem; margin-left: 0.35rem; vertical-align: middle; }
     .nw-empty { text-align: center; color: #7d8ba0; padding: 2rem 0.5rem; font-size: 0.92rem; }
+
+    /* ── Banner slideshow ── */
+    .nw-banner { position: relative; width: 100%; aspect-ratio: 3.2 / 1; border-radius: 10px; overflow: hidden; background: #0a0f15; box-shadow: 0 10px 40px rgba(0,0,0,0.45); margin-bottom: 2rem; }
+    .nw-banner-slide { position: absolute; inset: 0; opacity: 0; transition: opacity 0.8s ease; display: block; pointer-events: none; }
+    .nw-banner-slide.active { opacity: 1; pointer-events: auto; }
+    .nw-banner-bg { position: absolute; inset: 0; background-repeat: no-repeat; background-size: cover; background-position: center; }
+    .nw-banner-arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 3; width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.18); background: rgba(10,14,20,0.6); color: #fff; font-size: 1.3rem; line-height: 1; cursor: pointer; }
+    .nw-banner-arrow:hover { background: rgba(127,168,217,0.3); }
+    .nw-banner-arrow--prev { left: 0.7rem; } .nw-banner-arrow--next { right: 0.7rem; }
+    .nw-banner-dots { position: absolute; bottom: 0.7rem; left: 50%; transform: translateX(-50%); display: flex; gap: 0.4rem; z-index: 3; }
+    .nw-banner-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.4); cursor: pointer; }
+    .nw-banner-dot.active { background: #7fa8d9; }
+
+    /* ── Home: Latest updates + cards ── */
+    .nw-home-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.9rem; color: #cfe0f5; margin: 0 0 1.2rem; display: flex; align-items: center; gap: 0.6rem; text-shadow: 0 0 14px rgba(127,168,217,0.4); }
+    .nw-home-title img { width: 26px; height: 26px; object-fit: contain; }
+    .nw-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.5rem; }
+    .nw-ncard { cursor: pointer; background: #1c1e2b; border: 1px solid rgba(255,255,255,0.08); border-left: 3px solid #d9c9a3; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s; }
+    .nw-ncard:hover { transform: translateY(-3px); border-color: rgba(127,168,217,0.6); box-shadow: 0 10px 28px rgba(0,0,0,0.5); }
+    .nw-ncard-body { padding: 1rem 1.1rem 0.9rem; flex: 1; }
+    .nw-ncard-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.2rem; font-weight: 600; color: #6ea8ec; margin: 0 0 0.3rem; }
+    .nw-ncard-date { font-size: 0.78rem; color: #7d8ba0; margin-bottom: 0.55rem; }
+    .nw-ncard-sum { color: #c9ced9; font-size: 0.9rem; line-height: 1.55; margin: 0; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+    .nw-ncard-img { width: calc(100% - 2rem); margin: 0 1rem 1rem; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; display: block; background: #12141d; }
+    .nw-back { margin-bottom: 1rem; }
 
     /* ── Article (reader + preview) ── */
     .nw-article { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 2rem 2.4rem 2.4rem; min-width: 0; }
@@ -109,8 +135,10 @@
     .nw-note { font-size: 0.85rem; color: #7d8ba0; margin-top: 0.4rem; }
 
     @media (max-width: 860px) {
-      .nw-wrap { grid-template-columns: 1fr; }
-      .nw-side { position: static; }
+      .nw-wrap { grid-template-columns: 1fr; padding: 1rem 1rem 3rem; }
+      .nw-side { position: static; border-left: 1px solid rgba(255,255,255,0.08); border-radius: 12px; }
+      .nw-banner { aspect-ratio: 2 / 1; }
+      .nw-cards { grid-template-columns: 1fr; }
       .nw-list { max-height: 260px; }
       .nw-builder { grid-template-columns: 1fr; }
       .nw-palette { position: static; flex-direction: row; flex-wrap: wrap; }
@@ -134,7 +162,7 @@
     <div class="nw-list" id="nw-list"><p class="nw-empty">Loading…</p></div>
   </aside>
 
-  <main id="nw-main"></main>
+  <main class="nw-main" id="nw-main"></main>
 
   <section id="nw-builder" hidden>
     <div class="nw-bar">
@@ -268,6 +296,82 @@ function showReader() {
   $('nw-wrap').classList.remove('nw-wrap--edit');
   $('nw-side').hidden = false; $('nw-main').hidden = false; $('nw-builder').hidden = true;
 }
+
+// ── Home: banner slideshow + update cards ─────────────────────────────────
+let bannerSlides = [], bannerIdx = 0, bannerTimer = null, bannerRO = null;
+const imgDims = {};
+function loadDims(url) {
+  if (imgDims[url]) return Promise.resolve(imgDims[url]);
+  return new Promise(res => {
+    const im = new Image();
+    im.onload = () => { imgDims[url] = { w: im.naturalWidth || 1, h: im.naturalHeight || 1 }; res(imgDims[url]); };
+    im.onerror = () => res({ w: 1, h: 1 });
+    im.src = url;
+  });
+}
+function applyBannerCrop() {
+  const box = document.querySelector('.nw-banner'); if (!box) return;
+  const bw = box.clientWidth, bh = box.clientHeight; if (!bw || !bh) return;
+  box.querySelectorAll('.nw-banner-bg').forEach(el => {
+    const s = bannerSlides[+el.dataset.i], d = s && imgDims[s.image_url]; if (!d) return;
+    const scale = Math.max(bw / d.w, bh / d.h), f = (s.zoom || 100) / 100;
+    el.style.backgroundSize = `${(d.w * scale / bw) * 100 * f}% ${(d.h * scale / bh) * 100 * f}%`;
+    el.style.backgroundPosition = `${s.position_x}% ${s.position_y}%`;
+  });
+}
+function showBannerSlide(i) {
+  const n = bannerSlides.length; bannerIdx = (i + n) % n;
+  document.querySelectorAll('.nw-banner-slide').forEach((el, k) => el.classList.toggle('active', k === bannerIdx));
+  document.querySelectorAll('.nw-banner-dot').forEach((el, k) => el.classList.toggle('active', k === bannerIdx));
+}
+function startBannerTimer() {
+  clearInterval(bannerTimer);
+  if (bannerSlides.length > 1) bannerTimer = setInterval(() => showBannerSlide(bannerIdx + 1), 6000);
+}
+async function renderBanner(host) {
+  clearInterval(bannerTimer); if (bannerRO) bannerRO.disconnect();
+  try { bannerSlides = (await (await fetch(`${API}/news/banner-slides`)).json()).slides || []; } catch { bannerSlides = []; }
+  if (!host.isConnected) return; // navigated away while loading
+  if (!bannerSlides.length) { host.innerHTML = ''; return; }
+  const n = bannerSlides.length;
+  host.innerHTML = `<div class="nw-banner">
+    ${bannerSlides.map((s, i) => {
+      const inner = `<div class="nw-banner-bg" data-i="${i}" style="background-image:url('${esc(s.image_url)}')"></div>`;
+      return (safeUrl(s.link) || (s.link || '').startsWith('/'))
+        ? `<a class="nw-banner-slide" href="${esc(s.link)}">${inner}</a>` : `<div class="nw-banner-slide">${inner}</div>`;
+    }).join('')}
+    ${n > 1 ? `<button class="nw-banner-arrow nw-banner-arrow--prev" type="button" aria-label="Previous">‹</button><button class="nw-banner-arrow nw-banner-arrow--next" type="button" aria-label="Next">›</button>
+    <div class="nw-banner-dots">${bannerSlides.map((_, i) => `<div class="nw-banner-dot" data-i="${i}"></div>`).join('')}</div>` : ''}
+  </div>`;
+  showBannerSlide(0);
+  const box = host.firstElementChild;
+  if (n > 1) {
+    box.querySelector('.nw-banner-arrow--prev').addEventListener('click', () => { showBannerSlide(bannerIdx - 1); startBannerTimer(); });
+    box.querySelector('.nw-banner-arrow--next').addEventListener('click', () => { showBannerSlide(bannerIdx + 1); startBannerTimer(); });
+    box.querySelectorAll('.nw-banner-dot').forEach(d => d.addEventListener('click', () => { showBannerSlide(+d.dataset.i); startBannerTimer(); }));
+    startBannerTimer();
+  }
+  await Promise.all(bannerSlides.map(s => loadDims(s.image_url)));
+  applyBannerCrop();
+  bannerRO = new ResizeObserver(applyBannerCrop); bannerRO.observe(box);
+}
+function showHome() {
+  showReader();
+  currentPost = null; renderList();
+  const vis = posts.filter(p => p.is_published || isAdmin);
+  $('nw-main').innerHTML = `<div id="nw-banner-host"></div>
+    <h2 class="nw-home-title">Latest updates <img src="/images/home/decoration-1.png" alt="" /></h2>
+    ${vis.length ? `<div class="nw-cards">${vis.map(p => `
+      <div class="nw-ncard" data-id="${p.id}">
+        <div class="nw-ncard-body">
+          <h3 class="nw-ncard-title">${esc(p.title)}${p.is_published ? '' : '<span class="nw-draft">Draft</span>'}</h3>
+          <div class="nw-ncard-date">${esc(fmtDate(p.published_at || p.created_at))}</div>
+          ${p.summary ? `<p class="nw-ncard-sum">${esc(p.summary)}</p>` : ''}
+        </div>
+        ${safeImg(p.cover_url) ? `<img class="nw-ncard-img" src="${esc(p.cover_url)}" alt="" loading="lazy" />` : ''}
+      </div>`).join('')}</div>` : '<p class="nw-empty">No newsletters yet — check back soon!</p>'}`;
+  renderBanner($('nw-banner-host'));
+}
 async function openPost(id, push) {
   showReader();
   if (push) history.pushState({}, '', `?post=${id}`);
@@ -277,16 +381,21 @@ async function openPost(id, push) {
   const data = await res.json();
   currentPost = data.post; isAdmin = data.is_admin;
   $('nw-new-btn').hidden = !isAdmin;
-  $('nw-main').innerHTML = articleHtml(currentPost).replace('</article>', isAdmin
+  clearInterval(bannerTimer);
+  $('nw-main').innerHTML = '<div class="nw-back"><button class="nw-btn nw-btn--blue nw-btn--sm" data-home>‹ All updates</button></div>' + articleHtml(currentPost).replace('</article>', isAdmin
     ? `<div class="nw-article-actions"><button class="nw-btn nw-btn--blue" data-edit>Edit</button><button class="nw-btn nw-btn--danger" data-del>Delete</button></div></article>` : '</article>');
   renderList();
   window.scrollTo(0, 0);
 }
+function goHome() { history.pushState({}, '', location.pathname); showHome(); window.scrollTo(0, 0); }
+document.querySelector('.nw-side h2').addEventListener('click', goHome);
 $('nw-main').addEventListener('click', async e => {
+  const card = e.target.closest('.nw-ncard'); if (card) { openPost(card.dataset.id, true); return; }
+  if (e.target.closest('[data-home]')) { goHome(); return; }
   if (e.target.closest('[data-edit]')) { openBuilder(currentPost); return; }
   if (e.target.closest('[data-del]') && confirm('Delete this newsletter permanently?')) {
     await fetch(`${API}/admin/news/${currentPost.id}`, { method: 'DELETE', headers: authHeaders() });
-    currentPost = null; history.pushState({}, '', location.pathname); await loadList(); route();
+    currentPost = null; history.pushState({}, '', location.pathname); await loadList(); showHome();
   }
 });
 
@@ -401,6 +510,15 @@ canvas.addEventListener('drop', e => {
 });
 canvas.addEventListener('dragend', () => { dragIdx = null; renderCanvas(); });
 
+function summaryFromBlocks(bl) {
+  const t = bl.find(b => (b.type === 'text' || b.type === 'side') && (b.text || '').trim());
+  if (!t) return '';
+  return t.text.replace(/^[#+~!\-]+ /gm, '').replace(/\*\*(.+?)\*\*/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/\s+/g, ' ').trim().slice(0, 400);
+}
+function coverFromBlocks(bl) {
+  const i = bl.find(b => (b.type === 'image' || b.type === 'side') && safeImg(b.url));
+  return i ? i.url : '';
+}
 function currentDraft(published) {
   return { title: $('nw-title').value.trim(), body: JSON.stringify({ v: 2, blocks }), is_published: published };
 }
@@ -415,7 +533,7 @@ function setPreview(on) {
 $('nw-preview-btn').addEventListener('click', () => setPreview(!previewing));
 $('nw-cancel-btn').addEventListener('click', () => {
   if (!confirm('Discard unsaved changes?')) return;
-  if (editingId) openPost(editingId, false); else { showReader(); route(); }
+  if (editingId) openPost(editingId, false); else showHome();
 });
 async function save(published) {
   const d = currentDraft(published);
@@ -426,7 +544,8 @@ async function save(published) {
   fd.append('is_pinned', editingId && currentPost ? !!currentPost.is_pinned : false);
   fd.append('category', editingId && currentPost ? currentPost.category : 'patch-notes');
   fd.append('version_label', editingId && currentPost ? currentPost.version_label || '' : '');
-  fd.append('summary', editingId && currentPost ? currentPost.summary || '' : '');
+  fd.append('summary', summaryFromBlocks(blocks));
+  fd.append('cover_url', coverFromBlocks(blocks));
   document.querySelectorAll('.nw-bar .nw-btn').forEach(b => b.disabled = true);
   try {
     const res = await fetch(editingId ? `${API}/admin/news/${editingId}` : `${API}/admin/news`, { method: editingId ? 'PUT' : 'POST', headers: authHeaders(), body: fd });
@@ -445,10 +564,7 @@ $('nw-new-btn').addEventListener('click', () => { editingId = null; openBuilder(
 function route() {
   const id = new URLSearchParams(location.search).get('post');
   if (id) return openPost(id, false);
-  showReader();
-  const first = posts.find(p => p.is_published) || posts[0];
-  if (first) openPost(first.id, false);
-  else $('nw-main').innerHTML = '<p class="nw-empty">No newsletters yet — check back soon!</p>';
+  showHome();
 }
 window.addEventListener('popstate', route);
 loadList().then(route);
