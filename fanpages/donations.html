@@ -55,7 +55,7 @@
       border-color: rgba(240,192,96,0.5); color: var(--gold);
       box-shadow: 0 0 10px rgba(240,192,96,0.2);
     }
-    .fp-supporters-amount { display: block; font-size: 0.85rem; color: #e8d3a0; opacity: 0.9; margin-top: 0.15rem; }
+    .fp-supporters-amount { display: block; font-size: 0.95rem; color: #f3d9a4; margin-top: 0.15rem; }
     .fp-supporters-empty { font-family: 'Fredoka', 'Lato', cursive; color: #aaa; text-align: center; margin: 0; }
     .fp-donate-main { padding: 2.5rem 2.75rem 3rem; }
     .fp-donate-split { display: grid; gap: 2rem; align-items: stretch; }
@@ -221,31 +221,23 @@
     wrap.appendChild(paypal);
   });
 
-  // Display names only (no amounts), newest first, each name once.
+  // One entry per donation (newest first): display name plus the amount given.
   fetch('/api/donations').then(function (r) { return r.json(); }).then(function (data) {
     var list = document.getElementById('fp-supporters');
-    var seen = {}, names = [];
-    (data.donations || []).forEach(function (d) {
-      var n = (d.donor_name || '').trim();
-      if (!n || n.toLowerCase() === 'anonymous' || seen[n.toLowerCase()]) return;
-      seen[n.toLowerCase()] = 1; names.push({ name: n, amount: parseFloat(d.amount), currency: d.currency });
-    });
+    var SYMBOLS = { USD: '$', EUR: '€', GBP: '£', CAD: 'CA$', AUD: 'A$' };
+    var rows = (data.donations || []).filter(function (d) { return parseFloat(d.amount) > 0; });
     list.innerHTML = '';
-    if (!names.length) {
+    if (!rows.length) {
       list.innerHTML = '<li class="fp-supporters-empty" style="background:none;border:none">Be the first! ✨</li>';
       return;
     }
-    var SYMBOLS = { USD: '$', EUR: '€', GBP: '£', CAD: 'CA$', AUD: 'A$' };
-    names.forEach(function (n, i) {
+    rows.forEach(function (d) {
       var li = document.createElement('li');
-      li.textContent = n.name;
-      // Amount shown for the most recent supporter only.
-      if (i === 0 && n.amount > 0) {
-        var amt = document.createElement('span');
-        amt.className = 'fp-supporters-amount';
-        amt.textContent = 'Most recent: ' + (SYMBOLS[n.currency] || (n.currency + ' ')) + n.amount.toFixed(2);
-        li.appendChild(amt);
-      }
+      li.textContent = (d.donor_name || 'Anonymous').trim() || 'Anonymous';
+      var amt = document.createElement('span');
+      amt.className = 'fp-supporters-amount';
+      amt.textContent = '🌸 ' + (SYMBOLS[d.currency] || (d.currency + ' ')) + parseFloat(d.amount).toFixed(2);
+      li.appendChild(amt);
       list.appendChild(li);
     });
   }).catch(function () {
