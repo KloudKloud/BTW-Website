@@ -7852,7 +7852,7 @@ app.get('/api/moderator/my-sites', requireAuth, async (req, res) => {
   const siteOrderBy = SITE_SORTS[req.query.sort] || SITE_SORTS.page;
   const { rows } = await pool.query(
     `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.view_count, ms.updated_at,
-       ms.synopsis, ms.rating, ms.is_complete, u.avatar, u.display_name, u.username,
+       ms.synopsis, ms.rating, ms.is_complete, ms.tags, ms.fandoms, ms.categories, ms.relationships, u.avatar, u.display_name, u.username,
        NOT EXISTS (
          SELECT 1 FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
        ) AS is_draft_only,
