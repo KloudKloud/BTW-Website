@@ -7902,31 +7902,6 @@ app.get('/api/moderator/my-sites', requireAuth, async (req, res) => {
   });
 });
 
-// "Reorder" from the Creator Hub -- profile-wide Stories order
-// (moderator_sites.profile_sort_order). Same shape as the characters/gallery
-// profile-order endpoints above.
-app.put('/api/moderator/sites/profile-order', requireAuth, async (req, res) => {
-  const order = req.body.order;
-  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of site IDs.' });
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    for (let i = 0; i < order.length; i++) {
-      await client.query(
-        'UPDATE moderator_sites SET profile_sort_order = $1 WHERE id = $2 AND owner_user_id = $3',
-        [i, order[i], req.user.id]
-      );
-    }
-    await client.query('COMMIT');
-  } catch (e) {
-    await client.query('ROLLBACK');
-    return res.status(500).json({ error: 'Could not save the new order.' });
-  } finally {
-    client.release();
-  }
-  res.json({ message: 'Order saved.' });
-});
-
 // ── Site (Above All Else / Meet Blue text + links) ────────────────────────────
 app.get('/api/moderator/site', requireAuth, requireModerator, async (req, res) => {
   res.json({ site: req.modSite });
@@ -8702,20 +8677,13 @@ app.put('/api/moderator/chapters/:id/status', requireAuth, requireModerator, asy
     [status, req.params.id, req.modSite.id]
   );
   if (!chapter) return res.status(404).json({ error: 'Not found.' });
-  // Only notify followers on the draft→published transition, not every save
-  // -- also the one moment a story jumps back to the top of the owner's
-  // profile Page Order (editing an already-published chapter doesn't).
+  // Only notify followers on the draft→published transition, not every save.
+  // (Profile story order is automatic -- by last published-chapter update.)
   let levelUp = null;
   if (existing && existing.status !== 'published' && status === 'published') {
     await notifyFollowers(req.user.id, 'new_chapter',
       `published a new chapter: "${chapter.title}".`,
       `/${req.modSite.story_path}/reader?ch=${chapter.id}`);
-    await pool.query(
-      `UPDATE moderator_sites SET profile_sort_order = (
-         SELECT COALESCE(MIN(profile_sort_order), 0) - 1 FROM moderator_sites WHERE owner_user_id = $1
-       ) WHERE id = $2`,
-      [req.user.id, req.modSite.id]
-    );
     levelUp = await awardXp(req.user.id, 'chapter', chapter.id, 50);
   }
   res.json({ chapter, levelUp });
@@ -9497,31 +9465,6 @@ app.put('/api/moderator/gallery/reorder', requireAuth, requireModerator, async (
       await client.query(
         'UPDATE gallery_story_links SET sort_order = $1 WHERE gallery_id = $2 AND site_id = $3',
         [i, order[i], req.modSite.id]
-      );
-    }
-    await client.query('COMMIT');
-  } catch (e) {
-    await client.query('ROLLBACK');
-    return res.status(500).json({ error: 'Could not save the new order.' });
-  } finally {
-    client.release();
-  }
-  res.json({ message: 'Order saved.' });
-});
-
-// "Reorder" from the Creator Hub -- profile-wide Gallery order (the base
-// table's own sort_order), independent of any story link. See the matching
-// characters/profile-order endpoint above for the full rationale.
-app.put('/api/moderator/gallery/profile-order', requireAuth, async (req, res) => {
-  const order = req.body.order;
-  if (!Array.isArray(order) || !order.length) return res.status(400).json({ error: 'order must be a non-empty array of gallery IDs.' });
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    for (let i = 0; i < order.length; i++) {
-      await client.query(
-        'UPDATE moderator_gallery SET sort_order = $1 WHERE id = $2 AND owner_user_id = $3',
-        [i, order[i], req.user.id]
       );
     }
     await client.query('COMMIT');
