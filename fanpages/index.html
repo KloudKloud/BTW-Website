@@ -185,6 +185,44 @@
        comic-box pair (19% each) on either side. */
     .fp-hero-banner-mid { position: relative; flex: 1 1 0; min-width: 0; height: 100%; overflow: hidden; }
 
+    /* Neon lives ONLY on the main banner now: a four-color border (one color
+       per panel, left to right), matching colored inner glows on each side,
+       and a single spark that rides the perimeter while cycling through the
+       four colors. The comic panels themselves are plain black-bordered. */
+    .fp-hero-banner-mid {
+      box-sizing: border-box; border: 2px solid transparent;
+      border-image: linear-gradient(90deg, #c846ff, #ff2d55, #39ff14, #00c3ff) 1;
+    }
+    .fp-hero-banner-mid::after {
+      content: ''; position: absolute; inset: 0; z-index: 4; pointer-events: none;
+      box-shadow:
+        inset 14px 0 22px -10px rgba(200,70,255,0.75),
+        inset 0 14px 22px -10px rgba(255,45,85,0.6),
+        inset 0 -14px 22px -10px rgba(57,255,20,0.6),
+        inset -14px 0 22px -10px rgba(0,195,255,0.75);
+    }
+    .fp-hero-banner-mid::before {
+      content: ''; position: absolute; top: 0; left: 0; z-index: 5; pointer-events: none;
+      width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border-radius: 50%;
+      background: radial-gradient(circle, #fff 0%, var(--spark, #fff) 55%, transparent 100%);
+      box-shadow: 0 0 6px 1px var(--spark, #fff), 0 0 13px 4px var(--spark-dim, rgba(255,255,255,0.5));
+      offset-path: inset(2px round 2px); offset-distance: 0%;
+      animation: fp-spark-travel 9s linear infinite, fp-spark-flicker 0.45s ease-in-out infinite, fp-spark-hue 9s linear infinite;
+    }
+    @keyframes fp-spark-hue {
+      0%, 100% { --spark: #c846ff; --spark-dim: rgba(200,70,255,0.45); }
+      25% { --spark: #ff2d55; --spark-dim: rgba(255,45,85,0.45); }
+      50% { --spark: #39ff14; --spark-dim: rgba(57,255,20,0.45); }
+      75% { --spark: #00c3ff; --spark-dim: rgba(0,195,255,0.45); }
+    }
+    @property --spark { syntax: '<color>'; inherits: true; initial-value: #fff; }
+    @property --spark-dim { syntax: '<color>'; inherits: true; initial-value: rgba(255,255,255,0.5); }
+
+    /* Comic panels: plain black borders, no glow or traveling spark. */
+    .fp-hero-row .fp-comic-box { border: 1px solid #000; }
+    .fp-hero-row .fp-comic-box::before,
+    .fp-hero-row .fp-comic-box::after { display: none; }
+
     /* Phone widths: stack the banner full-width on top, with the four
        comic boxes as an equal-width row underneath it instead of five
        cramped slivers squeezed into one row. */
