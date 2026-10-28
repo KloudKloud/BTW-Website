@@ -726,6 +726,7 @@
       display: flex; flex-direction: column; overflow: hidden;
     }
     .lv-spin-card-back {
+      transform: rotateY(0deg); /* Firefox: faces need their own 3D transform for backface-visibility */
       background: radial-gradient(circle at 50% 35%, rgba(240,192,96,0.25), transparent 60%), linear-gradient(160deg, #2a2240, #130f20);
       border: 4px solid rgba(240,192,96,0.5); align-items: center; justify-content: center; font-size: 4.5rem;
       box-shadow: 0 16px 40px rgba(0,0,0,0.6), inset 0 0 60px rgba(240,192,96,0.08);
@@ -829,7 +830,10 @@
        BELOW the front instead of overlaying it, doubling the popup's
        height and pushing the Flip button (and the back face itself) way
        down the page. */
-    .lv-trading-card.lv-trading-card-face--front { position: relative; }
+    /* Explicit rotateY(0deg) on the front: Firefox only applies backface-visibility:hidden
+       to a face that has its own 3D transform, so without it the un-rotated front stayed
+       painted (mirrored) after the flip and the back never showed. Chrome didn't care. */
+    .lv-trading-card.lv-trading-card-face--front { position: relative; transform: rotateY(0deg); }
     .lv-trading-card.lv-trading-card-face--back { position: absolute; inset: 0; transform: rotateY(180deg); }
     /* backface-visibility:hidden only hides PAINT, not hit-testing, in
        enough browsers that the face rotated away was still swallowing
