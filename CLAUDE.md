@@ -351,6 +351,65 @@ specific desired display order on *both* at once means setting `created_at` expl
 row (not relying on literal insertion sequence) while independently setting `sort_order`,
 rather than trying to get one single insertion order to satisfy both.
 
+## Fanpage Hub hero row (fanpages/index.html) — current state + saved styles
+
+**Two saved hero designs exist as git tags (pushed to origin) — find them with
+`git tag -l "hub-hero-*"`.** The user explicitly wants to be able to flip back:
+- `hub-hero-classic` (commit `de15715`): narrow comic panels (fixed 9.5% width,
+  ~0.38 ratio), per-panel colored neon borders + traveling sparks.
+- `hub-hero-wide-panels` (commit `d8d0a36`) — **the current live style**: the four
+  comic panels are `aspect-ratio: 603 / 1012` at the row's height (row height is
+  `clamp(305px, 25vw, 425px)`, unchanged), the banner flexes to fill the rest,
+  panels have no resting glow and only a 1px black line where two meet, the
+  banner alone has a soft blue border + inner glow (no moving spark), and
+  hovering a panel lights that panel in its own neon color (Gallery purple,
+  Stories red, Characters green, Clubs blue) and recolors the banner glow to
+  match (via `:has()` + `--neon`/`--neon-glow` vars on `.fp-hero-row`).
+- **To switch back safely**: only six commits sit between the tags
+  (`a8721a9 68c4eec 24e4611 6f54a51 640c49e d8d0a36`) and they touch ONLY
+  `fanpages/index.html` + `fanpages/admin.html`, all hero-only. Prefer
+  `git revert --no-commit d8d0a36 640c49e 6f54a51 24e4611 68c4eec a8721a9`, which
+  undoes just the redesign and keeps later work. `git checkout <tag> -- fanpages/index.html fanpages/admin.html`
+  overwrites the WHOLE files and will wipe any unrelated later edits to them —
+  only use it if nothing else has touched those files. Tags are bookmarks, not a
+  rewind: checking out/restoring never deletes later work. Then run the normal
+  deploy cycle.
+- Admin → Bulletin → Hero Row Images crop editor/tiles use the same 603:1012
+  ratio for the four comic slots (other slots keep their own measured ratios:
+  Spotlights 334/484, Recent Submissions 267/495, Arcade 655/416, News Posts and
+  Donations 655/277). Recommended art for a comic panel: 603x1012 (or 1206x2024).
+- `fanpages/btw-cropper.js` accepts an opt-in `minZoomFactor` (<1) so a cropper can
+  zoom OUT past "cover"; only the hero editor uses it (0.2). Server accepts hero
+  zoom 10–400 (other slots stay 100–400). Position fractions follow CSS
+  `background-position` % convention (offset = p × (viewport − image)).
+
+## Other pages touched recently (so a /clear doesn't lose the context)
+
+- **News Posts** (`fanpages/news.html`): home cards are 42%-wide, centered, 2 per row,
+  gap 7%, newest 4 shown then a "See More" button; summary clamps at 2 lines; the
+  builder REQUIRES a cover image (separate upload, `cover_url`) like it requires a
+  title; golden Back pill (`.nw-back-btn`) replaces "All updates"; divider under
+  admin-only New Post button.
+- **Levels** (`fanpages/levels.html`): Leaderboard + Recent Activity boxes are always
+  equal size (fixed list heights in an equal-row grid; `/api/level-hub` pads each
+  board to 10 rows with 0-XP members); the banner is exactly as tall as both boxes
+  combined (aspect ≈1.135:1, so ~1550x1365 art; admin crop editor matches); the
+  Arcade menu uses flat underline tabs sitting on the divider line (no "Beta"
+  badge) and the gems/unique-cards/Top Collectors stat boxes live INSIDE the Spin
+  tab panel.
+- Gem grants: balance is `users.gems` + a `gem_ledger` row (see `gems.js`); do both
+  in one transaction (reason e.g. `admin_grant`).
+
+## Testing with Playwright
+
+Playwright is installed locally (`node_modules/playwright`). Log in by POSTing
+`/api/auth/login` with `{ identifier, password }` (field is `identifier`, not
+`email`), then set `localStorage.btw_token` to the returned token before loading a
+page. **Do not write credentials into this file (it's checked in)** — ask the user
+for the test login if it isn't in the current conversation. Test against the live
+site (btwfics.net) after deploying; save scratch scripts/screenshots in the
+scratchpad dir, not the repo.
+
 ## Feedback / working style
 
 - Deploy and verify live *before* committing, every batch — not just at session end.
