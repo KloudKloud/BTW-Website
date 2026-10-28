@@ -5712,7 +5712,7 @@ app.get('/api/recommended-followers', async (req, res) => {
   // sequence instead of reshuffling between requests.
   const { rows } = await pool.query(`
     SELECT u.id, u.username, u.display_name, u.avatar, s.score,
-           raw.follower_count, raw.following_count, raw.club_count
+           raw.follower_count, raw.following_count, raw.club_count, raw.story_count
     FROM users u
     JOIN LATERAL (
       SELECT
@@ -5742,7 +5742,7 @@ app.get('/api/recommended-followers', async (req, res) => {
       username: u.username,
       display_name: u.display_name || u.username,
       avatar: u.avatar || null,
-      follower_count: u.follower_count, following_count: u.following_count, club_count: u.club_count,
+      follower_count: u.follower_count, following_count: u.following_count, club_count: u.club_count, story_count: u.story_count,
     })),
   });
 });
