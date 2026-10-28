@@ -393,7 +393,7 @@ rather than trying to get one single insertion order to satisfy both.
 - **Levels** (`fanpages/levels.html`): Leaderboard + Recent Activity boxes are always
   equal size (fixed list heights in an equal-row grid; `/api/level-hub` pads each
   board to 10 rows with 0-XP members); the banner is exactly as tall as both boxes
-  combined (aspect ≈1.135:1, so ~1550x1365 art; admin crop editor matches); the
+  combined (aspect ≈1.332:1, so ~1548x1164 art; admin crop editor matches); the
   Arcade menu uses flat underline tabs sitting on the divider line (no "Beta"
   badge) and the gems/unique-cards/Top Collectors stat boxes live INSIDE the Spin
   tab panel.
