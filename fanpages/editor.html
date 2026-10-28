@@ -48,6 +48,10 @@
     .ed-page { max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto; padding: 6rem 2rem 5rem; }
     /* No boxed card around the title anymore -- just the icon + heading
        sitting directly on the page's own background, per request. */
+    /* Page accent (the crayon picker beside the tabs) -- every blue glow/
+       title/outline below is built from these three, defaulting to the
+       original blue. Set at runtime by applyHubAccent(). */
+    :root { --ed-accent: #7fa8d9; --ed-accent-light: #cfe0f5; --ed-accent-rgb: 127,168,217; }
     .ed-hero {
       display: flex; align-items: center; justify-content: center; gap: 0.7rem;
       margin-bottom: 1.75rem;
@@ -56,8 +60,8 @@
     /* Cool-blue spotlight glow -- same recipe as the homepage's Featured
        Characters/Gallery/Stories card titles. */
     .ed-title {
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 2.2rem; font-weight: 700; color: #7fa8d9;
-      text-shadow: 0 0 18px rgba(127,168,217,0.55), 0 1px 3px rgba(0,0,0,0.5);
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 2.2rem; font-weight: 700; color: var(--ed-accent);
+      text-shadow: 0 0 18px rgba(var(--ed-accent-rgb),0.55), 0 1px 3px rgba(0,0,0,0.5);
       margin: 0;
     }
     /* Bigger, centered, and unmistakably "there" -- pill-shaped buttons.
@@ -71,29 +75,70 @@
        divider lines between tabs, uppercase Fredoka) with a blue glow
        instead of gold. Centered, tucked tight above the content. */
     .ed-tabs {
-      display: flex; align-items: stretch; width: fit-content; margin: 0 0 1rem;
-      border-radius: 14px; border: 2px solid rgba(127,168,217,0.45); overflow: hidden;
+      display: flex; align-items: stretch; width: fit-content; margin: 0;
+      border-radius: 14px; border: 2px solid rgba(var(--ed-accent-rgb),0.45); overflow: hidden;
       background: linear-gradient(160deg, rgba(10,8,14,0.94), rgba(10,8,14,0.88));
-      box-shadow: 0 0 18px rgba(127,168,217,0.28), 0 10px 28px rgba(0,0,0,0.5);
+      box-shadow: 0 0 18px rgba(var(--ed-accent-rgb),0.28), 0 10px 28px rgba(0,0,0,0.5);
     }
     .ed-tab {
-      background: none; border: none; border-right: 2px solid rgba(127,168,217,0.22); cursor: pointer; color: #bbb;
+      background: none; border: none; border-right: 2px solid rgba(var(--ed-accent-rgb),0.22); cursor: pointer; color: #bbb;
       font-family: 'Fredoka', 'Lato', cursive; font-size: 0.98rem; font-weight: 700;
       text-transform: uppercase; letter-spacing: 0.03em;
       padding: 0.9rem 1.8rem; position: relative; transition: color 0.15s, background 0.15s, text-shadow 0.15s;
     }
     .ed-tabs .ed-tab:last-child { border-right: none; }
-    .ed-tab:hover { color: #fff; background: rgba(127,168,217,0.12); }
+    .ed-tab:hover { color: #fff; background: rgba(var(--ed-accent-rgb),0.12); }
     .ed-tab.active {
-      color: #cfe0f5; background: rgba(127,168,217,0.2);
-      text-shadow: 0 0 12px rgba(127,168,217,0.8);
+      color: var(--ed-accent-light); background: rgba(var(--ed-accent-rgb),0.2);
+      text-shadow: 0 0 12px rgba(var(--ed-accent-rgb),0.8);
+    }
+    .ed-tabs-row { display: flex; align-items: center; gap: 0.9rem; margin-bottom: 1rem; }
+    .ed-tabs-row .ed-tabs { margin: 0; }
+    /* Crayon accent button + popover -- same recipe as the profile's. */
+    .ed-accent-picker { position: relative; }
+    .ed-accent-btn {
+      width: 50px; height: 50px; border-radius: 50%; cursor: pointer; font-size: 1.4rem;
+      display: flex; align-items: center; justify-content: center; color: #f0f0f0;
+      background: linear-gradient(160deg, rgba(10,8,14,0.94), rgba(10,8,14,0.88));
+      border: 1px solid rgba(var(--ed-accent-rgb),0.6); box-shadow: 0 0 8px rgba(var(--ed-accent-rgb),0.22);
+      transition: box-shadow 0.15s, border-color 0.15s, transform 0.15s;
+    }
+    .ed-accent-btn:hover { border-color: var(--ed-accent); box-shadow: 0 0 16px rgba(var(--ed-accent-rgb),0.45); transform: translateY(-1px) rotate(-8deg); }
+    .ed-accent-popover {
+      position: absolute; top: calc(100% + 10px); left: 0; z-index: 60; width: 256px; box-sizing: border-box;
+      background: linear-gradient(160deg, rgba(14,11,20,0.97), rgba(10,8,14,0.97));
+      border: 1px solid rgba(var(--ed-accent-rgb),0.45); border-radius: 14px; padding: 1rem;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.55), 0 0 18px rgba(var(--ed-accent-rgb),0.2);
+    }
+    .ed-accent-popover[hidden] { display: none; }
+    .ed-accent-label { font-size: 0.75rem; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 0.75rem; }
+    .ed-accent-grid { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+    .ed-accent-swatch {
+      width: 48px; height: 48px; border-radius: 50%; cursor: pointer; padding: 0;
+      border: 2px solid transparent; box-shadow: 0 1px 4px rgba(0,0,0,0.4), 0 0 10px var(--sw-glow);
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .ed-accent-swatch:hover { transform: scale(1.08); }
+    .ed-accent-swatch.active { border-color: #fff; }
+    /* One-shot flash on the tab bar whenever the accent changes. */
+    @keyframes edAccentPulse {
+      0% { box-shadow: 0 0 44px rgba(var(--ed-accent-rgb),0.95), 0 10px 28px rgba(0,0,0,0.5); }
+      100% { box-shadow: 0 0 18px rgba(var(--ed-accent-rgb),0.28), 0 10px 28px rgba(0,0,0,0.5); }
+    }
+    .ed-tabs.ed-pulse { animation: edAccentPulse 0.8s ease-out; }
+    /* Panel art under the Create box -- swaps with the active tab. */
+    .ed-side-art {
+      display: block; width: 100%; height: auto; aspect-ratio: 603 / 1012; margin-top: 1rem;
+      border-radius: 16px; object-fit: cover; background: rgba(10,8,14,0.6);
+      border: 1px solid rgba(var(--ed-accent-rgb),0.4);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.45), 0 0 18px rgba(var(--ed-accent-rgb),0.22);
     }
     /* Little divider between the tab bar and the content: a soft blue line
        that fades out to the right. The sidebar/list divider below meets it. */
     .ed-tabs-rule {
       height: 2px; margin-bottom: 1.5rem; border-radius: 2px;
-      background: linear-gradient(90deg, rgba(127,168,217,0.75), rgba(127,168,217,0.25) 55%, rgba(127,168,217,0));
-      box-shadow: 0 0 10px rgba(127,168,217,0.35);
+      background: linear-gradient(90deg, rgba(var(--ed-accent-rgb),0.75), rgba(var(--ed-accent-rgb),0.25) 55%, rgba(var(--ed-accent-rgb),0));
+      box-shadow: 0 0 10px rgba(var(--ed-accent-rgb),0.35);
     }
 
     /* position:relative so the vertical divider below (an absolutely
@@ -106,7 +151,7 @@
     /* Sits in the middle of the grid's 2rem gap between the two columns. */
     .ed-layout::before {
       content: ''; position: absolute; top: -1.5rem; bottom: 0; left: calc(240px + 1rem); width: 1px;
-      background: linear-gradient(180deg, rgba(127,168,217,0.5), rgba(255,255,255,0.14) 12%);
+      background: linear-gradient(180deg, rgba(var(--ed-accent-rgb),0.5), rgba(255,255,255,0.14) 12%);
     }
 
     /* Left column — search on top, create button underneath. Sticky so it
@@ -146,7 +191,7 @@
     .ed-search-wrap { position: relative; }
     .ed-search-icon {
       position: absolute; left: 0.85rem; top: 50%; transform: translateY(-50%);
-      color: #7fa8d9; font-size: 0.85rem; pointer-events: none; opacity: 0.8;
+      color: var(--ed-accent); font-size: 0.85rem; pointer-events: none; opacity: 0.8;
     }
     .ed-search-input {
       width: 100%; box-sizing: border-box;
@@ -158,8 +203,8 @@
       transition: border-color 0.15s, box-shadow 0.15s;
     }
     .ed-search-input:focus {
-      outline: none; border-color: #7fa8d9; background: rgba(127,168,217,0.07);
-      box-shadow: inset 0 1px 3px rgba(0,0,0,0.3), 0 0 0 3px rgba(127,168,217,0.18);
+      outline: none; border-color: var(--ed-accent); background: rgba(var(--ed-accent-rgb),0.07);
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.3), 0 0 0 3px rgba(var(--ed-accent-rgb),0.18);
     }
     .ed-search-input::placeholder { color: #777; }
     .ed-search-count { font-size: 0.74rem; color: #888; padding: 0 0.2rem; }
@@ -245,7 +290,7 @@
       font-family: inherit; text-decoration: none; display: block;
     }
     .ed-tile-btn:hover { border-color: rgba(255,255,255,0.4); color: #fff; }
-    .ed-tile-btn--edit:hover { border-color: #7fa8d9; color: #7fa8d9; box-shadow: 0 0 10px rgba(127,168,217,0.5); }
+    .ed-tile-btn--edit:hover { border-color: var(--ed-accent); color: var(--ed-accent); box-shadow: 0 0 10px rgba(var(--ed-accent-rgb),0.5); }
     .ed-tile-btn--delete:hover { border-color: #d97a72; color: #d97a72; box-shadow: 0 0 10px rgba(217,122,114,0.5); }
 
     /* ── Story card — cover + title (top) + a short synopsis teaser on the
@@ -378,13 +423,13 @@
     .ed-tabdrawer-toggle {
       display: flex; align-items: center; justify-content: center;
       width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
-      background: rgba(20,16,26,0.55); border: 1px solid rgba(127,168,217,0.4);
-      color: #cfe0f5; cursor: pointer; box-shadow: 0 0 14px rgba(127,168,217,0.3);
+      background: rgba(20,16,26,0.55); border: 1px solid rgba(var(--ed-accent-rgb),0.4);
+      color: var(--ed-accent-light); cursor: pointer; box-shadow: 0 0 14px rgba(var(--ed-accent-rgb),0.3);
     }
-    .ed-tabdrawer-toggle:hover { color: #fff; border-color: rgba(127,168,217,0.7); }
+    .ed-tabdrawer-toggle:hover { color: #fff; border-color: rgba(var(--ed-accent-rgb),0.7); }
     .ed-section-title {
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.4rem; font-weight: 700; color: #7fa8d9;
-      text-shadow: 0 0 14px rgba(127,168,217,0.5), 0 1px 3px rgba(0,0,0,0.5);
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.4rem; font-weight: 700; color: var(--ed-accent);
+      text-shadow: 0 0 14px rgba(var(--ed-accent-rgb),0.5), 0 1px 3px rgba(0,0,0,0.5);
       margin: 0;
     }
     .ed-tabdrawer-menu {
@@ -397,8 +442,8 @@
       color: #ddd; font-family: 'Fredoka', 'Lato', cursive; font-size: 1rem; font-weight: 600;
       padding: 0.6rem 0.8rem; border-radius: 8px;
     }
-    .ed-tabdrawer-item:hover { background: rgba(127,168,217,0.12); color: #7fa8d9; }
-    .ed-tabdrawer-item.active { color: #f0c060; }
+    .ed-tabdrawer-item:hover { background: rgba(var(--ed-accent-rgb),0.12); color: var(--ed-accent); }
+    .ed-tabdrawer-item.active { color: var(--ed-accent); }
 
     @media (max-width: 700px) {
       /* Full-bleed, starting right at the top -- same treatment as the
@@ -406,7 +451,7 @@
          desktop-oriented 6rem top padding + 2rem side gutters. */
       .ed-page { padding: 1.1rem 0.75rem 3rem; }
       .ed-hero { display: none; }
-      .ed-tabs, .ed-tabs-rule { display: none; }
+      .ed-tabs-row, .ed-tabs-rule, .ed-side-art { display: none; }
       .ed-mobile-tabbar {
         display: flex; align-items: center; gap: 0.7rem; position: relative;
         margin-bottom: 1.25rem;
@@ -466,10 +511,19 @@
     <h1 class="ed-title">My Creator Hub</h1>
   </div>
 
-  <div class="ed-tabs">
-    <button class="ed-tab active" id="ed-tab-stories" type="button" data-tab="stories">Stories</button>
-    <button class="ed-tab" id="ed-tab-characters" type="button" data-tab="characters">Characters</button>
-    <button class="ed-tab" id="ed-tab-gallery" type="button" data-tab="gallery">Gallery</button>
+  <div class="ed-tabs-row">
+    <div class="ed-tabs" id="ed-tabs">
+      <button class="ed-tab active" id="ed-tab-stories" type="button" data-tab="stories">Stories</button>
+      <button class="ed-tab" id="ed-tab-characters" type="button" data-tab="characters">Characters</button>
+      <button class="ed-tab" id="ed-tab-gallery" type="button" data-tab="gallery">Gallery</button>
+    </div>
+    <div class="ed-accent-picker" id="ed-accent-picker">
+      <button type="button" class="ed-accent-btn" id="ed-accent-btn" title="Change accent color">🖍️</button>
+      <div class="ed-accent-popover" id="ed-accent-popover" hidden>
+        <p class="ed-accent-label">Accent Color</p>
+        <div class="ed-accent-grid" id="ed-accent-grid"></div>
+      </div>
+    </div>
   </div>
   <div class="ed-tabs-rule"></div>
 
@@ -502,6 +556,7 @@
           <span id="ed-create-btn-label">Create Story</span>
         </a>
       </div>
+      <img class="ed-side-art" id="ed-side-art" src="/images/home/btdubs_stories_panel_3.png" alt="" />
     </div>
     <div class="ed-list-col" id="ed-list"><p class="ed-empty">Loading…</p></div>
   </div>
@@ -566,8 +621,62 @@
   let currentTab = 'stories';
   const cache = { stories: null, characters: null, gallery: null };
 
+  const SIDE_ART = {
+    stories:    '/images/home/btdubs_stories_panel_3.png',
+    characters: '/images/home/btdubs_characters_panel_3.png',
+    gallery:    '/images/home/btdubs_gallery_panel_3.png',
+  };
+  Object.values(SIDE_ART).forEach(u => { new Image().src = u; });
+
+  // ── Accent color (crayon button beside the tabs) -- remembered per
+  // browser; blue is the default. Sets the --ed-accent* vars the page's
+  // glows/titles are built from. ──
+  const HUB_ACCENTS = {
+    blue:   { label: 'Blue',   accent: '#7fa8d9', light: '#cfe0f5', rgb: '127,168,217' },
+    gold:   { label: 'Gold',   accent: '#f0c060', light: '#f7d68a', rgb: '240,192,96' },
+    red:    { label: 'Red',    accent: '#e0605a', light: '#f29a93', rgb: '224,96,90' },
+    orange: { label: 'Orange', accent: '#e8954a', light: '#f3bd8c', rgb: '232,149,74' },
+    yellow: { label: 'Yellow', accent: '#e8d860', light: '#f4ea9e', rgb: '232,216,96' },
+    green:  { label: 'Green',  accent: '#5ec98a', light: '#9fe8bb', rgb: '94,201,138' },
+    teal:   { label: 'Teal',   accent: '#4fc9c0', light: '#9ee8e1', rgb: '79,201,192' },
+    purple: { label: 'Purple', accent: '#a87fd9', light: '#cbb3ec', rgb: '168,127,217' },
+    pink:   { label: 'Pink',   accent: '#e07fb0', light: '#f2b8d4', rgb: '224,127,176' },
+  };
+  function applyHubAccent(id, animate) {
+    const t = HUB_ACCENTS[id] || HUB_ACCENTS.blue;
+    const root = document.documentElement.style;
+    root.setProperty('--ed-accent', t.accent);
+    root.setProperty('--ed-accent-light', t.light);
+    root.setProperty('--ed-accent-rgb', t.rgb);
+    document.querySelectorAll('.ed-accent-swatch').forEach(el => el.classList.toggle('active', el.dataset.accent === id));
+    if (animate) {
+      const bar = document.getElementById('ed-tabs');
+      bar.classList.remove('ed-pulse'); void bar.offsetWidth; bar.classList.add('ed-pulse');
+    }
+  }
+  (function initHubAccent() {
+    const grid = document.getElementById('ed-accent-grid');
+    Object.entries(HUB_ACCENTS).forEach(([key, t]) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'ed-accent-swatch'; b.title = t.label; b.dataset.accent = key;
+      b.style.background = t.accent; b.style.setProperty('--sw-glow', `rgba(${t.rgb},0.35)`);
+      b.addEventListener('click', () => {
+        applyHubAccent(key, true);
+        try { localStorage.setItem('btw_hub_accent', key); } catch {}
+      });
+      grid.appendChild(b);
+    });
+    let saved = 'blue';
+    try { saved = localStorage.getItem('btw_hub_accent') || 'blue'; } catch {}
+    applyHubAccent(saved, false);
+    const pop = document.getElementById('ed-accent-popover');
+    document.getElementById('ed-accent-btn').addEventListener('click', (e) => { e.stopPropagation(); pop.hidden = !pop.hidden; });
+    document.addEventListener('click', (e) => { if (!document.getElementById('ed-accent-picker').contains(e.target)) pop.hidden = true; });
+  })();
+
   function switchEdTab(tab) {
     currentTab = tab;
+    document.getElementById('ed-side-art').src = SIDE_ART[tab];
     // Referer headers never carry the URL fragment, so a Cancel button on
     // create-gallery/create-character that builds its "back" link from
     // document.referrer alone can't recover which hub tab we came from --
