@@ -6129,8 +6129,11 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
   // discoverable" rule used by search/browse/spotlight. The owner still
   // sees them, flagged is_draft_only so the card can read as a draft
   // instead of a real published story.
+  // Default ("page") order is Wattpad-style: most recently updated story
+  // first -- any edit to a published chapter or a newly published chapter
+  // bumps its story to the top. No manual ordering for stories anymore.
   const STORY_SORTS = {
-    page: 'ms.profile_sort_order ASC, ms.created_at DESC',
+    page: 'last_chapter_update DESC NULLS LAST, ms.created_at DESC',
     updated: 'last_chapter_update DESC NULLS LAST, ms.created_at DESC',
     oldest: 'ms.created_at ASC',
     popular: 'like_count DESC, ms.created_at DESC',
@@ -6871,7 +6874,8 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
   const nsfwLock = !loggedIn ? 'login' : (!viewerNsfwEnabled ? 'sfw_mode' : null);
 
   const GALLERY_SORTS = {
-    page: 'mg.sort_order ASC, mg.created_at DESC',
+    // Default order is strictly newest-published first (no manual ordering).
+    page: 'mg.created_at DESC, mg.id DESC',
     updated: 'mg.updated_at DESC NULLS LAST, mg.created_at DESC',
     oldest: 'mg.created_at ASC',
     popular: 'like_count DESC, mg.created_at DESC',
@@ -7844,7 +7848,7 @@ app.get('/api/moderator-sites/:slug/is-owner', requireAuth, async (req, res) => 
 // to a single story — this deliberately lists all of them.
 app.get('/api/moderator/my-sites', requireAuth, async (req, res) => {
   const SITE_SORTS = {
-    page: 'ms.profile_sort_order ASC, ms.created_at DESC',
+    page: 'last_chapter_update DESC NULLS LAST, ms.created_at DESC',
     updated: 'last_chapter_update DESC NULLS LAST, ms.created_at DESC',
     oldest: 'ms.created_at ASC',
     popular: 'like_count DESC, ms.created_at DESC',

@@ -2772,7 +2772,7 @@
       fpStoriesSort = val;
       fpStoriesPage = 1;
       loadStoriesSort();
-    });
+    }, { pageLabel: 'Recently Updated', hide: ['updated'] });
 
     // Cover images load in async and can grow the page after this tab's
     // scrolling wallpaper was last measured -- same re-sync the Characters/
@@ -3432,14 +3432,20 @@
   // ── Sort By dropdown — shared by Stories/Characters/Gallery, custom
   // button+popover instead of a native <select> so both the closed box and
   // its open option list can carry the box-background-2.png art fill. ────
-  const FP_SORT_OPTIONS = [
+  const FP_SORT_OPTIONS_BASE = [
     { value: 'page', label: 'Page Order' },
     { value: 'updated', label: 'Date Updated' },
     { value: 'oldest', label: 'Oldest' },
     { value: 'popular', label: 'Popular' },
   ];
-  function renderSortDropdown(containerId, current, onChange) {
+  // Stories/Gallery have no manual "Page Order" anymore -- their default is
+  // automatic (recently updated / newest), so those tabs relabel the default
+  // option and drop the option that would just duplicate it.
+  function renderSortDropdown(containerId, current, onChange, tweaks) {
     const wrap = document.getElementById(containerId);
+    const FP_SORT_OPTIONS = FP_SORT_OPTIONS_BASE
+      .filter(o => !(tweaks && tweaks.hide || []).includes(o.value))
+      .map(o => (o.value === 'page' && tweaks && tweaks.pageLabel) ? { ...o, label: tweaks.pageLabel } : o);
     const currentLabel = (FP_SORT_OPTIONS.find(o => o.value === current) || FP_SORT_OPTIONS[0]).label;
     wrap.innerHTML = `
       <button type="button" class="fp-sort-btn" id="${containerId}-btn">Sort: ${currentLabel} <span class="fp-sort-caret">▾</span></button>
@@ -3699,7 +3705,7 @@
       fpGalleryPromise = null;
       fpGalleryPage = 1;
       loadGalleryTab();
-    });
+    }, { pageLabel: 'Newest', hide: ['updated'] });
 
     const uploaderName = (currentAuthor && (currentAuthor.display_name || currentAuthor.username)) || USERNAME;
     pageItems.forEach(g => {

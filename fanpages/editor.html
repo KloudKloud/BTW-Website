@@ -1150,15 +1150,16 @@
     }
   });
 
-  function edStoryCard(s, disableDrag) {
+  // Stories are ordered automatically (most recently updated first) -- no
+  // drag handle.
+  function edStoryCard(s) {
     const storyPath = s.story_path || s.slug;
     const editUrl = window.fpUrl(`/${storyPath}/edit?from=hub`);
     const row = document.createElement('div');
-    row.className = 'ed-story-row ed-reorderable';
+    row.className = 'ed-story-row';
     row.dataset.id = s.id;
     row.dataset.href = editUrl;
     row.innerHTML = `
-      <span class="ed-story-drag-handle${disableDrag ? ' ed-drag-handle-disabled' : ''}" title="Drag to reorder">⠿</span>
       ${s.is_draft_only ? '<span class="ed-story-draft-badge">Draft</span>' : ''}
       <img class="ed-story-deco" src="/images/home/decoration-8.png" alt="" />
       <a class="ed-bcard-cover" href="${editUrl}">${storyCoverHtml(s)}</a>
@@ -1199,7 +1200,6 @@
       e.stopPropagation();
       toggleMoreMenu(e.currentTarget, s, storyPath);
     });
-    if (!disableDrag) wireEdDragHandle(row, row.querySelector('.ed-story-drag-handle'));
     return row;
   }
 
@@ -1207,12 +1207,15 @@
   // builder's own tiles (club.html's .cl-gallery-editor-tile-wrap): square
   // image, grip handle top-left, "•••" (View on Profile) top-right, title
   // overlay at the bottom, Edit/Delete as their own buttons below.
+  // Characters are manually reorderable (drag handle); gallery posts are not
+  // (opts.reorderable === false) -- they're ordered by publish date.
   function edTile(opts, disableDrag) {
+    const reorderable = opts.reorderable !== false;
     const wrap = document.createElement('div');
-    wrap.className = 'ed-tile-wrap ed-reorderable';
+    wrap.className = 'ed-tile-wrap' + (reorderable ? ' ed-reorderable' : '');
     wrap.dataset.id = opts.id;
     wrap.innerHTML = `
-      <span class="ed-tile-handle${disableDrag ? ' ed-drag-handle-disabled' : ''}" title="Drag to reorder">⠿</span>
+      ${reorderable ? `<span class="ed-tile-handle${disableDrag ? ' ed-drag-handle-disabled' : ''}" title="Drag to reorder">⠿</span>` : ''}
       <div class="ed-tile-menu-wrap ed-more-wrap">
         <button class="ed-more-btn" type="button" title="More options">•••</button>
       </div>
@@ -1233,7 +1236,7 @@
       if (!confirm(`Delete this ${opts.label.toLowerCase()}? This can't be undone.`)) return;
       await opts.onDelete();
     });
-    if (!disableDrag) wireEdDragHandle(wrap, wrap.querySelector('.ed-tile-handle'));
+    if (reorderable && !disableDrag) wireEdDragHandle(wrap, wrap.querySelector('.ed-tile-handle'));
     return wrap;
   }
 
@@ -1289,7 +1292,7 @@
     closeAllContinueDropdowns();
     closeAllMoreMenus();
     if (tab === 'stories') {
-      items.forEach(s => list.appendChild(edStoryCard(s, isFiltered)));
+      items.forEach(s => list.appendChild(edStoryCard(s)));
       initEdTagScrollers(list);
     } else if (tab === 'characters') {
       items.forEach(c => list.appendChild(edTile({
@@ -1309,6 +1312,7 @@
       }, isFiltered)));
     } else {
       items.forEach(g => list.appendChild(edTile({
+        reorderable: false,
         id: g.id, label: 'Gallery Post',
         editHref: window.fpUrl(`/create-gallery?id=${g.id}`),
         img: g.preview_image || g.image,
