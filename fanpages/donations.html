@@ -55,6 +55,7 @@
       border-color: rgba(240,192,96,0.5); color: var(--gold);
       box-shadow: 0 0 10px rgba(240,192,96,0.2);
     }
+    .fp-supporters-amount { display: block; font-size: 0.85rem; color: #e8d3a0; opacity: 0.9; margin-top: 0.15rem; }
     .fp-supporters-empty { font-family: 'Fredoka', 'Lato', cursive; color: #aaa; text-align: center; margin: 0; }
     .fp-donate-main { padding: 2.5rem 2.75rem 3rem; }
     .fp-donate-split { display: grid; gap: 2rem; align-items: stretch; }
@@ -227,16 +228,24 @@
     (data.donations || []).forEach(function (d) {
       var n = (d.donor_name || '').trim();
       if (!n || n.toLowerCase() === 'anonymous' || seen[n.toLowerCase()]) return;
-      seen[n.toLowerCase()] = 1; names.push(n);
+      seen[n.toLowerCase()] = 1; names.push({ name: n, amount: parseFloat(d.amount), currency: d.currency });
     });
     list.innerHTML = '';
     if (!names.length) {
       list.innerHTML = '<li class="fp-supporters-empty" style="background:none;border:none">Be the first! ✨</li>';
       return;
     }
-    names.forEach(function (n) {
+    var SYMBOLS = { USD: '$', EUR: '€', GBP: '£', CAD: 'CA$', AUD: 'A$' };
+    names.forEach(function (n, i) {
       var li = document.createElement('li');
-      li.textContent = n;
+      li.textContent = n.name;
+      // Amount shown for the most recent supporter only.
+      if (i === 0 && n.amount > 0) {
+        var amt = document.createElement('span');
+        amt.className = 'fp-supporters-amount';
+        amt.textContent = 'Most recent: ' + (SYMBOLS[n.currency] || (n.currency + ' ')) + n.amount.toFixed(2);
+        li.appendChild(amt);
+      }
       list.appendChild(li);
     });
   }).catch(function () {
