@@ -4867,11 +4867,16 @@ function newsFields(req) {
     category: NEWS_CATEGORIES.includes(b.category) ? b.category : 'patch-notes',
     version: String(b.version_label || '').trim().slice(0, 40),
     summary: String(b.summary || '').trim().slice(0, 400),
-    body: String(b.body || '').slice(0, 60000),
+    body: String(b.body || '').slice(0, 200000),
     published: b.is_published === 'true' || b.is_published === '1',
     pinned: b.is_pinned === 'true' || b.is_pinned === '1',
   };
 }
+// Image upload for the newsletter builder's image / side-image blocks.
+app.post('/api/admin/news/image', requireAuth, requireAdmin, uploadModImage.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No image uploaded.' });
+  res.json({ url: `/images/moderators/${req.file.filename}` });
+});
 app.post('/api/admin/news', requireAuth, requireAdmin, uploadModImage.single('cover'), async (req, res) => {
   const f = newsFields(req);
   if (!f.title) return res.status(400).json({ error: 'A title is required.' });
