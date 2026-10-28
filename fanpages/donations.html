@@ -45,18 +45,27 @@
     .fp-donate-side-box h2 img { width: 24px; height: 24px; object-fit: contain; }
     .fp-donate-side-box .fp-donate-btns { flex-direction: column; gap: 0.8rem; margin-top: 0; }
     .fp-donate-side-box .fp-donate-btn { font-size: 1.25rem; padding: 0.95rem 1rem; border-radius: 16px; }
-    .fp-supporters { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.55rem; }
+    /* ~10 compact rows (42px + 8px gap) before it scrolls; also capped to what
+       fits beside the sticky Donations box so the pinned column never overflows
+       a short viewport. */
+    .fp-supporters {
+      list-style: none; margin: 0; padding: 0 0.3rem 0 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem;
+      max-height: max(200px, min(492px, calc(100vh - 500px))); overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: rgba(240,192,96,0.45) transparent;
+    }
     .fp-supporters li {
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.1rem; color: #eee; text-align: center;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; color: #eee;
       background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 12px; padding: 0.55rem 0.8rem; overflow-wrap: anywhere;
+      border-radius: 12px; padding: 0.5rem 0.8rem; min-height: 42px; box-sizing: border-box;
+      display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
     }
     .fp-supporters li:first-child {
       border-color: rgba(240,192,96,0.5); color: var(--gold);
       box-shadow: 0 0 10px rgba(240,192,96,0.2);
     }
-    .fp-supporters-amount { display: block; font-size: 0.95rem; color: #f3d9a4; margin-top: 0.15rem; }
-    .fp-supporters-empty { font-family: 'Fredoka', 'Lato', cursive; color: #aaa; text-align: center; margin: 0; }
+    .fp-supporters-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fp-supporters-amount { flex: 0 0 auto; font-size: 0.95rem; color: #f3d9a4; white-space: nowrap; }
+    .fp-supporters-empty { font-family: 'Fredoka', 'Lato', cursive; color: #aaa; text-align: center; margin: 0; justify-content: center; }
     .fp-donate-main { padding: 2.5rem 2.75rem 3rem; }
     .fp-donate-split { display: grid; gap: 2rem; align-items: stretch; }
     .fp-donate-split--art-right { grid-template-columns: 1fr 250px; }
@@ -233,7 +242,10 @@
     }
     rows.forEach(function (d) {
       var li = document.createElement('li');
-      li.textContent = (d.donor_name || 'Anonymous').trim() || 'Anonymous';
+      var nm = document.createElement('span');
+      nm.className = 'fp-supporters-name';
+      nm.textContent = (d.donor_name || 'Anonymous').trim() || 'Anonymous';
+      li.appendChild(nm);
       var amt = document.createElement('span');
       amt.className = 'fp-supporters-amount';
       amt.textContent = '🌸 ' + (SYMBOLS[d.currency] || (d.currency + ' ')) + parseFloat(d.amount).toFixed(2);
