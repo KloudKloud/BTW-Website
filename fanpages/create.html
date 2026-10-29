@@ -14,7 +14,11 @@
     body { background: transparent; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; margin: 0; padding: 0; }
     a { color: inherit; }
     [hidden] { display: none !important; }
-    .sb-page { max-width: 880px; margin: 0 auto; padding: calc(84px + 1.5rem) 1.25rem 4rem; }
+    .sb-page { max-width: 1120px; margin: 0 auto; padding: calc(84px + 2rem) 1.5rem 4rem; }
+    /* Wattpad-style: permanent cover column on the left, tabs + content on the right. */
+    .sb-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 2.5rem; align-items: start; }
+    .sb-side { position: sticky; top: calc(84px + 2rem); }
+    .sb-main { min-width: 0; }
     .char-editor-modal { margin: 0 auto; max-height: none; overflow-y: visible; }
     .sb-linkto-modal { margin-top: 2rem; }
 
@@ -53,19 +57,49 @@
     }
     .sb-topbar-delete:hover { background: #b13d3d; box-shadow: 0 0 20px rgba(201,74,74,0.65); }
 
-    /* ── Details / Chapters tabs ── */
-    .sb-tabs { display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem; }
+        /* ── Details / Chapters tabs -- flat underline tabs on a divider line ── */
+    .sb-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.14); }
     .sb-tab {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 1.15rem; font-weight: 600; color: #aaa;
-      background: rgba(10,8,14,0.55); border: 1px solid rgba(255,255,255,0.14); border-radius: 26px;
-      padding: 0.6em 2.2em; cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
+      background: none; border: none; border-bottom: 3px solid transparent; margin-bottom: -1px;
+      padding: 0.7em 1.6em; cursor: pointer; transition: color 0.15s, border-color 0.15s;
     }
-    .sb-tab:hover:not(:disabled) { color: #fff; border-color: rgba(255,255,255,0.35); }
-    .sb-tab.active {
-      color: #f7dda0; border-color: rgba(240,192,96,0.7); background: rgba(240,192,96,0.1);
-      box-shadow: 0 0 14px rgba(240,192,96,0.22);
-    }
+    .sb-tab:hover:not(:disabled) { color: #fff; }
+    .sb-tab.active { color: #f7dda0; border-bottom-color: #f0c060; }
     .sb-tab:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── Cover column ── */
+    .sb-cover {
+      position: relative; width: 100%; aspect-ratio: 2 / 3; border-radius: 6px; overflow: hidden;
+      background: #1a1d2e; border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .sb-cover img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; }
+    .sb-cover-placeholder { color: #8a90a8; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.95rem; text-align: center; padding: 1rem; }
+    /* Pencil in the bottom-right: a small circle that grows into an
+       "Edit Story Cover" pill on hover. Only exists on the Details tab. */
+    .sb-cover-edit {
+      position: absolute; right: 10px; bottom: 10px; height: 40px; max-width: 40px; border-radius: 20px;
+      display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; overflow: hidden; white-space: nowrap;
+      background: #1fb6a8; color: #fff; border: none; padding: 0 11px; cursor: pointer;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.92rem; font-weight: 700;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.5); transition: max-width 0.25s ease, background 0.15s;
+    }
+    .sb-cover-edit svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .sb-cover-edit-label { opacity: 0; transition: opacity 0.15s; }
+    .sb-cover-edit:hover, .sb-cover-edit:focus-visible { max-width: 220px; background: #1a9d91; }
+    .sb-cover-edit:hover .sb-cover-edit-label, .sb-cover-edit:focus-visible .sb-cover-edit-label { opacity: 1; }
+    body.sb-on-chapters .sb-cover-edit { display: none; }
+    .sb-cover-hint { color: #8a90a8; font-size: 0.78rem; margin: 0.6rem 0 0; text-align: center; }
+    body.sb-on-chapters .sb-cover-hint { display: none; }
+    .sb-reader-btn {
+      display: none; width: 100%; margin-top: 1rem; text-align: center; text-decoration: none;
+      background: #1fb6a8; color: #fff; border: none; border-radius: 8px; padding: 0.8em 1em; cursor: pointer;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 700;
+      box-shadow: 0 0 14px rgba(31,182,168,0.4); transition: background 0.15s;
+    }
+    .sb-reader-btn:hover { background: #1a9d91; }
+    body.sb-on-chapters.sb-editing .sb-reader-btn { display: block; }
 
     .sb-field-title-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; position: relative; }
     .sb-field-title-row label,
@@ -90,11 +124,9 @@
     .sb-page .wiki-tags-input {
       font-family: 'Fredoka', 'Lato', cursive;
     }
+    /* Plain dark-blue panels (no art) so the form reads cleanly. */
     .sb-page .char-editor-modal {
-      background-image: linear-gradient(160deg, rgba(10,8,14,0.55), rgba(10,8,14,0.42)), url('/images/home/box-background-2.png');
-      background-size: cover, cover;
-      background-position: center, center;
-      background-repeat: no-repeat, no-repeat;
+      background: #141828; border-color: rgba(127,168,217,0.22);
     }
     .sb-page .mod-field label,
     .sb-page .mod-field-label-standalone,
@@ -110,7 +142,7 @@
     .sb-page .mod-input,
     .sb-page .mod-textarea,
     .sb-page .mod-select {
-      background: rgba(8,6,12,0.65);
+      background: rgba(6,8,18,0.6);
       border-color: rgba(255,255,255,0.22);
     }
     .sb-page .mod-input:focus,
@@ -119,50 +151,22 @@
       border-color: #1fb6a8;
       box-shadow: 0 0 0 3px rgba(31,182,168,0.18);
     }
-    .sb-page .wiki-tags-input-box { background: rgba(8,6,12,0.65); border-color: rgba(255,255,255,0.22); }
+    .sb-page .wiki-tags-input-box { background: rgba(6,8,18,0.6); border-color: rgba(255,255,255,0.22); }
     .sb-page .wiki-tags-input-box:focus-within { border-color: #1fb6a8; box-shadow: 0 0 0 3px rgba(31,182,168,0.18); }
     .sb-page .gallery-linkto-box {
-      background: rgba(10,8,14,0.6);
+      background: rgba(6,8,18,0.5);
       border-color: rgba(240,192,96,0.4);
     }
     .mod-page-bg-img-static { opacity: 1; filter: blur(10px); transform: scale(1.04); }
     .mod-page-bg-overlay-static { background: rgba(10,8,14,0.2); }
 
-    /* ── Cover upload -- the character builder's reference-image box, at a
-       book cover's 2:3 shape. ── */
-    .sb-cover-wrap { max-width: 220px; aspect-ratio: 2 / 3; margin: 0 0 0.4rem; }
-    .sb-cover-hint { color: #aaa; font-size: 0.8rem; margin: 0 0 1.5rem; }
-
-    /* ── Complete? / Rating share the gallery builder's radio-pill row ── */
+        /* ── Complete? / Rating share the gallery builder's radio-pill row ── */
     .sb-page .gallery-cat-field { margin: 0 0 1.5rem; }
     .sb-page .gallery-cat-option--complete:has(input:checked) { background: rgba(90,180,110,0.2); border-color: rgba(90,180,110,0.6); color: #fff; }
 
     .sb-section-gap { margin-bottom: 1.5rem; }
 
-    /* ── Links -- one rounded row per link: icon, label, URL, remove ── */
-    .sb-links-list { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 0.75rem; }
-    .sb-link-row {
-      display: grid; grid-template-columns: auto minmax(0, 0.8fr) minmax(0, 1.4fr) auto; gap: 0.6rem; align-items: center;
-      background: rgba(10,8,14,0.5); border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; padding: 0.55rem 0.7rem;
-    }
-    .sb-link-row-icon { font-size: 1.05rem; opacity: 0.85; }
-    .sb-link-row .mod-input { margin: 0; }
-    .sb-link-remove {
-      width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer; flex-shrink: 0;
-      background: rgba(217,122,114,0.2); color: #f5b3ac; font-size: 0.8rem; font-weight: 700; line-height: 1;
-    }
-    .sb-link-remove:hover { background: #d97a72; color: #fff; }
-    .sb-link-add {
-      display: inline-flex; align-items: center; gap: 0.45rem; cursor: pointer;
-      background: rgba(255,255,255,0.03); border: 2px dashed rgba(255,255,255,0.25); border-radius: 12px;
-      color: #aaa; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.95rem; font-weight: 600; padding: 0.55em 1.2em;
-      transition: border-color 0.2s, color 0.2s, background 0.2s;
-    }
-    .sb-link-add:hover { border-color: #f0c060; color: #f0c060; background: rgba(240,192,96,0.07); }
-    .sb-link-add span { font-size: 1.3rem; line-height: 1; color: #f0c060; }
-    .sb-link-row .sb-link-url--invalid { border-color: #d97a72; }
-
-    /* ── Chapters tab ── */
+        /* ── Chapters tab ── */
     .sb-chap-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
     .sb-chap-toolbar-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
     .sb-pill {
@@ -178,10 +182,10 @@
     .sb-chap-empty { color: rgba(255,255,255,0.55); text-align: center; padding: 2rem 0; font-family: 'Fredoka', 'Lato', cursive; }
     .sb-chap-card {
       display: flex; align-items: center; gap: 1rem; padding: 0.9rem 1.1rem; border-radius: 14px; position: relative;
-      background: rgba(10,8,14,0.62); border: 1px solid rgba(255,255,255,0.14); cursor: pointer;
+      background: rgba(6,8,18,0.55); border: 1px solid rgba(255,255,255,0.14); cursor: pointer;
       transition: border-color 0.15s, background 0.15s;
     }
-    .sb-chap-card:hover { border-color: rgba(240,192,96,0.45); background: rgba(10,8,14,0.78); }
+    .sb-chap-card:hover { border-color: rgba(240,192,96,0.45); background: rgba(6,8,18,0.8); }
     .sb-chap-num {
       flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
       background: rgba(240,192,96,0.1); border: 1px solid rgba(240,192,96,0.35); color: #f0c060;
@@ -258,10 +262,9 @@
       .sb-topbar-actions { gap: 0.5rem; }
       .sb-topbar-cancel, .sb-topbar-save, .sb-topbar-delete { font-size: 0.82rem; padding: 0.6em 1.1em; }
       .sb-page { padding-top: calc(64px + 1rem); }
-      .sb-tab { padding: 0.55em 1.4em; font-size: 1rem; }
-      .sb-link-row { grid-template-columns: minmax(0, 1fr) auto; }
-      .sb-link-row-icon { display: none; }
-      .sb-link-row .sb-link-url { grid-column: 1 / 2; }
+      .sb-tab { padding: 0.6em 1.1em; font-size: 1rem; }
+      .sb-layout { grid-template-columns: 1fr; gap: 1.25rem; }
+      .sb-side { position: static; max-width: 200px; margin: 0 auto; }
       .sb-chap-stats { display: none; }
       .sb-chap-thumb { display: none; }
     }
@@ -286,6 +289,21 @@
 </div>
 
 <main class="sb-page">
+ <div class="sb-layout">
+  <aside class="sb-side">
+    <div class="sb-cover" id="sb-cover-wrap">
+      <img id="sb-cover-img" alt="Story cover" style="display:none;" draggable="false" />
+      <div class="sb-cover-placeholder" id="sb-cover-placeholder">No cover yet</div>
+      <button type="button" class="sb-cover-edit" id="sb-cover-edit" aria-label="Edit Story Cover">
+        <span class="sb-cover-edit-label">Edit Story Cover</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+      </button>
+    </div>
+    <input type="file" id="sb-cover-file" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+    <p class="sb-cover-hint">Recommended: 800 × 1200px (2:3)</p>
+    <a class="sb-reader-btn" id="sb-reader-btn" href="#" target="_blank" rel="noopener">View as Reader</a>
+  </aside>
+  <div class="sb-main">
 
   <nav class="sb-tabs" id="sb-tabs">
     <button type="button" class="sb-tab active" id="sb-tab-details">Details</button>
@@ -301,15 +319,6 @@
         <span class="mod-error-banner-icon">⚠️</span>
         <span id="sb-error-banner-text"></span>
       </div>
-
-      <p class="mod-field-label-standalone">Cover Image</p>
-      <div class="char-editor-ref-wrap sb-cover-wrap" id="sb-cover-wrap">
-        <img id="sb-cover-img" alt="" style="display:none;" draggable="false" />
-        <div class="char-editor-ref-placeholder" id="sb-cover-placeholder">Click to upload a cover</div>
-        <div class="char-editor-ref-overlay">📷 Change Cover</div>
-      </div>
-      <input type="file" id="sb-cover-file" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-      <p class="sb-cover-hint">Recommended size: 800 × 1200px (2:3, like a book cover)</p>
 
       <div class="mod-field">
         <label for="sb-title">Title <span class="mod-required-star">*</span></label>
@@ -402,7 +411,7 @@
         </div>
       </div>
 
-      <div class="mod-field">
+      <div class="mod-field" style="margin-bottom:0;">
         <div class="sb-field-title-row">
           <label for="tags-text-input">Additional Tags <span class="wiki-tags-count" id="tags-count" style="margin-left:0.4em;">0/100</span></label>
           <button class="wiki-tags-tip-icon" type="button" aria-label="Tag tips">💡</button>
@@ -417,17 +426,6 @@
         </div>
       </div>
 
-      <div class="mod-field" style="margin-bottom:0;">
-        <div class="sb-field-title-row">
-          <label>Links</label>
-          <button class="wiki-tags-tip-icon" type="button" aria-label="Links help">💡</button>
-          <div class="wiki-tags-tip-popover" hidden>
-            <p>Add up to 10 links to wherever else people can find you or this story — your art page, Discord, Ko-fi, an original post... Give each one a short label.</p>
-          </div>
-        </div>
-        <div class="sb-links-list" id="sb-links-list"></div>
-        <button type="button" class="sb-link-add" id="sb-link-add"><span>+</span> Add Link</button>
-      </div>
     </div>
 
     <div class="char-editor-modal sb-linkto-modal">
@@ -481,6 +479,8 @@
       <div class="sb-chap-stack" id="sb-chap-stack"></div>
     </div>
   </div>
+  </div>
+ </div>
 </main>
 
 <!-- "Link To: Characters" picker — multi-select, stays open until Done. -->
@@ -598,6 +598,7 @@
     $('sb-tab-chapters').classList.toggle('active', tab === 'chapters');
     $('sb-view-details').hidden = tab !== 'details';
     $('sb-view-chapters').hidden = tab !== 'chapters';
+    document.body.classList.toggle('sb-on-chapters', tab === 'chapters');
     if (tab === 'chapters') loadChapters();
     history.replaceState(null, '', window.location.pathname + window.location.search + (tab === 'chapters' ? '#chapters' : ''));
   }
@@ -754,51 +755,10 @@
   const fandomInput = makeBubbleInput({ name: 'fandom', max: 10, maxLen: 100, collapseWs: false, commaAdds: true });
   const tagsInput = makeBubbleInput({ name: 'tags', max: 100, maxLen: 40, collapseWs: true, countId: 'tags-count' });
 
-  // ── Links ──────────────────────────────────────────────────────────────────
-  const MAX_LINKS = 10;
-  function addLinkRow(label, url) {
-    if ($('sb-links-list').children.length >= MAX_LINKS) return;
-    const row = document.createElement('div');
-    row.className = 'sb-link-row';
-    row.innerHTML = `
-      <span class="sb-link-row-icon">🔗</span>
-      <input class="mod-input sb-link-label" maxlength="40" placeholder="Label (e.g. Ko-fi)" value="${escapeHtml(label || '')}" />
-      <input class="mod-input sb-link-url" maxlength="300" placeholder="https://…" value="${escapeHtml(url || '')}" />
-      <button type="button" class="sb-link-remove" aria-label="Remove link">✕</button>`;
-    row.querySelector('.sb-link-remove').addEventListener('click', () => {
-      row.remove();
-      sbDirty = true;
-      $('sb-link-add').hidden = false;
-    });
-    row.querySelector('.sb-link-url').addEventListener('input', (e) => e.target.classList.remove('sb-link-url--invalid'));
-    $('sb-links-list').appendChild(row);
-    $('sb-link-add').hidden = $('sb-links-list').children.length >= MAX_LINKS;
-  }
-  $('sb-link-add').addEventListener('click', () => { addLinkRow('', ''); sbDirty = true; });
-
-  // Returns { links, bad } -- rows with a URL but a malformed one are flagged.
-  function collectLinks() {
-    const links = [];
-    let bad = 0;
-    $('sb-links-list').querySelectorAll('.sb-link-row').forEach(row => {
-      const labelEl = row.querySelector('.sb-link-label');
-      const urlEl = row.querySelector('.sb-link-url');
-      let url = urlEl.value.trim();
-      const label = labelEl.value.trim();
-      if (!url && !label) return;
-      if (url && !/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) url = 'https://' + url;
-      let ok = false;
-      try { const u = new URL(url); ok = (u.protocol === 'http:' || u.protocol === 'https:') && u.hostname.includes('.'); } catch {}
-      if (!url || !ok) { urlEl.classList.add('sb-link-url--invalid'); bad++; return; }
-      links.push({ label: label || url.replace(/^https?:\/\//i, '').slice(0, 40), url });
-    });
-    return { links, bad };
-  }
-
   // ── Cover (staged; uploaded on save) ───────────────────────────────────────
   let pendingCoverBlob = null;
   let pendingCoverOriginal = null;
-  $('sb-cover-wrap').addEventListener('click', () => $('sb-cover-file').click());
+  $('sb-cover-edit').addEventListener('click', () => $('sb-cover-file').click());
   $('sb-cover-file').addEventListener('change', (e) => {
     const file = e.target.files[0];
     e.target.value = '';
@@ -1055,13 +1015,11 @@
     }
 
     relationshipsInput.flush(); fandomInput.flush(); tagsInput.flush();
-    const { links, bad } = collectLinks();
-    if (bad) { switchTab('details'); showError('One of your links doesn\'t look like a real web address. Fix or remove the highlighted link.'); return; }
 
     const body = {
       site_title: title, synopsis, rating,
       tags: tagsInput.items, categories: Array.from($('sb-category-checks').querySelectorAll('input:checked')).map(c => c.value),
-      relationships: relationshipsInput.items, fandoms: fandomInput.items, links, is_complete: getComplete(),
+      relationships: relationshipsInput.items, fandoms: fandomInput.items, is_complete: getComplete(),
     };
 
     const btn = $('sb-topbar-save');
@@ -1292,10 +1250,10 @@
   }
 
   (async function boot() {
-    addLinkRow('', '');
     loadCatalogs();
     if (!EDITING) return;
 
+    document.body.classList.add('sb-editing');
     $('sb-tab-chapters').disabled = false;
     $('sb-tab-chapters').title = '';
     $('sb-topbar-save').textContent = 'Save Changes';
@@ -1317,10 +1275,11 @@
     relationshipsInput.set(s.relationships);
     fandomInput.set(s.fandoms);
     tagsInput.set(s.tags);
-    $('sb-links-list').innerHTML = '';
-    (s.links || []).forEach(l => addLinkRow(l.label, l.url));
-    if (!$('sb-links-list').children.length) addLinkRow('', '');
     if (s.cover_url) showCover(s.cover_url);
+
+    // "View as Reader" -- first published chapter if there is one, else the story page.
+    const firstPub = (data.chapters || []).find(c => c.status === 'published');
+    $('sb-reader-btn').href = firstPub ? `${STORY_BASE}/reader?ch=${firstPub.id}` : STORY_BASE;
 
     existingChars = (data.characters || []).map(c => ({ id: c.id, name: c.name, ref_image: c.ref_image }));
     existingGallery = (data.gallery || []).map(g => ({ id: g.id, title: g.title, image: g.preview_image_url || g.image_url }));
