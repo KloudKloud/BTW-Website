@@ -407,6 +407,7 @@ async function initDb() {
   // meant every recrop could only ever zoom further into a shrinking image.
   await pool.query(`
     ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS banner_original_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE moderator_sites ADD COLUMN IF NOT EXISTS rating_confirmed BOOLEAN NOT NULL DEFAULT TRUE;
   `).catch(e => console.error('moderator_sites banner_original_url migration:', e.message));
 
   // Book cover — sits beside the story description, like BTW's own synopsis-cover
@@ -5286,13 +5287,26 @@ app.delete('/api/admin/hero-comic-boxes/:slot/image', requireAuth, requireAdmin,
 // story page — a story with zero chapters is never public (see
 // isStoryPublic below), so landing them anywhere else just invites an
 // abandoned, invisible story.
+// Which of the three publish-required story fields are still missing.
+function missingStoryFields(site) {
+  const missing = [];
+  const t = String(site.site_title || '').trim();
+  if (!t || t.toLowerCase() === 'untitled story') missing.push('title');
+  if (!String(site.synopsis || '').trim()) missing.push('synopsis');
+  if (site.rating_confirmed === false) missing.push('rating');
+  return missing;
+}
+
 app.post('/api/moderator/site/create', requireAuth, async (req, res) => {
-  const title = String(req.body.title || '').trim().slice(0, 60);
+  // The Story Builder's "Save & Continue" creates the story immediately, even
+  // with nothing filled in -- title/description/rating are only REQUIRED at
+  // publish time (see missingStoryFields + the chapter status route). A blank
+  // title becomes "Untitled Story"; rating_confirmed tracks whether the author
+  // actually picked a rating (the column itself always holds a valid value).
+  const title = String(req.body.title || '').trim().slice(0, 60) || 'Untitled Story';
   const synopsis = String(req.body.synopsis || '').trim();
-  const rating = req.body.rating;
-  if (!title) return res.status(400).json({ error: 'A title is required.' });
-  if (!synopsis) return res.status(400).json({ error: 'A description is required.' });
-  if (!RATING_OPTIONS.includes(rating)) return res.status(400).json({ error: 'A valid rating is required.' });
+  const ratingGiven = RATING_OPTIONS.includes(req.body.rating);
+  const rating = ratingGiven ? req.body.rating : 'sfw';
 
   const { rows: [user] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
   const slug = user.username.toLowerCase();
@@ -5307,8 +5321,8 @@ app.post('/api/moderator/site/create', requireAuth, async (req, res) => {
 
   try {
     const { rows: [site] } = await pool.query(
-      `INSERT INTO moderator_sites (slug, owner_user_id, site_title, story_path, synopsis, rating) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [slug, req.user.id, title, storyPath, synopsis, rating]
+      `INSERT INTO moderator_sites (slug, owner_user_id, site_title, story_path, synopsis, rating, rating_confirmed) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [slug, req.user.id, title, storyPath, synopsis, rating, ratingGiven]
     );
     const { rows: [chapter] } = await pool.query(
       `INSERT INTO moderator_chapters (site_id, title, sort_order, status, updated_at) VALUES ($1, 'Untitled Part: 1', 0, 'draft', NOW()) RETURNING *`,
@@ -7812,7 +7826,7 @@ async function sendSiteLookup(query, params, req, res) {
       author_display_name: site.author_display_name, author_username: site.author_username,
       author_avatar: site.author_avatar || null, author_bio: site.author_bio || '',
       tags: site.tags || [],
-      rating: site.rating || 'sfw', categories: site.categories || [], relationships: site.relationships || [],
+      rating: site.rating || 'sfw', rating_confirmed: site.rating_confirmed !== false, categories: site.categories || [], relationships: site.relationships || [],
       fandoms: site.fandoms || [], is_complete: !!site.is_complete,
       is_self: viewerId === site.owner_user_id,
       is_following: isFollowing.rows.length > 0,
@@ -8289,6 +8303,7 @@ app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) =
        relationships = COALESCE($9, relationships),
        fandoms       = COALESCE($10, fandoms),
        is_complete   = COALESCE($12, is_complete),
+       rating_confirmed = rating_confirmed OR $13,
        updated_at    = NOW()
      WHERE id = $11 RETURNING *`,
     [site_title, synopsis, bio, links !== undefined ? JSON.stringify(links) : null, theme,
@@ -8296,7 +8311,7 @@ app.put('/api/moderator/site', requireAuth, requireModerator, async (req, res) =
      categories !== undefined ? JSON.stringify(categories) : null,
      relationships !== undefined ? JSON.stringify(relationships) : null,
      fandoms !== undefined ? JSON.stringify(fandoms) : null,
-     req.modSite.id, isComplete]
+     req.modSite.id, isComplete, rating !== undefined]
   );
 
   res.json({ site });
@@ -8672,6 +8687,16 @@ app.put('/api/moderator/chapters/:id/status', requireAuth, requireModerator, asy
   const { rows: [existing] } = await pool.query(
     'SELECT status FROM moderator_chapters WHERE id = $1 AND site_id = $2', [req.params.id, req.modSite.id]
   );
+  // A story can't go public until it has a real title, description and rating.
+  if (status === 'published' && existing && existing.status !== 'published') {
+    const missing = missingStoryFields(req.modSite);
+    if (missing.length) {
+      return res.status(400).json({
+        error: 'Your story needs a title, description, and rating before it can be published.',
+        story_incomplete: true, missing,
+      });
+    }
+  }
   const { rows: [chapter] } = await pool.query(
     'UPDATE moderator_chapters SET status = $1, updated_at = NOW() WHERE id = $2 AND site_id = $3 RETURNING *',
     [status, req.params.id, req.modSite.id]

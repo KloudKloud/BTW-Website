@@ -16,9 +16,13 @@
     [hidden] { display: none !important; }
     .sb-page { max-width: 1120px; margin: 0 auto; padding: calc(84px + 2rem) 1.5rem 4rem; }
     /* Wattpad-style: permanent cover column on the left, tabs + content on the right. */
-    .sb-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 2.5rem; align-items: start; }
-    .sb-side { position: sticky; top: calc(84px + 2rem); }
-    .sb-main { min-width: 0; }
+    /* Tabs sit above the content column only, so the cover (row 2) starts on
+       exactly the same line as the first card. */
+    .sb-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); column-gap: 2.5rem; align-items: start; }
+    .sb-layout > .sb-tabs { grid-column: 2; grid-row: 1; }
+    .sb-layout > .sb-side { grid-column: 1; grid-row: 2; position: sticky; top: calc(84px + 1.5rem); }
+    .sb-layout > .sb-main { grid-column: 2; grid-row: 2; min-width: 0; }
+    body.sb-onboarding .sb-tabs { display: none; }
     .char-editor-modal { margin: 0 auto; max-height: none; overflow-y: visible; }
     .sb-linkto-modal { margin-top: 2rem; }
 
@@ -57,16 +61,31 @@
     }
     .sb-topbar-delete:hover { background: #b13d3d; box-shadow: 0 0 20px rgba(201,74,74,0.65); }
 
-        /* ── Details / Chapters tabs -- flat underline tabs on a divider line ── */
-    .sb-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.14); }
-    .sb-tab {
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.15rem; font-weight: 600; color: #aaa;
-      background: none; border: none; border-bottom: 3px solid transparent; margin-bottom: -1px;
-      padding: 0.7em 1.6em; cursor: pointer; transition: color 0.15s, border-color 0.15s;
+        /* ── Details / Chapters tabs -- the Creator Hub's blocky boxed tab bar ── */
+    .sb-tabs {
+      display: flex; align-items: stretch; width: fit-content; margin: 0 0 1.25rem;
+      border-radius: 14px; border: 2px solid rgba(127,168,217,0.45); overflow: hidden;
+      background: linear-gradient(160deg, rgba(10,8,14,0.94), rgba(10,8,14,0.88));
+      box-shadow: 0 0 18px rgba(127,168,217,0.28), 0 10px 28px rgba(0,0,0,0.5);
     }
-    .sb-tab:hover:not(:disabled) { color: #fff; }
-    .sb-tab.active { color: #f7dda0; border-bottom-color: #f0c060; }
+    .sb-tab {
+      background: none; border: none; border-right: 2px solid rgba(127,168,217,0.22); cursor: pointer; color: #bbb;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.98rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.03em;
+      padding: 0.9rem 1.8rem; transition: color 0.15s, background 0.15s, text-shadow 0.15s;
+    }
+    .sb-tabs .sb-tab:last-child { border-right: none; }
+    .sb-tab:hover:not(:disabled) { color: #fff; background: rgba(127,168,217,0.12); }
+    .sb-tab.active { color: #cfe0f5; background: rgba(127,168,217,0.2); text-shadow: 0 0 12px rgba(127,168,217,0.8); }
     .sb-tab:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* A required field that's still empty when the author tries to publish. */
+    .sb-missing { border-color: #d97a72 !important; box-shadow: 0 0 0 3px rgba(217,122,114,0.28) !important; }
+    .sb-chap-notice {
+      display: none; margin-bottom: 1rem; padding: 0.75rem 1rem; border-radius: 10px;
+      background: rgba(240,192,96,0.1); border: 1px solid rgba(240,192,96,0.4); color: #f7dda0; font-size: 0.92rem; font-weight: 600;
+    }
+    .sb-chap-notice.show { display: block; }
 
     /* ── Cover column ── */
     .sb-cover {
@@ -262,9 +281,10 @@
       .sb-topbar-actions { gap: 0.5rem; }
       .sb-topbar-cancel, .sb-topbar-save, .sb-topbar-delete { font-size: 0.82rem; padding: 0.6em 1.1em; }
       .sb-page { padding-top: calc(64px + 1rem); }
-      .sb-tab { padding: 0.6em 1.1em; font-size: 1rem; }
-      .sb-layout { grid-template-columns: 1fr; gap: 1.25rem; }
-      .sb-side { position: static; max-width: 200px; margin: 0 auto; }
+      .sb-layout { grid-template-columns: 1fr; }
+      .sb-layout > .sb-tabs, .sb-layout > .sb-side, .sb-layout > .sb-main { grid-column: 1; grid-row: auto; }
+      .sb-layout > .sb-side { position: static; max-width: 200px; margin: 0 auto 1.25rem; }
+      .sb-tab { padding: 0.75rem 1.1rem; font-size: 0.85rem; }
       .sb-chap-stats { display: none; }
       .sb-chap-thumb { display: none; }
     }
@@ -279,7 +299,7 @@
   <span class="sb-topbar-title" id="sb-topbar-title">New Story</span>
   <div class="sb-topbar-actions">
     <a class="sb-topbar-cancel" id="sb-topbar-cancel" href="/fanpages/editor#stories">Cancel</a>
-    <button class="sb-topbar-save" id="sb-topbar-save" type="button">Create Story</button>
+    <button class="sb-topbar-save" id="sb-topbar-save" type="button">Save &amp; Continue</button>
   </div>
 </div>
 
@@ -290,6 +310,10 @@
 
 <main class="sb-page">
  <div class="sb-layout">
+  <nav class="sb-tabs" id="sb-tabs">
+    <button type="button" class="sb-tab active" id="sb-tab-details">Details</button>
+    <button type="button" class="sb-tab" id="sb-tab-chapters" disabled title="Save your story first, then add chapters">Chapters</button>
+  </nav>
   <aside class="sb-side">
     <div class="sb-cover" id="sb-cover-wrap">
       <img id="sb-cover-img" alt="Story cover" style="display:none;" draggable="false" />
@@ -305,10 +329,6 @@
   </aside>
   <div class="sb-main">
 
-  <nav class="sb-tabs" id="sb-tabs">
-    <button type="button" class="sb-tab active" id="sb-tab-details">Details</button>
-    <button type="button" class="sb-tab" id="sb-tab-chapters" disabled title="Create your story first, then add chapters">Chapters</button>
-  </nav>
 
   <!-- ═══════════════ DETAILS ═══════════════ -->
   <div id="sb-view-details">
@@ -476,6 +496,7 @@
         </div>
       </div>
 
+      <div class="sb-chap-notice" id="sb-chap-notice"></div>
       <div class="sb-chap-stack" id="sb-chap-stack"></div>
     </div>
   </div>
@@ -539,6 +560,9 @@
   const EDITING = !!STORY_PATH;
   const STORY_BASE = EDITING ? window.fpUrl('/' + STORY_PATH) : null;
   const FROM_HUB = params.get('from') === 'hub';
+  // First-time flow: no story yet. Tabs are hidden; Save & Continue creates the
+  // story and drops the author into the chapter writer.
+  if (!EDITING) document.body.classList.add('sb-onboarding');
   // Every moderator endpoint finds the story from this header.
   const authHeaders = () => ({ Authorization: `Bearer ${token}`, ...(STORY_PATH ? { 'X-Story-Path': STORY_PATH } : {}) });
   const authHeadersFor = (path) => ({ Authorization: `Bearer ${token}`, 'X-Story-Path': path });
@@ -557,7 +581,6 @@
   (function setupLeaveLink() {
     const link = $('sb-topbar-cancel');
     if (EDITING) {
-      link.textContent = 'Back';
       link.href = FROM_HUB ? hubUrl : STORY_BASE;
     } else if (document.referrer && document.referrer.startsWith(window.location.origin)) {
       link.href = document.referrer;
@@ -990,82 +1013,177 @@
     return false;
   }
 
-  let saving = false;
-  $('sb-topbar-save').addEventListener('click', async () => {
-    if (saving) return;
-    const msgEl = $('sb-msg');
-    msgEl.textContent = '';
-    $('sb-error-banner').classList.remove('show');
+  // Required-at-publish fields. Highlight them, jump to the first, and explain.
+  function missingNow() {
+    const m = [];
+    if (!$('sb-title').value.trim()) m.push('title');
+    if (!$('sb-synopsis').value.trim()) m.push('synopsis');
+    if (!getRating()) m.push('rating');
+    return m;
+  }
+  const MISSING_EL = { title: () => $('sb-title'), synopsis: () => $('sb-synopsis'), rating: () => $('sb-rating-row') };
+  const MISSING_WORD = { title: 'a title', synopsis: 'a description', rating: 'a rating' };
+  function highlightMissing(missing, lead) {
+    if (EDITING) switchTab('details');
+    Object.values(MISSING_EL).forEach(f => f().classList.remove('sb-missing'));
+    missing.forEach(k => { const el = MISSING_EL[k](); el.classList.add('sb-missing'); flashField(el); });
+    const words = missing.map(k => MISSING_WORD[k]);
+    const last = words.pop();
+    const list = words.length ? words.join(', ') + (words.length > 1 ? ', and ' : ' and ') + last : last;
+    showError(`${lead || 'Your story needs'} ${list} before it can be published!`);
+    const first = MISSING_EL[missing[0]]();
+    first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (first.focus && first.tagName !== 'DIV') first.focus({ preventScroll: true });
+  }
+  ['sb-title', 'sb-synopsis'].forEach(id => $(id).addEventListener('input', () => $(id).classList.remove('sb-missing')));
+  document.querySelectorAll('input[name="sb-rating"]').forEach(r => r.addEventListener('change', () => $('sb-rating-row').classList.remove('sb-missing')));
 
-    const title = $('sb-title').value.trim();
-    const synopsis = $('sb-synopsis').value.trim();
-    const rating = getRating();
-    const missing = [];
-    if (!title) missing.push('a title');
-    if (!synopsis) missing.push('a description');
-    if (!rating) missing.push('a rating');
-    if (missing.length) {
-      switchTab('details');
-      const last = missing.pop();
-      showError(`Every story needs ${missing.length ? missing.join(', ') + (missing.length > 1 ? ', and ' : ' and ') : ''}${last}!`);
-      if (!title) flashField($('sb-title'));
-      if (!synopsis) flashField($('sb-synopsis'));
-      if (!rating) flashField($('sb-rating-row'));
-      return;
-    }
-
+  // Writes the Details form to an existing story (blank title is never sent,
+  // and rating only once one is picked -- the server treats those as "unset").
+  async function persistDetails(headers) {
     relationshipsInput.flush(); fandomInput.flush(); tagsInput.flush();
-
+    const title = $('sb-title').value.trim();
+    const rating = getRating();
     const body = {
-      site_title: title, synopsis, rating,
+      synopsis: $('sb-synopsis').value.trim(),
       tags: tagsInput.items, categories: Array.from($('sb-category-checks').querySelectorAll('input:checked')).map(c => c.value),
       relationships: relationshipsInput.items, fandoms: fandomInput.items, is_complete: getComplete(),
     };
+    if (title) body.site_title = title;
+    if (rating) body.rating = rating;
+    const putRes = await fetch('/api/moderator/site', {
+      method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!putRes.ok) return { ok: false };
+    const coverOk = await uploadCoverNow(headers);
+    await applyLinks(headers);
+    renderLinkToCards();
+    return { ok: true, coverOk };
+  }
 
+  // First-time flow: create the story right now (blanks allowed), then save the form onto it.
+  async function createStoryNow() {
+    const res = await fetch('/api/moderator/site/create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ title: $('sb-title').value.trim(), synopsis: $('sb-synopsis').value.trim(), rating: getRating() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { showError(data.error || 'Something went wrong. Please try again.'); return null; }
+    const path = data.site.story_path;
+    const saved = await persistDetails(authHeadersFor(path));
+    if (!saved.ok) showError('Your story was created, but some details couldn\'t be saved. You can finish them on the next screen.');
+    return { path, chapterId: data.chapter && data.chapter.id };
+  }
+
+  let saving = false;
+  function setSaving(on, label) {
+    saving = on;
+    $('sb-topbar-save').disabled = on;
+    if (label) $('sb-topbar-save').textContent = label;
+  }
+  $('sb-error-banner').classList.remove('show');
+
+  // "Publish" (book not live yet) / "Save" (a chapter is already published).
+  let bookPublished = false;
+  function updatePrimaryLabel() {
+    if (EDITING) $('sb-topbar-save').textContent = bookPublished ? 'Save' : 'Publish';
+  }
+  const stripHtml = (h) => String(h || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim();
+
+  async function publishBook(headers) {
+    let chapters = [];
+    try { chapters = (await (await fetch('/api/moderator/chapters', { headers })).json()).chapters || []; } catch {}
+    const cand = chapters.find(c => c.status === 'draft' && stripHtml(c.body));
+    if (!cand) {
+      switchTab('chapters');
+      const n = $('sb-chap-notice');
+      n.textContent = 'Your details are saved! To publish, write something in a chapter first — open a chapter below, add your text, and hit Publish there.';
+      n.classList.add('show');
+      return false;
+    }
+    const res = await fetch(`/api/moderator/chapters/${cand.id}/status`, {
+      method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'published' }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (data.story_incomplete) highlightMissing(data.missing || missingNow());
+      else showError(data.error || 'Could not publish. Please try again.');
+      return false;
+    }
+    bookPublished = true;
+    updatePrimaryLabel();
+    $('sb-chap-notice').classList.remove('show');
+    if (data.levelUp && window.fpnavShowXpGain) window.fpnavShowXpGain(data.levelUp);
+    $('sb-congrats-title').textContent = `Congrats! You published "${cand.title}" for ${$('sb-title').value.trim()}!`;
+    $('sb-congrats-overlay').hidden = false;
+    if (data.levelUp && data.levelUp.leveledUp && window.fpnavShowLevelUp) setTimeout(() => window.fpnavShowLevelUp(data.levelUp), 500);
+    return true;
+  }
+
+  $('sb-topbar-save').addEventListener('click', async () => {
+    if (saving) return;
+    $('sb-msg').textContent = '';
+    $('sb-error-banner').classList.remove('show');
     const btn = $('sb-topbar-save');
-    const idleLabel = EDITING ? 'Save Changes' : 'Create Story';
-    saving = true;
-    btn.disabled = true;
-    btn.textContent = EDITING ? 'Saving…' : 'Creating…';
-    try {
-      let path = STORY_PATH;
-      let firstChapterId = null;
-      if (!EDITING) {
-        const res = await fetch('/api/moderator/site/create', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ title, synopsis, rating }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) { showError(data.error || 'Something went wrong. Please try again.'); return; }
-        path = data.site.story_path;
-        firstChapterId = data.chapter && data.chapter.id;
-      }
-      const headers = authHeadersFor(path);
-      const putRes = await fetch('/api/moderator/site', {
-        method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-      });
-      if (!putRes.ok) { showError('Your story was created but the details couldn\'t be saved. Please try Save again.'); return; }
-      const coverOk = await uploadCoverNow(headers);
-      await applyLinks(headers);
-      renderLinkToCards();
 
-      if (!EDITING) {
+    // ── First time: Save & Continue. Nothing is required yet. ──
+    if (!EDITING) {
+      setSaving(true, 'Saving…');
+      try {
+        const made = await createStoryNow();
+        if (!made) return;
         sbDirty = false;
-        window.location.href = window.fpUrl(`/create?story=${encodeURIComponent(path)}&from=hub#chapters`);
+        // Lets the chapter writer know this visit is part of onboarding (a
+        // refresh/revisit won't have the flag and falls back to the normal editor).
+        sessionStorage.setItem('btw_onboarding', String(made.chapterId));
+        window.location.href = window.fpUrl(`/${made.path}/chapter-editor?id=${made.chapterId}&intro=1&onboarding=1`);
+        return;
+      } catch {
+        showError('Network error. Please try again.');
+      } finally {
+        setSaving(false, 'Save & Continue');
+      }
+      return;
+    }
+
+    // ── Existing story: Publish / Save. Title, description and rating are required. ──
+    const missing = missingNow();
+    if (missing.length) { highlightMissing(missing); return; }
+    setSaving(true, bookPublished ? 'Saving…' : 'Publishing…');
+    try {
+      const saved = await persistDetails(authHeaders());
+      if (!saved.ok) { showError('Couldn\'t save your details. Please try again.'); return; }
+      sbDirty = false;
+      if (!saved.coverOk) { showError('Saved, but the cover image failed to upload. Please try picking it again.'); return; }
+      $('sb-topbar-title').textContent = $('sb-title').value.trim();
+      if (!bookPublished) {
+        await publishBook(authHeaders());
         return;
       }
-      sbDirty = false;
-      if (!coverOk) { showError('Saved, but the cover image failed to upload. Please try picking it again.'); return; }
       btn.textContent = 'Saved ✓';
-      setTimeout(() => { if (!saving) btn.textContent = idleLabel; }, 1800);
-      return;
+      await new Promise(r => setTimeout(r, 1400));
     } catch {
       showError('Network error. Please try again.');
     } finally {
-      saving = false;
-      btn.disabled = false;
-      if (btn.textContent !== 'Saved ✓') btn.textContent = idleLabel;
+      setSaving(false);
+      updatePrimaryLabel();
     }
+  });
+
+  // Cancel during first-time setup: nothing entered -> just leave; otherwise the
+  // story "exists" now, so save what's there and open the Specific Story Editor.
+  $('sb-topbar-cancel').addEventListener('click', async (e) => {
+    if (EDITING || saving) return;
+    if (!sbDirty) return; // pristine: plain link back to where they came from
+    e.preventDefault();
+    setSaving(true, 'Saving…');
+    try {
+      const made = await createStoryNow();
+      if (!made) return;
+      sbDirty = false;
+      window.location.href = window.fpUrl(`/create?story=${encodeURIComponent(made.path)}&from=hub`);
+    } catch { showError('Network error. Please try again.'); }
+    finally { setSaving(false, 'Save & Continue'); }
   });
 
   // ── Delete story (edit mode) ───────────────────────────────────────────────
@@ -1093,6 +1211,8 @@
       const res = await fetch('/api/moderator/chapters', { headers: authHeaders() });
       CHAPTERS = (await res.json()).chapters || [];
     } catch { CHAPTERS = []; }
+    bookPublished = CHAPTERS.some(c => c.status === 'published');
+    updatePrimaryLabel();
     renderChapters();
   }
   function chapDate(ch) {
@@ -1153,6 +1273,7 @@
         method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }),
       });
       const data = await res.json().catch(() => null);
+      if (res.status === 400 && data && data.story_incomplete) { highlightMissing(data.missing || missingNow()); return; }
       if (data && data.levelUp && window.fpnavShowXpGain) window.fpnavShowXpGain(data.levelUp);
     } catch {}
     loadChapters();
@@ -1256,7 +1377,6 @@
     document.body.classList.add('sb-editing');
     $('sb-tab-chapters').disabled = false;
     $('sb-tab-chapters').title = '';
-    $('sb-topbar-save').textContent = 'Save Changes';
     $('sb-topbar-delete').style.display = '';
     $('sb-card-title').textContent = 'Story Details';
 
@@ -1265,9 +1385,11 @@
     const s = data.site;
     document.title = `Edit ${s.site_title || 'Story'} ✦ BTW`;
     $('sb-topbar-title').textContent = s.site_title || 'Untitled Story';
-    $('sb-title').value = s.site_title || '';
+    // "Untitled Story" is the placeholder a blank first-time save gets -- show it as empty so it's obviously still needed.
+    $('sb-title').value = (s.site_title || '').trim().toLowerCase() === 'untitled story' ? '' : (s.site_title || '');
     $('sb-synopsis').value = s.synopsis || '';
-    const rEl = document.querySelector(`input[name="sb-rating"][value="${s.rating || 'sfw'}"]`);
+    // A rating only counts once the author has actually chosen one.
+    const rEl = s.rating_confirmed ? document.querySelector(`input[name="sb-rating"][value="${s.rating || 'sfw'}"]`) : null;
     if (rEl) rEl.checked = true;
     const cEl = document.querySelector(`input[name="sb-complete"][value="${s.is_complete ? 'yes' : 'no'}"]`);
     if (cEl) cEl.checked = true;
@@ -1285,9 +1407,19 @@
     existingGallery = (data.gallery || []).map(g => ({ id: g.id, title: g.title, image: g.preview_image_url || g.image_url }));
     renderLinkToCards();
 
+    bookPublished = (data.chapters || []).some(c => c.status === 'published');
+    updatePrimaryLabel();
+
     sbDirty = false;
     if (window.location.hash === '#chapters') switchTab('chapters');
     maybeShowCongrats();
+    // Sent back from the chapter writer (or a menu Publish) because required fields are empty.
+    const missingParam = params.get('missing');
+    if (missingParam) {
+      const keys = missingParam.split(',').filter(k => MISSING_EL[k]);
+      if (keys.length) { switchTab('details'); setTimeout(() => highlightMissing(keys), 300); }
+      history.replaceState(null, '', window.location.pathname + '?story=' + encodeURIComponent(STORY_PATH) + (FROM_HUB ? '&from=hub' : ''));
+    }
   })();
 </script>
 

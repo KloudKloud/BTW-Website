@@ -630,6 +630,25 @@ const STORY_BASE = (window.FP_BASE || '') + '/' + PATH_PARTS.slice(OFFSET, OFFSE
 const CHAPTER_ID = new URLSearchParams(window.location.search).get('id');
 const API = '/api';
 
+// First-time story setup: the Story Builder's "Save & Continue" sends the author
+// here with ?onboarding=1 and stashes the chapter id in sessionStorage. The flag
+// is consumed on first load, so a refresh or revisit drops the onboarding flow
+// and sends them to the regular Story Editor instead.
+const STORY_EDITOR_URL = window.fpUrl('/create?story=' + encodeURIComponent(SLUG) + '&from=hub');
+let ONBOARDING = false;
+let ONBOARDING_ABORT = false;
+if (new URLSearchParams(window.location.search).get('onboarding') === '1') {
+  if (sessionStorage.getItem('btw_onboarding') === String(CHAPTER_ID)) {
+    sessionStorage.removeItem('btw_onboarding');
+    ONBOARDING = true;
+  } else {
+    ONBOARDING_ABORT = true;
+    window.location.replace(STORY_EDITOR_URL);
+  }
+}
+// During onboarding Back/Cancel land on Details; otherwise on the Chapters tab.
+const exitUrl = () => ONBOARDING ? STORY_EDITOR_URL : STORY_EDITOR_URL + '#chapters';
+
 // Shown once, right after a brand-new story is created — the redirect
 // chain from create.html tags the very first visit with ?intro=1. Skipped
 // entirely if the author previously checked "Don't show this hint again".
@@ -666,7 +685,7 @@ const editor = document.getElementById('ce-editor');
 function updateButtonsForStatus() {
   const isDraft = !currentChapter || currentChapter.status === 'draft';
   document.getElementById('ce-publish-btn').textContent = isDraft ? 'Publish' : 'Publish Changes';
-  document.getElementById('ce-cancel-btn').hidden = isDraft;
+  document.getElementById('ce-cancel-btn').hidden = isDraft && !ONBOARDING;
   // Preview (view this chapter as a reader would, drafts included since
   // the reader shows an owner their own unpublished content) only makes
   // sense before it's live -- once published, "Preview" and the real
@@ -749,12 +768,12 @@ document.getElementById('ce-back-btn').addEventListener('click', async () => {
   // Defines the loop: chapter editor's back arrow -> Story Editor's
   // Chapters tab -> Story Editor's own back arrow -> Creator Hub. Getting
   // back to the Creator Hub from here is now two steps, same as Wattpad.
-  window.location.href = window.fpUrl('/create?story=' + encodeURIComponent(SLUG) + '&from=hub#chapters');
+  window.location.href = exitUrl();
 });
 document.getElementById('ce-cancel-btn').addEventListener('click', async () => {
   const result = await confirmExitWithUnsavedChanges();
   if (result === 'stay') return;
-  window.location.href = window.fpUrl('/create?story=' + encodeURIComponent(SLUG) + '&from=hub#chapters');
+  window.location.href = exitUrl();
 });
 // Opens the real reader on this chapter in a new tab -- the reader
 // already shows an owner their own unpublished drafts (same as "View as
@@ -1468,6 +1487,13 @@ document.getElementById('ce-publish-btn').addEventListener('click', async () => 
         body: JSON.stringify({ status: 'published' }),
       });
       const statusData = await statusRes.json().catch(() => null);
+      // The story still lacks a title/description/rating: the text is saved,
+      // so send the author to Details with those fields highlighted.
+      if (!statusRes.ok && statusData && statusData.story_incomplete) {
+        window.location.href = STORY_EDITOR_URL + '&missing=' + encodeURIComponent((statusData.missing || []).join(','));
+        return;
+      }
+      if (!statusRes.ok) throw new Error('publish failed');
       chapterLevelUp = statusData && statusData.levelUp;
       currentChapter.status = 'published';
       updateButtonsForStatus();
@@ -1505,6 +1531,7 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 (async () => {
+  if (ONBOARDING_ABORT) return;
   if (!CHAPTER_ID) { window.location.href = window.fpUrl('/create?story=' + encodeURIComponent(SLUG) + '&from=hub#chapters'); return; }
 
   const [siteRes, chapterRes] = await Promise.all([
