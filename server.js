@@ -8883,13 +8883,18 @@ app.put('/api/moderator/chapters/:id/body', requireAuth, requireModerator, async
   const hasVideoUrl = req.body.video_url !== undefined;
   const imageUrl = hasImageUrl ? String(req.body.image_url || '') : null;
   const videoUrl = hasVideoUrl ? String(req.body.video_url || '') : null;
+  // Optional external "read it here too" links ({label,url}[]) -- the
+  // editor's "Add External Link" menu item; autosaved with everything else.
+  const hasLinks = Array.isArray(req.body.links);
+  const linksJson = JSON.stringify(hasLinks ? parseChapterLinks(JSON.stringify(req.body.links)) : []);
   const { rows: [chapter] } = await pool.query(
     `UPDATE moderator_chapters SET
        title = $1, body = $2, updated_at = NOW(),
        image_url = CASE WHEN $3 THEN $4 ELSE image_url END,
-       video_url = CASE WHEN $5 THEN $6 ELSE video_url END
+       video_url = CASE WHEN $5 THEN $6 ELSE video_url END,
+       links = CASE WHEN $9 THEN $10::jsonb ELSE links END
      WHERE id = $7 AND site_id = $8 RETURNING *`,
-    [title, body, hasImageUrl, imageUrl, hasVideoUrl, videoUrl, req.params.id, req.modSite.id]
+    [title, body, hasImageUrl, imageUrl, hasVideoUrl, videoUrl, req.params.id, req.modSite.id, hasLinks, linksJson]
   );
   if (!chapter) return res.status(404).json({ error: 'Not found.' });
   res.json({ chapter });

@@ -51,11 +51,13 @@
     .ce-topbar-status-word { color: #7fa8d9; font-weight: 700; }
     .ce-topbar-actions { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
     .ce-btn {
-      font-family: 'Inter', sans-serif; font-size: 0.95rem; font-weight: 700;
-      padding: 0.7em 1.7em; border-radius: 24px; cursor: pointer; border: none;
-      transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.98rem; font-weight: 600; letter-spacing: 0.01em;
+      padding: 0.6em 1.5em; border-radius: 24px; cursor: pointer; border: none;
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.45em;
+      transition: background 0.15s, box-shadow 0.15s, transform 0.1s, border-color 0.15s, color 0.15s;
     }
     .ce-btn:active { transform: translateY(1px); }
+    .ce-btn svg { flex-shrink: 0; }
     .ce-btn--cancel { background: none; border: 1px solid rgba(255,255,255,0.25); color: #ccc; }
     .ce-btn--cancel:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
     /* Same blue gradient + white text as the story view's own "Edit
@@ -63,6 +65,112 @@
     .ce-btn--publish { background: linear-gradient(135deg, #3d6fa8, #7fa8d9); color: #fff; box-shadow: 0 0 16px rgba(127,168,217,0.5); }
     .ce-btn--publish:hover { box-shadow: 0 0 26px rgba(127,168,217,0.75); }
     .ce-btn--publish:disabled { opacity: 0.45; box-shadow: none; cursor: default; }
+    /* Preview -- secondary pill: soft glass fill + gold hover, so it reads
+       as the quieter sibling of the blue primary button next to it. */
+    .ce-btn--preview {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(240,192,96,0.45); color: #f0c060;
+    }
+    .ce-btn--preview:hover { background: rgba(240,192,96,0.12); border-color: #f0c060; box-shadow: 0 0 14px rgba(240,192,96,0.25); }
+    /* "..." overflow menu -- Import / Add External Link live in here. */
+    .ce-more-wrap { position: relative; }
+    .ce-more-btn {
+      width: 40px; height: 40px; border-radius: 50%; padding: 0; cursor: pointer;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.25); color: #ddd;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .ce-more-btn:hover, .ce-more-btn[aria-expanded="true"] { background: rgba(127,168,217,0.15); border-color: #7fa8d9; color: #fff; }
+    .ce-more-menu {
+      position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; min-width: 210px;
+      background: linear-gradient(160deg, rgba(20,18,26,0.97), rgba(14,12,20,0.97));
+      border: 1px solid rgba(255,255,255,0.14); border-radius: 14px; padding: 0.4rem;
+      box-shadow: 0 14px 36px rgba(0,0,0,0.6);
+    }
+    .ce-more-menu button {
+      display: flex; align-items: center; gap: 0.65rem; width: 100%; text-align: left;
+      padding: 0.65rem 0.8rem; border-radius: 9px; background: none; border: none; color: #ddd; cursor: pointer;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.95rem; font-weight: 500;
+    }
+    .ce-more-menu button:hover { background: rgba(127,168,217,0.14); color: #fff; }
+    .ce-more-menu button svg { color: #7fa8d9; flex-shrink: 0; }
+    .ce-more-menu-count {
+      margin-left: auto; background: rgba(240,192,96,0.2); color: #f0c060; border-radius: 10px;
+      font-family: 'Inter', sans-serif; font-size: 0.72rem; font-weight: 700; padding: 0.1em 0.55em;
+    }
+
+    /* ── Google-Docs-style save badge, top-left beside the back arrow: a
+       spinning ring while a save is in flight, a check when everything is
+       stored, a pulsing amber dot while edits are waiting their turn, red
+       if the server couldn't be reached. ── */
+    .ce-save-badge {
+      flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: #7fa8d9;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+    }
+    .ce-save-badge svg { display: block; }
+    .ce-save-badge .ce-sb-icon { display: none; }
+    .ce-save-badge[data-state="saved"] .ce-sb-saved { display: block; }
+    .ce-save-badge[data-state="saving"] .ce-sb-saving { display: block; animation: ce-save-spin 0.8s linear infinite; }
+    .ce-save-badge[data-state="unsaved"] .ce-sb-unsaved { display: block; animation: ce-save-pulse 1.4s ease-in-out infinite; }
+    .ce-save-badge[data-state="error"] .ce-sb-error { display: block; }
+    .ce-save-badge[data-state="saving"] { color: #f0c060; border-color: rgba(240,192,96,0.4); }
+    .ce-save-badge[data-state="unsaved"] { color: #f0c060; }
+    .ce-save-badge[data-state="error"] { color: #e0766d; border-color: rgba(224,118,109,0.5); background: rgba(224,118,109,0.1); cursor: pointer; }
+    @keyframes ce-save-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+    /* ── "Link Video" popup -- same cozy box-background-art + Fredoka
+       treatment and red YouTube accent as the clubs' Link Video popup
+       (club.html's .cl-yt-modal-*). ── */
+    .ce-yt-overlay {
+      position: fixed; inset: 0; z-index: 230; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center; padding: 1rem;
+    }
+    .ce-yt-box {
+      background: linear-gradient(160deg, rgba(10,8,14,0.9), rgba(10,8,14,0.85)), url('/images/home/box-background-3.jpg');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(255,255,255,0.1); border-top: 3px solid #e05a52; border-radius: 16px;
+      padding: 1.75rem 2rem 2rem; width: min(90vw, 420px); box-shadow: 0 10px 40px rgba(0,0,0,0.5); text-align: center;
+    }
+    .ce-yt-icon { font-size: 1.8rem; margin-bottom: 0.3rem; color: #e05a52; }
+    .ce-yt-title {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.3rem; font-weight: 700; color: #f0f0f0;
+      margin: 0 0 1.1rem; display: flex; align-items: center; justify-content: center; gap: 0.45rem;
+    }
+    .ce-yt-title img { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
+    .ce-modal-input {
+      width: 100%; background: rgba(35,35,37,0.9); border: 1px solid rgba(255,255,255,0.18); border-radius: 10px;
+      color: #eee; font-family: 'Inter', sans-serif; font-size: 0.92rem; padding: 0.7em 0.95em; outline: none;
+      transition: border-color 0.15s;
+    }
+    .ce-modal-input::placeholder { color: #80808a; }
+    .ce-modal-input:focus { border-color: #7fa8d9; }
+    .ce-yt-box .ce-modal-input:focus { border-color: #e05a52; }
+    .ce-yt-error { color: #e05a52; font-size: 0.82rem; margin: 0.6rem 0 0; font-family: 'Inter', sans-serif; }
+    .ce-yt-actions { display: flex; justify-content: center; gap: 0.6rem; margin-top: 1.35rem; }
+    .ce-yt-save { background: linear-gradient(135deg, #ff7a70, #e05a52); color: #fff; box-shadow: 0 0 14px rgba(224,90,82,0.4); }
+    .ce-yt-save:hover { background: linear-gradient(135deg, #ff9088, #ff7a70); }
+    .ce-yt-save:disabled { opacity: 0.5; cursor: default; }
+    /* External-link manager (same shell, blue accent). */
+    .ce-yt-box.ce-link-box { border-top-color: #7fa8d9; width: min(92vw, 520px); text-align: left; }
+    .ce-link-box .ce-yt-title { justify-content: center; }
+    .ce-link-sub { margin: -0.6rem 0 1rem; text-align: center; font-family: 'Inter', sans-serif; font-size: 0.82rem; color: #9a9aa6; line-height: 1.5; }
+    .ce-link-rows { display: flex; flex-direction: column; gap: 0.6rem; max-height: 40vh; overflow-y: auto; }
+    .ce-link-row { display: flex; gap: 0.45rem; align-items: center; }
+    .ce-link-row .ce-modal-input { padding: 0.55em 0.75em; font-size: 0.85rem; }
+    .ce-link-row .ce-link-label { flex: 0 0 34%; }
+    .ce-link-row .ce-link-url { flex: 1; min-width: 0; }
+    .ce-link-remove {
+      flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2);
+      background: none; color: #bbb; cursor: pointer; font-size: 0.8rem;
+    }
+    .ce-link-remove:hover { border-color: #e0766d; color: #e0766d; }
+    .ce-link-add {
+      margin-top: 0.8rem; background: none; border: 1px dashed rgba(127,168,217,0.5); color: #7fa8d9; border-radius: 10px;
+      padding: 0.55em 1em; width: 100%; cursor: pointer; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.92rem; font-weight: 600;
+    }
+    .ce-link-add:hover { background: rgba(127,168,217,0.1); }
+    .ce-link-error { text-align: center; }
+
     /* ── Import .docx — preview the extracted text before committing it. ── */
     .ce-import-overlay {
       position: fixed; inset: 0; z-index: 210; display: flex; align-items: center; justify-content: center;
@@ -107,36 +215,40 @@
        case matching Wattpad's own layout (the cover picker spans edge to
        edge; the title/rule/body stay in the narrow centered column). */
     .ce-cover-box {
-      position: relative; width: 100%; background: #3a3a3c; padding: 2.5rem 1.5rem;
+      position: relative; width: 100%; padding: 2.5rem 1.5rem;
+      background: linear-gradient(160deg, rgba(10,8,14,0.82), rgba(10,8,14,0.7)), url('/images/home/box-background-3.png');
+      background-size: cover; background-position: center;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
       display: flex; align-items: center; justify-content: center; min-height: 120px;
-      transition: background 0.15s;
+      transition: background-color 0.15s;
     }
-    .ce-cover-box.ce-cover-dragover { background: #454547; }
+    .ce-cover-box.ce-cover-dragover { box-shadow: inset 0 0 0 3px rgba(240,192,96,0.65); }
     /* Preview state gets a set height and no padding, so the image can
        actually fill the box top-to-bottom instead of floating in a sea of
        padding — that's the whole point of "fill the box". */
-    .ce-cover-box.ce-cover-box--has-preview { height: 420px; padding: 0; }
-    .ce-cover-buttons { display: flex; gap: 1.25rem; }
+    .ce-cover-box.ce-cover-box--has-preview { height: 420px; padding: 0; background: #0a0a0c; }
+    .ce-cover-picker { display: flex; flex-direction: column; align-items: center; gap: 1.1rem; }
+    .ce-cover-picker-title {
+      display: flex; align-items: center; gap: 0.5rem; margin: 0;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.15rem; font-weight: 600; color: #e8eef7;
+    }
+    .ce-cover-picker-title img { width: 18px; height: 18px; object-fit: contain; }
+    .ce-cover-buttons { display: flex; gap: 1.1rem; }
     .ce-cover-big-btn {
-      width: 130px; height: 92px; border-radius: 12px; cursor: pointer; font-size: 2.4rem;
-      background: #232325; border: 1px solid rgba(255,255,255,0.12); color: #ddd;
-      transition: border-color 0.15s, color 0.15s;
+      width: 190px; padding: 1.15rem 1rem 1rem; border-radius: 16px; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; gap: 0.35rem;
+      background: rgba(20,18,26,0.72); border: 1.5px dashed rgba(255,255,255,0.25); color: #ddd;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 600;
+      backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+      transition: border-color 0.15s, color 0.15s, transform 0.15s, box-shadow 0.15s, background 0.15s;
     }
-    .ce-cover-big-btn:hover { border-color: rgba(240,192,96,0.5); color: #f0c060; }
-    .ce-cover-video-entry { display: flex; align-items: center; gap: 0.6rem; width: 100%; max-width: 460px; }
-    .ce-cover-video-input {
-      flex: 1; background: #232325; border: 1px solid rgba(127,168,217,0.5); border-radius: 8px;
-      color: #eee; font-family: 'Inter', sans-serif; font-size: 0.9rem; padding: 0.6em 0.9em; outline: none;
-    }
-    .ce-cover-video-input::placeholder { color: #888; }
-    .ce-cover-mini-btn {
-      font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 700; white-space: nowrap;
-      padding: 0.6em 1.1em; border-radius: 8px; cursor: pointer; border: none;
-    }
-    .ce-cover-mini-btn--add { background: #f0c060; color: #1a1408; }
-    .ce-cover-mini-btn--add:hover { background: #f5cd77; }
-    .ce-cover-mini-btn--ghost { background: none; border: 1px solid rgba(255,255,255,0.25); color: #ccc; }
-    .ce-cover-mini-btn--ghost:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+    .ce-cover-big-btn svg { width: 34px; height: 34px; }
+    .ce-cover-big-btn small { font-family: 'Inter', sans-serif; font-size: 0.72rem; font-weight: 500; color: #8c8c96; }
+    .ce-cover-big-btn:hover { transform: translateY(-2px); background: rgba(20,18,26,0.9); }
+    .ce-cover-big-btn--image:hover { border-color: #7fa8d9; color: #9fc0e6; box-shadow: 0 0 20px rgba(127,168,217,0.3); }
+    .ce-cover-big-btn--video { color: #e8837b; border-color: rgba(224,90,82,0.45); }
+    .ce-cover-big-btn--video:hover { border-color: #e05a52; color: #ff7a70; box-shadow: 0 0 20px rgba(224,90,82,0.3); }
+    .ce-cover-hint { margin: 0; font-family: 'Inter', sans-serif; font-size: 0.78rem; color: #8c8c96; }
     .ce-cover-preview { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; }
     .ce-cover-preview-inner { position: relative; height: 100%; display: flex; align-items: center; justify-content: center; }
     /* Fills the box's full height and stays centered horizontally — no
@@ -173,23 +285,12 @@
     .ce-inline-media-btns button {
       width: 32px; height: 32px; border-radius: 6px; border: none; cursor: pointer;
       background: rgba(255,255,255,0.06); color: #ccc; font-size: 1rem;
+      display: inline-flex; align-items: center; justify-content: center; padding: 0;
     }
     .ce-inline-media-btns button:hover { background: rgba(240,192,96,0.18); color: #f0c060; }
-    .ce-inline-video-entry {
-      position: fixed; z-index: 16;
-      background: rgba(28,28,30,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-      border: 1px solid rgba(127,168,217,0.5); border-radius: 8px; padding: 0.35rem;
-    }
-    .ce-inline-video-entry-row { display: flex; align-items: center; gap: 0.4rem; }
-    .ce-inline-video-entry input {
-      background: #232325; border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; color: #eee;
-      font-family: 'Inter', sans-serif; font-size: 0.82rem; padding: 0.4em 0.6em; outline: none; width: 220px;
-    }
     .ce-video-error {
       margin: 0.4rem 0 0; color: #f5b3ac; font-family: 'Inter', sans-serif; font-size: 0.78rem;
     }
-    .ce-cover-video-entry-wrap { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 460px; }
-    .ce-cover-video-entry-wrap .ce-video-error { text-align: center; }
 
     /* ── YouTube video blocks — a clickable thumbnail (real YouTube preview
        image + play button) rather than an always-live embed; clicking the
@@ -198,25 +299,13 @@
        both the chapter cover and inline body videos. ── */
     .ce-video-thumb-wrap { position: relative; cursor: pointer; border-radius: 10px; overflow: hidden; background: #000; }
     .ce-video-thumb-wrap img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    /* Same red round play button as the clubs' lite YouTube embed. */
     .ce-video-play-btn {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 56px; height: 56px; border-radius: 12px; border: none; cursor: pointer;
-      background: rgba(20,20,20,0.55); color: #fff; font-size: 1.5rem; line-height: 1;
-      display: flex; align-items: center; justify-content: center; transition: background 0.15s;
+      position: absolute; inset: 0; margin: auto; width: 56px; height: 56px; border-radius: 50%;
+      background: rgba(224,90,82,0.9); border: none; color: #fff; font-size: 1.3rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; transition: background 0.15s, transform 0.15s;
     }
-    .ce-video-thumb-wrap:hover .ce-video-play-btn { background: rgba(220,30,30,0.85); }
-    /* Title bar that fades in on hover — clicking it (like Wattpad/YouTube)
-       opens the video on YouTube itself, separate from the play button
-       which plays inline. */
-    .ce-video-thumb-title {
-      position: absolute; left: 0; right: 0; bottom: 0; padding: 1.6rem 1rem 0.7rem;
-      background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
-      color: #fff; font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 600;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      opacity: 0; transition: opacity 0.15s; cursor: pointer;
-    }
-    .ce-video-thumb-title:hover { text-decoration: underline; }
-    .ce-video-thumb-wrap:hover .ce-video-thumb-title { opacity: 1; }
+    .ce-video-thumb-wrap:hover .ce-video-play-btn { background: #e05a52; transform: scale(1.08); }
     .ce-video-block { position: relative; margin: 0 0 1.4em; border-radius: 10px; transition: opacity 0.15s, box-shadow 0.15s; }
     .ce-video-block.ce-dragging { opacity: 0.4; }
     .ce-video-block.ce-drop-target { box-shadow: 0 0 0 2px rgba(240,192,96,0.7); }
@@ -354,6 +443,7 @@
     .ce-save-indicator { font-weight: 700; }
     .ce-save-indicator--unsaved { color: #d97a72; }
     .ce-save-indicator--saved { color: #7fa8d9; }
+    .ce-save-indicator--error { color: #e0766d; }
     .ce-save-indicator--saving { color: #f0c060; display: inline-flex; align-items: center; gap: 0.35em; }
     .ce-save-spinner {
       display: inline-block; width: 0.8em; height: 0.8em; border-radius: 50%;
@@ -439,7 +529,14 @@
       .ce-cover-buttons { gap: 0.8rem; }
       /* The two big Image/Video cover buttons -- explicitly called out as
          too large on mobile. */
-      .ce-cover-big-btn { width: 76px; height: 56px; font-size: 1.5rem; border-radius: 10px; }
+      .ce-cover-big-btn { width: 128px; padding: 0.8rem 0.5rem; font-size: 0.92rem; border-radius: 12px; }
+      .ce-cover-big-btn svg { width: 26px; height: 26px; }
+      .ce-cover-big-btn small { display: none; }
+      .ce-cover-picker-title { font-size: 1rem; }
+      .ce-cover-hint { display: none; }
+      .ce-more-btn { width: 34px; height: 34px; }
+      .ce-link-row { flex-wrap: wrap; }
+      .ce-link-row .ce-link-label { flex: 1 1 100%; }
       .ce-cover-edit-btn { width: 38px; height: 38px; font-size: 1rem; bottom: 0.6rem; right: 0.75rem; }
 
       .ce-title-block { margin-top: 1.25rem; }
@@ -451,7 +548,6 @@
 
       .ce-inline-media-btns button, .ce-sel-toolbar button { width: 30px; height: 30px; }
       .ce-img-controls button { width: 26px; height: 26px; }
-      .ce-inline-video-entry input { width: 160px; }
 
       /* Width safety margin for every popup modal -- fixed max-width
          values (400-460px) sized for desktop had no fallback once the
@@ -475,6 +571,12 @@
   <button class="ce-back-btn" id="ce-back-btn" type="button" title="Back to Chapters">
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
   </button>
+  <div class="ce-save-badge" id="ce-save-badge" data-state="saved" title="All changes saved" role="status" aria-live="polite">
+    <svg class="ce-sb-icon ce-sb-saved" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></svg>
+    <svg class="ce-sb-icon ce-sb-saving" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="12" cy="12" r="9" opacity="0.25"/><path d="M12 3a9 9 0 0 1 9 9"/></svg>
+    <svg class="ce-sb-icon ce-sb-unsaved" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9" opacity="0.4"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg>
+    <svg class="ce-sb-icon ce-sb-error" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.4v.1"/></svg>
+  </div>
   <a class="ce-topbar-cover-link" id="ce-topbar-cover-link" href="#">
     <img class="ce-topbar-cover" id="ce-story-cover" src="/images/defaultcover.png" alt="" />
   </a>
@@ -487,10 +589,27 @@
     <p class="ce-topbar-status" id="ce-topbar-status"></p>
   </div>
   <div class="ce-topbar-actions">
-    <button class="ce-btn ce-btn--cancel" id="ce-import-docx-btn" type="button">📄 Import</button>
     <button class="ce-btn ce-btn--publish" id="ce-publish-btn" type="button" disabled>Publish</button>
-    <button class="ce-btn ce-btn--cancel" id="ce-cancel-btn" type="button" hidden>Cancel</button>
-    <button class="ce-btn ce-btn--cancel" id="ce-preview-btn" type="button" hidden>Preview</button>
+    <button class="ce-btn ce-btn--preview" id="ce-preview-btn" type="button">
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12S5.5 4.5 12 4.5 22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/></svg>
+      Preview
+    </button>
+    <div class="ce-more-wrap">
+      <button class="ce-more-btn" id="ce-more-btn" type="button" title="More" aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+      </button>
+      <div class="ce-more-menu" id="ce-more-menu" hidden>
+        <button type="button" id="ce-import-docx-btn">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>
+          Import
+        </button>
+        <button type="button" id="ce-ext-link-btn">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
+          Add External Link
+          <span class="ce-more-menu-count" id="ce-ext-link-count" hidden></span>
+        </button>
+      </div>
+    </div>
     <input type="file" id="ce-docx-file-input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none;" />
   </div>
 </div>
@@ -544,17 +663,21 @@
      thumbnail later. Deliberately outside .ce-page so it isn't constrained
      to the narrow reading column. -->
 <div class="ce-cover-box" id="ce-cover-box" hidden>
-  <div class="ce-cover-buttons" id="ce-cover-buttons">
-    <button type="button" class="ce-cover-big-btn" id="ce-cover-image-btn" title="Add a cover image">🖼️</button>
-    <button type="button" class="ce-cover-big-btn" id="ce-cover-video-btn" title="Add a cover video">🎥</button>
-  </div>
-  <div class="ce-cover-video-entry-wrap" id="ce-cover-video-entry-wrap" hidden>
-    <div class="ce-cover-video-entry">
-      <input type="text" id="ce-cover-video-input" placeholder="Paste YouTube URL" />
-      <button type="button" class="ce-cover-mini-btn ce-cover-mini-btn--add" id="ce-cover-video-add">Add</button>
-      <button type="button" class="ce-cover-mini-btn ce-cover-mini-btn--ghost" id="ce-cover-video-cancel">Cancel</button>
+  <div class="ce-cover-picker" id="ce-cover-buttons">
+    <p class="ce-cover-picker-title">Add a chapter cover <img src="/images/home/decoration-1.png" alt="" /></p>
+    <div class="ce-cover-buttons">
+      <button type="button" class="ce-cover-big-btn ce-cover-big-btn--image" id="ce-cover-image-btn" title="Add a cover image">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 9"/></svg>
+        Add Image
+        <small>Upload or drop a file</small>
+      </button>
+      <button type="button" class="ce-cover-big-btn ce-cover-big-btn--video" id="ce-cover-video-btn" title="Add a cover video">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="M10 9.2v5.6l4.8-2.8z" fill="currentColor"/></svg>
+        Add Video
+        <small>Link a YouTube video</small>
+      </button>
     </div>
-    <p class="ce-video-error" id="ce-cover-video-error" hidden>Error with the link. Please try another YouTube link.</p>
+    <p class="ce-cover-hint">PNG, JPG, WebP or GIF</p>
   </div>
   <div class="ce-cover-preview" id="ce-cover-preview" hidden>
     <div class="ce-cover-preview-inner" id="ce-cover-preview-inner">
@@ -582,18 +705,36 @@
 <p class="ce-loading" id="ce-loading">Loading…</p>
 
 <div class="ce-inline-media-btns" id="ce-inline-media-btns" hidden>
-  <button type="button" data-action="image" title="Insert Image">🖼️</button>
-  <button type="button" data-action="video" title="Insert YouTube Video">🎥</button>
+  <button type="button" data-action="image" title="Insert Image"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 9"/></svg></button>
+  <button type="button" data-action="video" title="Insert YouTube Video"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="M10 9.2v5.6l4.8-2.8z" fill="currentColor"/></svg></button>
   <span class="ce-sel-toolbar-divider"></span>
   <button type="button" data-action="hr" title="Insert Horizontal Line">—</button>
 </div>
-<div class="ce-inline-video-entry" id="ce-inline-video-entry" hidden>
-  <div class="ce-inline-video-entry-row">
-    <input type="text" id="ce-inline-video-input" placeholder="Paste YouTube URL" />
-    <button type="button" class="ce-cover-mini-btn ce-cover-mini-btn--add" id="ce-inline-video-add">Add</button>
-    <button type="button" class="ce-cover-mini-btn ce-cover-mini-btn--ghost" id="ce-inline-video-cancel">Cancel</button>
+<div class="ce-yt-overlay" id="ce-yt-overlay" hidden>
+  <div class="ce-yt-box">
+    <div class="ce-yt-icon">▶</div>
+    <p class="ce-yt-title">Link Video <img src="/images/home/decoration-1.png" alt="" /></p>
+    <input type="text" class="ce-modal-input" id="ce-yt-input" placeholder="Paste a YouTube link…" autocomplete="off" />
+    <p class="ce-yt-error" id="ce-yt-error" hidden>That doesn't look like a YouTube link — double-check it and try again.</p>
+    <div class="ce-yt-actions">
+      <button type="button" class="ce-btn ce-btn--cancel" id="ce-yt-cancel">Cancel</button>
+      <button type="button" class="ce-btn ce-yt-save" id="ce-yt-save">Save</button>
+    </div>
   </div>
-  <p class="ce-video-error" id="ce-inline-video-error" hidden>Error with the link. Please try another YouTube link.</p>
+</div>
+
+<div class="ce-yt-overlay" id="ce-link-overlay" hidden>
+  <div class="ce-yt-box ce-link-box">
+    <p class="ce-yt-title">External Links <img src="/images/home/decoration-8.png" alt="" /></p>
+    <p class="ce-link-sub">Point readers to this chapter's home elsewhere — AO3, Wattpad, a Google Doc, anywhere. These will appear in the story reader.</p>
+    <div class="ce-link-rows" id="ce-link-rows"></div>
+    <button type="button" class="ce-link-add" id="ce-link-add">＋ Add another link</button>
+    <p class="ce-yt-error ce-link-error" id="ce-link-error" hidden></p>
+    <div class="ce-yt-actions">
+      <button type="button" class="ce-btn ce-btn--cancel" id="ce-link-cancel">Cancel</button>
+      <button type="button" class="ce-btn ce-btn--publish" id="ce-link-save">Save</button>
+    </div>
+  </div>
 </div>
 
 <div class="ce-sel-toolbar" id="ce-sel-toolbar" hidden>
@@ -648,57 +789,129 @@ let dirty = false;
 let everPublished = false; // becomes true right after the first successful publish, gates the congrats modal to only ever show once per chapter
 const editor = document.getElementById('ce-editor');
 
-// Draft vs published changes which buttons make sense: a draft has nothing
-// public yet to "cancel" back to; a published chapter already has a live
-// version, so Cancel (discard edits) makes sense there. Autosave (below)
-// covers the "just save my progress" case for both states now, so Publish
-// is the only action button left -- it publishes a draft, or re-publishes
-// (saves + goes live with) edits to an already-published chapter.
-function updateButtonsForStatus() {
+// Draft vs published changes what the primary button says: a draft gets
+// "Publish" (flips it live), an already-live chapter gets "Save Changes".
+// Either way the text is also autosaved continuously (see below), so this
+// button is the explicit "commit it now" action, not the only way to save.
+// Preview is always available -- the reader shows an owner their own
+// drafts and their live chapters alike.
+function setPublishLabel() {
   const isDraft = !currentChapter || currentChapter.status === 'draft';
-  document.getElementById('ce-publish-btn').textContent = isDraft ? 'Publish' : 'Publish Changes';
-  document.getElementById('ce-cancel-btn').hidden = isDraft && !ONBOARDING;
-  // Preview (view this chapter as a reader would, drafts included since
-  // the reader shows an owner their own unpublished content) only makes
-  // sense before it's live -- once published, "Preview" and the real
-  // page are the same thing.
-  document.getElementById('ce-preview-btn').hidden = !isDraft;
+  document.getElementById('ce-publish-btn').textContent = isDraft ? 'Publish' : 'Save Changes';
 }
+function updateButtonsForStatus() { setPublishLabel(); }
+
+// Version counters: every edit bumps editVersion; a save remembers the
+// version it started with, so edits typed WHILE a save is in flight keep
+// the document dirty instead of being silently marked "saved".
+let editVersion = 0;
+let saving = false;
+let saveError = false;
 function markDirty() {
   dirty = true;
+  editVersion++;
   document.getElementById('ce-publish-btn').disabled = false;
   updateStatusLine();
+  scheduleAutosave();
 }
 function showPublishBuffer() { document.getElementById('ce-publish-buffer-overlay').hidden = false; }
 function hidePublishBuffer() { document.getElementById('ce-publish-buffer-overlay').hidden = true; }
-let autosaving = false;
 function updateStatusLine() {
   const words = editor.textContent.trim() ? editor.textContent.trim().split(/\s+/).length : 0;
   const status = currentChapter ? currentChapter.status : 'draft';
-  const indicator = autosaving
-    ? '<span class="ce-save-indicator ce-save-indicator--saving"><span class="ce-save-spinner"></span>Saving</span>'
-    : dirty
-      ? '<span class="ce-save-indicator ce-save-indicator--unsaved">Unsaved changes</span>'
-      : '<span class="ce-save-indicator ce-save-indicator--saved">All Changes Saved</span>';
+  const state = saving ? 'saving' : saveError ? 'error' : dirty ? 'unsaved' : 'saved';
+  const indicator = {
+    saving: '<span class="ce-save-indicator ce-save-indicator--saving"><span class="ce-save-spinner"></span>Saving…</span>',
+    error: '<span class="ce-save-indicator ce-save-indicator--error">Couldn\'t save — retrying</span>',
+    unsaved: '<span class="ce-save-indicator ce-save-indicator--unsaved">Unsaved changes</span>',
+    saved: '<span class="ce-save-indicator ce-save-indicator--saved">All Changes Saved</span>',
+  }[state];
   document.getElementById('ce-topbar-status').innerHTML =
     `<span class="ce-topbar-status-word">${status === 'draft' ? 'Draft' : 'Published'}</span> (${words} Word${words === 1 ? '' : 's'}) — ${indicator}`;
+  const badge = document.getElementById('ce-save-badge');
+  badge.dataset.state = state;
+  badge.title = { saving: 'Saving…', error: "Couldn't save — click to retry", unsaved: 'Unsaved changes', saved: 'All changes saved' }[state];
 }
 
-// Saves the title/body (no status change) — shared by the draft Save
-// button, the periodic autosave, and as the first step of Publish/Save
-// Changes. Returns true on success.
-async function saveChapterBody() {
-  const title = document.getElementById('ce-big-title-input').value.trim();
-  const body = editor.innerHTML;
-  const res = await fetch(`${API}/moderator/chapters/${CHAPTER_ID}/body`, {
-    method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, body, image_url: coverImageUrl, video_url: coverVideoUrl }),
-  });
-  if (!res.ok) return false;
-  dirty = false;
-  updateStatusLine();
-  return true;
+function buildSavePayload() {
+  // The server insists on a title; if the author has cleared it while
+  // still writing, keep whatever was last stored rather than failing every
+  // autosave (Publish itself still requires a real title).
+  const typed = document.getElementById('ce-big-title-input').value.trim();
+  const title = typed || (currentChapter && currentChapter.title) || 'Untitled Part';
+  return JSON.stringify({ title, body: editor.innerHTML, image_url: coverImageUrl, video_url: coverVideoUrl, links: chapterLinks });
 }
+
+// Saves are chained so two never overlap (an autosave and a Publish click
+// landing together would otherwise race and the older text could win).
+// force=false is the autosave path: it skips if an earlier queued save
+// already covered everything. Returns true on success.
+let saveChain = Promise.resolve();
+function saveChapterBody(force = true) {
+  const run = saveChain.then(() => doSave(force));
+  saveChain = run.catch(() => false);
+  return run;
+}
+async function doSave(force) {
+  if (!force && !dirty) return true;
+  const versionAtStart = editVersion;
+  saving = true;
+  saveError = false;
+  updateStatusLine();
+  let ok = false;
+  try {
+    const res = await fetch(`${API}/moderator/chapters/${CHAPTER_ID}/body`, {
+      method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: buildSavePayload(),
+    });
+    ok = res.ok;
+  } catch { ok = false; }
+  saving = false;
+  if (ok) dirty = editVersion !== versionAtStart;
+  else saveError = true;
+  updateStatusLine();
+  return ok;
+}
+
+// Dynamic autosave, Google-Docs-style: a save fires ~1.2s after the last
+// keystroke, but never later than 8s after the first unsaved edit even if
+// the author never pauses. If a save fails the badge goes red and it
+// retries every 5s until the server takes it.
+const AUTOSAVE_IDLE_MS = 1200;
+const AUTOSAVE_MAX_MS = 8000;
+const AUTOSAVE_RETRY_MS = 5000;
+let autosaveIdleTimer = null;
+let autosaveMaxTimer = null;
+function scheduleAutosave() {
+  clearTimeout(autosaveIdleTimer);
+  autosaveIdleTimer = setTimeout(autosaveNow, AUTOSAVE_IDLE_MS);
+  if (!autosaveMaxTimer) autosaveMaxTimer = setTimeout(autosaveNow, AUTOSAVE_MAX_MS);
+}
+async function autosaveNow() {
+  clearTimeout(autosaveIdleTimer);
+  clearTimeout(autosaveMaxTimer);
+  autosaveMaxTimer = null;
+  if (!dirty) return;
+  const ok = await saveChapterBody(false);
+  if (!ok) { autosaveIdleTimer = setTimeout(autosaveNow, AUTOSAVE_RETRY_MS); }
+  else if (dirty) scheduleAutosave(); // more edits landed while that save was in flight
+}
+document.getElementById('ce-save-badge').addEventListener('click', () => { if (saveError) autosaveNow(); });
+// Last-chance flush when the tab is hidden/closed: keepalive lets the
+// request outlive the page (capped around 64KB by browsers, so very long
+// chapters fall back to the beforeunload warning + the regular autosave).
+function flushOnLeave() {
+  if (!dirty || !currentChapter) return;
+  const payload = buildSavePayload();
+  if (payload.length > 60000) return;
+  try {
+    fetch(`${API}/moderator/chapters/${CHAPTER_ID}/body`, {
+      method: 'PUT', keepalive: true, headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: payload,
+    });
+  } catch {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushOnLeave(); });
+window.addEventListener('pagehide', flushOnLeave);
 
 // Custom 3-way "you've got unsaved changes" prompt — used by every in-app
 // exit point instead of a bare browser confirm(), so leaving with unsaved
@@ -742,18 +955,17 @@ document.getElementById('ce-back-btn').addEventListener('click', async () => {
   // back to the Creator Hub from here is now two steps, same as Wattpad.
   window.location.href = exitUrl();
 });
-document.getElementById('ce-cancel-btn').addEventListener('click', async () => {
-  const result = await confirmExitWithUnsavedChanges();
-  if (result === 'stay') return;
-  window.location.href = exitUrl();
-});
 // Opens the real reader on this chapter in a new tab -- the reader
 // already shows an owner their own unpublished drafts (same as "View as
 // Reader" elsewhere), so this needs no separate preview mode of its own.
-// Saves first if there are unsaved edits, so what you see is current.
+// Saves first if there are unsaved edits, so what you see is current. The
+// tab is opened synchronously inside the click (then pointed at the reader
+// once the save lands) so popup blockers don't eat it.
 document.getElementById('ce-preview-btn').addEventListener('click', async () => {
-  if (dirty) await saveChapterBody();
-  window.open(`${STORY_BASE}/reader?ch=${CHAPTER_ID}`, '_blank');
+  const tab = window.open('', '_blank');
+  if (dirty || saving) await saveChapterBody();
+  const url = `${STORY_BASE}/reader?ch=${CHAPTER_ID}`;
+  if (tab) tab.location.href = url; else window.open(url, '_blank');
 });
 document.getElementById('ce-topbar-cover-link').addEventListener('click', async (e) => {
   e.preventDefault();
@@ -761,22 +973,6 @@ document.getElementById('ce-topbar-cover-link').addEventListener('click', async 
   if (result === 'stay') return;
   window.location.href = STORY_BASE;
 });
-// Autosave — Wattpad-style, every 20s while there's something unsaved.
-// Covers drafts and published chapters alike (saveChapterBody only ever
-// touches title/body, never the published/draft status itself, so
-// there's nothing extra it could accidentally make public). A plain
-// timer rather than a per-keystroke debounce on purpose, to keep this
-// cheap -- at most one extra request every 20 seconds, not one per
-// character typed.
-async function autosaveNow() {
-  if (autosaving || !dirty) return;
-  autosaving = true;
-  updateStatusLine();
-  await saveChapterBody(); // sets dirty=false and calls updateStatusLine() again on success
-  autosaving = false;
-  updateStatusLine();
-}
-setInterval(autosaveNow, 20000);
 document.getElementById('ce-big-title-input').addEventListener('input', (e) => {
   document.getElementById('ce-title-display').textContent = e.target.value.trim() || 'Untitled Part';
   markDirty();
@@ -796,51 +992,41 @@ let coverImageUrl = '';
 let coverVideoUrl = '';
 function showCoverButtons() {
   document.getElementById('ce-cover-buttons').hidden = false;
-  document.getElementById('ce-cover-video-entry-wrap').hidden = true;
   document.getElementById('ce-cover-preview').hidden = true;
   coverBox.classList.remove('ce-cover-box--has-preview');
 }
-function showCoverVideoEntry() {
-  document.getElementById('ce-cover-buttons').hidden = true;
-  document.getElementById('ce-cover-video-entry-wrap').hidden = false;
-  document.getElementById('ce-cover-preview').hidden = true;
-  document.getElementById('ce-cover-video-error').hidden = true;
-  document.getElementById('ce-cover-video-input').focus();
-  coverBox.classList.remove('ce-cover-box--has-preview');
+// Add/replace the cover video through the same "Link Video" popup the
+// clubs use (validated client-side AND server-side).
+async function addCoverVideo() {
+  const url = await promptYoutubeLink();
+  if (!url) return;
+  coverVideoUrl = url;
+  coverImageUrl = '';
+  markDirty();
+  refreshCoverUi();
 }
-// Shared by the chapter cover and inline body videos: a real YouTube
-// thumbnail image with a play button overlay, instead of an always-live
-// (and always-loading) iframe. Clicking the thumbnail itself opens the
-// video on YouTube; clicking play swaps this same element for a real
-// playing embed in place.
+// Shared by the chapter cover and inline body videos: the same lite
+// YouTube embed the clubs use -- YouTube's own thumbnail plus a red round
+// play button, swapped for the real (heavier) iframe in place on click.
 function buildVideoThumbMarkup(videoId) {
   return `
-    <img src="https://img.youtube.com/vi/${videoId}/hqdefault.jpg" alt="" />
-    <button type="button" class="ce-video-play-btn" title="Play video">▶</button>
-    <div class="ce-video-thumb-title" title="Watch on YouTube">Watch on YouTube</div>
+    <img src="https://img.youtube.com/vi/${videoId}/maxresdefault.jpg" alt="" />
+    <button type="button" class="ce-video-play-btn" title="Play video" aria-label="Play video">▶</button>
   `;
 }
 function wireVideoThumb(wrap, videoId) {
   wrap.innerHTML = buildVideoThumbMarkup(videoId);
-  const openOnYouTube = () => window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank', 'noopener');
-  wrap.querySelector('img').addEventListener('click', openOnYouTube);
-  wrap.querySelector('.ce-video-thumb-title').addEventListener('click', (e) => {
+  // maxresdefault isn't generated for every video -- YouTube's img server
+  // answers with a 120px grey placeholder instead of a 404, so check size.
+  const thumbImg = wrap.querySelector('img');
+  const useHq = () => { thumbImg.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`; };
+  thumbImg.addEventListener('load', () => { if (thumbImg.naturalWidth <= 120 && !thumbImg.src.includes('hqdefault')) useHq(); });
+  thumbImg.addEventListener('error', () => { if (!thumbImg.src.includes('hqdefault')) useHq(); });
+  wrap.onclick = (e) => {
     e.stopPropagation();
-    openOnYouTube();
-  });
-  wrap.querySelector('.ce-video-play-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    wrap.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1" allow="autoplay; encrypted-media" allowfullscreen title="Chapter video"></iframe>`;
-  });
-  // Real video title via YouTube's no-key oEmbed endpoint — falls back to
-  // the generic label above if the request fails (e.g. offline, invalid ID).
-  fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + videoId)}&format=json`)
-    .then(res => res.ok ? res.json() : null)
-    .then(data => {
-      const titleEl = wrap.querySelector('.ce-video-thumb-title');
-      if (data && data.title && titleEl) { titleEl.textContent = data.title; titleEl.title = data.title; }
-    })
-    .catch(() => {});
+    wrap.onclick = null;
+    wrap.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1" title="YouTube video" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+  };
 }
 function updateCoverEditMenuLabels() {
   const replaceBtn = coverEditMenu.querySelector('[data-action="replace"]');
@@ -858,7 +1044,6 @@ function updateCoverEditMenuLabels() {
 }
 function showCoverPreview() {
   document.getElementById('ce-cover-buttons').hidden = true;
-  document.getElementById('ce-cover-video-entry-wrap').hidden = true;
   document.getElementById('ce-cover-preview').hidden = false;
   document.getElementById('ce-cover-edit-menu').hidden = true;
   coverBox.classList.add('ce-cover-box--has-preview');
@@ -898,19 +1083,7 @@ document.getElementById('ce-cover-image-btn').addEventListener('click', () => {
   document.getElementById('ce-image-file-input').dataset.target = 'cover';
   document.getElementById('ce-image-file-input').click();
 });
-document.getElementById('ce-cover-video-btn').addEventListener('click', showCoverVideoEntry);
-document.getElementById('ce-cover-video-cancel').addEventListener('click', refreshCoverUi);
-document.getElementById('ce-cover-video-add').addEventListener('click', () => {
-  const url = document.getElementById('ce-cover-video-input').value.trim();
-  const errEl = document.getElementById('ce-cover-video-error');
-  if (!url) return;
-  if (!extractYouTubeId(url)) { errEl.hidden = false; return; }
-  errEl.hidden = true;
-  coverVideoUrl = url;
-  coverImageUrl = '';
-  markDirty();
-  refreshCoverUi();
-});
+document.getElementById('ce-cover-video-btn').addEventListener('click', addCoverVideo);
 const coverEditMenu = document.getElementById('ce-cover-edit-menu');
 document.getElementById('ce-cover-edit-btn').addEventListener('click', (e) => {
   e.stopPropagation();
@@ -927,7 +1100,7 @@ coverEditMenu.querySelector('[data-action="replace"]').addEventListener('click',
     document.getElementById('ce-image-file-input').click();
   } else {
     // Replace Video — same type, paste a new link.
-    showCoverVideoEntry();
+    addCoverVideo();
   }
 });
 coverEditMenu.querySelector('[data-action="remove"]').addEventListener('click', () => {
@@ -941,7 +1114,7 @@ coverEditMenu.querySelector('[data-action="other"]').addEventListener('click', (
   coverEditMenu.hidden = true;
   if (coverImageUrl) {
     // Add YouTube Video — switch away from the image to a video.
-    showCoverVideoEntry();
+    addCoverVideo();
     return;
   }
   // Add Image — switch away from the video; picking a file replaces
@@ -1054,6 +1227,90 @@ editor.addEventListener('paste', (e) => {
   if (cleaned) document.execCommand('insertHTML', false, cleaned);
   markDirty();
   updateStatusLine();
+});
+
+// ── "..." overflow menu (Import / Add External Link). ──────────────────
+const moreBtn = document.getElementById('ce-more-btn');
+const moreMenu = document.getElementById('ce-more-menu');
+function setMoreMenuOpen(open) {
+  moreMenu.hidden = !open;
+  moreBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+moreBtn.addEventListener('click', (e) => { e.stopPropagation(); setMoreMenuOpen(moreMenu.hidden); });
+moreMenu.addEventListener('click', () => setMoreMenuOpen(false));
+document.addEventListener('click', (e) => { if (!moreMenu.hidden && !moreMenu.contains(e.target)) setMoreMenuOpen(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setMoreMenuOpen(false); });
+
+// ── External links -- saved on the chapter ({ label, url }[] in the
+// chapter's existing `links` column) so the story reader can surface them
+// later. Autosaved along with everything else. ──────────────────────────
+let chapterLinks = [];
+const linkOverlay = document.getElementById('ce-link-overlay');
+const linkRowsEl = document.getElementById('ce-link-rows');
+const linkErrorEl = document.getElementById('ce-link-error');
+function updateLinkCount() {
+  const el = document.getElementById('ce-ext-link-count');
+  el.hidden = !chapterLinks.length;
+  el.textContent = chapterLinks.length;
+}
+function addLinkRow(label = '', url = '') {
+  const row = document.createElement('div');
+  row.className = 'ce-link-row';
+  row.innerHTML = `
+    <input type="text" class="ce-modal-input ce-link-label" placeholder="Label (e.g. Read on AO3)" maxlength="60" />
+    <input type="text" class="ce-modal-input ce-link-url" placeholder="https://…" />
+    <button type="button" class="ce-link-remove" title="Remove link">✕</button>
+  `;
+  row.querySelector('.ce-link-label').value = label;
+  row.querySelector('.ce-link-url').value = url;
+  row.querySelector('.ce-link-remove').addEventListener('click', () => row.remove());
+  linkRowsEl.appendChild(row);
+  return row;
+}
+function openLinkModal() {
+  linkRowsEl.innerHTML = '';
+  linkErrorEl.hidden = true;
+  (chapterLinks.length ? chapterLinks : [{ label: '', url: '' }]).forEach(l => addLinkRow(l.label, l.url));
+  linkOverlay.hidden = false;
+  const first = linkRowsEl.querySelector('.ce-link-url');
+  if (first && !first.value) first.focus();
+}
+function normalizeHttpUrl(raw) {
+  let u = String(raw || '').trim();
+  if (!u) return null;
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = 'https://' + u;
+  try {
+    const parsed = new URL(u);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (!parsed.hostname.includes('.')) return null;
+    return parsed.href;
+  } catch { return null; }
+}
+document.getElementById('ce-ext-link-btn').addEventListener('click', openLinkModal);
+document.getElementById('ce-link-add').addEventListener('click', () => addLinkRow().querySelector('.ce-link-url').focus());
+document.getElementById('ce-link-cancel').addEventListener('click', () => { linkOverlay.hidden = true; });
+linkOverlay.addEventListener('mousedown', (e) => { if (e.target === linkOverlay) linkOverlay.hidden = true; });
+document.getElementById('ce-link-save').addEventListener('click', () => {
+  const next = [];
+  for (const row of linkRowsEl.querySelectorAll('.ce-link-row')) {
+    const rawUrl = row.querySelector('.ce-link-url').value.trim();
+    const label = row.querySelector('.ce-link-label').value.trim();
+    if (!rawUrl && !label) continue; // untouched blank row
+    const url = normalizeHttpUrl(rawUrl);
+    if (!url) {
+      linkErrorEl.textContent = "One of those links doesn't look right — make sure it's a full web address.";
+      linkErrorEl.hidden = false;
+      row.querySelector('.ce-link-url').focus();
+      return;
+    }
+    next.push({ label: label || new URL(url).hostname.replace(/^www\./, ''), url });
+  }
+  linkOverlay.hidden = true;
+  if (JSON.stringify(next) !== JSON.stringify(chapterLinks)) {
+    chapterLinks = next;
+    updateLinkCount();
+    markDirty();
+  }
 });
 
 // ── Import .docx — extracted server-side via mammoth, run through the same
@@ -1304,8 +1561,69 @@ function insertHrBlock() {
 
 // ── Inline YouTube video embeds — same movable-block treatment as images. ──
 function extractYouTubeId(url) {
-  const m = String(url || '').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{6,})/);
-  return m ? m[1] : null;
+  const s = String(url || '').trim();
+  const patterns = [
+    /^https?:\/\/(?:www\.|m\.)?youtube\.com\/watch\?(?:[^#]*&)?v=([A-Za-z0-9_-]{11})(?:&.*)?$/,
+    /^https?:\/\/(?:www\.)?youtu\.be\/([A-Za-z0-9_-]{11})(?:\?.*)?$/,
+    /^https?:\/\/(?:www\.|m\.)?youtube\.com\/embed\/([A-Za-z0-9_-]{11})(?:\?.*)?$/,
+    /^https?:\/\/(?:www\.|m\.)?youtube\.com\/shorts\/([A-Za-z0-9_-]{11})(?:\?.*)?$/,
+  ];
+  for (const re of patterns) {
+    const m = s.match(re);
+    if (m) return m[1];
+  }
+  return null;
+}
+// The "Link Video" popup -- same flow as the clubs' promptYoutubeLink():
+// resolves to the canonical saved URL on success, null if cancelled. An
+// unrecognized paste shows an inline error and the popup stays open
+// (checked here AND server-side by /api/moderator/youtube-link).
+function promptYoutubeLink() {
+  return new Promise((resolve) => {
+    const overlay = document.getElementById('ce-yt-overlay');
+    const input = document.getElementById('ce-yt-input');
+    const errorEl = document.getElementById('ce-yt-error');
+    const saveBtn = document.getElementById('ce-yt-save');
+    const cancelBtn = document.getElementById('ce-yt-cancel');
+    input.value = '';
+    errorEl.hidden = true;
+    overlay.hidden = false;
+    input.focus();
+    function cleanup() {
+      overlay.hidden = true;
+      saveBtn.removeEventListener('click', onSave);
+      cancelBtn.removeEventListener('click', onCancel);
+      input.removeEventListener('keydown', onKeydown);
+      overlay.removeEventListener('mousedown', onBackdrop);
+    }
+    function onCancel() { cleanup(); resolve(null); }
+    function onBackdrop(e) { if (e.target === overlay) onCancel(); }
+    async function onSave() {
+      const raw = input.value.trim();
+      if (!extractYouTubeId(raw)) { errorEl.hidden = false; return; }
+      errorEl.hidden = true;
+      saveBtn.disabled = true;
+      try {
+        const res = await fetch(`${API}/moderator/youtube-link`, {
+          method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: raw }),
+        });
+        saveBtn.disabled = false;
+        if (!res.ok) { errorEl.hidden = false; return; }
+        const data = await res.json();
+        cleanup();
+        resolve(data.url);
+      } catch {
+        saveBtn.disabled = false;
+        errorEl.hidden = false;
+      }
+    }
+    function onKeydown(e) { if (e.key === 'Enter') onSave(); else if (e.key === 'Escape') onCancel(); }
+    saveBtn.addEventListener('click', onSave);
+    cancelBtn.addEventListener('click', onCancel);
+    input.addEventListener('keydown', onKeydown);
+    overlay.addEventListener('mousedown', onBackdrop);
+  });
 }
 function wireVideoBlock(block) {
   wireBlockDrag(block);
@@ -1341,7 +1659,6 @@ function insertVideoBlock(url) {
 let activeEmptyPara = null;
 let inlineHideTimer = null;
 const inlineBtns = document.getElementById('ce-inline-media-btns');
-const inlineVideoEntry = document.getElementById('ce-inline-video-entry');
 function isParagraphEmpty(p) {
   return p && p.tagName === 'P' && p.textContent.trim() === '';
 }
@@ -1356,13 +1673,11 @@ function positionOverParagraph(el, p) {
 }
 function showInlineBtns(p) {
   activeEmptyPara = p;
-  inlineVideoEntry.hidden = true;
   inlineBtns.hidden = false;
   positionOverParagraph(inlineBtns, p);
 }
 function hideInlineUi() {
   inlineBtns.hidden = true;
-  inlineVideoEntry.hidden = true;
   activeEmptyPara = null;
 }
 function scheduleHideInline() { inlineHideTimer = setTimeout(hideInlineUi, 150); }
@@ -1379,8 +1694,6 @@ editor.addEventListener('mousemove', (e) => {
 editor.addEventListener('mouseleave', scheduleHideInline);
 inlineBtns.addEventListener('mouseenter', cancelHideInline);
 inlineBtns.addEventListener('mouseleave', scheduleHideInline);
-inlineVideoEntry.addEventListener('mouseenter', cancelHideInline);
-inlineVideoEntry.addEventListener('mouseleave', scheduleHideInline);
 inlineBtns.querySelector('[data-action="image"]').addEventListener('click', () => {
   if (!activeEmptyPara) return;
   pendingInlineAnchor = activeEmptyPara;
@@ -1392,26 +1705,15 @@ inlineBtns.querySelector('[data-action="hr"]').addEventListener('click', () => {
   insertHrBlock();
   hideInlineUi();
 });
-inlineBtns.querySelector('[data-action="video"]').addEventListener('click', () => {
+inlineBtns.querySelector('[data-action="video"]').addEventListener('click', async () => {
   if (!activeEmptyPara) return;
-  inlineBtns.hidden = true;
-  inlineVideoEntry.hidden = false;
-  document.getElementById('ce-inline-video-error').hidden = true;
-  positionOverParagraph(inlineVideoEntry, activeEmptyPara);
-  document.getElementById('ce-inline-video-input').value = '';
-  document.getElementById('ce-inline-video-input').focus();
-});
-document.getElementById('ce-inline-video-cancel').addEventListener('click', hideInlineUi);
-document.getElementById('ce-inline-video-add').addEventListener('click', () => {
-  const url = document.getElementById('ce-inline-video-input').value.trim();
-  const errEl = document.getElementById('ce-inline-video-error');
-  if (!url) return;
-  if (!insertVideoBlock(url)) {
-    errEl.hidden = false;
-    positionOverParagraph(inlineVideoEntry, activeEmptyPara);
-    return;
-  }
+  // The popup steals focus/hover from the editor, so remember which empty
+  // line this was opened on (same trick as the inline image picker).
+  pendingInlineAnchor = activeEmptyPara;
   hideInlineUi();
+  const url = await promptYoutubeLink();
+  if (!url) { pendingInlineAnchor = null; return; }
+  insertVideoBlock(url);
 });
 document.getElementById('ce-image-file-input').addEventListener('change', async (e) => {
   const file = e.target.files[0];
@@ -1438,15 +1740,14 @@ document.getElementById('ce-publish-btn').addEventListener('click', async () => 
 
   const btn = document.getElementById('ce-publish-btn');
   btn.disabled = true;
-  btn.textContent = 'Saving…';
-  // Without the old separate Save button, Publish is now the only thing
-  // that guarantees the latest text actually made it to the server -- the
-  // 20s autosave timer might just not have fired yet. This overlay covers
-  // that gap: saveChapterBody() below always runs (and is awaited) before
-  // the status flips to published, so a mid-typing author never goes live
-  // with stale content, and the buffer gives that save a visible beat
-  // instead of it happening invisibly behind a button label change.
-  showPublishBuffer();
+  btn.textContent = wasDraft ? 'Publishing…' : 'Saving…';
+  // Publish guarantees the latest text actually made it to the server --
+  // saveChapterBody() always runs (and is awaited, after any autosave
+  // already in flight) before the status flips to published, so a
+  // mid-typing author never goes live with stale content. The buffer
+  // overlay gives that save a visible beat on the one-way draft→live step;
+  // "Save Changes" on an already-live chapter just flips the button label.
+  if (wasDraft) showPublishBuffer();
   try {
     const ok = await saveChapterBody();
     if (!ok) throw new Error('save failed');
@@ -1468,7 +1769,6 @@ document.getElementById('ce-publish-btn').addEventListener('click', async () => 
       if (!statusRes.ok) throw new Error('publish failed');
       chapterLevelUp = statusData && statusData.levelUp;
       currentChapter.status = 'published';
-      updateButtonsForStatus();
       if (chapterLevelUp && window.fpnavShowXpGain) window.fpnavShowXpGain(chapterLevelUp, btn);
     }
     updateStatusLine();
@@ -1486,11 +1786,11 @@ document.getElementById('ce-publish-btn').addEventListener('click', async () => 
       window.location.href = window.fpUrl('/create?story=' + encodeURIComponent(SLUG) + '&from=hub#chapters');
       return;
     }
-    setTimeout(() => { btn.textContent = wasDraft ? 'Publish Changes' : (currentChapter.status === 'draft' ? 'Publish' : 'Publish Changes'); btn.disabled = true; }, 1200);
+    setTimeout(() => { setPublishLabel(); btn.disabled = false; }, 1200);
   } catch {
     alert('Something went wrong saving. Please try again.');
     btn.disabled = false;
-    btn.textContent = wasDraft ? 'Publish' : 'Publish Changes';
+    setPublishLabel();
   } finally {
     hidePublishBuffer();
   }
@@ -1549,6 +1849,8 @@ window.addEventListener('beforeunload', (e) => {
   });
   updateStatusLine();
 
+  chapterLinks = Array.isArray(chapter.links) ? chapter.links.filter(l => l && l.url) : [];
+  updateLinkCount();
   coverImageUrl = chapter.image_url || '';
   coverVideoUrl = chapter.video_url || '';
   refreshCoverUi();
