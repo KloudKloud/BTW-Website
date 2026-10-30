@@ -229,12 +229,18 @@
     .sv-pmain-head .sv-h2 { margin: 0; font-size: 1.7rem; }
     .sv-pmain-sum { font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #98a2b2; }
     .sv-pmain-sum b { color: #fff; font-weight: 700; }
+    #sv-plist { display: flex; flex-direction: column; gap: 0.8rem; margin-top: 1.1rem; }
     .sv-prow {
-      position: relative; display: flex; align-items: center; gap: 1.1rem; padding: 1.15rem 0.6rem 1.15rem 0.4rem; text-decoration: none; color: #e8edf5;
-      border-bottom: 1px solid rgba(255,255,255,0.09); transition: background 0.15s, padding-left 0.15s;
+      position: relative; display: flex; align-items: center; gap: 1.1rem; padding: 1rem 1.3rem 1rem 1rem; text-decoration: none; color: #e8edf5; overflow: hidden;
+      border-radius: 20px; background: rgba(255,255,255,0.045); border: 1px solid rgba(255,255,255,0.11); border-left: 4px solid #7fa8d9;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.25); transition: background 0.15s, border-color 0.15s, transform 0.15s, box-shadow 0.15s;
     }
-    .sv-prow:hover { background: rgba(127,168,217,0.1); padding-left: 0.9rem; }
-    .sv-prow-num { flex-shrink: 0; width: 2.6rem; text-align: center; font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 1.05rem; color: #7fa8d9; }
+    .sv-prow:hover { background: rgba(127,168,217,0.14); border-color: rgba(127,168,217,0.55); border-left-color: #cfe0f5; transform: translateX(4px); box-shadow: 0 8px 22px rgba(0,0,0,0.4); }
+    .sv-prow--draft { border-style: dashed; border-left-style: solid; border-left-color: #ffd479; background: rgba(255,212,121,0.04); }
+    .sv-prow-num {
+      flex-shrink: 0; width: 2.8rem; height: 2.8rem; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 1.1rem; color: #cfe0f5; background: rgba(127,168,217,0.16); border: 1px solid rgba(127,168,217,0.45);
+    }
     .sv-prow-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; }
     .sv-prow-title { font-family: 'Fredoka', 'Lato', cursive; font-weight: 500; font-size: 1.25rem; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sv-prow:hover .sv-prow-title { text-shadow: 0 0 14px rgba(255,255,255,0.45); }
@@ -244,7 +250,7 @@
     .sv-prow-right { flex-shrink: 0; display: flex; align-items: center; gap: 0.8rem; font-family: 'Inter', sans-serif; font-size: 0.88rem; color: #aab3c2; }
     .sv-prow-read { font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 0.8rem; color: #9fc0e6; border: 1px solid rgba(127,168,217,0.5); border-radius: 999px; padding: 0.1em 0.7em; }
     .sv-prow-read--done { color: #7fe3a0; border-color: rgba(127,227,160,0.5); }
-    .sv-prow-bar { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; }
+    .sv-prow-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,0.06); }
     .sv-prow-bar i { display: block; height: 100%; background: linear-gradient(90deg, #3d6fa8, #7fa8d9); box-shadow: 0 0 8px rgba(127,168,217,0.7); }
 
     /* ── You may also like ── */
@@ -312,7 +318,7 @@
       .sv-chside-stat, .sv-chside-stat:nth-child(even) { align-items: flex-start; text-align: left; }
       .sv-chside-stat .sv-stat-top { justify-content: flex-start; }
       .sv-prow { gap: 0.6rem; }
-      .sv-prow-num { width: 1.8rem; }
+      .sv-prow-num { width: 2.2rem; height: 2.2rem; font-size: 0.95rem; }
       .sv-prow-title { font-size: 1.05rem; }
       .sv-prow-right .sv-prow-date { display: none; }
       .sv-chrow-meta { display: none; }
@@ -533,6 +539,17 @@ $('sv-tab-summary').addEventListener('click', () => setTab('summary'));
 $('sv-tab-chapters').addEventListener('click', () => setTab('chapters'));
 $('sv-see-all').addEventListener('click', () => { setTab('chapters'); window.scrollTo({ top: 0, behavior: 'smooth' }); });
 
+// Where "Continue Reading" should go for a logged-in reader who has opened any chapter:
+// the first published chapter they haven't finished, else the one they read last.
+function continueTarget() {
+  if (!token) return null;
+  const pct = (c) => Number(c.progress_percent) || 0;
+  const read = CHAPTERS.filter(c => pct(c) > 0);
+  if (!read.length) return null;
+  const next = CHAPTERS.find(c => c.status === 'published' && c._words > 0 && pct(c) < 97);
+  return next || read[read.length - 1];
+}
+
 // ── Hero ──
 function renderHero() {
   const s = SITE;
@@ -587,6 +604,11 @@ function renderHero() {
     $('sv-start-label').textContent = 'No Chapters Yet';
   } else {
     btn.href = `${STORY_BASE}/reader?ch=${first.id}`;
+    const cont = s.resume ? null : continueTarget();
+    if (cont) {
+      btn.href = `${STORY_BASE}/reader?ch=${cont.id}`;
+      $('sv-start-label').textContent = 'Continue Reading';
+    }
     if (s.resume) {
       $('sv-start-label').textContent = 'Continue Reading';
       btn.addEventListener('click', (e) => {
@@ -710,9 +732,10 @@ function renderChaptersTab() {
     mini(ICONS.eye, formatCount(s.view_count), 'Reads') + mini(ICONS.heart, formatCount(s.like_count), 'Likes') +
     mini(ICONS.words, formatCount(totalWords), 'Words') + mini(ICONS.book, CHAPTERS.length.toLocaleString(), 'Chapters');
   const start = $('sv-ch-start');
-  if (CHAPTERS[0]) start.href = `${STORY_BASE}/reader?ch=${s.resume ? s.resume.chapter_id : CHAPTERS[0].id}${s.resume ? '&resume=1' : ''}`;
+  const cont = s.resume ? null : continueTarget();
+  if (CHAPTERS[0]) start.href = `${STORY_BASE}/reader?ch=${s.resume ? s.resume.chapter_id : (cont ? cont.id : CHAPTERS[0].id)}${s.resume ? '&resume=1' : ''}`;
   else { start.classList.add('sv-start--off'); start.removeAttribute('href'); }
-  if (s.resume) start.querySelector('span').textContent = 'Continue Reading';
+  if (s.resume || cont) start.querySelector('span').textContent = 'Continue Reading';
 
   const published = CHAPTERS.filter(c => c.status === 'published');
   const last = published.reduce((m, c) => (!m || new Date(c.updated_at) > new Date(m) ? c.updated_at : m), null);
@@ -722,7 +745,7 @@ function renderChaptersTab() {
     const pct = Math.max(0, Math.min(100, Number(c.progress_percent) || 0));
     const readChip = pct >= 97 ? '<span class="sv-prow-read sv-prow-read--done">✓ Read</span>' : pct > 0 ? `<span class="sv-prow-read">${pct}%</span>` : '';
     return `
-    <a class="sv-prow" href="${STORY_BASE}/reader?ch=${c.id}">
+    <a class="sv-prow${c.status === 'draft' ? ' sv-prow--draft' : ''}" href="${STORY_BASE}/reader?ch=${c.id}">
       <span class="sv-prow-num">${c._num}</span>
       <span class="sv-prow-main">
         <span class="sv-prow-title">${esc(c.title || 'Untitled Part')}</span>
