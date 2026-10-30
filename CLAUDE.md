@@ -353,31 +353,36 @@ rather than trying to get one single insertion order to satisfy both.
 
 ## Fanpage Hub hero row (fanpages/index.html) — current state + saved styles
 
-**Two saved hero designs exist as git tags (pushed to origin) — find them with
-`git tag -l "hub-hero-*"`.** The user explicitly wants to be able to flip back:
+**The live style is the "classic" layout with the sparks replaced by a static glow.**
+Two earlier designs are saved as git tags (pushed to origin; `git tag -l "hub-hero-*"`):
 - `hub-hero-classic` (commit `de15715`): narrow comic panels (fixed 9.5% width,
-  ~0.38 ratio), per-panel colored neon borders + traveling sparks.
-- `hub-hero-wide-panels` (commit `d8d0a36`) — **the current live style**: the four
-  comic panels are `aspect-ratio: 603 / 1012` at the row's height (row height is
-  `clamp(305px, 25vw, 425px)`, unchanged), the banner flexes to fill the rest,
-  panels have no resting glow and only a 1px black line where two meet, the
-  banner alone has a soft blue border + inner glow (no moving spark), and
-  hovering a panel lights that panel in its own neon color (Gallery purple,
-  Stories red, Characters green, Clubs blue) and recolors the banner glow to
-  match (via `:has()` + `--neon`/`--neon-glow` vars on `.fp-hero-row`).
-- **To switch back safely**: only six commits sit between the tags
-  (`a8721a9 68c4eec 24e4611 6f54a51 640c49e d8d0a36`) and they touch ONLY
-  `fanpages/index.html` + `fanpages/admin.html`, all hero-only. Prefer
-  `git revert --no-commit d8d0a36 640c49e 6f54a51 24e4611 68c4eec a8721a9`, which
-  undoes just the redesign and keeps later work. `git checkout <tag> -- fanpages/index.html fanpages/admin.html`
-  overwrites the WHOLE files and will wipe any unrelated later edits to them —
-  only use it if nothing else has touched those files. Tags are bookmarks, not a
-  rewind: checking out/restoring never deletes later work. Then run the normal
-  deploy cycle.
-- Admin → Bulletin → Hero Row Images crop editor/tiles use the same 603:1012
-  ratio for the four comic slots (other slots keep their own measured ratios:
-  Spotlights 334/484, Recent Submissions 320/531, Arcade 655/416, News Posts and
-  Donations 655/277). Recommended art for a comic panel: 603x1012 (or 1206x2024).
+  ~0.38 ratio), per-panel colored neon borders + a traveling spark circling each border.
+- `hub-hero-wide-panels` (commit `d8d0a36`): wide `aspect-ratio: 603 / 1012` panels, no
+  resting glow, only the banner glowing, hover lights a panel in its own neon color.
+  **Not live** — it was reverted by `8b593b0` ("revert hero row to the classic
+  neon-glow style"), which put the page back on the classic layout.
+- **Current live state** (built on the classic layout): narrow 9.5% panels, per-panel neon
+  borders (Gallery purple, Stories red, Characters green, Clubs blue), and **no animation on
+  the panels at all**. The spark (`::before` + `fp-spark-travel`/`fp-spark-flicker`) was removed;
+  `.fp-comic-box::before` is now a *static* soft inset glow (`inset 0 0 22px` in the panel's
+  `--comic-neon-dim`, opacity .75, 1 on hover) — the same "faint haze hugging the inside of
+  the border" the Spotlight / Recent Submissions boxes below use, held steady instead of
+  pulsing. History of that experiment, all in `fanpages/index.html` only: sparks =
+  `f4f13e9` (last commit with sparks), a stronger left/right-edge-only glow = `1281029`
+  (user found it too strong), then the all-around soft glow (current).
+  To get the sparks back: `git revert` the glow commit(s) (newest first), don't
+  `git checkout` the file (wipes unrelated edits).
+- To go back to the *wide-panels* layout instead: it would mean undoing `8b593b0`
+  (`git revert 8b593b0`), untested — the six commits it reverted
+  (`a8721a9 68c4eec 24e4611 6f54a51 640c49e d8d0a36`) touch only `fanpages/index.html` +
+  `fanpages/admin.html`. Tags are bookmarks, not a rewind. Then run the normal deploy cycle.
+- Admin → Bulletin → Hero Row Images crop tiles for the four comic slots use the
+  **classic 9.5:25 ratio** (`.hr-card-img-wrap`, ratio fallback `9.5 / 25` in admin.html), not
+  603:1012. Other slots keep their own measured ratios: Spotlights 334/484, Recent Submissions
+  320/531, Arcade 655/416, News Posts and Donations 655/277. (The 603:1012 / 1206x2024 art
+  recommendation only applied to the wide-panels style.) Homepage panel art is now served
+  as a right-sized copy (`/api/hero-comic-boxes?display=1`, see the image-sizing note below);
+  the admin editor still gets the full-size file.
 - `fanpages/btw-cropper.js` accepts an opt-in `minZoomFactor` (<1) so a cropper can
   zoom OUT past "cover"; only the hero editor uses it (0.2). Server accepts hero
   zoom 10–400 (other slots stay 100–400). Position fractions follow CSS
@@ -399,6 +404,27 @@ rather than trying to get one single insertion order to satisfy both.
   tab panel.
 - Gem grants: balance is `users.gems` + a `gem_ledger` row (see `gems.js`); do both
   in one transaction (reason e.g. `admin_grant`).
+
+## Right-sized images (this session)
+
+Browsers decode the full bitmap of whatever they're given, so a 1265px avatar drawn at 32px
+costs memory and bytes even though the file is "fine". `sizedUrl(urlPath, maxPx)` in
+server.js writes a lazy copy beside the original as `<name>-<maxPx>.<ext>` (PNG stays PNG,
+JPEG stays JPEG; GIFs/animated/already-small files are skipped; originals are never touched).
+First request for a missing copy returns the original and resizes in the background.
+- **Avatars:** a small `/api` middleware (right after `express.json()`) rewrites any
+  `avatar`/`*_avatar` string in every JSON response to the 400px copy; the homepage's
+  spotlights/followers/feed use 200px. Exceptions that keep the full file: any object that also
+  has `avatar_original_url` (the account editor) and `POST /api/auth/avatar`.
+- **Spotlight/feed images with no `-thumb`:** 600px copies. **Hero panels:**
+  `/api/hero-comic-boxes?display=1` returns a 1200px-long-side copy (scaled up with crop zoom);
+  omit the flag (admin) for the full file.
+- One-off backfill that pre-generates copies for existing rows lives on the server only:
+  `/var/www/btw-api/scripts/backfill-sized.js` (`node ... dry` for a dry run).
+- Billboard: slides load one-ahead (visible + next), server sends `image_w/image_h` so no
+  full-image probe is needed; a black curtain fades in if someone clicks to an unloaded slide.
+- Measuring: headless Playwright memory numbers are inflated (software rendering) — compare
+  runs to each other, never to Chrome's own tab-memory hover. Don't trust a single run.
 
 ## Testing with Playwright
 
