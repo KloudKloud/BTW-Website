@@ -4776,6 +4776,52 @@ async function generateThumbnail(imageUrlPath) {
   }
 }
 
+// Right-sized copy of a locally stored image, written next to the original
+// as <name>-<maxPx>.<ext> (PNG stays PNG so avatars keep transparency; JPEG
+// stays JPEG). The original is never touched -- this is purely what list /
+// card contexts show, so a 1265px avatar drawn at 32px, or a 1600x2400 cover
+// drawn at 185px, doesn't make the browser decode the full-size bitmap.
+// Created lazily: the first request for a not-yet-made copy kicks off the
+// resize in the background and returns the original that one time, every
+// later call returns the small copy. Anything that isn't one of our own
+// still images (GIFs, external URLs, already-small files) comes back as-is.
+const SIZED_DIRS = ['/images/avatars/', '/images/moderators/'];
+const sizedVariantCache = new Map();   // "<url>|<px>" -> variant url, or false when the original should be used
+const sizedVariantInflight = new Set();
+function sizedUrl(urlPath, maxPx) {
+  if (!urlPath || typeof urlPath !== 'string' || !SIZED_DIRS.some(d => urlPath.startsWith(d))) return urlPath;
+  const ext = path.extname(urlPath).toLowerCase();
+  const outExt = ext === '.png' ? '.png' : (ext === '.webp' ? '.webp' : (ext === '.jpg' || ext === '.jpeg') ? '.jpg' : null);
+  if (!outExt) return urlPath;
+  const key = `${urlPath}|${maxPx}`;
+  if (sizedVariantCache.has(key)) return sizedVariantCache.get(key) || urlPath;
+  const variantUrl = `${urlPath.slice(0, -ext.length)}-${maxPx}${outExt}`;
+  if (fs.existsSync(path.join('/var/www/btw', variantUrl))) { sizedVariantCache.set(key, variantUrl); return variantUrl; }
+  if (!sizedVariantInflight.has(key)) {
+    sizedVariantInflight.add(key);
+    makeSizedVariant(urlPath, variantUrl, maxPx, outExt).then(ok => {
+      sizedVariantCache.set(key, ok ? variantUrl : false);
+    }).finally(() => sizedVariantInflight.delete(key));
+  }
+  return urlPath;
+}
+async function makeSizedVariant(urlPath, variantUrl, maxPx, outExt) {
+  try {
+    const src = path.join('/var/www/btw', urlPath);
+    if (!fs.existsSync(src)) return false;
+    const meta = await sharp(src).metadata();
+    if (meta.pages > 1) return false;                              // animated
+    if (Math.max(meta.width || 0, meta.height || 0) <= maxPx) return false; // already small enough
+    let img = sharp(src).rotate().resize(maxPx, maxPx, { fit: 'inside', withoutEnlargement: true });
+    img = outExt === '.png' ? img.png({ compressionLevel: 9 }) : outExt === '.webp' ? img.webp({ quality: 85 }) : img.jpeg({ quality: 86 });
+    await img.toFile(path.join('/var/www/btw', variantUrl));
+    return true;
+  } catch (e) {
+    console.error('makeSizedVariant failed for', urlPath, e.message);
+    return false;
+  }
+}
+
 // Admin-only display art (home billboard slides, hero comic panels) has no
 // "full quality" detail page behind it -- the image on screen IS the image --
 // so an uploaded PNG/WebP is re-encoded to a capped JPEG and the raw upload
@@ -5283,9 +5329,23 @@ async function imageDimsFor(urlPath) {
 
 app.get('/api/hero-comic-boxes', async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM hero_comic_box_images');
+  // ?display=1 (the homepage) swaps in a right-sized copy: long side capped at
+  // 1200px (retina-safe for the biggest panel), scaled up with the crop zoom so
+  // a zoomed-in slot keeps its sharpness. The admin editor omits the flag and
+  // keeps getting the full-size file. Position/zoom are fractions, so the
+  // smaller copy crops identically.
+  const display = req.query.display === '1';
   await Promise.all(rows.map(async r => {
     const d = await imageDimsFor(r.image_url);
-    if (d) { r.image_w = d.w; r.image_h = d.h; }
+    if (!d) return;
+    r.image_w = d.w; r.image_h = d.h;
+    if (!display) return;
+    const cap = Math.round(1200 * Math.max(1, (r.zoom || 100) / 100));
+    const small = sizedUrl(r.image_url, cap);
+    if (small !== r.image_url) {
+      const scale = cap / Math.max(d.w, d.h);
+      r.image_url = small; r.image_w = Math.round(d.w * scale); r.image_h = Math.round(d.h * scale);
+    }
   }));
   res.json({ boxes: rows });
 });
@@ -6006,7 +6066,7 @@ app.get('/api/recommended-followers', async (req, res) => {
     users: rows.map(u => ({
       username: u.username,
       display_name: u.display_name || u.username,
-      avatar: u.avatar || null,
+      avatar: sizedUrl(u.avatar, 200) || null,
       follower_count: u.follower_count, following_count: u.following_count, club_count: u.club_count, story_count: u.story_count,
     })),
   });
@@ -10643,11 +10703,11 @@ app.get('/api/spotlight/characters', async (req, res) => {
     characters: rows.map(r => {
       const locked = r.ref_is_nsfw && !nsfwAllowed;
       return {
-        id: r.id, name: r.name, image: locked ? null : (r.thumb_image_url || r.ref_image), nsfw_locked: !!locked,
+        id: r.id, name: r.name, image: locked ? null : (r.thumb_image_url || sizedUrl(r.ref_image, 600)), nsfw_locked: !!locked,
         position_x: r.ref_position_x, position_y: r.ref_position_y,
         story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
         owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
-        owner_avatar: r.owner_avatar || null,
+        owner_avatar: sizedUrl(r.owner_avatar, 200) || null,
       };
     }),
   });
@@ -10677,11 +10737,11 @@ app.get('/api/spotlight/gallery', async (req, res) => {
     // Same spotlight-only-thumb / original-on-click split as the character
     // spotlight above.
     gallery: rows.map(r => ({
-      id: r.id, image: r.thumb_image_url || r.image_url, title: r.title,
+      id: r.id, image: r.thumb_image_url || sizedUrl(r.image_url, 600), title: r.title,
       position_x: r.position_x, position_y: r.position_y,
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,
       owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
-      owner_avatar: r.owner_avatar || null,
+      owner_avatar: sizedUrl(r.owner_avatar, 200) || null,
     })),
   });
 });
@@ -10709,8 +10769,8 @@ app.get('/api/spotlight/stories', async (req, res) => {
   );
   res.json({
     stories: rows.map(r => ({
-      slug: r.slug, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url,
-      author: r.display_name || r.username, author_username: r.username, author_avatar: r.avatar || null,
+      slug: r.slug, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: sizedUrl(r.cover_url, 600),
+      author: r.display_name || r.username, author_username: r.username, author_avatar: sizedUrl(r.avatar, 200) || null,
     })),
   });
 });
@@ -10825,14 +10885,14 @@ app.get('/api/activity-feed', async (req, res) => {
         // Clicking through to the actual chapter/post/character page is
         // unaffected, since those pages fetch their own data independently
         // and never see this field.
-        image: charLocked ? null : (r.thumb_image_url || r.image || null),
+        image: charLocked ? null : (r.thumb_image_url || sizedUrl(r.image, 600) || null),
         nsfw_locked: !!charLocked,
         position_x: r.position_x, position_y: r.position_y,
         story_path: r.story_path,
         site_title: r.site_title,
         author: r.display_name || r.username,
         author_username: r.username,
-        author_avatar: r.avatar || null,
+        author_avatar: sizedUrl(r.avatar, 200) || null,
       };
     });
   res.json({ items });
