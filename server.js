@@ -64,6 +64,36 @@ const app = express();
 app.set('trust proxy', 'loopback');
 app.use(express.json());
 
+// Right-sized avatars site-wide: every /api response that carries an avatar URL
+// (avatar, author_avatar, owner_avatar, other_avatar, ...) gets the 400px copy
+// from sizedUrl() instead of the full-size file -- the biggest avatar anywhere
+// is drawn at ~130px, so 400px is retina-safe. Two exceptions keep the raw
+// file: any object that also carries avatar_original_url (the account editor's
+// payload, which can re-crop from it) and the avatar upload endpoint itself.
+// Originals stay on disk and are still what the editor works from. Idempotent
+// (an already-sized "-NNN" URL is left alone), and a no-op until the small copy
+// exists, so it can never point at a missing file.
+const AVATAR_KEY_RE = /(^|_)avatar$/;
+function shrinkAvatarsDeep(node, depth) {
+  if (!node || typeof node !== 'object' || depth > 8) return;
+  if (Array.isArray(node)) { for (const n of node) shrinkAvatarsDeep(n, depth + 1); return; }
+  const keepRaw = 'avatar_original_url' in node;
+  for (const k of Object.keys(node)) {
+    const v = node[k];
+    if (typeof v === 'string') {
+      if (!keepRaw && AVATAR_KEY_RE.test(k) && v.startsWith('/images/avatars/') && !/-\d{3,4}\.(jpg|png|webp)$/i.test(v)) node[k] = sizedUrl(v, 400);
+    } else if (v && typeof v === 'object') {
+      shrinkAvatarsDeep(v, depth + 1);
+    }
+  }
+}
+app.use('/api', (req, res, next) => {
+  if (req.path === '/auth/avatar') return next();
+  const origJson = res.json.bind(res);
+  res.json = (body) => { try { shrinkAvatarsDeep(body, 0); } catch {} return origJson(body); };
+  next();
+});
+
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
