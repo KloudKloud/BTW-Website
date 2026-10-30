@@ -2180,6 +2180,66 @@
     #cl-modpicker-overlay .mod-btn {
       font-family: 'Fredoka', 'Lato', cursive;
     }
+  
+    /* Club search -- persistent in the left sidebar on every Clubs page. */
+    .soc-club-search-wrap {
+      flex: 1; min-width: 0; max-width: 340px; margin-left: 0.75rem; position: relative;
+      display: flex; align-items: center;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 20px;
+      padding: 0 0.9rem; transition: border-color 0.15s, background 0.15s;
+    }
+    .soc-club-search-wrap:focus-within { border-color: rgba(240,192,96,0.5); background: rgba(255,255,255,0.09); }
+    .soc-club-search-icon { color: #888; flex-shrink: 0; }
+    .soc-club-search-wrap:focus-within .soc-club-search-icon { color: #f0c060; }
+    .soc-club-search-input {
+      flex: 1; min-width: 0; background: none; border: none; outline: none; color: #f0f0f0;
+      font-family: inherit; font-size: 0.9rem; font-weight: 600; padding: 0.5em 0 0.5em 0.5em;
+    }
+    .soc-club-search-input::placeholder { color: #888; font-weight: 400; }
+    .soc-club-search-suggest {
+      position: fixed; z-index: 220; background: #141018; border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 12px; box-shadow: 0 16px 40px rgba(0,0,0,0.55); overflow: hidden;
+      max-height: 340px; overflow-y: auto;
+    }
+    .soc-club-search-suggest-empty { color: #888; font-size: 0.85rem; padding: 0.9rem 1rem; margin: 0; text-align: center; }
+    .soc-club-search-suggest-row {
+      display: flex; align-items: center; gap: 0.7rem; width: 100%; text-align: left;
+      background: none; border: none; border-bottom: 1px solid rgba(255,255,255,0.06);
+      color: inherit; text-decoration: none; padding: 0.6rem 0.9rem; cursor: pointer; font-family: inherit;
+    }
+    .soc-club-search-suggest-row:last-child { border-bottom: none; }
+    .soc-club-search-suggest-row:hover, .soc-club-search-suggest-row.active { background: rgba(127,168,217,0.12); }
+    .soc-club-search-suggest-icon, .soc-club-search-suggest-icon-fallback {
+      width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    }
+    .soc-club-search-suggest-icon-fallback {
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.9rem;
+    }
+    .soc-club-search-suggest-body { flex: 1; min-width: 0; }
+    .soc-club-search-suggest-name {
+      font-size: 0.9rem; font-weight: 700; color: #e8e8e8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .soc-club-search-suggest-meta { font-size: 0.75rem; color: #888; margin-top: 0.1rem; }
+    @media (max-width: 860px) {
+      .soc-club-search-wrap { max-width: none; }
+    }
+    /* Desktop home: the club search lives in the left sidebar, right under
+       the pfp block -- bigger, on a plain black fill. Scoped to .soc-sidebar so the mobile top-row
+       relocation (which moves this same node out of the sidebar) keeps its
+       own plain styling. */
+    .soc-sidebar .soc-club-search-wrap {
+      flex: none; max-width: none; margin: 0.4rem 0 1rem; padding: 0 1rem; border-radius: 16px;
+      background: #000;
+      border: 1px solid rgba(127,168,217,0.4); box-shadow: 0 0 10px rgba(127,168,217,0.18);
+    }
+    .soc-sidebar .soc-club-search-wrap:focus-within {
+      border-color: rgba(240,192,96,0.7); box-shadow: 0 0 16px rgba(240,192,96,0.3);
+      background: #000;
+    }
+    .soc-sidebar .soc-club-search-icon { width: 18px; height: 18px; color: #a8c6e8; }
+    .soc-sidebar .soc-club-search-input { font-size: 1rem; padding: 0.8em 0 0.8em 0.65em; }
+    .soc-sidebar .soc-club-search-input::placeholder { color: #9aa8bd; }
   </style>
 </head>
 <body>
@@ -2203,6 +2263,10 @@
 
     <div class="soc-sidebar-content" id="soc-sidebar-content">
       <div id="soc-sidebar-user-slot"></div>
+      <div class="soc-club-search-wrap" id="soc-club-search-wrap">
+        <svg class="soc-club-search-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" class="soc-club-search-input" id="soc-club-search-input" placeholder="Search clubs…" autocomplete="off" />
+      </div>
 
       <nav class="soc-sidebar-nav">
         <a class="soc-nav-link" id="soc-nav-home" href="/fanpages/social"><span class="soc-nav-icon">🏠</span> Home</a>
@@ -8357,6 +8421,90 @@ if (!slug) {
 } else {
   loadClub();
 }
+</script>
+
+<div class="soc-club-search-suggest" id="soc-club-search-suggest" hidden></div>
+<script>
+// ── Club search — typeahead against GET /api/clubs?q=, which already
+// sorts by member_count and supports partial name matches. Dropdown is
+// body-appended/fixed-position (repositioned on scroll/resize) same as
+// every other suggest dropdown on the site, since this sits inside a flex
+// toolbar that could otherwise clip an absolutely-positioned child. ──────
+function positionClubSearchSuggest() {
+  const input = document.getElementById('soc-club-search-input');
+  const box = document.getElementById('soc-club-search-suggest');
+  // Anchor to the whole search pill (icon included), and never narrower
+  // than 280px -- in the sidebar the pill is only ~210px wide, which cut
+  // club names off.
+  const wrapEl = document.getElementById('soc-club-search-wrap');
+  const rect = (wrapEl || input).getBoundingClientRect();
+  box.style.top = `${rect.bottom + 6}px`;
+  box.style.left = `${rect.left}px`;
+  box.style.width = `${Math.min(Math.max(rect.width, 280), window.innerWidth - rect.left - 12)}px`;
+}
+function closeClubSearchSuggest() {
+  const box = document.getElementById('soc-club-search-suggest');
+  box.hidden = true;
+  box.innerHTML = '';
+}
+function clubSearchSuggestRow(c) {
+  const a = document.createElement('a');
+  a.className = 'soc-club-search-suggest-row';
+  a.href = window.fpUrl(`/club?slug=${encodeURIComponent(c.slug)}`);
+  const iconHtml = c.icon_url
+    ? `<img class="soc-club-search-suggest-icon" src="${escapeHtml(c.icon_url)}" alt="" />`
+    : `<span class="soc-club-search-suggest-icon-fallback">${escapeHtml((c.name || '?').charAt(0).toUpperCase())}</span>`;
+  const memberLabel = c.member_count === 1 ? '1 member' : `${c.member_count} members`;
+  a.innerHTML = `
+    ${iconHtml}
+    <div class="soc-club-search-suggest-body">
+      <div class="soc-club-search-suggest-name">${escapeHtml(c.name)}</div>
+      <div class="soc-club-search-suggest-meta">${memberLabel}</div>
+    </div>
+  `;
+  return a;
+}
+let clubSearchDebounce = null;
+let clubSearchReqId = 0;
+async function runClubSearch(q) {
+  const box = document.getElementById('soc-club-search-suggest');
+  if (box.parentElement !== document.body) document.body.appendChild(box);
+  if (!q) { closeClubSearchSuggest(); return; }
+  const reqId = ++clubSearchReqId;
+  positionClubSearchSuggest();
+  box.hidden = false;
+  try {
+    const res = await fetch(`${API}/clubs?q=${encodeURIComponent(q)}&limit=8`, { headers: authHeaders() });
+    if (reqId !== clubSearchReqId) return; // a newer keystroke already superseded this request
+    const data = await res.json();
+    const clubs = data.clubs || [];
+    positionClubSearchSuggest();
+    if (!clubs.length) { box.innerHTML = '<p class="soc-club-search-suggest-empty">No clubs found.</p>'; return; }
+    box.innerHTML = '';
+    clubs.forEach(c => box.appendChild(clubSearchSuggestRow(c)));
+  } catch {
+    if (reqId === clubSearchReqId) box.innerHTML = '<p class="soc-club-search-suggest-empty">Couldn\'t search clubs right now.</p>';
+  }
+}
+document.getElementById('soc-club-search-input').addEventListener('input', (e) => {
+  clearTimeout(clubSearchDebounce);
+  const q = e.target.value.trim();
+  clubSearchDebounce = setTimeout(() => runClubSearch(q), 300);
+});
+document.getElementById('soc-club-search-input').addEventListener('focus', (e) => {
+  if (e.target.value.trim()) runClubSearch(e.target.value.trim());
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#soc-club-search-wrap') && !e.target.closest('#soc-club-search-suggest')) closeClubSearchSuggest();
+});
+window.addEventListener('scroll', () => {
+  const box = document.getElementById('soc-club-search-suggest');
+  if (!box.hidden) positionClubSearchSuggest();
+}, true);
+window.addEventListener('resize', () => {
+  const box = document.getElementById('soc-club-search-suggest');
+  if (!box.hidden) positionClubSearchSuggest();
+});
 </script>
 
 </body>
