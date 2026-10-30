@@ -9267,6 +9267,88 @@ app.get('/api/stories/mine', requireAuth, async (req, res) => {
   res.json({ stories: rows.map(r => ({ id: r.id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url, author_avatar: r.author_avatar })) });
 });
 
+// "You may also like" on a story's own page. Scores every other published
+// story against THIS one (shared fandoms/relationships/tags, same author)
+// and, for a logged-in viewer, against what they actually read/bookmarked
+// elsewhere (reading progress counts once, bookmarks twice), then returns
+// the best dozen with a one-line reason. Same NSFW visibility rule as the
+// homepage recommenders, and never the story itself.
+app.get('/api/stories/similar/:owner/:story', async (req, res) => {
+  const { viewerId, nsfwAllowed } = await getViewerNsfwAccess(req);
+  const { rows: [cur] } = await pool.query(
+    'SELECT id, owner_user_id, tags, fandoms, categories, relationships FROM moderator_sites WHERE story_path = $1',
+    [`${req.params.owner}/${req.params.story}`]
+  );
+  if (!cur) return res.status(404).json({ error: 'Not found.' });
+
+  const { rows: cands } = await pool.query(`
+    SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.synopsis, ms.tags, ms.fandoms, ms.relationships, ms.rating,
+           ms.is_complete, ms.owner_user_id, u.username, u.display_name, u.avatar,
+           pubchap.published_count, pubchap.last_chapter_update,
+           COALESCE((SELECT COUNT(*)::int FROM moderator_site_likes WHERE site_id = ms.id), 0)
+             + COALESCE((SELECT COUNT(*)::int FROM chapter_likes chl JOIN moderator_chapters chc ON chc.id = chl.chapter_id WHERE chc.site_id = ms.id), 0) AS like_count,
+           COALESCE((SELECT COUNT(*)::int FROM moderator_bookmarks WHERE site_id = ms.id), 0) AS bookmark_count
+    FROM moderator_sites ms
+    JOIN users u ON u.id = ms.owner_user_id
+    JOIN LATERAL (
+      SELECT COUNT(*)::int AS published_count, MAX(mc.updated_at) AS last_chapter_update
+      FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
+    ) pubchap ON true
+    WHERE pubchap.published_count > 0 AND ms.id <> $1 AND (ms.rating = 'sfw' OR $2::boolean)
+  `, [cur.id, nsfwAllowed]);
+
+  const lc = (arr) => (Array.isArray(arr) ? arr : []).map(x => String(x).toLowerCase());
+  const curTags = new Set(lc(cur.tags)), curFandoms = new Set(lc(cur.fandoms)), curRels = new Set(lc(cur.relationships));
+
+  // What this viewer is into, from stories they've read or bookmarked.
+  const affinity = {};
+  const readSiteIds = new Set();
+  if (viewerId) {
+    const [{ rows: readRows }, { rows: markRows }] = await Promise.all([
+      pool.query(`SELECT DISTINCT mc.site_id FROM chapter_reading_progress crp JOIN moderator_chapters mc ON mc.id = crp.chapter_id WHERE crp.user_id = $1`, [viewerId]),
+      pool.query('SELECT site_id FROM moderator_bookmarks WHERE user_id = $1', [viewerId]),
+    ]);
+    const weight = new Map();
+    readRows.forEach(r => { readSiteIds.add(r.site_id); weight.set(r.site_id, (weight.get(r.site_id) || 0) + 1); });
+    markRows.forEach(r => { weight.set(r.site_id, (weight.get(r.site_id) || 0) + 2); });
+    if (weight.size) {
+      const { rows: seen } = await pool.query('SELECT id, tags, fandoms FROM moderator_sites WHERE id = ANY($1::int[])', [[...weight.keys()]]);
+      seen.forEach(st => [...lc(st.tags), ...lc(st.fandoms)].forEach(t => { affinity[t] = (affinity[t] || 0) + weight.get(st.id); }));
+    }
+  }
+
+  const scored = cands.map(c => {
+    const fSh = lc(c.fandoms).filter(f => curFandoms.has(f));
+    const rSh = lc(c.relationships).filter(r => curRels.has(r));
+    const tSh = lc(c.tags).filter(t => curTags.has(t));
+    const sameAuthor = c.owner_user_id === cur.owner_user_id;
+    const aff = [...lc(c.tags), ...lc(c.fandoms)].reduce((sum, t) => sum + (affinity[t] || 0), 0);
+    let score = fSh.length * 14 + rSh.length * 8 + tSh.length * 4 + (sameAuthor ? 30 : 0) + Math.min(aff, 12) * 2 + recTrendingScore(c);
+    if (readSiteIds.has(c.id)) score -= 15; // already dipped into this one -- surface fresh picks first
+    let reason = 'Trending now';
+    if (sameAuthor) reason = `More from ${c.display_name || c.username}`;
+    else if (fSh.length || rSh.length || tSh.length) reason = 'Shares ' + [...fSh, ...rSh, ...tSh].slice(0, 2).join(', ');
+    else if (aff > 0) reason = 'Based on what you\'ve read';
+    return { ...c, score, reason };
+  }).filter(c => c.score > 0.5);
+
+  scored.forEach(c => { c.score += Math.random() * 2; });
+  scored.sort((a, b) => b.score - a.score);
+  const picked = [];
+  const perAuthor = {};
+  for (const c of scored) {
+    if (picked.length >= 12) break;
+    if ((perAuthor[c.owner_user_id] || 0) >= 3) continue;
+    perAuthor[c.owner_user_id] = (perAuthor[c.owner_user_id] || 0) + 1;
+    picked.push(c);
+  }
+  res.json({ stories: picked.map(c => ({
+    story_path: c.story_path || c.slug, site_title: c.site_title, cover_url: c.cover_url, synopsis: c.synopsis || '',
+    rating: c.rating, is_complete: !!c.is_complete, chapter_count: c.published_count,
+    author: c.display_name || c.username, author_username: c.username, reason: c.reason,
+  })) });
+});
+
 app.get('/api/stories/search', requireAuth, async (req, res) => {
   const q = `%${(req.query.q || '').trim()}%`;
   const { rows } = await pool.query(

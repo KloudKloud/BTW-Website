@@ -8,1369 +8,644 @@
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css?v=20260804a" />
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&display=swap" />
   <style>
-    /* Background scrolls *with* the page instead of staying pinned, same
-       treatment as the Characters/Gallery tabs -- overrides the shared
-       .mod-page-bg-img's own position:fixed just for this page. Height is
-       measured in JS (see syncBgHeight) since percentage/inset sizing can't
-       resolve against a wrap whose own height is just "however tall its
-       content is." */
-    #page-bg-img {
-      position: absolute; top: 0; left: 0; right: 0; bottom: auto;
-      width: 100%; height: 100vh; object-fit: cover;
+    /* Story viewer -- rebuilt from a blank template. Page background is the
+       same flat navy News Posts uses. Fredoka headings + box-background art
+       panels, per the site's current visual language. */
+    html, body { background: #0e141b; min-height: 100vh; margin: 0; }
+    [hidden] { display: none !important; }
+    .sv-wrap { max-width: 1240px; margin: 0 auto; padding: 1.75rem 1.5rem 5rem; position: relative; z-index: 1; }
+
+    /* ── Box tabs (Summary / Chapters) -- same bar as the profile tabs. ── */
+    .sv-tabs {
+      display: inline-flex; align-items: stretch; margin-bottom: 1.25rem;
+      border-radius: 14px; border: 2px solid rgba(240,192,96,0.3); overflow: hidden;
+      background: linear-gradient(160deg, rgba(10,8,14,0.94), rgba(10,8,14,0.88));
+      box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+    }
+    .sv-tab {
+      background: none; border: none; border-right: 2px solid rgba(240,192,96,0.22); cursor: pointer; color: #bbb;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.92rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.03em; padding: 0.9rem 1.5rem; transition: color 0.15s, background 0.15s;
+    }
+    .sv-tab:last-child { border-right: none; }
+    .sv-tab:hover { color: #fff; background: rgba(127,168,217,0.12); }
+    .sv-tab.active { color: #f0c060; background: rgba(240,192,96,0.14); }
+
+    /* Shared panel look: starry art under a dark scrim. */
+    .sv-panel {
+      position: relative; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);
+      background: linear-gradient(160deg, rgba(10,8,18,0.82), rgba(10,8,18,0.72)), url('/images/home/box-background-3.png');
+      background-size: cover; background-position: center; box-shadow: 0 10px 34px rgba(0,0,0,0.4);
+    }
+    .sv-h2 {
+      display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.9rem;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.35rem; font-weight: 600; color: #cfe0f5;
+      text-shadow: 0 0 16px rgba(127,168,217,0.5), 0 1px 3px rgba(0,0,0,0.5);
+    }
+    .sv-h2 img { width: 18px; height: 18px; object-fit: contain; }
+
+    /* ── Hero: cover + title + stats ── */
+    .sv-hero { display: flex; gap: 2.25rem; padding: 2rem; align-items: stretch; }
+    .sv-cover-col { flex-shrink: 0; width: 250px; }
+    .sv-cover {
+      display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 12px; background: #1a1a22;
+      border: 1px solid rgba(255,255,255,0.18); box-shadow: 0 14px 40px rgba(0,0,0,0.6), 0 0 28px rgba(127,168,217,0.2);
+    }
+    .sv-hero-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .sv-title {
+      margin: 0 0 0.7rem; font-family: 'Fredoka', 'Lato', cursive; font-size: 2.5rem; line-height: 1.12; font-weight: 700; color: #cfe0f5;
+      text-shadow: 0 0 22px rgba(127,168,217,0.55), 0 2px 4px rgba(0,0,0,0.5); overflow-wrap: anywhere;
+    }
+    .sv-author { display: inline-flex; align-items: center; gap: 0.6rem; text-decoration: none; color: #ddd; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 500; align-self: flex-start; }
+    .sv-author:hover { color: #fff; }
+    .sv-author-av { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: #2a2a36; border: 1px solid rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-weight: 700; color: #aaa; }
+    .sv-stats { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1.25rem; }
+    .sv-stat {
+      display: flex; align-items: center; gap: 0.55rem; padding: 0.55rem 0.95rem; border-radius: 12px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    }
+    .sv-stat svg { color: #7fa8d9; flex-shrink: 0; }
+    .sv-stat-num { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.15rem; font-weight: 600; color: #fff; line-height: 1; }
+    .sv-stat-label { font-family: 'Inter', sans-serif; font-size: 0.68rem; color: #8f98a6; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.15rem; }
+    .sv-stat--hl { border-color: rgba(240,192,96,0.4); background: rgba(240,192,96,0.08); }
+    .sv-stat--hl svg { color: #f0c060; }
+    .sv-actions { display: flex; align-items: center; gap: 0.8rem; margin-top: auto; padding-top: 1.5rem; flex-wrap: wrap; }
+    .sv-start {
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.6rem; text-decoration: none; cursor: pointer; border: none;
+      min-width: 260px; padding: 0.95rem 2.4rem; border-radius: 999px;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.3rem; font-weight: 700; color: #fff;
+      background: linear-gradient(135deg, #3d6fa8, #7fa8d9); box-shadow: 0 0 22px rgba(127,168,217,0.5);
+      transition: box-shadow 0.15s, transform 0.15s;
+    }
+    .sv-start:hover { box-shadow: 0 0 34px rgba(127,168,217,0.8); transform: translateY(-2px); }
+    .sv-start--off { background: rgba(255,255,255,0.08); box-shadow: none; color: #888; cursor: default; pointer-events: none; }
+    .sv-iconbtn {
+      width: 52px; height: 52px; border-radius: 50%; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+      background: rgba(20,16,30,0.75); border: 1px solid rgba(255,255,255,0.28); color: #ddd; transition: all 0.15s; text-decoration: none;
+    }
+    .sv-iconbtn:hover { border-color: #f0c060; color: #f0c060; box-shadow: 0 0 12px rgba(240,192,96,0.3); }
+    .sv-iconbtn.on { border-color: #f0c060; color: #f0c060; background: rgba(240,192,96,0.15); }
+    .sv-iconbtn.on svg { fill: currentColor; }
+    .sv-editbtn {
+      display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.7em 1.4em; border-radius: 999px; text-decoration: none;
+      font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 0.95rem; color: #f7d68a;
+      background: linear-gradient(160deg, rgba(38,30,16,0.85), rgba(20,16,10,0.85)); border: 1px solid rgba(240,192,96,0.6);
+      box-shadow: 0 0 8px rgba(240,192,96,0.22);
+    }
+    .sv-editbtn:hover { color: #fff; box-shadow: 0 0 16px rgba(240,192,96,0.4); }
+
+    /* ── Tags ── */
+    .sv-tags { margin-top: 1.25rem; padding: 1.25rem 1.6rem 1.4rem; }
+    .sv-tags .sv-h2 { margin-bottom: 0.75rem; }
+    .sv-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .sv-chip {
+      display: inline-flex; align-items: center; padding: 0.38em 0.95em; border-radius: 999px; text-decoration: none;
+      font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600; border: 1px solid transparent; transition: filter 0.15s, transform 0.15s;
+    }
+    a.sv-chip:hover { filter: brightness(1.25); transform: translateY(-1px); }
+    .sv-chip--rating-sfw { color: #8fe0a8; background: rgba(143,224,168,0.12); border-color: rgba(143,224,168,0.5); }
+    .sv-chip--rating-mature { color: #ffd479; background: rgba(255,212,121,0.12); border-color: rgba(255,212,121,0.5); }
+    .sv-chip--rating-explicit { color: #ff8f86; background: rgba(255,143,134,0.12); border-color: rgba(255,143,134,0.5); }
+    .sv-chip--fandom { color: #9fc0e6; background: rgba(127,168,217,0.14); border-color: rgba(127,168,217,0.5); }
+    .sv-chip--cat { color: #c9a8f0; background: rgba(176,130,235,0.13); border-color: rgba(176,130,235,0.5); }
+    .sv-chip--rel { color: #f5a9cf; background: rgba(240,130,190,0.12); border-color: rgba(240,130,190,0.5); }
+    .sv-chip--tag { color: #c9ced8; background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.14); }
+
+    /* ── Summary body: description + chapters (left), HUD (right) ── */
+    .sv-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 1.25rem; margin-top: 1.25rem; align-items: stretch; }
+    .sv-left { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
+    .sv-desc { padding: 1.4rem 1.6rem 1.5rem; }
+    .sv-status-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem 1rem; margin-bottom: 1rem; font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #98a2b2; }
+    .sv-status { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.3em 0.85em; border-radius: 999px; font-weight: 700; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.92rem; }
+    .sv-status::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    .sv-status--complete { color: #7fe3a0; background: rgba(127,227,160,0.12); border: 1px solid rgba(127,227,160,0.45); }
+    .sv-status--ongoing { color: #8fbfff; background: rgba(143,191,255,0.12); border: 1px solid rgba(143,191,255,0.45); }
+    .sv-synopsis { margin: 0; color: #dfe4ec; font-family: 'Lora', 'Georgia', serif; font-size: 1.04rem; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .sv-synopsis.clamped { display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden; }
+    .sv-more { background: none; border: none; color: #f0c060; cursor: pointer; padding: 0; margin-top: 0.5rem; font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 0.95rem; }
+    .sv-more:hover { color: #fff; }
+    .sv-empty { color: #8a93a2; font-family: 'Inter', sans-serif; font-size: 0.9rem; margin: 0; }
+
+    .sv-chsec { padding: 1.3rem 1.4rem 1.4rem; }
+    .sv-chsec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; }
+    .sv-chsec-head .sv-h2 { margin: 0; }
+    .sv-linkbtn { background: none; border: none; cursor: pointer; color: #7fa8d9; font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 0.92rem; }
+    .sv-linkbtn:hover { color: #fff; }
+    .sv-chlist { max-height: 290px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; padding-right: 0.35rem; }
+    .sv-chrow {
+      display: flex; align-items: center; gap: 0.9rem; padding: 0.65rem 0.9rem; border-radius: 10px; text-decoration: none; color: #e3e8f0;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-left: 3px solid #d9c9a3; transition: background 0.15s, border-color 0.15s, transform 0.15s;
+    }
+    .sv-chrow:hover { background: rgba(127,168,217,0.13); border-left-color: #7fa8d9; transform: translateX(2px); }
+    .sv-chrow-num { flex-shrink: 0; min-width: 2.2rem; font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; color: #d9c9a3; font-size: 0.95rem; }
+    .sv-chrow-title { flex: 1; min-width: 0; font-family: 'Fredoka', 'Lato', cursive; font-weight: 500; font-size: 1.02rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sv-chrow-meta { flex-shrink: 0; font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #8a93a2; }
+    .sv-draft-badge { flex-shrink: 0; font-family: 'Inter', sans-serif; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; color: #ffd479; border: 1px solid rgba(255,212,121,0.5); border-radius: 6px; padding: 0.1em 0.5em; }
+    .sv-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+    .sv-scroll::-webkit-scrollbar-thumb { background: rgba(127,168,217,0.4); border-radius: 8px; }
+    .sv-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); border-radius: 8px; }
+    .sv-scroll { scrollbar-width: thin; scrollbar-color: rgba(127,168,217,0.4) rgba(255,255,255,0.04); }
+
+    /* ── HUD: linked characters + gallery in one scanning console ── */
+    .sv-hudwrap { position: relative; min-height: 440px; }
+    .sv-hud {
+      position: absolute; inset: 0; display: flex; flex-direction: column; padding: 1.2rem 1.1rem 1.1rem; overflow: hidden;
+      border-color: rgba(127,168,217,0.35);
+      background: linear-gradient(180deg, rgba(8,12,24,0.9), rgba(8,10,20,0.82)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+      box-shadow: 0 0 0 1px rgba(127,168,217,0.1), 0 10px 34px rgba(0,0,0,0.45), inset 0 0 40px rgba(127,168,217,0.08);
+    }
+    /* Corner brackets + faint scanline sheen. */
+    .sv-hud::before, .sv-hud::after { content: ''; position: absolute; width: 22px; height: 22px; border: 2px solid #7fa8d9; pointer-events: none; opacity: 0.85; }
+    .sv-hud::before { top: 8px; left: 8px; border-right: none; border-bottom: none; border-top-left-radius: 8px; }
+    .sv-hud::after { bottom: 8px; right: 8px; border-left: none; border-top: none; border-bottom-right-radius: 8px; }
+    .sv-hud-scan { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(127,168,217,0.035) 0 1px, transparent 1px 4px); }
+    .sv-hud-title { position: relative; display: flex; align-items: center; justify-content: space-between; margin: 0 0 0.75rem; padding: 0 0.3rem; font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 1.1rem; letter-spacing: 0.08em; text-transform: uppercase; color: #9fc0e6; text-shadow: 0 0 12px rgba(127,168,217,0.7); }
+    .sv-hud-dot { width: 9px; height: 9px; border-radius: 50%; background: #7fe3a0; box-shadow: 0 0 10px #7fe3a0; animation: sv-blink 2s ease-in-out infinite; }
+    @keyframes sv-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+    .sv-seg { position: relative; display: flex; padding: 4px; border-radius: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(127,168,217,0.25); margin-bottom: 0.8rem; }
+    .sv-seg button { flex: 1; border: none; background: none; cursor: pointer; color: #8f9bb0; padding: 0.5rem 0.4rem; border-radius: 9px; font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 0.9rem; transition: all 0.15s; }
+    .sv-seg button:hover { color: #fff; }
+    .sv-seg button.active { color: #fff; background: rgba(127,168,217,0.28); box-shadow: 0 0 12px rgba(127,168,217,0.35); }
+    .sv-hud-list { position: relative; flex: 1 1 0; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; align-content: start; grid-auto-rows: max-content; padding-right: 0.3rem; }
+    .sv-tile { position: relative; display: block; border-radius: 12px; overflow: hidden; text-decoration: none; background: #14141c; border: 1px solid rgba(255,255,255,0.12); transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s; }
+    .sv-tile:hover { transform: translateY(-2px); border-color: #7fa8d9; box-shadow: 0 0 16px rgba(127,168,217,0.4); }
+    /* Height via a padding spacer (not aspect-ratio) so grid rows can't collapse inside the scrolling list. */
+    .sv-tile::before { content: ''; display: block; padding-top: 133%; }
+    .sv-tile--gal::before { padding-top: 100%; }
+    .sv-tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+    .sv-tile--locked img { filter: blur(14px); transform: scale(1.1); }
+    .sv-tile-name { position: absolute; left: 0; right: 0; bottom: 0; padding: 1.4rem 0.55rem 0.5rem; background: linear-gradient(to top, rgba(0,0,0,0.88), transparent); color: #fff; font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sv-hud-empty { grid-column: 1 / -1; text-align: center; padding: 2rem 0.5rem; }
+    .sv-hud-foot { position: relative; margin-top: 0.7rem; padding: 0 0.3rem; display: flex; justify-content: space-between; font-family: 'Inter', sans-serif; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: #6f7a8c; }
+    .sv-hud-foot a { color: #7fa8d9; text-decoration: none; }
+    .sv-hud-foot a:hover { color: #fff; }
+
+    /* ── Chapters tab: full cards ── */
+    .sv-chgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 0.25rem; }
+    .sv-chcard {
+      display: flex; gap: 1rem; padding: 0.85rem; text-decoration: none; color: #e8edf5; border-radius: 14px; position: relative; overflow: hidden;
+      background: linear-gradient(160deg, rgba(28,30,43,0.95), rgba(18,20,29,0.95)); border: 1px solid rgba(255,255,255,0.09); border-left: 3px solid #d9c9a3;
+      transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .sv-chcard:hover { transform: translateY(-3px); border-color: rgba(127,168,217,0.6); border-left-color: #7fa8d9; box-shadow: 0 10px 28px rgba(0,0,0,0.5); }
+    .sv-chcard-img { flex-shrink: 0; width: 150px; aspect-ratio: 16 / 10; border-radius: 9px; object-fit: cover; background: #12141d; align-self: flex-start; }
+    .sv-chcard-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .sv-chcard-num { font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 0.78rem; color: #d9c9a3; letter-spacing: 0.08em; text-transform: uppercase; }
+    .sv-chcard-title { margin: 0.1rem 0 0.35rem; font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 1.2rem; color: #9fc0e6; text-shadow: 0 0 14px rgba(127,168,217,0.4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sv-chcard-snip { margin: 0; font-family: 'Lora', 'Georgia', serif; font-size: 0.86rem; line-height: 1.5; color: #a7b0be; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .sv-chcard-meta { margin-top: auto; padding-top: 0.55rem; display: flex; flex-wrap: wrap; gap: 0.2rem 0.85rem; font-family: 'Inter', sans-serif; font-size: 0.74rem; color: #8a93a2; }
+    .sv-chcard-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,0.08); }
+    .sv-chcard-bar i { display: block; height: 100%; background: linear-gradient(90deg, #3d6fa8, #7fa8d9); }
+
+    /* ── You may also like ── */
+    .sv-rec { margin-top: 1.25rem; padding: 1.4rem 1.5rem 1.5rem; }
+    .sv-rec-head { display: flex; align-items: center; justify-content: space-between; }
+    .sv-rec-head .sv-h2 { margin-bottom: 0.9rem; }
+    .sv-rec-arrows { display: flex; gap: 0.4rem; margin-bottom: 0.9rem; }
+    .sv-rec-arrows button { width: 34px; height: 34px; border-radius: 50%; cursor: pointer; background: rgba(20,16,30,0.75); border: 1px solid rgba(255,255,255,0.25); color: #ddd; font-size: 1.1rem; line-height: 1; }
+    .sv-rec-arrows button:hover { border-color: #f0c060; color: #f0c060; }
+    .sv-rec-row { display: flex; gap: 1rem; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 0.7rem; }
+    .sv-rcard { flex: 0 0 168px; width: 168px; min-width: 0; max-width: 168px; scroll-snap-align: start; text-decoration: none; color: #e8edf5; display: flex; flex-direction: column; gap: 0.45rem; }
+    .sv-rcard-cover { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 10px; background: #1a1a22; border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 6px 18px rgba(0,0,0,0.5); transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s; }
+    .sv-rcard:hover .sv-rcard-cover { transform: translateY(-4px); border-color: #7fa8d9; box-shadow: 0 12px 26px rgba(0,0,0,0.6), 0 0 18px rgba(127,168,217,0.4); }
+    .sv-rcard-title { font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 1rem; line-height: 1.25; color: #cfe0f5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .sv-rcard-by { max-width: 100%; font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #8a93a2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sv-rcard-why { align-self: flex-start; font-family: 'Inter', sans-serif; font-size: 0.68rem; font-weight: 600; color: #f0c060; background: rgba(240,192,96,0.1); border: 1px solid rgba(240,192,96,0.35); border-radius: 999px; padding: 0.15em 0.65em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Resume prompt */
+    .sv-overlay { position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .sv-modal { width: min(92vw, 420px); text-align: center; padding: 1.75rem 2rem 1.9rem; border-top: 3px solid #7fa8d9; }
+    .sv-modal h3 { margin: 0 0 0.5rem; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.35rem; color: #f0f0f0; }
+    .sv-modal p { margin: 0 0 1.4rem; font-family: 'Inter', sans-serif; font-size: 0.92rem; color: #b8c0cc; }
+    .sv-modal-actions { display: flex; justify-content: center; gap: 0.6rem; flex-wrap: wrap; }
+    .sv-modal-actions button { cursor: pointer; padding: 0.65em 1.4em; border-radius: 999px; font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 0.95rem; }
+    .sv-btn-ghost { background: none; border: 1px solid rgba(255,255,255,0.3); color: #ddd; }
+    .sv-btn-ghost:hover { border-color: #fff; color: #fff; }
+    .sv-btn-blue { border: none; color: #fff; background: linear-gradient(135deg, #3d6fa8, #7fa8d9); box-shadow: 0 0 14px rgba(127,168,217,0.45); }
+    .sv-loading { text-align: center; color: #8a93a2; padding: 6rem 0; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.1rem; }
+
+    /* ── Mobile -- every rule here comes after the base rules it overrides. ── */
+    @media (max-width: 980px) {
+      .sv-grid { grid-template-columns: minmax(0, 1fr); }
+      .sv-hudwrap { min-height: 420px; }
+      .sv-chgrid { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media (max-width: 720px) {
+      .sv-wrap { padding: 1rem 0.85rem 4rem; }
+      .sv-tab { padding: 0.75rem 1.1rem; font-size: 0.85rem; }
+      .sv-hero { flex-direction: column; align-items: center; padding: 1.4rem 1.1rem; gap: 1.25rem; }
+      .sv-cover-col { width: 190px; }
+      .sv-hero-main { width: 100%; align-items: center; text-align: center; }
+      .sv-title { font-size: 1.75rem; }
+      .sv-author { align-self: center; }
+      .sv-stats { justify-content: center; }
+      .sv-actions { justify-content: center; width: 100%; }
+      .sv-start { min-width: 0; flex: 1; font-size: 1.15rem; padding: 0.85rem 1.2rem; }
+      .sv-chcard-img { width: 110px; }
+      .sv-chrow-meta { display: none; }
+      .sv-rcard { flex-basis: 140px; width: 140px; max-width: 140px; }
     }
   </style>
 </head>
-<body class="mod-theme">
-
+<body>
+<div class="fp-content-z">
 <div id="fanpages-topbar-root"></div>
 <script src="/fanpages/fanpages-nav.js"></script>
-<script src="/fanpages/btw-cropper.js"></script>
-<script src="/fanpages/crop-modal.js"></script>
-
-<!-- Edit bar — only shown while editing -->
-<div class="mod-edit-bar" id="edit-bar" style="display:none;">
-  <div class="mod-edit-bar-left">
-    <span class="mod-edit-bar-label">Currently editing your story</span>
-    <button class="mod-edit-bar-delete" id="delete-story-btn" type="button">🗑️ Delete Story</button>
-  </div>
-  <div class="mod-edit-bar-actions">
-    <button class="mod-edit-bar-save" id="save-edit-btn">Save Changes</button>
-    <button class="mod-edit-bar-cancel" id="cancel-edit-btn" type="button">Cancel</button>
-  </div>
-</div>
-
-<!-- "Continue where you left off?" — Wattpad-style resume prompt, shown when
-     Start Reading is clicked and the server reports meaningful saved
-     progress on some chapter (see site.resume in the API response). -->
-<div class="mod-confirm-overlay" id="resume-confirm-overlay" hidden>
-  <div class="mod-confirm-modal">
-    <p class="mod-confirm-title">Continue where you left off?</p>
-    <p class="mod-confirm-text" id="resume-confirm-text"></p>
-    <div class="mod-confirm-actions">
-      <button class="mod-btn" id="resume-confirm-restart" type="button">Start From The Top</button>
-      <button class="mod-btn" id="resume-confirm-yes" type="button" style="background:#1fb6a8;color:#04211d;">Resume Reading</button>
-    </div>
-  </div>
-</div>
-
-<!-- Delete-story confirmation — centered on-page modal -->
-<div class="mod-confirm-overlay" id="delete-story-confirm-overlay" hidden>
-  <div class="mod-confirm-modal">
-    <p class="mod-confirm-title">Delete this entire story?</p>
-    <p class="mod-confirm-text">This permanently deletes the story, its characters, chapters, and gallery. This can't be undone.</p>
-    <div class="mod-confirm-actions">
-      <button class="mod-btn" id="delete-story-confirm-cancel" type="button">Cancel</button>
-      <button class="mod-btn mod-btn--danger" id="delete-story-confirm-yes" type="button">Delete</button>
-    </div>
-  </div>
-</div>
-
-<!-- Cover -->
-<div class="wiki-cover" id="wiki-cover">
-  <img alt="Story banner" id="banner-img" class="mod-banner-loading" draggable="false" />
-
-  <button class="fp-recrop-btn" id="banner-recrop-btn" type="button" style="display:none; position:absolute; right:1.5rem; top:1.25rem; z-index:5;">✏️ Recrop</button>
-
-  <button class="mod-banner-edit-pencil" id="banner-edit-pencil" type="button" style="display:none;" title="Edit banner image">✏️</button>
-
-  <div class="mod-banner-edit-wrap" id="banner-edit-wrap" style="display:none;">
-    <button class="mod-banner-edit-btn" id="banner-edit-btn" type="button">📷 Change Banner Image</button>
-    <span class="mod-banner-edit-hint">Recommended size: 1600 × 560px</span>
-  </div>
-  <input type="file" id="banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-
-  <div class="mod-vip-badge" id="vip-badge" style="display:none;">
-    <span class="mod-vip-badge-star">⭐</span> VeekitPaws — Developer
-  </div>
-
-  <a class="mod-written-by" id="written-by" href="#" style="display:none;">
-    <img class="mod-written-by-avatar" id="written-by-avatar" alt="" style="display:none;" />
-    <span class="mod-written-by-avatar-fallback" id="written-by-avatar-fallback" style="display:none;">?</span>
-    <span class="mod-written-by-text">
-      <span class="mod-written-by-label">Written by</span>
-      <span class="mod-written-by-name" id="written-by-name"></span>
-    </span>
-  </a>
-
-  <button class="mod-bookmark-btn" id="bookmark-btn" style="display:none;" type="button" title="Bookmark">
-    <svg viewBox="0 0 24 24"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
-  </button>
-</div>
-
-<!-- Custom theme background (blurred, only shown when a custom image is set) -->
-<div class="mod-page-bg-wrap" id="page-bg-wrap">
-  <img class="mod-page-bg-img" id="page-bg-img" style="display:none;" alt="" />
-  <div class="mod-page-bg-overlay" id="page-bg-overlay" style="display:none;"></div>
-
-  <!-- Sits directly under the banner pencil, same right offset, so the two
-       read as one vertical stack. -->
-  <div class="mod-theme-picker mod-theme-picker--floating" id="theme-picker-wrap" style="display:none;">
-    <button class="mod-theme-btn-floating" id="theme-btn" type="button" title="Change story background">🎨</button>
-    <div class="mod-theme-popover" id="theme-popover" hidden>
-      <p class="mod-theme-popover-label">Story Background</p>
-      <div class="mod-theme-grid" id="theme-grid"></div>
-    </div>
-  </div>
-
-  <!-- Wiki-style layout -->
-  <main class="wiki-layout">
-
-    <div class="wiki-main">
-      <!-- Editor-only row: while editing, JS moves #cover-wrap into
-           #editor-cover-slot so the cards stack vertically on the left and
-           the cover sits to their right. In display mode this wrapper is
-           unstyled and #editor-cover-slot stays empty, so it's a no-op. -->
-      <div class="mod-editor-top-row" id="editor-top-row">
-        <div class="mod-editor-cover-slot" id="editor-cover-slot"></div>
-      </div>
-
-      <!-- Editor-only box: while editing, this reads as one continuous
-           form (Title → Description → Bio → Links → Tags) via
-           body.mod-editing-active CSS. Display mode leaves the title in its
-           original spot above and the three sections exactly as they were —
-           this wrapper carries no styling of its own outside that class. -->
-      <div class="mod-editor-form-box" id="editor-form-box">
-
-      <!-- Big centered title, then the tab row, sitting right under the
-           banner — above the AO3-style "Start Reading" card below. -->
-      <div class="wiki-page-title-block mod-editable-block">
-        <span class="mod-field-label">Title</span>
-        <h1 class="wiki-title wiki-page-title mod-title-loading" id="site-title-display"></h1>
-        <input class="mod-input mod-edit-input" id="site-title-input" style="display:none;" maxlength="60" />
-      </div>
-
-
-      <nav class="wiki-story-tabs">
-        <a href="#" id="tab-home" class="wiki-story-tab active">Home</a>
-        <a href="#" id="tab-chapters" class="wiki-story-tab">Chapters</a>
-        <a href="#" id="tab-characters" class="wiki-story-tab">Characters</a>
-        <a href="#" id="tab-gallery" class="wiki-story-tab">Gallery</a>
-        <button class="wiki-story-tabs-edit-btn" id="edit-profile-btn" style="display:none;" type="button">✎ Edit Story</button>
-      </nav>
-
-      <!-- "Start Reading" card — AO3-style: cover on the left, then every
-           tag (Rating/Fandom/Categories/Relationships in red, Additional
-           Tags in blue) packed into a clamped-height cloud with a "+" to
-           expand, actions row, and a compact stat bar at the bottom. -->
-      <div class="wiki-hero" id="wiki-hero">
-        <div class="wiki-hero-cover-col">
-          <div class="mod-cover-wrap wiki-hero-cover" id="cover-wrap">
-            <img id="cover-img" alt="Book cover" style="display:none;" draggable="false" />
-
-            <button class="mod-cover-edit-btn" id="cover-edit-btn" type="button" style="display:none;">📷 Change Cover</button>
-            <input type="file" id="cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-
-            <button class="fp-recrop-btn" id="cover-recrop-btn" type="button" style="display:none; position:absolute; bottom:8px; right:8px; z-index:3;">✏️ Recrop</button>
-          </div>
-
-          <!-- Start Reading + Share/Report now live under the cover instead
-               of alongside the tag cloud -- see wiki-hero-info below for
-               what took their old spot. -->
-          <div class="wiki-hero-actions">
-            <a class="wiki-hero-btn wiki-hero-btn--start" id="start-reading-btn" href="#">Start Reading</a>
-            <div class="wiki-hero-actions-row">
-              <button class="fp-share-icon-btn" id="story-share-btn" type="button" title="Share this story">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 20.5c-0.5-8 5-13 11.5-13" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M13.3 2.2l8.7 6.3-8.7 6.3V2.2z" fill="currentColor"/></svg>
-              </button>
-              <button class="fp-share-icon-btn" id="story-report-btn" type="button" title="Report" style="display:none;">&#127987;&#65039;</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="wiki-hero-divider"></div>
-
-        <div class="wiki-hero-info">
-          <!-- Rating/Category/Relationships still get their own edit-mode
-               form (select/checkboxes/bubble-input) — display mode is now
-               entirely the tag cloud below, built from the same data. -->
-          <div class="wiki-meta-display" id="wiki-meta-display" style="display:none;">
-            <div class="wiki-meta-badge-group">
-              <span class="wiki-meta-badge-label">Rating</span>
-              <span class="wiki-rating-badge wiki-rating-badge--general" id="wiki-meta-rating-badge">General</span>
-            </div>
-            <div class="wiki-meta-badge-group">
-              <span class="wiki-meta-badge-label">Fandom</span>
-              <span class="wiki-meta-badge-list" id="wiki-meta-fandom-badges"><span class="wiki-tags-empty">N/A</span></span>
-            </div>
-          </div>
-
-          <div class="wiki-hero-tagcloud-wrap" id="wiki-hero-tagcloud-wrap">
-            <div class="wiki-hero-tagcloud" id="wiki-hero-tagcloud"></div>
-            <button class="wiki-hero-tagcloud-expand" id="wiki-hero-tagcloud-expand" type="button" style="display:none;" title="Show all tags">+</button>
-          </div>
-
-          <!-- Takes the old wiki-hero-actions spot -- only ever shown to a
-               logged-in reader (there's nothing to track for a guest), see
-               renderReadingProgress(). -->
-          <div class="wiki-hero-progress" id="wiki-hero-progress" style="display:none;">
-            <span class="wiki-hero-progress-label" id="wiki-hero-progress-label">Reading Progress</span>
-            <div class="wiki-hero-progress-bar"><div class="wiki-hero-progress-bar-fill" id="wiki-hero-progress-bar-fill"></div></div>
-            <span class="wiki-hero-progress-pct" id="wiki-hero-progress-pct">0%</span>
-          </div>
-
-          <div class="wiki-hero-stats-bar" id="wiki-hero-stats-bar">
-            <span class="wiki-hero-stat-sm" title="Reads"><span class="wiki-hero-stat-sm-icon">👁</span><span id="hero-stat-views">0</span> <span class="wiki-hero-stat-sm-label">Reads</span></span>
-            <span class="wiki-hero-stat-sm-divider"></span>
-            <span class="wiki-hero-stat-sm" title="Likes"><span class="wiki-hero-stat-sm-icon">♥</span><span id="hero-stat-likes">0</span> <span class="wiki-hero-stat-sm-label">Likes</span></span>
-            <span class="wiki-hero-stat-sm-divider"></span>
-            <span class="wiki-hero-stat-sm" title="Comments"><span class="wiki-hero-stat-sm-icon">💬</span><span id="hero-stat-comments">0</span> <span class="wiki-hero-stat-sm-label">Comments</span></span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Published is visible to everyone; Drafts + the publish nudge are
-           owner-only (renderPartsStatus gates that). -->
-      <div class="wiki-parts-status" id="wiki-parts-status" style="display:none;">
-        <span class="wiki-parts-published" id="wiki-parts-published" style="display:none;"></span>
-        <span class="wiki-parts-draft" id="wiki-parts-draft" style="display:none;"></span>
-        <span class="wiki-parts-private-badge" id="wiki-parts-private-badge" style="display:none;">🔒 Private</span>
-        <span class="wiki-parts-hint" id="wiki-parts-hint" style="display:none;">Publish a chapter for others to find your story!</span>
-      </div>
-
-      <section class="wiki-section">
-        <div class="wiki-section-title-row">
-          <h2 class="wiki-section-title" id="description-heading">Story Description</h2>
-        </div>
-        <div class="wiki-rule"></div>
-        <div class="mod-editable-block" id="about-row">
-          <div class="mod-field-label-row">
-            <span class="mod-field-label">Story Description</span>
-            <span class="mod-field-hint">Use *text* for italics, **text** for bold.</span>
-          </div>
-
-          <!-- Small cover + clickable author avatar, floated so the
-               description text wraps cleanly underneath once it runs
-               taller than this box. -->
-          <div class="wiki-desc-side" id="wiki-desc-side">
-            <div class="wiki-desc-cover-wrap">
-              <img id="desc-cover-img" alt="Book cover" style="display:none;" draggable="false" />
-            </div>
-            <a class="wiki-desc-author-link" id="desc-author-link" href="#" style="display:none;" title="">
-              <img class="wiki-desc-author-avatar" id="desc-author-avatar" alt="" style="display:none;" />
-              <span class="wiki-desc-author-avatar-fallback" id="desc-author-avatar-fallback" style="display:none;">?</span>
-              <span class="wiki-desc-author-name" id="desc-author-name"></span>
-            </a>
-          </div>
-
-          <blockquote class="wiki-quote" id="site-synopsis-display">N/A</blockquote>
-          <textarea class="mod-textarea mod-edit-input" id="site-synopsis-input" style="display:none;"></textarea>
-        </div>
-
-        <div class="wiki-meta-editor mod-editable-block" id="wiki-meta-editor" style="display:none;">
-          <div class="mod-field-label-row">
-            <span class="mod-field-label">Rating</span>
-            <button class="wiki-tags-tip-icon" id="rating-tip-icon" type="button" aria-label="Rating help">💡</button>
-            <div class="wiki-tags-tip-popover" id="rating-tip-popover" hidden>
-              <p><strong>Not Rated (Adult!)</strong> — For searching, screening, and other site functions, this may get treated the same way as Explicit content. Choose this if you'd rather not rate your content.</p>
-              <p><strong>General Audiences</strong> — Suitable for anyone.</p>
-              <p><strong>Teen And Up Audiences</strong> — May be inappropriate for audiences under 13.</p>
-              <p><strong>Mature (Adult!)</strong> — Adult themes (sex, violence, etc.) that aren't as graphic as Explicit.</p>
-              <p><strong>Explicit (Adult!)</strong> — Porn, graphic violence, etc.</p>
-            </div>
-          </div>
-          <select class="mod-input" id="rating-select">
-            <option value="Not Rated">Not Rated (Adult!)</option>
-            <option value="General Audiences">General Audiences</option>
-            <option value="Teen And Up Audiences">Teen And Up Audiences</option>
-            <option value="Mature">Mature (Adult!)</option>
-            <option value="Explicit">Explicit (Adult!)</option>
-          </select>
-
-          <div class="mod-field-label-row" style="margin-top:1.25rem;">
-            <span class="mod-field-label">Categories</span>
-            <button class="wiki-tags-tip-icon" id="category-tip-icon" type="button" aria-label="Category help">💡</button>
-            <div class="wiki-tags-tip-popover" id="category-tip-popover" hidden>
-              <p>There are 6 categories. Definitions vary fic to fic — use whichever feel applicable, or none:</p>
-              <p><strong>F/F</strong> — Female/Female relationships</p>
-              <p><strong>F/M</strong> — Female/Male relationships</p>
-              <p><strong>Gen</strong> — General: no romantic/sexual relationships, or not the main focus</p>
-              <p><strong>M/M</strong> — Male/Male relationships</p>
-              <p><strong>Multi</strong> — More than one kind of relationship, or a relationship with multiple partners</p>
-              <p><strong>Other</strong> — Other relationships</p>
-            </div>
-          </div>
-          <div class="wiki-meta-check-row" id="category-checks"></div>
-
-          <div class="mod-field-label-row" style="margin-top:1.25rem;">
-            <span class="mod-field-label">Relationships</span>
-            <span class="mod-field-hint">e.g. "Umbreon/Espeon". Press Enter to add.</span>
-          </div>
-          <div class="wiki-tags-input-box" id="relationships-input-box">
-            <input type="text" class="wiki-tags-input" id="relationships-text-input" placeholder="Type a relationship and press Enter…" />
-          </div>
-        </div>
-      </section>
-
-      <!-- Characters/Chapters/Gallery — one full-width row now instead of
-           the old sidebar triangle. Clicking a card is the same navigation
-           as clicking its matching tab above. -->
-      <div class="wiki-story-cards-row">
-        <a class="mod-quick-nav-card wiki-story-cards-row-card" id="qn-chapters" href="#">
-          <img id="qn-chapters-img" alt="Chapters" draggable="false" />
-          <div class="mod-quick-nav-card-overlay"><span class="mod-quick-nav-card-label">Chapters</span></div>
-          <button class="mod-quick-nav-card-edit-btn" id="qn-chapters-edit-btn" type="button" title="Change card image">📷</button>
-          <button class="fp-recrop-btn mod-quick-nav-card-recrop-btn" id="qn-chapters-recrop-btn" type="button" style="display:none;">✏️ Recrop</button>
-        </a>
-        <a class="mod-quick-nav-card wiki-story-cards-row-card" id="qn-characters" href="#">
-          <img id="qn-characters-img" alt="Characters" draggable="false" />
-          <div class="mod-quick-nav-card-overlay"><span class="mod-quick-nav-card-label">Characters</span></div>
-          <button class="mod-quick-nav-card-edit-btn" id="qn-characters-edit-btn" type="button" title="Change card image">📷</button>
-          <button class="fp-recrop-btn mod-quick-nav-card-recrop-btn" id="qn-characters-recrop-btn" type="button" style="display:none;">✏️ Recrop</button>
-        </a>
-        <a class="mod-quick-nav-card wiki-story-cards-row-card" id="qn-gallery" href="#">
-          <img id="qn-gallery-img" alt="Gallery" draggable="false" />
-          <div class="mod-quick-nav-card-overlay"><span class="mod-quick-nav-card-label">Gallery</span></div>
-          <button class="mod-quick-nav-card-edit-btn" id="qn-gallery-edit-btn" type="button" title="Change card image">📷</button>
-          <button class="fp-recrop-btn mod-quick-nav-card-recrop-btn" id="qn-gallery-recrop-btn" type="button" style="display:none;">✏️ Recrop</button>
-        </a>
-        <input type="file" id="qn-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
-      </div>
-
-      <section class="wiki-section">
-        <h2 class="wiki-section-title" id="meet-heading">Notes From the Author</h2>
-        <div class="wiki-rule"></div>
-        <div class="wiki-meet-split">
-          <div class="wiki-meet-text mod-editable-block">
-            <div class="mod-field-label-row">
-              <span class="mod-field-label" id="bio-field-label">Notes From the Author</span>
-              <span class="mod-field-hint">Use *text* for italics, **text** for bold.</span>
-            </div>
-            <p id="site-bio-display">N/A</p>
-            <textarea class="mod-textarea mod-edit-input" id="site-bio-input" style="display:none;"></textarea>
-
-            <a class="wiki-author-teaser-card" id="wiki-author-teaser-card" href="#" style="display:none;">
-              <div class="wiki-author-teaser-avatar-wrap">
-                <img class="wiki-author-teaser-avatar" id="wiki-author-teaser-avatar" alt="" style="display:none;" />
-                <span class="wiki-author-teaser-avatar-fallback" id="wiki-author-teaser-avatar-fallback" style="display:none;">?</span>
-              </div>
-              <div class="wiki-author-teaser-text">
-                <p class="wiki-author-teaser-name" id="wiki-author-teaser-name"></p>
-                <p class="wiki-author-teaser-bio" id="wiki-author-teaser-bio"></p>
-              </div>
-              <span class="wiki-author-teaser-arrow">&#8594;</span>
-            </a>
-          </div>
-          <div class="wiki-meet-divider"></div>
-          <div class="wiki-meet-links mod-editable-block">
-            <p class="wiki-meet-links-label">Find Me</p>
-            <ul class="wiki-links-list" id="site-links-display">
-              <li>N/A</li>
-            </ul>
-            <div id="site-links-editor" style="display:none;"></div>
-            <button class="mod-btn mod-btn--small" id="add-link-edit-row" type="button" style="display:none;">+ Add Link</button>
-          </div>
-        </div>
-      </section>
-
-      </div>
-    </div>
-
-  </main>
-</div>
-
-<footer>
-  <p id="footer-text">This story is a fan-made page hosted on Between Two Worlds.</p>
-</footer>
-
 <script src="/fanpages/fanpages-site.js"></script>
+
+<!-- "Continue where you left off?" prompt, shown by Start Reading when the
+     server reports saved progress (site.resume). -->
+<div class="sv-overlay" id="sv-resume-overlay" hidden>
+  <div class="sv-panel sv-modal">
+    <h3>Continue where you left off?</h3>
+    <p id="sv-resume-text"></p>
+    <div class="sv-modal-actions">
+      <button class="sv-btn-ghost" id="sv-resume-restart" type="button">Start From The Top</button>
+      <button class="sv-btn-blue" id="sv-resume-yes" type="button">Resume Reading</button>
+    </div>
+  </div>
+</div>
+
+<p class="sv-loading" id="sv-loading">Loading…</p>
+
+<main class="sv-wrap" id="sv-wrap" hidden>
+
+  <div class="sv-tabs" role="tablist">
+    <button class="sv-tab active" id="sv-tab-summary" type="button" role="tab">Summary</button>
+    <button class="sv-tab" id="sv-tab-chapters" type="button" role="tab">Chapters</button>
+  </div>
+
+  <!-- Cover, title, stats -->
+  <section class="sv-panel sv-hero">
+    <div class="sv-cover-col"><img class="sv-cover" id="sv-cover" alt="" /></div>
+    <div class="sv-hero-main">
+      <h1 class="sv-title" id="sv-title"></h1>
+      <a class="sv-author" id="sv-author" href="#"></a>
+      <div class="sv-stats" id="sv-stats"></div>
+      <div class="sv-actions">
+        <a class="sv-start" id="sv-start" href="#">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>
+          <span id="sv-start-label">Start Reading</span>
+        </a>
+        <button class="sv-iconbtn" id="sv-bookmark" type="button" title="Bookmark" hidden>
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>
+        </button>
+        <a class="sv-editbtn" id="sv-edit" href="#" hidden>✎ Edit Story</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Summary tab ═══ -->
+  <div id="sv-view-summary">
+    <section class="sv-panel sv-tags">
+      <h2 class="sv-h2">Tags <img src="/images/home/decoration-1.png" alt="" /></h2>
+      <div class="sv-chips" id="sv-chips"></div>
+    </section>
+
+    <div class="sv-grid">
+      <div class="sv-left">
+        <section class="sv-panel sv-desc">
+          <h2 class="sv-h2">Description <img src="/images/home/decoration-8.png" alt="" /></h2>
+          <div class="sv-status-row" id="sv-status-row"></div>
+          <p class="sv-synopsis" id="sv-synopsis"></p>
+          <button class="sv-more" id="sv-more" type="button" hidden>Read more</button>
+        </section>
+
+        <section class="sv-panel sv-chsec">
+          <div class="sv-chsec-head">
+            <h2 class="sv-h2">Chapters <img src="/images/home/decoration-1.png" alt="" /></h2>
+            <button class="sv-linkbtn" id="sv-see-all" type="button">See all →</button>
+          </div>
+          <div class="sv-chlist sv-scroll" id="sv-chlist"></div>
+        </section>
+      </div>
+
+      <aside class="sv-hudwrap">
+        <div class="sv-panel sv-hud">
+          <div class="sv-hud-scan"></div>
+          <p class="sv-hud-title"><span>Cast &amp; Gallery</span><span class="sv-hud-dot"></span></p>
+          <div class="sv-seg" id="sv-seg">
+            <button type="button" class="active" data-mode="chars">Characters <span id="sv-n-chars"></span></button>
+            <button type="button" data-mode="gallery">Gallery <span id="sv-n-gallery"></span></button>
+          </div>
+          <div class="sv-hud-list sv-scroll" id="sv-hud-list"></div>
+          <div class="sv-hud-foot" id="sv-hud-foot"></div>
+        </div>
+      </aside>
+    </div>
+
+    <section class="sv-panel sv-rec" id="sv-rec" hidden>
+      <div class="sv-rec-head">
+        <h2 class="sv-h2">You may also like <img src="/images/home/decoration-1.png" alt="" /></h2>
+        <div class="sv-rec-arrows"><button type="button" id="sv-rec-prev" aria-label="Previous">‹</button><button type="button" id="sv-rec-next" aria-label="Next">›</button></div>
+      </div>
+      <div class="sv-rec-row sv-scroll" id="sv-rec-row"></div>
+    </section>
+  </div>
+
+  <!-- ═══ Chapters tab ═══ -->
+  <div id="sv-view-chapters" hidden>
+    <section class="sv-panel" style="margin-top:1.25rem;padding:1.4rem 1.5rem 1.6rem;">
+      <h2 class="sv-h2" id="sv-chapters-h2">All Chapters <img src="/images/home/decoration-1.png" alt="" /></h2>
+      <div class="sv-chgrid" id="sv-chgrid"></div>
+    </section>
+  </div>
+</main>
+
 <script>
-// ── Which story is this? Derived from the URL: /fanpages/<owner>/<story> ──
-// SLUG is the full "owner/story" path — authors can own several stories now,
-// so this is what disambiguates which one, both for the public GET and for
-// every write call below (via the X-Story-Path header).
+// ── Which story? /<owner>/<story> (btwfics.net) or /fanpages/<owner>/<story> ──
 const PATH_PARTS = window.location.pathname.split('/').filter(Boolean);
 const OFFSET = window.FP_BASE ? 1 : 0;
 const SLUG = PATH_PARTS.slice(OFFSET, OFFSET + 2).join('/');
-const STORY_BASE = (window.FP_BASE || '') + '/' + PATH_PARTS.slice(OFFSET, OFFSET + 2).join('/');
-
-document.getElementById('tab-home').href = STORY_BASE;
-document.getElementById('tab-chapters').href = STORY_BASE + '/chapters';
-document.getElementById('tab-characters').href = STORY_BASE + '/characters';
-document.getElementById('tab-gallery').href = STORY_BASE + '/gallery';
-
-document.getElementById('qn-characters').href = STORY_BASE + '/characters';
-document.getElementById('qn-chapters').href = STORY_BASE + '/chapters';
-document.getElementById('qn-gallery').href = STORY_BASE + '/gallery';
-
+const STORY_BASE = (window.FP_BASE || '') + '/' + SLUG;
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
 const authHeaders = () => ({ Authorization: `Bearer ${token}`, 'X-Story-Path': SLUG });
+const $ = (id) => document.getElementById(id);
 
-// Clicking a tag in the hero tag cloud (renderHeroTagCloud's tagItem links)
-// runs a brand-new, specific Stories search -- it should land there with
-// both of search.html's side panels open, not carry over whatever
-// collapsed state a previous visit there left in this tab's sessionStorage.
-// Mirrors search.html's own resetCollapseStateForNewSearch, duplicated here
-// since this page's script runs independently of search.html's.
-document.addEventListener('click', (e) => {
-  const a = e.target.closest('a.wiki-tag-bubble[href]');
-  if (!a) return;
-  try {
-    sessionStorage.removeItem('btw_search_filters_collapsed');
-    sessionStorage.removeItem('btw_search_sidebar_collapsed');
-  } catch {}
-});
-
-let siteData = { site: {} };
-let editing = false;
-let isSelf = false;
-
-// ── Theme — just default (black) or a custom uploaded blurred background.
-// This is per-STORY, not per-account: whatever the author picks here is
-// what every visitor sees on this story's Home/Characters/Chapters/Gallery
-// pages. The rest of Fanpages stays the regular dark theme regardless. ──
-const THEMES = [
-  { id: 'default', label: 'Default (Dark)', c1: '#7fa8d9', c2: '#d97a72', bg: '#0a0a0a', cardBg: '#161616', text: '#f0f0f0', dark: true },
-  { id: 'custom',  label: 'Custom Background', c1: '#7fa8d9', c2: '#d97a72', bg: '#0a0a0a', cardBg: '#161616', text: '#f0f0f0', dark: true },
-];
-
-function hexToRgba(hex, alpha) {
-  const n = parseInt(hex.replace('#', ''), 16);
-  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+function esc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
-
-function applyTheme(themeId, customBgUrl) {
-  const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
-  document.body.style.setProperty('--gold', theme.c1);
-  document.body.style.setProperty('--violet', theme.c1);
-  document.body.style.setProperty('--rose', theme.c2);
-  document.body.style.background = theme.bg;
-  document.body.style.color = theme.text;
-
-  document.body.style.setProperty('--mod-card-bg', theme.cardBg);
-  document.body.style.setProperty('--mod-card-border', theme.dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)');
-  document.body.style.setProperty('--mod-text-primary', theme.text);
-  document.body.style.setProperty('--mod-text-secondary', hexToRgba(theme.text, 0.65));
-  document.body.style.setProperty('--mod-accent-border', hexToRgba(theme.c1, 0.4));
-  document.body.style.setProperty('--mod-accent-bg', hexToRgba(theme.c1, 0.08));
-  document.body.style.setProperty('--mod-accent-bg-hover', hexToRgba(theme.c1, 0.12));
-  document.body.style.setProperty('--mod-accent2-border', hexToRgba(theme.c2, 0.3));
-  document.body.style.setProperty('--mod-accent2-bg', hexToRgba(theme.c2, 0.06));
-  document.body.style.setProperty('--mod-accent2-bg-hover', hexToRgba(theme.c2, 0.12));
-
-  const bgImg = document.getElementById('page-bg-img');
-  const bgOverlay = document.getElementById('page-bg-overlay');
-  if (themeId === 'custom' && customBgUrl) {
-    bgImg.src = customBgUrl;
-    bgImg.style.display = 'block';
-    bgOverlay.style.background = hexToRgba(theme.bg, 0.78);
-    bgOverlay.style.display = 'block';
-  } else {
-    bgImg.style.display = 'none';
-    bgOverlay.style.display = 'none';
-  }
-
-  document.querySelectorAll('.mod-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
-  syncBgHeight();
-}
-
-// Background scrolls *with* the page instead of staying pinned -- needs its
-// height measured in JS since percentage/inset sizing can't resolve against
-// a wrap whose own height is just "however tall its content is." Reset to 0
-// before each measurement (the element being measured is itself absolutely
-// positioned and contributes to scrollHeight) so a previously-tall page can
-// still report shrinking back down.
-function syncBgHeight() {
-  const bgEl = document.getElementById('page-bg-img');
-  bgEl.style.height = '0';
-  bgEl.style.height = Math.max(document.documentElement.scrollHeight, window.innerHeight) + 'px';
-}
-window.addEventListener('resize', syncBgHeight);
-
-function buildThemeGrid() {
-  const grid = document.getElementById('theme-grid');
-  grid.innerHTML = '';
-
-  const defaultBtn = document.createElement('button');
-  defaultBtn.className = 'mod-theme-swatch';
-  defaultBtn.type = 'button';
-  defaultBtn.title = 'Default (plain dark)';
-  defaultBtn.dataset.theme = 'default';
-  defaultBtn.innerHTML = `<span style="background:#0a0a0a;"></span><span style="background:#161616;"></span>`;
-  defaultBtn.addEventListener('click', () => selectTheme('default'));
-  grid.appendChild(defaultBtn);
-
-  const uploadBtn = document.createElement('button');
-  uploadBtn.className = 'mod-theme-swatch mod-theme-swatch--upload';
-  uploadBtn.type = 'button';
-  uploadBtn.title = 'Upload a custom blurred background image';
-  uploadBtn.textContent = '+';
-  uploadBtn.addEventListener('click', () => document.getElementById('theme-bg-file-input').click());
-  grid.appendChild(uploadBtn);
-}
-
-async function selectTheme(themeId) {
-  applyTheme(themeId, siteData.site.theme_bg_url);
-  const res = await fetch('/api/moderator/site', {
-    method: 'PUT',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ theme: themeId }),
-  });
-  if (res.ok) {
-    const { site } = await res.json();
-    siteData.site = site;
-  }
-}
-
-const themeBgFileInput = document.createElement('input');
-themeBgFileInput.type = 'file';
-themeBgFileInput.accept = 'image/png,image/jpeg,image/webp,image/gif';
-themeBgFileInput.id = 'theme-bg-file-input';
-themeBgFileInput.style.display = 'none';
-document.body.appendChild(themeBgFileInput);
-themeBgFileInput.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  // Wait for the real, saved URL before changing anything visually — an
-  // instant local preview here used to apply the new background right
-  // away regardless of whether the upload actually succeeded, so a failed
-  // upload (e.g. too large) still looked like it had worked.
-  const fd = new FormData();
-  fd.append('image', file);
-  const res = await fetch('/api/moderator/site/theme-bg', { method: 'PUT', headers: authHeaders(), body: fd });
-  if (res.ok) {
-    const { site } = await res.json();
-    siteData.site = site;
-    applyTheme(site.theme, site.theme_bg_url);
-  } else {
-    alert('Background upload failed — the image may be too large (10MB max). Please try again.');
-  }
-});
-
-document.getElementById('theme-btn').addEventListener('click', (e) => {
-  e.stopPropagation();
-  document.getElementById('theme-popover').hidden = !document.getElementById('theme-popover').hidden;
-});
-document.addEventListener('click', (e) => {
-  const picker = document.querySelector('.mod-theme-picker');
-  if (picker && !picker.contains(e.target)) document.getElementById('theme-popover').hidden = true;
-});
-
-// ── Site text/links ────────────────────────────────────────────────────────────
-const LINK_ICONS = [
-  [/wattpad/i,               '📖'],
-  [/(archiveofourown|ao3)/i, '📜'],
-  [/discord/i,               '💬'],
-  [/(twitter|^x\.com| x$)/i, '🐦'],
-  [/instagram/i,             '📷'],
-  [/(youtube|youtu\.be)/i,   '▶️'],
-  [/tiktok/i,                '🎵'],
-  [/tumblr/i,                '📝'],
-  [/(furaffinity|deviantart|toyhou)/i, '🎨'],
-  [/twitch/i,                '🎮'],
-  [/spotify/i,                '🎧'],
-  [/patreon|ko-?fi/i,        '☕'],
-];
-function linkIcon(label, url) {
-  const haystack = `${label} ${url}`;
-  const match = LINK_ICONS.find(([re]) => re.test(haystack));
-  return match ? match[1] : '🔗';
-}
-
-// ── Story Metadata — Rating / Category / Relationships / Fandom ────────────
-const RATING_META = {
-  'sfw':      { label: 'General',  cls: 'general' },
-  'mature':   { label: 'Mature',   cls: 'teen' },
-  'explicit': { label: 'Explicit', cls: 'mature' },
-};
-const CATEGORY_OPTIONS = ['Gen', 'M/F', 'M/M', 'F/F', 'Multi', 'Other'];
-
-function renderMetaDisplay(s) {
-  const rating = RATING_META[s.rating] || RATING_META['sfw'];
-  const badge = document.getElementById('wiki-meta-rating-badge');
-  badge.textContent = rating.label;
-  badge.className = `wiki-rating-badge wiki-rating-badge--${rating.cls}`;
-
-  const fanWrap = document.getElementById('wiki-meta-fandom-badges');
-  const fandoms = s.fandoms || [];
-  fanWrap.innerHTML = fandoms.length
-    ? fandoms.map(f => `<span class="wiki-meta-badge-list-item">${escapeHtml(f)}</span>`).join('')
-    : '<span class="wiki-tags-empty">N/A</span>';
-}
-
-// AO3-style tag cloud — Rating, then every Fandom/Category/Relationship
-// (all red, no section labels), then Additional Tags (blue), packed into
-// one clamped-height block. The "+" only appears if the list actually
-// overflows the clamp; clicking it expands the whole card to show everything.
-let heroTagCloudExpanded = false;
-function renderHeroTagCloud(s) {
-  const cloud = document.getElementById('wiki-hero-tagcloud');
-  const redItem = (text) => `<span class="wiki-meta-badge-list-item">${escapeHtml(text)}</span>`;
-  // q mirrors tags_include here so that switching to the Posts/Profiles
-  // tabs after landing on Stories (search.html's left-nav links carry q
-  // across tab switches) keeps the same "Jolteon" context instead of
-  // resetting to "Everything" -- those two tabs only understand free-text
-  // q, not tags_include.
-  const tagItem = (t) => `<a class="wiki-tag-bubble" href="${window.fpUrl(`/search?tags_include=${encodeURIComponent(t)}&q=${encodeURIComponent(t)}&sort=updated&view=story`)}">${escapeHtml(t)}</a>`;
-
-  const parts = [];
-  parts.push(redItem((RATING_META[s.rating] || RATING_META['sfw']).label));
-  (s.fandoms || []).forEach(f => parts.push(redItem(f)));
-  (s.categories || []).forEach(c => parts.push(redItem(c)));
-  (s.relationships || []).forEach(r => parts.push(redItem(r)));
-  (s.tags || []).forEach(t => parts.push(tagItem(t)));
-
-  cloud.innerHTML = parts.join('');
-  heroTagCloudExpanded = false;
-  document.getElementById('wiki-hero-tagcloud-wrap').classList.remove('expanded');
-  cloud.classList.remove('expanded');
-  const expandBtn = document.getElementById('wiki-hero-tagcloud-expand');
-  expandBtn.classList.remove('expanded');
-  expandBtn.textContent = '+';
-
-  // Only worth showing the toggle if the list is actually taller than the
-  // clamp — otherwise it never does anything.
-  requestAnimationFrame(() => {
-    expandBtn.style.display = cloud.scrollHeight > cloud.clientHeight + 2 ? 'flex' : 'none';
-  });
-}
-document.getElementById('wiki-hero-tagcloud-expand').addEventListener('click', () => {
-  heroTagCloudExpanded = !heroTagCloudExpanded;
-  document.getElementById('wiki-hero-tagcloud-wrap').classList.toggle('expanded', heroTagCloudExpanded);
-  document.getElementById('wiki-hero-tagcloud').classList.toggle('expanded', heroTagCloudExpanded);
-  const expandBtn = document.getElementById('wiki-hero-tagcloud-expand');
-  expandBtn.classList.toggle('expanded', heroTagCloudExpanded);
-  expandBtn.textContent = heroTagCloudExpanded ? '−' : '+';
-  expandBtn.title = heroTagCloudExpanded ? 'Show fewer tags' : 'Show all tags';
-  syncBgHeight();
-});
-
-function buildCategoryChecks(selected) {
-  const wrap = document.getElementById('category-checks');
-  wrap.innerHTML = '';
-  CATEGORY_OPTIONS.forEach(opt => {
-    const label = document.createElement('label');
-    label.className = 'wiki-meta-check-item';
-    label.innerHTML = `<input type="checkbox" value="${opt}" ${selected.includes(opt) ? 'checked' : ''} /> <span>${opt}</span>`;
-    wrap.appendChild(label);
-  });
-}
-
-[['rating-tip-icon', 'rating-tip-popover'], ['category-tip-icon', 'category-tip-popover']].forEach(([iconId, popId]) => {
-  const icon = document.getElementById(iconId);
-  const pop = document.getElementById(popId);
-  icon.addEventListener('click', (e) => {
-    e.stopPropagation();
-    pop.hidden = !pop.hidden;
-  });
-  document.addEventListener('click', (e) => {
-    if (!pop.hidden && !pop.contains(e.target) && e.target !== icon) pop.hidden = true;
-  });
-});
-
-// ── Relationships — same bubble-tag input pattern as Tags, separate array ──
-let workingRelationships = [];
-
-function renderRelationshipsEditor() {
-  const box = document.getElementById('relationships-input-box');
-  const input = document.getElementById('relationships-text-input');
-  box.querySelectorAll('.wiki-tag-bubble--editable').forEach(b => b.remove());
-  workingRelationships.forEach(r => {
-    const bubble = document.createElement('span');
-    bubble.className = 'wiki-tag-bubble wiki-tag-bubble--editable';
-    bubble.innerHTML = `${escapeHtml(r)} <button class="wiki-tag-bubble-remove" type="button" aria-label="Remove relationship">✕</button>`;
-    bubble.querySelector('.wiki-tag-bubble-remove').addEventListener('click', () => {
-      workingRelationships = workingRelationships.filter(x => x !== r);
-      renderRelationshipsEditor();
-    });
-    box.insertBefore(bubble, input);
-  });
-}
-
-function addWorkingRelationship(raw) {
-  const clean = raw.trim().slice(0, 150);
-  if (!clean) return;
-  if (workingRelationships.includes(clean)) return;
-  if (workingRelationships.length >= 20) return;
-  workingRelationships.push(clean);
-  renderRelationshipsEditor();
-}
-
-const relationshipsTextInput = document.getElementById('relationships-text-input');
-relationshipsTextInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' || e.key === ',') {
-    e.preventDefault();
-    addWorkingRelationship(relationshipsTextInput.value);
-    relationshipsTextInput.value = '';
-  } else if (e.key === 'Backspace' && !relationshipsTextInput.value && workingRelationships.length) {
-    workingRelationships.pop();
-    renderRelationshipsEditor();
-  }
-});
-
-// Keeps the big hero cover and the small floated one in the Description box
-// in sync — same cover_url, two places it renders now.
-// Every story has a cover — either the one it was assigned, or the
-// generated purple/rose "title over a gradient" default. The plain "No
-// cover yet" placeholder only ever belongs to the Story Editor's own cover
-// picker (you're actively choosing one there); everywhere a story is
-// actually being *displayed* — including the story's own home page here —
-// shows the real default cover like it's the real thing, same as search
-// results, spotlight, and the reader already do.
-function updateCoverPreviews(coverUrl) {
-  const site = Object.assign({}, siteData.site, { cover_url: coverUrl || '' });
-  window.wikiSetCoverSlot(document.getElementById('cover-img'), site, { alt: `${site.site_title || 'Untitled Story'} cover` });
-  window.wikiSetCoverSlot(document.getElementById('desc-cover-img'), site, { alt: `${site.site_title || 'Untitled Story'} cover` });
-}
-
-function populateDisplay() {
-  const s = siteData.site || {};
-  const title = s.site_title || 'Untitled Story';
-  // Belt-and-suspenders: force these editor-only hints/labels hidden via
-  // inline style (wins over any stylesheet) rather than trusting CSS alone.
-  document.querySelectorAll('.mod-field-label-row').forEach(el => { el.style.display = editing ? 'flex' : 'none'; });
-  const titleEl = document.getElementById('site-title-display');
-  titleEl.textContent = title;
-  titleEl.classList.remove('mod-title-loading');
-  document.getElementById('site-synopsis-display').innerHTML = renderMarkdownLite(s.synopsis || 'N/A');
-  document.getElementById('site-bio-display').innerHTML      = renderMarkdownLite(s.bio       || 'N/A');
-  renderMetaDisplay(s);
-  renderHeroTagCloud(s);
-  const meetText = 'Notes From ' + (s.author_display_name || s.author_username || 'the Author');
-  document.getElementById('meet-heading').textContent = meetText;
-  document.getElementById('bio-field-label').textContent = meetText;
-  document.getElementById('footer-text').textContent = `${title} is a fan-made page hosted on Between Two Worlds.`;
-  document.title = `${title} ✦ BTW`;
-
-  const bannerImg = document.getElementById('banner-img');
-  bannerImg.style.objectPosition = 'center';
-
-  const targetBannerSrc = s.banner_url || '/images/gallery/pixernbath_13.png';
-  if (bannerImg.src.endsWith(targetBannerSrc)) {
-    bannerImg.classList.remove('mod-banner-loading');
-  } else {
-    const reveal = () => bannerImg.classList.remove('mod-banner-loading');
-    bannerImg.addEventListener('load', reveal, { once: true });
-    bannerImg.addEventListener('error', reveal, { once: true });
-    bannerImg.src = targetBannerSrc;
-  }
-
-  document.getElementById('qn-characters-img').src = s.characters_card_url || NAV_CARD_DEFAULT.characters;
-  document.getElementById('qn-chapters-img').src   = s.chapters_card_url   || NAV_CARD_DEFAULT.chapters;
-  document.getElementById('qn-gallery-img').src    = s.gallery_card_url    || NAV_CARD_DEFAULT.gallery;
-
-  ['characters', 'chapters', 'gallery'].forEach(kind => {
-    document.getElementById(`qn-${kind}-img`).style.objectPosition = 'center';
-  });
-
-  const linksList = document.getElementById('site-links-display');
-  linksList.innerHTML = '';
-  if (s.links && s.links.length) {
-    s.links.forEach(l => {
-      const li = document.createElement('li');
-      const a  = document.createElement('a');
-      a.className = 'wiki-link-item';
-      a.href = isSafeLinkUrl(l.url) ? l.url : '#'; a.target = '_blank'; a.rel = 'noopener noreferrer nofollow ugc';
-      a.innerHTML = `<span class="link-icon">${linkIcon(l.label, l.url)}</span><span class="link-name">${escapeHtml(l.label)}</span><span class="link-arrow">↗</span>`;
-      li.appendChild(a);
-      linksList.appendChild(li);
-    });
-  } else {
-    linksList.innerHTML = '<li>N/A</li>';
-  }
-
-  updateCoverPreviews(s.cover_url);
-}
-
-function addLinkEditRow(label, url) {
-  const wrap = document.createElement('div');
-  wrap.className = 'mod-stat-row';
-  wrap.innerHTML = `
-    <input class="mod-input link-label" placeholder="Label (e.g. Twitter)" value="${label || ''}" />
-    <input class="mod-input link-url" placeholder="https://…" value="${url || ''}" />
-    <button class="mod-btn mod-btn--small mod-btn--danger" type="button">✕</button>`;
-  wrap.querySelector('button').addEventListener('click', () => wrap.remove());
-  document.getElementById('site-links-editor').appendChild(wrap);
-}
-document.getElementById('add-link-edit-row').addEventListener('click', () => addLinkEditRow('', ''));
-
-function escapeHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-// Defensive client-side mirror of the server's protocol allowlist — rejects
-// javascript:/data:/vbscript: URIs before they're ever assigned to an href.
-// The server is the real trust boundary; this just stops a bad value that's
-// already in the DB (e.g. saved before this check existed) from firing.
-function isSafeLinkUrl(url) {
-  try { return ['http:', 'https:'].includes(new URL(String(url), location.origin).protocol); }
-  catch { return false; }
-}
-
-// Tiny markdown subset for the Description/Bio fields — **bold** and
-// *italic* only. Escapes first so raw HTML in the text can't inject
-// anything; ** is matched before * so bold pairs don't get eaten by the
-// italic pass first.
-function renderMarkdownLite(text) {
-  return escapeHtml(text)
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>');
-}
-
-function toggle(el, show) { el.style.display = show ? '' : 'none'; }
-
-function enterEditMode() {
-  editing = true;
-  const s = siteData.site || {};
-
-  document.body.classList.add('mod-editing-active');
-  document.querySelectorAll('.mod-field-label-row').forEach(el => { el.style.display = 'flex'; });
-  document.getElementById('edit-bar').style.display = 'flex';
-  document.getElementById('wiki-cover').style.marginTop = '84px';
-  toggle(document.getElementById('edit-profile-btn'), false);
-  document.getElementById('banner-edit-pencil').style.display = 'none';
-  document.getElementById('theme-picker-wrap').style.display = 'none';
-  document.getElementById('bookmark-btn').style.display = 'none';
-  document.getElementById('banner-edit-wrap').style.display = 'flex';
-  document.getElementById('banner-recrop-btn').style.display = s.banner_url ? 'block' : 'none';
-  document.getElementById('wiki-cover').classList.add('mod-editing-banner');
-
-  document.getElementById('cover-edit-btn').style.display = 'block';
-  document.getElementById('cover-recrop-btn').style.display = (siteData.site && siteData.site.cover_url) ? 'block' : 'none';
-  // Sit the cover next to the quick-nav cards while editing instead of
-  // floated inside the Description field — moved back on exit.
-  document.getElementById('editor-cover-slot').appendChild(document.getElementById('cover-wrap'));
-
-  ['characters', 'chapters', 'gallery'].forEach(kind => {
-    document.getElementById(`qn-${kind}-edit-btn`).style.display = 'flex';
-    const url = s[NAV_CARD_FIELD[kind]];
-    document.getElementById(`qn-${kind}-recrop-btn`).style.display = (url && url !== NAV_CARD_DEFAULT[kind]) ? 'flex' : 'none';
-    document.getElementById(`qn-${kind}`).classList.add('mod-editing');
-  });
-
-  toggle(document.getElementById('site-title-display'), false);
-  const titleInput = document.getElementById('site-title-input');
-  titleInput.style.display = 'block';
-  titleInput.value = s.site_title || '';
-
-  toggle(document.getElementById('site-synopsis-display'), false);
-  const synInput = document.getElementById('site-synopsis-input');
-  synInput.style.display = 'block';
-  synInput.value = s.synopsis || '';
-
-  toggle(document.getElementById('wiki-meta-display'), false);
-  document.getElementById('wiki-meta-editor').style.display = 'block';
-  document.getElementById('rating-select').value = s.rating || 'Not Rated';
-  buildCategoryChecks(s.categories || []);
-  workingRelationships = (s.relationships || []).slice();
-  renderRelationshipsEditor();
-
-  toggle(document.getElementById('site-bio-display'), false);
-  const bioInput = document.getElementById('site-bio-input');
-  bioInput.style.display = 'block';
-  bioInput.value = s.bio || '';
-
-  toggle(document.getElementById('site-links-display'), false);
-  document.getElementById('site-links-editor').style.display = 'block';
-  document.getElementById('add-link-edit-row').style.display = 'inline-block';
-  document.getElementById('site-links-editor').innerHTML = '';
-  const links = s.links && s.links.length ? s.links : [{ label: '', url: '' }];
-  links.forEach(l => addLinkEditRow(l.label, l.url));
-}
-
-function exitEditMode() {
-  editing = false;
-  document.querySelectorAll('.mod-field-label-row').forEach(el => { el.style.display = 'none'; });
-  document.body.classList.remove('mod-editing-active');
-  document.getElementById('edit-bar').style.display = 'none';
-  document.getElementById('wiki-cover').style.marginTop = '';
-  document.getElementById('theme-popover').hidden = true;
-  document.getElementById('edit-profile-btn').style.display = 'flex';
-  document.getElementById('banner-edit-pencil').style.display = isSelf ? 'flex' : 'none';
-  document.getElementById('theme-picker-wrap').style.display = isSelf ? 'block' : 'none';
-  document.getElementById('bookmark-btn').style.display = 'flex';
-  document.getElementById('banner-edit-wrap').style.display = 'none';
-  document.getElementById('banner-recrop-btn').style.display = 'none';
-  document.getElementById('wiki-cover').classList.remove('mod-editing-banner');
-
-  document.getElementById('cover-edit-btn').style.display = 'none';
-  document.getElementById('cover-recrop-btn').style.display = 'none';
-  const heroCoverCol = document.querySelector('.wiki-hero-cover-col');
-  heroCoverCol.appendChild(document.getElementById('cover-wrap'));
-
-  ['characters', 'chapters', 'gallery'].forEach(kind => {
-    document.getElementById(`qn-${kind}-edit-btn`).style.display = 'none';
-    document.getElementById(`qn-${kind}-recrop-btn`).style.display = 'none';
-    document.getElementById(`qn-${kind}`).classList.remove('mod-editing');
-  });
-
-  toggle(document.getElementById('site-title-display'), true);
-  document.getElementById('site-title-input').style.display = 'none';
-  toggle(document.getElementById('site-synopsis-display'), true);
-  document.getElementById('site-synopsis-input').style.display = 'none';
-  toggle(document.getElementById('wiki-meta-display'), true);
-  document.getElementById('wiki-meta-editor').style.display = 'none';
-  document.getElementById('rating-tip-popover').hidden = true;
-  document.getElementById('category-tip-popover').hidden = true;
-  toggle(document.getElementById('site-bio-display'), true);
-  document.getElementById('site-bio-input').style.display = 'none';
-  toggle(document.getElementById('site-links-display'), true);
-  document.getElementById('site-links-editor').style.display = 'none';
-  document.getElementById('add-link-edit-row').style.display = 'none';
-}
-
-document.getElementById('edit-profile-btn').addEventListener('click', () => { window.location.href = STORY_BASE + '/edit'; });
-document.getElementById('banner-edit-pencil').addEventListener('click', () => { window.location.href = STORY_BASE + '/edit'; });
-document.getElementById('story-share-btn').addEventListener('click', (e) => {
-  fpShare(e.currentTarget, window.location.href);
-});
-// Hidden entirely for guests, not just gated on click — reports are an
-// account-only action with nothing useful for a guest to click into.
-if (localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token')) {
-  document.getElementById('story-report-btn').style.display = '';
-}
-document.getElementById('story-report-btn').addEventListener('click', () => {
-  reportContent('story', siteData.site.id);
-});
-document.getElementById('cancel-edit-btn').addEventListener('click', exitEditMode);
-
-function confirmDeleteStory() {
-  return new Promise(resolve => {
-    const overlay = document.getElementById('delete-story-confirm-overlay');
-    const yesBtn = document.getElementById('delete-story-confirm-yes');
-    const cancelBtn = document.getElementById('delete-story-confirm-cancel');
-    overlay.hidden = false;
-    const cleanup = (result) => {
-      overlay.hidden = true;
-      yesBtn.removeEventListener('click', onYes);
-      cancelBtn.removeEventListener('click', onCancel);
-      resolve(result);
-    };
-    const onYes = () => cleanup(true);
-    const onCancel = () => cleanup(false);
-    yesBtn.addEventListener('click', onYes);
-    cancelBtn.addEventListener('click', onCancel);
-  });
-}
-
-document.getElementById('delete-story-btn').addEventListener('click', async () => {
-  if (!await confirmDeleteStory()) return;
-  const btn = document.getElementById('delete-story-btn');
-  btn.disabled = true;
-  btn.textContent = 'Deleting…';
-  try {
-    const res = await fetch('/api/moderator/site', { method: 'DELETE', headers: authHeaders() });
-    if (!res.ok) throw new Error();
-    window.location.href = window.fpUrl('/my-stories');
-  } catch {
-    alert('Something went wrong deleting this story. Please try again.');
-    btn.disabled = false;
-    btn.textContent = '🗑️ Delete Story';
-  }
-});
-
-document.getElementById('save-edit-btn').addEventListener('click', async () => {
-  const links = Array.from(document.querySelectorAll('#site-links-editor .mod-stat-row')).map(row => ({
-    label: row.querySelector('.link-label').value.trim(),
-    url:   row.querySelector('.link-url').value.trim(),
-  })).filter(l => l.label && l.url);
-
-  if (relationshipsTextInput.value.trim()) {
-    addWorkingRelationship(relationshipsTextInput.value);
-    relationshipsTextInput.value = '';
-  }
-  const categories = Array.from(document.querySelectorAll('#category-checks input:checked')).map(c => c.value);
-
-  const body = {
-    site_title: document.getElementById('site-title-input').value.trim(),
-    synopsis:   document.getElementById('site-synopsis-input').value.trim(),
-    bio:        document.getElementById('site-bio-input').value.trim(),
-    links,
-    rating: document.getElementById('rating-select').value,
-    categories,
-    relationships: workingRelationships,
-  };
-
-  const res = await fetch('/api/moderator/site', {
-    method: 'PUT',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (res.ok) {
-    const { site } = await res.json();
-    siteData.site = { ...siteData.site, ...site };
-    populateDisplay();
-    exitEditMode();
-  } else {
-    alert('Something went wrong saving. Please try again.');
-  }
-});
-
-// ── Banner image — crop-and-upload via the shared crop modal
-// (1600:560, matching the recommended size). The crop is baked into the
-// uploaded image itself, so no separate reposition step/metadata is
-// needed afterward. ───────────────────────────────────────────────────
-document.getElementById('banner-edit-btn').addEventListener('click', () => {
-  document.getElementById('banner-file-input').click();
-});
-document.getElementById('banner-file-input').addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  openCropModal({
-    title: 'Crop Story Banner', imageSrc: URL.createObjectURL(file), aspectRatio: 1600 / 560, round: false,
-    onSave: uploadBanner,
-  });
-  e.target.value = '';
-});
-document.getElementById('banner-recrop-btn').addEventListener('click', () => {
-  if (!siteData.site || !siteData.site.banner_url) return;
-  openCropModal({
-    title: 'Crop Story Banner', imageSrc: siteData.site.banner_url, aspectRatio: 1600 / 560, round: false,
-    onSave: uploadBanner,
-  });
-});
-async function uploadBanner(blob) {
-  const bannerImg = document.getElementById('banner-img');
-  const fd = new FormData();
-  fd.append('banner', blob, 'banner.jpg');
-  fd.append('position', 50);
-  const res = await fetch('/api/moderator/site/banner', { method: 'PUT', headers: authHeaders(), body: fd });
-  if (res.ok) {
-    const { site } = await res.json();
-    siteData.site = { ...siteData.site, ...site };
-    bannerImg.src = site.banner_url + '?t=' + Date.now();
-    bannerImg.style.objectPosition = 'center';
-    bannerImg.classList.remove('mod-banner-loading');
-    document.getElementById('banner-recrop-btn').style.display = 'block';
-  } else {
-    alert('Banner upload failed. Please try again.');
-  }
-}
-
-// ── Book cover — crop-and-upload via the shared crop modal (2:3,
-// matching .mod-cover-wrap's ratio). cover_original is only sent the first
-// time a NEW source photo is picked -- Recrop re-sends just cover (a fresh
-// bake) from the existing original, so cover_original_url stays untouched.
-// Same pattern as the banner/nav-cards. ────────────────────────────────────
-let pendingNewCoverFile = null;
-document.getElementById('cover-edit-btn').addEventListener('click', () => {
-  document.getElementById('cover-file-input').click();
-});
-document.getElementById('cover-file-input').addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  pendingNewCoverFile = file;
-  openCropModal({
-    title: 'Crop Book Cover', imageSrc: URL.createObjectURL(file), aspectRatio: 2 / 3, round: false,
-    onSave: uploadCover,
-  });
-  e.target.value = '';
-});
-document.getElementById('cover-recrop-btn').addEventListener('click', () => {
-  if (!siteData.site || !siteData.site.cover_url) return;
-  pendingNewCoverFile = null;
-  openCropModal({
-    title: 'Crop Book Cover', imageSrc: siteData.site.cover_original_url || siteData.site.cover_url, aspectRatio: 2 / 3, round: false,
-    onSave: uploadCover,
-  });
-});
-async function uploadCover(blob) {
-  const fd = new FormData();
-  fd.append('cover', blob, 'cover.jpg');
-  if (pendingNewCoverFile) fd.append('cover_original', pendingNewCoverFile, pendingNewCoverFile.name || 'original.jpg');
-  fd.append('position_x', 50);
-  fd.append('position_y', 50);
-  const res = await fetch('/api/moderator/site/cover', { method: 'PUT', headers: authHeaders(), body: fd });
-  if (res.ok) {
-    const { site } = await res.json();
-    pendingNewCoverFile = null;
-    siteData.site = { ...siteData.site, ...site };
-    updateCoverPreviews(site.cover_url + '?t=' + Date.now());
-    document.getElementById('cover-recrop-btn').style.display = 'block';
-  } else {
-    alert('Cover upload failed. Please try again.');
-  }
-}
-
-// ── Quick-nav card art (Characters/Chapters/Gallery) — crop-and-upload via
-// the shared crop modal (16:10, matching the card's aspect-ratio). The
-// crop is baked into the uploaded image itself, so no separate reposition
-// step/metadata is needed afterward, same pattern as the banner/cover. ────
-const NAV_CARD_FIELD = { characters: 'characters_card_url', chapters: 'chapters_card_url', gallery: 'gallery_card_url' };
-const NAV_CARD_DEFAULT = {
-  characters: '/images/characters/kloudreference.png',
-  chapters: '/images/gallery/autumnleave_11.png',
-  gallery: '/images/gallery/apolloref_10.png',
-};
-const NAV_CARD_LABEL = { characters: 'Characters', chapters: 'Chapters', gallery: 'Gallery' };
-let qnUploadKind = null;
-const qnFileInput = document.getElementById('qn-file-input');
-
-// While editing, the card is just a canvas for the camera/recrop buttons —
-// don't let a click anywhere on it navigate away.
-['characters', 'chapters', 'gallery'].forEach(kind => {
-  document.getElementById(`qn-${kind}`).addEventListener('click', (e) => {
-    if (editing) e.preventDefault();
-  });
-});
-
-['characters', 'chapters', 'gallery'].forEach(kind => {
-  document.getElementById(`qn-${kind}-edit-btn`).addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    qnUploadKind = kind;
-    qnFileInput.click();
-  });
-  document.getElementById(`qn-${kind}-recrop-btn`).addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const url = siteData.site && siteData.site[NAV_CARD_FIELD[kind]];
-    if (!url) return;
-    openCropModal({
-      title: `Crop ${NAV_CARD_LABEL[kind]} Card`, imageSrc: url, aspectRatio: 16 / 10, round: false,
-      onSave: (blob) => uploadQnCard(kind, blob),
-    });
-  });
-});
-
-qnFileInput.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  const kind = qnUploadKind;
-  qnFileInput.value = '';
-  qnUploadKind = null;
-  if (!file || !kind) return;
-  openCropModal({
-    title: `Crop ${NAV_CARD_LABEL[kind]} Card`, imageSrc: URL.createObjectURL(file), aspectRatio: 16 / 10, round: false,
-    onSave: (blob) => uploadQnCard(kind, blob),
-  });
-});
-
-async function uploadQnCard(kind, blob) {
-  const img = document.getElementById(`qn-${kind}-img`);
-  const fd = new FormData();
-  fd.append('image', blob, `${kind}.jpg`);
-  const res = await fetch(`/api/moderator/site/nav-card/${kind}`, { method: 'PUT', headers: authHeaders(), body: fd });
-  if (res.ok) {
-    const { site } = await res.json();
-    siteData.site = { ...siteData.site, ...site };
-    img.src = site[NAV_CARD_FIELD[kind]] + '?t=' + Date.now();
-    img.style.objectPosition = 'center';
-    document.getElementById(`qn-${kind}-recrop-btn`).style.display = 'flex';
-  } else {
-    alert('Card image upload failed. Please try again.');
-  }
-}
-
-// ── Written by / Author box / Bookmark ──────────────────────────────────────
-function avatarInto(imgEl, fallbackEl, avatarUrl, name) {
-  if (avatarUrl) {
-    imgEl.src = avatarUrl;
-    imgEl.style.display = 'block';
-    fallbackEl.style.display = 'none';
-  } else {
-    fallbackEl.textContent = (name || '?').charAt(0).toUpperCase();
-    fallbackEl.style.display = 'flex';
-    imgEl.style.display = 'none';
-  }
-}
-
-function renderVipBadge(s) {
-  document.getElementById('vip-badge').style.display =
-    (s.author_username || '').toLowerCase() === 'veekitpaws' ? 'flex' : 'none';
-}
-
-function renderWrittenBy(s) {
-  const wrap = document.getElementById('written-by');
-  if (!s.author_username) { wrap.style.display = 'none'; return; }
-  wrap.style.display = 'flex';
-  wrap.href = window.fpUrl(`/${s.author_username}`);
-  document.getElementById('written-by-name').textContent = s.author_display_name || s.author_username;
-  avatarInto(
-    document.getElementById('written-by-avatar'),
-    document.getElementById('written-by-avatar-fallback'),
-    s.author_avatar, s.author_display_name || s.author_username
-  );
-}
-
-// Small clickable avatar tucked under the cover thumbnail in the Story
-// Description box — replaces the old sidebar "Follow Author" box; just a
-// link out to their profile now, no follow button here.
-function renderDescAuthorAvatar(s) {
-  const link = document.getElementById('desc-author-link');
-  if (!s.author_username) { link.style.display = 'none'; return; }
-  link.style.display = 'flex';
-  link.href = window.fpUrl(`/${s.author_username}`);
-  link.title = s.author_display_name || s.author_username;
-  document.getElementById('desc-author-name').textContent = s.author_display_name || s.author_username;
-  avatarInto(
-    document.getElementById('desc-author-avatar'),
-    document.getElementById('desc-author-avatar-fallback'),
-    s.author_avatar, s.author_display_name || s.author_username
-  );
-}
-
-function renderBookmarkBtn(s) {
-  const btn = document.getElementById('bookmark-btn');
-  btn.style.display = editing ? 'none' : 'flex';
-  let bookmarked = !!s.is_bookmarked;
-  const paint = () => {
-    btn.classList.toggle('bookmarked', bookmarked);
-    btn.title = bookmarked ? 'Bookmarked' : 'Bookmark';
-  };
-  paint();
-  btn.onclick = async () => {
-    if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname)}`); return; }
-    btn.disabled = true;
-    try {
-      await fetch(`/api/bookmarks/by-path/${SLUG}`, { method: bookmarked ? 'DELETE' : 'POST', headers: authHeaders() });
-      bookmarked = !bookmarked;
-      paint();
-    } catch {}
-    btn.disabled = false;
-  };
-}
-
-// ── Teaser card for the author's actual account profile (separate from the
-// story-scoped "Notes From the Author" text above it) — a truncated peek at
-// their account bio that links out to /fanpages/<username>. ──────────────
-function renderAuthorTeaserCard(s) {
-  const card = document.getElementById('wiki-author-teaser-card');
-  if (!s.author_username) { card.style.display = 'none'; return; }
-  card.style.display = 'flex';
-  card.href = window.fpUrl(`/${s.author_username}`);
-  document.getElementById('wiki-author-teaser-name').textContent = s.author_display_name || s.author_username;
-  avatarInto(
-    document.getElementById('wiki-author-teaser-avatar'),
-    document.getElementById('wiki-author-teaser-avatar-fallback'),
-    s.author_avatar, s.author_display_name || s.author_username
-  );
-  const bio = (s.author_bio || '').trim();
-  const TEASER_LIMIT = 140;
-  document.getElementById('wiki-author-teaser-bio').textContent = bio
-    ? (bio.length > TEASER_LIMIT ? bio.slice(0, TEASER_LIMIT).trim() + '…' : bio)
-    : 'No bio yet. Click here to discover their full profile.';
-}
-
-// Jumps straight into the first chapter (by sort order) instead of just the
-// Chapters list — falls back to the list itself if there's nothing to read
-// yet, so the button's never a dead end.
-function renderStartReadingBtn(chapters) {
-  const btn = document.getElementById('start-reading-btn');
-  const first = chapters && chapters.length ? chapters[0] : null;
-  btn.href = first ? `${STORY_BASE}/reader?ch=${first.id}` : `${STORY_BASE}/chapters`;
-}
-
-// "Continue where you left off?" — Wattpad-style. site.resume (see
-// sendSiteLookup on the server) names whichever chapter this logged-in
-// reader most recently reported scroll progress on, as long as it isn't
-// basically unstarted or basically finished. Clicking Start Reading with a
-// resume candidate on file intercepts the plain navigation and asks first;
-// with no candidate the button just falls through to its normal href.
-function wireStartReadingResume(s) {
-  const btn = document.getElementById('start-reading-btn');
-  const resume = s.resume;
-  if (!resume) return;
-  btn.addEventListener('click', (e) => {
-    e.preventDefault();
-    document.getElementById('resume-confirm-text').textContent =
-      `You're ${resume.percent}% through "${resume.chapter_title || 'Untitled Chapter'}".`;
-    document.getElementById('resume-confirm-overlay').hidden = false;
-  });
-  document.getElementById('resume-confirm-restart').addEventListener('click', () => {
-    document.getElementById('resume-confirm-overlay').hidden = true;
-    window.location.href = btn.href;
-  });
-  document.getElementById('resume-confirm-yes').addEventListener('click', () => {
-    document.getElementById('resume-confirm-overlay').hidden = true;
-    window.location.href = `${STORY_BASE}/reader?ch=${resume.chapter_id}&resume=1`;
-  });
-}
-
-// Wattpad-style abbreviated counts (570000 -> "570K", 22800 -> "22.8K").
 function formatCount(n) {
   n = Number(n) || 0;
   if (n < 1000) return String(n);
   if (n < 1000000) return (n / 1000).toFixed(n % 1000 >= 100 ? 1 : 0).replace(/\.0$/, '') + 'K';
   return (n / 1000000).toFixed(n % 1000000 >= 100000 ? 1 : 0).replace(/\.0$/, '') + 'M';
 }
-
-function renderHeroStats(s) {
-  document.getElementById('hero-stat-views').textContent = formatCount(s.view_count);
-  document.getElementById('hero-stat-likes').textContent = formatCount(s.like_count);
-  document.getElementById('hero-stat-comments').textContent = formatCount(s.comment_count);
+function fmtDate(d) {
+  return d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 }
-
-// Reading-progress tracker — only means anything for a logged-in reader
-// (guests aren't tracked, see the reader's own progress-reporting code), so
-// it stays hidden entirely rather than showing a meaningless "0%".
-function renderReadingProgress(s) {
-  const wrap = document.getElementById('wiki-hero-progress');
-  const loggedIn = !!(localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token'));
-  if (!loggedIn || !siteData.chapters || !siteData.chapters.length) {
-    wrap.style.display = 'none';
-    return;
-  }
-  const pct = Math.max(0, Math.min(100, Number(s.reading_progress_percent) || 0));
-  wrap.style.display = 'flex';
-  document.getElementById('wiki-hero-progress-bar-fill').style.width = pct + '%';
-  document.getElementById('wiki-hero-progress-pct').textContent = pct + '%';
+function plainText(html) {
+  return String(html || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
 }
-
-// "X Published Parts" is visible to every visitor the moment the story has
-// one — "X Drafts" and the nudge to publish are owner-only, same privacy
-// rule as the draft banner above: a purely-drafted story stays completely
-// private, nothing about its drafts leaks to anyone but its author.
-function renderPartsStatus(s, chapters) {
-  const wrap = document.getElementById('wiki-parts-status');
-  const publishedEl = document.getElementById('wiki-parts-published');
-  const draftEl = document.getElementById('wiki-parts-draft');
-  const privateBadgeEl = document.getElementById('wiki-parts-private-badge');
-  const hintEl = document.getElementById('wiki-parts-hint');
-  const list = chapters || [];
-  const publishedCount = list.filter(c => c.status === 'published' && c.body && c.body.trim()).length;
-  const draftCount = s.is_self ? list.filter(c => !(c.status === 'published' && c.body && c.body.trim())).length : 0;
-  // The Private badge and the "publish a chapter" nudge are the same
-  // message: nothing's live yet. Once even one part is published, "X
-  // Published Parts" already says enough on its own.
-  const showPrivateExtras = s.is_self && draftCount > 0 && publishedCount === 0;
-
-  publishedEl.style.display = publishedCount > 0 ? '' : 'none';
-  if (publishedCount > 0) publishedEl.textContent = `${publishedCount} Published Part${publishedCount === 1 ? '' : 's'}`;
-
-  draftEl.style.display = s.is_self && draftCount > 0 ? '' : 'none';
-  if (s.is_self && draftCount > 0) draftEl.textContent = `${draftCount} Draft${draftCount === 1 ? '' : 's'}`;
-
-  privateBadgeEl.style.display = showPrivateExtras ? '' : 'none';
-  hintEl.style.display = showPrivateExtras ? '' : 'none';
-
-  wrap.style.display = (publishedCount > 0 || (s.is_self && draftCount > 0)) ? 'flex' : 'none';
+function wordCount(html) {
+  const t = plainText(html);
+  return t ? t.split(' ').length : 0;
 }
+function ytId(url) {
+  const m = String(url || '').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
+  return m ? m[1] : null;
+}
+const ICONS = {
+  eye: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12S5.5 4.5 12 4.5 22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  heart: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-9.3-9.3C1.6 7.6 3.5 4.5 6.7 4.5c2 0 3.5 1.1 5.3 3 1.8-1.9 3.3-3 5.3-3 3.2 0 5.1 3.1 4 6.2C19.500 15.400 12 20 12 20z"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>',
+  mark: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3a1 1 0 0 0-1 1v16.5a.5.5 0 0 0 .8.4L12 16l6.2 4.9a.5.5 0 0 0 .8-.4V4a1 1 0 0 0-1-1H6z"/></svg>',
+  words: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2M12 5v14M9 19h6"/></svg>',
+  book: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.500 4H11v15H5.500A1.500 1.500 0 0 0 4 20.500zM20 5.500A1.500 1.500 0 0 0 18.500 4H13v15h5.500a1.500 1.500 0 0 1 1.500 1.500z"/></svg>',
+};
 
-// ── Boot ─────────────────────────────────────────────────────────────────────
-(async () => {
-  buildThemeGrid();
-  const data = await ModeratorSite.load(SLUG);
-  if (data) siteData = data;
-  populateDisplay();
-  applyTheme(siteData.site.theme || 'default', siteData.site.theme_bg_url);
+const RATING_META = {
+  sfw: { label: 'General', cls: 'sfw' },
+  mature: { label: 'Mature', cls: 'mature' },
+  explicit: { label: 'Explicit', cls: 'explicit' },
+};
 
-  const s = siteData.site || {};
-  renderVipBadge(s);
-  renderWrittenBy(s);
-  renderDescAuthorAvatar(s);
-  renderAuthorTeaserCard(s);
-  renderBookmarkBtn(s);
-  renderStartReadingBtn(siteData.chapters);
-  wireStartReadingResume(s);
-  renderHeroStats(s);
-  renderReadingProgress(s);
-  renderPartsStatus(s, siteData.chapters);
+let DATA = null;       // full API payload
+let SITE = null;
+let CHAPTERS = [];     // chapters + computed _words / _num
+let hudMode = 'chars';
 
-  if (s.is_self) {
-    isSelf = true;
-    document.getElementById('edit-profile-btn').style.display = 'flex';
-    document.getElementById('banner-edit-pencil').style.display = 'flex';
-    document.getElementById('theme-picker-wrap').style.display = 'block';
-    if (new URLSearchParams(window.location.search).get('edit') === '1') {
-      window.location.href = STORY_BASE + '/edit';
+// ── Tabs ──
+function setTab(name) {
+  const isCh = name === 'chapters';
+  $('sv-tab-summary').classList.toggle('active', !isCh);
+  $('sv-tab-chapters').classList.toggle('active', isCh);
+  $('sv-view-summary').hidden = isCh;
+  $('sv-view-chapters').hidden = !isCh;
+  history.replaceState(null, '', isCh ? '#chapters' : location.pathname + location.search);
+}
+$('sv-tab-summary').addEventListener('click', () => setTab('summary'));
+$('sv-tab-chapters').addEventListener('click', () => setTab('chapters'));
+$('sv-see-all').addEventListener('click', () => { setTab('chapters'); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+
+// ── Hero ──
+function renderHero() {
+  const s = SITE;
+  document.title = `${s.site_title || 'Story'} ✦ BTW`;
+  $('sv-title').textContent = s.site_title || 'Untitled Story';
+  const coverEl = window.wikiSetCoverSlot($('sv-cover'), s, { alt: `${s.site_title || 'Untitled Story'} cover` });
+  coverEl.classList.add('sv-cover');
+
+  const a = $('sv-author');
+  if (s.author_username) {
+    a.href = window.fpUrl('/' + s.author_username);
+    const name = s.author_display_name || s.author_username;
+    a.innerHTML = (s.author_avatar
+      ? `<img class="sv-author-av" src="${esc(s.author_avatar)}" alt="" />`
+      : `<span class="sv-author-av">${esc(name.charAt(0).toUpperCase())}</span>`) + `<span>${esc(name)}</span>`;
+  } else a.hidden = true;
+
+  const totalWords = CHAPTERS.reduce((n, c) => n + c._words, 0);
+  const stat = (icon, num, label, hl) =>
+    `<div class="sv-stat${hl ? ' sv-stat--hl' : ''}">${icon}<div><div class="sv-stat-num">${esc(num)}</div><div class="sv-stat-label">${label}</div></div></div>`;
+  $('sv-stats').innerHTML =
+    stat(ICONS.eye, formatCount(s.view_count), 'Reads') +
+    stat(ICONS.heart, formatCount(s.like_count), 'Likes') +
+    stat(ICONS.chat, formatCount(s.comment_count), 'Comments') +
+    stat(ICONS.mark, formatCount(s.bookmark_count), 'Saved') +
+    stat(ICONS.words, totalWords.toLocaleString(), 'Words', true) +
+    stat(ICONS.book, CHAPTERS.length.toLocaleString(), CHAPTERS.length === 1 ? 'Chapter' : 'Chapters', true);
+
+  // Start Reading -> first chapter, or a resume prompt if there's progress.
+  const btn = $('sv-start');
+  const first = CHAPTERS[0];
+  if (!first) {
+    btn.classList.add('sv-start--off');
+    btn.removeAttribute('href');
+    $('sv-start-label').textContent = 'No Chapters Yet';
+  } else {
+    btn.href = `${STORY_BASE}/reader?ch=${first.id}`;
+    if (s.resume) {
+      $('sv-start-label').textContent = 'Continue Reading';
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        $('sv-resume-text').textContent = `You're ${s.resume.percent}% through "${s.resume.chapter_title || 'Untitled Chapter'}".`;
+        $('sv-resume-overlay').hidden = false;
+      });
+      $('sv-resume-restart').addEventListener('click', () => { window.location.href = btn.href; });
+      $('sv-resume-yes').addEventListener('click', () => { window.location.href = `${STORY_BASE}/reader?ch=${s.resume.chapter_id}&resume=1`; });
     }
   }
 
-  syncBgHeight();
-  document.querySelectorAll('img').forEach(img => img.addEventListener('load', syncBgHeight, { once: true }));
+  // Bookmark
+  const bm = $('sv-bookmark');
+  if (!s.is_self) {
+    bm.hidden = false;
+    let on = !!s.is_bookmarked;
+    const paint = () => { bm.classList.toggle('on', on); bm.title = on ? 'Bookmarked' : 'Bookmark'; };
+    paint();
+    bm.addEventListener('click', async () => {
+      if (!token) { window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(location.pathname)}`); return; }
+      bm.disabled = true;
+      try {
+        const r = await fetch(`/api/bookmarks/by-path/${SLUG}`, { method: on ? 'DELETE' : 'POST', headers: authHeaders() });
+        if (r.ok) { on = !on; paint(); }
+      } catch {}
+      bm.disabled = false;
+    });
+  }
+  if (s.is_self) {
+    const e = $('sv-edit');
+    e.hidden = false;
+    e.href = window.fpUrl('/create?story=' + encodeURIComponent(SLUG) + '&from=hub');
+  }
+}
+
+// ── Tags: rating, fandoms, categories, relationships, then every other tag ──
+function renderTags() {
+  const s = SITE;
+  const r = RATING_META[s.rating] || RATING_META.sfw;
+  const chips = [`<span class="sv-chip sv-chip--rating-${r.cls}">${r.label}</span>`];
+  (s.fandoms || []).forEach(f => chips.push(`<span class="sv-chip sv-chip--fandom">${esc(f)}</span>`));
+  (s.categories || []).forEach(c => chips.push(`<span class="sv-chip sv-chip--cat">${esc(c)}</span>`));
+  (s.relationships || []).forEach(x => chips.push(`<span class="sv-chip sv-chip--rel">${esc(x)}</span>`));
+  (s.tags || []).forEach(t => {
+    const href = window.fpUrl(`/search?tags_include=${encodeURIComponent(t)}&q=${encodeURIComponent(t)}&sort=updated&view=story`);
+    chips.push(`<a class="sv-chip sv-chip--tag" href="${href}">${esc(t)}</a>`);
+  });
+  $('sv-chips').innerHTML = chips.join('');
+}
+
+// ── Description + status ──
+function renderDescription() {
+  const s = SITE;
+  const published = CHAPTERS.filter(c => c.status === 'published');
+  const last = published.reduce((m, c) => (!m || new Date(c.updated_at) > new Date(m) ? c.updated_at : m), null);
+  $('sv-status-row').innerHTML =
+    `<span class="sv-status ${s.is_complete ? 'sv-status--complete' : 'sv-status--ongoing'}">${s.is_complete ? 'Complete' : 'Ongoing'}</span>` +
+    (last ? `<span>Updated ${esc(fmtDate(last))}</span>` : '');
+  const txt = (s.synopsis || '').trim();
+  const el = $('sv-synopsis');
+  if (!txt) { el.className = 'sv-empty'; el.textContent = 'No description yet.'; return; }
+  el.textContent = txt;
+  if (txt.length > 420 || txt.split('\n').length > 7) {
+    el.classList.add('clamped');
+    const more = $('sv-more');
+    more.hidden = false;
+    more.addEventListener('click', () => {
+      const open = el.classList.toggle('clamped');
+      more.textContent = open ? 'Read more' : 'Show less';
+    });
+  }
+}
+
+// ── Chapters: compact scroller (Summary) + full cards (Chapters tab) ──
+function renderChapters() {
+  const list = $('sv-chlist');
+  if (!CHAPTERS.length) {
+    list.innerHTML = '<p class="sv-empty">No chapters published yet.</p>';
+    $('sv-see-all').hidden = true;
+    $('sv-chgrid').innerHTML = '<p class="sv-empty">No chapters published yet.</p>';
+    return;
+  }
+  list.innerHTML = CHAPTERS.map(c => `
+    <a class="sv-chrow" href="${STORY_BASE}/reader?ch=${c.id}">
+      <span class="sv-chrow-num">${c._num}</span>
+      <span class="sv-chrow-title">${esc(c.title || 'Untitled Part')}</span>
+      ${c.status === 'draft' ? '<span class="sv-draft-badge">Draft</span>' : ''}
+      <span class="sv-chrow-meta">${c._words.toLocaleString()} words</span>
+    </a>`).join('');
+
+  $('sv-chgrid').innerHTML = CHAPTERS.map(c => {
+    const vid = ytId(c.video_url);
+    const img = c.image_url || (vid ? `https://img.youtube.com/vi/${vid}/hqdefault.jpg` : '') || SITE.cover_url || '/images/defaultcover.png';
+    const snip = plainText(c.body).slice(0, 220);
+    const pct = Math.max(0, Math.min(100, Number(c.progress_percent) || 0));
+    return `
+    <a class="sv-chcard" href="${STORY_BASE}/reader?ch=${c.id}">
+      <img class="sv-chcard-img" src="${esc(img)}" alt="" loading="lazy" />
+      <div class="sv-chcard-body">
+        <span class="sv-chcard-num">Part ${c._num}${c.status === 'draft' ? ' · Draft' : ''}</span>
+        <h3 class="sv-chcard-title">${esc(c.title || 'Untitled Part')}</h3>
+        <p class="sv-chcard-snip">${esc(snip) || '&nbsp;'}</p>
+        <div class="sv-chcard-meta">
+          <span>${c._words.toLocaleString()} words</span>
+          <span>♥ ${formatCount(c.like_count)}</span>
+          <span>💬 ${formatCount(c.comment_count)}</span>
+          <span>${esc(fmtDate(c.created_at))}</span>
+        </div>
+      </div>
+      ${pct > 0 ? `<div class="sv-chcard-bar"><i style="width:${pct}%"></i></div>` : ''}
+    </a>`;
+  }).join('');
+}
+
+// ── HUD: linked characters / gallery ──
+function renderHud() {
+  const chars = DATA.characters || [];
+  const gal = DATA.gallery || [];
+  $('sv-n-chars').textContent = chars.length ? `· ${chars.length}` : '';
+  $('sv-n-gallery').textContent = gal.length ? `· ${gal.length}` : '';
+  const list = $('sv-hud-list');
+  list.scrollTop = 0;
+  if (hudMode === 'chars') {
+    list.innerHTML = chars.length ? chars.map(c => {
+      const ref = c.ref_image && c.ref_image !== '/images/defaultchar.jpg' ? c.ref_image : '';
+      const pos = `${c.ref_position_x != null ? c.ref_position_x : 50}% ${c.ref_position_y != null ? c.ref_position_y : 15}%`;
+      return `<a class="sv-tile sv-tile--char${c.nsfw_locked ? ' sv-tile--locked' : ''}" href="${STORY_BASE}/characters?char=${c.id}" title="${esc(c.name)}">
+        <img src="${esc(ref || '/images/defaultchar.jpg')}" alt="" style="object-position:${pos}" loading="lazy" />
+        <span class="sv-tile-name">${esc(c.name)}</span></a>`;
+    }).join('') : '<p class="sv-empty sv-hud-empty">No characters linked to this story yet.</p>';
+    $('sv-hud-foot').innerHTML = `<span>${chars.length} linked</span>${chars.length ? `<a href="${STORY_BASE}/characters">Open roster →</a>` : ''}`;
+  } else {
+    list.innerHTML = gal.length ? gal.map(g => {
+      const src = g.preview_image_url || g.image_url;
+      return `<a class="sv-tile sv-tile--gal" href="${STORY_BASE}/gallery?post=${g.id}" title="${esc(g.title || '')}">
+        <img src="${esc(src)}" alt="" style="object-position:${g.position_x != null ? g.position_x : 50}% ${g.position_y != null ? g.position_y : 50}%" loading="lazy" />
+        ${g.title ? `<span class="sv-tile-name">${esc(g.title)}</span>` : ''}</a>`;
+    }).join('') : '<p class="sv-empty sv-hud-empty">No gallery posts linked to this story yet.</p>';
+    $('sv-hud-foot').innerHTML = `<span>${gal.length} linked</span>${gal.length ? `<a href="${STORY_BASE}/gallery">Open gallery →</a>` : ''}`;
+  }
+}
+$('sv-seg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-mode]');
+  if (!b) return;
+  hudMode = b.dataset.mode;
+  $('sv-seg').querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+  renderHud();
+});
+
+// ── You may also like ──
+async function loadSimilar() {
+  try {
+    const res = await fetch(`/api/stories/similar/${SLUG}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) return;
+    const { stories } = await res.json();
+    if (!stories || !stories.length) return;
+    $('sv-rec-row').innerHTML = stories.map(st => `
+      <a class="sv-rcard" href="${window.fpUrl('/' + st.story_path)}" title="${esc(st.synopsis).slice(0, 160)}">
+        <img class="sv-rcard-cover" src="${esc(st.cover_url || '/images/defaultcover.png')}" alt="" loading="lazy" />
+        <span class="sv-rcard-title">${esc(st.site_title || 'Untitled Story')}</span>
+        <span class="sv-rcard-by">by ${esc(st.author)} · ${st.chapter_count} ch · ${st.is_complete ? 'Complete' : 'Ongoing'}</span>
+        <span class="sv-rcard-why">${esc(st.reason)}</span>
+      </a>`).join('');
+    $('sv-rec').hidden = false;
+    const row = $('sv-rec-row');
+    $('sv-rec-prev').onclick = () => row.scrollBy({ left: -row.clientWidth * 0.8, behavior: 'smooth' });
+    $('sv-rec-next').onclick = () => row.scrollBy({ left: row.clientWidth * 0.8, behavior: 'smooth' });
+  } catch {}
+}
+
+(async () => {
+  DATA = await window.ModeratorSite.load(SLUG);
+  if (!DATA) { $('sv-loading').textContent = "Couldn't load this story."; return; }
+  SITE = DATA.site;
+  CHAPTERS = (DATA.chapters || []).map((c, i) => ({ ...c, _num: i + 1, _words: wordCount(c.body) }));
+  renderHero();
+  renderTags();
+  renderDescription();
+  renderChapters();
+  renderHud();
+  $('sv-loading').hidden = true;
+  $('sv-wrap').hidden = false;
+  if (location.hash === '#chapters') setTab('chapters');
+  loadSimilar();
+  // One view per page load (the server skips the owner's own visits).
+  fetch(`/api/moderator-sites/by-path/${SLUG}/view`, { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {} }).catch(() => {});
 })();
 </script>
+</div>
 </body>
 </html>
