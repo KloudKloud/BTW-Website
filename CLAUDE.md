@@ -36,9 +36,15 @@ changes, not just at the end of a session — deploy and verify BEFORE committin
 - Backend: `/var/www/btw-api/server.js`, systemd service `btw-api`, listens on
   `127.0.0.1:3001` behind nginx.
 - DB: Postgres, reachable via `ssh root@87.99.143.27 "sudo -u postgres psql -d btw -c \"...\""`.
-- Per-story pages live in `fanpages/_story-template/*.html` and are nginx-rewritten per
-  story (`/fanpages/<owner>/<story>/(characters|gallery|chapters|panel|edit|chapter-editor|reader)`
-  → `_story-template/<page>.html`; the bare `/fanpages/<owner>/<story>` → `_story-template/index.html`).
+- Per-story pages live in `fanpages/_story-template/*.html`: `index.html` (the story viewer: Summary/Chapters tabs,
+  hero, tags, description, Cast & Gallery HUD, "You may also like"), `reader.html`, `chapter-editor.html`, and
+  `edit.html` (a stub that forwards to `create.html`). nginx rewrites `/<owner>/<story>/(edit|chapter-editor|reader)`
+  → `_story-template/<page>.html` and the bare `/<owner>/<story>` → `index.html`; the retired
+  `/<owner>/<story>/(characters|gallery|chapters|panel)` URLs 301 to the story page. The story-level
+  characters/gallery/chapters/panel pages were deleted: the viewer's HUD opens characters in the owner's profile
+  (`/<user>?char=ID&back=<story>#characters`, `back` is honoured by profile-template) and gallery posts via
+  `/gallery-post?id=`. `fanpages.css` had its dead story-page rules (`wiki-*`, `mod-*` hero/quick-nav/panel/theme
+  classes) pruned; before deleting CSS again, check a class isn't built dynamically (`'foo--' + x`).
 - Single-segment `/fanpages/<username>` not matching a real file → `profile-template.html`.
 
 ## Site structure — what's built
