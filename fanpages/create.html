@@ -1114,6 +1114,7 @@
     updatePrimaryLabel();
     $('sb-chap-notice').classList.remove('show');
     if (data.levelUp && window.fpnavShowXpGain) window.fpnavShowXpGain(data.levelUp);
+    congratsChapterId = cand.id;
     $('sb-congrats-title').textContent = `Congrats! You published "${cand.title}" for ${$('sb-title').value.trim()}!`;
     $('sb-congrats-overlay').hidden = false;
     if (data.levelUp && data.levelUp.leveledUp && window.fpnavShowLevelUp) setTimeout(() => window.fpnavShowLevelUp(data.levelUp), 500);
@@ -1345,14 +1346,17 @@
 
   // The chapter editor stashes this right before sending the author back
   // here after a first publish -- show the congrats modal once.
-  $('sb-congrats-go').addEventListener('click', () => { window.open(`${STORY_BASE}/chapters`, '_blank'); $('sb-congrats-overlay').hidden = true; });
+  // "Take Me There" drops straight into the reader on the chapter that was just published.
+  let congratsChapterId = null;
+  $('sb-congrats-go').addEventListener('click', () => { window.open(congratsChapterId ? `${STORY_BASE}/reader?ch=${congratsChapterId}` : STORY_BASE, '_blank'); $('sb-congrats-overlay').hidden = true; });
   $('sb-congrats-close').addEventListener('click', () => { $('sb-congrats-overlay').hidden = true; });
   function maybeShowCongrats() {
     const raw = sessionStorage.getItem('btw_just_published');
     if (!raw) return;
     sessionStorage.removeItem('btw_just_published');
     try {
-      const { title, storyTitle, levelUp } = JSON.parse(raw);
+      const { title, storyTitle, levelUp, chapterId } = JSON.parse(raw);
+      congratsChapterId = chapterId || null;
       $('sb-congrats-title').textContent = `Congrats! You published "${title}" for ${storyTitle}!`;
       $('sb-congrats-overlay').hidden = false;
       if (levelUp && levelUp.leveledUp && window.fpnavShowLevelUp) setTimeout(() => window.fpnavShowLevelUp(levelUp), 500);
