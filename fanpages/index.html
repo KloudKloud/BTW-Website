@@ -82,30 +82,18 @@
       content: ''; position: absolute; inset: 0; opacity: 0; transition: opacity 0.22s;
       background: radial-gradient(ellipse at center, var(--comic-glow, rgba(255,255,255,0.35)) 0%, transparent 72%);
     }
-    /* The traveling spark -- a small glowing dot riding offset-path: inset
-       around the box's own border rectangle, looping forever. Combines two
-       independent animations: fp-spark-travel moves it around the
-       perimeter at a steady pace, fp-spark-flicker is a much faster
-       opacity/scale wobble layered on top for the "flickering fire" feel
-       rather than a smoothly gliding dot. Each panel's animation-delay is
-       offset so the four sparks aren't moving in lockstep. */
+    /* Constant side glow (replaces the old traveling spark -- no animation):
+       each panel carries a soft inset glow down its left and right edges in
+       its own neon color, so the strip reads as lit from the sides. Adjacent
+       panels blend into each other where they meet. z-index keeps it above
+       the admin art + scrim but below the label. Experimental -- the previous
+       spark version is the commit before this one. */
     .fp-comic-box::before {
-      content: ''; position: absolute; top: 0; left: 0; z-index: 3;
-      width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border-radius: 50%;
-      background: radial-gradient(circle, #fff 0%, var(--comic-neon, #fff) 55%, transparent 100%);
-      box-shadow: 0 0 6px 1px var(--comic-neon, #fff), 0 0 13px 4px var(--comic-neon-dim, rgba(255,255,255,0.5));
-      offset-path: inset(0 round 2px);
-      offset-distance: 0%;
-      pointer-events: none;
-      animation: fp-spark-travel 7s linear infinite, fp-spark-flicker 0.45s ease-in-out infinite;
-    }
-    .fp-comic-box--stories::before { animation-delay: -1.75s, 0s; }
-    .fp-comic-box--characters::before { animation-delay: -3.5s, 0s; }
-    .fp-comic-box--clubs::before { animation-delay: -5.25s, 0s; }
-    @keyframes fp-spark-travel { to { offset-distance: 100%; } }
-    @keyframes fp-spark-flicker {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.55; transform: scale(0.8); }
+      content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+      box-shadow:
+        inset 14px 0 22px -10px var(--comic-neon, #fff),
+        inset -14px 0 22px -10px var(--comic-neon, #fff);
+      opacity: 0.85; transition: opacity 0.22s;
     }
     /* Admin-picked image for this slot (see Admin > Bulletin > Hero Row
        Images) — only present once a crop has actually been saved for that
@@ -117,10 +105,7 @@
     .fp-comic-box-scrim { position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(0,0,0,0.3), rgba(0,0,0,0.6)); }
     .fp-comic-box:hover { transform: translateY(-2px); background-color: #120f16; }
     .fp-comic-box:hover::after { opacity: 1; }
-    .fp-comic-box:hover::before {
-      width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px;
-      box-shadow: 0 0 9px 2px var(--comic-neon, #fff), 0 0 19px 7px var(--comic-neon-dim, rgba(255,255,255,0.6));
-    }
+    .fp-comic-box:hover::before { opacity: 1; }
     /* True neon tones -- Gallery purple, Stories red, Characters green,
        Clubs blue, each with a dimmer translucent twin for the outermost
        shadow layer and the inset glow (a 100%-alpha color that far out
