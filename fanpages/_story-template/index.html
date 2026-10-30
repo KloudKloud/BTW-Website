@@ -19,18 +19,18 @@
     /* ── Box tabs (Summary / Chapters) -- same bar as the profile tabs. ── */
     .sv-tabs {
       display: inline-flex; align-items: stretch; margin-bottom: 1.25rem;
-      border-radius: 14px; border: 2px solid rgba(240,192,96,0.3); overflow: hidden;
+      border-radius: 14px; border: 2px solid rgba(127,168,217,0.5); overflow: hidden;
       background: linear-gradient(160deg, rgba(10,8,14,0.94), rgba(10,8,14,0.88));
-      box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+      box-shadow: 0 0 20px rgba(127,168,217,0.4), 0 10px 28px rgba(0,0,0,0.5);
     }
     .sv-tab {
-      background: none; border: none; border-right: 2px solid rgba(240,192,96,0.22); cursor: pointer; color: #bbb;
+      background: none; border: none; border-right: 2px solid rgba(127,168,217,0.3); cursor: pointer; color: #bbb;
       font-family: 'Fredoka', 'Lato', cursive; font-size: 0.92rem; font-weight: 700;
       text-transform: uppercase; letter-spacing: 0.03em; padding: 0.9rem 1.5rem; transition: color 0.15s, background 0.15s;
     }
     .sv-tab:last-child { border-right: none; }
     .sv-tab:hover { color: #fff; background: rgba(127,168,217,0.12); }
-    .sv-tab.active { color: #f0c060; background: rgba(240,192,96,0.14); }
+    .sv-tab.active { color: #9fc0e6; background: rgba(127,168,217,0.2); text-shadow: 0 0 12px rgba(127,168,217,0.8); }
 
     /* Shared panel look: starry art under a dark scrim. */
     .sv-panel {
@@ -56,8 +56,8 @@
     }
     .sv-hero-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
     .sv-title {
-      margin: 0 0 0.7rem; font-family: 'Fredoka', 'Lato', cursive; font-size: 2.5rem; line-height: 1.12; font-weight: 700; color: #cfe0f5;
-      text-shadow: 0 0 22px rgba(127,168,217,0.55), 0 2px 4px rgba(0,0,0,0.5); overflow-wrap: anywhere;
+      margin: 0 0 0.7rem; font-family: 'Fredoka', 'Lato', cursive; font-size: 2.5rem; line-height: 1.12; font-weight: 700; color: #fff;
+      text-shadow: 0 0 22px rgba(255,255,255,0.45), 0 2px 4px rgba(0,0,0,0.5); overflow-wrap: anywhere;
     }
     .sv-author { display: inline-flex; align-items: center; gap: 0.6rem; text-decoration: none; color: #ddd; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 500; align-self: flex-start; }
     .sv-author:hover { color: #fff; }
@@ -67,9 +67,9 @@
     .sv-stat { display: flex; flex-direction: column; padding: 1.3rem 1.8rem; border-left: 1px solid rgba(255,255,255,0.14); border-top: 1px solid rgba(255,255,255,0.14); }
     .sv-stat:nth-child(3n+1) { padding-left: 0; border-left: none; }
     .sv-stat:nth-child(-n+3) { border-top: none; padding-top: 0.2rem; }
-    .sv-stat-top { display: flex; align-items: center; gap: 0.65rem; color: #f0c060; }
-    .sv-stat-top svg { width: 28px; height: 28px; flex-shrink: 0; filter: drop-shadow(0 0 8px rgba(240,192,96,0.5)); }
-    .sv-stat-num { font-family: 'Fredoka', 'Lato', cursive; font-size: 2.6rem; font-weight: 700; line-height: 1; color: #f0c060; text-shadow: 0 0 18px rgba(240,192,96,0.55); }
+    .sv-stat-top { display: flex; align-items: center; gap: 0.65rem; color: #fff; }
+    .sv-stat-top svg { width: 28px; height: 28px; flex-shrink: 0; filter: drop-shadow(0 0 8px rgba(255,255,255,0.5)); }
+    .sv-stat-num { font-family: 'Fredoka', 'Lato', cursive; font-size: 2.6rem; font-weight: 700; line-height: 1; color: #fff; text-shadow: 0 0 18px rgba(255,255,255,0.5); }
     .sv-stat-label { margin-top: 0.45rem; font-family: 'Inter', sans-serif; font-size: 0.78rem; color: #8f98a6; text-transform: uppercase; letter-spacing: 0.1em; }
     /* Reading-progress bar above the Start/Continue button. */
     .sv-cta { margin-top: auto; padding-top: 1.75rem; }
@@ -617,19 +617,23 @@ function renderHud() {
     list.innerHTML = chars.length ? chars.map(c => {
       const ref = c.ref_image && c.ref_image !== '/images/defaultchar.jpg' ? c.ref_image : '';
       const pos = `${c.ref_position_x != null ? c.ref_position_x : 50}% ${c.ref_position_y != null ? c.ref_position_y : 15}%`;
-      return `<a class="sv-tile sv-tile--char${c.nsfw_locked ? ' sv-tile--locked' : ''}" href="${STORY_BASE}/characters?char=${c.id}" title="${esc(c.name)}">
+      // Opens the character in its owner's profile Characters tab; Back there returns to this story.
+      const href = c.owner_username
+        ? `${window.fpUrl('/' + c.owner_username)}?char=${c.id}&back=${encodeURIComponent(STORY_BASE)}#characters`
+        : STORY_BASE;
+      return `<a class="sv-tile sv-tile--char${c.nsfw_locked ? ' sv-tile--locked' : ''}" href="${href}" title="${esc(c.name)}">
         <img src="${esc(ref || '/images/defaultchar.jpg')}" alt="" style="object-position:${pos}" loading="lazy" />
         <span class="sv-tile-name">${esc(c.name)}</span></a>`;
     }).join('') : '<p class="sv-empty sv-hud-empty">No characters linked to this story yet.</p>';
-    $('sv-hud-foot').innerHTML = `<span>${chars.length} linked</span>${chars.length ? `<a href="${STORY_BASE}/characters">Open roster →</a>` : ''}`;
+    $('sv-hud-foot').innerHTML = `<span>${chars.length} linked</span>`;
   } else {
     list.innerHTML = gal.length ? gal.map(g => {
       const src = g.preview_image_url || g.image_url;
-      return `<a class="sv-tile sv-tile--gal" href="${STORY_BASE}/gallery?post=${g.id}" title="${esc(g.title || '')}">
+      return `<a class="sv-tile sv-tile--gal" href="${window.fpUrl('/gallery-post?id=' + g.id)}" title="${esc(g.title || '')}">
         <img src="${esc(src)}" alt="" style="object-position:${g.position_x != null ? g.position_x : 50}% ${g.position_y != null ? g.position_y : 50}%" loading="lazy" />
         ${g.title ? `<span class="sv-tile-name">${esc(g.title)}</span>` : ''}</a>`;
     }).join('') : '<p class="sv-empty sv-hud-empty">No gallery posts linked to this story yet.</p>';
-    $('sv-hud-foot').innerHTML = `<span>${gal.length} linked</span>${gal.length ? `<a href="${STORY_BASE}/gallery">Open gallery →</a>` : ''}`;
+    $('sv-hud-foot').innerHTML = `<span>${gal.length} linked</span>`;
   }
 }
 $('sv-seg').addEventListener('click', (e) => {

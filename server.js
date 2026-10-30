@@ -7733,7 +7733,7 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
       link_url: kind === 'story'
         ? `/${r.story_path || r.slug}`
         : (r.story_path || r.slug
-          ? `/${r.story_path || r.slug}${kind === 'character' ? '/characters' : '/gallery'}`
+          ? `/${r.story_path || r.slug}`
           : `/${r.owner_username}`),
       mine: r.owner_user_id === req.user.id,
       owner_username: r.owner_username,

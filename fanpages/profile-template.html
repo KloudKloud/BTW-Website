@@ -3546,7 +3546,14 @@
     syncScrollBgHeight();
   }
   let charDetailBackIsHome = false;
+  // Set when a page (e.g. a story's Cast HUD) deep-linked here with ?back=/some/path --
+  // Back returns there instead of to this profile's own character grid.
+  let charDetailBackUrl = null;
   function closeCharDetail() {
+    if (charDetailBackUrl) {
+      window.location.href = charDetailBackUrl;
+      return;
+    }
     if (charDetailBackIsHome) {
       window.location.href = window.fpUrl('/');
       return;
@@ -5776,6 +5783,9 @@
     // "Back" should return to the homepage instead of this profile's own
     // character grid, since the viewer never chose to browse this profile.
     if (deepParams.get('from') === 'home') charDetailBackIsHome = true;
+    // Same-site paths only (single leading slash) -- never an open redirect.
+    const backParam = deepParams.get('back');
+    if (backParam && /^\/(?![\/\\])/.test(backParam)) charDetailBackUrl = backParam;
     loadCharactersTab().then(() => openCharDetail(deepCharId, true));
   }
 </script>
