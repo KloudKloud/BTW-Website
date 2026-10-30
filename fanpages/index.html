@@ -985,6 +985,11 @@
       boxes = (await res.json()).boxes || [];
     } catch { return; }
 
+    // The server sends each image's pixel size, so there's no need to
+    // download every panel just to measure it (that probe was forcing even
+    // below-the-fold panels to load up front). Falls back to the probe if a
+    // size ever comes back missing.
+    boxes.forEach(b => { if (b.image_url && b.image_w && b.image_h) billboardImgDims[b.image_url] = { w: b.image_w, h: b.image_h }; });
     const urls = boxes.filter(b => b.image_url).map(b => b.image_url);
     await Promise.all(urls.map(loadImageDims));
     homeCacheSet('hero', { boxes, dims: dimsFor(urls) });
@@ -1016,7 +1021,24 @@
 
       const bg = document.createElement('div');
       bg.className = isPanel ? 'fp-deco-panel-bg' : 'fp-comic-box-bg';
-      bg.style.backgroundImage = `url('${b.image_url}')`;
+      // The decorative panels sit lower on the page, so their art waits
+      // until the panel actually reaches the screen (CSS backgrounds can't
+      // use loading="lazy"). No look-ahead margin on purpose: the page is
+      // much shorter during first load (feeds fill in a moment later and
+      // push these panels down ~600px), so any margin would count the
+      // lower panels as "near" and fetch them anyway. The top comic boxes
+      // load right away.
+      const bgUrl = `url('${b.image_url}')`;
+      if (isPanel && 'IntersectionObserver' in window) {
+        const lazyIo = new IntersectionObserver((entries) => {
+          if (!entries.some(en => en.isIntersecting)) return;
+          bg.style.backgroundImage = bgUrl;
+          lazyIo.disconnect();
+        });
+        lazyIo.observe(el);
+      } else {
+        bg.style.backgroundImage = bgUrl;
+      }
 
       const scrim = document.createElement('div');
       scrim.className = isPanel ? 'fp-deco-panel-scrim' : 'fp-comic-box-scrim';
@@ -1560,7 +1582,7 @@
     const posX = it.position_x != null ? it.position_x : 50;
     const posY = it.position_y != null ? it.position_y : 50;
     a.innerHTML = `
-      <img src="${it.image}" alt="" style="object-position:${posX}% ${posY}%;" />
+      <img src="${it.image}" alt="" loading="lazy" decoding="async" style="object-position:${posX}% ${posY}%;" />
       <span class="rs-card-badge">🎨</span>
     `;
     tile.appendChild(a);
@@ -1662,7 +1684,7 @@
   // at a time in a horizontally-scrolling track. ──
   function rfCardHtml(u) {
     const avatar = u.avatar
-      ? `<img class="fp-rf-avatar" src="${escapeHtml(u.avatar)}" alt="" />`
+      ? `<img class="fp-rf-avatar" src="${escapeHtml(u.avatar)}" alt="" loading="lazy" decoding="async" />`
       : `<span class="fp-rf-avatar-fallback">${escapeHtml((u.display_name[0] || '?').toUpperCase())}</span>`;
     const followBtn = u.is_self ? '' : `
       <button class="fp-rf-follow-btn${u.is_following ? ' fp-rf-follow-btn--following' : ''}"

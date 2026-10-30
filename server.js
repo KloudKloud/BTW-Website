@@ -5254,8 +5254,32 @@ app.put('/api/admin/notifications-banner', requireAuth, requireAdmin, uploadModI
 // ── Fanpages hub hero row comic-strip box images (admin-adjustable crop) ───
 const HERO_COMIC_BOX_SLOTS = ['gallery', 'stories', 'characters', 'clubs', 'spotlights', 'recent-submissions', 'arcade', 'news-posts', 'donations'];
 
+// Pixel size of one of our own uploaded images, read from the file header
+// (cheap -- no decode) and memoized by URL, which is safe because every
+// upload filename is unique. Lets the homepage size a background crop
+// without downloading the whole image just to measure it, so below-the-fold
+// panels can lazy-load. EXIF-rotated files report swapped dimensions, same
+// as the browser's naturalWidth/Height.
+const imageDimsCache = new Map();
+async function imageDimsFor(urlPath) {
+  if (!urlPath || !urlPath.startsWith('/images/')) return null;
+  if (imageDimsCache.has(urlPath)) return imageDimsCache.get(urlPath);
+  try {
+    const m = await sharp(path.join('/var/www/btw', urlPath)).metadata();
+    if (!m.width || !m.height) return null;
+    const swap = m.orientation >= 5;
+    const dims = { w: swap ? m.height : m.width, h: swap ? m.width : m.height };
+    imageDimsCache.set(urlPath, dims);
+    return dims;
+  } catch { return null; }
+}
+
 app.get('/api/hero-comic-boxes', async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM hero_comic_box_images');
+  await Promise.all(rows.map(async r => {
+    const d = await imageDimsFor(r.image_url);
+    if (d) { r.image_w = d.w; r.image_h = d.h; }
+  }));
   res.json({ boxes: rows });
 });
 
