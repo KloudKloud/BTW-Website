@@ -2882,6 +2882,9 @@
       name: r.name,
       hasRef: !!r.ref_image,
       ref: r.ref_image || null,
+      // Small JPEG for the grid card only; `ref` stays the full-quality
+      // original and is what the detail view renders.
+      thumb: r.thumb_image || r.ref_image || null,
       refPosX: r.ref_position_x != null ? r.ref_position_x : 50,
       refPosY: r.ref_position_y != null ? r.ref_position_y : 50,
       desc: (r.description || NA).split('\n').filter(Boolean),
@@ -3407,7 +3410,7 @@
     const posY = c.refPosY != null ? c.refPosY : 50;
     const species = (c.stats && c.stats.Species) ? String(c.stats.Species).trim() : '';
     const imgHtml = c.ref
-      ? `<img src="${escapeHtml(c.ref)}" alt="" style="object-position:${posX}% ${posY}%;" />`
+      ? `<img src="${escapeHtml(c.thumb || c.ref)}" alt="" style="object-position:${posX}% ${posY}%;" />`
       : `<div class="fp-char-card-fallback">${escapeHtml((c.name[0] || '?').toUpperCase())}</div>`;
     return `
       <div class="fp-char-card">
@@ -3724,7 +3727,7 @@
       // before that existed.
       const tileImg = g.preview_image
         ? `<img src="${g.preview_image}" alt="${g.title || 'Gallery image'}" loading="lazy" draggable="false" />`
-        : `<img src="${g.image}" alt="${g.title || 'Gallery image'}" loading="lazy" draggable="false" style="object-position: ${g.position_x != null ? g.position_x : 50}% ${g.position_y != null ? g.position_y : 50}%;" />`;
+        : `<img src="${g.thumb_image || g.image}" alt="${g.title || 'Gallery image'}" loading="lazy" draggable="false" style="object-position: ${g.position_x != null ? g.position_x : 50}% ${g.position_y != null ? g.position_y : 50}%;" />`;
       a.innerHTML = tileImg;
       wrap.appendChild(a);
       // No emoji badge here (unlike the search/browse submission tiles) --

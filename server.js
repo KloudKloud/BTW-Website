@@ -6867,7 +6867,7 @@ app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
   const charOrderBy = CHAR_SORTS[req.query.sort] || CHAR_SORTS.page;
 
   const { rows } = await pool.query(
-    `SELECT mc.id, mc.name, mc.ref_image, mc.ref_position_x, mc.ref_position_y, mc.view_count,
+    `SELECT mc.id, mc.name, mc.ref_image, mc.thumb_image_url, mc.ref_position_x, mc.ref_position_y, mc.view_count,
             mc.description, mc.stats, mc.facts, mc.lore, mc.relationships,
             mc.is_official_art, mc.official_art_source_url, mc.voice_claim_url,
             ms.story_path, ms.slug, ms.site_title,
@@ -6886,6 +6886,9 @@ app.get('/api/fanpage-profile/:username/all-characters', async (req, res) => {
   res.json({
     characters: rows.map(r => ({
       id: r.id, name: r.name, image: r.ref_image || null,
+      // Small JPEG copy for grid cards only -- ref_image below stays the
+      // untouched original so the detail view still shows full quality.
+      thumb_image: r.thumb_image_url || r.ref_image || null,
       position_x: r.ref_position_x, position_y: r.ref_position_y,
       // Full-detail fields — used by the profile's "Characters" tab, which
       // renders a complete character page (not just a nav-list thumbnail).
@@ -6927,7 +6930,7 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
   const galleryOrderBy = GALLERY_SORTS[req.query.sort] || GALLERY_SORTS.page;
 
   const { rows } = await pool.query(
-    `SELECT mg.id, mg.image_url, mg.preview_image_url, mg.title, mg.description, mg.category, mg.position_x, mg.position_y,
+    `SELECT mg.id, mg.image_url, mg.thumb_image_url, mg.preview_image_url, mg.title, mg.description, mg.category, mg.position_x, mg.position_y,
             mg.tags, mg.view_count,
             ms.story_path, ms.slug, ms.site_title,
             (SELECT COUNT(*)::int FROM moderator_gallery_likes WHERE gallery_id = mg.id) AS like_count,
@@ -6945,7 +6948,7 @@ app.get('/api/fanpage-profile/:username/all-gallery', async (req, res) => {
   );
   res.json({
     gallery: rows.map(r => ({
-      id: r.id, image: r.image_url, preview_image: r.preview_image_url || '', title: r.title, description: r.description, category: r.category,
+      id: r.id, image: r.image_url, thumb_image: r.thumb_image_url || r.image_url, preview_image: r.preview_image_url || '', title: r.title, description: r.description, category: r.category,
       position_x: r.position_x, position_y: r.position_y, tags: r.tags || [], view_count: r.view_count || 0,
       like_count: r.like_count, comment_count: r.comment_count, liked: r.liked, bookmarked: r.bookmarked,
       story_path: r.story_path || r.slug || null, site_title: r.site_title || null,

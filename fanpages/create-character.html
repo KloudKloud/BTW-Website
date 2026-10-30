@@ -154,7 +154,7 @@
        not the shared .char-editor-modal rule -- that class is still used
        undecorated by the in-story character modal.
        This card is a full scrolling form (2000px+ tall), not a compact
-       ~400px popup, and box-background-3.png has a bright moon baked into
+       ~400px popup, and box-background-3.jpg has a bright moon baked into
        it. Earlier attempts: tiling repeated that moon as a distracting
        column of duplicate glows down the right side; `background-
        attachment: fixed` only painted it for one viewport's height,
@@ -1174,8 +1174,13 @@
   document.getElementById('char-editor-file-input').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    // A PNG source stays a lossless PNG (the character card shows this exact
+    // file; the small JPEG used on the homepage/profile grids is generated
+    // separately server-side). Any other source is exported as JPEG, since
+    // re-encoding a JPEG/WebP photo as PNG only makes the file bigger.
     openCropModal({
       title: 'Crop Reference Image', imageSrc: URL.createObjectURL(file), aspectRatio: 1, round: false,
+      format: file.type === 'image/png' ? 'png' : 'jpeg',
       onSave: uploadRefImage,
     });
     e.target.value = '';
@@ -1185,13 +1190,14 @@
     if (!uploadedRefUrl) return;
     openCropModal({
       title: 'Crop Reference Image', imageSrc: uploadedRefUrl, aspectRatio: 1, round: false,
+      format: /\.png(\?|$)/i.test(uploadedRefUrl) ? 'png' : 'jpeg',
       onSave: uploadRefImage,
     });
   });
   async function uploadRefImage(blob) {
     const img = document.getElementById('char-editor-ref-img');
     const fd = new FormData();
-    fd.append('image', blob, 'ref.jpg');
+    fd.append('image', blob, blob.type === 'image/png' ? 'ref.png' : 'ref.jpg');
     const res = await fetch('/api/moderator/character-image', { method: 'POST', headers: authHeaders(), body: fd });
     if (res.ok) {
       const data = await res.json();
