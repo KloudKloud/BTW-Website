@@ -4776,6 +4776,36 @@ async function generateThumbnail(imageUrlPath) {
   }
 }
 
+// Admin-only display art (home billboard slides, hero comic panels) has no
+// "full quality" detail page behind it -- the image on screen IS the image --
+// so an uploaded PNG/WebP is re-encoded to a capped JPEG and the raw upload
+// is dropped. Admins can still drop a PNG; visitors just never download it.
+// 2400px is ~2x the widest slot (the 1190px billboard) and leaves room for
+// the crop editor's zoom. GIFs are left alone so animated ones keep moving.
+// Returns the filename to store (the new .jpg, or the original on failure/GIF).
+async function convertUploadToDisplayJpg(file) {
+  if (!file || file.mimetype === 'image/gif') return file ? file.filename : null;
+  const base = file.filename.replace(/\.[^.]+$/, '');
+  const outName = `${base}.jpg`;
+  const outPath = path.join(MOD_IMAGES_DIR, outName);
+  const tmpPath = path.join(MOD_IMAGES_DIR, `${base}.tmp.jpg`);
+  try {
+    await sharp(file.path)
+      .rotate()
+      .flatten({ background: '#000' })
+      .resize(2400, 2400, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 88, mozjpeg: true, chromaSubsampling: '4:4:4' })
+      .toFile(tmpPath);
+    if (path.resolve(file.path) !== path.resolve(outPath)) fs.unlinkSync(file.path);
+    fs.renameSync(tmpPath, outPath);
+    return outName;
+  } catch (e) {
+    console.error('convertUploadToDisplayJpg failed for', file.filename, e.message);
+    try { fs.unlinkSync(tmpPath); } catch {}
+    return file.filename;
+  }
+}
+
 // Chapter cover images share the moderator images dir; the readable PDF/Docx
 // attachment gets its own dir since it isn't an image and needs to keep its
 // original filename around for the download prompt.
@@ -5040,7 +5070,7 @@ app.post('/api/admin/hub-billboard', requireAuth, requireAdmin, uploadModImage.s
   const endZoom = clampZoom(req.body.end_zoom, 100);
   const isNsfw = req.body.is_nsfw === 'true' || req.body.is_nsfw === '1';
   const isVip = req.body.is_vip === 'true' || req.body.is_vip === '1';
-  const imageUrl = `/images/moderators/${req.file.filename}`;
+  const imageUrl = `/images/moderators/${await convertUploadToDisplayJpg(req.file)}`;
   const { rows: [{ maxOrder }] } = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM hub_billboard_slides');
   const { rows: [slide] } = await pool.query(
     `INSERT INTO hub_billboard_slides
@@ -5072,7 +5102,7 @@ app.put('/api/admin/hub-billboard/:id', requireAuth, requireAdmin, uploadModImag
 
   let imageUrl = existing.image_url;
   if (req.file) {
-    imageUrl = `/images/moderators/${req.file.filename}`;
+    imageUrl = `/images/moderators/${await convertUploadToDisplayJpg(req.file)}`;
     if (existing.image_url.startsWith('/images/moderators/')) {
       const oldPath = path.join('/var/www/btw', existing.image_url);
       if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
@@ -5243,7 +5273,7 @@ app.put('/api/admin/hero-comic-boxes/:slot', requireAuth, requireAdmin, uploadMo
 
   let imageUrl = existing.image_url;
   if (req.file) {
-    imageUrl = `/images/moderators/${req.file.filename}`;
+    imageUrl = `/images/moderators/${await convertUploadToDisplayJpg(req.file)}`;
     if (existing.image_url && existing.image_url.startsWith('/images/moderators/')) {
       const oldPath = path.join('/var/www/btw', existing.image_url);
       if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
@@ -10835,7 +10865,7 @@ app.get('/api/search/submissions', async (req, res) => {
        UNION ALL
 
        SELECT 'art', mg.id, mg.created_at,
-              mg.title, mg.image_url, NULLIF(mg.preview_image_url, ''),
+              mg.title, COALESCE(NULLIF(mg.thumb_image_url, ''), mg.image_url), NULLIF(mg.preview_image_url, ''),
               mg.position_x, mg.position_y,
               ms.story_path, ms.site_title,
               u.username, u.display_name, u.avatar,
@@ -10934,7 +10964,7 @@ app.get('/api/search/profiles', async (req, res) => {
 
   if (type === 'characters') {
     const { rows } = await pool.query(
-      `SELECT mch.id, mch.name, mch.ref_image, mch.ref_position_x, mch.ref_position_y, mch.ref_is_nsfw,
+      `SELECT mch.id, mch.name, COALESCE(NULLIF(mch.thumb_image_url, ''), mch.ref_image) AS ref_image, mch.ref_position_x, mch.ref_position_y, mch.ref_is_nsfw,
               u.username AS owner_username, u.display_name AS owner_display_name,
               (SELECT COUNT(*)::int FROM character_story_links csl WHERE csl.character_id = mch.id) AS story_count,
               COUNT(*) OVER() AS total_count
@@ -11078,7 +11108,7 @@ app.get('/api/search/characters', async (req, res) => {
     : `${bestMatchExpr} DESC, mch.created_at DESC`;
 
   const { rows } = await pool.query(
-    `SELECT mch.id, mch.name, mch.ref_image, mch.ref_position_x, mch.ref_position_y, mch.ref_is_nsfw,
+    `SELECT mch.id, mch.name, COALESCE(NULLIF(mch.thumb_image_url, ''), mch.ref_image) AS ref_image, mch.ref_position_x, mch.ref_position_y, mch.ref_is_nsfw,
             trim(mch.stats->>'Species') AS species,
             u.username AS owner_username, u.display_name AS owner_display_name,
             (SELECT COUNT(*)::int FROM character_story_links csl WHERE csl.character_id = mch.id) AS story_count,
