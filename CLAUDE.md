@@ -353,25 +353,25 @@ rather than trying to get one single insertion order to satisfy both.
 
 ## Fanpage Hub hero row (fanpages/index.html) — current state + saved styles
 
-**The live style is the "classic" layout with the sparks replaced by a static glow.**
-Two earlier designs are saved as git tags (pushed to origin; `git tag -l "hub-hero-*"`):
+**The live style is the "classic" layout with traveling sparks** (the same as the
+`hub-hero-classic` tag, plus everything built since). Two designs are saved as git tags
+(pushed to origin; `git tag -l "hub-hero-*"`):
 - `hub-hero-classic` (commit `de15715`): narrow comic panels (fixed 9.5% width,
-  ~0.38 ratio), per-panel colored neon borders + a traveling spark circling each border.
+  ~0.38 ratio), per-panel colored neon borders (Gallery purple, Stories red, Characters
+  green, Clubs blue) + a traveling spark circling each border (`.fp-comic-box::before`,
+  `fp-spark-travel`/`fp-spark-flicker`, staggered per-panel delays).
 - `hub-hero-wide-panels` (commit `d8d0a36`): wide `aspect-ratio: 603 / 1012` panels, no
   resting glow, only the banner glowing, hover lights a panel in its own neon color.
-  **Not live** — it was reverted by `8b593b0` ("revert hero row to the classic
-  neon-glow style"), which put the page back on the classic layout.
-- **Current live state** (built on the classic layout): narrow 9.5% panels, per-panel neon
-  borders (Gallery purple, Stories red, Characters green, Clubs blue), and **no animation on
-  the panels at all**. The spark (`::before` + `fp-spark-travel`/`fp-spark-flicker`) was removed;
-  `.fp-comic-box::before` is now a *static* soft inset glow (`inset 0 0 22px` in the panel's
-  `--comic-neon-dim`, opacity .75, 1 on hover) — the same "faint haze hugging the inside of
-  the border" the Spotlight / Recent Submissions boxes below use, held steady instead of
-  pulsing. History of that experiment, all in `fanpages/index.html` only: sparks =
-  `f4f13e9` (last commit with sparks), a stronger left/right-edge-only glow = `1281029`
-  (user found it too strong), then the all-around soft glow (current).
-  To get the sparks back: `git revert` the glow commit(s) (newest first), don't
-  `git checkout` the file (wipes unrelated edits).
+  **Not live** — reverted by `8b593b0` ("revert hero row to the classic neon-glow style").
+- **Tried and reverted (Oct 30):** replacing the sparks with a static glow (a strong
+  left/right-edge glow, `1281029`, then a soft all-around inset glow, `2c20262`) so the
+  panels had no animation, hoping to cut mobile lag. Real-browser measurements (idle homepage,
+  CPU as % of one core summed over the browser's processes): removing the sparks saved only
+  ~10 points in Chrome (~78% -> ~67%) and ~5 in Edge (~59% -> ~54%). The bigger animation
+  costs are the **pulsing Spotlight/Recent Submissions/Arcade box glows (~40 points in
+  Chrome)** and the **billboard's background pan/zoom transition (~13 points)**; with all
+  animation off the page idles at ~2%. The user reinstated the sparks anyway. If animation
+  cost is ever worth chasing, start with the box-glow pulses, not the sparks.
 - To go back to the *wide-panels* layout instead: it would mean undoing `8b593b0`
   (`git revert 8b593b0`), untested — the six commits it reverted
   (`a8721a9 68c4eec 24e4611 6f54a51 640c49e d8d0a36`) touch only `fanpages/index.html` +
