@@ -246,6 +246,10 @@
     }
     .fp-billboard-slide.active { opacity: 1; z-index: 1; }
     .fp-billboard-slide-bg { position: absolute; inset: 0; background-repeat: no-repeat; }
+    /* Black curtain: fades in over the current slide if someone navigates to a
+       slide whose image hasn't finished loading yet, and fades out once it has. */
+    .fp-billboard-curtain { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 2; transition: opacity 0.45s ease; }
+    .fp-billboard-curtain.on { opacity: 1; }
     .fp-billboard-slide-scrim {
       position: absolute; left: 0; right: 0; bottom: 0; padding: 2.5rem 2.5rem 1.75rem;
       background: linear-gradient(to top, rgba(0,0,0,0.82), transparent);
@@ -761,6 +765,7 @@
   <div class="fp-hero-banner-mid">
     <section class="fp-billboard" id="fp-billboard">
       <div class="fp-billboard-track" id="fp-billboard-track"></div>
+      <div class="fp-billboard-curtain" id="fp-billboard-curtain"></div>
       <div class="fp-billboard-empty" id="fp-billboard-empty" style="display:none;">
         <p>✨ Something fun is coming to this spot soon!</p>
       </div>
@@ -928,6 +933,26 @@
       probe.src = url;
     });
   }
+  // The server now sends image_w/image_h per slide, so no download is needed to measure.
+  function seedSlideDims(slides) {
+    slides.forEach(s => { if (s.image_url && s.image_w && s.image_h) billboardImgDims[s.image_url] = { w: s.image_w, h: s.image_h }; });
+  }
+  // One-slide-ahead image loading: only the visible slide (plus the next one) is
+  // ever fetched, instead of every slide up front.
+  const billboardImgLoads = {};
+  function preloadSlideImage(url) {
+    if (!url) return Promise.resolve();
+    if (!billboardImgLoads[url]) {
+      billboardImgLoads[url] = new Promise(resolve => {
+        const img = new Image();
+        img.onload = img.onerror = () => resolve();
+        img.src = url;
+      });
+      billboardImgLoads[url].done = false;
+      billboardImgLoads[url].then(() => { billboardImgLoads[url].done = true; });
+    }
+    return billboardImgLoads[url];
+  }
   function coverBgSize(dims, boxW, boxH, zoomPercent) {
     const scale = Math.max(boxW / dims.w, boxH / dims.h) || 1;
     const renderedW = dims.w * scale, renderedH = dims.h * scale;
@@ -1090,6 +1115,7 @@
     }
     empty.style.display = 'none';
 
+    seedSlideDims(slides);
     await Promise.all(slides.map(s => loadImageDims(s.image_url)));
 
     track.innerHTML = '';
@@ -1121,8 +1147,14 @@
     }
 
     billboardIndex = 0;
+    billboardNavToken++;
+    document.getElementById('fp-billboard-curtain').classList.remove('on');
     playSlideAnimation(0);
     restartBillboardTimer();
+    preloadSlideImage(slides[0].image_url).then(() => preloadNextSlide());
+  }
+  function preloadNextSlide() {
+    if (billboardSlides.length > 1) preloadSlideImage(billboardSlides[(billboardIndex + 1) % billboardSlides.length].image_url);
   }
 
   // ── "Infinite scroll" dot strip ──────────────────────────────────────────
@@ -1225,17 +1257,42 @@
 
   window.addEventListener('resize', () => { if (billboardSlides.length) playSlideAnimation(billboardIndex); });
 
+  let billboardNavToken = 0;
   function goToSlide(i, direction) {
     if (!billboardSlides.length) return;
     // direction defaults to whichever way i actually moved from the current
     // index (handles the auto-advance timer, which always calls
     // goToSlide(billboardIndex + 1) without passing one explicitly).
     if (direction === undefined) direction = i >= billboardIndex ? 1 : -1;
-    billboardIndex = (i + billboardSlides.length) % billboardSlides.length;
+    const target = (i + billboardSlides.length) % billboardSlides.length;
+    const url = billboardSlides[target].image_url;
+    const pending = billboardImgLoads[url];
+    if (pending && pending.done) { commitSlide(target, direction); return; }
+    // Image isn't in yet: fade the current slide to black, hold until the
+    // image arrives, then switch and fade back up (a later click supersedes this one).
+    const token = ++billboardNavToken;
+    if (billboardTimer) clearInterval(billboardTimer);
+    const curtain = document.getElementById('fp-billboard-curtain');
+    curtain.classList.add('on');
+    preloadSlideImage(url).then(() => {
+      if (token !== billboardNavToken) return;
+      setTimeout(() => {
+        if (token !== billboardNavToken) return;
+        commitSlide(target, direction);
+        curtain.classList.remove('on');
+      }, 450); // let the fade-to-black finish first so the switch itself is hidden
+    });
+  }
+
+  function commitSlide(target, direction) {
+    billboardNavToken++;
+    document.getElementById('fp-billboard-curtain').classList.remove('on');
+    billboardIndex = target;
     document.querySelectorAll('.fp-billboard-slide').forEach((el, idx) => el.classList.toggle('active', idx === billboardIndex));
     if (billboardSlides.length > 1) shiftBillboardDots(direction);
     playSlideAnimation(billboardIndex);
     restartBillboardTimer();
+    preloadNextSlide();
   }
 
   function restartBillboardTimer() {
@@ -1272,7 +1329,8 @@
       .then(async data => {
         const slides = data.slides || [];
         const urls = slides.map(s => s.image_url);
-        await Promise.all(urls.map(loadImageDims));
+        seedSlideDims(slides);
+        await Promise.all(urls.map(loadImageDims)); // instant when the server sent sizes; probes only as a fallback
         homeCacheSet('billboard', { slides, dims: dimsFor(urls) });
         if (hadCache && JSON.stringify(slides) === JSON.stringify(cachedBb.slides)) return;
         renderBillboard(buildBillboardOrder(slides));

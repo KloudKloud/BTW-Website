@@ -4883,7 +4883,14 @@ app.get('/api/hub-billboard', async (req, res) => {
     const { rows: [u] } = await pool.query('SELECT email_hash FROM users WHERE id = $1', [viewerId]);
     isAdmin = !!(u && u.email_hash === process.env.ADMIN_EMAIL_HASH);
   }
-  res.json({ slides: (nsfwAllowed || isAdmin) ? rows : rows.filter(s => !s.is_nsfw) });
+  const visible = (nsfwAllowed || isAdmin) ? rows : rows.filter(s => !s.is_nsfw);
+  // Send each image's pixel size so the homepage can place/crop a slide
+  // without downloading it first (lets it load slides one at a time).
+  await Promise.all(visible.map(async r => {
+    const d = await imageDimsFor(r.image_url);
+    if (d) { r.image_w = d.w; r.image_h = d.h; }
+  }));
+  res.json({ slides: visible });
 });
 
 // ── News Posts (patch notes / weekly blogs / events) ────────────────────────
