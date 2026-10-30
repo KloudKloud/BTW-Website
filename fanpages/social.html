@@ -423,6 +423,25 @@
     @media (max-width: 860px) {
       .soc-club-search-wrap { max-width: none; }
     }
+    /* Desktop home: the club search lives in the left sidebar, right under
+       the pfp block -- bigger and on the same starry box art as the rest of
+       the redesigned pages. Scoped to .soc-sidebar so the mobile top-row
+       relocation (which moves this same node out of the sidebar) keeps its
+       own plain styling. */
+    .soc-sidebar .soc-club-search-wrap {
+      flex: none; max-width: none; margin: 0.4rem 0 1rem; padding: 0 1rem; border-radius: 16px;
+      background: linear-gradient(160deg, rgba(10,8,14,0.78), rgba(10,8,14,0.62)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+      border: 1px solid rgba(127,168,217,0.4); box-shadow: 0 0 10px rgba(127,168,217,0.18);
+    }
+    .soc-sidebar .soc-club-search-wrap:focus-within {
+      border-color: rgba(240,192,96,0.7); box-shadow: 0 0 16px rgba(240,192,96,0.3);
+      background: linear-gradient(160deg, rgba(10,8,14,0.78), rgba(10,8,14,0.62)), url('/images/home/box-background-2.png');
+      background-size: cover; background-position: center;
+    }
+    .soc-sidebar .soc-club-search-icon { width: 18px; height: 18px; color: #a8c6e8; }
+    .soc-sidebar .soc-club-search-input { font-size: 1rem; padding: 0.8em 0 0.8em 0.65em; }
+    .soc-sidebar .soc-club-search-input::placeholder { color: #9aa8bd; }
 
     /* Same .soc-feed-card component as the main feed, scaled way down
        here — the big square thumbnail and full-size padding/text made
@@ -604,6 +623,10 @@
 
     <div class="soc-sidebar-content" id="soc-sidebar-content">
       <div id="soc-sidebar-user-slot"></div>
+      <div class="soc-club-search-wrap" id="soc-club-search-wrap">
+        <svg class="soc-club-search-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" class="soc-club-search-input" id="soc-club-search-input" placeholder="Search clubs…" autocomplete="off" />
+      </div>
 
       <nav class="soc-sidebar-nav">
         <a class="soc-nav-link active" id="soc-nav-home" href="/fanpages/social"><span class="soc-nav-icon">🏠</span> Home</a>
@@ -654,10 +677,6 @@
           <button type="button" class="view-toggle-menu-item" data-mode="card">Card</button>
           <button type="button" class="view-toggle-menu-item active" data-mode="compact">Compact</button>
         </div>
-      </div>
-      <div class="soc-club-search-wrap" id="soc-club-search-wrap">
-        <svg class="soc-club-search-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" class="soc-club-search-input" id="soc-club-search-input" placeholder="Search clubs…" autocomplete="off" />
       </div>
       <div class="soc-club-search-suggest" id="soc-club-search-suggest" hidden></div>
     </div>
@@ -1215,10 +1234,14 @@ wireViewToggle();
 function positionClubSearchSuggest() {
   const input = document.getElementById('soc-club-search-input');
   const box = document.getElementById('soc-club-search-suggest');
-  const rect = input.getBoundingClientRect();
+  // Anchor to the whole search pill (icon included), and never narrower
+  // than 280px -- in the sidebar the pill is only ~210px wide, which cut
+  // club names off.
+  const wrapEl = document.getElementById('soc-club-search-wrap');
+  const rect = (wrapEl || input).getBoundingClientRect();
   box.style.top = `${rect.bottom + 6}px`;
   box.style.left = `${rect.left}px`;
-  box.style.width = `${rect.width}px`;
+  box.style.width = `${Math.min(Math.max(rect.width, 280), window.innerWidth - rect.left - 12)}px`;
 }
 function closeClubSearchSuggest() {
   const box = document.getElementById('soc-club-search-suggest');
