@@ -417,18 +417,21 @@
     @media (max-width: 860px) {
       .soc-club-search-wrap { max-width: none; }
     }
+    /* Second search pill, beside the sort/view controls in the feed header. */
+    .soc-club-search-wrap--top { background: #0e141b; border-color: rgba(127,168,217,0.4); }
+    .soc-club-search-wrap--top:focus-within { background: #0e141b; }
     /* Desktop home: the club search lives in the left sidebar, right under
-       the pfp block -- bigger, on a plain black fill. Scoped to .soc-sidebar so the mobile top-row
+       the pfp block -- bigger, on the flat #0e141b backdrop colour. Scoped to .soc-sidebar so the mobile top-row
        relocation (which moves this same node out of the sidebar) keeps its
        own plain styling. */
     .soc-sidebar .soc-club-search-wrap {
       flex: none; max-width: none; margin: 0.4rem 0 1rem; padding: 0 1rem; border-radius: 16px;
-      background: #000;
+      background: #0e141b;
       border: 1px solid rgba(127,168,217,0.4); box-shadow: 0 0 10px rgba(127,168,217,0.18);
     }
     .soc-sidebar .soc-club-search-wrap:focus-within {
       border-color: rgba(240,192,96,0.7); box-shadow: 0 0 16px rgba(240,192,96,0.3);
-      background: #000;
+      background: #0e141b;
     }
     .soc-sidebar .soc-club-search-icon { width: 18px; height: 18px; color: #a8c6e8; }
     .soc-sidebar .soc-club-search-input { font-size: 1rem; padding: 0.8em 0 0.8em 0.65em; }
@@ -565,6 +568,7 @@
         color: #cfe0f5; cursor: pointer; box-shadow: 0 0 12px rgba(127,168,217,0.28);
       }
       .soc-mobile-drawer-toggle:hover { color: #fff; border-color: rgba(127,168,217,0.7); }
+      .soc-club-search-wrap--top { display: none; }
       .soc-mobile-search-slot { flex: 1; min-width: 0; }
       .soc-mobile-search-slot .soc-club-search-wrap { max-width: none; margin-left: 0; width: 100%; }
 
@@ -663,6 +667,10 @@
           <button type="button" class="view-toggle-menu-item" data-mode="card">Card</button>
           <button type="button" class="view-toggle-menu-item active" data-mode="compact">Compact</button>
         </div>
+      </div>
+      <div class="soc-club-search-wrap soc-club-search-wrap--top" id="soc-club-search-wrap-top">
+        <svg class="soc-club-search-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" class="soc-club-search-input" id="soc-club-search-input-top" placeholder="Search clubs…" autocomplete="off" />
       </div>
       <div class="soc-club-search-suggest" id="soc-club-search-suggest" hidden></div>
     </div>
@@ -1218,13 +1226,11 @@ wireViewToggle();
 // every other suggest dropdown on the site, since this sits inside a flex
 // toolbar that could otherwise clip an absolutely-positioned child. ──────
 function positionClubSearchSuggest() {
-  const input = document.getElementById('soc-club-search-input');
   const box = document.getElementById('soc-club-search-suggest');
-  // Anchor to the whole search pill (icon included), and never narrower
-  // than 280px -- in the sidebar the pill is only ~210px wide, which cut
-  // club names off.
-  const wrapEl = document.getElementById('soc-club-search-wrap');
-  const rect = (wrapEl || input).getBoundingClientRect();
+  // Anchor to whichever search pill is being used (icon included), and
+  // never narrower than 280px -- in the sidebar the pill is only ~210px
+  // wide, which cut club names off.
+  const rect = clubSearchAnchor.getBoundingClientRect();
   box.style.top = `${rect.bottom + 6}px`;
   box.style.left = `${rect.left}px`;
   box.style.width = `${Math.min(Math.max(rect.width, 280), window.innerWidth - rect.left - 12)}px`;
@@ -1251,6 +1257,7 @@ function clubSearchSuggestRow(c) {
   `;
   return a;
 }
+let clubSearchAnchor = document.getElementById('soc-club-search-wrap');
 let clubSearchDebounce = null;
 let clubSearchReqId = 0;
 async function runClubSearch(q) {
@@ -1273,16 +1280,28 @@ async function runClubSearch(q) {
     if (reqId === clubSearchReqId) box.innerHTML = '<p class="soc-club-search-suggest-empty">Couldn\'t search clubs right now.</p>';
   }
 }
-document.getElementById('soc-club-search-input').addEventListener('input', (e) => {
-  clearTimeout(clubSearchDebounce);
-  const q = e.target.value.trim();
-  clubSearchDebounce = setTimeout(() => runClubSearch(q), 300);
-});
-document.getElementById('soc-club-search-input').addEventListener('focus', (e) => {
-  if (e.target.value.trim()) runClubSearch(e.target.value.trim());
+// Two search pills (sidebar + feed header) share one dropdown; whichever
+// one was last used is the anchor. Typing in one clears the other so only
+// one query is ever "live".
+['soc-club-search-input', 'soc-club-search-input-top'].forEach(id => {
+  const inputEl = document.getElementById(id);
+  const useAnchor = () => {
+    clubSearchAnchor = inputEl.closest('.soc-club-search-wrap');
+    document.querySelectorAll('.soc-club-search-input').forEach(o => { if (o !== inputEl) o.value = ''; });
+  };
+  inputEl.addEventListener('input', (e) => {
+    useAnchor();
+    clearTimeout(clubSearchDebounce);
+    const q = e.target.value.trim();
+    clubSearchDebounce = setTimeout(() => runClubSearch(q), 300);
+  });
+  inputEl.addEventListener('focus', (e) => {
+    useAnchor();
+    if (e.target.value.trim()) runClubSearch(e.target.value.trim());
+  });
 });
 document.addEventListener('click', (e) => {
-  if (!e.target.closest('#soc-club-search-wrap') && !e.target.closest('#soc-club-search-suggest')) closeClubSearchSuggest();
+  if (!e.target.closest('.soc-club-search-wrap') && !e.target.closest('#soc-club-search-suggest')) closeClubSearchSuggest();
 });
 window.addEventListener('scroll', () => {
   const box = document.getElementById('soc-club-search-suggest');
