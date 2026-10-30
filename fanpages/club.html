@@ -2243,6 +2243,14 @@
     .soc-sidebar .soc-club-search-icon { width: 18px; height: 18px; color: #a8c6e8; }
     .soc-sidebar .soc-club-search-input { font-size: 1rem; padding: 0.8em 0 0.8em 0.65em; }
     .soc-sidebar .soc-club-search-input::placeholder { color: #9aa8bd; }
+    /* The sidebar search sits right under the pfp block, and the divider
+       that used to close the pfp block now closes the search slot instead. */
+    .soc-sidebar-search-slot { padding-bottom: 0.9rem; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .soc-sidebar-search-slot .soc-club-search-wrap { margin: 0.3rem 0 0; }
+    .soc-sidebar:has(.soc-sidebar-search-slot .soc-club-search-wrap) .soc-sidebar-user,
+    .soc-sidebar:has(.soc-sidebar-search-slot .soc-club-search-wrap) .soc-sidebar-login,
+    .soc-sidebar:has(.soc-sidebar-search-slot .soc-club-search-wrap) .soc-sidebar-guest-wrap { border-bottom: none; }
+    .soc-sidebar-search-slot:not(:has(.soc-club-search-wrap)) { display: none; }
   </style>
 </head>
 <body>
@@ -2266,9 +2274,11 @@
 
     <div class="soc-sidebar-content" id="soc-sidebar-content">
       <div id="soc-sidebar-user-slot"></div>
+      <div class="soc-sidebar-search-slot">
       <div class="soc-club-search-wrap" id="soc-club-search-wrap">
         <svg class="soc-club-search-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input type="text" class="soc-club-search-input" id="soc-club-search-input" placeholder="Search clubs…" autocomplete="off" />
+      </div>
       </div>
 
       <nav class="soc-sidebar-nav">
@@ -3799,7 +3809,7 @@ function renderClub(club, members) {
   document.getElementById('cl-side-add-page-btn').style.display = isAdminOrOwner ? 'block' : 'none';
   document.getElementById('cl-banner-recrop-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
   document.getElementById('cl-create-news-post-btn').style.display = isAdminOrOwner ? 'block' : 'none';
-  document.getElementById('cl-theme-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
+  updateClubThemeBtn();
   document.getElementById('cl-tabs-edit-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
   if (isAdminOrOwner && currentUser) {
     document.getElementById('cl-side-admin-name').textContent = currentUser.display_name || currentUser.username;
@@ -3808,7 +3818,7 @@ function renderClub(club, members) {
   renderClubSidebarInfo(club);
   renderClubMods(currentMembers);
 
-  applyClubTheme(club.theme, club.theme_bg_url);
+  paintHomeBackground();
 }
 
 // ── Cover Media (Hub) — static image, or a slideshow that cycles randomly
@@ -4849,7 +4859,7 @@ function renderFromUrl() {
     // A General page can carry its own theme/banner -- switch the shared
     // background/banner back to Home's own when navigating away from one.
     if (currentClub) {
-      applyClubTheme(currentClub.theme, currentClub.theme_bg_url);
+      paintHomeBackground();
       renderBanner(currentClub.banner_url, currentClub.banner_position_x, currentClub.banner_position_y);
       document.getElementById('cl-banner-revert-btn').style.display = 'none';
     }
@@ -4870,7 +4880,26 @@ function setHomeTab(tab) {
   document.getElementById('cl-home-tab-social').classList.toggle('active', isSocial);
   document.getElementById('cl-hub-tab-content').hidden = isSocial;
   document.getElementById('cl-social-tab-content').hidden = !isSocial;
+  document.getElementById('cl-theme-menu').hidden = true;
+  updateClubThemeBtn();
   if (isSocial && !socialPostsCache) loadSocialPosts();
+}
+// Club-level custom background is Social-tab-only now: Hub always paints
+// the flat default, and the 🎨 button only shows (to owners/admins) while
+// the Social tab is open. Reads the tab off the URL so it also works at
+// initial load, before setHomeTab() has run.
+function isSocialTabUrl() {
+  const p = new URLSearchParams(location.search);
+  return !p.get('post') && !p.get('page') && p.get('tab') === 'social';
+}
+function updateClubThemeBtn() {
+  const isAdminOrOwner = !!currentClub && (currentClub.viewer_role === 'owner' || currentClub.viewer_role === 'admin');
+  document.getElementById('cl-theme-btn').style.display = (isAdminOrOwner && isSocialTabUrl()) ? 'flex' : 'none';
+}
+function paintHomeBackground() {
+  if (!currentClub) return;
+  if (isSocialTabUrl()) applyClubTheme(currentClub.theme, currentClub.theme_bg_url);
+  else paintThemeBackground('default', '');
 }
 document.getElementById('cl-home-tab-hub').addEventListener('click', () => navigateTo({ tab: null, page: null, post: null }));
 document.getElementById('cl-home-tab-social').addEventListener('click', () => navigateTo({ tab: 'social', page: null, post: null }));
@@ -5335,13 +5364,15 @@ async function loadCustomPage(pageSlug, tab) {
     // Promotion pages all just show their one single view, with a comments
     // section at the bottom (wired in below).
     if (page.type === 'general') {
-      applyPageTheme(page);
+      // General pages no longer have a custom background -- always the flat default.
+      paintThemeBackground('default', '');
       // Own banner if the page has set one, otherwise the generic default
       // (not Home's banner -- see comment above).
       if (page.banner_url) renderBanner(page.banner_url, page.banner_position_x, page.banner_position_y);
       const isAdminOrOwner = !!currentClub && (currentClub.viewer_role === 'owner' || currentClub.viewer_role === 'admin');
       document.getElementById('cl-page-view-edit-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
-      document.getElementById('cl-page-view-theme-btn').style.display = isAdminOrOwner ? 'flex' : 'none';
+      document.getElementById('cl-page-view-theme-btn').style.display = 'none';
+      document.getElementById('cl-page-view-theme-menu').hidden = true;
       document.querySelector('.cl-page-view-title-row').classList.toggle('cl-page-view-title-row--has-actions', isAdminOrOwner);
       document.getElementById('cl-banner-revert-btn').style.display = (isAdminOrOwner && page.banner_url) ? 'flex' : 'none';
     }
