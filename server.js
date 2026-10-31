@@ -1895,6 +1895,8 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS banner_url TEXT NOT NULL DEFAULT '';
     ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS banner_position_x INTEGER NOT NULL DEFAULT 50;
     ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS banner_position_y INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE club_pages ADD COLUMN IF NOT EXISTS accent_color TEXT NOT NULL DEFAULT 'none';
+    ALTER TABLE clubs ALTER COLUMN accent_color SET DEFAULT 'none';
   `).catch(e => console.error('club_pages banner migration:', e.message));
 
   // Posts became full mini-pages (title + Cover Media + up to 10 Text
@@ -11433,7 +11435,7 @@ function clubPublicShape(c, viewerRole) {
     icon_url: c.icon_url, icon_original_url: c.icon_original_url || '', owner_user_id: c.owner_user_id,
     badge_url: c.badge_url || '', badge_original_url: c.badge_original_url || '',
     theme: c.theme || 'default', theme_bg_url: c.theme_bg_url || '',
-    accent_color: c.accent_color || 'blue',
+    accent_color: c.accent_color || 'none',
     sidebar_title: c.sidebar_title || '', sidebar_message: c.sidebar_message || '', is_nsfw: !!c.is_nsfw,
     welcome_title: c.welcome_title || '', cover_mode: c.cover_mode || 'static', cover_image_url: c.cover_image_url || '',
     cover_randomize: c.cover_randomize !== false,
@@ -11717,7 +11719,7 @@ app.put('/api/clubs/:slug/accent-color', requireAuth, async (req, res) => {
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const role = await getClubRole(club.id, req.user.id);
   if (role !== 'owner' && role !== 'admin') return res.status(403).json({ error: 'Only club owners/admins can edit this club.' });
-  const accent = CLUB_ACCENT_KEYS.includes(req.body.accent_color) ? req.body.accent_color : 'blue';
+  const accent = CLUB_ACCENT_KEYS.includes(req.body.accent_color) ? req.body.accent_color : 'none';
   const { rows: [updated] } = await pool.query('UPDATE clubs SET accent_color = $1 WHERE id = $2 RETURNING *', [accent, club.id]);
   res.json({ club: clubPublicShape(updated, role) });
 });
@@ -12688,7 +12690,7 @@ app.get('/api/clubs/:slug/pages/:pageSlug', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT id FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const { rows: [page] } = await pool.query(
-    'SELECT id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y FROM club_pages WHERE club_id = $1 AND slug = $2',
+    'SELECT id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, accent_color, banner_url, banner_position_x, banner_position_y FROM club_pages WHERE club_id = $1 AND slug = $2',
     [club.id, req.params.pageSlug]
   );
   if (!page) return res.status(404).json({ error: 'Page not found.' });
@@ -12778,7 +12780,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => {
   const title = req.body.title !== undefined ? String(req.body.title).trim().slice(0, 60) || existing.title : existing.title;
   const content = req.body.content !== undefined ? String(req.body.content).slice(0, 20000) : existing.content;
   const { rows: [page] } = await pool.query(
-    'UPDATE club_pages SET title = $1, content = $2 WHERE id = $3 RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y',
+    'UPDATE club_pages SET title = $1, content = $2 WHERE id = $3 RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, accent_color, banner_url, banner_position_x, banner_position_y',
     [title, content, existing.id]
   );
   res.json({ page });
@@ -12786,12 +12788,24 @@ app.put('/api/clubs/:slug/pages/:pageSlug', requireAuth, async (req, res) => {
 
 // PUT /api/clubs/:slug/pages/:pageSlug/theme — General page's own theme,
 // same default/custom pattern as the club-level PUT .../theme above.
+// PUT /api/clubs/:slug/pages/:pageSlug/accent-color -- each club page has its
+// own accent (default 'none'), same allow-list as the club-level one.
+app.put('/api/clubs/:slug/pages/:pageSlug/accent-color', requireAuth, async (req, res) => {
+  const ctx = await requireClubPageAdmin(req, res);
+  if (!ctx) return;
+  const accent = CLUB_ACCENT_KEYS.includes(req.body.accent_color) ? req.body.accent_color : 'none';
+  const { rows: [updated] } = await pool.query(
+    'UPDATE club_pages SET accent_color = $1 WHERE id = $2 RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, accent_color, banner_url, banner_position_x, banner_position_y',
+    [accent, ctx.page.id]
+  );
+  res.json({ page: updated });
+});
 app.put('/api/clubs/:slug/pages/:pageSlug/theme', requireAuth, async (req, res) => {
   const ctx = await requireClubPageAdmin(req, res);
   if (!ctx) return;
   const theme = req.body.theme === 'custom' ? 'custom' : 'default';
   const { rows: [updated] } = await pool.query(
-    'UPDATE club_pages SET theme = $1 WHERE id = $2 RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y',
+    'UPDATE club_pages SET theme = $1 WHERE id = $2 RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, accent_color, banner_url, banner_position_x, banner_position_y',
     [theme, ctx.page.id]
   );
   res.json({ page: updated });
@@ -12804,7 +12818,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug/theme-bg', requireAuth, uploadModImage
   const bgUrl = `/images/moderators/${req.file.filename}`;
   const { rows: [updated] } = await pool.query(
     `UPDATE club_pages SET theme_bg_url = $1, theme = 'custom' WHERE id = $2
-     RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
+     RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, accent_color, banner_url, banner_position_x, banner_position_y`,
     [bgUrl, ctx.page.id]
   );
   res.json({ page: updated });
@@ -12826,7 +12840,7 @@ app.put('/api/clubs/:slug/pages/:pageSlug/banner', requireAuth, uploadModImage.s
   }
   const { rows: [updated] } = await pool.query(
     `UPDATE club_pages SET banner_url = $1, banner_position_x = $2, banner_position_y = $3 WHERE id = $4
-     RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
+     RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, accent_color, banner_url, banner_position_x, banner_position_y`,
     [bannerUrl, positionX, positionY, ctx.page.id]
   );
   res.json({ page: updated });
@@ -12840,7 +12854,7 @@ app.delete('/api/clubs/:slug/pages/:pageSlug/banner', requireAuth, async (req, r
   deleteIfModeratorUpload(ctx.page.banner_url);
   const { rows: [updated] } = await pool.query(
     `UPDATE club_pages SET banner_url = '', banner_position_x = 50, banner_position_y = 50 WHERE id = $1
-     RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, banner_url, banner_position_x, banner_position_y`,
+     RETURNING id, slug, title, type, content, cover_mode, cover_image_url, cover_randomize, text_fields, theme, theme_bg_url, accent_color, banner_url, banner_position_x, banner_position_y`,
     [ctx.page.id]
   );
   res.json({ page: updated });

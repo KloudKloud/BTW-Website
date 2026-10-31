@@ -12,6 +12,8 @@
   <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <style>
+    /* Default (no accent): neutral light grey. syncClubAccent() overrides these inline on <body>. */
+    body { --cl-accent: #e6e8eb; --cl-accent-light: #ffffff; --cl-accent-rgb: 230,232,235; }
     /* Club default backdrop: the News-Posts navy (#0a0c0d) instead of pure
        black. Shows wherever no custom theme image is painted. */
     html { background: #0a0c0d; }
@@ -5467,6 +5469,7 @@ async function loadCustomPage(pageSlug, tab) {
     if (reqId !== loadCustomPageReqId) return;
     const page = data.page;
     currentPageData = page;
+    syncClubAccent();
     document.title = `${page.title} ✦ ${currentClub ? currentClub.name : 'Club'} ✦ BTW`;
     titleEl.textContent = page.title;
     // General/Gallery/Promotion pages stretch the full content column (like
@@ -6266,21 +6269,27 @@ const CL_ACCENTS = {
   magenta:{ label: 'Magenta',accent: '#d44fd0', light: '#efb0ed', rgb: '212,79,208' },
   silver: { label: 'Silver', accent: '#cfd4da', light: '#eceef1', rgb: '207,212,218' },
 };
-function syncClubAccent() {
-  const p = new URLSearchParams(location.search);
-  const onHomeOrSocial = !p.get('post') && !p.get('page');
-  const b = document.body.style;
-  if (!onHomeOrSocial || !currentClub) {
-    ['--cl-accent', '--cl-accent-light', '--cl-accent-rgb'].forEach(k => b.removeProperty(k));
-    document.body.classList.remove('cl-accent-on');
-    return;
+// Which accent is in effect right now: a custom page uses its own
+// (club_pages.accent_color, default 'none'); Home, Social and posts use the
+// club-level one (clubs.accent_color, default 'none').
+function isPageView() { return !!new URLSearchParams(location.search).get('page') && !new URLSearchParams(location.search).get('post'); }
+function currentAccentKey() {
+  if (!currentClub) return 'none';
+  if (isPageView()) {
+    const pageSlugNow = new URLSearchParams(location.search).get('page');
+    return (currentPageData && currentPageData.slug === pageSlugNow && currentPageData.accent_color) || 'none';
   }
-  const t = CL_ACCENTS[currentClub.accent_color] || CL_ACCENTS.blue;
+  return currentClub.accent_color || 'none';
+}
+function syncClubAccent() {
+  const b = document.body.style;
+  const key = currentAccentKey();
+  const t = CL_ACCENTS[key] || CL_ACCENTS.none;
   b.setProperty('--cl-accent', t.accent);
   b.setProperty('--cl-accent-light', t.light);
   b.setProperty('--cl-accent-rgb', t.rgb);
-  document.body.classList.toggle('cl-accent-on', !['blue', 'none'].includes(currentClub.accent_color || 'blue'));
-  document.querySelectorAll('.cl-accent-swatch').forEach(el => el.classList.toggle('active', el.dataset.accent === (currentClub.accent_color || 'blue')));
+  document.body.classList.toggle('cl-accent-on', key !== 'none');
+  document.querySelectorAll('.cl-accent-swatch').forEach(el => el.classList.toggle('active', el.dataset.accent === key));
 }
 function buildClAccentGrid() {
   const grid = document.getElementById('cl-accent-grid');
@@ -6299,15 +6308,21 @@ function buildClAccentGrid() {
   syncClubAccent();
 }
 async function selectClubAccent(key) {
-  const prev = currentClub.accent_color;
-  currentClub.accent_color = key;
+  // On a custom page the pick belongs to that page; everywhere else it's the club's.
+  const onPage = isPageView() && currentPageData && currentPageData.slug === currentPageSlug;
+  const target = onPage ? currentPageData : currentClub;
+  const prev = target.accent_color;
+  target.accent_color = key;
   syncClubAccent();
-  const res = await fetch(`${API}/clubs/${encodeURIComponent(slug)}/accent-color`, {
+  const url = onPage
+    ? `${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(currentPageSlug)}/accent-color`
+    : `${API}/clubs/${encodeURIComponent(slug)}/accent-color`;
+  const res = await fetch(url, {
     method: 'PUT',
     headers: { ...authHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify({ accent_color: key }),
   });
-  if (!res.ok) { currentClub.accent_color = prev; syncClubAccent(); }
+  if (!res.ok) { target.accent_color = prev; syncClubAccent(); }
 }
 document.getElementById('cl-accent-btn').addEventListener('click', (e) => {
   e.stopPropagation();
