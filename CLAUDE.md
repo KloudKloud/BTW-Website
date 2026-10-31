@@ -432,6 +432,54 @@ First request for a missing copy returns the original and resizes in the backgro
 - Measuring: headless Playwright memory numbers are inflated (software rendering) — compare
   runs to each other, never to Chrome's own tab-memory hover. Don't trust a single run.
 
+## Performance rules — apply to ALL new and touched UI (permanent)
+
+Two lag sources were found and fixed in this order; don't reintroduce either.
+
+### 1. Never ship a full-size image into a small slot
+Any list/grid/modal/picker that draws images small (avatars, club icons, picker or card
+thumbnails) must be served a right-sized copy by the **API**, not the original and not the
+generic 400px avatar copy:
+- Use `sizedUrl(url, px[, {jpeg:true}])` or, for lists where the first request must not
+  return the original, `await sizedUrlReady(url, px[, {jpeg:true}])` (waits for the copy to
+  be generated; use `Promise.all` over rows). Pick px ≈ 2-3x the drawn size: **120** for
+  ~30-46px avatars/icons (follower/following rows, club Members/Clubs modal rows), **160 JPEG**
+  for the Edit Profile Featured Submission picker thumbnails. Pass `{jpeg:true}` for
+  thumbnails that never need transparency.
+- `SIZED_DIRS` (server.js) lists the folders that get copies: `/images/avatars/`,
+  `/images/moderators/`, `/images/gallery/`. If images live elsewhere, add the folder
+  rather than shipping originals. Never size `/images/spicy/` (protected delivery).
+- Already done: `/api/featured-search` + the pinned featured submission (160 JPEG),
+  `/api/fanpage-profile/:username/followers|following|clubs` and `GET /api/clubs/:slug`
+  members (120). The `/api` middleware leaves any `-NNN` URL alone, so a smaller copy
+  survives it.
+- **Before calling a list/modal done, measure it**: load it with Playwright and check the
+  images' `naturalWidth` vs `clientWidth` and the summed response bytes (the profile Following
+  list went 4.5MB -> 32KB). Check the *actual* page you were asked about, not just the endpoint.
+
+### 2. No `backdrop-filter` on full-screen overlays/modals
+A `backdrop-filter: blur()` on a `position:fixed; inset:0` overlay is recomputed every frame
+over the whole page; with the always-running `fpnav-level-*` sparkle animations underneath it
+halved the frame rate (61 -> 26-31fps) on the profile Following/Followers/Clubs modal and the
+club Members popup.
+- Modal/popup/confirm/drawer overlays get a **plain scrim** (`rgba(8,6,14,0.86)`-ish, alpha
+  0.84-0.86), never a blur. This is already fixed at the source in `.char-editor-overlay` /
+  `.mod-confirm-overlay` (fanpages.css), `.fpnav-modal-overlay` (fanpages-nav.css),
+  crop-modal.js and the per-page Link Video / resume / newspaper-compose / change-email
+  overlays. **Any new overlay must do the same.**
+- fanpages-nav.css pauses the level-sparkle animations while `.char-editor-overlay`,
+  `.mod-confirm-overlay`, `.fpnav-modal-overlay` or `.crop-modal-overlay` is open; if a new
+  overlay class is introduced, add it to that `body:has(...)` selector.
+- Small blurred cards/panels are fine individually, but avoid stacking several (the club page's
+  `.soc-sidebar`/`.cl-side`/`.cl-admin-posts` each blur(16px)). Still open: the 3px blur on
+  the mobile-only drawer backdrops (`.soc-mobile-drawer-backdrop`, `.cl-side-backdrop`,
+  `.fp-char-drawer-backdrop`, `.fp-tabdrawer-backdrop`) was left alone, unmeasured.
+- Measure when touching a popup: rAF fps over ~2s with it closed vs open (should match; ~61fps
+  headless). Headless numbers are only good for before/after comparison.
+- Shared CSS/JS is served with `max-age=14400` (4h), so users may see the old look until they
+  hard-refresh; inline-in-HTML changes apply immediately. Prefer putting a fix where it
+  deploys reliably, and mention the cache when a shared-file fix looks "not working".
+
 ## Testing with Playwright
 
 Playwright is installed locally (`node_modules/playwright`). Log in by POSTing
