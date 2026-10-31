@@ -1342,17 +1342,34 @@
     body.fp-np-page .fp-bg-img-scroll,
     body.fp-np-page .fp-bg-overlay-scroll { display: none !important; }
     body.fp-np-page #fp-newspaper-view { min-height: calc(100vh - 80px); }
+    /* Title + author badge share one row: white title, then a small pill
+       (avatar, name, time) right beside it. */
+    .fp-np-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; margin: 0 0 1.25rem; }
     .fp-newspaper-post-title {
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.9rem; font-weight: 700; color: #7fa8d9;
-      margin: 0 0 1rem; text-shadow: 0 0 20px rgba(127,168,217,0.55), 0 1px 3px rgba(0,0,0,0.5);
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.9rem; font-weight: 700; color: #fff;
+      margin: 0; text-shadow: 0 1px 3px rgba(0,0,0,0.5);
     }
-    .fp-newspaper-post-body { font-size: 1.2rem; color: #e2e2e2; line-height: 1.85; white-space: pre-line; margin: 1.5rem 0 2rem; }
+    #fp-newspaper-post .fp-np-head .fp-newspaper-card-header {
+      margin: 0; gap: 0.5rem; padding: 0.25rem 0.85rem 0.25rem 0.25rem; border-radius: 999px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14);
+    }
+    #fp-newspaper-post .fp-np-head .fp-newspaper-avatar,
+    #fp-newspaper-post .fp-np-head .fp-newspaper-avatar-fallback { width: 28px; height: 28px; font-size: 0.8rem; }
+    #fp-newspaper-post .fp-np-head .fp-newspaper-header-text { flex-direction: row; align-items: baseline; gap: 0.5rem; }
+    #fp-newspaper-post .fp-np-head .fp-newspaper-author-name { font-size: 0.85rem; }
+    #fp-newspaper-post .fp-np-head .fp-newspaper-time { font-size: 0.74rem; }
+    .fp-newspaper-post-body { font-size: 1.2rem; color: #e2e2e2; line-height: 1.85; white-space: pre-line; margin: 0 0 2rem; }
     .fp-newspaper-post-body p { margin: 0 0 1rem; }
-    .fp-newspaper-post-media { display: flex; flex-direction: column; gap: 1.25rem; margin-bottom: 1.75rem; }
+    /* Images sit on their own: natural aspect ratio, no frame, no background
+       and no letterbox bars -- just the picture (capped to the column width
+       and a max height). */
+    .fp-newspaper-post-media { display: flex; flex-direction: column; align-items: flex-start; gap: 1.25rem; margin-bottom: 1.75rem; }
     .fp-newspaper-post-media img, .fp-newspaper-post-media video {
-      width: 100%; max-height: 640px; object-fit: contain; display: block;
-      background: #161616; border-radius: 14px; border: 1px solid rgba(255,255,255,0.1);
+      display: block; width: auto; height: auto; max-width: 100%; max-height: 640px;
+      border-radius: 14px; background: none; border: none;
     }
+    /* Comment box: plain black instead of the wallpaper art fill. */
+    #fp-newspaper-comments .cc-compose > textarea { background: #000; background-image: none; }
     .fp-np-meta-row { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0 0 2.5rem; }
     .fp-np-meta-btn {
       display: flex; align-items: center; gap: 0.4rem;
@@ -3723,10 +3740,12 @@
     const canDelete = isOwner || (CURRENT_USER && CURRENT_USER.is_admin);
     const el = document.getElementById('fp-newspaper-post');
     el.innerHTML = `
-      ${post.title ? `<h1 class="fp-newspaper-post-title">${escapeHtml(post.title)}</h1>` : ''}
-      ${newspaperAuthorHeader(post)}
+      <div class="fp-np-head">
+        ${post.title ? `<h1 class="fp-newspaper-post-title">${escapeHtml(post.title)}</h1>` : ''}
+        ${newspaperAuthorHeader(post)}
+      </div>
+      ${(post.attachments && post.attachments.length) ? `<div class="fp-newspaper-post-media">${newspaperMediaHtml(post.attachments, '')}</div>` : ''}
       <div class="fp-newspaper-post-body">${renderGalleryText(post.body)}</div>
-      <div class="fp-newspaper-post-media">${newspaperMediaHtml(post.attachments, '')}</div>
       <div class="fp-np-meta-row">
         <button class="fp-np-meta-btn" id="fp-newspaper-comment-jump" type="button">💬 <span id="fp-newspaper-comment-count">${post.comment_count || 0}</span></button>
         ${isOwner ? '<button class="fp-np-meta-btn" id="fp-newspaper-edit-this-btn" type="button">Edit</button>' : ''}
