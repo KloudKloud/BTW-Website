@@ -1103,13 +1103,22 @@
       padding: 0.15rem 0.3rem; border-radius: 6px; line-height: 1; flex-shrink: 0;
     }
     .fp-share-btn:hover { color: #7fa8d9; background: rgba(127,168,217,0.1); }
-    .fp-links-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
-    .fp-links-list li { display: flex; align-items: center; gap: 0.35rem; }
+    /* Each link is its own small chip; chips wrap into rows instead of one
+       full-width bar per link. */
+    .fp-links-list { list-style: none; display: flex; flex-flow: row wrap; align-items: flex-start; gap: 0.45rem; margin: 0; padding: 0; }
+    .fp-links-list li { display: flex; min-width: 0; max-width: 100%; }
+    /* Themed scrollbar, same as the Notes / Activity lists. */
+    .fp-links-list { scrollbar-width: thin; scrollbar-color: rgba(168,112,217,0.45) transparent; }
+    .fp-links-list::-webkit-scrollbar { width: 7px; }
+    .fp-links-list::-webkit-scrollbar-track { background: transparent; }
+    .fp-links-list::-webkit-scrollbar-thumb { background: rgba(168,112,217,0.45); border-radius: 6px; }
+    .fp-links-list::-webkit-scrollbar-thumb:hover { background: rgba(168,112,217,0.7); }
     .fp-link-item {
-      display: block; text-decoration: none; color: #ddd; font-size: 0.85rem;
-      padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
+      display: block; text-decoration: none; color: #ddd; font-size: 0.82rem;
+      padding: 0.35rem 0.75rem; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.05);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      transition: border-color 0.15s, color 0.15s; flex: 1; min-width: 0;
+      transition: border-color 0.15s, color 0.15s; min-width: 0; max-width: 100%;
     }
     .fp-link-item:hover { border-color: #7fa8d9; color: #7fa8d9; }
 
@@ -1144,47 +1153,6 @@
     .fp-side-club-card img { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; border-radius: 4px; }
     .fp-side-club-card span { color: #ddd; font-size: 0.85rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fp-side-club-empty { color: #999; font-size: 0.85rem; font-style: italic; margin: 0; }
-
-    /* Feature Club editor (Edit Profile, under Featured Gallery) */
-    .fp-featured-club-selected {
-      display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.75rem;
-      background: #1e1e1e; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; max-width: 320px;
-    }
-    .fp-featured-club-selected img { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; flex-shrink: 0; }
-    .fp-featured-club-selected span { flex: 1; color: #f0f0f0; font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .fp-featured-club-remove {
-      background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #d97a72;
-      cursor: pointer; flex-shrink: 0; width: 28px; height: 28px; font-size: 0.85rem;
-    }
-    .fp-featured-club-remove:hover { border-color: #d97a72; }
-    .fp-featured-club-search-wrap { position: relative; max-width: 320px; }
-    .fp-featured-club-search {
-      width: 100%; background: #1e1e1e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
-      color: #f0f0f0; font-family: inherit; font-size: 0.85rem; padding: 0.55rem 0.7rem; box-sizing: border-box;
-    }
-    .fp-featured-club-search:focus { outline: none; border-color: #7fa8d9; }
-    /* Body-appended, fixed-position dropdown (same pattern as the tag/fandom
-       suggest dropdowns elsewhere) -- it used to be position:absolute scoped
-       to the search box, which lived inside the left sidebar's own
-       position:relative/z-index:1 stacking context, so the Links section
-       underneath it (a later sibling with the same z-index) always painted
-       on top and made the suggestions look washed out/clipped. Fixed
-       positioning off the real DOM root sidesteps that entirely. Capped to
-       ~4 rows tall with scroll so being in dozens of clubs doesn't produce
-       a huge list. */
-    .fp-featured-club-dropdown {
-      position: fixed; z-index: 3000;
-      background: #1e1e1e; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
-      max-height: 168px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-    }
-    .fp-featured-club-option {
-      width: 100%; display: flex; align-items: center; gap: 0.55rem; background: none; border: none;
-      padding: 0.5rem 0.7rem; cursor: pointer; text-align: left; color: #ddd; font-family: inherit; font-size: 0.85rem;
-    }
-    .fp-featured-club-option:hover { background: rgba(127,168,217,0.12); color: #7fa8d9; }
-    .fp-featured-club-option img { width: 24px; height: 24px; object-fit: contain; border-radius: 4px; flex-shrink: 0; }
-    .fp-featured-club-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .fp-featured-club-empty { color: #999; font-size: 0.82rem; padding: 0.6rem 0.7rem; margin: 0; }
 
     /* Featured Stories / Featured Characters / Featured Gallery -- these now
        live stacked inside .fp-home-main (a flex column), so no more of
@@ -2118,8 +2086,6 @@
   let currentStories = [];
   let editMode = false;
   let editLinks = [];
-  let editFeaturedClub = null;
-  let myClubsCache = null;
 
   // ── Profile theme — default (box-background-2, slightly blurred -- just
   // trying this out, easy to revert to plain dark if it doesn't land) or a
@@ -3636,111 +3602,6 @@
       });
     }
     paint();
-  }
-
-  // ── Feature Club — single-pick, limited to clubs the viewer is actually
-  // a member of, so this just fetches that (usually short) list once and
-  // filters it client-side as they type instead of a server round trip
-  // per keystroke. ────────────────────────────────────────────────────────
-  async function loadMyClubs() {
-    if (myClubsCache) return myClubsCache;
-    try {
-      const res = await fetch(`/api/fanpage-profile/${encodeURIComponent(USERNAME)}/clubs`, { headers: authHeaders() });
-      const data = await res.json();
-      myClubsCache = data.clubs || [];
-    } catch { myClubsCache = []; }
-    return myClubsCache;
-  }
-
-  function renderFeaturedClubEditor() {
-    const wrap = document.getElementById('fp-featured-club-editor');
-    wrap.innerHTML = '';
-    // Always drop any body-appended dropdown from a previous render first --
-    // the "selected card" branch below used to skip this, leaving a stray
-    // position:fixed/z-index:3000 panel on screen with no search input left
-    // to blur it closed. Chrome happened to fire that input's blur event
-    // before wrap.innerHTML='' finished destroying it, hiding the dropdown
-    // as a side effect; Firefox doesn't, so the leftover panel sat there
-    // intercepting every click on the page until a refresh.
-    document.getElementById('fp-featured-club-dropdown')?.remove();
-
-    if (editFeaturedClub) {
-      const card = document.createElement('div');
-      card.className = 'fp-featured-club-selected';
-      card.innerHTML = `
-        <img src="${editFeaturedClub.badge_url || '/images/nopicture2.png'}" alt="" />
-        <span>${escapeHtml(editFeaturedClub.name)}</span>
-        <button type="button" class="fp-featured-club-remove">✕</button>
-      `;
-      card.querySelector('.fp-featured-club-remove').addEventListener('click', () => {
-        editFeaturedClub = null;
-        renderFeaturedClubEditor();
-      });
-      wrap.appendChild(card);
-      return;
-    }
-
-    const searchWrap = document.createElement('div');
-    searchWrap.className = 'fp-featured-club-search-wrap';
-    searchWrap.innerHTML = `
-      <input type="text" class="fp-featured-club-search" placeholder="Search a club you're in…" autocomplete="off" />
-    `;
-    wrap.appendChild(searchWrap);
-    const input = searchWrap.querySelector('.fp-featured-club-search');
-
-    // Body-appended, fixed-position dropdown (never position:absolute
-    // scoped to the search box -- the sidebar it lives in clips/loses
-    // stacking-order fights with the Links section below it otherwise).
-    // Re-created fresh each editor render, so drop any stale one first.
-    document.getElementById('fp-featured-club-dropdown')?.remove();
-    const dropdown = document.createElement('div');
-    dropdown.className = 'fp-featured-club-dropdown';
-    dropdown.id = 'fp-featured-club-dropdown';
-    dropdown.hidden = true;
-    document.body.appendChild(dropdown);
-
-    function positionClubDropdown() {
-      const rect = input.getBoundingClientRect();
-      dropdown.style.top = `${rect.bottom + 4}px`;
-      dropdown.style.left = `${rect.left}px`;
-      dropdown.style.width = `${rect.width}px`;
-    }
-
-    async function paintDropdown(q) {
-      const clubs = await loadMyClubs();
-      const query = q.trim().toLowerCase();
-      const matches = query ? clubs.filter(c => c.name.toLowerCase().includes(query)) : clubs;
-      positionClubDropdown();
-      dropdown.hidden = false;
-      if (!matches.length) {
-        dropdown.innerHTML = `<p class="fp-featured-club-empty">${clubs.length ? 'No matches.' : "You're not in any clubs yet."}</p>`;
-        return;
-      }
-      dropdown.innerHTML = '';
-      matches.forEach(c => {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = 'fp-featured-club-option';
-        item.innerHTML = `
-          <img src="${c.badge_url || c.icon_url || '/images/nopicture2.png'}" alt="" />
-          <span>${escapeHtml(c.name)}</span>
-        `;
-        // mousedown (not click) fires before the input's blur hides the
-        // dropdown, otherwise blur wins the race and the click never lands.
-        item.addEventListener('mousedown', (e) => {
-          e.preventDefault();
-          editFeaturedClub = { slug: c.slug, name: c.name, badge_url: c.badge_url || c.icon_url || '' };
-          renderFeaturedClubEditor();
-        });
-        dropdown.appendChild(item);
-      });
-    }
-
-    input.addEventListener('focus', () => paintDropdown(input.value));
-    input.addEventListener('input', () => paintDropdown(input.value));
-    input.addEventListener('blur', () => { dropdown.hidden = true; });
-    window.addEventListener('scroll', () => { if (!dropdown.hidden) positionClubDropdown(); }, true);
-    window.addEventListener('resize', () => { if (!dropdown.hidden) positionClubDropdown(); });
   }
 
   // ── Newspaper ─────────────────────────────────────────────────────────────
