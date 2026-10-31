@@ -9219,6 +9219,13 @@ app.delete('/api/moderator/characters/:id', requireAuth, requireModerator, async
   res.json({ message: 'Unlinked from this story.' });
 });
 
+// The "Link To" pickers draw their thumbnails at ~46px, so they get a small
+// right-sized copy (see sizedUrl) instead of the full original -- those can be
+// several MB each and 30 of them decoding at once is what made scrolling the
+// picker lag. `?limit=` lets the client ask for a short initial list.
+const PICKER_THUMB_PX = 200;
+const pickerLimit = (req) => Math.max(1, Math.min(30, parseInt(req.query.limit, 10) || 30));
+
 // Search the current user's OWN characters not yet linked to this story —
 // feeds the "+ Link Existing" picker.
 // Every character the requesting user owns, regardless of story links —
@@ -9228,10 +9235,10 @@ app.delete('/api/moderator/characters/:id', requireAuth, requireModerator, async
 app.get('/api/characters/mine', requireAuth, async (req, res) => {
   const q = `%${(req.query.q || '').trim()}%`;
   const { rows } = await pool.query(
-    `SELECT id, name, ref_image FROM moderator_characters WHERE owner_user_id = $1 AND name ILIKE $2 ORDER BY name LIMIT 30`,
-    [req.user.id, q]
+    `SELECT id, name, ref_image FROM moderator_characters WHERE owner_user_id = $1 AND name ILIKE $2 ORDER BY name LIMIT $3`,
+    [req.user.id, q, pickerLimit(req)]
   );
-  res.json({ characters: rows });
+  res.json({ characters: rows.map(r => ({ ...r, ref_image: sizedUrl(r.ref_image, PICKER_THUMB_PX) })) });
 });
 
 // Cross-owner character search — the "Other Characters" tab of the
@@ -9246,12 +9253,12 @@ app.get('/api/characters/search', requireAuth, async (req, res) => {
      FROM moderator_characters mc
      JOIN users u ON u.id = mc.owner_user_id
      WHERE mc.owner_user_id <> $1 AND mc.name ILIKE $2
-     ORDER BY mc.name LIMIT 30`,
-    [req.user.id, q]
+     ORDER BY mc.name LIMIT $3`,
+    [req.user.id, q, pickerLimit(req)]
   );
   res.json({
     characters: rows.map(r => ({
-      id: r.id, name: r.name, ref_image: r.ref_image,
+      id: r.id, name: r.name, ref_image: sizedUrl(r.ref_image, PICKER_THUMB_PX),
       owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
     })),
   });
@@ -9266,10 +9273,10 @@ app.get('/api/stories/mine', requireAuth, async (req, res) => {
      FROM moderator_sites ms
      JOIN users u ON u.id = ms.owner_user_id
      WHERE ms.owner_user_id = $1 AND ms.site_title ILIKE $2
-     ORDER BY ms.site_title LIMIT 30`,
-    [req.user.id, q]
+     ORDER BY ms.site_title LIMIT $3`,
+    [req.user.id, q, pickerLimit(req)]
   );
-  res.json({ stories: rows.map(r => ({ id: r.id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url, author_avatar: r.author_avatar })) });
+  res.json({ stories: rows.map(r => ({ id: r.id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: sizedUrl(r.cover_url, PICKER_THUMB_PX), author_avatar: r.author_avatar })) });
 });
 
 // "You may also like" on a story's own page. Scores every other published
@@ -9361,12 +9368,12 @@ app.get('/api/stories/search', requireAuth, async (req, res) => {
      FROM moderator_sites ms
      JOIN users u ON u.id = ms.owner_user_id
      WHERE ms.owner_user_id <> $1 AND ms.site_title ILIKE $2
-     ORDER BY ms.site_title LIMIT 30`,
-    [req.user.id, q]
+     ORDER BY ms.site_title LIMIT $3`,
+    [req.user.id, q, pickerLimit(req)]
   );
   res.json({
     stories: rows.map(r => ({
-      id: r.id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url,
+      id: r.id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: sizedUrl(r.cover_url, PICKER_THUMB_PX),
       owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
       author_avatar: r.author_avatar,
     })),
@@ -9378,10 +9385,10 @@ app.get('/api/stories/search', requireAuth, async (req, res) => {
 app.get('/api/gallery/mine', requireAuth, async (req, res) => {
   const q = `%${(req.query.q || '').trim()}%`;
   const { rows } = await pool.query(
-    `SELECT id, title, image_url, preview_image_url FROM moderator_gallery WHERE owner_user_id = $1 AND title ILIKE $2 ORDER BY title LIMIT 30`,
-    [req.user.id, q]
+    `SELECT id, title, image_url, preview_image_url FROM moderator_gallery WHERE owner_user_id = $1 AND title ILIKE $2 ORDER BY title LIMIT $3`,
+    [req.user.id, q, pickerLimit(req)]
   );
-  res.json({ gallery: rows.map(r => ({ id: r.id, title: r.title, image: r.preview_image_url || r.image_url })) });
+  res.json({ gallery: rows.map(r => ({ id: r.id, title: r.title, image: sizedUrl(r.preview_image_url || r.image_url, PICKER_THUMB_PX) })) });
 });
 app.get('/api/gallery/search', requireAuth, async (req, res) => {
   const q = `%${(req.query.q || '').trim()}%`;
@@ -9390,12 +9397,12 @@ app.get('/api/gallery/search', requireAuth, async (req, res) => {
      FROM moderator_gallery mg
      JOIN users u ON u.id = mg.owner_user_id
      WHERE mg.owner_user_id <> $1 AND mg.title ILIKE $2
-     ORDER BY mg.title LIMIT 30`,
-    [req.user.id, q]
+     ORDER BY mg.title LIMIT $3`,
+    [req.user.id, q, pickerLimit(req)]
   );
   res.json({
     gallery: rows.map(r => ({
-      id: r.id, title: r.title, image: r.preview_image_url || r.image_url,
+      id: r.id, title: r.title, image: sizedUrl(r.preview_image_url || r.image_url, PICKER_THUMB_PX),
       owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
     })),
   });

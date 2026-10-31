@@ -487,7 +487,7 @@
       <div class="char-link-picker-scroll" id="char-link-picker-mine-list"></div>
     </div>
     <div id="char-link-picker-other" hidden>
-      <input class="mod-input" id="char-link-other-search" placeholder="Search characters by name…" style="margin-bottom:0.75rem;" />
+      <input class="mod-input" id="char-link-other-search" placeholder="A few shown — type to search all characters…" style="margin-bottom:0.75rem;" />
       <div class="char-link-picker-scroll" id="char-link-picker-other-list"></div>
     </div>
     <button class="mod-btn mod-btn--small" id="char-link-picker-close" type="button" style="margin-top:0.75rem;">Close</button>
@@ -507,7 +507,7 @@
       <div class="char-link-picker-scroll" id="char-story-picker-mine-list"></div>
     </div>
     <div id="char-story-picker-other" hidden>
-      <input class="mod-input" id="char-story-other-search" placeholder="Search stories by title…" style="margin-bottom:0.75rem;" />
+      <input class="mod-input" id="char-story-other-search" placeholder="A few shown — type to search all stories…" style="margin-bottom:0.75rem;" />
       <div class="char-link-picker-scroll" id="char-story-picker-other-list"></div>
     </div>
     <button class="mod-btn mod-btn--small" id="char-story-picker-done" type="button" style="margin-top:0.75rem;">Done</button>
@@ -528,7 +528,7 @@
       <div class="char-link-picker-scroll" id="char-gallery-picker-mine-list"></div>
     </div>
     <div id="char-gallery-picker-other" hidden>
-      <input class="mod-input" id="char-gallery-other-search" placeholder="Search gallery by title…" style="margin-bottom:0.75rem;" />
+      <input class="mod-input" id="char-gallery-other-search" placeholder="A few shown — type to search all gallery…" style="margin-bottom:0.75rem;" />
       <div class="char-link-picker-scroll" id="char-gallery-picker-other-list"></div>
     </div>
     <button class="mod-btn mod-btn--small" id="char-gallery-picker-done" type="button" style="margin-top:0.75rem;">Done</button>
@@ -832,7 +832,7 @@
     item.type = 'button';
     item.className = 'char-link-picker-item--big';
     item.innerHTML = `
-      <img src="${c.ref_image || '/images/characters/noreference.png'}" alt="" />
+      <img src="${c.ref_image || '/images/characters/noreference.png'}" alt="" loading="lazy" decoding="async" width="46" height="46" />
       <span>
         <span class="char-link-picker-item-name">${c.name}</span>
         ${showOwner ? `<span class="char-link-picker-item-owner">${c.owner_display_name || c.owner_username}</span>` : ''}
@@ -881,7 +881,7 @@
     const list = document.getElementById('char-link-picker-other-list');
     list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
     try {
-      const res = await fetch(`/api/characters/search?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+      const res = await fetch(`/api/characters/search?q=${encodeURIComponent(q)}${q ? '' : '&limit=12'}`, { headers: authHeaders() });
       const data = await res.json();
       const results = (data.characters || []).filter(c => !linkPickerExcludedIds.has(String(c.id)));
       if (!results.length) {
@@ -1065,7 +1065,7 @@
     const list = document.getElementById('char-story-picker-other-list');
     list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
     try {
-      const res = await fetch(`/api/stories/search?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+      const res = await fetch(`/api/stories/search?q=${encodeURIComponent(q)}${q ? '' : '&limit=12'}`, { headers: authHeaders() });
       const data = await res.json();
       const stories = data.stories || [];
       if (!stories.length) { list.innerHTML = '<p class="char-link-picker-empty">No matching stories found.</p>'; return; }
@@ -1132,7 +1132,7 @@
       const gallery = data.gallery || [];
       if (!gallery.length) { list.innerHTML = `<p class="char-link-picker-empty">${q ? 'No matching gallery posts found.' : 'You don\'t have any gallery posts yet.'}</p>`; return; }
       list.innerHTML = '';
-      gallery.forEach(g => list.appendChild(galleryLinkPickerToggleItem(g, `<img src="${g.image}" alt="" />`, g.title || 'Untitled', null)));
+      gallery.forEach(g => list.appendChild(galleryLinkPickerToggleItem(g, `<img src="${g.image}" alt="" loading="lazy" decoding="async" width="46" height="46" />`, g.title || 'Untitled', null)));
     } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t load your gallery right now.</p>'; }
   }
   let galleryLinkOtherDebounce;
@@ -1140,12 +1140,12 @@
     const list = document.getElementById('char-gallery-picker-other-list');
     list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
     try {
-      const res = await fetch(`/api/gallery/search?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+      const res = await fetch(`/api/gallery/search?q=${encodeURIComponent(q)}${q ? '' : '&limit=12'}`, { headers: authHeaders() });
       const data = await res.json();
       const gallery = data.gallery || [];
       if (!gallery.length) { list.innerHTML = '<p class="char-link-picker-empty">No matching gallery posts found.</p>'; return; }
       list.innerHTML = '';
-      gallery.forEach(g => list.appendChild(galleryLinkPickerToggleItem(g, `<img src="${g.image}" alt="" />`, g.title || 'Untitled', g.owner_display_name || g.owner_username)));
+      gallery.forEach(g => list.appendChild(galleryLinkPickerToggleItem(g, `<img src="${g.image}" alt="" loading="lazy" decoding="async" width="46" height="46" />`, g.title || 'Untitled', g.owner_display_name || g.owner_username)));
     } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t search right now.</p>'; }
   }
   function openGalleryLinkPicker() {
