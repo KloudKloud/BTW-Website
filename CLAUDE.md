@@ -357,8 +357,8 @@ rather than trying to get one single insertion order to satisfy both.
 ## Fanpage Hub hero row (fanpages/index.html) — current state + saved styles
 
 **UPDATE (supersedes the "traveling sparks" description below): the four comic panels are now two
-grouped pairs.** `.fp-comic-group--left` (Gallery+Stories, cool purple #a35cff) and `--right`
-(Characters+Clubs, blue #3d9bff) each share ONE perimeter border (2px) and one inset glow, with a faint
+grouped pairs.** `.fp-comic-group--left` (Gallery+Stories, light purple #bd98ff) and `--right`
+(Characters+Clubs, light sky blue #96cdff, glow alpha ~0.26) each share ONE perimeter border (2px) and one inset glow, with a faint
 divider between the two panels; each group is 19% of the row. The traveling spark was removed in favor of a
 subtle "breathing" pulse that animates only the OPACITY of a `::after` glow overlay (4s, right group half a
 cycle behind) -- compositor-only, so it's ~free. Per-panel neon colors/seam rules are gone. The `hub-hero-*`
@@ -472,12 +472,13 @@ stored as-is, and the character ref-image crop passes `maxEdge: 8192, quality: 1
 crop of artwork displayed at full size must pass the same options.
 
 ### Animations: prefer opacity/transform, avoid animating `box-shadow`
-Measured on the homepage (headless, % of one core): everything animating ~140%, all off 0%. The pulsing
-`box-shadow` keyframes (`fp-glow-pulse`/`-blue` on the Spotlight + Recent Submissions frames,
-`fp-glow-line-pulse` on the `.rs-box-topbar`) are the big cost (~70 points); the billboard slide
-`background-position` pan is next (~15-20); the arcade `fp-arcade-neon-purple` box-shadow pulse and the
-old traveling spark were small (~0-5 each). New glows should pulse by animating `opacity` of an overlay/
-pseudo-element that carries a static shadow (see `.fp-comic-group::after`), not the shadow itself.
+Measured on the homepage (headless, % of one core): everything animating was ~140-165%, all off 0%. The
+pulsing `box-shadow` keyframes on the Spotlight + Recent Submissions frames (`.fp-glow-frame::after`,
+`.rs-box-topbar` lines) were ~70 points of that; they now hold a STATIC shadow and animate only `opacity`
+(`fp-glow-fade`, `fp-glow-line-fade`, `will-change: opacity`) -> homepage ~83%. Remaining: billboard
+slide `background-position` pan (~15-20) and the arcade `fp-arcade-neon-purple` box-shadow pulse (~0-5,
+left as-is). New glows must pulse by animating `opacity` of an overlay/pseudo-element carrying a static
+shadow (see `.fp-comic-group::after`), never the shadow itself.
 
 ### 2. No `backdrop-filter` on full-screen overlays/modals
 A `backdrop-filter: blur()` on a `position:fixed; inset:0` overlay is recomputed every frame

@@ -66,14 +66,14 @@
        The right group runs half a cycle behind so they don't pulse in sync. */
     .fp-comic-group::after {
       content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
-      box-shadow: inset 0 0 22px 3px var(--comic-glow);
+      box-shadow: inset 0 0 16px 1px var(--comic-glow);
       will-change: opacity;
       animation: fp-comic-pulse 4s ease-in-out infinite;
     }
     .fp-comic-group--right::after { animation-delay: -2s; }
     @keyframes fp-comic-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
-    .fp-comic-group--left  { --comic-glow: rgba(163,92,255,0.45); --comic-neon: #a35cff; --comic-neon-dim: rgba(163,92,255,0.45); }
-    .fp-comic-group--right { --comic-glow: rgba(61,155,255,0.45); --comic-neon: #3d9bff; --comic-neon-dim: rgba(61,155,255,0.45); }
+    .fp-comic-group--left  { --comic-glow: rgba(190,150,255,0.26); --comic-neon: #bd98ff; --comic-neon-dim: rgba(190,150,255,0.26); }
+    .fp-comic-group--right { --comic-glow: rgba(150,205,255,0.26); --comic-neon: #96cdff; --comic-neon-dim: rgba(150,205,255,0.26); }
     .fp-comic-box {
       /* overflow stays visible -- the bg/scrim children are inset:0 (exactly
          bounded already) and the halftone background-image just tiles. */
@@ -275,14 +275,19 @@
       box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
       background: #14101c;
     }
-    @keyframes fp-glow-pulse {
-      0%, 100% { box-shadow: inset 0 0 0 1px rgba(240,192,96,0.3), inset 0 0 16px rgba(240,192,96,0.1); }
-      50% { box-shadow: inset 0 0 0 1px rgba(240,192,96,0.6), inset 0 0 28px rgba(240,192,96,0.26); }
+    /* The pulse animates only OPACITY (compositor-only, ~free). The shadow itself
+       is static at the glow's bright state; animating box-shadow repainted these
+       big boxes every frame and was the homepage's biggest animation cost. */
+    @keyframes fp-glow-fade {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
     }
     .fp-glow-frame { position: relative; }
     .fp-glow-frame::after {
       content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
-      animation: fp-glow-pulse 4.5s ease-in-out infinite;
+      box-shadow: inset 0 0 0 1px rgba(240,192,96,0.6), inset 0 0 28px rgba(240,192,96,0.26);
+      will-change: opacity;
+      animation: fp-glow-fade 4.5s ease-in-out infinite;
     }
     /* Recent Submissions uses a cool blue variant of the same glow-frame
        pattern, with border-radius matching the box's own 18px corners so
@@ -291,13 +296,9 @@
        the Spotlight box since its ::after already gets a per-side radius
        override, but rs-box is a single glow-frame covering all 4 corners
        at once). */
-    @keyframes fp-glow-pulse-blue {
-      0%, 100% { box-shadow: inset 0 0 0 1.5px rgba(127,168,217,0.55), inset 0 0 18px rgba(127,168,217,0.22); }
-      50% { box-shadow: inset 0 0 0 1.5px rgba(127,168,217,0.9), inset 0 0 30px rgba(127,168,217,0.4); }
-    }
     .rs-box.fp-glow-frame::after {
       border-radius: 18px;
-      animation: fp-glow-pulse-blue 4.5s ease-in-out infinite;
+      box-shadow: inset 0 0 0 1.5px rgba(127,168,217,0.9), inset 0 0 30px rgba(127,168,217,0.4);
     }
     .fp-spotlight-strip {
       flex: 0 0 25%; position: relative; overflow: hidden;
@@ -404,14 +405,16 @@
       position: relative; display: flex; align-items: center; gap: 0.5rem;
       padding: 1.1rem 1.5rem;
     }
-    @keyframes fp-glow-line-pulse {
-      0%, 100% { box-shadow: 0 0 6px rgba(127,168,217,0.4), 0 0 12px rgba(127,168,217,0.18); }
-      50% { box-shadow: 0 0 10px rgba(127,168,217,0.75), 0 0 20px rgba(127,168,217,0.35); }
+    @keyframes fp-glow-line-fade {
+      0%, 100% { opacity: 0.55; }
+      50% { opacity: 1; }
     }
     .rs-box-topbar::before, .rs-box-topbar::after {
       content: ''; position: absolute; left: 0; right: 0; height: 1px;
       background: rgba(127,168,217,0.65);
-      animation: fp-glow-line-pulse 4.5s ease-in-out infinite;
+      box-shadow: 0 0 10px rgba(127,168,217,0.75), 0 0 20px rgba(127,168,217,0.35);
+      will-change: opacity;
+      animation: fp-glow-line-fade 4.5s ease-in-out infinite;
     }
     .rs-box-topbar::before { top: 0; }
     .rs-box-topbar::after { bottom: 0; }
@@ -640,7 +643,7 @@
       .fp-spotlight-strip::after, .fp-spotlight-grid::after { border-radius: 0; }
       .rs-box { flex-direction: column; }
       .rs-box-body { flex: 1 1 auto; }
-      .rs-side-panel { flex: 0 0 100px; border-left: none; border-top: 1px solid rgba(127,168,217,0.65); animation-name: fp-glow-line-pulse; }
+      .rs-side-panel { flex: 0 0 100px; border-left: none; border-top: 1px solid rgba(127,168,217,0.65); }
       .rs-side-panel::after { border-radius: 0; }
       .fp-arcade-row { flex-direction: column; height: auto; }
       .fp-arcade-main { flex: 0 0 220px; height: 220px; min-height: 220px; align-self: auto; }
