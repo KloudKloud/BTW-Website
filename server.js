@@ -3481,7 +3481,8 @@ app.get('/api/auth/profile', requireAuth, async (req, res) => {
   const { rows: [user] } = await pool.query(
     `SELECT id, username, display_name, email, avatar, avatar_original_url, email_newsletter, nsfw_enabled, pending_email,
             pronouns, account_bio, fun_facts, account_links, featured_club_slug,
-            featured_submission_kind, featured_submission_ref_id
+            featured_submission_kind, featured_submission_ref_id,
+            account_banner_url AS banner_url
      FROM users WHERE id = $1`, [req.user.id]
   );
   if (!user) return res.status(404).json({ error: 'User not found.' });

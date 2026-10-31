@@ -207,7 +207,31 @@
     .ep-link-remove:hover { border-color: #d97a72; }
     .ep-links-error { color: #d97a72; font-size: 0.8rem; margin: 0.5rem 0 0; }
 
+    /* ── Banner / pfp preview -- the banner box takes the live profile
+         banner's exact aspect on this screen (viewport width : banner height,
+         set from JS), so what the cropper frames is what the profile shows. ── */
+    .ep-img-preview { position: relative; margin: 0.4rem 0 1.1rem; padding-bottom: 44px; }
+    .ep-img-banner {
+      position: relative; width: 100%; background: #1a1a1a center / cover no-repeat; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.14); overflow: hidden; aspect-ratio: 1600 / 420;
+    }
+    .ep-img-banner-empty {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      color: #777; font-size: 0.85rem;
+    }
+    .ep-img-banner-empty[hidden] { display: none; }
+    .ep-img-avatar {
+      position: absolute; left: 18px; bottom: 0; width: 88px; height: 88px; border-radius: 50%;
+      background: #25232c center / cover no-repeat; border: 3px solid #14121a;
+      display: flex; align-items: center; justify-content: center; color: #888; font-size: 1.6rem; font-weight: 700;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    }
+    .ep-img-actions { display: flex; flex-wrap: wrap; gap: 0.6rem 2rem; }
+    .ep-img-actions-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
     @media (max-width: 720px) {
+      .ep-img-avatar { width: 64px; height: 64px; left: 10px; }
+      .ep-img-preview { padding-bottom: 32px; }
       .cs-layout { padding: calc(68px + 2rem) 1.25rem 4rem; }
       .cs-field-row { flex-direction: column; gap: 0; }
       .cs-topbar-eyebrow { display: none; }
@@ -249,6 +273,29 @@
 <div class="cs-layout">
   <p class="cs-error" id="ep-error" hidden></p>
   <p class="cs-success" id="ep-success" hidden>Saved!</p>
+
+  <div class="cs-panel">
+    <div class="cs-field-title-row" style="flex-wrap:wrap;">
+      <span class="cs-field-title" style="white-space:nowrap;">Banner &amp; Profile Picture</span>
+      <span class="cs-field-hint">Preview matches your profile on this screen. Saves with Save Changes.</span>
+    </div>
+    <div class="ep-img-preview" id="ep-img-preview">
+      <div class="ep-img-banner" id="ep-banner-preview"><span class="ep-img-banner-empty" id="ep-banner-empty">No banner yet</span></div>
+      <div class="ep-img-avatar" id="ep-avatar-preview"><span id="ep-avatar-fallback">?</span></div>
+    </div>
+    <div class="ep-img-actions">
+      <div class="ep-img-actions-group ep-img-actions-group--banner">
+        <button type="button" class="mod-btn mod-btn--small" id="ep-banner-change-btn">📷 Change Banner</button>
+        <button type="button" class="mod-btn mod-btn--small" id="ep-banner-recrop-btn" hidden>✏️ Recrop</button>
+      </div>
+      <div class="ep-img-actions-group">
+        <button type="button" class="mod-btn mod-btn--small" id="ep-avatar-change-btn">📷 Change Profile Picture</button>
+        <button type="button" class="mod-btn mod-btn--small" id="ep-avatar-recrop-btn" hidden>✏️ Recrop</button>
+      </div>
+    </div>
+    <input type="file" id="ep-banner-file" accept="image/*" hidden />
+    <input type="file" id="ep-avatar-file" accept="image/*" hidden />
+  </div>
 
   <div class="cs-panel">
     <div class="cs-field-block">
@@ -325,6 +372,8 @@
 
 </div>
 
+<script src="/fanpages/btw-cropper.js"></script>
+<script src="/fanpages/crop-modal.js"></script>
 <script>
 const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
 if (!token) {
@@ -348,6 +397,118 @@ function wireBackLinks() {
   );
   document.getElementById('cs-topbar-back').href = target;
   document.getElementById('cs-cancel-link').href = target;
+}
+
+// ── Banner + profile picture ─────────────────────────────────────────────
+// Crops are held in memory and only uploaded on Save. The cropper's exported
+// image is the exact final picture (position 50/50, zoom 100 on the server).
+// The banner is drawn on the profile as a full-width, fixed-height strip with
+// background-size: cover, so its aspect depends on the viewer's screen; we
+// use this screen's live width:height so the cropper frame == what you'll see.
+function liveBannerRatio() {
+  const w = window.innerWidth;
+  const h = w <= 480 ? 165 : w <= 800 ? 220 : 420;
+  return Math.min(Math.max(w / h, 2), 6);
+}
+const bannerBox = document.getElementById('ep-banner-preview');
+const avatarBox = document.getElementById('ep-avatar-preview');
+bannerBox.style.aspectRatio = String(liveBannerRatio());
+window.addEventListener('resize', () => { bannerBox.style.aspectRatio = String(liveBannerRatio()); });
+
+let bannerSavedUrl = '';          // what the server has now
+let avatarSavedUrl = '';
+let avatarOriginalSavedUrl = '';
+let pendingBanner = null;         // { blob, previewUrl, sourceFile }
+let pendingAvatar = null;         // { blob, previewUrl, sourceFile }
+
+function paintImages() {
+  const bUrl = pendingBanner ? pendingBanner.previewUrl : bannerSavedUrl;
+  bannerBox.style.backgroundImage = bUrl ? `url("${bUrl}")` : '';
+  document.getElementById('ep-banner-empty').hidden = !!bUrl;
+  document.getElementById('ep-banner-recrop-btn').hidden = !bUrl;
+  const aUrl = pendingAvatar ? pendingAvatar.previewUrl : avatarSavedUrl;
+  avatarBox.style.backgroundImage = aUrl ? `url("${aUrl}")` : '';
+  document.getElementById('ep-avatar-fallback').hidden = !!aUrl;
+  document.getElementById('ep-avatar-recrop-btn').hidden = !aUrl;
+}
+
+function cropBanner(src, sourceFile) {
+  openCropModal({
+    title: 'Crop Banner Image', imageSrc: src, aspectRatio: liveBannerRatio(), round: false,
+    hint: 'This frame is the shape your banner takes on this screen. Drag to move, scroll or pinch to zoom.',
+    onSave: async (blob) => {
+      if (pendingBanner) URL.revokeObjectURL(pendingBanner.previewUrl);
+      pendingBanner = { blob, previewUrl: URL.createObjectURL(blob), sourceFile };
+      paintImages();
+    },
+  });
+}
+function cropAvatar(src, sourceFile) {
+  openCropModal({
+    title: 'Crop Profile Picture', imageSrc: src, aspectRatio: 1, round: true,
+    onSave: async (blob) => {
+      if (pendingAvatar) URL.revokeObjectURL(pendingAvatar.previewUrl);
+      pendingAvatar = { blob, previewUrl: URL.createObjectURL(blob), sourceFile };
+      paintImages();
+    },
+  });
+}
+
+document.getElementById('ep-banner-change-btn').addEventListener('click', () => document.getElementById('ep-banner-file').click());
+document.getElementById('ep-banner-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) cropBanner(URL.createObjectURL(file), file);
+  e.target.value = '';
+});
+document.getElementById('ep-banner-recrop-btn').addEventListener('click', () => {
+  // Recropping a not-yet-saved banner reopens its untouched source file.
+  const src = pendingBanner && pendingBanner.sourceFile ? URL.createObjectURL(pendingBanner.sourceFile) : bannerSavedUrl;
+  if (src) cropBanner(src, pendingBanner ? pendingBanner.sourceFile : null);
+});
+document.getElementById('ep-avatar-change-btn').addEventListener('click', () => document.getElementById('ep-avatar-file').click());
+document.getElementById('ep-avatar-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) cropAvatar(URL.createObjectURL(file), file);
+  e.target.value = '';
+});
+document.getElementById('ep-avatar-recrop-btn').addEventListener('click', () => {
+  if (pendingAvatar && pendingAvatar.sourceFile) cropAvatar(URL.createObjectURL(pendingAvatar.sourceFile), pendingAvatar.sourceFile);
+  else if (avatarSavedUrl) cropAvatar(avatarOriginalSavedUrl || avatarSavedUrl, null);
+});
+
+// Uploads whichever crops are pending; throws on failure so Save reports it.
+async function uploadPendingImages() {
+  if (pendingBanner) {
+    const fd = new FormData();
+    fd.append('banner', pendingBanner.blob, 'banner.jpg');
+    fd.append('position_x', 50);
+    fd.append('position_y', 50);
+    const res = await fetch('/api/account/banner', { method: 'PUT', headers: authHeaders(), body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.banner_url) throw new Error('banner');
+    bannerSavedUrl = data.banner_url + '?t=' + Date.now();
+    URL.revokeObjectURL(pendingBanner.previewUrl);
+    pendingBanner = null;
+  }
+  if (pendingAvatar) {
+    const fd = new FormData();
+    fd.append('avatar', pendingAvatar.blob, 'avatar.jpg');
+    if (pendingAvatar.sourceFile) fd.append('avatar_original', pendingAvatar.sourceFile, pendingAvatar.sourceFile.name || 'original.jpg');
+    const res = await fetch('/api/auth/avatar', { method: 'POST', headers: authHeaders(), body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.avatar) throw new Error('avatar');
+    avatarSavedUrl = data.avatar + '?t=' + Date.now();
+    avatarOriginalSavedUrl = data.avatar_original_url || avatarOriginalSavedUrl;
+    URL.revokeObjectURL(pendingAvatar.previewUrl);
+    pendingAvatar = null;
+    // Topbar avatar is only populated on page load; keep the cached user in step.
+    ['localStorage', 'sessionStorage'].forEach(store => {
+      const raw = window[store].getItem('btw_user');
+      if (!raw) return;
+      try { window[store].setItem('btw_user', JSON.stringify({ ...JSON.parse(raw), avatar: data.avatar })); } catch {}
+    });
+  }
+  paintImages();
 }
 
 // ── Tip popover (Bio hint) -- same open/close-on-outside-click pattern as
@@ -624,6 +785,7 @@ document.getElementById('ep-save-btn').addEventListener('click', async () => {
   if (pendingFeaturedSubmission !== undefined) body.featured_submission = pendingFeaturedSubmission;
 
   try {
+    await uploadPendingImages();
     const res = await fetch('/api/account/profile', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -649,6 +811,10 @@ document.getElementById('ep-save-btn').addEventListener('click', async () => {
     const { user } = await res.json();
     myUsername = user.username;
     wireBackLinks();
+    bannerSavedUrl = user.banner_url || '';
+    avatarSavedUrl = user.avatar || '';
+    avatarOriginalSavedUrl = user.avatar_original_url || '';
+    paintImages();
 
     document.getElementById('ep-pronouns-input').value = user.pronouns || '';
     funFacts = (user.fun_facts || []).slice(0, MAX_FUN_FACTS);
