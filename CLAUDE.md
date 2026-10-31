@@ -356,7 +356,15 @@ rather than trying to get one single insertion order to satisfy both.
 
 ## Fanpage Hub hero row (fanpages/index.html) — current state + saved styles
 
-**The live style is the "classic" layout with traveling sparks** (the same as the
+**UPDATE (supersedes the "traveling sparks" description below): the four comic panels are now two
+grouped pairs.** `.fp-comic-group--left` (Gallery+Stories, cool purple #a35cff) and `--right`
+(Characters+Clubs, blue #3d9bff) each share ONE perimeter border (2px) and one inset glow, with a faint
+divider between the two panels; each group is 19% of the row. The traveling spark was removed in favor of a
+subtle "breathing" pulse that animates only the OPACITY of a `::after` glow overlay (4s, right group half a
+cycle behind) -- compositor-only, so it's ~free. Per-panel neon colors/seam rules are gone. The `hub-hero-*`
+git tags still hold the older per-panel designs.
+
+**Original description (kept for history): the live style was the "classic" layout with traveling sparks** (the same as the
 `hub-hero-classic` tag, plus everything built since). Two designs are saved as git tags
 (pushed to origin; `git tag -l "hub-hero-*"`):
 - `hub-hero-classic` (commit `de15715`): narrow comic panels (fixed 9.5% width,
@@ -462,6 +470,14 @@ Verified live (natural size = file size, no CDN recompression). The upload side 
 stored as-is, and the character ref-image crop passes `maxEdge: 8192, quality: 1` to `openCropModal`
 (crop-modal.js defaults are 2400px / JPEG 0.92 -- fine for banners/avatars, not for art shown as-is). Any new
 crop of artwork displayed at full size must pass the same options.
+
+### Animations: prefer opacity/transform, avoid animating `box-shadow`
+Measured on the homepage (headless, % of one core): everything animating ~140%, all off 0%. The pulsing
+`box-shadow` keyframes (`fp-glow-pulse`/`-blue` on the Spotlight + Recent Submissions frames,
+`fp-glow-line-pulse` on the `.rs-box-topbar`) are the big cost (~70 points); the billboard slide
+`background-position` pan is next (~15-20); the arcade `fp-arcade-neon-purple` box-shadow pulse and the
+old traveling spark were small (~0-5 each). New glows should pulse by animating `opacity` of an overlay/
+pseudo-element that carries a static shadow (see `.fp-comic-group::after`), not the shadow itself.
 
 ### 2. No `backdrop-filter` on full-screen overlays/modals
 A `backdrop-filter: blur()` on a `position:fixed; inset:0` overlay is recomputed every frame

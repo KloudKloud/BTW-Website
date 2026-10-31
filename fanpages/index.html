@@ -39,73 +39,56 @@
        62/25 — that's the ratio the Admin > Bulletin crop editor/preview
        use so what you crop there matches what renders here. ── */
     .fp-hero-row {
-      /* overflow:hidden here (not on the individual .fp-comic-box elements,
-         which intentionally stay visible so their glow/spark isn't clipped)
-         -- without it, the traveling spark (.fp-comic-box::before) bleeds a
-         few px past Gallery's outer-left edge, Clubs' outer-right edge, and
-         every box's bottom edge as it rides along the border. Those are the
-         row's own outer edges too, and now that the homepage has nothing
-         below the hero row, that handful of px was enough to toggle real
-         page scrollbars on/off as the sparks moved -- visible as the page
-         "jerking". Clipping at the row's own bounds stops that while still
-         leaving the spark free to bleed across box-to-box seams and the
-         top edge, which don't affect the page's actual scrollable area. */
+      /* overflow:hidden keeps anything bleeding past the row's own outer edges
+         (glows, transforms) from toggling real page scrollbars. */
       position: relative; width: 100%; height: clamp(305px, 25vw, 425px);
       display: flex; align-items: stretch; border-bottom: 1px solid rgba(255,255,255,0.08);
       overflow: hidden;
     }
 
-    /* Comic-strip link boxes — flat black, bold border, halftone dot
-       texture, a center-right label, and a little traveling spark that
-       circles the perimeter (instead of a static glow) to give each panel
-       a subtle animated life. --comic-neon is each panel's full-brightness
-       neon color, used for the border and the spark itself. Fixed 9.5%
-       basis each (no grow/shrink) so Gallery+Stories and Characters+Clubs
-       land on exactly 19% of the row apiece, leaving 62% for the banner. */
+    /* Comic-strip link boxes -- flat black with a halftone dot texture and a
+       label. The four boxes are now two PAIRS (.fp-comic-group): Gallery +
+       Stories share ONE perimeter border in a cool purple glow, Characters +
+       Clubs share ONE in a nice blue. The glow breathes with a soft, subtle
+       pulse (see .fp-comic-group::after); the panels inside just keep a faint
+       divider. Each group is exactly 19% of the row (the two panels split it
+       evenly), leaving 62% for the banner. */
+    .fp-comic-group {
+      position: relative; flex: 0 0 19%; min-width: 0; height: 100%; display: flex;
+      box-sizing: border-box;
+      border: 2px solid var(--comic-neon);
+    }
+    /* Inset glow drawn as an overlay (not a box-shadow on the group itself),
+       so it sits above the panels' art instead of being hidden under it. It
+       "breathes" by animating ONLY opacity -- a compositor-only property, so
+       the pulse costs next to nothing (animating the box-shadow itself would
+       repaint every frame, which is what makes the other glow boxes costly).
+       The right group runs half a cycle behind so they don't pulse in sync. */
+    .fp-comic-group::after {
+      content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+      box-shadow: inset 0 0 22px 3px var(--comic-glow);
+      will-change: opacity;
+      animation: fp-comic-pulse 4s ease-in-out infinite;
+    }
+    .fp-comic-group--right::after { animation-delay: -2s; }
+    @keyframes fp-comic-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+    .fp-comic-group--left  { --comic-glow: rgba(163,92,255,0.45); --comic-neon: #a35cff; --comic-neon-dim: rgba(163,92,255,0.45); }
+    .fp-comic-group--right { --comic-glow: rgba(61,155,255,0.45); --comic-neon: #3d9bff; --comic-neon-dim: rgba(61,155,255,0.45); }
     .fp-comic-box {
-      /* overflow stays visible -- overflow:hidden would clip the spark
-         (::before, below) wherever it travels past the box's own edge,
-         and clip this element's own box-shadow too. Nothing inside
-         actually needs clipping: the bg/scrim children are inset:0
-         (exactly bounded already) and the halftone background-image just
-         tiles. */
-      position: relative; flex: 0 0 9.5%; min-width: 0; height: 100%;
+      /* overflow stays visible -- the bg/scrim children are inset:0 (exactly
+         bounded already) and the halftone background-image just tiles. */
+      position: relative; flex: 1 1 50%; min-width: 0; height: 100%;
       display: block; text-decoration: none; cursor: pointer;
       background: #0a0a0a;
       background-image:
         radial-gradient(rgba(255,255,255,0.09) 1.1px, transparent 1.1px);
       background-size: 13px 13px;
-      border: 1px solid var(--comic-neon, rgba(255,255,255,0.85));
       transition: transform 0.18s, background-color 0.22s;
     }
+    .fp-comic-box + .fp-comic-box { border-left: 1px solid rgba(255,255,255,0.14); }
     .fp-comic-box::after {
       content: ''; position: absolute; inset: 0; opacity: 0; transition: opacity 0.22s;
       background: radial-gradient(ellipse at center, var(--comic-glow, rgba(255,255,255,0.35)) 0%, transparent 72%);
-    }
-    /* The traveling spark -- a small glowing dot riding offset-path: inset
-       around the box's own border rectangle, looping forever. Combines two
-       independent animations: fp-spark-travel moves it around the
-       perimeter at a steady pace, fp-spark-flicker is a much faster
-       opacity/scale wobble layered on top for the "flickering fire" feel
-       rather than a smoothly gliding dot. Each panel's animation-delay is
-       offset so the four sparks aren't moving in lockstep. */
-    .fp-comic-box::before {
-      content: ''; position: absolute; top: 0; left: 0; z-index: 3;
-      width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border-radius: 50%;
-      background: radial-gradient(circle, #fff 0%, var(--comic-neon, #fff) 55%, transparent 100%);
-      box-shadow: 0 0 6px 1px var(--comic-neon, #fff), 0 0 13px 4px var(--comic-neon-dim, rgba(255,255,255,0.5));
-      offset-path: inset(0 round 2px);
-      offset-distance: 0%;
-      pointer-events: none;
-      animation: fp-spark-travel 7s linear infinite, fp-spark-flicker 0.45s ease-in-out infinite;
-    }
-    .fp-comic-box--stories::before { animation-delay: -1.75s, 0s; }
-    .fp-comic-box--characters::before { animation-delay: -3.5s, 0s; }
-    .fp-comic-box--clubs::before { animation-delay: -5.25s, 0s; }
-    @keyframes fp-spark-travel { to { offset-distance: 100%; } }
-    @keyframes fp-spark-flicker {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.55; transform: scale(0.8); }
     }
     /* Admin-picked image for this slot (see Admin > Bulletin > Hero Row
        Images) — only present once a crop has actually been saved for that
@@ -117,50 +100,6 @@
     .fp-comic-box-scrim { position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(0,0,0,0.3), rgba(0,0,0,0.6)); }
     .fp-comic-box:hover { transform: translateY(-2px); background-color: #120f16; }
     .fp-comic-box:hover::after { opacity: 1; }
-    .fp-comic-box:hover::before {
-      width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px;
-      box-shadow: 0 0 9px 2px var(--comic-neon, #fff), 0 0 19px 7px var(--comic-neon-dim, rgba(255,255,255,0.6));
-    }
-    /* True neon tones -- Gallery purple, Stories red, Characters green,
-       Clubs blue, each with a dimmer translucent twin for the outermost
-       shadow layer and the inset glow (a 100%-alpha color that far out
-       would just read as a flat color fill, not a soft halo). */
-    .fp-comic-box--gallery { --comic-glow: rgba(200,70,255,0.4); --comic-neon: #c846ff; --comic-neon-dim: rgba(200,70,255,0.4); }
-    .fp-comic-box--stories { --comic-glow: rgba(255,45,85,0.4); --comic-neon: #ff2d55; --comic-neon-dim: rgba(255,45,85,0.4); }
-    .fp-comic-box--characters { --comic-glow: rgba(57,255,20,0.4); --comic-neon: #39ff14; --comic-neon-dim: rgba(57,255,20,0.4); }
-    .fp-comic-box--clubs { --comic-glow: rgba(0,195,255,0.4); --comic-neon: #00c3ff; --comic-neon-dim: rgba(0,195,255,0.4); }
-
-    /* The solid border (not the glow) literally doubles in apparent
-       thickness wherever two comic boxes sit flush against each other --
-       Gallery's right edge + Stories' left edge paint as one 2px seam, same
-       for Characters' right + Clubs' left. The four "lone" edges (Gallery's
-       outer-left, Stories' right against the banner, Characters' left
-       against the banner, Clubs' outer-right) only ever get one box's 1px,
-       so they read thinner. Thickening just that one side on each closes
-       the gap without touching the box-sizing (border-box, so this doesn't
-       shift any widths). The two sides that border the banner specifically
-       (Stories' right, Characters' left) need a bit more than that: the
-       banner-mid element paints right after Stories in DOM order, so it
-       covers most of Stories' glow bleeding rightward onto it -- there's
-       nothing on the other side to "swallow" a thin border the way there
-       is at the Gallery/Stories or Characters/Clubs seams, so those two
-       sides go to 3px instead of 2px to stay visible on their own, without
-       depending on bleed that gets covered. Kept noticeably thinner than
-       the original 6px/4px pass, which read too heavy against the banner. */
-    .fp-comic-box--gallery { border-left-width: 2px; }
-    .fp-comic-box--stories { border-right-width: 3px; }
-    .fp-comic-box--characters { border-left-width: 3px; }
-    .fp-comic-box--clubs { border-right-width: 2px; }
-
-    /* Seam colors at the two places where a comic box's border touches
-       another comic box's border -- rather than two distinct hard-edged
-       colors sitting side by side (purple next to red, green next to
-       blue), the shared edge uses a blended color so it reads as one
-       combined line instead of a visible seam. */
-    .fp-comic-box--gallery { border-right-color: #e03aa6; }
-    .fp-comic-box--stories { border-left-color: #e03aa6; }
-    .fp-comic-box--characters { border-right-color: #1de18a; }
-    .fp-comic-box--clubs { border-left-color: #1de18a; }
 
     /* Label runs vertically bottom-to-top (comic-book spine style) same as
        before, but now much bigger and stretched a bit taller per
@@ -195,7 +134,7 @@
     @media (max-width: 720px) {
       .fp-hero-row { height: auto; flex-wrap: wrap; }
       .fp-hero-banner-mid { flex: 1 1 100%; order: 1; height: 220px; }
-      .fp-comic-box { flex: 1 1 25%; order: 2; height: 130px; }
+      .fp-comic-group { flex: 1 1 50%; order: 2; height: 130px; }
       .fp-comic-label { font-size: 0.6rem; letter-spacing: 0.04em; bottom: 0.5rem; }
     }
 
@@ -755,12 +694,14 @@
      no video/background behind it), Characters/Clubs comic strips (right
      quarter). Each comic box is a plain link to its destination page. ══ -->
 <section class="fp-hero-row">
-  <a class="fp-comic-box fp-comic-box--gallery" href="/fanpages/search?view=submissions&browse=1" data-hero-slot="gallery">
-    <span class="fp-comic-label">Gallery</span>
-  </a>
-  <a class="fp-comic-box fp-comic-box--stories" href="/fanpages/search?sort=updated&browse=1" data-hero-slot="stories">
-    <span class="fp-comic-label">Stories</span>
-  </a>
+  <div class="fp-comic-group fp-comic-group--left">
+    <a class="fp-comic-box fp-comic-box--gallery" href="/fanpages/search?view=submissions&browse=1" data-hero-slot="gallery">
+      <span class="fp-comic-label">Gallery</span>
+    </a>
+    <a class="fp-comic-box fp-comic-box--stories" href="/fanpages/search?sort=updated&browse=1" data-hero-slot="stories">
+      <span class="fp-comic-label">Stories</span>
+    </a>
+  </div>
 
   <div class="fp-hero-banner-mid">
     <section class="fp-billboard" id="fp-billboard">
@@ -775,12 +716,14 @@
     </section>
   </div>
 
-  <a class="fp-comic-box fp-comic-box--characters" href="/fanpages/characters" data-hero-slot="characters">
-    <span class="fp-comic-label">Characters</span>
-  </a>
-  <a class="fp-comic-box fp-comic-box--clubs" href="/fanpages/social" data-hero-slot="clubs">
-    <span class="fp-comic-label">Clubs</span>
-  </a>
+  <div class="fp-comic-group fp-comic-group--right">
+    <a class="fp-comic-box fp-comic-box--characters" href="/fanpages/characters" data-hero-slot="characters">
+      <span class="fp-comic-label">Characters</span>
+    </a>
+    <a class="fp-comic-box fp-comic-box--clubs" href="/fanpages/social" data-hero-slot="clubs">
+      <span class="fp-comic-label">Clubs</span>
+    </a>
+  </div>
 </section>
 
 <div class="fp-main">
