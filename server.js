@@ -3518,7 +3518,7 @@ app.get('/api/auth/profile', requireAuth, async (req, res) => {
       `SELECT ${titleCol} AS title, ${imageCol} AS image_url FROM ${table} WHERE id = $1 AND owner_user_id = $2`,
       [refId, req.user.id]
     );
-    if (row) featuredSubmission = { kind, ref_id: refId, title: row.title, image_url: row.image_url || '' };
+    if (row) featuredSubmission = { kind, ref_id: refId, title: row.title, image_url: (await sizedUrlReady(row.image_url, 160, { jpeg: true })) || '' };
   }
 
   res.json({ user: { ...rest, email: decryptEmail(user.email), email_change_pending: !!pending_email, featured_submission: featuredSubmission, featured_club: featuredClub } });
@@ -4820,9 +4820,9 @@ async function generateThumbnail(imageUrlPath) {
 // resize in the background and returns the original that one time, every
 // later call returns the small copy. Anything that isn't one of our own
 // still images (GIFs, external URLs, already-small files) comes back as-is.
-const SIZED_DIRS = ['/images/avatars/', '/images/moderators/'];
+const SIZED_DIRS = ['/images/avatars/', '/images/moderators/', '/images/gallery/'];
 const sizedVariantCache = new Map();   // "<url>|<px>" -> variant url, or false when the original should be used
-const sizedVariantInflight = new Set();
+const sizedVariantInflight = new Map();   // key -> promise of the in-progress resize
 // opts.jpeg forces a JPEG copy even from a PNG/WebP source (transparency is
 // flattened onto the dark UI colour) -- for thumbnails that never need alpha.
 function sizedUrl(urlPath, maxPx, opts) {
@@ -4836,12 +4836,25 @@ function sizedUrl(urlPath, maxPx, opts) {
   const variantUrl = `${urlPath.slice(0, -ext.length)}-${maxPx}${outExt}`;
   if (fs.existsSync(path.join('/var/www/btw', variantUrl))) { sizedVariantCache.set(key, variantUrl); return variantUrl; }
   if (!sizedVariantInflight.has(key)) {
-    sizedVariantInflight.add(key);
-    makeSizedVariant(urlPath, variantUrl, maxPx, outExt).then(ok => {
+    const p = makeSizedVariant(urlPath, variantUrl, maxPx, outExt).then(ok => {
       sizedVariantCache.set(key, ok ? variantUrl : false);
     }).finally(() => sizedVariantInflight.delete(key));
+    sizedVariantInflight.set(key, p);
   }
   return urlPath;
+}
+// Same as sizedUrl, but when the small copy doesn't exist yet it WAITS for the
+// resize instead of handing back the full-size original that one time. For
+// small-thumbnail lists (follower/club modals, the featured picker) where the
+// first open would otherwise pull every original at full resolution.
+async function sizedUrlReady(urlPath, maxPx, opts) {
+  const first = sizedUrl(urlPath, maxPx, opts);
+  if (first !== urlPath) return first;
+  const ext = path.extname(urlPath || '').toLowerCase();
+  const outExt = (opts && opts.jpeg) ? '.jpg' : (ext === '.png' ? '.png' : (ext === '.webp' ? '.webp' : '.jpg'));
+  const p = sizedVariantInflight.get(`${urlPath}|${maxPx}|${outExt}`);
+  if (p) { try { await p; } catch {} return sizedUrl(urlPath, maxPx, opts); }
+  return first;
 }
 async function makeSizedVariant(urlPath, variantUrl, maxPx, outExt) {
   try {
@@ -6726,7 +6739,8 @@ app.get('/api/fanpage-profile/:username/clubs', async (req, res) => {
      ORDER BY (cm.role = 'owner') DESC, (cm.role = 'admin') DESC, c.name ASC`,
     [author.id]
   );
-  res.json({ clubs: rows.map(r => ({ slug: r.slug, name: r.name, icon_url: r.icon_url || null, badge_url: r.badge_url || null, is_nsfw: r.is_nsfw, role: r.role })) });
+  const smallIcons = await Promise.all(rows.map(r => sizedUrlReady(r.icon_url, 120)));
+  res.json({ clubs: rows.map((r, i) => ({ slug: r.slug, name: r.name, icon_url: smallIcons[i] || null, badge_url: r.badge_url || null, is_nsfw: r.is_nsfw, role: r.role })) });
 });
 
 // GET /api/fanpage-profile/:username/notes — paginated guestbook "notes"
@@ -6820,9 +6834,11 @@ async function fanpageFollowList(req, res, direction) {
      ORDER BY f.created_at DESC`,
     [author.id, viewerId || 0]
   );
+  // Drawn at ~46px -- 120px copies, not the 400px the /api middleware would apply.
+  const smallAvatars = await Promise.all(rows.map(r => sizedUrlReady(r.avatar, 120)));
   res.json({
-    users: rows.map(r => ({
-      username: r.username, display_name: r.display_name || r.username, avatar: r.avatar || null,
+    users: rows.map((r, i) => ({
+      username: r.username, display_name: r.display_name || r.username, avatar: smallAvatars[i] || null,
       works_count: r.works_count, follower_count: r.follower_count,
       is_following: r.is_following, is_self: viewerId === r.id,
     })),
@@ -7735,11 +7751,13 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
     ));
   }
 
+  // Picker thumbnails are tiny: 160px JPEG copies instead of the originals.
+  const thumbs = await Promise.all(rows.map(r => sizedUrlReady(r.image_url, 160, { jpeg: true })));
   const results = rows
-    .map(r => ({
+    .map((r, i) => ({
       ref_id: String(r.id),
       title: r.title || 'Untitled',
-      image_url: r.image_url || '',
+      image_url: thumbs[i] || '',
       link_url: kind === 'story'
         ? `/${r.story_path || r.slug}`
         : (r.story_path || r.slug
