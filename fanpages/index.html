@@ -937,7 +937,7 @@
   function seedSlideDims(slides) {
     slides.forEach(s => { if (s.image_url && s.image_w && s.image_h) billboardImgDims[s.image_url] = { w: s.image_w, h: s.image_h }; });
   }
-  // One-slide-ahead image loading: only the visible slide (plus the next one) is
+  // Two-slides-ahead image loading: only the visible slide (plus the next two) is
   // ever fetched, instead of every slide up front.
   const billboardImgLoads = {};
   function preloadSlideImage(url) {
@@ -1154,7 +1154,11 @@
     preloadSlideImage(slides[0].image_url).then(() => preloadNextSlide());
   }
   function preloadNextSlide() {
-    if (billboardSlides.length > 1) preloadSlideImage(billboardSlides[(billboardIndex + 1) % billboardSlides.length].image_url);
+    // Two ahead: the next slide first, then the one after it.
+    const n = billboardSlides.length;
+    if (n > 1) preloadSlideImage(billboardSlides[(billboardIndex + 1) % n].image_url).then(() => {
+      if (n > 2) preloadSlideImage(billboardSlides[(billboardIndex + 2) % n].image_url);
+    });
   }
 
   // ── "Infinite scroll" dot strip ──────────────────────────────────────────
