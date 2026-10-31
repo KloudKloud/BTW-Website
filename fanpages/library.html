@@ -12,124 +12,159 @@
   <link rel="stylesheet" href="/fanpages/fanpages.css" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    /* Transparent, not an opaque fill -- .lib-bg's video sits at
-       z-index:-1, and a negative-z-index descendant paints BEHIND an
-       ancestor's own non-transparent background (CSS painting order), so
-       an opaque body here was hiding the video entirely. */
-    body {
-      background: transparent;
-      color: #f0f0f0;
-      font-family: 'Lato', Arial, sans-serif;
-      min-height: 100vh;
-    }
-    html { background: #0d0d0d; }
-    a { color: inherit; }
+    /* Solid black-ish page, same as Clubs -- no video wallpaper. */
+    html { background: #0a0c0d; }
+    body { background: transparent; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; }
+    a { color: inherit; text-decoration: none; }
 
-    /* Unblurred, full-bleed video -- .page-bg (style.css, not even loaded
-       on this page) always blurs its <img>; this page gets its own
-       background layer instead, same recipe as Discord/BTW Homepage. */
-    .lib-bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; }
-    .lib-bg video { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .lib-bg-overlay { position: absolute; inset: 0; background: rgba(10,10,10,0.55); }
+    /* Accent vars the copied profile card styles read (profile defaults), plus
+       the Creator Hub's blue accent for the tab bar / title. */
+    :root {
+      --fp-accent: #f0c060; --fp-accent-light: #f7d68a; --fp-accent-light2: #f5cf7c; --fp-accent-rgb: 240,192,96;
+      --ed-accent: #7fa8d9; --ed-accent-light: #cfe0f5; --ed-accent-rgb: 127,168,217;
+    }
 
     /* Same 1400px width as the Home/Profile pages. */
     .lib-main { max-width: clamp(1400px, 73vw, 1800px); margin: 0 auto; padding: 3rem 2rem 5rem; }
-    .lib-header-row { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 1.5rem; }
-    .lib-title { font-family: 'Fredoka', 'Lato', cursive; font-size: 2.2rem; }
+    .lib-header-row { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 1.25rem; }
+    .lib-title {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.9rem; font-weight: 700; line-height: 1.1;
+      color: var(--ed-accent-light);
+      text-shadow: 0 0 16px rgba(var(--ed-accent-rgb),0.75), 0 0 4px rgba(var(--ed-accent-rgb),0.5), 0 1px 3px rgba(0,0,0,0.6);
+    }
     .lib-private { display: flex; align-items: center; gap: 0.4rem; color: #999; font-size: 0.85rem; }
 
-    /* Big centered pill tabs -- same recipe as the Creator Hub's
-       Stories/Characters/Gallery tabs -- instead of the old boxed
-       "Browse" sidebar. */
-    .lib-tabs { display: flex; justify-content: center; gap: 1.25rem; margin-bottom: 2.5rem; }
+    /* Creator Hub tab bar (editor.html's .ed-tabs/.ed-tab): one boxed bar,
+       divider lines between tabs, uppercase Fredoka, blue glow. */
+    .lib-tabs {
+      display: flex; align-items: stretch; width: fit-content; margin: 0 0 1rem;
+      border-radius: 14px; border: 2px solid rgba(var(--ed-accent-rgb),0.45); overflow: hidden;
+      background: linear-gradient(160deg, rgba(10,8,14,0.94), rgba(10,8,14,0.88));
+      box-shadow: 0 0 18px rgba(var(--ed-accent-rgb),0.28), 0 10px 28px rgba(0,0,0,0.5);
+    }
     .lib-tab {
-      background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
-      border: 1px solid rgba(255,255,255,0.14); border-radius: 30px; cursor: pointer; color: #bbb;
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.25rem; font-weight: 700;
-      padding: 0.75rem 2.2rem; position: relative;
-      transition: color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+      background: none; border: none; border-right: 2px solid rgba(var(--ed-accent-rgb),0.22); cursor: pointer; color: #bbb;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 0.98rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.03em;
+      padding: 0.9rem 1.8rem; position: relative; transition: color 0.15s, background 0.15s, text-shadow 0.15s;
     }
-    .lib-tab:hover { color: #fff; border-color: rgba(240,192,96,0.5); box-shadow: 0 0 10px rgba(240,192,96,0.18); transform: translateY(-1px); }
-    .lib-tab.active {
-      color: #1a1408; border-color: #f0c060;
-      background: linear-gradient(135deg, #b8863a, #f0c060);
-      box-shadow: 0 0 12px rgba(240,192,96,0.35);
+    .lib-tabs .lib-tab:last-child { border-right: none; }
+    .lib-tab:hover { color: #fff; background: rgba(var(--ed-accent-rgb),0.12); }
+    .lib-tab.active { color: var(--ed-accent-light); background: rgba(var(--ed-accent-rgb),0.2); text-shadow: 0 0 12px rgba(var(--ed-accent-rgb),0.8); }
+    /* Soft blue rule under the tab bar, fading out to the right. */
+    .lib-tabs-rule {
+      height: 2px; margin-bottom: 1.5rem; border-radius: 2px;
+      background: linear-gradient(90deg, rgba(var(--ed-accent-rgb),0.75), rgba(var(--ed-accent-rgb),0.25) 55%, rgba(var(--ed-accent-rgb),0));
+      box-shadow: 0 0 10px rgba(var(--ed-accent-rgb),0.35);
     }
-    .lib-tab.active:hover { transform: none; box-shadow: 0 0 12px rgba(240,192,96,0.35); }
 
     .lib-empty { color: #999; font-size: 0.92rem; padding: 2rem 0; }
 
-    /* ── Stories tab — the exact .fp-bcard card from the profile Stories
-       tab (profile-template.html), duplicated per the site's "duplication
-       over shared components" convention. Only real difference: this
-       card's art is potential-box-background instead of box-background-5. ── */
-    .fp-bcard-grid { display: flex; flex-direction: column; gap: 0.9rem; }
+    /* Stories tab -- the profile Stories tab's .fp-bcard card, copied
+       verbatim from profile-template.html (duplication over shared
+       components). */
+    .fp-bcard-grid { display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }
     .fp-tag-pill {
       display: inline-block; border-radius: 20px; padding: 0.32em 0.9em; font-size: 0.82rem; font-weight: 700;
       text-decoration: none; cursor: pointer; border: 1px solid transparent; white-space: nowrap;
     }
     .fp-tag-pill:hover { filter: brightness(1.25); }
     .fp-bcard {
-      display: flex; flex-direction: row; cursor: pointer; overflow: hidden; position: relative; height: 216px;
+      display: flex; flex-direction: row; cursor: pointer; overflow: hidden; position: relative; height: 220px;
       background: linear-gradient(160deg, rgba(10,8,14,0.86), rgba(10,8,14,0.76)), url('/images/home/potential-box-background.png');
       background-size: cover; background-position: center;
       border: 1px solid rgba(255,255,255,0.22); border-radius: 14px;
       box-shadow: 0 1px 8px rgba(0,0,0,0.25); transition: border-color 0.15s, box-shadow 0.15s;
     }
-    .fp-bcard:hover { border-color: rgba(240,192,96,0.5); box-shadow: 0 1px 8px rgba(0,0,0,0.25), 0 0 22px rgba(240,192,96,0.18); }
+    .fp-bcard:hover { border-color: rgba(var(--fp-accent-rgb),0.5); box-shadow: 0 1px 8px rgba(0,0,0,0.25), 0 0 22px rgba(var(--fp-accent-rgb),0.18); }
+    .fp-bcard-innerwrap { display: flex; flex-direction: row; width: 100%; height: 100%; }
     .fp-bcard-cover-link { width: auto; height: 100%; aspect-ratio: 2 / 3; flex-shrink: 0; display: block; overflow: hidden; position: relative; }
     .fp-bcard-cover-link img, .fp-bcard-cover-link .wiki-generated-cover { width: 100%; height: 100%; border-radius: 0; border: none; box-shadow: none; object-fit: cover; }
-    .fp-bcard-body { min-width: 0; flex: 1; display: flex; flex-direction: column; padding: 0.75rem 1.05rem 0.65rem; overflow: hidden; }
-    .fp-bcard-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.45rem; }
-    .fp-bcard-title { font-size: 1.16rem; font-weight: 700; color: #fff; line-height: 1.15; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+    .fp-bcard-body { min-width: 0; flex: 1; display: flex; flex-direction: column; padding: 0.65rem 0.85rem 0.6rem; overflow: hidden; }
+    .fp-bcard-head { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+    .fp-bcard-title { font-size: 1.22rem; font-weight: 700; color: #fff; line-height: 1.15; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
     .fp-bcard-title:hover { text-shadow: 0 0 6px rgba(255,255,255,0.25), 0 1px 3px rgba(0,0,0,0.4); }
+    .fp-bcard-title-deco { width: 14px; height: 14px; object-fit: contain; flex-shrink: 0; margin-left: 0.2rem; vertical-align: -2px; }
     .fp-bcard-author { display: inline-flex; align-items: center; gap: 0.35rem; text-decoration: none; }
     .fp-bcard-author:hover .fp-bcard-author-name { color: #7fa8d9; text-decoration: underline; }
-    .fp-bcard-author-avatar, .fp-bcard-author-avatar-fallback { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-    .fp-bcard-author-avatar-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.64rem; }
-    .fp-bcard-author-name { font-size: 0.82rem; font-weight: 600; color: #ccc; }
-    .fp-bcard-badges { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
-    .fp-bcard-badges .fp-tag-pill { font-size: 0.8rem; padding: 0.28em 0.75em; font-weight: 800; }
-    .fp-bcard-badges .fp-tag-pill--rating-general { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
-    .fp-bcard-badges .fp-tag-pill--rating-teen { background: rgba(240,192,96,0.18); color: #f5cf7c; border-color: rgba(240,192,96,0.5); }
-    .fp-bcard-badges .fp-tag-pill--rating-mature { background: rgba(224,80,74,0.2); color: #ff8079; border-color: rgba(224,80,74,0.55); }
+    .fp-bcard-author-avatar, .fp-bcard-author-avatar-fallback { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .fp-bcard-author-avatar-fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.68rem; }
+    .fp-bcard-author-name { font-size: 0.86rem; font-weight: 600; color: #ccc; }
+    /* Every tag (Rating/Ongoing included) packed into one horizontally-
+       scrolling strip -- same as Browse/Search's take-2 card, instead of
+       this card's older fixed Rating+Ongoing badge pair. */
+    .fp-bcard-tags-row { display: flex; margin-bottom: 0.5rem; min-width: 0; }
+    .fp-bcard-tags-scroll .fp-tag-pill--rating-general { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
+    .fp-bcard-tags-scroll .fp-tag-pill--rating-teen { background: rgba(var(--fp-accent-rgb),0.18); color: var(--fp-accent-light2); border-color: rgba(var(--fp-accent-rgb),0.5); }
+    .fp-bcard-tags-scroll .fp-tag-pill--rating-mature { background: rgba(224,80,74,0.2); color: #ff8079; border-color: rgba(224,80,74,0.55); }
     .fp-tag-pill--status-ongoing { background: rgba(90,200,110,0.18); color: #6fe08a; border-color: rgba(90,200,110,0.5); }
     .fp-tag-pill--status-complete { background: rgba(127,168,217,0.2); color: #a8c6e8; border-color: rgba(127,168,217,0.5); }
-    .fp-bcard-statpanel { display: flex; gap: 0.5rem; margin-bottom: 0.45rem; }
-    .fp-bcard-stat {
-      flex: 0 0 auto; display: flex; align-items: baseline; gap: 0.35rem; padding: 0.22rem 0.7rem;
-      background: linear-gradient(160deg, rgba(240,192,96,0.12), rgba(127,168,217,0.08));
-      border: 1px solid rgba(240,192,96,0.28); border-radius: 8px;
+    .fp-tag-pill--fandom { background: rgba(194,84,122,0.1); color: #c2547a; border-color: rgba(194,84,122,0.3); }
+    .fp-tag-pill--relationship { background: rgba(194,84,122,0.1); color: #c2547a; border-color: rgba(194,84,122,0.3); }
+    .fp-tag-pill--category { background: rgba(194,84,122,0.1); color: #c2547a; border-color: rgba(194,84,122,0.3); }
+    .fp-tag-pill--tag { background: rgba(127,168,217,0.16); color: #bcd4f0; border-color: rgba(127,168,217,0.55); }
+    .fp-bcard-tags-scroll-wrap { display: flex; flex-direction: column; gap: 0.22rem; flex: 1; min-width: 0; }
+    .fp-bcard-tags-scroll-inner { position: relative; min-width: 0; overflow: hidden; }
+    .fp-bcard-tags-scroll {
+      display: flex; gap: 0.4rem; overflow-x: auto;
+      scrollbar-width: none;
     }
-    .fp-bcard-stat-val { font-size: 0.85rem; font-weight: 800; color: #f0c060; text-shadow: 0 0 8px rgba(240,192,96,0.4); }
-    .fp-bcard-stat-label { font-size: 0.68rem; font-weight: 600; color: #ccc; }
+    .fp-bcard-tags-scroll::-webkit-scrollbar { display: none; }
+    .fp-bcard-tags-scroll .fp-tag-pill { font-size: 0.78rem; padding: 0.28em 0.8em; white-space: nowrap; }
+    .fp-bcard-tags-arrow {
+      display: none; position: absolute; top: 0; bottom: 0; width: 1.8rem;
+      align-items: center; justify-content: center; border: none; cursor: pointer; padding: 0;
+      color: var(--fp-accent); font-size: 1.1rem; font-weight: 800;
+    }
+    .fp-bcard-tags-arrow--right { right: 0; background: linear-gradient(to right, transparent, rgba(10,8,14,0.92) 45%); }
+    .fp-bcard-tags-arrow--left { left: 0; background: linear-gradient(to left, transparent, rgba(10,8,14,0.92) 45%); }
+    .fp-bcard-tags-scroll-wrap.fp-bcard-tags-has-overflow:not(.fp-bcard-tags-at-end) .fp-bcard-tags-arrow--right { display: flex; }
+    .fp-bcard-tags-scroll-wrap.fp-bcard-tags-has-overflow:not(.fp-bcard-tags-at-start) .fp-bcard-tags-arrow--left { display: flex; }
+    .fp-bcard-tags-arrow:hover { color: #fff; }
+    .fp-bcard-tags-scrollbar {
+      display: none; position: relative; height: 18px; cursor: pointer;
+    }
+    .fp-bcard-tags-scrollbar::before {
+      content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 6px; transform: translateY(-50%);
+      border-radius: 4px; background: rgba(255,255,255,0.12); transition: height 0.15s, background-color 0.15s;
+    }
+    .fp-bcard-tags-scrollbar:hover::before { height: 9px; background: rgba(255,255,255,0.2); }
+    .fp-bcard-tags-scroll-wrap.fp-bcard-tags-has-overflow .fp-bcard-tags-scrollbar { display: block; }
+    .fp-bcard-tags-scrollbar-thumb {
+      position: absolute; top: 50%; left: 0; height: 6px; min-width: 16%; border-radius: 4px; transform: translateY(-50%);
+      background: linear-gradient(90deg, var(--fp-accent), #e0504a); cursor: grab; touch-action: none;
+      transition: height 0.15s;
+    }
+    .fp-bcard-tags-scrollbar:hover .fp-bcard-tags-scrollbar-thumb { height: 9px; }
+    .fp-bcard-tags-scrollbar-thumb:hover { filter: brightness(1.15); }
+    .fp-bcard-tags-scrollbar-thumb:active { cursor: grabbing; }
     .fp-bcard-synopsis {
-      font-size: 0.87rem; line-height: 1.48; color: #ddd; margin-bottom: 0.5rem;
-      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+      font-size: 0.97rem; line-height: 1.4; color: #ddd; margin: 0.15rem 0 0.5rem;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
     }
-    .fp-bcard-chars { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: auto; overflow: hidden; max-height: 32px; }
+    .fp-bcard-bottom-row { display: flex; align-items: center; gap: 0.5rem; margin-top: auto; }
+    .fp-bcard-chars { display: flex; flex-wrap: nowrap; overflow: hidden; gap: 0.35rem; flex: 1; min-width: 0; }
     .fp-bcard-char-chip {
       display: flex; align-items: center; gap: 0.35rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 20px; padding: 0.15rem 0.6rem 0.15rem 0.15rem; font-size: 0.72rem; color: #ddd; font-weight: 600;
-      text-decoration: none; transition: border-color 0.15s, color 0.15s;
+      border-radius: 20px; padding: 0.2rem 0.65rem 0.2rem 0.2rem; font-size: 0.74rem; color: #ddd; font-weight: 600;
+      text-decoration: none; transition: border-color 0.15s, color 0.15s; flex-shrink: 0;
     }
     .fp-bcard-char-chip:hover { border-color: #7fa8d9; color: #fff; }
-    .fp-bcard-char-chip img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
+    .fp-bcard-char-chip img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
     .fp-bcard-char-chip--empty { color: #888; cursor: default; font-style: italic; }
     .fp-bcard-char-chip--empty:hover { border-color: rgba(255,255,255,0.1); color: #888; }
+    .fp-bcard-statpanel { display: flex; gap: 0.35rem; flex-shrink: 0; }
+    .fp-bcard-stat {
+      display: flex; align-items: center; gap: 0.28rem; white-space: nowrap; padding: 0.22rem 0.6rem;
+      background: linear-gradient(160deg, rgba(var(--fp-accent-rgb),0.12), rgba(127,168,217,0.08));
+      border: 1px solid rgba(var(--fp-accent-rgb),0.28); border-radius: 9px;
+      font-size: 0.82rem; color: #ccc;
+    }
+    .fp-bcard-stat-val { font-weight: 800; color: var(--fp-accent); text-shadow: 0 0 6px rgba(var(--fp-accent-rgb),0.4); }
     .fp-bcard-deco--tr { position: absolute; z-index: 2; pointer-events: none; object-fit: contain; opacity: 0.9; top: -10px; right: -8px; width: 32px; height: 32px; }
 
-    /* ── Gallery tab — same .gallery-tile-card tiles as the profile Gallery
-       tab (.gallery-tile-card/.gallery-tile-caption* come from
-       fanpages.css, which this page does load), 4-per-row. The grid
-       container is its own dedicated local class instead of reusing
-       fanpages.css's .gallery-grid--4up modifier -- combining that with a
-       same-named .gallery-grid base rule defined here (this page doesn't
-       load style.css, which is where .gallery-grid/.gallery-tile actually
-       live) meant this file's own rule, loading after fanpages.css, was
-       silently winning the grid-template-columns fight and shrinking it to
-       3 columns. One self-contained rule removes the cross-file ordering
-       dependency entirely. ── */
+    /* Gallery tab -- same .gallery-tile-card tiles as the profile Gallery
+       tab (caption styles come from fanpages.css), 4-per-row. */
     .lib-gallery-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; text-align: left; align-items: start; }
     .gallery-tile {
       display: block; position: relative; padding-top: 116.67%; border-radius: 10px; overflow: hidden;
@@ -140,15 +175,15 @@
     .gallery-tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.35s; }
     .gallery-tile:hover img { transform: scale(1.03); }
 
-    /* ── Characters tab — the exact .fp-char-card grid from the profile
-       Characters tab, 4-per-row (already uses potential-box-background). ── */
+    /* Characters tab -- the profile Characters tab's .fp-char-card grid,
+       copied verbatim, 4-per-row. */
     .fp-char-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.9rem; }
     .fp-char-card {
       position: relative; display: block; text-decoration: none; color: inherit;
       background: #161616; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
       overflow: hidden; transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
     }
-    .fp-char-card:hover { transform: translateY(-3px); box-shadow: 0 10px 22px rgba(0,0,0,0.45); border-color: rgba(240,192,96,0.4); }
+    .fp-char-card:hover { transform: translateY(-3px); box-shadow: 0 10px 22px rgba(0,0,0,0.45); border-color: rgba(var(--fp-accent-rgb),0.4); }
     .fp-char-card-img-wrap { position: relative; width: 100%; aspect-ratio: 1 / 1; background: #1e1e1e; overflow: hidden; }
     .fp-char-card-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .fp-char-card-fallback {
@@ -156,103 +191,66 @@
       background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 2rem;
     }
     .fp-char-card-body {
-      position: relative; overflow: hidden; height: 72px; padding: 0.45rem 0.55rem 0.55rem;
+      position: relative; overflow: hidden; padding: 0.75rem 0.75rem 0.8rem;
       background: linear-gradient(160deg, rgba(10,8,14,0.82), rgba(10,8,14,0.72)), url('/images/home/potential-box-background.png');
       background-size: cover; background-position: center;
     }
     .fp-char-card-body-deco { position: absolute; top: -8px; right: -6px; width: 26px; height: 26px; object-fit: contain; opacity: 0.9; pointer-events: none; }
-    .fp-char-card-name-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; }
+    .fp-char-card-name-row { display: flex; flex-direction: row; align-items: center; gap: 0.45rem; margin-bottom: 0; min-width: 0; }
     .fp-char-card-name {
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.05rem; font-weight: 700; color: #fff;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.2rem; font-weight: 700; color: #fff;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 100%;
     }
     .fp-char-card-species {
-      display: inline-block; flex-shrink: 0; background: rgba(127,168,217,0.16); color: #a8c6e8; border-radius: 20px;
-      padding: 0.15em 0.6em; font-size: 0.92rem; font-weight: 700;
+      display: inline-block; flex: 0 1 auto; min-width: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      background: rgba(127,168,217,0.2); color: #b9d3f0; border: 1px solid rgba(127,168,217,0.4); border-radius: 20px;
+      padding: 0.15em 0.8em; font-family: 'Fredoka', 'Lato', cursive; font-size: 0.88rem; font-weight: 600;
     }
     .fp-char-card-owner { font-size: 0.72rem; color: #999; }
+    .fp-char-card > a { display: block; color: inherit; text-decoration: none; }
 
     @media (max-width: 760px) {
-      /* Full-bleed width -- was inheriting the desktop 2rem side gutters.
-         No extra top clearance needed (unlike Characters/Search's own
-         in-page hamburger toggle) -- the shared topbar drops to normal
-         document flow on mobile and pushes this down on its own. */
       .lib-main { padding: 1.5rem 0.6rem 3rem; }
       .lib-header-row { flex-direction: column; align-items: flex-start; gap: 0.3rem; margin-bottom: 0.75rem; }
       .lib-title { font-size: 1.5rem; }
-
-      /* Stories/Galleries/Characters switch from boxed pill buttons to the
-         same Wattpad-style underline tab row used on Profile (see
-         profile-template.html's .fp-tabs-row/.fp-tab) -- flex:1 equal-width
-         columns, gold underline on the active tab, no background/border.
-         Desktop keeps the original pill tabs (no rule above this query
-         touches .lib-tabs/.lib-tab). */
-      .lib-tabs {
-        display: flex; gap: 0; justify-content: stretch; margin-bottom: 1.25rem;
-        border-bottom: 1px solid rgba(255,255,255,0.08);
-      }
-      .lib-tab {
-        flex: 1 1 0; min-width: 0; background: none; border: none; border-radius: 0;
-        color: #999; font-size: 0.86rem; font-weight: 700; padding: 0.85rem 0.1rem;
-        box-shadow: none; transform: none;
-      }
-      .lib-tab:hover { color: #ccc; border-color: transparent; box-shadow: none; transform: none; }
-      .lib-tab.active {
-        color: #f0f0f0; background: none; box-shadow: none; position: relative;
-      }
-      .lib-tab.active::after {
-        content: ''; position: absolute; left: 0.4rem; right: 0.4rem; bottom: -1px;
-        height: 3px; background: #f0c060; border-radius: 2px;
-      }
-      .lib-tab.active:hover { box-shadow: none; }
-
-      /* Gallery/Characters grids match Profile's own mobile column count
-         (3-per-row) and card styling exactly -- .gallery-tile-card and
-         .fp-char-card are already the shared fanpages.css components Profile
-         uses, so only the grid container's column count needed to follow
-         suit (see profile-template.html's equivalent mobile block). */
-      .lib-gallery-tiles, .fp-char-grid { grid-template-columns: repeat(3, 1fr); gap: 0.7rem; }
-
-      /* Stories tab -- exact compact mobile fp-bcard from search.html's
-         Search Query -> Stories results (same selectors/values, copied
-         verbatim so a bookmarked story card matches a search-result story
-         card pixel for pixel). Desktop's taller .fp-bcard rules above are
-         untouched. */
-      .fp-bcard-grid { grid-template-columns: 1fr; gap: 0.5rem; }
-      .fp-bcard { height: 125px; flex-direction: row; border-radius: 10px; }
-      .fp-bcard-cover-link { width: auto; height: 100%; aspect-ratio: 2 / 3; }
+      /* Same boxed tab bar, stretched to the full width. */
+      .lib-tabs { width: 100%; }
+      .lib-tab { flex: 1 1 0; min-width: 0; font-size: 0.8rem; padding: 0.8rem 0.2rem; }
+      .lib-tabs-rule { margin-bottom: 1.1rem; }
+      .lib-gallery-tiles { grid-template-columns: repeat(3, 1fr); gap: 0.7rem; }
+      .fp-char-grid { grid-template-columns: repeat(3, 1fr); gap: 0.7rem; }
+      .fp-bcard { height: 125px; border-radius: 10px; }
       .fp-bcard-body { padding: 0.4rem 0.55rem 0.4rem; }
       .fp-bcard-head { gap: 0.3rem; margin-bottom: 0.2rem; }
       .fp-bcard-title { font-size: 0.88rem; }
+      .fp-bcard-title-deco { width: 10px; height: 10px; }
       .fp-bcard-author-avatar, .fp-bcard-author-avatar-fallback { width: 15px; height: 15px; }
       .fp-bcard-author-name { font-size: 0.68rem; }
-      .fp-bcard-badges { gap: 0.25rem; margin-bottom: 0.25rem; }
-      .fp-bcard-badges .fp-tag-pill { font-size: 0.6rem; padding: 0.18em 0.5em; }
-      .fp-bcard-statpanel { gap: 0.2rem; margin-bottom: 0.22rem; }
-      .fp-bcard-stat { padding: 0.08rem 0.12rem; }
+      .fp-bcard-tags-row { gap: 0.25rem; margin-bottom: 0.25rem; }
+      .fp-bcard-tags-scroll-wrap { gap: 0; }
+      .fp-bcard-tags-scroll { overflow-x: hidden; }
+      .fp-bcard-tags-scroll .fp-tag-pill { font-size: 0.6rem; padding: 0.18em 0.5em; }
+      .fp-bcard-tags-arrow, .fp-bcard-tags-scrollbar { display: none !important; }
+      .fp-bcard-bottom-row { margin-top: 0.2rem; }
+      .fp-bcard-statpanel { gap: 0.2rem; }
+      .fp-bcard-stat { padding: 0.08rem 0.12rem; font-size: 0.56rem; }
       .fp-bcard-stat-val { font-size: 0.66rem; }
-      .fp-bcard-stat-label { font-size: 0.52rem; }
       .fp-bcard-synopsis { font-size: 0.68rem; line-height: 1.28; -webkit-line-clamp: 2; margin-bottom: 0; }
       .fp-bcard-chars { display: none; }
       .fp-bcard-deco--tr { width: 20px; height: 20px; top: -5px; right: -4px; }
+      .fp-bcard-grid { gap: 0.5rem; }
     }
 
     @media (max-width: 480px) {
-      /* Matches Profile's own 480px character-card shrink exactly. */
       .fp-char-grid { gap: 0.5rem; }
-      .fp-char-card-name { font-size: 0.85rem; }
-      .fp-char-card-species { font-size: 0.66rem; }
+      .fp-char-card-name { font-size: 0.88rem; flex: 0 0 auto; max-width: 62%; }
+      .fp-char-card-species { font-size: 0.68rem; padding: 0.1em 0.5em; flex: 1 1 0; max-width: none; }
+      .fp-char-card-name-row { gap: 0.3rem; }
+      .fp-char-card-body { padding: 0.6rem 0.55rem 0.65rem; }
     }
   </style>
 </head>
 <body>
-
-<div class="lib-bg">
-  <video autoplay muted loop playsinline>
-    <source src="/images/home/top-background.webm" type="video/webm" />
-  </video>
-  <div class="lib-bg-overlay"></div>
-</div>
 
 <div id="fanpages-topbar-root"></div>
 
@@ -264,9 +262,10 @@
 
   <nav class="lib-tabs">
     <button class="lib-tab active" id="lib-tab-stories" type="button">Stories</button>
-    <button class="lib-tab" id="lib-tab-gallery" type="button">Galleries</button>
+    <button class="lib-tab" id="lib-tab-gallery" type="button">Gallery</button>
     <button class="lib-tab" id="lib-tab-characters" type="button">Characters</button>
   </nav>
+  <div class="lib-tabs-rule"></div>
 
   <div>
       <section id="lib-stories-section">
@@ -292,9 +291,8 @@
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  // ── Stories tab — the exact .fp-bcard card from the profile Stories tab
-  // (see profile-template.html's featuredStoryCardEl), so a bookmarked
-  // story reads identically here. ─────────────────────────────────────────
+  // ── Stories tab -- the profile Stories tab's card renderers, copied from
+  // profile-template.html. ──────────────────────────────────────────────────
   function truncateSynopsis(s) {
     const text = (s || '').trim();
     if (!text) return 'No description yet.';
@@ -341,36 +339,151 @@
       </div>
     `;
   }
-  function storyCard(w) {
+  // Same "everything in one scrolling strip" tag row as Browse/Search's
+  // take-2 .fp-bcard -- Rating + Ongoing/Complete first, then fandoms/
+  // relationships/categories/free tags, each a link back into Story search.
+  function tagSearchUrl(params) {
+    const usp = new URLSearchParams(params);
+    usp.set('sort', 'updated');
+    usp.set('view', 'story');
+    if (params.tags_include && !usp.has('q')) usp.set('q', params.tags_include);
+    return window.fpUrl(`/search?${usp.toString()}`);
+  }
+  function bcardTagsScrollHtml(w) {
     const isComplete = !!w.is_complete;
+    const tags = [];
+    if (w.rating) tags.push(`<a class="fp-tag-pill ${ratingClass(w.rating)}" href="${tagSearchUrl({ rating: w.rating })}">${escapeHtml(ratingLabel(w.rating))}</a>`);
+    tags.push(`<a class="fp-tag-pill ${isComplete ? 'fp-tag-pill--status-complete' : 'fp-tag-pill--status-ongoing'}" href="${tagSearchUrl({ completion: isComplete ? 'complete' : 'wip' })}">${isComplete ? 'Complete' : 'Ongoing'}</a>`);
+    (w.fandoms || []).forEach(f => tags.push(`<a class="fp-tag-pill fp-tag-pill--fandom" href="${tagSearchUrl({ fandoms: f })}">${escapeHtml(f)}</a>`));
+    (w.relationships || []).forEach(r => tags.push(`<a class="fp-tag-pill fp-tag-pill--relationship" href="${tagSearchUrl({ relationships: r })}">${escapeHtml(r)}</a>`));
+    (w.categories || []).forEach(c => tags.push(`<a class="fp-tag-pill fp-tag-pill--category" href="${tagSearchUrl({ categories: c })}">${escapeHtml(c)}</a>`));
+    (w.tags || []).forEach(t => tags.push(`<a class="fp-tag-pill fp-tag-pill--tag" href="${tagSearchUrl({ tags_include: t })}">${escapeHtml(t)}</a>`));
+    return `
+      <div class="fp-bcard-tags-scroll-wrap">
+        <div class="fp-bcard-tags-scroll-inner">
+          <button type="button" class="fp-bcard-tags-arrow fp-bcard-tags-arrow--left" aria-label="Scroll tags back" onclick="scrollBcardTags(this, -1)">‹</button>
+          <div class="fp-bcard-tags-scroll">${tags.join('')}</div>
+          <button type="button" class="fp-bcard-tags-arrow fp-bcard-tags-arrow--right" aria-label="Scroll tags forward" onclick="scrollBcardTags(this, 1)">›</button>
+        </div>
+        <div class="fp-bcard-tags-scrollbar"><div class="fp-bcard-tags-scrollbar-thumb"></div></div>
+      </div>
+    `;
+  }
+  // Hand-rolled smooth scroll + drag -- identical to search.html's
+  // bcard tag scroller, ported verbatim so arrow/track/drag behavior
+  // matches Browse/Search exactly.
+  const bcardScrollAnims = new WeakMap();
+  function animateBcardTagsScroll(el, target) {
+    cancelAnimationFrame(bcardScrollAnims.get(el));
+    const start = el.scrollLeft;
+    const delta = target - start;
+    if (Math.abs(delta) < 1) return;
+    const duration = 280;
+    const startTime = performance.now();
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+    function step(now) {
+      const t = Math.min((now - startTime) / duration, 1);
+      el.scrollLeft = start + delta * easeOutCubic(t);
+      if (t < 1) {
+        bcardScrollAnims.set(el, requestAnimationFrame(step));
+      } else {
+        bcardScrollAnims.delete(el);
+      }
+    }
+    bcardScrollAnims.set(el, requestAnimationFrame(step));
+  }
+  function scrollBcardTags(btn, dir) {
+    const wrap = btn.closest('.fp-bcard-tags-scroll-wrap');
+    const scrollEl = wrap.querySelector('.fp-bcard-tags-scroll');
+    const maxScroll = scrollEl.scrollWidth - scrollEl.clientWidth;
+    const target = Math.max(0, Math.min(scrollEl.scrollLeft + dir * 160, maxScroll));
+    animateBcardTagsScroll(scrollEl, target);
+  }
+  function updateBcardTagsScrollbar(wrap) {
+    const scrollEl = wrap.querySelector('.fp-bcard-tags-scroll');
+    const thumb = wrap.querySelector('.fp-bcard-tags-scrollbar-thumb');
+    if (!scrollEl || !thumb) return;
+    const maxScroll = scrollEl.scrollWidth - scrollEl.clientWidth;
+    const widthPct = Math.max((scrollEl.clientWidth / scrollEl.scrollWidth) * 100, 14);
+    thumb.style.width = `${widthPct}%`;
+    const travel = Math.max(100 - widthPct, 0);
+    thumb.style.left = `${maxScroll > 0 ? (scrollEl.scrollLeft / maxScroll) * travel : 0}%`;
+    wrap.classList.toggle('fp-bcard-tags-at-start', scrollEl.scrollLeft <= 1);
+    wrap.classList.toggle('fp-bcard-tags-at-end', scrollEl.scrollLeft >= maxScroll - 1);
+  }
+  function initBcardTagScrollers() {
+    document.querySelectorAll('.fp-bcard-tags-scroll-wrap').forEach(wrap => {
+      const scrollEl = wrap.querySelector('.fp-bcard-tags-scroll');
+      const track = wrap.querySelector('.fp-bcard-tags-scrollbar');
+      const thumb = wrap.querySelector('.fp-bcard-tags-scrollbar-thumb');
+      if (!scrollEl || !track || !thumb) return;
+      const hasOverflow = scrollEl.scrollWidth > scrollEl.clientWidth + 2;
+      wrap.classList.toggle('fp-bcard-tags-has-overflow', hasOverflow);
+      if (!hasOverflow || wrap.dataset.scrollerWired) return;
+      wrap.dataset.scrollerWired = '1';
+      updateBcardTagsScrollbar(wrap);
+      scrollEl.addEventListener('scroll', () => updateBcardTagsScrollbar(wrap));
+
+      const scrollTargetForClientX = (clientX) => {
+        const trackRect = track.getBoundingClientRect();
+        const thumbWidth = thumb.offsetWidth;
+        const x = Math.max(0, Math.min(clientX - trackRect.left - thumbWidth / 2, trackRect.width - thumbWidth));
+        const maxScroll = scrollEl.scrollWidth - scrollEl.clientWidth;
+        const travel = trackRect.width - thumbWidth;
+        return travel > 0 ? (x / travel) * maxScroll : 0;
+      };
+
+      thumb.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        cancelAnimationFrame(bcardScrollAnims.get(scrollEl));
+        thumb.setPointerCapture(e.pointerId);
+      });
+      thumb.addEventListener('pointermove', (e) => {
+        if (!thumb.hasPointerCapture(e.pointerId)) return;
+        scrollEl.scrollLeft = scrollTargetForClientX(e.clientX);
+      });
+      thumb.addEventListener('click', (e) => e.stopPropagation());
+      track.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (e.target === thumb) return;
+        animateBcardTagsScroll(scrollEl, scrollTargetForClientX(e.clientX));
+      });
+    });
+  }
+
+  function storyCard(w) {
+    const storyHref = window.fpUrl(`/${escapeHtml(w.story_path || w.slug)}`);
     const card = document.createElement('div');
     card.className = 'fp-bcard';
-    card.dataset.href = window.fpUrl(`/${escapeHtml(w.story_path || w.slug)}`);
+    card.dataset.href = storyHref;
     card.innerHTML = `
-      <a class="fp-bcard-cover-link" href="${card.dataset.href}">${bcardCoverHtml(w)}</a>
-      <img class="fp-bcard-deco--tr" src="/images/home/decoration-8.png" alt="" />
-      <div class="fp-bcard-body">
-        <div class="fp-bcard-head">
-          <a class="fp-bcard-title" href="${card.dataset.href}">${escapeHtml(w.site_title || 'Untitled Story')}</a>
-          ${bcardAuthorHtml(w)}
+      <div class="fp-bcard-innerwrap">
+        <a class="fp-bcard-cover-link" href="${storyHref}">${bcardCoverHtml(w)}</a>
+        <img class="fp-bcard-deco--tr" src="/images/home/decoration-8.png" alt="" />
+        <div class="fp-bcard-body">
+          <div class="fp-bcard-head">
+            <a class="fp-bcard-title" href="${storyHref}">${escapeHtml(w.site_title || 'Untitled Story')}<img class="fp-bcard-title-deco" src="/images/home/decoration-1.png" alt="" /></a>
+            ${bcardAuthorHtml(w)}
+          </div>
+          <div class="fp-bcard-tags-row">
+            ${bcardTagsScrollHtml(w)}
+          </div>
+          <p class="fp-bcard-synopsis">${escapeHtml(truncateSynopsis(w.synopsis))}</p>
+          <div class="fp-bcard-bottom-row">
+            ${bcardCharsHtml(w)}
+            <div class="fp-bcard-statpanel">
+              <div class="fp-bcard-stat">👁 <span class="fp-bcard-stat-val">${(w.hits || 0).toLocaleString()}</span></div>
+              <div class="fp-bcard-stat">❤️ <span class="fp-bcard-stat-val">${(w.kudos || 0).toLocaleString()}</span></div>
+              <div class="fp-bcard-stat">📖 <span class="fp-bcard-stat-val">${w.word_count != null ? Number(w.word_count).toLocaleString() : '—'}</span></div>
+            </div>
+          </div>
         </div>
-        <div class="fp-bcard-badges">
-          ${w.rating ? `<span class="fp-tag-pill ${ratingClass(w.rating)}">${escapeHtml(ratingLabel(w.rating))}</span>` : ''}
-          <span class="fp-tag-pill ${isComplete ? 'fp-tag-pill--status-complete' : 'fp-tag-pill--status-ongoing'}">${isComplete ? 'Complete' : 'Ongoing'}</span>
-        </div>
-        <div class="fp-bcard-statpanel">
-          <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${(w.hits || 0).toLocaleString()}</span><span class="fp-bcard-stat-label">👁 Reads</span></div>
-          <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${(w.kudos || 0).toLocaleString()}</span><span class="fp-bcard-stat-label">❤️ Likes</span></div>
-          <div class="fp-bcard-stat"><span class="fp-bcard-stat-val">${w.word_count != null ? Number(w.word_count).toLocaleString() : '—'}</span><span class="fp-bcard-stat-label">📖 Words</span></div>
-        </div>
-        <p class="fp-bcard-synopsis">${escapeHtml(truncateSynopsis(w.synopsis))}</p>
-        ${bcardCharsHtml(w)}
       </div>
     `;
     return card;
   }
   // Whole-card-clickable -- clicking anywhere on a bookmarked story that
-  // isn't a real link (tag pill/author/character chip) goes to the story.
+  // isn't a real link/button goes to the story.
   document.addEventListener('click', (e) => {
     const card = e.target.closest('.fp-bcard[data-href]');
     if (!card || e.target.closest('a, button')) return;
@@ -404,21 +517,22 @@
     const imgHtml = c.image
       ? `<img src="${escapeHtml(c.image)}" alt="" style="object-position:${posX}% ${posY}%;" loading="lazy" />`
       : `<div class="fp-char-card-fallback">${escapeHtml((c.name[0] || '?').toUpperCase())}</div>`;
-    const a = document.createElement('a');
-    a.className = 'fp-char-card';
-    a.href = window.fpUrl(`/character?id=${c.id}`);
-    a.innerHTML = `
-      <div class="fp-char-card-img-wrap">${imgHtml}</div>
-      <div class="fp-char-card-body">
-        <img class="fp-char-card-body-deco" src="/images/home/decoration-8.png" alt="" />
-        <div class="fp-char-card-name-row">
-          <p class="fp-char-card-name">${escapeHtml(c.name)}</p>
-          ${c.species ? `<span class="fp-char-card-species">${escapeHtml(c.species)}</span>` : ''}
+    const card = document.createElement('div');
+    card.className = 'fp-char-card';
+    card.innerHTML = `
+      <a href="${window.fpUrl(`/character?id=${c.id}`)}">
+        <div class="fp-char-card-img-wrap">${imgHtml}</div>
+        <div class="fp-char-card-body">
+          <img class="fp-char-card-body-deco" src="/images/home/decoration-8.png" alt="" />
+          <div class="fp-char-card-name-row">
+            <p class="fp-char-card-name">${escapeHtml(c.name)}</p>
+            ${c.species ? `<span class="fp-char-card-species">${escapeHtml(c.species)}</span>` : ''}
+          </div>
+          <p class="fp-char-card-owner">by ${escapeHtml(c.owner)}</p>
         </div>
-        <p class="fp-char-card-owner">by ${escapeHtml(c.owner)}</p>
-      </div>
+      </a>
     `;
-    return a;
+    return card;
   }
 
   const TAB_TITLES = { stories: 'Bookmarked Stories', gallery: 'Bookmarked Galleries', characters: 'Bookmarked Characters' };
@@ -472,6 +586,7 @@
         stories.forEach(s => grid.appendChild(storyCard(s)));
         storiesGrid.innerHTML = '';
         storiesGrid.appendChild(grid);
+        initBcardTagScrollers();
       }
 
       renderGalleryGrid('lib-gallery-grid', data.bookmarked_gallery || [], 'You haven\'t bookmarked any gallery posts yet. Hit the bookmark icon on a gallery post to save it here.');
