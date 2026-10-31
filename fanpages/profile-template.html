@@ -1409,6 +1409,10 @@
     .fp-np-feed-card-avatar { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
     .fp-np-feed-card-avatar--fallback { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6b3fa0, #c2547a); color: #fff; font-weight: 700; font-size: 0.6rem; }
     .fp-np-feed-card-dot { color: #666; }
+    .fp-np-nsfw-pill {
+      font-size: 0.66rem; font-weight: 800; letter-spacing: 0.04em; padding: 0.1em 0.55em; border-radius: 20px;
+      background: rgba(224,80,74,0.2); color: #ff8079; border: 1px solid rgba(224,80,74,0.55);
+    }
     .fp-np-feed-card-meta { font-size: 0.85rem; color: #888; font-weight: 400; }
     .fp-np-feed-card-title {
       font-size: 1rem; font-weight: 600; color: #e8e8e8; margin: 0; line-height: 1.4;
@@ -3657,6 +3661,7 @@
           <span>${escapeHtml(name)}</span>
           <span class="fp-np-feed-card-dot">·</span>
           <span class="fp-np-feed-card-meta">${timeAgo(post.created_at)}</span>
+          ${post.is_nsfw ? '<span class="fp-np-nsfw-pill">NSFW</span>' : ''}
         </div>
         <p class="fp-np-feed-card-title">${escapeHtml(post.title || 'Untitled')}</p>
         <div class="fp-np-feed-card-stats"><span>💬 ${post.comment_count}</span></div>
@@ -3667,7 +3672,7 @@
 
   async function fetchNewspaperPosts() {
     if (NEWSPAPER_POSTS.length || newspaperTabLoaded) return NEWSPAPER_POSTS;
-    const res = await fetch(`/api/fanpage-profile/${USERNAME}/newspaper`);
+    const res = await fetch(`/api/fanpage-profile/${USERNAME}/newspaper`, { headers: authHeaders() });
     const data = await res.json();
     NEWSPAPER_POSTS = data.posts || [];
     newspaperTabLoaded = true;
@@ -3739,7 +3744,7 @@
     history.replaceState(null, '', `${location.pathname}?news=${id}#newspaper`);
     syncScrollBgHeight();
     try {
-      const res = await fetch(`/api/newspaper/post/${id}`);
+      const res = await fetch(`/api/newspaper/post/${id}`, { headers: authHeaders() });
       if (!res.ok) { document.getElementById('fp-newspaper-post').innerHTML = '<p class="fp-tab-view-empty">Post not found.</p>'; return; }
       const { post } = await res.json();
       renderNewspaperDetail(post);
@@ -3757,6 +3762,7 @@
       <div class="fp-np-head">
         ${post.title ? `<h1 class="fp-newspaper-post-title">${escapeHtml(post.title)}</h1>` : ''}
         ${newspaperAuthorHeader(post)}
+        ${post.is_nsfw ? '<span class="fp-np-nsfw-pill">NSFW</span>' : ''}
       </div>
       ${(newspaperCoverHtml(post) || (post.attachments && post.attachments.length)) ? `<div class="fp-newspaper-post-media">${newspaperCoverHtml(post)}${newspaperMediaHtml(post.attachments, '')}</div>` : ''}
       <div class="fp-newspaper-post-body">${renderGalleryText(post.body)}</div>
@@ -3825,7 +3831,7 @@
     const titleHtml = '<p class="cc-title">💬 Comments</p>';
     wrap.innerHTML = titleHtml + '<div class="cc-list"><p class="cc-empty">Loading…</p></div>';
     try {
-      const res = await fetch(`/api/newspaper/post/${postId}/comments`);
+      const res = await fetch(`/api/newspaper/post/${postId}/comments`, { headers: authHeaders() });
       const data = await res.json();
       const comments = data.comments || [];
       wrap.innerHTML = titleHtml;

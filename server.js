@@ -1233,6 +1233,7 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE newspaper_posts ADD COLUMN IF NOT EXISTS preview_image_url TEXT NOT NULL DEFAULT '';
     ALTER TABLE newspaper_posts ADD COLUMN IF NOT EXISTS preview_position_x INTEGER NOT NULL DEFAULT 50;
     ALTER TABLE newspaper_posts ADD COLUMN IF NOT EXISTS preview_position_y INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE newspaper_posts ADD COLUMN IF NOT EXISTS is_nsfw BOOLEAN NOT NULL DEFAULT false;
   `).catch(e => console.error('newspaper cover migration:', e.message));
 
   await (async () => {
@@ -6365,7 +6366,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
           FROM moderator_gallery WHERE owner_user_id = $1 ORDER BY created_at DESC LIMIT 5)
          UNION ALL
          (SELECT 'newspaper', created_at, title, NULL, id::text, NULL
-          FROM newspaper_posts WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5)
+          FROM newspaper_posts WHERE user_id = $1 AND (is_nsfw = false OR $2::boolean) ORDER BY created_at DESC LIMIT 5)
          UNION ALL
          (SELECT 'like_character', cl.created_at, mc.name, NULL, mc.id::text, u.username
           FROM moderator_character_likes cl JOIN moderator_characters mc ON mc.id = cl.character_id
@@ -6403,7 +6404,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
           WHERE cc3.user_id = $1 ORDER BY cc3.created_at DESC LIMIT 5)
        ) combined
        ORDER BY ts DESC LIMIT 5`,
-      [author.id]
+      [author.id, profileNsfwAllowed || viewerId === author.id]
     ),
     // Stats box -- total Stories/Characters/Gallery posted (regardless of
     // draft/NSFW status -- this is the owner's own gross count, not a
@@ -6727,6 +6728,7 @@ function mapNewspaperPost(r) {
     preview_image_url: r.preview_image_url || '',
     preview_position_x: r.preview_position_x != null ? r.preview_position_x : 50,
     preview_position_y: r.preview_position_y != null ? r.preview_position_y : 50,
+    is_nsfw: !!r.is_nsfw,
     created_at: r.created_at,
     updated_at: r.updated_at,
     comment_count: r.comment_count != null ? Number(r.comment_count) : 0,
@@ -6756,15 +6758,18 @@ async function mapNewspaperPosts(rows) {
 
 // Every post by a user, newest first — backs both the Home tab's "latest
 // post" preview (just takes [0]) and the full Newspapers tab list.
+// NSFW posts are hidden (not blurred) from guests and SFW-Mode viewers;
+// their own author always sees them so they can still manage them.
 app.get('/api/fanpage-profile/:username/newspaper', async (req, res) => {
   const { rows: [author] } = await pool.query('SELECT id FROM users WHERE username = $1', [req.params.username.toLowerCase()]);
   if (!author) return res.status(404).json({ error: 'Not found.' });
+  const { viewerId, nsfwAllowed } = await getViewerNsfwAccess(req);
   const { rows } = await pool.query(
     `SELECT np.*, u.username, u.display_name, u.avatar,
             (SELECT COUNT(*)::int FROM newspaper_comments WHERE post_id = np.id) AS comment_count
      FROM newspaper_posts np JOIN users u ON u.id = np.user_id
-     WHERE np.user_id = $1 ORDER BY np.created_at DESC LIMIT 100`,
-    [author.id]
+     WHERE np.user_id = $1 AND (np.is_nsfw = false OR $2::boolean) ORDER BY np.created_at DESC LIMIT 100`,
+    [author.id, nsfwAllowed || viewerId === author.id]
   );
   res.json({ posts: await mapNewspaperPosts(rows) });
 });
@@ -6778,6 +6783,10 @@ app.get('/api/newspaper/post/:id', async (req, res) => {
     [req.params.id]
   );
   if (!row) return res.status(404).json({ error: 'Not found.' });
+  if (row.is_nsfw) {
+    const { viewerId, nsfwAllowed } = await getViewerNsfwAccess(req);
+    if (!nsfwAllowed && viewerId !== row.user_id) return res.status(404).json({ error: 'Not found.' });
+  }
   res.json({ post: (await mapNewspaperPosts([row]))[0] });
 });
 
@@ -6792,18 +6801,27 @@ app.post('/api/newspaper', requireAuth, async (req, res) => {
   const previewImageUrl = cleanUploadedImagePath(req.body.preview_image_url);
   const previewX = req.body.preview_position_x !== undefined ? clampPosition(req.body.preview_position_x) : 50;
   const previewY = req.body.preview_position_y !== undefined ? clampPosition(req.body.preview_position_y) : 50;
+  const isNsfw = !!req.body.is_nsfw;
 
   const { rows: [post] } = await pool.query(
     `INSERT INTO newspaper_posts (user_id, title, body, cover_mode, cover_image_url, cover_slideshow, cover_randomize,
-                                  preview_image_url, preview_position_x, preview_position_y)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+                                  preview_image_url, preview_position_x, preview_position_y, is_nsfw)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
     [req.user.id, title, body, cover.mode, cover.image_url, JSON.stringify(cover.slideshow), cover.randomize,
-     previewImageUrl, previewX, previewY]
+     previewImageUrl, previewX, previewY, isNsfw]
   );
   const { rows: [actor] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
-  await notifyFollowers(req.user.id, 'new_newspaper',
-    `posted a new newspaper${title ? `: "${title}"` : '.'}`,
-    `/${actor.username}?news=${post.id}#newspaper`);
+  // An NSFW post only notifies followers who can actually open it.
+  const notifyMsg = `posted a new newspaper${title ? `: "${title}"` : '.'}`;
+  const notifyLink = `/${actor.username}?news=${post.id}#newspaper`;
+  if (isNsfw) {
+    const { rows: followers } = await pool.query(
+      `SELECT uf.follower_id FROM user_follows uf JOIN users u ON u.id = uf.follower_id
+       WHERE uf.followed_id = $1 AND u.nsfw_enabled = true`, [req.user.id]);
+    await Promise.all(followers.map(f => notifyUser(f.follower_id, req.user.id, 'new_newspaper', notifyMsg, notifyLink)));
+  } else {
+    await notifyFollowers(req.user.id, 'new_newspaper', notifyMsg, notifyLink);
+  }
   const levelUp = await awardXp(req.user.id, 'newspaper', post.id, 50);
   res.json({ post: { ...post, comment_count: 0 }, levelUp });
 });
@@ -6824,12 +6842,13 @@ app.put('/api/newspaper/:id', requireAuth, async (req, res) => {
   const previewImageUrl = req.body.preview_image_url !== undefined ? cleanUploadedImagePath(req.body.preview_image_url) : existing.preview_image_url;
   const previewX = req.body.preview_position_x !== undefined ? clampPosition(req.body.preview_position_x) : existing.preview_position_x;
   const previewY = req.body.preview_position_y !== undefined ? clampPosition(req.body.preview_position_y) : existing.preview_position_y;
+  const isNsfw = req.body.is_nsfw !== undefined ? !!req.body.is_nsfw : existing.is_nsfw;
   const { rows: [post] } = await pool.query(
     `UPDATE newspaper_posts SET title = $1, body = $2, cover_mode = $3, cover_image_url = $4, cover_slideshow = $5,
-       cover_randomize = $6, preview_image_url = $7, preview_position_x = $8, preview_position_y = $9, updated_at = NOW()
-     WHERE id = $10 RETURNING *`,
+       cover_randomize = $6, preview_image_url = $7, preview_position_x = $8, preview_position_y = $9, is_nsfw = $10, updated_at = NOW()
+     WHERE id = $11 RETURNING *`,
     [title, body, cover.mode, cover.image_url, JSON.stringify(cover.slideshow), cover.randomize,
-     previewImageUrl, previewX, previewY, existing.id]
+     previewImageUrl, previewX, previewY, isNsfw, existing.id]
   );
   res.json({ post });
 });
@@ -6846,7 +6865,17 @@ app.delete('/api/newspaper/:id', requireAuth, async (req, res) => {
   res.json({ message: 'Deleted.' });
 });
 
+// Comments follow their post's visibility: a hidden NSFW post is a 404 here too.
+async function newspaperPostHiddenFrom(req, postId) {
+  const { rows: [np] } = await pool.query('SELECT user_id, is_nsfw FROM newspaper_posts WHERE id = $1', [postId]);
+  if (!np) return true;
+  if (!np.is_nsfw) return false;
+  const { viewerId, nsfwAllowed } = await getViewerNsfwAccess(req);
+  return !nsfwAllowed && viewerId !== np.user_id;
+}
+
 app.get('/api/newspaper/post/:id/comments', async (req, res) => {
+  if (await newspaperPostHiddenFrom(req, req.params.id)) return res.status(404).json({ error: 'Not found.' });
   const { rows } = await pool.query(
     `SELECT nc.id, nc.body, nc.created_at, u.username, u.display_name, u.avatar
      FROM newspaper_comments nc JOIN users u ON u.id = nc.user_id
@@ -6865,9 +6894,13 @@ app.post('/api/newspaper/post/:id/comments', requireAuth, async (req, res) => {
   const body = String(req.body.body || '').trim().slice(0, 2000);
   if (!body) return res.status(400).json({ error: 'Comment cannot be empty.' });
   const { rows: [post] } = await pool.query(
-    `SELECT np.id, np.user_id, np.title, u.username AS owner_username
+    `SELECT np.id, np.user_id, np.title, np.is_nsfw, u.username AS owner_username
      FROM newspaper_posts np JOIN users u ON u.id = np.user_id WHERE np.id = $1`, [req.params.id]);
   if (!post) return res.status(404).json({ error: 'Post not found.' });
+  if (post.is_nsfw && post.user_id !== req.user.id) {
+    const { rows: [viewer] } = await pool.query('SELECT nsfw_enabled FROM users WHERE id = $1', [req.user.id]);
+    if (!(viewer && viewer.nsfw_enabled)) return res.status(404).json({ error: 'Post not found.' });
+  }
   const { rows: [comment] } = await pool.query(
     `INSERT INTO newspaper_comments (post_id, user_id, body) VALUES ($1, $2, $3) RETURNING id, body, created_at`,
     [post.id, req.user.id, body]

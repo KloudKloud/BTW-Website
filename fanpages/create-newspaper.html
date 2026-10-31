@@ -63,6 +63,9 @@
     .cp-page .mod-btn {
       font-family: 'Fredoka', 'Lato', cursive;
     }
+    .cp-nsfw-row { display: flex; align-items: center; gap: 0.75rem; }
+    .cp-nsfw-state { font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 0.95rem; color: #6fe08a; }
+    .cp-nsfw-state--on { color: #ff8079; }
     .cp-field-title-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; position: relative; }
     .cp-field-title-row label { margin-bottom: 0; }
     /* Page heading stays blue (this page's own look, not the gold
@@ -291,9 +294,24 @@
       <div class="cp-field-title-row">
         <label for="cp-body-input" class="cp-field-label-lg">Description</label>
         <button class="wiki-tags-tip-icon" type="button" aria-label="Description help">💡</button>
-        <div class="wiki-tags-tip-popover" hidden><p>Tell everyone what this newspaper is about! An update, an announcement, a bit of lore, a ramble~<br><br>If you'd like to format: bold text with **text**, italicize with *text*, drop in a normal link by just pasting it (like https://example.com) to make it clickable automatically, or embed a link into a specific phrase/word with [text]&lt;URL Link&gt;.</p></div>
+        <div class="wiki-tags-tip-popover" hidden><p>Share what's on your mind! An update, announcement, lore drop, just rambling~ Whatever you wanna, have at it!<br><br>If you'd like to format: bold text with **text**, italicize with *text*, drop in a normal link by just pasting it (like https://example.com) to make it clickable automatically, or embed a link into a specific phrase/word with [text]&lt;URL Link&gt;.</p></div>
       </div>
       <textarea class="mod-textarea" id="cp-body-input" rows="8" maxlength="8000" placeholder="Write your newspaper…"></textarea>
+    </div>
+
+    <div class="mod-field" style="margin-top:2.25rem;">
+      <div class="cp-field-title-row">
+        <label for="cp-nsfw-input" class="cp-field-label-lg">NSFW</label>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="NSFW help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Posts are SFW by default. Switch this on if your newspaper has mature or adult content — it'll be completely hidden from logged-out visitors and anyone with SFW Mode on.</p></div>
+      </div>
+      <div class="cp-nsfw-row">
+        <label class="slideshow-randomize-switch">
+          <input type="checkbox" id="cp-nsfw-input" />
+          <span class="slideshow-randomize-slider"></span>
+        </label>
+        <span class="cp-nsfw-state" id="cp-nsfw-state">SFW</span>
+      </div>
     </div>
 
     <p class="mod-panel-msg" id="cp-msg"></p>
@@ -626,6 +644,14 @@
     cancelEl.href = (document.referrer && document.referrer.startsWith(window.location.origin)) ? document.referrer : myNewspaperUrl();
   }
 
+  function syncNsfwState() {
+    const on = document.getElementById('cp-nsfw-input').checked;
+    const st = document.getElementById('cp-nsfw-state');
+    st.textContent = on ? 'NSFW' : 'SFW';
+    st.classList.toggle('cp-nsfw-state--on', on);
+  }
+  document.getElementById('cp-nsfw-input').addEventListener('change', syncNsfwState);
+
   // ── Save / Create ──────────────────────────────────────────────────
   document.getElementById('cp-save').addEventListener('click', async () => {
     const title = document.getElementById('cp-title-input').value.trim();
@@ -639,7 +665,7 @@
     btn.disabled = true;
     btn.textContent = editingPostId ? 'Saving…' : 'Posting…';
     try {
-      const body = { title, description, cover, preview_position_x: postPreviewPos.x, preview_position_y: postPreviewPos.y };
+      const body = { title, description, cover, preview_position_x: postPreviewPos.x, preview_position_y: postPreviewPos.y, is_nsfw: document.getElementById('cp-nsfw-input').checked };
       // Thumbnail Preview's current crop gets baked into a real cropped image
       // and uploaded like any other image on this page.
       if (postCreateCropper && postCreateCropper.isReady()) {
@@ -718,6 +744,8 @@
       const { post } = await res.json();
       document.getElementById('cp-title-input').value = post.title || '';
       document.getElementById('cp-body-input').value = post.body || '';
+      document.getElementById('cp-nsfw-input').checked = !!post.is_nsfw;
+      syncNsfwState();
       cover = {
         mode: post.cover_mode === 'slideshow' ? 'slideshow' : 'static',
         image_url: post.cover_image_url || '',
