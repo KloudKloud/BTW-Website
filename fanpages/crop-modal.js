@@ -9,7 +9,7 @@
   const style = document.createElement('style');
   style.textContent = `
     .crop-modal-overlay {
-      position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+      position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.86);
       display: flex; align-items: center; justify-content: center; padding: 2rem 1rem;
     }
     .crop-modal-box {
