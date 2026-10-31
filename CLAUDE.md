@@ -71,14 +71,11 @@ session), `club.html` (single club, huge file ~260KB), `profile-template.html`,
   snaps to the catalog's canonical casing (both client-side on Enter/suggestion-click,
   and server-side again as the real trust boundary) — see `snapToCatalogCasing()` in
   server.js and `addWorkingTag()`-style functions in the editors.
-- **Card/Compact view toggle**: shared `localStorage` key `btw_feed_view_mode` across
-  the Home feed, Clubs Recent, and every club's Social tab. Compact is default. Card
-  mode currently uses a fixed 16:9 box + `object-fit: cover` (crops) for images — the
-  user flagged this as **not quite right yet** ("fix it up a bit later") after a
-  `contain`-based attempt looked worse; this needs revisiting with fresh eyes, ideally
-  by actually looking at a live rendered example before changing the CSS again.
-  Title/author now render in a header block *above* the image (matches Reddit), that
-  part is settled — only the image sizing/crop itself is still an open question.
+- **Clubs feeds are compact-only.** The Card/Compact switcher (and its `btw_feed_view_mode`
+  localStorage key) was removed from social.html, clubs-recent.html, your-posts.html and club.html's
+  Social tab; each now has `const viewMode = 'compact';`. The card-mode renderer code paths
+  (`feedCard(p, 'card')`, `adminPostRow(p, 'card')`) and the `.view-toggle-*` CSS are still in those files,
+  unused -- don't re-add the toggle unasked. (The old "card image crop/contain" question is moot.)
 - **Suggest dropdowns** (tag/fandom/species typeahead): use the body-appended,
   fixed-position pattern (`positionSuggestDropdown`/`renderSuggestDropdown` in
   `_story-template/edit.html` and `create.html`) — never `position:absolute` scoped to
