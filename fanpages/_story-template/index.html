@@ -271,16 +271,6 @@
     .sv-rcard-by { max-width: 100%; font-family: 'Inter', sans-serif; font-size: 0.75rem; color: #8a93a2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sv-rcard-why { align-self: flex-start; font-family: 'Inter', sans-serif; font-size: 0.68rem; font-weight: 600; color: #f0c060; background: rgba(240,192,96,0.1); border: 1px solid rgba(240,192,96,0.35); border-radius: 999px; padding: 0.15em 0.65em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-    /* Resume prompt */
-    .sv-overlay { position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,0.86); display: flex; align-items: center; justify-content: center; padding: 1rem; }
-    .sv-modal { width: min(92vw, 420px); text-align: center; padding: 1.75rem 2rem 1.9rem; border-top: 3px solid #7fa8d9; }
-    .sv-modal h3 { margin: 0 0 0.5rem; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.35rem; color: #f0f0f0; }
-    .sv-modal p { margin: 0 0 1.4rem; font-family: 'Inter', sans-serif; font-size: 0.92rem; color: #b8c0cc; }
-    .sv-modal-actions { display: flex; justify-content: center; gap: 0.6rem; flex-wrap: wrap; }
-    .sv-modal-actions button { cursor: pointer; padding: 0.65em 1.4em; border-radius: 999px; font-family: 'Fredoka', 'Lato', cursive; font-weight: 700; font-size: 0.95rem; }
-    .sv-btn-ghost { background: none; border: 1px solid rgba(255,255,255,0.3); color: #ddd; }
-    .sv-btn-ghost:hover { border-color: #fff; color: #fff; }
-    .sv-btn-blue { border: none; color: #fff; background: linear-gradient(135deg, #3d6fa8, #7fa8d9); box-shadow: 0 0 14px rgba(127,168,217,0.45); }
     .sv-loading { text-align: center; color: #8a93a2; padding: 6rem 0; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.1rem; }
 
     /* ── Mobile -- every rule here comes after the base rules it overrides. ── */
@@ -334,19 +324,6 @@
 <div id="fanpages-topbar-root"></div>
 <script src="/fanpages/fanpages-nav.js"></script>
 <script src="/fanpages/fanpages-site.js"></script>
-
-<!-- "Continue where you left off?" prompt, shown by Start Reading when the
-     server reports saved progress (site.resume). -->
-<div class="sv-overlay" id="sv-resume-overlay" hidden>
-  <div class="sv-panel sv-modal">
-    <h3>Continue where you left off?</h3>
-    <p id="sv-resume-text"></p>
-    <div class="sv-modal-actions">
-      <button class="sv-btn-ghost" id="sv-resume-restart" type="button">Start From The Top</button>
-      <button class="sv-btn-blue" id="sv-resume-yes" type="button">Resume Reading</button>
-    </div>
-  </div>
-</div>
 
 <p class="sv-loading" id="sv-loading">Loading…</p>
 
@@ -613,14 +590,10 @@ function renderHero() {
       $('sv-start-label').textContent = 'Continue Reading';
     }
     if (s.resume) {
+      // Saved progress: Continue Reading jumps straight to that chapter and
+      // scroll position (the reader honors ?resume=1) -- no prompt.
       $('sv-start-label').textContent = 'Continue Reading';
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        $('sv-resume-text').textContent = `You're ${s.resume.percent}% through "${s.resume.chapter_title || 'Untitled Chapter'}".`;
-        $('sv-resume-overlay').hidden = false;
-      });
-      $('sv-resume-restart').addEventListener('click', () => { window.location.href = btn.href; });
-      $('sv-resume-yes').addEventListener('click', () => { window.location.href = `${STORY_BASE}/reader?ch=${s.resume.chapter_id}&resume=1`; });
+      btn.href = `${STORY_BASE}/reader?ch=${s.resume.chapter_id}&resume=1`;
     }
   }
 
