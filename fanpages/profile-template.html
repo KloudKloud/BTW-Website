@@ -40,7 +40,7 @@
        content is"). .fp-bg-wrap itself stays a normal, non-fixed container
        so the actual page content inside it still flows and scrolls like
        everything else. */
-    .fp-bg-wrap { position: relative; background: #0d0d0d; }
+    .fp-bg-wrap { position: relative; background: #0a0c0d; }
     .fp-bg-img {
       /* Blurred now (unlike the site-wide .mod-page-bg-img, which stays
          sharp because it's pinned to a fixed 100vh and a blur would fade
@@ -2069,9 +2069,20 @@
   // trying this out, easy to revert to plain dark if it doesn't land) or a
   // custom uploaded background ──
   const FP_DEFAULT_HOME_BG = '/images/home/potential-box-background.png';
+  // Experiment: when true, every tab's DEFAULT background is Clubs' plain
+  // near-black (#0a0c0d, set on .fp-bg-wrap) instead of the wallpaper art.
+  // A custom uploaded Home background is still honored. Set to false to go
+  // back to the wallpaper look.
+  const FP_PLAIN_DEFAULT_BG = true;
   function applyProfileTheme(themeId, bgUrl) {
     const bgImg = document.getElementById('fp-bg-img');
     const bgOverlay = document.getElementById('fp-bg-overlay');
+    if (FP_PLAIN_DEFAULT_BG && !(themeId === 'custom' && bgUrl)) {
+      bgImg.style.display = 'none';
+      bgOverlay.style.display = 'none';
+      document.querySelectorAll('.fp-theme-swatch').forEach(el => el.classList.toggle('active', el.dataset.theme === themeId));
+      return;
+    }
     bgImg.src = (themeId === 'custom' && bgUrl) ? bgUrl : FP_DEFAULT_HOME_BG;
     bgImg.classList.toggle('fp-bg-img--custom', themeId === 'custom' && !!bgUrl);
     bgImg.style.display = 'block';
@@ -2092,7 +2103,7 @@
       document.getElementById('fp-bg-img').style.display = 'none';
       document.getElementById('fp-bg-overlay').style.display = 'none';
     }
-    const scrollOn = tab === 'characters' || tab === 'gallery' || tab === 'stories' || tab === 'newspaper';
+    const scrollOn = !FP_PLAIN_DEFAULT_BG && (tab === 'characters' || tab === 'gallery' || tab === 'stories' || tab === 'newspaper');
     document.getElementById('fp-bg-img-scroll').style.display = scrollOn ? 'block' : 'none';
     document.getElementById('fp-bg-overlay-scroll').style.display = scrollOn ? 'block' : 'none';
     if (scrollOn) syncScrollBgHeight();
