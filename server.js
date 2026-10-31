@@ -4822,12 +4822,15 @@ async function generateThumbnail(imageUrlPath) {
 const SIZED_DIRS = ['/images/avatars/', '/images/moderators/'];
 const sizedVariantCache = new Map();   // "<url>|<px>" -> variant url, or false when the original should be used
 const sizedVariantInflight = new Set();
-function sizedUrl(urlPath, maxPx) {
+// opts.jpeg forces a JPEG copy even from a PNG/WebP source (transparency is
+// flattened onto the dark UI colour) -- for thumbnails that never need alpha.
+function sizedUrl(urlPath, maxPx, opts) {
   if (!urlPath || typeof urlPath !== 'string' || !SIZED_DIRS.some(d => urlPath.startsWith(d))) return urlPath;
   const ext = path.extname(urlPath).toLowerCase();
-  const outExt = ext === '.png' ? '.png' : (ext === '.webp' ? '.webp' : (ext === '.jpg' || ext === '.jpeg') ? '.jpg' : null);
+  const isStill = ext === '.png' || ext === '.webp' || ext === '.jpg' || ext === '.jpeg';
+  const outExt = !isStill ? null : (opts && opts.jpeg) ? '.jpg' : (ext === '.png' ? '.png' : (ext === '.webp' ? '.webp' : '.jpg'));
   if (!outExt) return urlPath;
-  const key = `${urlPath}|${maxPx}`;
+  const key = `${urlPath}|${maxPx}|${outExt}`;
   if (sizedVariantCache.has(key)) return sizedVariantCache.get(key) || urlPath;
   const variantUrl = `${urlPath.slice(0, -ext.length)}-${maxPx}${outExt}`;
   if (fs.existsSync(path.join('/var/www/btw', variantUrl))) { sizedVariantCache.set(key, variantUrl); return variantUrl; }
@@ -4847,6 +4850,7 @@ async function makeSizedVariant(urlPath, variantUrl, maxPx, outExt) {
     if (meta.pages > 1) return false;                              // animated
     if (Math.max(meta.width || 0, meta.height || 0) <= maxPx) return false; // already small enough
     let img = sharp(src).rotate().resize(maxPx, maxPx, { fit: 'inside', withoutEnlargement: true });
+    if (outExt === '.jpg') img = img.flatten({ background: '#14121a' });
     img = outExt === '.png' ? img.png({ compressionLevel: 9 }) : outExt === '.webp' ? img.webp({ quality: 85 }) : img.jpeg({ quality: 86 });
     await img.toFile(path.join('/var/www/btw', variantUrl));
     return true;
@@ -9224,10 +9228,10 @@ app.delete('/api/moderator/characters/:id', requireAuth, requireModerator, async
 // several MB each and 30 of them decoding at once is what made scrolling the
 // picker lag. `?limit=` lets the client ask for a short initial list.
 const PICKER_THUMB_PX = 200;
-// Prefer the stored thumb_image_url (the small re-encoded JPEG the spotlights
-// and profile tabs already use); only fall back to a resized copy of the
-// original for rows that don't have one.
-const pickerThumb = (thumb, original) => thumb || sizedUrl(original, PICKER_THUMB_PX);
+// Built from the stored thumb_image_url (the small JPEG the spotlights and
+// profile tabs already use) when there is one, else from the original, and
+// always scaled down to a 200px JPEG -- the size these rows are drawn at.
+const pickerThumb = (thumb, original) => sizedUrl(thumb || original, PICKER_THUMB_PX, { jpeg: true });
 const pickerLimit = (req) => Math.max(1, Math.min(30, parseInt(req.query.limit, 10) || 30));
 
 // Search the current user's OWN characters not yet linked to this story —
@@ -9280,7 +9284,7 @@ app.get('/api/stories/mine', requireAuth, async (req, res) => {
      ORDER BY ms.site_title LIMIT $3`,
     [req.user.id, q, pickerLimit(req)]
   );
-  res.json({ stories: rows.map(r => ({ id: r.id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: sizedUrl(r.cover_url, PICKER_THUMB_PX), author_avatar: r.author_avatar })) });
+  res.json({ stories: rows.map(r => ({ id: r.id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: sizedUrl(r.cover_url, PICKER_THUMB_PX, { jpeg: true }), author_avatar: r.author_avatar })) });
 });
 
 // "You may also like" on a story's own page. Scores every other published
@@ -9377,7 +9381,7 @@ app.get('/api/stories/search', requireAuth, async (req, res) => {
   );
   res.json({
     stories: rows.map(r => ({
-      id: r.id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: sizedUrl(r.cover_url, PICKER_THUMB_PX),
+      id: r.id, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: sizedUrl(r.cover_url, PICKER_THUMB_PX, { jpeg: true }),
       owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
       author_avatar: r.author_avatar,
     })),
