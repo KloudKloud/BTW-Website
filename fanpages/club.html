@@ -435,6 +435,25 @@
     .cl-theme-popover-label { font-size: 0.75rem; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; }
     .cl-theme-grid { display: flex; gap: 0.75rem; }
     .cl-accent-grid { flex-wrap: wrap; gap: 0.6rem; }
+
+    /* Post button now lives at the right end of the tab row (accent-filled);
+       Edit Club + the accent picker moved up into the banner's button group,
+       left of Join. */
+    .cl-tabs-admin-actions .cl-banner-post-btn {
+      height: 44px; padding: 0 1.6rem; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1rem; font-weight: 700; letter-spacing: 0.02em; color: #14121a; white-space: nowrap;
+      background: linear-gradient(160deg, rgba(var(--cl-accent-rgb,127,168,217),1), rgba(var(--cl-accent-rgb,127,168,217),0.7));
+      border: 1px solid var(--cl-accent,#7fa8d9); box-shadow: 0 0 14px rgba(var(--cl-accent-rgb,127,168,217),0.4);
+    }
+    .cl-tabs-admin-actions .cl-banner-post-btn:hover {
+      background: linear-gradient(160deg, rgba(var(--cl-accent-rgb,127,168,217),1), rgba(var(--cl-accent-rgb,127,168,217),0.85));
+      box-shadow: 0 0 20px rgba(var(--cl-accent-rgb,127,168,217),0.6); transform: translateY(-1px);
+    }
+    .cl-banner-actions .cl-tabs-edit-btn { height: 38px; padding: 0 1.1rem; font-size: 0.9rem; background: rgba(0,0,0,0.6); }
+    .cl-banner-actions .cl-theme-btn { width: 38px; height: 38px; font-size: 1.05rem; background: rgba(0,0,0,0.6); }
+    /* The accent popover is appended to <body> and positioned from JS (the
+       banner clips overflow, so it can't live inside it). */
+    .cl-accent-menu { position: fixed; right: auto; top: 0; left: 0; z-index: 300; }
     .cl-accent-grid .cl-theme-swatch { width: 36px; height: 36px; }
     .cl-theme-swatch {
       width: 48px; height: 48px; border-radius: 50%; cursor: pointer;
@@ -2406,7 +2425,8 @@
     <button class="cl-banner-recrop-btn" id="cl-banner-revert-btn" type="button" style="display:none; right: 4.2rem;" title="Reset to the default banner">↺</button>
     <input type="file" id="cl-banner-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
     <div class="cl-banner-actions" id="cl-banner-actions">
-      <button class="cl-banner-post-btn" id="cl-banner-post-btn" type="button" style="display:none;">+ Post</button>
+      <button class="cl-tabs-edit-btn" id="cl-tabs-edit-btn" type="button" title="Edit Club" style="display:none;">✎ Edit Club</button>
+      <button class="cl-theme-btn" id="cl-accent-btn" type="button" title="Accent color" style="display:none;">🖍️</button>
       <button class="cl-banner-join-btn" id="cl-banner-join-btn" type="button" style="display:none;">Join</button>
     </div>
   </div>
@@ -2424,8 +2444,7 @@
           <button class="cl-home-tab active" id="cl-home-tab-hub" type="button" data-tab="hub">Home</button>
           <button class="cl-home-tab" id="cl-home-tab-social" type="button" data-tab="social">Social</button>
           <div class="cl-tabs-admin-actions" id="cl-tabs-admin-actions">
-            <button class="cl-tabs-edit-btn" id="cl-tabs-edit-btn" type="button" title="Edit Club" style="display:none;">✎ Edit Club</button>
-            <button class="cl-theme-btn" id="cl-accent-btn" type="button" title="Accent color" style="display:none;">🖍️</button>
+            <button class="cl-banner-post-btn" id="cl-banner-post-btn" type="button" style="display:none;">+ Post</button>
             <button class="cl-theme-btn" id="cl-theme-btn" type="button" title="Club theme" style="display:none;">🎨</button>
           </div>
           <div class="cl-theme-menu cl-accent-menu" id="cl-accent-menu" hidden>
@@ -3802,7 +3821,7 @@ function fadeInCoverMedia(className, url) {
 
 // ── Join/Joined button — top-right of the banner ─────────────────────────
 function renderJoinBtn(club) {
-  document.getElementById('cl-banner-post-btn').style.display = 'block';
+  document.getElementById('cl-banner-post-btn').style.display = 'flex';
   const btn = document.getElementById('cl-banner-join-btn');
   btn.style.display = 'block';
   const isOwner = club.viewer_role === 'owner';
@@ -4907,7 +4926,7 @@ function renderFromUrl() {
     clHeader.style.display = 'none';
   } else {
     bannerWrap.style.display = '';
-    bannerPostBtn.style.display = 'block';
+    bannerPostBtn.style.display = 'flex';
     clHeader.style.display = '';
   }
   // Stationary/full-size theme background -- custom pages, the Social tab,
@@ -6253,10 +6272,20 @@ async function selectClubAccent(key) {
 document.getElementById('cl-accent-btn').addEventListener('click', (e) => {
   e.stopPropagation();
   const menu = document.getElementById('cl-accent-menu');
+  if (menu.parentElement !== document.body) document.body.appendChild(menu);
   const opening = menu.hidden;
   menu.hidden = !opening;
-  if (opening) buildClAccentGrid();
+  if (opening) { buildClAccentGrid(); positionClAccentMenu(); }
 });
+function positionClAccentMenu() {
+  const menu = document.getElementById('cl-accent-menu');
+  if (menu.hidden) return;
+  const r = document.getElementById('cl-accent-btn').getBoundingClientRect();
+  menu.style.top = `${r.bottom + 8}px`;
+  menu.style.left = `${Math.max(8, Math.min(r.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8))}px`;
+}
+window.addEventListener('scroll', () => { document.getElementById('cl-accent-menu').hidden = true; }, true);
+window.addEventListener('resize', positionClAccentMenu);
 document.getElementById('cl-accent-menu').addEventListener('click', (e) => e.stopPropagation());
 document.addEventListener('click', () => { document.getElementById('cl-accent-menu').hidden = true; });
 
