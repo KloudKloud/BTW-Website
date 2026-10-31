@@ -9224,6 +9224,10 @@ app.delete('/api/moderator/characters/:id', requireAuth, requireModerator, async
 // several MB each and 30 of them decoding at once is what made scrolling the
 // picker lag. `?limit=` lets the client ask for a short initial list.
 const PICKER_THUMB_PX = 200;
+// Prefer the stored thumb_image_url (the small re-encoded JPEG the spotlights
+// and profile tabs already use); only fall back to a resized copy of the
+// original for rows that don't have one.
+const pickerThumb = (thumb, original) => thumb || sizedUrl(original, PICKER_THUMB_PX);
 const pickerLimit = (req) => Math.max(1, Math.min(30, parseInt(req.query.limit, 10) || 30));
 
 // Search the current user's OWN characters not yet linked to this story —
@@ -9235,10 +9239,10 @@ const pickerLimit = (req) => Math.max(1, Math.min(30, parseInt(req.query.limit, 
 app.get('/api/characters/mine', requireAuth, async (req, res) => {
   const q = `%${(req.query.q || '').trim()}%`;
   const { rows } = await pool.query(
-    `SELECT id, name, ref_image FROM moderator_characters WHERE owner_user_id = $1 AND name ILIKE $2 ORDER BY name LIMIT $3`,
+    `SELECT id, name, ref_image, thumb_image_url FROM moderator_characters WHERE owner_user_id = $1 AND name ILIKE $2 ORDER BY name LIMIT $3`,
     [req.user.id, q, pickerLimit(req)]
   );
-  res.json({ characters: rows.map(r => ({ ...r, ref_image: sizedUrl(r.ref_image, PICKER_THUMB_PX) })) });
+  res.json({ characters: rows.map(r => ({ id: r.id, name: r.name, ref_image: pickerThumb(r.thumb_image_url, r.ref_image) })) });
 });
 
 // Cross-owner character search — the "Other Characters" tab of the
@@ -9249,7 +9253,7 @@ app.get('/api/characters/mine', requireAuth, async (req, res) => {
 app.get('/api/characters/search', requireAuth, async (req, res) => {
   const q = `%${(req.query.q || '').trim()}%`;
   const { rows } = await pool.query(
-    `SELECT mc.id, mc.name, mc.ref_image, u.username AS owner_username, u.display_name AS owner_display_name
+    `SELECT mc.id, mc.name, mc.ref_image, mc.thumb_image_url, u.username AS owner_username, u.display_name AS owner_display_name
      FROM moderator_characters mc
      JOIN users u ON u.id = mc.owner_user_id
      WHERE mc.owner_user_id <> $1 AND mc.name ILIKE $2
@@ -9258,7 +9262,7 @@ app.get('/api/characters/search', requireAuth, async (req, res) => {
   );
   res.json({
     characters: rows.map(r => ({
-      id: r.id, name: r.name, ref_image: sizedUrl(r.ref_image, PICKER_THUMB_PX),
+      id: r.id, name: r.name, ref_image: pickerThumb(r.thumb_image_url, r.ref_image),
       owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
     })),
   });
@@ -9385,15 +9389,15 @@ app.get('/api/stories/search', requireAuth, async (req, res) => {
 app.get('/api/gallery/mine', requireAuth, async (req, res) => {
   const q = `%${(req.query.q || '').trim()}%`;
   const { rows } = await pool.query(
-    `SELECT id, title, image_url, preview_image_url FROM moderator_gallery WHERE owner_user_id = $1 AND title ILIKE $2 ORDER BY title LIMIT $3`,
+    `SELECT id, title, image_url, preview_image_url, thumb_image_url FROM moderator_gallery WHERE owner_user_id = $1 AND title ILIKE $2 ORDER BY title LIMIT $3`,
     [req.user.id, q, pickerLimit(req)]
   );
-  res.json({ gallery: rows.map(r => ({ id: r.id, title: r.title, image: sizedUrl(r.preview_image_url || r.image_url, PICKER_THUMB_PX) })) });
+  res.json({ gallery: rows.map(r => ({ id: r.id, title: r.title, image: pickerThumb(r.thumb_image_url, r.preview_image_url || r.image_url) })) });
 });
 app.get('/api/gallery/search', requireAuth, async (req, res) => {
   const q = `%${(req.query.q || '').trim()}%`;
   const { rows } = await pool.query(
-    `SELECT mg.id, mg.title, mg.image_url, mg.preview_image_url, u.username AS owner_username, u.display_name AS owner_display_name
+    `SELECT mg.id, mg.title, mg.image_url, mg.preview_image_url, mg.thumb_image_url, u.username AS owner_username, u.display_name AS owner_display_name
      FROM moderator_gallery mg
      JOIN users u ON u.id = mg.owner_user_id
      WHERE mg.owner_user_id <> $1 AND mg.title ILIKE $2
@@ -9402,7 +9406,7 @@ app.get('/api/gallery/search', requireAuth, async (req, res) => {
   );
   res.json({
     gallery: rows.map(r => ({
-      id: r.id, title: r.title, image: sizedUrl(r.preview_image_url || r.image_url, PICKER_THUMB_PX),
+      id: r.id, title: r.title, image: pickerThumb(r.thumb_image_url, r.preview_image_url || r.image_url),
       owner_username: r.owner_username, owner_display_name: r.owner_display_name || r.owner_username,
     })),
   });
