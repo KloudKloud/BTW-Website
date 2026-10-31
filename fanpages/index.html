@@ -550,14 +550,23 @@
     }
     .fp-arcade-side-box p { margin-top: 0.4rem; font-size: 0.92rem; color: #ddd3ec; max-width: 32ch; }
 
-    /* Soft neon glow around the perimeter of the three Arcade-row boxes,
-       slow-pulsing like the glow frames on the boxes above: purple on all three. */
-    @keyframes fp-arcade-neon-purple {
-      0%, 100% { box-shadow: 0 0 6px 1px rgba(170,100,255,0.28), 0 0 16px 2px rgba(150,90,255,0.2), 0 10px 30px rgba(0,0,0,0.4); }
-      50% { box-shadow: 0 0 9px 1px rgba(170,100,255,0.45), 0 0 22px 4px rgba(150,90,255,0.32), 0 10px 30px rgba(0,0,0,0.4); }
+    /* Arcade-row boxes (Arcade / News Posts / Donations): a toned-down purple
+       edge. Each box keeps a normal static drop shadow (so it sits on the page
+       instead of floating in a hazy neon rectangle) plus the faintest purple
+       halo; the "alive" pulse is a thin inner ring on ::before that animates
+       OPACITY only (compositor-cheap -- animating the box-shadow itself
+       repainted these big boxes every frame and replaced the drop shadow). */
+    .fp-arcade-main, .fp-arcade-side-box {
+      border-color: rgba(170,110,255,0.32);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.45), 0 0 14px rgba(150,90,255,0.1), inset 0 1px 0 rgba(255,255,255,0.1);
     }
-    .fp-arcade-main { border-color: rgba(170,110,255,0.55); animation: fp-arcade-neon-purple 4.5s ease-in-out infinite; }
-    .fp-arcade-side-box { border-color: rgba(170,110,255,0.55); animation: fp-arcade-neon-purple 4.5s ease-in-out infinite; }
+    .fp-arcade-main::before, .fp-arcade-side-box::before {
+      content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none; border-radius: 18px;
+      box-shadow: inset 0 0 0 1px rgba(170,110,255,0.5), inset 0 0 16px rgba(150,90,255,0.16);
+      will-change: opacity;
+      animation: fp-arcade-fade 4.5s ease-in-out infinite;
+    }
+    @keyframes fp-arcade-fade { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.85; } }
     .fp-arcade-main, .fp-arcade-side-box { transition: transform 0.2s ease; }
     .fp-arcade-main:hover, .fp-arcade-side-box:hover { transform: translateY(-2px); }
 
