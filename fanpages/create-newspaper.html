@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Already a dark page: tell dark-mode browser extensions (Dark Reader and similar) not to re-tint it. -->
+  <meta name="color-scheme" content="dark" />
+  <meta name="darkreader-lock" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>New Newspaper Post ✦ BTW</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/fanpages/fanpages-nav.css" />
+  <link rel="stylesheet" href="/fanpages/fanpages.css" />
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #0d0d0d; color: #f0f0f0; font-family: 'Lato', Arial, sans-serif; min-height: 100vh; margin: 0; padding: 0; }
+    a { color: inherit; }
+    [hidden] { display: none !important; }
+
+    /* Sticky top bar — same recipe as +Character/+Gallery's .cc-topbar/
+       .cg-topbar: replaces the site nav entirely so Cancel/Create stay
+       reachable without scrolling and a stray nav click can't carry
+       someone off this page unconfirmed. */
+    #fanpages-topbar-root { display: none; }
+    .cp-topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 150; height: 84px; box-sizing: border-box;
+      display: flex; align-items: center; justify-content: space-between;
+      background: #161616; border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding: 0 1.5rem;
+    }
+    .cp-topbar-actions { display: flex; align-items: center; gap: 1rem; }
+    .cp-topbar-cancel {
+      color: #ccc; font-family: 'Fredoka', 'Lato', cursive; font-size: 1.02rem; font-weight: 600; text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.25); border-radius: 26px; padding: 0.8em 1.8em; cursor: pointer; background: none;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .cp-topbar-cancel:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+    .cp-topbar-create {
+      background: #1fb6a8; color: #fff; border: none;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.06rem; font-weight: 700;
+      padding: 0.85em 2.2em; border-radius: 26px; cursor: pointer;
+      box-shadow: 0 0 16px rgba(31,182,168,0.55); transition: background 0.15s, box-shadow 0.15s;
+    }
+    .cp-topbar-create:hover { background: #1a9d91; box-shadow: 0 0 22px rgba(31,182,168,0.75); }
+    .cp-topbar-delete {
+      background: #c94a4a; color: #fff; border: none;
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.02rem; font-weight: 700;
+      padding: 0.8em 1.8em; border-radius: 26px; cursor: pointer;
+      box-shadow: 0 0 14px rgba(201,74,74,0.45); transition: background 0.15s, box-shadow 0.15s;
+    }
+    .cp-topbar-delete:hover { background: #b13d3d; box-shadow: 0 0 20px rgba(201,74,74,0.65); }
+    @media (max-width: 720px) {
+      .cp-topbar { height: 64px; padding: 0 0.9rem; }
+      .cp-topbar-actions { gap: 0.5rem; }
+      .cp-topbar-cancel, .cp-topbar-create, .cp-topbar-delete { font-size: 0.82rem; padding: 0.6em 1.1em; }
+      .cp-page { padding-top: calc(64px + 1.5rem); }
+    }
+
+    .cp-page { max-width: 880px; margin: 0 auto; padding: calc(84px + 2.5rem) 1.25rem 4rem; }
+    .char-editor-modal { margin: 0 auto; max-height: none; overflow-y: visible; }
+    .cp-page .char-editor-title,
+    .cp-page .mod-field label,
+    .cp-page .mod-field-label-standalone,
+    .cp-page .mod-btn {
+      font-family: 'Fredoka', 'Lato', cursive;
+    }
+    .cp-field-title-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; position: relative; }
+    .cp-field-title-row label { margin-bottom: 0; }
+    /* Page heading stays blue (this page's own look, not the gold
+       .editor-title-glow +Character/+Gallery share) and centered. */
+    #cp-title-heading { color: #fff; text-shadow: 0 0 6px rgba(255,255,255,0.05), 0 1px 3px rgba(0,0,0,0.45); text-align: center; }
+    /* Post Title / Body Text read at the same size+color as a section
+       header (Media, Additional Fields) -- these two are just as
+       important as those, not lesser form-field labels. */
+    .mod-field label.cp-field-label-lg { font-size: 1.1rem; font-weight: 700; color: #f0f0f0; }
+
+    /* Cover Media / Text Section image slots — ported verbatim from the
+       General Page builder (club.html's imgbox/mode-toggle/slideshow-stack
+       classes, plus the per-text-field "tf" wrapper), since posts now use
+       the exact same Cover Media + up-to-three-Text-Sections shape a
+       General Page does. */
+    .cl-edit-imgbox {
+      position: relative; width: 100%; margin: 0 auto 1rem;
+      border-radius: 14px; overflow: hidden; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12);
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+    .cl-edit-imgbox img, .cl-edit-imgbox video { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
+    /* Empty state -- a dashed "Add Image" tile (same recipe as
+       .cl-edit-slideshow-add) instead of the flat gray nopicture2.png
+       placeholder image, so an unset Cover/Side slot reads as "click here
+       to add one" rather than "this image failed to load". */
+    .cl-tf-imgbox--empty { background: transparent; border: 2px dashed rgba(255,255,255,0.25); }
+    .cl-tf-imgbox--empty:hover { border-color: rgba(127,168,217,0.6); }
+    .cl-tf-imgbox--empty .cl-tf-preview, .cl-tf-imgbox--empty .cl-edit-imgbox-overlay { display: none; }
+    .cl-tf-img-add-ph {
+      display: none; flex-direction: column; align-items: center; justify-content: center; gap: 0.3rem;
+      color: #888; font-family: 'Inter', sans-serif; font-size: 0.78rem; font-weight: 700; pointer-events: none;
+    }
+    .cl-tf-imgbox--empty .cl-tf-img-add-ph { display: flex; }
+    .cl-tf-imgbox--empty:hover .cl-tf-img-add-ph { color: #7fa8d9; }
+    /* "Link Video" as a small square DASHED tile beside the image box
+       (Single mode) -- matches the Add Image empty-state's own dashed
+       look (.cl-tf-imgbox--empty) instead of a solid-filled pill. Slideshow
+       mode uses .cl-edit-slideshow-add--youtube instead, sitting inside the
+       stack itself next to the "+" Add Image tile. Chained with the base
+       class (not just .cl-youtube-insert-btn--sqtile alone) so this always
+       beats the base rule's conflicting border/padding regardless of
+       cascade order -- see club.html's identical fix for why. */
+    .cl-youtube-insert-btn.cl-youtube-insert-btn--sqtile {
+      width: 72px; height: 72px; flex: 0 0 auto; border-radius: 10px; padding: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem;
+      font-size: 0.68rem; letter-spacing: 0.01em;
+      background: transparent; border: 2px dashed rgba(224,90,82,0.4);
+    }
+    .cl-youtube-insert-btn--sqtile .cl-img-add-tile-icon { font-size: 1.2rem; font-weight: 400; color: inherit; }
+    .cl-edit-imgbox-overlay {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.45); color: #fff; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600;
+      opacity: 0; transition: opacity 0.2s; text-align: center; padding: 0.5rem;
+    }
+    .cl-edit-imgbox:hover .cl-edit-imgbox-overlay { opacity: 1; }
+    .cl-splash-rules-link {
+      background: none; border: 1px solid rgba(127,168,217,0.4); color: #7fa8d9;
+      font-family: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer;
+      padding: 0.4rem 0.75rem; border-radius: 16px; white-space: nowrap; transition: background 0.15s, border-color 0.15s;
+    }
+    .cl-splash-rules-link:hover { background: rgba(127,168,217,0.12); border-color: #7fa8d9; }
+    /* Boxes the Media section the same way club.html's Home editor boxes
+       Cover Media/Club Icon/etc -- same recipe (.cl-edit-panel there). */
+    .cl-media-panel {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px; padding: 1.75rem 2rem; margin-top: 1.75rem;
+    }
+    .cl-edit-mode-toggle { display: flex; gap: 0.6rem; margin-bottom: 1rem; }
+    .cl-edit-mode-btn {
+      flex: 1; padding: 0.55em 0.8em; border-radius: 10px; cursor: pointer;
+      background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #ccc;
+      font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 700;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .cl-edit-mode-btn:hover { border-color: rgba(255,255,255,0.4); color: #fff; }
+    .cl-edit-mode-btn.active { background: rgba(127,168,217,0.15); border-color: #7fa8d9; color: #7fa8d9; }
+    .cl-edit-slideshow-stack { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.85rem; }
+    .cl-edit-slideshow-item {
+      position: relative; width: 190px; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden;
+      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); cursor: default;
+    }
+    .cl-edit-slideshow-item img, .cl-edit-slideshow-item video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cl-edit-slideshow-remove {
+      position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%;
+      background: rgba(0,0,0,0.7); border: none; color: #fff; font-size: 0.7rem; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cl-edit-slideshow-remove:hover { background: rgba(217,122,114,0.85); }
+    /* Shared "Add Image" dashed-tile look -- this slideshow "+" tile and a
+       single Cover/Side image slot's empty state (.cl-tf-imgbox--empty)
+       both use it, so every "nothing here yet, click to add" image spot in
+       the editor reads as one consistent shape. */
+    .cl-img-add-tile-icon { font-size: 1.5rem; font-weight: 400; line-height: 1; display: block; }
+    .cl-edit-slideshow-add {
+      width: 190px; aspect-ratio: 16 / 9; border-radius: 10px; cursor: pointer;
+      background: transparent; border: 2px dashed rgba(255,255,255,0.25); color: #888;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.3rem;
+      font-family: 'Inter', sans-serif; font-size: 0.78rem; font-weight: 700;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .cl-edit-slideshow-add:hover { border-color: rgba(127,168,217,0.6); color: #7fa8d9; }
+    /* "Link Video" tile -- sits right after the "+" add tile in the
+       slideshow stack, smaller/square instead of matching the Add Image
+       tile's full 190px width, so it reads as a secondary option next to
+       the main "add a slide" action rather than an equal-weight twin. */
+    .cl-edit-slideshow-add--youtube {
+      width: 90px; aspect-ratio: 1 / 1;
+      font-size: 0.68rem; font-weight: 700; font-family: 'Inter', sans-serif; color: #e05a52;
+      border-color: rgba(224,90,82,0.4); flex-direction: column; gap: 0.25rem; text-align: center; padding: 0.5rem;
+    }
+    .cl-edit-slideshow-add--youtube:hover { border-color: #e05a52; color: #ff7a70; }
+    .cl-edit-slideshow-add--youtube .cl-yt-icon { font-size: 1.1rem; }
+    /* Static-mode equivalent -- sits below the single imgbox, left-aligned,
+       next to the "No Media" remove button. */
+    .cl-cover-actions-row { display: flex; align-items: center; gap: 0.85rem; margin-top: 0.75rem; flex-wrap: wrap; }
+    .cl-youtube-insert-btn {
+      background: transparent; border: 1px solid rgba(224,90,82,0.4); color: #e05a52; border-radius: 8px;
+      padding: 0.5em 0.9em; font-family: 'Inter', sans-serif; font-size: 0.82rem; font-weight: 700; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .cl-youtube-insert-btn:hover { border-color: #e05a52; color: #ff7a70; }
+    /* An Additional Field's Cover slideshow puts "Link Video" inside the
+       image stack itself now, right next to the "+" Add Image tile (see
+       .cl-edit-slideshow-add--youtube), same as the top-level Cover's own
+       slideshow -- Randomize is the only thing left in this row,
+       right-aligned via the base .slideshow-randomize-row's own
+       justify-content:flex-end (fanpages.css). */
+    .slideshow-randomize-row-controls { display: flex; align-items: center; gap: 0.5rem; }
+    /* "Link Video" popup -- Fredoka per the site's bubbly-heading
+       convention (see CLAUDE.md), matching crop-modal.js's overlay pattern
+       but its own self-contained markup, per this codebase's duplication-
+       over-shared-components convention. */
+    .cl-yt-modal-overlay {
+      position: fixed; inset: 0; z-index: 600; background: rgba(0,0,0,0.86);
+      display: flex; align-items: center; justify-content: center; padding: 1rem;
+    }
+    .cl-yt-modal-overlay[hidden] { display: none; }
+    .cl-yt-modal-box {
+      background: #1a1a1a; border: 1px solid rgba(255,255,255,0.12); border-radius: 16px;
+      padding: 1.75rem; width: min(90vw, 420px); box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    .cl-yt-modal-title {
+      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.3rem; font-weight: 700; color: #fff;
+      margin: 0 0 1rem; text-align: center;
+    }
+    .cl-yt-modal-input { width: 100%; box-sizing: border-box; }
+    .cl-yt-modal-error { color: #e05a52; font-size: 0.82rem; margin: 0.6rem 0 0; font-family: 'Inter', sans-serif; }
+    .cl-yt-modal-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 1.35rem; }
+    .cl-edit-hint { color: #888; font-size: 0.78rem; margin: 0; }
+  </style>
+</head>
+<body>
+
+<div id="fanpages-topbar-root"></div>
+
+<div class="cp-topbar">
+  <button class="cp-topbar-delete" id="cp-topbar-delete" type="button" style="display:none;">Delete Post</button>
+  <div class="cp-topbar-actions">
+    <button class="cp-topbar-cancel" id="cp-topbar-cancel" type="button">Cancel</button>
+    <button class="cp-topbar-create" id="cp-topbar-create" type="button">Post</button>
+  </div>
+</div>
+
+<main class="cp-page">
+  <div class="char-editor-modal">
+    <h2 class="char-editor-title editor-title-glow" id="cp-title-heading">New Newspaper Post</h2>
+
+    <div class="mod-field">
+      <label for="cp-title-input" class="cp-field-label-lg">Title <span class="mod-required-star">*</span></label>
+      <input class="mod-input" id="cp-title-input" maxlength="120" placeholder="Give your newspaper a title" />
+    </div>
+
+    <div class="cl-media-panel">
+      <div class="cp-field-title-row">
+        <h3 class="char-editor-title" style="font-size:1.1rem; margin:0;">Cover Image</h3>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Cover Image help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Pick a single image/GIF, a YouTube video, or a Slideshow that cycles through several. It's good practice to credit sources you use, if the art/images aren't yours.<br><br>Optional — a newspaper without a cover just shows your profile picture as its thumbnail~</p></div>
+      </div>
+      <div class="cl-edit-mode-toggle">
+        <button class="cl-edit-mode-btn active" id="cp-cover-mode-static" type="button">Single</button>
+        <button class="cl-edit-mode-btn" id="cp-cover-mode-slideshow" type="button">Slideshow</button>
+      </div>
+      <div id="cp-cover-static">
+        <div class="cl-edit-imgbox cl-tf-imgbox cl-tf-imgbox--empty" id="cp-cover-wrap" style="aspect-ratio: 16 / 9;">
+          <img class="cl-tf-preview" id="cp-cover-preview" alt="" />
+          <div class="cl-tf-img-add-ph"><span class="cl-img-add-tile-icon">+</span>Add Image</div>
+          <div class="cl-edit-imgbox-overlay">📷 Change Cover Media</div>
+          <button type="button" class="fp-recrop-btn" id="cp-cover-recrop-btn" style="position:absolute; bottom:8px; right:8px; z-index:3;" hidden>✏️ Recrop</button>
+        </div>
+        <input type="file" id="cp-cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+        <div class="cl-cover-actions-row">
+          <button type="button" class="cl-youtube-insert-btn cl-youtube-insert-btn--sqtile" id="cp-cover-youtube-btn"><span class="cl-img-add-tile-icon">▶</span>Link Video</button>
+          <button type="button" class="cl-splash-rules-link" id="cp-cover-remove-btn" hidden>✕ No Media</button>
+        </div>
+      </div>
+      <div id="cp-cover-slideshow" hidden>
+        <div class="cl-edit-slideshow-stack" id="cp-cover-slideshow-stack"></div>
+        <input type="file" id="cp-cover-slideshow-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" />
+        <div class="slideshow-randomize-row">
+          <label class="slideshow-randomize-label" for="cp-cover-slideshow-randomize">Randomize</label>
+          <label class="slideshow-randomize-switch">
+            <input type="checkbox" id="cp-cover-slideshow-randomize" checked />
+            <span class="slideshow-randomize-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="mod-field" id="cp-preview-field" hidden style="margin-top:1.5rem;">
+      <div class="cp-field-title-row">
+        <label>Thumbnail Preview</label>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Thumbnail Preview help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>This is how your cover image shows up on the Newspaper tab. Drag to pick the best part to show off, and use the slider to zoom in! Your full-size image is never cropped, only this thumbnail.</p></div>
+      </div>
+      <div class="gallery-preview-crop-wrap" id="cp-preview-wrap" style="aspect-ratio: 1 / 1;">
+        <img id="cp-preview-img" alt="" draggable="false" />
+      </div>
+      <div class="crop-modal-zoom-row gallery-preview-zoom-row">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+        <input type="range" class="crop-modal-zoom" id="cp-preview-zoom" />
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+      </div>
+    </div>
+
+    <div class="mod-field" style="margin-top:2.25rem;">
+      <div class="cp-field-title-row">
+        <label for="cp-body-input" class="cp-field-label-lg">Description</label>
+        <button class="wiki-tags-tip-icon" type="button" aria-label="Description help">💡</button>
+        <div class="wiki-tags-tip-popover" hidden><p>Tell everyone what this newspaper is about! An update, an announcement, a bit of lore, a ramble~<br><br>If you'd like to format: bold text with **text**, italicize with *text*, drop in a normal link by just pasting it (like https://example.com) to make it clickable automatically, or embed a link into a specific phrase/word with [text]&lt;URL Link&gt;.</p></div>
+      </div>
+      <textarea class="mod-textarea" id="cp-body-input" rows="8" maxlength="8000" placeholder="Write your newspaper…"></textarea>
+    </div>
+
+    <p class="mod-panel-msg" id="cp-msg"></p>
+    <div class="char-editor-actions">
+      <button class="mod-btn mod-btn--danger" id="cp-delete-forever" type="button" style="display:none;">Delete Post</button>
+      <a class="mod-btn mod-btn--cancel" href="#" id="cp-cancel">Cancel</a>
+      <button class="mod-btn" id="cp-save" type="button">Post</button>
+    </div>
+  </div>
+</main>
+
+<div class="cl-yt-modal-overlay" id="cl-yt-modal-overlay" hidden>
+  <div class="cl-yt-modal-box">
+    <p class="cl-yt-modal-title">▶ Link Video</p>
+    <input type="text" class="mod-input cl-yt-modal-input" id="cl-yt-modal-input" placeholder="Paste a YouTube link…" autocomplete="off" />
+    <p class="cl-yt-modal-error" id="cl-yt-modal-error" hidden>That doesn't look like a YouTube link — double-check it and try again.</p>
+    <div class="cl-yt-modal-actions">
+      <button type="button" class="mod-btn mod-btn--cancel" id="cl-yt-modal-cancel">Cancel</button>
+      <button type="button" class="mod-btn" id="cl-yt-modal-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="/fanpages/fanpages-nav.js"></script>
+<script src="/fanpages/btw-cropper.js"></script>
+<script src="/fanpages/crop-modal.js"></script>
+<script>
+  const token = localStorage.getItem('btw_token') || sessionStorage.getItem('btw_token');
+  const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : {});
+  if (!token) window.location.href = window.fpUrl(`/login?from=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  let cpDirty = false;
+  document.querySelector('.char-editor-modal').addEventListener('input', () => { cpDirty = true; }, true);
+  document.querySelector('.char-editor-modal').addEventListener('change', () => { cpDirty = true; }, true);
+  window.addEventListener('beforeunload', (e) => {
+    if (!cpDirty) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+
+  document.getElementById('cp-topbar-create').addEventListener('click', () => document.getElementById('cp-save').click());
+  document.getElementById('cp-topbar-cancel').addEventListener('click', () => document.getElementById('cp-cancel').click());
+  document.getElementById('cp-topbar-delete').addEventListener('click', () => document.getElementById('cp-delete-forever').click());
+
+  // Lightbulb hint popovers — delegated (not wired per-icon at load) since
+  // the Cover/Side Image slots' own lightbulbs get created later, dynamically,
+  // every time a Text Field row renders.
+  document.addEventListener('click', (e) => {
+    const icon = e.target.closest('.wiki-tags-tip-icon');
+    if (icon) {
+      const pop = icon.nextElementSibling;
+      if (pop && pop.classList.contains('wiki-tags-tip-popover')) { e.stopPropagation(); pop.hidden = !pop.hidden; }
+      return;
+    }
+    document.querySelectorAll('.wiki-tags-tip-popover').forEach(pop => {
+      if (!pop.hidden && !pop.contains(e.target)) pop.hidden = true;
+    });
+  });
+
+  // Every image on this page uploads immediately on pick (same plain
+  // "upload a blob, get a URL back" endpoint character/gallery creation
+  // uses — nothing character-specific about it) and the URL is just carried
+  // in local state until the final Create/Save submit, same as those pages.
+  async function uploadPostImage(blob) {
+    const fd = new FormData();
+    fd.append('image', blob, 'image.jpg');
+    const res = await fetch('/api/moderator/character-image', { method: 'POST', headers: authHeaders(), body: fd });
+    if (!res.ok) return '';
+    const data = await res.json();
+    return data.url || '';
+  }
+
+  // A Cover slot's URL is either our own uploaded image/GIF, or a YouTube
+  // link -- detected purely off the URL's own shape (the server always
+  // normalizes a saved YouTube link to this exact canonical form), no
+  // separate type field needed anywhere this gets stored.
+  function extractYoutubeId(url) {
+    const s = String(url || '').trim();
+    const patterns = [
+      /^https?:\/\/(?:www\.)?youtube\.com\/watch\?(?:[^#]*&)?v=([A-Za-z0-9_-]{11})(?:&.*)?$/,
+      /^https?:\/\/(?:www\.)?youtu\.be\/([A-Za-z0-9_-]{11})(?:\?.*)?$/,
+      /^https?:\/\/(?:www\.)?youtube\.com\/embed\/([A-Za-z0-9_-]{11})(?:\?.*)?$/,
+      /^https?:\/\/(?:www\.)?youtube\.com\/shorts\/([A-Za-z0-9_-]{11})(?:\?.*)?$/,
+    ];
+    for (const re of patterns) {
+      const m = s.match(re);
+      if (m) return m[1];
+    }
+    return null;
+  }
+  function isYouTubeUrl(url) { return !!extractYoutubeId(url); }
+  function youtubeThumbUrl(url) {
+    const id = extractYoutubeId(url);
+    return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : '';
+  }
+  // Shows the "Link Video" popup and resolves to the canonical
+  // saved URL on success, or null if cancelled. Forces a real YouTube link:
+  // an unrecognized paste shows an inline error and the popup stays open
+  // (both here, client-side, AND re-checked server-side -- the real trust
+  // boundary -- by /api/moderator/youtube-link below).
+  function promptYoutubeLink() {
+    return new Promise((resolve) => {
+      const overlay = document.getElementById('cl-yt-modal-overlay');
+      const input = document.getElementById('cl-yt-modal-input');
+      const errorEl = document.getElementById('cl-yt-modal-error');
+      const saveBtn = document.getElementById('cl-yt-modal-save');
+      const cancelBtn = document.getElementById('cl-yt-modal-cancel');
+      input.value = '';
+      errorEl.hidden = true;
+      overlay.hidden = false;
+      input.focus();
+      function cleanup() {
+        overlay.hidden = true;
+        saveBtn.removeEventListener('click', onSave);
+        cancelBtn.removeEventListener('click', onCancel);
+        input.removeEventListener('keydown', onKeydown);
+      }
+      function onCancel() { cleanup(); resolve(null); }
+      async function onSave() {
+        const raw = input.value.trim();
+        if (!extractYoutubeId(raw)) { errorEl.hidden = false; return; }
+        errorEl.hidden = true;
+        saveBtn.disabled = true;
+        try {
+          const res = await fetch('/api/moderator/youtube-link', {
+            method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: raw }),
+          });
+          saveBtn.disabled = false;
+          if (!res.ok) { errorEl.hidden = false; return; }
+          const data = await res.json();
+          cleanup();
+          resolve(data.url);
+        } catch {
+          saveBtn.disabled = false;
+          errorEl.hidden = false;
+        }
+      }
+      function onKeydown(e) { if (e.key === 'Enter') onSave(); else if (e.key === 'Escape') onCancel(); }
+      saveBtn.addEventListener('click', onSave);
+      cancelBtn.addEventListener('click', onCancel);
+      input.addEventListener('keydown', onKeydown);
+    });
+  }
+
+  // ── Cover Media ──────────────────────────────────────────────────────
+  let cover = { mode: 'static', image_url: '', slideshow: [], randomize: true };
+  function setCoverMode(mode) {
+    cover.mode = mode;
+    const isSlideshow = mode === 'slideshow';
+    document.getElementById('cp-cover-mode-static').classList.toggle('active', !isSlideshow);
+    document.getElementById('cp-cover-mode-slideshow').classList.toggle('active', isSlideshow);
+    document.getElementById('cp-cover-static').hidden = isSlideshow;
+    document.getElementById('cp-cover-slideshow').hidden = !isSlideshow;
+    updatePostPreviewField();
+  }
+  document.getElementById('cp-cover-mode-static').addEventListener('click', () => setCoverMode('static'));
+  document.getElementById('cp-cover-mode-slideshow').addEventListener('click', () => setCoverMode('slideshow'));
+  document.getElementById('cp-cover-slideshow-randomize').addEventListener('change', function () {
+    cover.randomize = this.checked;
+    cpDirty = true;
+  });
+
+  document.getElementById('cp-cover-wrap').addEventListener('click', (e) => {
+    if (e.target.closest('#cp-cover-recrop-btn')) return;
+    document.getElementById('cp-cover-file-input').click();
+  });
+  function setCoverPreviewEl(url) {
+    const img = document.getElementById('cp-cover-preview');
+    if (url) img.src = isYouTubeUrl(url) ? youtubeThumbUrl(url) : url;
+    else img.removeAttribute('src');
+    document.getElementById('cp-cover-wrap').classList.toggle('cl-tf-imgbox--empty', !url);
+  }
+  document.getElementById('cp-cover-file-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    openCropModal({ title: 'Crop Cover Media', imageSrc: URL.createObjectURL(file), aspectRatio: 16 / 9, round: false, onSave: saveCoverImage });
+  });
+  document.getElementById('cp-cover-recrop-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!cover.image_url || isYouTubeUrl(cover.image_url)) return;
+    openCropModal({ title: 'Crop Cover Media', imageSrc: cover.image_url, aspectRatio: 16 / 9, round: false, onSave: saveCoverImage });
+  });
+  function saveCoverMediaUrl(url) {
+    cover.image_url = url;
+    setCoverPreviewEl(url);
+    document.getElementById('cp-cover-recrop-btn').hidden = isYouTubeUrl(url);
+    document.getElementById('cp-cover-remove-btn').hidden = false;
+    cpDirty = true;
+    updatePostPreviewField();
+  }
+  async function saveCoverImage(blob) {
+    const url = await uploadPostImage(blob);
+    if (!url) return;
+    saveCoverMediaUrl(url);
+  }
+  document.getElementById('cp-cover-youtube-btn').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const url = await promptYoutubeLink();
+    if (url) saveCoverMediaUrl(url);
+  });
+  document.getElementById('cp-cover-remove-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    cover.image_url = '';
+    setCoverPreviewEl('');
+    document.getElementById('cp-cover-recrop-btn').hidden = true;
+    document.getElementById('cp-cover-remove-btn').hidden = true;
+    cpDirty = true;
+    updatePostPreviewField();
+  });
+  function slideshowItemInnerHtml(url) {
+    const src = isYouTubeUrl(url) ? youtubeThumbUrl(url) : url;
+    return `<img src="${escapeHtml(src)}" alt="" /><button type="button" class="cl-edit-slideshow-remove">✕</button>`;
+  }
+  function renderCoverSlideshow() {
+    const stack = document.getElementById('cp-cover-slideshow-stack');
+    stack.innerHTML = '';
+    cover.slideshow.forEach((img, idx) => {
+      const item = document.createElement('div');
+      item.className = 'cl-edit-slideshow-item';
+      item.innerHTML = slideshowItemInnerHtml(img.image_url);
+      item.querySelector('.cl-edit-slideshow-remove').addEventListener('click', (e) => {
+        e.stopPropagation();
+        cover.slideshow.splice(idx, 1);
+        cpDirty = true;
+        renderCoverSlideshow();
+        updatePostPreviewField();
+      });
+      stack.appendChild(item);
+    });
+    const addBtn = document.createElement('button');
+    addBtn.className = 'cl-edit-slideshow-add';
+    addBtn.type = 'button';
+    addBtn.title = 'Add Image';
+    addBtn.innerHTML = '<span class="cl-img-add-tile-icon">+</span>Add Image';
+    addBtn.addEventListener('click', () => document.getElementById('cp-cover-slideshow-file-input').click());
+    stack.appendChild(addBtn);
+    const ytBtn = document.createElement('button');
+    ytBtn.className = 'cl-edit-slideshow-add cl-edit-slideshow-add--youtube';
+    ytBtn.type = 'button';
+    ytBtn.title = 'Link Video';
+    ytBtn.innerHTML = '<span class="cl-yt-icon">▶</span>Link Video';
+    ytBtn.addEventListener('click', async () => {
+      const url = await promptYoutubeLink();
+      if (!url) return;
+      cover.slideshow.push({ image_url: url });
+      cpDirty = true;
+      renderCoverSlideshow();
+      updatePostPreviewField();
+    });
+    stack.appendChild(ytBtn);
+  }
+  document.getElementById('cp-cover-slideshow-file-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    openCropModal({
+      title: 'Crop Slideshow Image', imageSrc: URL.createObjectURL(file), aspectRatio: 16 / 9, round: false,
+      onSave: async (blob) => {
+        const url = await uploadPostImage(blob);
+        if (!url) return;
+        cover.slideshow.push({ image_url: url });
+        cpDirty = true;
+        renderCoverSlideshow();
+        updatePostPreviewField();
+      },
+    });
+  });
+  renderCoverSlideshow();
+
+  // ── Post Preview — same drag-to-pan-and-zoom crop box as the gallery
+  // tile preview, ported verbatim from the old post modal. Keys off
+  // whatever Cover Media currently has an image (static image, or the
+  // slideshow's first slide). ─────────────────────────────────────────
+  let postPreviewPos = { x: 50, y: 50 };
+  let postCreateCropper = null;
+  function currentCoverPreviewSrc() {
+    if (cover.mode === 'slideshow') return cover.slideshow[0] ? cover.slideshow[0].image_url : '';
+    return cover.image_url;
+  }
+  function updatePostPreviewField() {
+    const field = document.getElementById('cp-preview-field');
+    const src = currentCoverPreviewSrc();
+    // A YouTube cover has no feed-thumbnail position/zoom crop -- there's
+    // no frame to position against here, so the feed card just falls back
+    // to showing YouTube's own thumbnail at its default framing.
+    if (!src || isYouTubeUrl(src)) {
+      field.hidden = true;
+      if (postCreateCropper) { postCreateCropper.destroy(); postCreateCropper = null; }
+      return;
+    }
+    field.hidden = false;
+    postPreviewPos = { x: 50, y: 50 };
+    showPostPreviewCrop(src);
+  }
+  function showPostPreviewCrop(src) {
+    const previewImg = document.getElementById('cp-preview-img');
+    const wrap = document.getElementById('cp-preview-wrap');
+    if (postCreateCropper) { postCreateCropper.destroy(); postCreateCropper = null; }
+    previewImg.removeAttribute('src');
+    previewImg.onload = () => {
+      requestAnimationFrame(() => {
+        postCreateCropper = new BtwCropper(previewImg, wrap, {
+          onChange(pos) {
+            postPreviewPos.x = Math.round(pos.x * 100);
+            postPreviewPos.y = Math.round(pos.y * 100);
+          },
+        });
+        postCreateCropper.setZoomInput(document.getElementById('cp-preview-zoom'));
+        postCreateCropper.setPositionFraction({ x: postPreviewPos.x / 100, y: postPreviewPos.y / 100 });
+      });
+    };
+    previewImg.src = src;
+  }
+
+
+  // Which profile to go back to: the signed-in user's own Newspaper tab.
+  const CURRENT_USER = (() => {
+    try { return JSON.parse(localStorage.getItem('btw_user') || sessionStorage.getItem('btw_user') || 'null'); } catch { return null; }
+  })();
+  const myNewspaperUrl = () => window.fpUrl(`/${CURRENT_USER && CURRENT_USER.username ? encodeURIComponent(CURRENT_USER.username) : ''}#newspaper`);
+  const editingPostId = new URLSearchParams(location.search).get('id') || null;
+  {
+    const cancelEl = document.getElementById('cp-cancel');
+    cancelEl.href = (document.referrer && document.referrer.startsWith(window.location.origin)) ? document.referrer : myNewspaperUrl();
+  }
+
+  // ── Save / Create ──────────────────────────────────────────────────
+  document.getElementById('cp-save').addEventListener('click', async () => {
+    const title = document.getElementById('cp-title-input').value.trim();
+    const description = document.getElementById('cp-body-input').value.trim();
+    const msg = document.getElementById('cp-msg');
+    msg.className = 'mod-panel-msg';
+    msg.textContent = '';
+    if (!title) { msg.className = 'mod-panel-msg mod-panel-msg--error'; msg.textContent = 'A title is required.'; document.getElementById('cp-title-input').focus(); return; }
+
+    const btn = document.getElementById('cp-save');
+    btn.disabled = true;
+    btn.textContent = editingPostId ? 'Saving…' : 'Posting…';
+    try {
+      const body = { title, description, cover, preview_position_x: postPreviewPos.x, preview_position_y: postPreviewPos.y };
+      // Thumbnail Preview's current crop gets baked into a real cropped image
+      // and uploaded like any other image on this page.
+      if (postCreateCropper && postCreateCropper.isReady()) {
+        const wrap = document.getElementById('cp-preview-wrap');
+        const scale = postCreateCropper.getZoom();
+        let outW = Math.round(wrap.clientWidth / scale);
+        let outH = Math.round(wrap.clientHeight / scale);
+        const MAX_EDGE = 2400;
+        if (Math.max(outW, outH) > MAX_EDGE) {
+          const shrink = MAX_EDGE / Math.max(outW, outH);
+          outW = Math.round(outW * shrink);
+          outH = Math.round(outH * shrink);
+        }
+        const previewBlob = await new Promise((resolve) => {
+          postCreateCropper.getCanvas(outW, outH).toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
+        });
+        if (previewBlob) body.preview_image_url = await uploadPostImage(previewBlob);
+      } else {
+        body.preview_image_url = '';
+      }
+      const res = await fetch(editingPostId ? `/api/newspaper/${editingPostId}` : '/api/newspaper', {
+        method: editingPostId ? 'PUT' : 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        msg.className = 'mod-panel-msg mod-panel-msg--error';
+        msg.textContent = data.error || 'Something went wrong. Please try again.';
+        return;
+      }
+      const { post, levelUp } = await res.json();
+      if (levelUp && window.fpnavStashXpGain) window.fpnavStashXpGain(levelUp);
+      cpDirty = false;
+      const uname = CURRENT_USER && CURRENT_USER.username;
+      window.location.href = uname
+        ? window.fpUrl(`/${encodeURIComponent(uname)}?news=${post.id}#newspaper`)
+        : myNewspaperUrl();
+    } catch {
+      msg.className = 'mod-panel-msg mod-panel-msg--error';
+      msg.textContent = 'Network error. Please try again.';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = editingPostId ? 'Save Changes' : 'Post';
+    }
+  });
+
+  document.getElementById('cp-delete-forever').addEventListener('click', async () => {
+    if (!editingPostId) return;
+    if (!confirm('Are you sure you want to delete this newspaper? This cannot be undone.')) return;
+    const delBtn = document.getElementById('cp-delete-forever');
+    delBtn.disabled = true;
+    delBtn.textContent = 'Deleting…';
+    try {
+      await fetch(`/api/newspaper/${editingPostId}`, { method: 'DELETE', headers: authHeaders() });
+      cpDirty = false;
+      window.location.href = myNewspaperUrl();
+    } catch {
+      delBtn.disabled = false;
+      delBtn.textContent = 'Delete Post';
+    }
+  });
+
+  // ── Edit mode — same page, ?id= query param, same convention as the
+  // other builders. ─────────────────────────────────────────────────────
+  (async function initEditMode() {
+    if (!editingPostId) return;
+    document.getElementById('cp-title-heading').textContent = 'Edit Newspaper Post';
+    document.getElementById('cp-topbar-create').textContent = 'Save Changes';
+    document.getElementById('cp-save').textContent = 'Save Changes';
+    document.getElementById('cp-topbar-delete').style.display = '';
+    document.getElementById('cp-delete-forever').style.display = '';
+    try {
+      const res = await fetch(`/api/newspaper/post/${editingPostId}`, { headers: authHeaders() });
+      if (!res.ok) return;
+      const { post } = await res.json();
+      document.getElementById('cp-title-input').value = post.title || '';
+      document.getElementById('cp-body-input').value = post.body || '';
+      cover = {
+        mode: post.cover_mode === 'slideshow' ? 'slideshow' : 'static',
+        image_url: post.cover_image_url || '',
+        slideshow: post.cover_slideshow || [],
+        randomize: post.cover_randomize !== false,
+      };
+      setCoverMode(cover.mode);
+      document.getElementById('cp-cover-slideshow-randomize').checked = cover.randomize;
+      if (cover.image_url) {
+        setCoverPreviewEl(cover.image_url);
+        document.getElementById('cp-cover-recrop-btn').hidden = isYouTubeUrl(cover.image_url);
+        document.getElementById('cp-cover-remove-btn').hidden = false;
+      }
+      renderCoverSlideshow();
+      updatePostPreviewField();
+      cpDirty = false;
+    } catch {}
+  })();
+</script>
+
+</body>
+</html>

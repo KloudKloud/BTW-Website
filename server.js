@@ -1220,6 +1220,21 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     CREATE INDEX IF NOT EXISTS idx_newspaper_comments_post ON newspaper_comments(post_id, created_at);
   `).catch(e => console.error('newspaper migration:', e.message));
 
+  // Newspaper posts are built on their own page now (create-newspaper.html):
+  // Title + Cover Media (single image / slideshow / YouTube, same shape as a
+  // club post) + a feed-thumbnail crop + Description (the existing body
+  // column). The old multi-attachment column stays so older posts still
+  // render.
+  await pool.query(`
+    ALTER TABLE newspaper_posts ADD COLUMN IF NOT EXISTS cover_mode TEXT NOT NULL DEFAULT 'static';
+    ALTER TABLE newspaper_posts ADD COLUMN IF NOT EXISTS cover_image_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE newspaper_posts ADD COLUMN IF NOT EXISTS cover_slideshow JSONB NOT NULL DEFAULT '[]';
+    ALTER TABLE newspaper_posts ADD COLUMN IF NOT EXISTS cover_randomize BOOLEAN NOT NULL DEFAULT true;
+    ALTER TABLE newspaper_posts ADD COLUMN IF NOT EXISTS preview_image_url TEXT NOT NULL DEFAULT '';
+    ALTER TABLE newspaper_posts ADD COLUMN IF NOT EXISTS preview_position_x INTEGER NOT NULL DEFAULT 50;
+    ALTER TABLE newspaper_posts ADD COLUMN IF NOT EXISTS preview_position_y INTEGER NOT NULL DEFAULT 50;
+  `).catch(e => console.error('newspaper cover migration:', e.message));
+
   await (async () => {
     const { rows: [existing] } = await pool.query("SELECT id FROM users WHERE username = 'btwteam'");
     if (existing) return;
@@ -4820,7 +4835,7 @@ async function generateThumbnail(imageUrlPath) {
 // resize in the background and returns the original that one time, every
 // later call returns the small copy. Anything that isn't one of our own
 // still images (GIFs, external URLs, already-small files) comes back as-is.
-const SIZED_DIRS = ['/images/avatars/', '/images/moderators/', '/images/gallery/'];
+const SIZED_DIRS = ['/images/avatars/', '/images/moderators/', '/images/gallery/', '/images/inbox/'];
 const sizedVariantCache = new Map();   // "<url>|<px>" -> variant url, or false when the original should be used
 const sizedVariantInflight = new Map();   // key -> promise of the in-progress resize
 // opts.jpeg forces a JPEG copy even from a PNG/WebP source (transparency is
@@ -6705,11 +6720,38 @@ function mapNewspaperPost(r) {
     title: r.title || '',
     body: r.body || '',
     attachments: r.attachments || [],
+    cover_mode: r.cover_mode === 'slideshow' ? 'slideshow' : 'static',
+    cover_image_url: r.cover_image_url || '',
+    cover_slideshow: r.cover_slideshow || [],
+    cover_randomize: r.cover_randomize !== false,
+    preview_image_url: r.preview_image_url || '',
+    preview_position_x: r.preview_position_x != null ? r.preview_position_x : 50,
+    preview_position_y: r.preview_position_y != null ? r.preview_position_y : 50,
     created_at: r.created_at,
     updated_at: r.updated_at,
     comment_count: r.comment_count != null ? Number(r.comment_count) : 0,
     author: { username: r.username, display_name: r.display_name || r.username, avatar: r.avatar || null },
   };
+}
+
+// Small feed thumbnail for a newspaper card: the baked preview crop if there
+// is one, else the cover (single image, or the slideshow's first slide), else
+// an older post's first image attachment, else the author's own avatar.
+// Always served as a right-sized copy -- the list draws it ~90px wide.
+async function newspaperThumbUrl(r) {
+  const ytThumb = (u) => { const id = extractYoutubeId(u); return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : u; };
+  const slide0 = (r.cover_slideshow || [])[0];
+  const att0 = (r.attachments || []).find(a => a && a.url && !/\.(mp4|webm)$/i.test(a.url));
+  const src = r.preview_image_url
+    || (r.cover_mode === 'slideshow' ? (slide0 && ytThumb(slide0.image_url)) : (r.cover_image_url && ytThumb(r.cover_image_url)))
+    || (att0 && att0.url)
+    || r.avatar || '';
+  return src ? await sizedUrlReady(src, 200) : '';
+}
+async function mapNewspaperPosts(rows) {
+  const posts = rows.map(mapNewspaperPost);
+  await Promise.all(posts.map(async (p, i) => { p.thumb_url = await newspaperThumbUrl(rows[i]); }));
+  return posts;
 }
 
 // Every post by a user, newest first — backs both the Home tab's "latest
@@ -6724,7 +6766,7 @@ app.get('/api/fanpage-profile/:username/newspaper', async (req, res) => {
      WHERE np.user_id = $1 ORDER BY np.created_at DESC LIMIT 100`,
     [author.id]
   );
-  res.json({ posts: rows.map(mapNewspaperPost) });
+  res.json({ posts: await mapNewspaperPosts(rows) });
 });
 
 app.get('/api/newspaper/post/:id', async (req, res) => {
@@ -6736,21 +6778,27 @@ app.get('/api/newspaper/post/:id', async (req, res) => {
     [req.params.id]
   );
   if (!row) return res.status(404).json({ error: 'Not found.' });
-  res.json({ post: mapNewspaperPost(row) });
+  res.json({ post: (await mapNewspaperPosts([row]))[0] });
 });
 
-app.post('/api/newspaper', requireAuth, uploadInbox.array('attachments', 4), async (req, res) => {
+// Title is mandatory (also enforced client-side in create-newspaper.html);
+// Description is optional. Cover media / preview crop use the same shapes
+// and sanitizers as club posts.
+app.post('/api/newspaper', requireAuth, async (req, res) => {
   const title = String(req.body.title || '').trim().slice(0, 120);
-  const body = String(req.body.body || '').trim().slice(0, 8000);
-  const files = req.files || [];
-  const attachments = files.map(f => ({ url: '/images/inbox/' + f.filename, name: f.originalname }));
-  const gifUrl = (req.body.gif_url || '').trim();
-  if (gifUrl) attachments.push({ url: gifUrl, name: 'GIF' });
-  if (!title && !body && !attachments.length) return res.status(400).json({ error: 'A newspaper post needs at least a title, body, or attachment.' });
+  if (!title) return res.status(400).json({ error: 'A title is required.' });
+  const body = String(req.body.description != null ? req.body.description : (req.body.body || '')).trim().slice(0, 8000);
+  const cover = sanitizeClubPostImageSlot(req.body.cover);
+  const previewImageUrl = cleanUploadedImagePath(req.body.preview_image_url);
+  const previewX = req.body.preview_position_x !== undefined ? clampPosition(req.body.preview_position_x) : 50;
+  const previewY = req.body.preview_position_y !== undefined ? clampPosition(req.body.preview_position_y) : 50;
 
   const { rows: [post] } = await pool.query(
-    `INSERT INTO newspaper_posts (user_id, title, body, attachments) VALUES ($1, $2, $3, $4) RETURNING *`,
-    [req.user.id, title, body, JSON.stringify(attachments)]
+    `INSERT INTO newspaper_posts (user_id, title, body, cover_mode, cover_image_url, cover_slideshow, cover_randomize,
+                                  preview_image_url, preview_position_x, preview_position_y)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+    [req.user.id, title, body, cover.mode, cover.image_url, JSON.stringify(cover.slideshow), cover.randomize,
+     previewImageUrl, previewX, previewY]
   );
   const { rows: [actor] } = await pool.query('SELECT username FROM users WHERE id = $1', [req.user.id]);
   await notifyFollowers(req.user.id, 'new_newspaper',
@@ -6762,15 +6810,26 @@ app.post('/api/newspaper', requireAuth, uploadInbox.array('attachments', 4), asy
 
 app.put('/api/newspaper/:id', requireAuth, async (req, res) => {
   const { rows: [existing] } = await pool.query(
-    'SELECT id FROM newspaper_posts WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]
+    'SELECT * FROM newspaper_posts WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]
   );
   if (!existing) return res.status(404).json({ error: 'Not found.' });
-  const title = req.body.title != null ? String(req.body.title).trim().slice(0, 120) : null;
-  const body = req.body.body != null ? String(req.body.body).trim().slice(0, 8000) : null;
+  const title = String(req.body.title != null ? req.body.title : existing.title).trim().slice(0, 120);
+  if (!title) return res.status(400).json({ error: 'A title is required.' });
+  const body = req.body.description != null || req.body.body != null
+    ? String(req.body.description != null ? req.body.description : req.body.body).trim().slice(0, 8000)
+    : existing.body;
+  const cover = req.body.cover !== undefined ? sanitizeClubPostImageSlot(req.body.cover) : {
+    mode: existing.cover_mode, image_url: existing.cover_image_url, slideshow: existing.cover_slideshow, randomize: existing.cover_randomize,
+  };
+  const previewImageUrl = req.body.preview_image_url !== undefined ? cleanUploadedImagePath(req.body.preview_image_url) : existing.preview_image_url;
+  const previewX = req.body.preview_position_x !== undefined ? clampPosition(req.body.preview_position_x) : existing.preview_position_x;
+  const previewY = req.body.preview_position_y !== undefined ? clampPosition(req.body.preview_position_y) : existing.preview_position_y;
   const { rows: [post] } = await pool.query(
-    `UPDATE newspaper_posts SET title = COALESCE($1, title), body = COALESCE($2, body), updated_at = NOW()
-     WHERE id = $3 RETURNING *`,
-    [title, body, existing.id]
+    `UPDATE newspaper_posts SET title = $1, body = $2, cover_mode = $3, cover_image_url = $4, cover_slideshow = $5,
+       cover_randomize = $6, preview_image_url = $7, preview_position_x = $8, preview_position_y = $9, updated_at = NOW()
+     WHERE id = $10 RETURNING *`,
+    [title, body, cover.mode, cover.image_url, JSON.stringify(cover.slideshow), cover.randomize,
+     previewImageUrl, previewX, previewY, existing.id]
   );
   res.json({ post });
 });
