@@ -11623,11 +11623,13 @@ app.get('/api/clubs/:slug', async (req, res) => {
     pool.query('SELECT COUNT(*)::int AS "postCount" FROM club_posts WHERE club_id = $1', [club.id]),
   ]);
 
+  // Member rows are drawn at 30-46px -- 120px copies, not the 400px the /api middleware would apply.
+  const memberAvatars = await Promise.all(members.map(m => sizedUrlReady(m.avatar, 120)));
   res.json({
     club: clubPublicShape({ ...club, member_count: members.length, post_count: postCount }, viewerRole),
-    members: members.map(m => ({
+    members: members.map((m, i) => ({
       id: m.id, username: m.username, display_name: m.display_name || m.username,
-      avatar: m.avatar || null, role: m.role, joined_at: m.joined_at,
+      avatar: memberAvatars[i] || null, role: m.role, joined_at: m.joined_at,
     })),
   });
 });
