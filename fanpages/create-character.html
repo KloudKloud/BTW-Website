@@ -779,6 +779,13 @@
   // ── Relationship rows + link picker ─────────────────────────────────────
   let linkPickerTargetRow = null;
 
+  function setRelNameLocked(row, locked) {
+    const input = row.querySelector('.rel-name');
+    input.readOnly = locked;
+    input.title = locked ? 'Linked to a character — click the link button to choose a different one' : '';
+    row.querySelector('.char-rel-card-link-btn').title = locked ? 'Change the linked character' : 'Link to an existing character';
+  }
+
   function addRelationshipRow(name, type, characterId, avatarUrl) {
     const wrap = document.createElement('div');
     wrap.className = 'char-rel-card';
@@ -800,11 +807,10 @@
     const nameInput = wrap.querySelector('.rel-name');
     const linkBtn = wrap.querySelector('.char-rel-card-link-btn');
     const avatarImg = wrap.querySelector('.char-rel-card-avatar');
-    nameInput.addEventListener('input', () => {
-      wrap.dataset.charId = '';
-      linkBtn.classList.remove('linked');
-      avatarImg.src = '/images/characters/noreference.png';
-    });
+    // A linked row's name is locked to the character it points at -- typing
+    // over it only made the link and the label disagree. Clicking the link
+    // button again re-opens the picker to swap in a different character.
+    setRelNameLocked(wrap, !!characterId);
     linkBtn.addEventListener('click', () => openLinkPicker(wrap));
     wrap.querySelector('.char-rel-card-remove').addEventListener('click', () => wrap.remove());
 
@@ -843,6 +849,7 @@
       linkPickerTargetRow.dataset.charId = c.id;
       linkPickerTargetRow.querySelector('.char-rel-card-link-btn').classList.add('linked');
       linkPickerTargetRow.querySelector('.char-rel-card-avatar').src = c.ref_image || '/images/characters/noreference.png';
+      setRelNameLocked(linkPickerTargetRow, true);
       closeLinkPicker();
     });
     return item;
