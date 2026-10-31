@@ -6246,13 +6246,13 @@ async function fetchDefaultStoryCards(ownerId, limit) {
 // the Home tab's "Featured Submission" slot via the Edit Profile page. Falls
 // back to the live "latest post across all three kinds" query whenever
 // nothing's pinned yet, or the pinned item was since deleted.
-async function fetchFeaturedSubmission(author, viewerId) {
+async function fetchFeaturedSubmission(author, viewerId, nsfwAllowed) {
   if (author.featured_submission_kind && author.featured_submission_ref_id) {
     const kind = author.featured_submission_kind;
     const refId = author.featured_submission_ref_id;
     const pinnedQuery = kind === 'story'
       ? `SELECT 'story' AS kind, ms.id::text AS ref_id, ms.site_title AS title, ms.cover_url AS image_url,
-                ms.story_path AS story_path, ms.created_at AS ts, false AS is_nsfw
+                ms.story_path AS story_path, ms.created_at AS ts, (ms.rating IS NOT NULL AND ms.rating <> 'sfw') AS is_nsfw
          FROM moderator_sites ms WHERE ms.id = $1 AND ms.owner_user_id = $2`
       : kind === 'character'
       ? `SELECT 'character' AS kind, mc.id::text AS ref_id, mc.name AS title, mc.ref_image AS image_url,
@@ -6262,27 +6262,30 @@ async function fetchFeaturedSubmission(author, viewerId) {
                 NULL AS story_path, mg.created_at AS ts, COALESCE(mg.category <> 'sfw', false) AS is_nsfw
          FROM moderator_gallery mg WHERE mg.id = $1 AND mg.owner_user_id = $2`;
     const { rows } = await pool.query(pinnedQuery, [refId, author.id]);
-    if (rows.length) return { rows };
+    // A pinned NSFW pick is simply skipped for a viewer without NSFW access --
+    // falls through to the latest-SFW query below instead of showing a lock.
+    if (rows.length && (nsfwAllowed || !rows[0].is_nsfw)) return { rows };
   }
   return pool.query(
     `SELECT * FROM (
        (SELECT 'story' AS kind, ms.id::text AS ref_id, ms.site_title AS title, ms.cover_url AS image_url,
-               ms.story_path AS story_path, ms.created_at AS ts, false AS is_nsfw
+               ms.story_path AS story_path, ms.created_at AS ts, (ms.rating IS NOT NULL AND ms.rating <> 'sfw') AS is_nsfw
         FROM moderator_sites ms
         WHERE ms.owner_user_id = $1
+          AND ($3::boolean OR ms.rating IS NULL OR ms.rating = 'sfw')
           AND ($2::int = $1 OR EXISTS (
             SELECT 1 FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
           ))
         ORDER BY ms.created_at DESC LIMIT 1)
        UNION ALL
        (SELECT 'character', mc.id::text, mc.name, mc.ref_image, NULL, mc.created_at, COALESCE(mc.ref_is_nsfw, false)
-        FROM moderator_characters mc WHERE mc.owner_user_id = $1 ORDER BY mc.created_at DESC LIMIT 1)
+        FROM moderator_characters mc WHERE mc.owner_user_id = $1 AND ($3::boolean OR NOT COALESCE(mc.ref_is_nsfw, false)) ORDER BY mc.created_at DESC LIMIT 1)
        UNION ALL
        (SELECT 'gallery', mg.id::text, mg.title, mg.image_url, NULL, mg.created_at, COALESCE(mg.category <> 'sfw', false)
-        FROM moderator_gallery mg WHERE mg.owner_user_id = $1 ORDER BY mg.created_at DESC LIMIT 1)
+        FROM moderator_gallery mg WHERE mg.owner_user_id = $1 AND ($3::boolean OR COALESCE(mg.category, 'sfw') = 'sfw') ORDER BY mg.created_at DESC LIMIT 1)
      ) combined
      ORDER BY ts DESC LIMIT 1`,
-    [author.id, viewerId]
+    [author.id, viewerId, !!nsfwAllowed]
   );
 }
 
@@ -6508,7 +6511,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     ),
     // Featured Submission -- prefers whatever's pinned via the Edit Profile
     // page, falling back to the single latest post across all three kinds.
-    fetchFeaturedSubmission(author, viewerId),
+    fetchFeaturedSubmission(author, viewerId, profileNsfwAllowed),
     // Submissions box -- latest 4 posts across chapters/characters/gallery.
     // Stories post as their latest published CHAPTER (title + the parent
     // story's cover), same "post the chapter" treatment Search's Posts tab
@@ -6516,19 +6519,20 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     pool.query(
       `SELECT * FROM (
          (SELECT 'chapter' AS kind, mc.id::text AS ref_id, mc.title AS title, ms.site_title AS context,
-                 ms.cover_url AS image_url, COALESCE(ms.story_path, ms.slug) AS story_path, mc.created_at AS ts, false AS is_nsfw
+                 ms.cover_url AS image_url, COALESCE(ms.story_path, ms.slug) AS story_path, mc.created_at AS ts, (ms.rating IS NOT NULL AND ms.rating <> 'sfw') AS is_nsfw
           FROM moderator_chapters mc JOIN moderator_sites ms ON ms.id = mc.site_id
           WHERE ms.owner_user_id = $1 AND mc.status = 'published' AND length(trim(mc.body)) > 0
+            AND ($2::boolean OR ms.rating IS NULL OR ms.rating = 'sfw')
           ORDER BY mc.created_at DESC LIMIT 4)
          UNION ALL
          (SELECT 'character', mc.id::text, mc.name, NULL, mc.ref_image, NULL, mc.created_at, COALESCE(mc.ref_is_nsfw, false)
-          FROM moderator_characters mc WHERE mc.owner_user_id = $1 ORDER BY mc.created_at DESC LIMIT 4)
+          FROM moderator_characters mc WHERE mc.owner_user_id = $1 AND ($2::boolean OR NOT COALESCE(mc.ref_is_nsfw, false)) ORDER BY mc.created_at DESC LIMIT 4)
          UNION ALL
          (SELECT 'gallery', mg.id::text, mg.title, NULL, mg.image_url, NULL, mg.created_at, COALESCE(mg.category <> 'sfw', false)
-          FROM moderator_gallery mg WHERE mg.owner_user_id = $1 ORDER BY mg.created_at DESC LIMIT 4)
+          FROM moderator_gallery mg WHERE mg.owner_user_id = $1 AND ($2::boolean OR COALESCE(mg.category, 'sfw') = 'sfw') ORDER BY mg.created_at DESC LIMIT 4)
        ) combined
        ORDER BY ts DESC LIMIT 4`,
-      [author.id]
+      [author.id, profileNsfwAllowed]
     ),
   ]);
 
