@@ -464,6 +464,13 @@
        banner clips overflow, so it can't live inside it). */
     .cl-accent-menu { position: fixed; right: auto; top: 0; left: 0; z-index: 300; }
     .cl-accent-grid .cl-theme-swatch { width: 36px; height: 36px; }
+    /* "No accent" swatch: a CSS-drawn X on a dark disc, first in the list. */
+    .cl-accent-swatch--none { position: relative; background: #1b1d20; align-items: center; justify-content: center; }
+    .cl-accent-swatch--none::before, .cl-accent-swatch--none::after {
+      content: ''; position: absolute; left: 50%; top: 50%; width: 16px; height: 2px; border-radius: 2px; background: #d0d3d8;
+    }
+    .cl-accent-swatch--none::before { transform: translate(-50%, -50%) rotate(45deg); }
+    .cl-accent-swatch--none::after { transform: translate(-50%, -50%) rotate(-45deg); }
     .cl-theme-swatch {
       width: 48px; height: 48px; border-radius: 50%; cursor: pointer;
       border: 2px solid transparent; padding: 0; overflow: hidden;
@@ -6243,6 +6250,7 @@ document.addEventListener('click', () => { document.getElementById('cl-theme-men
 // set while the Home/Social view is showing, so custom pages and posts keep
 // the original blue. ──
 const CL_ACCENTS = {
+  none:   { label: 'No accent', accent: '#e6e8eb', light: '#ffffff', rgb: '230,232,235' },
   blue:   { label: 'Blue',   accent: '#7fa8d9', light: '#cfe0f5', rgb: '127,168,217' },
   gold:   { label: 'Gold',   accent: '#f0c060', light: '#f7d68a', rgb: '240,192,96' },
   red:    { label: 'Red',    accent: '#e0605a', light: '#f7b8b3', rgb: '224,96,90' },
@@ -6252,6 +6260,11 @@ const CL_ACCENTS = {
   teal:   { label: 'Teal',   accent: '#4fc9c0', light: '#b0eee9', rgb: '79,201,192' },
   purple: { label: 'Purple', accent: '#a87fd9', light: '#dccbf3', rgb: '168,127,217' },
   pink:   { label: 'Pink',   accent: '#e07fb0', light: '#f6cde2', rgb: '224,127,176' },
+  lime:   { label: 'Lime',   accent: '#a3d94f', light: '#d6f0a3', rgb: '163,217,79' },
+  sky:    { label: 'Sky',    accent: '#4fb3f0', light: '#b0dcf8', rgb: '79,179,240' },
+  indigo: { label: 'Indigo', accent: '#6c7ae0', light: '#bcc3f3', rgb: '108,122,224' },
+  magenta:{ label: 'Magenta',accent: '#d44fd0', light: '#efb0ed', rgb: '212,79,208' },
+  silver: { label: 'Silver', accent: '#cfd4da', light: '#eceef1', rgb: '207,212,218' },
 };
 function syncClubAccent() {
   const p = new URLSearchParams(location.search);
@@ -6266,7 +6279,7 @@ function syncClubAccent() {
   b.setProperty('--cl-accent', t.accent);
   b.setProperty('--cl-accent-light', t.light);
   b.setProperty('--cl-accent-rgb', t.rgb);
-  document.body.classList.toggle('cl-accent-on', (currentClub.accent_color || 'blue') !== 'blue');
+  document.body.classList.toggle('cl-accent-on', !['blue', 'none'].includes(currentClub.accent_color || 'blue'));
   document.querySelectorAll('.cl-accent-swatch').forEach(el => el.classList.toggle('active', el.dataset.accent === (currentClub.accent_color || 'blue')));
 }
 function buildClAccentGrid() {
@@ -6278,7 +6291,8 @@ function buildClAccentGrid() {
     btn.type = 'button';
     btn.title = t.label;
     btn.dataset.accent = key;
-    btn.innerHTML = `<span style="background:${t.accent};"></span>`;
+    if (key === 'none') btn.classList.add('cl-accent-swatch--none');
+    else btn.innerHTML = `<span style="background:${t.accent};"></span>`;
     btn.addEventListener('click', () => selectClubAccent(key));
     grid.appendChild(btn);
   });
@@ -6307,7 +6321,7 @@ function positionClAccentMenu() {
   const menu = document.getElementById('cl-accent-menu');
   if (menu.hidden) return;
   const r = document.getElementById('cl-accent-btn').getBoundingClientRect();
-  menu.style.top = `${r.bottom + 8}px`;
+  menu.style.top = `${Math.max(8, r.top - menu.offsetHeight - 8)}px`;
   menu.style.left = `${Math.max(8, Math.min(r.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8))}px`;
 }
 window.addEventListener('scroll', () => { document.getElementById('cl-accent-menu').hidden = true; }, true);

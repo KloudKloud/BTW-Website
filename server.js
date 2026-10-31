@@ -11709,12 +11709,14 @@ app.put('/api/clubs/:slug/nsfw', requireAuth, async (req, res) => {
 // Home/Social pages. Same allow-list as the profile accent picker
 // (ACCENT_COLOR_KEYS, defined above); blue is the club default because it is
 // the colour those pages always used. Owner/admin only.
+// Clubs get the profile palette plus a few extras, and 'none' = no accent at all (neutral).
+const CLUB_ACCENT_KEYS = ACCENT_COLOR_KEYS.concat(['lime', 'sky', 'indigo', 'magenta', 'silver', 'none']);
 app.put('/api/clubs/:slug/accent-color', requireAuth, async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT * FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
   const role = await getClubRole(club.id, req.user.id);
   if (role !== 'owner' && role !== 'admin') return res.status(403).json({ error: 'Only club owners/admins can edit this club.' });
-  const accent = ACCENT_COLOR_KEYS.includes(req.body.accent_color) ? req.body.accent_color : 'blue';
+  const accent = CLUB_ACCENT_KEYS.includes(req.body.accent_color) ? req.body.accent_color : 'blue';
   const { rows: [updated] } = await pool.query('UPDATE clubs SET accent_color = $1 WHERE id = $2 RETURNING *', [accent, club.id]);
   res.json({ club: clubPublicShape(updated, role) });
 });
