@@ -6674,23 +6674,21 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
       latest_submission: (() => {
         const sub = latestSubmission.rows[0];
         if (!sub) return null;
-        const locked = sub.is_nsfw && !profileNsfwAllowed;
         const linkUrl = sub.kind === 'story' ? `/${sub.story_path}`
           : sub.kind === 'character' ? `/${author.username}?char=${sub.ref_id}#characters`
           : `/gallery-post?id=${sub.ref_id}`;
         return {
           kind: sub.kind, title: sub.title, link_url: linkUrl,
-          image_url: locked ? null : sub.image_url, nsfw_locked: !!locked,
+          image_url: sub.image_url,
         };
       })(),
       recent_submissions: recentSubmissions.rows.map(sub => {
-        const locked = sub.is_nsfw && !profileNsfwAllowed;
         const linkUrl = sub.kind === 'chapter' ? `/${sub.story_path}`
           : sub.kind === 'character' ? `/${author.username}?char=${sub.ref_id}#characters`
           : `/gallery-post?id=${sub.ref_id}`;
         return {
           kind: sub.kind, title: sub.title, context: sub.context || null, link_url: linkUrl,
-          image_url: locked ? null : sub.image_url, nsfw_locked: !!locked,
+          image_url: sub.image_url,
         };
       }),
       featured_characters: featuredCharacters,

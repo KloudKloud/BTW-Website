@@ -862,13 +862,6 @@
       background: linear-gradient(135deg, #6b3fa0, #c2547a);
     }
     .fp-spotlight-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .fp-spotlight-img-wrap--locked { position: relative; }
-    .fp-spotlight-img--blurred { filter: blur(9px) brightness(0.6); transform: scale(1.08); }
-    .fp-spotlight-locked-msg {
-      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-      text-align: center; padding: 0 1rem; font-size: 0.7rem; font-weight: 700; color: #fff;
-      text-shadow: 0 1px 4px rgba(0,0,0,0.9);
-    }
     .fp-spotlight-name {
       font-family: 'Fredoka', 'Lato', cursive; font-weight: 600; font-size: 1.05rem; color: #fff;
       text-shadow: 0 1px 2px rgba(0,0,0,0.7); line-height: 1.25;
@@ -4590,9 +4583,7 @@
   // character kind.
   const SUB_KIND_BADGE = { chapter: '📖', character: '🐾', gallery: '🎨' };
   function subCardHtml(sub) {
-    const locked = sub.nsfw_locked;
-    const img = locked ? '/images/defaultchar.jpg' : (sub.image_url || '/images/nopicture2.png');
-    return { locked, img, href: locked ? '#' : window.fpUrl(sub.link_url) };
+    return { img: sub.image_url || '/images/nopicture2.png', href: window.fpUrl(sub.link_url) };
   }
   function renderSubmissionsBox(subs) {
     const mainWrap = document.getElementById('fp-sub-main-wrap');
@@ -4607,8 +4598,8 @@
     mainWrap.innerHTML = `
       <a class="fp-sub-main" href="${m.href}">
         <div class="fp-sub-main-img-wrap">
-          <img class="fp-sub-main-img${m.locked ? ' fp-spotlight-img--blurred' : ''}" src="${m.img}" alt="" />
-          ${m.locked ? '<span class="fp-spotlight-locked-msg">18+ Must Sign In</span>' : `<span class="fp-sub-kind-badge">${SUB_KIND_BADGE[main.kind] || ''}</span>`}
+          <img class="fp-sub-main-img" src="${m.img}" alt="" />
+          <span class="fp-sub-kind-badge">${SUB_KIND_BADGE[main.kind] || ''}</span>
         </div>
         <div class="fp-sub-main-info">
           <p class="fp-sub-main-title">${escapeHtml(main.title)}</p>
@@ -4620,8 +4611,8 @@
       return `
         <a class="fp-sub-mini" href="${s.href}">
           <div class="fp-sub-mini-img-wrap">
-            <img class="fp-sub-mini-img${s.locked ? ' fp-spotlight-img--blurred' : ''}" src="${s.img}" alt="" />
-            ${s.locked ? '<span class="fp-spotlight-locked-msg">18+</span>' : `<span class="fp-sub-kind-badge">${SUB_KIND_BADGE[sub.kind] || ''}</span>`}
+            <img class="fp-sub-mini-img" src="${s.img}" alt="" />
+            <span class="fp-sub-kind-badge">${SUB_KIND_BADGE[sub.kind] || ''}</span>
           </div>
           <p class="fp-sub-mini-title">${escapeHtml(sub.title)}</p>
         </a>
@@ -4930,12 +4921,10 @@
       const subWrap = document.getElementById('fp-featured-sub');
       const sub = a.latest_submission;
       if (sub) {
-        const locked = sub.nsfw_locked;
         subWrap.innerHTML = `
-          <a class="fp-spotlight-item" href="${locked ? '#' : window.fpUrl(sub.link_url)}">
-            <div class="fp-spotlight-img-wrap${locked ? ' fp-spotlight-img-wrap--locked' : ''}">
-              <img class="fp-spotlight-img${locked ? ' fp-spotlight-img--blurred' : ''}" src="${locked ? '/images/defaultchar.jpg' : (sub.image_url || '/images/nopicture2.png')}" alt="" />
-              ${locked ? '<span class="fp-spotlight-locked-msg">18+ Must Sign In</span>' : ''}
+          <a class="fp-spotlight-item" href="${window.fpUrl(sub.link_url)}">
+            <div class="fp-spotlight-img-wrap">
+              <img class="fp-spotlight-img" src="${sub.image_url || '/images/nopicture2.png'}" alt="" />
             </div>
             <p class="fp-spotlight-name">${escapeHtml(sub.title)}</p>
           </a>
