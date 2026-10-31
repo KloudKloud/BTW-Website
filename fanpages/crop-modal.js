@@ -75,6 +75,8 @@
   let btwCropper = null;
   let onSaveCb = null;
   let exportFormat = 'image/jpeg';
+  let exportQuality = 0.92;
+  let exportMaxEdge = 2400;
 
   function close() {
     overlay.hidden = true;
@@ -107,7 +109,7 @@
       // (never up, so this can't reintroduce blur), just keeps a
       // zoomed-way-out crop on a huge source photo from baking an
       // unreasonably large file.
-      const MAX_EDGE = 2400;
+      const MAX_EDGE = exportMaxEdge;
       if (Math.max(outW, outH) > MAX_EDGE) {
         const shrink = MAX_EDGE / Math.max(outW, outH);
         outW = Math.round(outW * shrink);
@@ -118,7 +120,7 @@
         canvas.toBlob(async (blob) => {
           if (!blob) { reject(new Error('Could not export the cropped image.')); return; }
           try { await onSaveCb(blob); resolve(); } catch (err) { reject(err); }
-        }, exportFormat, exportFormat === 'image/jpeg' ? 0.92 : undefined);
+        }, exportFormat, exportFormat === 'image/jpeg' ? exportQuality : undefined);
       });
       close();
     } catch (err) {
@@ -129,7 +131,7 @@
     }
   });
 
-  // opts: { title, imageSrc, aspectRatio, round, hint, onSave(blob), format }
+  // opts: { title, imageSrc, aspectRatio, round, hint, onSave(blob), format, maxEdge, quality }
   // format: 'png' keeps transparency (e.g. logos/badges meant to sit over
   // other art) instead of the default JPEG export, which flattens any
   // alpha channel to solid black.
@@ -141,6 +143,11 @@
     const img = overlay.querySelector('#crop-modal-img');
     onSaveCb = opts.onSave;
     exportFormat = opts.format === 'png' ? 'image/png' : 'image/jpeg';
+    // maxEdge / quality: callers whose output IS the displayed artwork (character
+    // reference images) pass a huge maxEdge and quality 1 so nothing is downscaled
+    // or re-compressed beyond the crop itself.
+    exportQuality = typeof opts.quality === 'number' ? opts.quality : 0.92;
+    exportMaxEdge = opts.maxEdge || 2400;
     overlay.hidden = false;
     if (btwCropper) { btwCropper.destroy(); btwCropper = null; }
 

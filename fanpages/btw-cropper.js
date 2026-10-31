@@ -230,6 +230,7 @@
       const canvas = document.createElement('canvas');
       canvas.width = outW; canvas.height = outH;
       const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
       const sx = -tx / scale, sy = -ty / scale, sw = vpW / scale, sh = vpH / scale;
       ctx.drawImage(imgEl, sx, sy, sw, sh, 0, 0, outW, outH);
       return canvas;

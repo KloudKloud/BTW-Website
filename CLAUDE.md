@@ -454,6 +454,15 @@ generic 400px avatar copy:
   images' `naturalWidth` vs `clientWidth` and the summed response bytes (the profile Following
   list went 4.5MB -> 32KB). Check the *actual* page you were asked about, not just the endpoint.
 
+**Exception -- opening a specific character or gallery post is ALWAYS full quality.** Browse/grid/
+profile-tab cards use the small copies (`thumb_image_url`, `sizedUrl(..., 600)`), but `/character?id=`
+and `/gallery-post?id=` must render the untouched original (`ref_image` / `image_url`; PNG stays PNG, no
+`sizedUrl`, no `-thumb`). Keeping it in the square frame (`object-fit`) is fine; recompressing is not.
+Verified live (natural size = file size, no CDN recompression). The upload side matches: raw uploads are
+stored as-is, and the character ref-image crop passes `maxEdge: 8192, quality: 1` to `openCropModal`
+(crop-modal.js defaults are 2400px / JPEG 0.92 -- fine for banners/avatars, not for art shown as-is). Any new
+crop of artwork displayed at full size must pass the same options.
+
 ### 2. No `backdrop-filter` on full-screen overlays/modals
 A `backdrop-filter: blur()` on a `position:fixed; inset:0` overlay is recomputed every frame
 over the whole page; with the always-running `fpnav-level-*` sparkle animations underneath it
