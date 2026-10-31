@@ -1421,7 +1421,20 @@
        backdrop-filter box: a blur layered over the blurred scrolling
        wallpaper was the likely source of the lag on opening a post. */
     #fp-newspaper-view { position: relative; }
-    .fp-newspaper-page { max-width: 800px; margin: 0 auto; }
+    .fp-newspaper-page { max-width: 1000px; margin: 0 auto; }
+    /* Opening a post turns the profile into a standalone page: banner, tabs,
+       controls and the themed wallpaper all go away, leaving the Clubs'
+       near-black backdrop with just the post (see openNewspaperPost). The
+       Back button restores the profile's Newspapers tab. */
+    body.fp-np-page, body.fp-np-page .fp-bg-wrap { background: #0a0c0d; }
+    body.fp-np-page .fp-banner-wrap,
+    body.fp-np-page .fp-banner-actions,
+    body.fp-np-page .fp-header,
+    body.fp-np-page .fp-bg-img,
+    body.fp-np-page .fp-bg-overlay,
+    body.fp-np-page .fp-bg-img-scroll,
+    body.fp-np-page .fp-bg-overlay-scroll { display: none !important; }
+    body.fp-np-page #fp-newspaper-view { min-height: calc(100vh - 80px); }
     .fp-newspaper-post-title {
       font-family: 'Fredoka', 'Lato', cursive; font-size: 1.9rem; font-weight: 700; color: #7fa8d9;
       margin: 0 0 1rem; text-shadow: 0 0 20px rgba(127,168,217,0.55), 0 1px 3px rgba(0,0,0,0.5);
@@ -2448,6 +2461,7 @@
     // Home — this is what's read on load below.
     history.replaceState(null, '', tab === 'home' ? location.pathname + location.search : `#${tab}`);
     document.body.classList.toggle('fp-tab-no-idbox', tab !== 'home');
+    document.body.classList.remove('fp-np-page');
     if (currentAuthor && currentAuthor.is_self) renderActions(currentAuthor, false);
     // The theme wheel is a Home-tab-only shortcut. The banner pencil stays
     // on every tab so the Edit button beside it never shifts position.
@@ -4950,6 +4964,8 @@
   }
 
   async function loadNewspaperTab() {
+    const deepIdEarly = new URLSearchParams(window.location.search).get('news');
+    document.body.classList.toggle('fp-np-page', !!deepIdEarly);
     document.getElementById('fp-newspaper-detail-wrap').style.display = 'none';
     document.getElementById('fp-newspaper-list-wrap').style.display = 'block';
     const list = document.getElementById('fp-newspaper-list');
@@ -4981,6 +4997,7 @@
     detailWrap.style.display = 'block';
     document.getElementById('fp-newspaper-post').innerHTML = '<p class="fp-tab-view-empty">Loading…</p>';
     document.getElementById('fp-newspaper-comments').innerHTML = '';
+    document.body.classList.add('fp-np-page');
     window.scrollTo(0, 0);
     history.replaceState(null, '', `${location.pathname}?news=${id}#newspaper`);
     syncScrollBgHeight();
@@ -5133,6 +5150,7 @@
     e.preventDefault();
     document.getElementById('fp-newspaper-detail-wrap').style.display = 'none';
     document.getElementById('fp-newspaper-list-wrap').style.display = 'block';
+    document.body.classList.remove('fp-np-page');
     history.replaceState(null, '', `${location.pathname}#newspaper`);
     syncScrollBgHeight();
   });
@@ -5144,6 +5162,8 @@
       NEWSPAPER_POSTS = NEWSPAPER_POSTS.filter(p => String(p.id) !== String(id));
       document.getElementById('fp-newspaper-detail-wrap').style.display = 'none';
       document.getElementById('fp-newspaper-list-wrap').style.display = 'block';
+      document.body.classList.remove('fp-np-page');
+      history.replaceState(null, '', `${location.pathname}#newspaper`);
       loadNewspaperTab();
       loadNewspaperHome();
     } catch {}
