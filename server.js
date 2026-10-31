@@ -7568,7 +7568,8 @@ app.put('/api/account/profile', requireAuth, async (req, res) => {
 // server-side (the real trust boundary) against the same palette the
 // frontend's ACCENT_THEMES offers, so a bad/unknown key can't get stored
 // and silently fall back to no CSS var match on render.
-const ACCENT_COLOR_KEYS = ['gold', 'red', 'orange', 'green', 'yellow', 'purple', 'blue', 'pink', 'teal'];
+// 'none' = no accent (neutral); lime..silver are the extra swatches added later.
+const ACCENT_COLOR_KEYS = ['gold', 'red', 'orange', 'green', 'yellow', 'purple', 'blue', 'pink', 'teal', 'lime', 'sky', 'indigo', 'magenta', 'silver', 'none'];
 app.put('/api/account/accent-color', requireAuth, async (req, res) => {
   const accent = ACCENT_COLOR_KEYS.includes(req.body.accent_color) ? req.body.accent_color : 'gold';
   await pool.query('UPDATE users SET accent_color = $1 WHERE id = $2', [accent, req.user.id]);
@@ -11709,8 +11710,8 @@ app.put('/api/clubs/:slug/nsfw', requireAuth, async (req, res) => {
 // Home/Social pages. Same allow-list as the profile accent picker
 // (ACCENT_COLOR_KEYS, defined above); blue is the club default because it is
 // the colour those pages always used. Owner/admin only.
-// Clubs get the profile palette plus a few extras, and 'none' = no accent at all (neutral).
-const CLUB_ACCENT_KEYS = ACCENT_COLOR_KEYS.concat(['lime', 'sky', 'indigo', 'magenta', 'silver', 'none']);
+// Clubs and profiles now share one palette (see ACCENT_COLOR_KEYS above).
+const CLUB_ACCENT_KEYS = ACCENT_COLOR_KEYS;
 app.put('/api/clubs/:slug/accent-color', requireAuth, async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT * FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });

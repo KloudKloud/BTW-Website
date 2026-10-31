@@ -108,6 +108,13 @@
     }
     .fp-theme-swatch span { display: block; width: 100%; height: 100%; background: #0a0a0a; }
     .fp-theme-swatch.active { border-color: #7fa8d9; }
+    /* "No accent" swatch: a CSS-drawn X on a dark disc, first in the list. */
+    .fp-accent-swatch--none { position: relative; background: #1b1d20; align-items: center; justify-content: center; }
+    .fp-accent-swatch--none::before, .fp-accent-swatch--none::after {
+      content: ''; position: absolute; left: 50%; top: 50%; width: 20px; height: 2px; border-radius: 2px; background: #d0d3d8;
+    }
+    .fp-accent-swatch--none::before { transform: translate(-50%, -50%) rotate(45deg); }
+    .fp-accent-swatch--none::after { transform: translate(-50%, -50%) rotate(-45deg); }
     .fp-theme-swatch--upload {
       align-items: center; justify-content: center; background: #1e1e1e; color: #999; font-size: 1.1rem;
     }
@@ -2368,6 +2375,7 @@
   // that distinction for Gold specifically; every other color just reuses
   // its own `light` for both since there's no "original" shade to match. ──
   const ACCENT_THEMES = {
+    none:   { label: 'No accent', accent: '#e6e8eb', light: '#ffffff', light2: '#ffffff', rgb: '230,232,235' },
     gold:   { label: 'Gold',   accent: '#f0c060', light: '#f7d68a', light2: '#f5cf7c', rgb: '240,192,96' },
     red:    { label: 'Red',    accent: '#e0605a', light: '#f29a93', light2: '#f29a93', rgb: '224,96,90' },
     orange: { label: 'Orange', accent: '#e8954a', light: '#f3bd8c', light2: '#f3bd8c', rgb: '232,149,74' },
@@ -2377,6 +2385,11 @@
     blue:   { label: 'Blue',   accent: '#7fa8d9', light: '#b3cdec', light2: '#b3cdec', rgb: '127,168,217' },
     pink:   { label: 'Pink',   accent: '#e07fb0', light: '#f2b8d4', light2: '#f2b8d4', rgb: '224,127,176' },
     teal:   { label: 'Teal',   accent: '#4fc9c0', light: '#9ee8e1', light2: '#9ee8e1', rgb: '79,201,192' },
+    lime:   { label: 'Lime',   accent: '#a3d94f', light: '#d6f0a3', light2: '#d6f0a3', rgb: '163,217,79' },
+    sky:    { label: 'Sky',    accent: '#4fb3f0', light: '#b0dcf8', light2: '#b0dcf8', rgb: '79,179,240' },
+    indigo: { label: 'Indigo', accent: '#6c7ae0', light: '#bcc3f3', light2: '#bcc3f3', rgb: '108,122,224' },
+    magenta:{ label: 'Magenta',accent: '#d44fd0', light: '#efb0ed', light2: '#efb0ed', rgb: '212,79,208' },
+    silver: { label: 'Silver', accent: '#cfd4da', light: '#eceef1', light2: '#eceef1', rgb: '207,212,218' },
   };
   function applyAccentTheme(accentId) {
     const theme = ACCENT_THEMES[accentId] || ACCENT_THEMES.gold;
@@ -2396,7 +2409,8 @@
       btn.type = 'button';
       btn.title = theme.label;
       btn.dataset.accent = key;
-      btn.innerHTML = `<span style="background:${theme.accent};"></span>`;
+      if (key === 'none') btn.classList.add('fp-accent-swatch--none');
+      else btn.innerHTML = `<span style="background:${theme.accent};"></span>`;
       btn.addEventListener('click', () => selectAccentColor(key));
       grid.appendChild(btn);
     });
