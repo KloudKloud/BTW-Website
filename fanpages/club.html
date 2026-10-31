@@ -6287,7 +6287,12 @@ function currentAccentKey() {
     const pageSlugNow = new URLSearchParams(location.search).get('page');
     return (currentPageData && currentPageData.slug === pageSlugNow && currentPageData.accent_color) || 'none';
   }
-  return currentClub.accent_color || 'none';
+  return (isSocialScope() ? currentClub.social_accent_color : currentClub.accent_color) || 'none';
+}
+// Home and Social have their own accents. Social = the Social tab, plus an opened post (posts live in the Social feed).
+function isSocialScope() {
+  const p = new URLSearchParams(location.search);
+  return !!p.get('post') || (!p.get('page') && p.get('tab') === 'social');
 }
 function syncClubAccent() {
   const b = document.body.style;
@@ -6325,9 +6330,11 @@ function buildClAccentGrid() {
 async function selectClubAccent(key) {
   // On a custom page the pick belongs to that page; everywhere else it's the club's.
   const onPage = isPageView() && currentPageData && currentPageData.slug === currentPageSlug;
+  const social = !onPage && isSocialScope();
   const target = onPage ? currentPageData : currentClub;
-  const prev = target.accent_color;
-  target.accent_color = key;
+  const field = social ? 'social_accent_color' : 'accent_color';
+  const prev = target[field];
+  target[field] = key;
   syncClubAccent();
   const url = onPage
     ? `${API}/clubs/${encodeURIComponent(slug)}/pages/${encodeURIComponent(currentPageSlug)}/accent-color`
@@ -6335,9 +6342,9 @@ async function selectClubAccent(key) {
   const res = await fetch(url, {
     method: 'PUT',
     headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accent_color: key }),
+    body: JSON.stringify(social ? { accent_color: key, scope: 'social' } : { accent_color: key }),
   });
-  if (!res.ok) { target.accent_color = prev; syncClubAccent(); }
+  if (!res.ok) { target[field] = prev; syncClubAccent(); }
 }
 document.getElementById('cl-accent-btn').addEventListener('click', (e) => {
   e.stopPropagation();

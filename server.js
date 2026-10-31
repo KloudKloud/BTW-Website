@@ -1706,6 +1706,7 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE clubs ADD COLUMN IF NOT EXISTS sidebar_message TEXT NOT NULL DEFAULT '';
     ALTER TABLE clubs ADD COLUMN IF NOT EXISTS is_nsfw BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE clubs ADD COLUMN IF NOT EXISTS accent_color TEXT NOT NULL DEFAULT 'blue';
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS social_accent_color TEXT NOT NULL DEFAULT 'none';
   `).catch(e => console.error('clubs sidebar fields migration:', e.message));
 
   await pool.query(`
@@ -11436,6 +11437,7 @@ function clubPublicShape(c, viewerRole) {
     badge_url: c.badge_url || '', badge_original_url: c.badge_original_url || '',
     theme: c.theme || 'default', theme_bg_url: c.theme_bg_url || '',
     accent_color: c.accent_color || 'none',
+    social_accent_color: c.social_accent_color || 'none',
     sidebar_title: c.sidebar_title || '', sidebar_message: c.sidebar_message || '', is_nsfw: !!c.is_nsfw,
     welcome_title: c.welcome_title || '', cover_mode: c.cover_mode || 'static', cover_image_url: c.cover_image_url || '',
     cover_randomize: c.cover_randomize !== false,
@@ -11720,7 +11722,9 @@ app.put('/api/clubs/:slug/accent-color', requireAuth, async (req, res) => {
   const role = await getClubRole(club.id, req.user.id);
   if (role !== 'owner' && role !== 'admin') return res.status(403).json({ error: 'Only club owners/admins can edit this club.' });
   const accent = CLUB_ACCENT_KEYS.includes(req.body.accent_color) ? req.body.accent_color : 'none';
-  const { rows: [updated] } = await pool.query('UPDATE clubs SET accent_color = $1 WHERE id = $2 RETURNING *', [accent, club.id]);
+  // Home and Social have separate accents: body.scope === 'social' targets the Social tab (and posts).
+  const column = req.body.scope === 'social' ? 'social_accent_color' : 'accent_color';
+  const { rows: [updated] } = await pool.query(`UPDATE clubs SET ${column} = $1 WHERE id = $2 RETURNING *`, [accent, club.id]);
   res.json({ club: clubPublicShape(updated, role) });
 });
 
