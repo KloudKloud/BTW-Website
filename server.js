@@ -1705,6 +1705,7 @@ I can't wait to browse your stories! Please read the terms above, and if you agr
     ALTER TABLE clubs ADD COLUMN IF NOT EXISTS sidebar_title TEXT NOT NULL DEFAULT '';
     ALTER TABLE clubs ADD COLUMN IF NOT EXISTS sidebar_message TEXT NOT NULL DEFAULT '';
     ALTER TABLE clubs ADD COLUMN IF NOT EXISTS is_nsfw BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE clubs ADD COLUMN IF NOT EXISTS accent_color TEXT NOT NULL DEFAULT 'blue';
   `).catch(e => console.error('clubs sidebar fields migration:', e.message));
 
   await pool.query(`
@@ -11431,6 +11432,7 @@ function clubPublicShape(c, viewerRole) {
     icon_url: c.icon_url, icon_original_url: c.icon_original_url || '', owner_user_id: c.owner_user_id,
     badge_url: c.badge_url || '', badge_original_url: c.badge_original_url || '',
     theme: c.theme || 'default', theme_bg_url: c.theme_bg_url || '',
+    accent_color: c.accent_color || 'blue',
     sidebar_title: c.sidebar_title || '', sidebar_message: c.sidebar_message || '', is_nsfw: !!c.is_nsfw,
     welcome_title: c.welcome_title || '', cover_mode: c.cover_mode || 'static', cover_image_url: c.cover_image_url || '',
     cover_randomize: c.cover_randomize !== false,
@@ -11701,6 +11703,20 @@ app.put('/api/clubs/:slug/nsfw', requireAuth, async (req, res) => {
   const isNsfw = req.body.is_nsfw === true || req.body.is_nsfw === 'true';
   await pool.query('UPDATE clubs SET is_nsfw = $1 WHERE id = $2', [isNsfw, ctx.club.id]);
   res.json({ is_nsfw: isNsfw });
+});
+
+// Club accent color -- re-tints the outlines/glows/active states on a club's
+// Home/Social pages. Same allow-list as the profile accent picker
+// (ACCENT_COLOR_KEYS, defined above); blue is the club default because it is
+// the colour those pages always used. Owner/admin only.
+app.put('/api/clubs/:slug/accent-color', requireAuth, async (req, res) => {
+  const { rows: [club] } = await pool.query('SELECT * FROM clubs WHERE slug = $1', [req.params.slug]);
+  if (!club) return res.status(404).json({ error: 'Club not found.' });
+  const role = await getClubRole(club.id, req.user.id);
+  if (role !== 'owner' && role !== 'admin') return res.status(403).json({ error: 'Only club owners/admins can edit this club.' });
+  const accent = ACCENT_COLOR_KEYS.includes(req.body.accent_color) ? req.body.accent_color : 'blue';
+  const { rows: [updated] } = await pool.query('UPDATE clubs SET accent_color = $1 WHERE id = $2 RETURNING *', [accent, club.id]);
+  res.json({ club: clubPublicShape(updated, role) });
 });
 
 app.put('/api/clubs/:slug/theme', requireAuth, async (req, res) => {
