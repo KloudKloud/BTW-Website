@@ -39,16 +39,6 @@
     .cp-byline a { color: var(--fp-accent-light); text-decoration: none; }
     .cp-byline a:hover { text-decoration: underline; }
 
-    /* Quote -- a little sign-off tucked under the Lore. */
-    .cp-quote {
-      text-align: center; padding: 1.4rem 1.5rem; border-radius: 16px;
-      background: #000; border: 1px solid rgba(255,255,255,0.1);
-    }
-    .cp-quote-text { font-family: 'Fredoka', 'Lato', cursive; font-size: 1.25rem; font-style: italic; color: #f0f0f0; line-height: 1.5; }
-    .cp-quote-text::before { content: '“'; color: var(--fp-accent); margin-right: 0.15em; }
-    .cp-quote-text::after { content: '”'; color: var(--fp-accent); margin-left: 0.15em; }
-    .cp-quote-by { margin-top: 0.55rem; font-size: 0.85rem; color: var(--fp-accent-light); }
-
     /* Comments: plain black, tidy and centred under the card. */
     .fp-char-empty { color: #999; text-align: center; padding: 3rem 0; }
     .cp-comments { margin: 2.25rem auto 0; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.08); }
@@ -709,6 +699,19 @@ function renderCharacter(char) {
     fact.appendChild(content);
     factsBox.appendChild(fact);
   });
+  // Quote -- shown exactly as typed (no forced italics or quotation marks).
+  if (!isBlank(char.quote)) {
+    const quoteFact = document.createElement('div');
+    quoteFact.className = 'char-fact';
+    const quoteBullet = document.createElement('span');
+    quoteBullet.className = 'char-fact-bullet';
+    quoteBullet.textContent = '✦';
+    quoteFact.appendChild(quoteBullet);
+    const quoteContent = document.createElement('span');
+    quoteContent.innerHTML = `<span style="color:#f0c060; font-weight:700;">Quote:</span> ${richText(char.quote)}`;
+    quoteFact.appendChild(quoteContent);
+    factsBox.appendChild(quoteFact);
+  }
   const creditFact = artCreditFactRow(char);
   if (creditFact) factsBox.appendChild(creditFact);
   row.appendChild(factsBox);
@@ -737,14 +740,6 @@ function renderCharacter(char) {
   spoiler.appendChild(revealBtn);
   loreBox.appendChild(spoiler);
   profile.appendChild(loreBox);
-
-  // Quote -- a little sign-off under the Lore.
-  if (!isBlank(char.quote)) {
-    const quoteBox = document.createElement('div');
-    quoteBox.className = 'cp-quote';
-    quoteBox.innerHTML = `<p class="cp-quote-text">${richText(char.quote)}</p><p class="cp-quote-by">— ${escapeHtml(char.name)}</p>`;
-    profile.appendChild(quoteBox);
-  }
 
   const footer = document.createElement('div');
   footer.className = 'char-detail-footer';
