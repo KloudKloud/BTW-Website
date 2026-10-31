@@ -580,7 +580,6 @@
     .fp-sort-menu-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
     .fp-sort-menu-item.active { color: var(--fp-accent); }
     .fp-tab-view-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1.25rem; }
-    .fp-tab-view-grid .fp-featured-card { width: auto; }
     .fp-tab-view-empty {
       text-align: center; color: #999; font-size: 0.9rem; padding: 3rem 1rem;
       border: 1px dashed rgba(255,255,255,0.12); border-radius: 14px; grid-column: 1 / -1;
@@ -1190,12 +1189,6 @@
     /* Featured Stories / Featured Characters / Featured Gallery -- these now
        live stacked inside .fp-home-main (a flex column), so no more of
        their own max-width/centering, just natural block flow. */
-    .fp-featured-title {
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.6rem; font-weight: 600;
-      color: var(--fp-accent); text-align: left; margin-bottom: 1.25rem;
-      text-shadow: 0 0 14px rgba(var(--fp-accent-rgb),0.4);
-    }
-    .fp-featured-title-deco { width: 22px; height: 22px; object-fit: contain; vertical-align: -4px; margin-left: 0.35rem; }
     .fp-featured-empty { color: #999; font-size: 0.88rem; }
 
     /* Featured Stories — the same story card as the Search page's Browse/
@@ -1307,44 +1300,6 @@
     }
     .fp-bcard-stat-val { font-weight: 800; color: var(--fp-accent); text-shadow: 0 0 6px rgba(var(--fp-accent-rgb),0.4); }
     .fp-bcard-deco--tr { position: absolute; z-index: 2; pointer-events: none; object-fit: contain; opacity: 0.9; top: -10px; right: -8px; width: 32px; height: 32px; }
-    /* Fixed 3-column grid (max 3 featured items) so a full row of three
-       actually spreads to fill the available width instead of clumping
-       left with dead space on the right. */
-    .fp-featured-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
-    .fp-featured-row .fp-featured-card { width: 100%; }
-    .fp-featured-card {
-      display: block; width: 150px; text-decoration: none; color: inherit; position: relative;
-    }
-    /* Positioned ancestor for the NSFW lock overlay -- without its own
-       wrapper, .fp-nsfw-lock-overlay's inset:0 resolves against
-       .fp-featured-card itself (the nearest positioned ancestor), which
-       spans the image AND the title below it, covering text that's
-       supposed to stay fully visible and un-blurred. */
-    .fp-featured-card-imgwrap { position: relative; }
-    .fp-featured-card-img {
-      width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; display: block;
-      background: #1e1e1e; border: 1px solid rgba(255,255,255,0.08); transition: transform 0.15s;
-    }
-    .fp-featured-card:hover .fp-featured-card-img { transform: translateY(-4px); }
-    /* White instead of gold — the page is already gold-heavy
-       (Featured Characters/Gallery headers, disclaimer highlight, etc.),
-       so these read as their own distinct "spotlight" accent instead of
-       blending in. Warm cream-tinted glow (not pure white) so it doesn't
-       blow out against the white fill at larger sizes. */
-    .fp-featured-card-title {
-      font-family: 'Fredoka', 'Lato', cursive; font-size: 1.2rem; font-weight: 700; margin-top: 0.65rem;
-      color: #ffffff; letter-spacing: 0.01em; line-height: 1.3;
-      text-shadow: 0 0 14px rgba(255,236,200,0.45), 0 1px 3px rgba(0,0,0,0.65);
-    }
-    .fp-featured-remove {
-      position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;
-      background: rgba(0,0,0,0.7); border: none; color: #f0f0f0; cursor: pointer; font-size: 0.75rem;
-    }
-    .fp-featured-remove:hover { background: #d97a72; }
-
-    .fp-featured-editor-note {
-      font-size: 0.85rem; color: #999; line-height: 1.6; margin-bottom: 1rem; max-width: 700px;
-    }
 
     /* ── Newspaper ── */
     .fp-newspaper-home-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
@@ -1701,12 +1656,6 @@
          specificity regardless of which media query either sits in. */
       .fp-char-grid { grid-template-columns: repeat(3, 1fr); gap: 0.7rem; }
       .gallery-grid--4up { grid-template-columns: repeat(3, 1fr); }
-      /* Featured Characters/Gallery (.fp-featured-row) stay a fixed
-         3-column grid, matching desktop -- Featured Stories is a separate
-         component (.fp-bcard-grid, already one-per-row by default on every
-         screen size) and isn't affected by this rule. */
-      .fp-featured-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
-      .fp-featured-card-title { font-size: 0.95rem; margin-top: 0.4rem; }
       .fp-newspaper-home-header { flex-wrap: wrap; gap: 0.75rem; }
 
       .fp-theme-btn--big { width: 42px; height: 42px; font-size: 1.15rem; }
@@ -1744,8 +1693,6 @@
       .fp-char-card-name-row { gap: 0.3rem; }
       .fp-char-card-body { padding: 0.6rem 0.55rem 0.65rem; }
       .fp-tab { font-size: 0.72rem; padding: 0.75rem 0.05rem; }
-      .fp-featured-row { gap: 0.4rem; }
-      .fp-featured-card-title { font-size: 0.86rem; }
     }
   </style>
 </head>
@@ -2060,27 +2007,6 @@
   </div>
 </div>
 
-<!-- Featured Characters/Gallery picker — same shopping-style multi-select
-     (toggle cards, max 3) as the "Link To:" pickers on the character/gallery
-     editors. -->
-<div class="char-link-picker-overlay" id="fp-featured-picker-overlay" hidden>
-  <div class="char-link-picker-modal" style="max-width:480px;">
-    <h3 class="char-link-picker-title" id="fp-featured-picker-title">Feature Characters</h3>
-    <div class="char-link-picker-tabs">
-      <button type="button" class="char-link-picker-tab active" id="fp-featured-tab-mine">Your Characters</button>
-      <button type="button" class="char-link-picker-tab" id="fp-featured-tab-other">Other Characters</button>
-    </div>
-    <div id="fp-featured-picker-mine">
-      <div class="char-link-picker-scroll" id="fp-featured-picker-mine-list"><p class="char-link-picker-empty">Loading…</p></div>
-    </div>
-    <div id="fp-featured-picker-other" hidden>
-      <input class="mod-input" id="fp-featured-picker-other-search" placeholder="Search…" style="margin-bottom:0.75rem;" />
-      <div class="char-link-picker-scroll" id="fp-featured-picker-other-list"></div>
-    </div>
-    <button class="mod-btn mod-btn--small" id="fp-featured-picker-done" type="button" style="margin-top:0.75rem;">Done</button>
-  </div>
-</div>
-
 <!-- Newspaper compose/edit — title, body (rich text), up to 4 attachments
      (images/gifs/video/pdf, same as a DM), owner only. -->
 <div class="fp-newspaper-compose-overlay" id="fp-newspaper-compose-overlay" hidden>
@@ -2194,16 +2120,6 @@
   let editLinks = [];
   let editFeaturedClub = null;
   let myClubsCache = null;
-  let editFeatured = { character: [], gallery: [], story: [] };
-  // Single lookup driving the previously character/gallery-only binary
-  // ternaries in renderFeaturedEditor/openFeaturedPicker/featuredPickerItemEl
-  // -- adding a third featured kind (Stories) meant those needed a real map
-  // instead of a hardcoded A-or-B choice.
-  const FEATURED_KIND_CONFIG = {
-    character: { displayId: 'fp-featured-characters', editorId: 'fp-featured-characters-editor', label: 'Characters', singular: 'Character', max: 3 },
-    gallery:   { displayId: 'fp-featured-gallery',     editorId: 'fp-featured-gallery-editor',     label: 'Gallery',    singular: 'Gallery',   max: 3 },
-    story:     { displayId: 'fp-featured-stories',     editorId: 'fp-featured-stories-editor',     label: 'Stories',    singular: 'Story',     max: 3 },
-  };
 
   // ── Profile theme — default (box-background-2, slightly blurred -- just
   // trying this out, easy to revert to plain dark if it doesn't land) or a
@@ -2670,19 +2586,6 @@
       if (overlay) overlay.addEventListener('click', () => { if (window.fpShowAdultGate) window.fpShowAdultGate(); });
     }
     return card;
-  }
-  function renderFeaturedStories(containerId, items) {
-    const wrap = document.getElementById(containerId);
-    wrap.innerHTML = '';
-    if (!items || !items.length) {
-      wrap.innerHTML = `<p class="fp-featured-empty">No featured stories to showcase.</p>`;
-      return;
-    }
-    const grid = document.createElement('div');
-    grid.className = 'fp-bcard-grid';
-    items.forEach(w => grid.appendChild(featuredStoryCardEl(w)));
-    wrap.appendChild(grid);
-    initBcardTagScrollers();
   }
 
   // Stories tab -- same bcard as Featured Stories, but the full unfiltered
@@ -3284,57 +3187,6 @@
       fpFollowList.innerHTML = '<p class="fp-follow-empty">Couldn\'t load this list right now.</p>';
     }
   }
-  // ── Featured rows (display mode) ────────────────────────────────────────
-  // Links straight to the specific character/gallery entry on the
-  // Characters/Gallery tab (via ?char=/gallery=#tab, read on load below)
-  // instead of a generic story link.
-  function renderFeaturedRow(containerId, items, emptyText, kind) {
-    const wrap = document.getElementById(containerId);
-    wrap.innerHTML = '';
-    if (!items || !items.length) {
-      wrap.innerHTML = `<p class="fp-featured-empty">${emptyText}</p>`;
-      return;
-    }
-    const row = document.createElement('div');
-    row.className = 'fp-featured-row';
-    items.forEach(item => {
-      const locked = !!item.nsfw_locked;
-      const card = document.createElement('a');
-      card.className = 'fp-featured-card';
-      // "Other Characters"/"Other Gallery" (fp-featured-tab-other) lets a
-      // user feature something they don't own -- item.owner_username is the
-      // character/art's real owner in that case, not necessarily this
-      // profile. Falls back to USERNAME for the common own-item case (and
-      // for the rare deleted-item edge case where the server has no owner
-      // to report).
-      const realHref = kind === 'character'
-        ? window.fpUrl(`/character?id=${encodeURIComponent(item.ref_id)}`)
-        : window.fpUrl(`/gallery-post?id=${encodeURIComponent(item.ref_id)}`);
-      // A locked featured item stays a teaser, not a dead end -- clicking
-      // it opens the same adult-content gate a direct visit to the real
-      // page would hit, instead of silently navigating into a 403.
-      if (locked) card.href = '#';
-      else card.href = realHref;
-      // Only the image box gets blurred/locked -- the title underneath
-      // stays fully visible and un-blurred, same as the unlocked state.
-      card.innerHTML = `
-        <div class="fp-featured-card-imgwrap">
-          <img class="fp-featured-card-img"${locked ? ' style="filter: blur(12px) grayscale(0.3) brightness(0.8);"' : ''} src="${locked ? '/images/gallery/kloudsaphbedroom_1.png' : (item.image_url || '/images/gallery/kloudsaphbedroom_1.png')}" alt="${item.title}" />
-          ${locked ? `<div class="fp-nsfw-lock-overlay"><span>🔒 18+</span><span>${token ? 'Must Enable NSFW Access to See Content' : 'Must Sign In to Access Content'}</span></div>` : ''}
-        </div>
-        <p class="fp-featured-card-title">${item.title}</p>
-      `;
-      if (locked) {
-        card.addEventListener('click', (e) => {
-          e.preventDefault();
-          if (window.fpShowAdultGate) window.fpShowAdultGate();
-        });
-      }
-      row.appendChild(card);
-    });
-    wrap.appendChild(row);
-  }
-
   // ── Recent Activity (left info box) ─────────────────────────────────────
   // Rows without a link (the "liked" types) render as plain text instead of
   // an <a> -- see the recent_activity shaping comment in server.js for why.
@@ -3785,129 +3637,6 @@
     }
     paint();
   }
-
-  // Featured Characters/Gallery editor — the same shopping-style multi-select
-  // (toggle cards in an overlay picker, "+ " add-tile, max 3) as the
-  // "Link To:" sections on the character/gallery editors.
-  function renderFeaturedEditor(kind, note) {
-    const cfg = FEATURED_KIND_CONFIG[kind];
-    document.getElementById(cfg.displayId).hidden = true;
-    const wrap = document.getElementById(cfg.editorId);
-    wrap.hidden = false;
-
-    wrap.innerHTML = `
-      <p class="fp-featured-editor-note">${note}</p>
-      <div class="gallery-linkto-grid" id="${cfg.editorId}-grid"></div>
-    `;
-
-    function paintSelected() {
-      const grid = wrap.querySelector(`#${cfg.editorId}-grid`);
-      grid.innerHTML = '';
-      if (editFeatured[kind].length < cfg.max) {
-        const tile = document.createElement('button');
-        tile.type = 'button';
-        tile.className = 'gallery-linkto-add-tile';
-        tile.innerHTML = `<span class="gallery-linkto-add-tile-icon">+</span> ${cfg.singular}`;
-        tile.addEventListener('click', () => openFeaturedPicker(kind, paintSelected));
-        grid.appendChild(tile);
-      }
-      editFeatured[kind].forEach((item, i) => {
-        const card = document.createElement('div');
-        card.className = 'gallery-linkto-card';
-        card.innerHTML = `
-          <img class="gallery-linkto-card-img" src="${item.image_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="" />
-          <p class="gallery-linkto-card-name">${item.title}</p>
-          <button type="button" class="gallery-linkto-card-remove">✕</button>
-        `;
-        card.querySelector('.gallery-linkto-card-remove').addEventListener('click', () => {
-          editFeatured[kind].splice(i, 1);
-          paintSelected();
-        });
-        grid.appendChild(card);
-      });
-    }
-    paintSelected();
-  }
-
-  // ── Featured picker overlay — shared by both kinds, with "Your X" /
-  // "Other X" tabs matching the relationship/link-to pickers exactly. ─────
-  let featuredPickerKind = null;
-  let featuredPickerOnChange = null;
-  function openFeaturedPicker(kind, onChange) {
-    featuredPickerKind = kind;
-    featuredPickerOnChange = onChange;
-    const label = FEATURED_KIND_CONFIG[kind].label;
-    document.getElementById('fp-featured-picker-title').textContent = `Feature ${label}`;
-    document.getElementById('fp-featured-tab-mine').textContent = `Your ${label}`;
-    document.getElementById('fp-featured-tab-other').textContent = `Other ${label}`;
-    document.getElementById('fp-featured-picker-overlay').hidden = false;
-    switchFeaturedPickerTab('mine');
-  }
-  document.getElementById('fp-featured-picker-done').addEventListener('click', () => {
-    document.getElementById('fp-featured-picker-overlay').hidden = true;
-  });
-
-  function switchFeaturedPickerTab(tab) {
-    document.getElementById('fp-featured-tab-mine').classList.toggle('active', tab === 'mine');
-    document.getElementById('fp-featured-tab-other').classList.toggle('active', tab === 'other');
-    document.getElementById('fp-featured-picker-mine').hidden = tab !== 'mine';
-    document.getElementById('fp-featured-picker-other').hidden = tab !== 'other';
-    if (tab === 'mine') runFeaturedPickerSearch('mine', '');
-    else { document.getElementById('fp-featured-picker-other-search').value = ''; runFeaturedPickerSearch('other', ''); }
-  }
-  document.getElementById('fp-featured-tab-mine').addEventListener('click', () => switchFeaturedPickerTab('mine'));
-  document.getElementById('fp-featured-tab-other').addEventListener('click', () => switchFeaturedPickerTab('other'));
-
-  function featuredPickerItemEl(r) {
-    const selected = editFeatured[featuredPickerKind].some(it => it.ref_id === r.ref_id);
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'char-link-picker-item--big' + (selected ? ' selected' : '');
-    item.innerHTML = `
-      <img src="${r.image_url || '/images/gallery/kloudsaphbedroom_1.png'}" alt="" />
-      <span>
-        <span class="char-link-picker-item-name">${r.title}</span>
-        <span class="char-link-picker-item-owner">${r.mine ? 'You' : (r.owner_username || '')}</span>
-      </span>
-      <span class="char-link-picker-item-check">✓</span>
-    `;
-    item.addEventListener('click', () => {
-      const arr = editFeatured[featuredPickerKind];
-      const idx = arr.findIndex(it => it.ref_id === r.ref_id);
-      if (idx >= 0) {
-        arr.splice(idx, 1);
-        item.classList.remove('selected');
-      } else {
-        if (arr.length >= FEATURED_KIND_CONFIG[featuredPickerKind].max) return;
-        arr.push({ ref_id: r.ref_id, title: r.title, image_url: r.image_url, link_url: r.link_url, site_slug: r.slug || null });
-        item.classList.add('selected');
-      }
-      if (featuredPickerOnChange) featuredPickerOnChange();
-    });
-    return item;
-  }
-
-  async function runFeaturedPickerSearch(scope, q) {
-    const list = document.getElementById(scope === 'mine' ? 'fp-featured-picker-mine-list' : 'fp-featured-picker-other-list');
-    list.innerHTML = '<p class="char-link-picker-empty">Loading…</p>';
-    try {
-      const res = await fetch(`/api/featured-search?kind=${featuredPickerKind}&scope=${scope}&q=${encodeURIComponent(q)}`, { headers: authHeaders() });
-      const data = await res.json();
-      const results = data.results || [];
-      if (!results.length) {
-        list.innerHTML = `<p class="char-link-picker-empty">${q ? 'No matches found.' : (scope === 'mine' ? 'Nothing to feature yet.' : 'No matching results.')}</p>`;
-        return;
-      }
-      list.innerHTML = '';
-      results.forEach(r => list.appendChild(featuredPickerItemEl(r)));
-    } catch { list.innerHTML = '<p class="char-link-picker-empty">Couldn\'t load right now.</p>'; }
-  }
-  let featuredPickerOtherDebounce;
-  document.getElementById('fp-featured-picker-other-search').addEventListener('input', (e) => {
-    clearTimeout(featuredPickerOtherDebounce);
-    const q = e.target.value.trim();
-    featuredPickerOtherDebounce = setTimeout(() => runFeaturedPickerSearch('other', q), 300);
-  });
 
   // ── Feature Club — single-pick, limited to clubs the viewer is actually
   // a member of, so this just fetches that (usually short) list once and

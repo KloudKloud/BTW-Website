@@ -6176,72 +6176,6 @@ app.delete(['/api/bookmarks/:slug', '/api/bookmarks/by-path/:owner/:story'], req
   res.json({ message: 'Removed.' });
 });
 
-// Shared by a profile's Featured Stories (both the explicit picks and the
-// "no picks yet" default-latest-updated fallback) -- fetches the same
-// bcard-shaped fields the Search page's story cards use (stats/tags/
-// character-teasers), by a specific ordered list of site ids. Order of the
-// input `ids` array is preserved in the output so callers control sort.
-async function fetchStoryCardsById(ids) {
-  if (!ids.length) return [];
-  const { rows } = await pool.query(
-    `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.synopsis,
-            ms.rating, ms.is_complete, ms.view_count,
-            ms.tags, ms.fandoms, ms.categories, ms.relationships,
-            u.username, u.display_name, u.avatar,
-            pubchap.word_count, COALESCE(lc.count, 0) AS like_count,
-            charsj.chars AS characters
-     FROM moderator_sites ms
-     JOIN users u ON u.id = ms.owner_user_id
-     JOIN LATERAL (
-       SELECT COALESCE(SUM(
-         GREATEST(1, array_length(regexp_split_to_array(trim(regexp_replace(mc.body, '<[^>]+>', ' ', 'g')), '\\s+'), 1))
-       ), 0) AS word_count
-       FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
-     ) pubchap ON true
-     LEFT JOIN LATERAL (
-       SELECT COALESCE((SELECT COUNT(*)::int FROM moderator_site_likes WHERE site_id = ms.id), 0)
-            + COALESCE((SELECT COUNT(*)::int FROM chapter_likes chl JOIN moderator_chapters chc ON chc.id = chl.chapter_id WHERE chc.site_id = ms.id), 0)
-       AS count
-     ) lc ON true
-     LEFT JOIN LATERAL (
-       SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb) AS chars FROM (
-         SELECT mc3.id, mc3.name, mc3.ref_image, u3.username AS owner_username
-         FROM character_story_links csl JOIN moderator_characters mc3 ON mc3.id = csl.character_id
-         JOIN users u3 ON u3.id = mc3.owner_user_id
-         WHERE csl.site_id = ms.id ORDER BY csl.sort_order LIMIT 4
-       ) t
-     ) charsj ON true
-     WHERE ms.id = ANY($1::int[])`,
-    [ids]
-  );
-  const byId = {};
-  rows.forEach(r => { byId[r.id] = r; });
-  return ids.map(id => byId[id]).filter(Boolean).map(r => ({
-    id: r.id, slug: r.slug, story_path: r.story_path || r.slug, site_title: r.site_title, cover_url: r.cover_url,
-    synopsis: r.synopsis || '', rating: r.rating, is_complete: !!r.is_complete,
-    tags: r.tags || [], fandoms: r.fandoms || [], categories: r.categories || [], relationships: r.relationships || [],
-    author: r.display_name || r.username, author_username: r.username, author_avatar: r.avatar || null,
-    hits: r.view_count || 0, kudos: Number(r.like_count), word_count: r.word_count,
-    characters: r.characters || [],
-  }));
-}
-
-// A user's own latest-updated published stories, for Featured Stories'
-// default (nothing manually featured yet) state.
-async function fetchDefaultStoryCards(ownerId, limit) {
-  const { rows } = await pool.query(
-    `SELECT ms.id FROM moderator_sites ms
-     JOIN LATERAL (
-       SELECT COUNT(*)::int AS published_count, MAX(mc.updated_at) AS last_chapter_update
-       FROM moderator_chapters mc WHERE mc.site_id = ms.id AND mc.status = 'published' AND length(trim(mc.body)) > 0
-     ) pubchap ON true
-     WHERE ms.owner_user_id = $1 AND pubchap.published_count > 0
-     ORDER BY pubchap.last_chapter_update DESC NULLS LAST LIMIT $2`,
-    [ownerId, limit]
-  );
-  return fetchStoryCardsById(rows.map(r => r.id));
-}
-
 // Featured Submission -- the single character/story/gallery post pinned to
 // the Home tab's "Featured Submission" slot via the Edit Profile page. Falls
 // back to the live "latest post across all three kinds" query whenever
@@ -6330,7 +6264,7 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
   };
   const storyOrderBy = STORY_SORTS[req.query.sort] || STORY_SORTS.page;
 
-  const [{ rows: sites }, followerCount, followingCount, clubCount, isFollowing, followsViewer, featuredChars, featuredGallery, featuredStoryIds, activity, statsCounts, latestSubmission, recentSubmissions] = await Promise.all([
+  const [{ rows: sites }, followerCount, followingCount, clubCount, isFollowing, followsViewer, activity, statsCounts, latestSubmission, recentSubmissions] = await Promise.all([
     pool.query(
       `SELECT ms.id, ms.slug, ms.story_path, ms.site_title, ms.cover_url, ms.banner_url, ms.synopsis,
               ms.tags, ms.fandoms, ms.view_count, ms.rating, ms.is_complete,
@@ -6383,46 +6317,6 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     viewerId
       ? pool.query('SELECT 1 FROM user_follows WHERE follower_id = $1 AND followed_id = $2', [author.id, viewerId])
       : Promise.resolve({ rows: [] }),
-    // Featured items store a title/image_url *snapshot* from when they were
-    // picked (see the user_featured_items migration comment above), but in
-    // practice every row currently comes from this site's own characters/
-    // gallery (source is always 'fanpage'), so we can — and should — join
-    // back to the live row and prefer its current name/art over the stale
-    // snapshot. The snapshot only survives as a fallback for the rare case
-    // the original character/gallery post was since deleted.
-    // "Other Characters"/"Other Gallery" (see fp-featured-tab-other in
-    // profile-template.html) lets a user feature something they don't own,
-    // so mc/mg's own owner can differ from this profile's author -- the
-    // frontend needs that real owner's username to link to the character's
-    // actual home instead of always assuming it lives on this profile.
-    pool.query(
-      `SELECT ufi.ref_id, COALESCE(mc.name, ufi.title) AS title,
-              COALESCE(mc.ref_image, ufi.image_url) AS image_url, ufi.link_url,
-              mcu.username AS owner_username, COALESCE(mc.ref_is_nsfw, false) AS is_nsfw
-       FROM user_featured_items ufi
-       LEFT JOIN moderator_characters mc ON ufi.ref_id ~ '^[0-9]+$' AND mc.id = ufi.ref_id::int
-       LEFT JOIN users mcu ON mcu.id = mc.owner_user_id
-       WHERE ufi.user_id = $1 AND ufi.kind = 'character' ORDER BY ufi.sort_order LIMIT 3`,
-      [author.id]
-    ),
-    pool.query(
-      `SELECT ufi.ref_id, COALESCE(mg.title, ufi.title) AS title,
-              COALESCE(mg.image_url, ufi.image_url) AS image_url, ufi.link_url,
-              mgu.username AS owner_username, COALESCE(mg.category <> 'sfw', false) AS is_nsfw
-       FROM user_featured_items ufi
-       LEFT JOIN moderator_gallery mg ON ufi.ref_id ~ '^[0-9]+$' AND mg.id = ufi.ref_id::int
-       LEFT JOIN users mgu ON mgu.id = mg.owner_user_id
-       WHERE ufi.user_id = $1 AND ufi.kind = 'gallery' ORDER BY ufi.sort_order LIMIT 3`,
-      [author.id]
-    ),
-    // Featured Stories just needs the ordered list of chosen site ids here --
-    // the actual card data (stats/tags/characters) is fetched in bulk via
-    // fetchStoryCardsById below, shared with the "no explicit picks yet"
-    // default path so both render identically.
-    pool.query(
-      `SELECT ref_id FROM user_featured_items WHERE user_id = $1 AND kind = 'story' ORDER BY sort_order LIMIT 3`,
-      [author.id]
-    ),
     // Recent Activity -- no unified activity log exists, so this is a
     // hand-rolled UNION ALL across every place this user can act. Each
     // branch normalizes to the same (type, ts, label, context, ref_a,
@@ -6553,48 +6447,6 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
     });
   }
 
-  // Featured Characters/Gallery/Stories all share the same "default until
-  // manually overridden" behavior: an empty user_featured_items set for that
-  // kind means the user hasn't touched it yet, so fall back to a live
-  // "latest N" query instead of an empty section. The moment they Save that
-  // section's editor (see PUT /api/account/featured), real rows get written
-  // and this fallback stops being reached — permanently "locking" it in,
-  // with no separate locked flag needed.
-  const rawFeaturedCharacters = featuredChars.rows.length
-    ? featuredChars.rows
-    : (await pool.query(
-        `SELECT id::text AS ref_id, name AS title, ref_image AS image_url, COALESCE(ref_is_nsfw, false) AS is_nsfw
-         FROM moderator_characters WHERE owner_user_id = $1 ORDER BY created_at DESC LIMIT 3`,
-        [author.id]
-      )).rows;
-  const rawFeaturedGalleryItems = featuredGallery.rows.length
-    ? featuredGallery.rows
-    : (await pool.query(
-        `SELECT id::text AS ref_id, title, image_url, COALESCE(category <> 'sfw', false) AS is_nsfw
-         FROM moderator_gallery WHERE owner_user_id = $1 ORDER BY created_at DESC LIMIT 3`,
-        [author.id]
-      )).rows;
-  // Featured Characters/Gallery/Stories are a teaser on the profile Home
-  // tab, visible to guests even when the rest of that item would be fully
-  // locked elsewhere -- so instead of hiding the slot, the image itself is
-  // withheld and nsfw_locked tells the frontend to blur a placeholder and
-  // show the "18+ Must Sign In" overlay instead of the real art.
-  const featuredCharacters = rawFeaturedCharacters.map(item => {
-    const locked = item.is_nsfw && !profileNsfwAllowed;
-    return { ...item, image_url: locked ? null : item.image_url, nsfw_locked: !!locked };
-  });
-  const featuredGalleryItems = rawFeaturedGalleryItems.map(item => {
-    const locked = item.is_nsfw && !profileNsfwAllowed;
-    return { ...item, image_url: locked ? null : item.image_url, nsfw_locked: !!locked };
-  });
-  const featuredStories = (featuredStoryIds.rows.length
-    ? await fetchStoryCardsById(featuredStoryIds.rows.map(r => Number(r.ref_id)))
-    : await fetchDefaultStoryCards(author.id, 3)
-  ).map(w => {
-    const locked = w.rating && w.rating !== 'sfw' && !profileNsfwAllowed;
-    return { ...w, cover_url: locked ? null : w.cover_url, nsfw_locked: !!locked };
-  });
-
   // Re-checked against live membership (not just the stored slug) so a
   // club the user has since left quietly stops showing instead of leaking
   // a stale badge for a club they're no longer in.
@@ -6691,9 +6543,6 @@ app.get('/api/fanpage-profile/:username', async (req, res) => {
           image_url: sub.image_url,
         };
       }),
-      featured_characters: featuredCharacters,
-      featured_gallery: featuredGalleryItems,
-      featured_stories: featuredStories,
       featured_club: featuredClub ? {
         slug: featuredClub.slug, name: featuredClub.name,
         badge_url: featuredClub.badge_url || featuredClub.icon_url || '',
@@ -7771,36 +7620,6 @@ app.get('/api/featured-search', requireAuth, async (req, res) => {
     .sort((a, b) => (b.mine - a.mine));
 
   res.json({ results });
-});
-
-// PUT /api/account/featured — replaces the caller's featured-characters,
-// featured-gallery, or featured-stories set (max 3 each) in
-// one shot.
-app.put('/api/account/featured', requireAuth, async (req, res) => {
-  const kind = ['gallery', 'story'].includes(req.body.kind) ? req.body.kind : 'character';
-  const items = Array.isArray(req.body.items) ? req.body.items.slice(0, 3) : [];
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query('DELETE FROM user_featured_items WHERE user_id = $1 AND kind = $2', [req.user.id, kind]);
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      await client.query(
-        `INSERT INTO user_featured_items (user_id, kind, source, site_slug, ref_id, title, image_url, link_url, sort_order)
-         VALUES ($1, $2, 'fanpage', $3, $4, $5, $6, $7, $8)`,
-        [req.user.id, kind, it.site_slug || null, String(it.ref_id || ''), String(it.title || '').slice(0, 80),
-         String(it.image_url || '').slice(0, 300), String(it.link_url || '').slice(0, 300), i]
-      );
-    }
-    await client.query('COMMIT');
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
-  }
-  res.json({ message: 'Featured items updated.' });
 });
 
 // GET /api/moderator-sites/:slug — public read, powers the static moderator pages.
@@ -12400,8 +12219,6 @@ app.put('/api/clubs/:slug/featured-cards/reorder', requireAuth, async (req, res)
   // between them -- pool.query() checks a connection back in after every
   // call, so the old bare pool.query('BEGIN')/pool.query('COMMIT') version
   // had no guarantee any of these statements shared a connection at all.
-  // Same pool.connect()/client.query() pattern already used by
-  // PUT /api/account/featured above.
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
