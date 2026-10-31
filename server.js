@@ -11506,7 +11506,6 @@ app.get('/api/clubs/:slug', async (req, res) => {
   const { rows: [club] } = await pool.query('SELECT * FROM clubs WHERE slug = $1', [req.params.slug]);
   if (!club) return res.status(404).json({ error: 'Club not found.' });
 
-  const viewerRoleEarly = await getClubRole(club.id, viewerId);
   if (club.is_nsfw) {
     // SFW Mode hides an NSFW club even from its own members/mods -- it's a
     // personal viewing preference, not a membership gate, so being in the
